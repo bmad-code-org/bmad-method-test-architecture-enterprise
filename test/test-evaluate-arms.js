@@ -198,6 +198,24 @@ const JUDGE_SNAPSHOT = 'stub-judge-2026-09';
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GIT_')));
 const GIT_IDENTITY = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
 const GIT_ENV = { ...BASE_ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+
+let lazyFetchSkippable = null;
+
+/** Whether this host's git honors `GIT_NO_LAZY_FETCH` (2.44 and later); under `CI` a git that does not is a failed check. */
+function hostSkipsLazyFetch() {
+  if (lazyFetchSkippable !== null) return lazyFetchSkippable;
+  const asked = spawnSync('git', ['--version'], { env: GIT_ENV, encoding: 'utf8' }).stdout;
+  const [, major, minor] = /(\d+)\.(\d+)/.exec(asked) ?? [];
+  lazyFetchSkippable = Number(major) > 2 || (Number(major) === 2 && Number(minor) >= 44);
+  if (!lazyFetchSkippable) {
+    if (process.env.CI)
+      check(false, `this CI host's ${asked.trim()} predates GIT_NO_LAZY_FETCH (git 2.44), so the partial-clone case cannot run`);
+    else
+      console.log(`  skipped the partial-clone case: this host's ${asked.trim()} predates GIT_NO_LAZY_FETCH (git 2.44); TeA's CI runs it`);
+  }
+  return lazyFetchSkippable;
+}
+
 const SPAWN_TIMEOUT_MS = 180_000;
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
@@ -623,6 +641,53 @@ function historicalProbe(seeded, fixCommit) {
     defectSignature: seeded.defectSignature,
     qualification: { route: 'historical', fixCommit },
   };
+}
+
+/**
+ * A confined run never fetches from a promisor remote (Story 1.80): over a blob-less clone of a historical project the
+ * pre-fix revision's checkout is refused, exit 12 naming the revision, and the remote is never asked; over a full clone the
+ * same run completes.
+ */
+async function checkHistoricalPartialClone() {
+  const project = makeHistoricalProject('historical-partial', { marker: false });
+  const root = project.directory;
+  const run = (args) => {
+    const result = spawnSync('git', args, { env: GIT_ENV, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+  };
+  const origin = path.join(root, 'origin.git');
+  run(['clone', '--quiet', '--bare', project.repository, origin]);
+  run(['-C', origin, 'config', 'uploadpack.allowFilter', 'true']);
+  run(['-C', origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true']);
+  const asClone = (name, filter) => {
+    const clone = path.join(root, name);
+    run(['clone', '--quiet', ...(filter === null ? [] : [`--filter=${filter}`]), `file://${origin}`, clone]);
+    fs.cpSync(path.join(project.repository, 'vendor'), path.join(clone, 'vendor'), { recursive: true });
+    return { repository: clone, folder: path.join(clone, EVALUATION) };
+  };
+  const fetchLog = path.join(root, 'fetches.log');
+  const partial = asClone('partial', 'blob:none');
+  const wrapper = path.join(root, 'upload-pack.sh');
+  fs.writeFileSync(wrapper, `#!/bin/sh\necho "$@" >> '${fetchLog}'\nexec git upload-pack "$@"\n`, { mode: 0o755 });
+  run(['-C', partial.repository, 'config', 'remote.origin.uploadpack', wrapper]);
+  const refused = evaluate(['run', '--evaluation', partial.folder], project.env);
+  check(
+    refused.status === 12 &&
+      refused.output.includes(project.parent) &&
+      refused.output.includes('partial clone') &&
+      refused.output.includes('"confinement": false'),
+    `a confined historical run over a blob-less clone exited ${refused.status}; expected 12 naming the pre-fix revision ${project.parent}\n${refused.output}`,
+  );
+  check(
+    !fs.existsSync(fetchLog),
+    `a confined historical run fetched from the promisor remote:\n${fs.existsSync(fetchLog) ? fs.readFileSync(fetchLog, 'utf8') : ''}`,
+  );
+  const full = asClone('full', null);
+  const completed = evaluate(['run', '--evaluation', full.folder], project.env);
+  check(
+    completed.status === 0,
+    `the same confined historical run over a full clone exited ${completed.status}; expected 0\n${completed.output}`,
+  );
 }
 
 async function checkHistorical() {
@@ -4144,6 +4209,11 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    if (process.argv.includes('--partial-clone-only')) {
+      // Story 1.80's confined historical run over a blob-less clone alone, which its revert checks run.
+      if (hostSkipsLazyFetch()) await runCase('the historical arm over a partial clone', checkHistoricalPartialClone);
+      return finish();
+    }
     if (process.argv.includes('--held-releases-only')) {
       // The cases of Story 1.64's release asked after the witness legs and after the trials alone, which its revert
       // checks run: the cases over the redeployed pre-fix servers, the units of the three points, and the read of the
@@ -4175,6 +4245,7 @@ async function main() {
     await runCase('the units', checkUnits);
     await runCase('the gameability arm', checkGameability);
     await runCase('the historical arm', checkHistorical);
+    if (hostSkipsLazyFetch()) await runCase('the historical arm over a partial clone', checkHistoricalPartialClone);
     await runCase('the confined arms', checkConfinedArms);
     await runCase('the one-commit refusal', checkOneCommit);
     await runCase('a mutation beside a historical probe', checkMutationBesideHistorical);

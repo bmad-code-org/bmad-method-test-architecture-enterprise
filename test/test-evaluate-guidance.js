@@ -2833,7 +2833,7 @@ function checkRunGuidance(guide, failures) {
     'an observer that cannot confirm itself',
     'or an evaluation folder or temp directory whose path holds a double quote, a backslash or a control character',
     'the run observes no file-system access',
-    "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, or for a project whose history exceeds about six million objects (fetch a partial clone's full history first: clone again without `--filter`)",
+    "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, and record the adopter's reason in the evaluation notes",
     'On Linux an entry that keeps the default `"network": "isolated"`',
     '`run.json` records what the targets ran under',
     "tell the adopter which entries keep the host's network",
@@ -2860,6 +2860,10 @@ function checkRunGuidance(guide, failures) {
     'Read both before reading a verdict',
   ])
     requireText(confined, marker, 'run.md ## Run confined', failures);
+  // Story 1.80: a partial-clone project and a very large history run confined, so the guide names neither as a reason to opt out.
+  for (const stale of ['six million objects', "partial clone's full history", 'clone again without `--filter`']) {
+    if (confined.includes(stale)) failures.push(`run.md ## Run confined still names ${JSON.stringify(stale)}, a limit Story 1.80 removed`);
+  }
   const strength = headingBody(guide, '## Read development strength before held-out');
   for (const marker of [
     'strength-aggregate.json',
@@ -2935,9 +2939,12 @@ function checkIsolationViolationGuidance(guide, failures) {
     'Declare `"network": "host"` on its entry, confirm `run.json` lists the entry under `hostNetwork`, and rerun',
     "the entry then keeps a route to the host's abstract Unix sockets until Story 1.83",
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
-    'find each further cause (a project history too large to pack, a partial clone) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)',
+    "find each further cause (a failed step in building the target's private git repository, an observer that fails mid-run) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)",
   ])
     requireText(body, marker, `gaps.md ${heading}`, failures);
+  for (const stale of ['too large to pack', 'a partial clone']) {
+    if (body.includes(stale)) failures.push(`gaps.md ${heading} still names ${JSON.stringify(stale)}, a cause Story 1.80 removed`);
+  }
   const rows = tableRows(guide, heading, ['Observed path', 'Cause', 'Concrete repair'], failures);
   // Each row: the observed path it starts with, its exact cause, and the phrases its repair holds.
   const expected = [

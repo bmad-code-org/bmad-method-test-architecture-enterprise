@@ -7125,30 +7125,50 @@ async function checkWithheldHistoryEdges() {
     }
   }
 
-  // A partial clone is refused before any history is packed, by either marker.
-  for (const [label, configure] of [
-    ['extension', (repository) => git(repository, ['config', 'extensions.partialClone', 'origin'])],
-    ['remote', (repository) => git(repository, ['config', 'remote.origin.promisor', 'true'])],
-  ]) {
+  // A project that names a promisor remote, by either marker, builds from the objects it holds: the remote names no URL, so
+  // a fetch would fail the build (Story 1.80).
+  for (const [label, configure] of hostSkipsLazyFetch()
+    ? [
+        ['extension', (repository) => git(repository, ['config', 'extensions.partialClone', 'origin'])],
+        ['remote', (repository) => git(repository, ['config', 'remote.origin.promisor', 'true'])],
+      ]
+    : []) {
     const partial = makeHistoryRepository(`withheld-edge-partial-${label}`);
     configure(partial.repository);
-    let partialRefusal = null;
+    let built = null;
+    let failure = null;
     try {
-      createWorkspace({ root: partial.repository, kind: 'git', exclude: [partial.folder], label: 'partial', withholdHistory: true });
+      built = createWorkspace({
+        root: partial.repository,
+        kind: 'git',
+        exclude: [partial.folder],
+        label: 'partial',
+        withholdHistory: true,
+      });
     } catch (error) {
-      partialRefusal = error;
+      failure = error;
     }
-    check(
-      partialRefusal instanceof WorkspaceRefusal &&
-        partialRefusal.message.includes('partial clone') &&
-        partialRefusal.message.includes('"confinement": false') &&
-        partialRefusal.message.includes('fetch the full history'),
-      `a partial clone (${label}) was not refused with its cause and both ways out: ${partialRefusal?.message}`,
-    );
-    check(
-      !git(partial.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes('tea-evaluate-partial'),
-      `a refused partial clone (${label}) left a worktree registration`,
-    );
+    check(built !== null, `a project naming a promisor remote (${label}) broke the build: ${failure?.message}`);
+    if (built !== null) {
+      try {
+        check(
+          readsOf(built, partial.repository, partial.folder) === '',
+          `a project naming a promisor remote (${label}) let the target read the folder`,
+        );
+        const status = runConfined(built, partial.folder, 'git status --porcelain; git log --format=%H | wc -l; git show HEAD:src/a.txt');
+        check(
+          /^\s*3\nsource a, changed\n$/.test(status.stdout),
+          `git over a project naming a promisor remote (${label}) printed:\n${status.stdout}${status.stderr}`,
+        );
+        const carried = fs.readFileSync(path.join(built.gitView, 'config'), 'utf8');
+        check(
+          !/promisor|partialclone|remote/i.test(carried),
+          `the withheld repository of a project naming a promisor remote (${label}) carried it:\n${carried}`,
+        );
+      } finally {
+        removeWorkspace(built);
+      }
+    }
   }
 
   // A copy workspace in a repository withholds the project's git directory too.
@@ -7354,6 +7374,682 @@ async function checkWithheldHistoryEdges() {
   }
 }
 
+/**
+ * What the withheld repository shows a confined target of the project (Story 1.80), through the real CLI: a project cloned
+ * with a promisor remote (`--filter=blob:none` and `--filter=tree:0`) runs with no fetch and no exit 12, a project's tags
+ * (lightweight and annotated, those inside the evaluated history) reach the target's git with no remote, URL, credential or
+ * hook, a history whose object walk prints more than six million ids is read as a stream, and a filter driver's whole
+ * configuration reaches it.
+ */
+const LARGE_WALK_OBJECTS = 7_000_000;
+
+/** A project that commits its evaluation folder in three commits, plus a file outside it that changes in each. */
+function reachProject(label, { drivers = false, tags = false } = {}) {
+  return makeProject(label, {
+    toolchain: true,
+    edit: ({ project, folder }) => {
+      fs.mkdirSync(path.join(project, 'docs'), { recursive: true });
+      fs.copyFileSync(path.join(folder, 'contract.json'), path.join(project, 'docs', 'contract-copy.json'));
+    },
+    history: ({ repository, folder }) => {
+      for (const version of ['one', 'two']) {
+        fs.writeFileSync(path.join(folder, 'notes.md'), `note ${version}\n`);
+        fs.writeFileSync(path.join(repository, 'docs', 'history.txt'), `history ${version}\n`);
+        git(repository, ['add', '--all']);
+        git(repository, ['commit', '--quiet', '--message', `note ${version}`]);
+      }
+      if (drivers) {
+        git(repository, ['config', 'filter.upper.clean', 'tr A-Z a-z']);
+        git(repository, ['config', 'filter.upper.smudge', 'tr a-z A-Z']);
+        // A boolean written with no value, which `git config --get-regexp` prints as the key alone.
+        fs.appendFileSync(path.join(repository, '.git', 'config'), '[filter "upper"]\n\trequired\n');
+        git(repository, ['config', 'filter.my driver.clean', 'cat']);
+        git(repository, ['config', 'filter.my driver.smudge', 'cat']);
+        fs.writeFileSync(path.join(repository, '.gitattributes'), 'docs/shout.up filter=upper\n');
+        fs.writeFileSync(path.join(repository, 'docs', 'shout.up'), 'quiet words\n');
+        git(repository, ['add', '--all']);
+        git(repository, ['commit', '--quiet', '--message', 'a filtered file']);
+      }
+      if (tags) {
+        git(repository, ['tag', 'light', 'HEAD~2']);
+        git(repository, ['tag', '--annotate', '--message', 'release 2.0', 'v2.0', 'HEAD~1']);
+        // A tag on a commit the evaluated history does not reach, and one on a tree: neither can name a commit of the history.
+        git(repository, ['switch', '--quiet', '--create', 'side', 'HEAD~1']);
+        fs.writeFileSync(path.join(repository, 'side.txt'), 'side\n');
+        git(repository, ['add', '--all']);
+        git(repository, ['commit', '--quiet', '--message', 'side']);
+        git(repository, ['tag', 'side-tag']);
+        git(repository, ['switch', '--quiet', 'main']);
+        git(repository, ['tag', 'tree-tag', 'HEAD^{tree}']);
+        git(repository, ['remote', 'add', 'origin', 'https://user:secret@example.test/repo.git']);
+        git(repository, ['config', 'credential.helper', 'store']);
+        const hooks = path.join(repository, '.git', 'hooks');
+        fs.mkdirSync(hooks, { recursive: true });
+        fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      }
+    },
+  });
+}
+
+/** `project` cloned with `filter`, its remote logging every upload-pack it serves to `fetchLog`; the clone holds what a checkout needs. */
+function partialCloneOf(project, filter, label) {
+  const root = path.dirname(project.repository);
+  const origin = path.join(root, 'origin.git');
+  const clone = path.join(root, `partial-${label}`);
+  const fetchLog = path.join(root, `fetches-${label}.log`);
+  const run = (args) => {
+    const result = spawnSync('git', args, { env: GIT_ENV, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+  };
+  if (!fs.existsSync(origin)) {
+    run(['clone', '--quiet', '--bare', project.repository, origin]);
+    run(['-C', origin, 'config', 'uploadpack.allowFilter', 'true']);
+    run(['-C', origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true']);
+  }
+  run(['clone', '--quiet', `--filter=${filter}`, `file://${origin}`, clone]);
+  const wrapper = path.join(root, `upload-pack-${label}.sh`);
+  fs.writeFileSync(wrapper, `#!/bin/sh\necho "$@" >> '${fetchLog}'\nexec git upload-pack "$@"\n`, { mode: 0o755 });
+  run(['-C', clone, 'config', 'remote.origin.uploadpack', wrapper]);
+  // The gitignored runtime directory the evaluation provisions, when the project has one.
+  if (fs.existsSync(path.join(project.repository, 'vendor'))) {
+    fs.cpSync(path.join(project.repository, 'vendor'), path.join(clone, 'vendor'), { recursive: true });
+  }
+  return { repository: clone, folder: path.join(clone, EVALUATION), env: project.env, fetchLog };
+}
+
+let lazyFetchSkippable = null;
+
+/**
+ * Whether this host's git honors `GIT_NO_LAZY_FETCH` (2.44 and later), asked once. The partial-clone cases run only where
+ * it does; under `CI` a git that does not is a failed check, so the cases cannot go unrun there.
+ */
+function hostSkipsLazyFetch() {
+  if (lazyFetchSkippable !== null) return lazyFetchSkippable;
+  const asked = spawnSync('git', ['--version'], { env: GIT_ENV, encoding: 'utf8' }).stdout;
+  const [, major, minor] = /(\d+)\.(\d+)/.exec(asked) ?? [];
+  lazyFetchSkippable = Number(major) > 2 || (Number(major) === 2 && Number(minor) >= 44);
+  if (!lazyFetchSkippable) {
+    if (process.env.CI)
+      check(false, `this CI host's ${asked.trim()} predates GIT_NO_LAZY_FETCH (git 2.44), so the partial-clone cases cannot run`);
+    else
+      console.log(
+        `  skipped the partial-clone cases: this host's ${asked.trim()} predates GIT_NO_LAZY_FETCH (git 2.44); TeA's CI runs them`,
+      );
+  }
+  return lazyFetchSkippable;
+}
+
+/** The ids a partial clone lacks on disk, asked without fetching. */
+function missingObjectsOf(repository) {
+  const walked = spawnSync('git', ['-C', repository, 'rev-list', '--objects', '--missing=print', 'HEAD'], {
+    env: { ...GIT_ENV, GIT_NO_LAZY_FETCH: '1' },
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return walked.stdout.split('\n').filter((line) => line.startsWith('?'));
+}
+
+/** What the `probe-history` stub printed in the clean arm's first trial. */
+function historyLines(project, { env = {} } = {}) {
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    ...env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'probe-history',
+  });
+  const out = ran.status === 0 ? trialStdout(runDirectoryOf(project.folder), 'clean', 1) : '';
+  return { ran, out, seen: probeGitLines(out) };
+}
+
+async function checkWithheldHistoryReach() {
+  // A project cloned with a promisor remote: the target's git shows what the project holds on disk, and nothing fetches.
+  for (const filter of hostSkipsLazyFetch() ? ['blob:none', 'tree:0'] : []) {
+    const source = reachProject(`reach-partial-${filter.replace(':', '-')}`);
+    const partial = partialCloneOf(source, filter, filter.replace(':', '-'));
+    check(
+      missingObjectsOf(partial.repository).length > 0,
+      `the ${filter} clone holds its whole history on disk; the case needs a partial clone`,
+    );
+    const objects = () => git(partial.repository, ['cat-file', '--batch-all-objects', '--batch-check']).toString('utf8');
+    const objectsBefore = objects();
+    const { ran, out, seen } = historyLines(partial);
+    check(ran.status === 0, `a confined run over a ${filter} partial clone exited ${ran.status}; expected 0\n${ran.output}`);
+    check(
+      /^exit 0 \(0 line\(s\)\)$/.test(seen.status ?? ''),
+      `a confined target's git status over a ${filter} clone ended ${JSON.stringify(seen.status)}\n${out}`,
+    );
+    check(
+      /^exit 0 \(3 line\(s\)\)$/.test(seen.log ?? ''),
+      `a confined target's git log over a ${filter} clone ended ${JSON.stringify(seen.log)}\n${out}`,
+    );
+    check(
+      seen['show-tracked'] === 'printed',
+      `a confined target could not show a tracked file of a ${filter} clone: ${seen['show-tracked']}\n${out}`,
+    );
+    check(
+      seen['show-shared'] === 'printed',
+      `a confined target could not show the file outside the folder that holds the contract's bytes in a ${filter} clone: ${seen['show-shared']}\n${out}`,
+    );
+    check(
+      /^none \d+$/.test(seen['show-folder'] ?? ''),
+      `a confined target read the committed contract of a ${filter} clone: ${seen['show-folder']}\n${out}`,
+    );
+    check(
+      !fs.existsSync(partial.fetchLog),
+      `a process fetched from the promisor remote of a ${filter} clone:\n${fs.existsSync(partial.fetchLog) ? fs.readFileSync(partial.fetchLog, 'utf8') : ''}`,
+    );
+    check(objects() === objectsBefore, `a confined run over a ${filter} clone changed the clone's objects`);
+  }
+
+  // Tags: those inside the evaluated history reach the target's git, with their annotations, and no remote, URL, credential or hook does.
+  const tagged = reachProject('reach-tags', { tags: true });
+  {
+    const { ran, out, seen } = historyLines(tagged);
+    check(ran.status === 0, `a confined run over a project with tags exited ${ran.status}; expected 0\n${ran.output}`);
+    check(
+      seen.tags === 'light,v2.0',
+      `a confined target's git tag -l printed ${JSON.stringify(seen.tags)}; expected the tags inside the history, light and v2.0\n${out}`,
+    );
+    check(
+      /^v2\.0-1-g[0-9a-f]+$/.test(seen.describe ?? ''),
+      `a confined target's git describe --tags printed ${JSON.stringify(seen.describe)}; expected v2.0-1-g<id>\n${out}`,
+    );
+    check(
+      seen['tag-tracked'] === 'light=printed,v2.0=printed',
+      `a confined target read ${JSON.stringify(seen['tag-tracked'])} of the tagged commits' files\n${out}`,
+    );
+    check(
+      seen['tag-folder'] === 'light=none,v2.0=none',
+      `a confined target read the committed contract at a tag: ${JSON.stringify(seen['tag-folder'])}\n${out}`,
+    );
+    check(
+      seen.remotes === '0' && seen.carried === '0' && seen.hooks === '0',
+      `a confined target's git carries ${seen.remotes} remote(s), ${seen.carried} remote, URL, credential or hook setting(s) and ${seen.hooks} hook(s); expected none\n${out}`,
+    );
+  }
+
+  // A filter driver: its whole configuration reaches the target, a name with a space and a `required` with no value included.
+  const filtered = reachProject('reach-filters', { drivers: true });
+  {
+    const { ran, out, seen } = historyLines(filtered);
+    check(ran.status === 0, `a confined run over a project with filter drivers exited ${ran.status}; expected 0\n${ran.output}`);
+    check(
+      /^exit 0 \(0 line\(s\)\)$/.test(seen.status ?? ''),
+      `a confined target's git status over a filtered file ended ${JSON.stringify(seen.status)}; the project's lists nothing\n${out}`,
+    );
+    check(seen.required === 'true', `a confined target's filter.upper.required is ${JSON.stringify(seen.required)}; expected true\n${out}`);
+    check(
+      (seen.filters ?? '').includes('filter.my driver.clean=cat') && (seen.filters ?? '').includes('filter.my driver.smudge=cat'),
+      `a confined target's git lost the filter driver named with a space: ${JSON.stringify(seen.filters)}\n${out}`,
+    );
+  }
+
+  // A history whose object walk prints more than six million ids: the walk is read as a stream, so no buffer bounds it.
+  const large = reachProject('reach-large');
+  {
+    const stubs = tempDir('reach-large-git');
+    const real = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
+    // The store's object walk answers as git does and then prints more ids; every other git call is git's.
+    fs.writeFileSync(
+      path.join(stubs, 'git'),
+      `#!/bin/sh\ncase " $* " in\n  *" rev-list "*"--objects"*"--missing=print"*)\n    echo walked >> "$STUB_LOG"\n    "${real}" "$@" || exit $?\n    exec awk -v n=${LARGE_WALK_OBJECTS} 'BEGIN { for (i = 1; i <= n; i++) printf "%040x\\n", i }'\n    ;;\nesac\nexec "${real}" "$@"\n`,
+      { mode: 0o755 },
+    );
+    const walkLog = path.join(stubs, 'walks.log');
+    const { ran, out, seen } = historyLines(large, { env: { PATH: `${stubs}${path.delimiter}${BASE_ENV.PATH}`, STUB_LOG: walkLog } });
+    check(fs.existsSync(walkLog), 'the stub git on PATH never saw the store walk, so the case does not exercise a large walk');
+    check(
+      ran.status === 0,
+      `a confined run over a history of more than six million objects exited ${ran.status}; expected 0\n${ran.output}`,
+    );
+    check(
+      /^exit 0 \(0 line\(s\)\)$/.test(seen.status ?? '') && seen['show-tracked'] === 'printed' && seen['show-shared'] === 'printed',
+      `a confined target's git over a history of more than six million objects printed ${JSON.stringify(seen)}\n${out}`,
+    );
+    check(
+      /^none \d+$/.test(seen['show-folder'] ?? ''),
+      `a confined target read the committed contract over the large history: ${seen['show-folder']}\n${out}`,
+    );
+  }
+}
+
+/**
+ * The withheld repository's reach, built directly (Story 1.80): the tags it carries and drops, the configuration of a
+ * filter driver and of a boolean written with no value, a partial clone built with no fetch and a failing pack, and the
+ * streaming reader run with a heap too small for the output it reads.
+ */
+async function checkWithheldHistoryReachUnits() {
+  // Tags: those inside the history are carried with their annotations, a later build sees a tag added since, and nothing
+  // outside the history, no remote, URL, credential or hook is.
+  const tagged = makeHistoryRepository('reach-unit-tags');
+  git(tagged.repository, ['tag', 'light', 'HEAD~2']);
+  git(tagged.repository, ['tag', '--annotate', '--message', 'release one', 'v1', 'HEAD~1']);
+  git(tagged.repository, ['-c', 'advice.nestedTag=false', 'tag', '--annotate', '--message', 'nested', 'nested', 'v1']);
+  git(tagged.repository, ['switch', '--quiet', '--create', 'side', 'HEAD~1']);
+  fs.writeFileSync(path.join(tagged.repository, 'side.txt'), 'side\n');
+  git(tagged.repository, ['add', '--all']);
+  git(tagged.repository, ['commit', '--quiet', '--message', 'side']);
+  git(tagged.repository, ['tag', 'side-tag']);
+  git(tagged.repository, ['switch', '--quiet', 'main']);
+  git(tagged.repository, ['tag', 'tree-tag', 'HEAD^{tree}']);
+  git(tagged.repository, ['remote', 'add', 'origin', 'https://user:secret@example.test/repo.git']);
+  const build = (repository, label) =>
+    createWorkspace({ root: repository.repository, kind: 'git', exclude: [repository.folder], label, withholdHistory: true });
+  const first = build(tagged, 'tags-first');
+  let second = null;
+  try {
+    const asked = runConfined(
+      first,
+      tagged.folder,
+      String.raw`git -c tag.sort=refname tag -l | tr "\n" " "; echo; git describe --tags --exact-match HEAD~2; git cat-file -t nested; git rev-parse "nested^{commit}"; git show v1:src/a.txt; git show light:evals/verdict/contract.json 2>/dev/null | grep -c secret`,
+    );
+    const [names = '', described = '', type = '', peeled = '', shown = '', folder = ''] = asked.stdout.split('\n');
+    check(
+      names === 'light nested v1 ',
+      `the tags a target's git lists are ${JSON.stringify(names)}; expected light, nested and v1 (not side-tag or tree-tag)`,
+    );
+    check(described === 'light', `git describe --tags --exact-match HEAD~2 printed ${JSON.stringify(described)}; expected light`);
+    check(type === 'tag', `an annotated tag's object type reads ${JSON.stringify(type)}; expected tag`);
+    check(
+      peeled === git(tagged.repository, ['rev-parse', 'HEAD~1']).toString('utf8').trim(),
+      `a nested tag peels to ${JSON.stringify(peeled)}; expected the tagged commit`,
+    );
+    check(shown === 'source a, changed', `git show v1:src/a.txt printed ${JSON.stringify(shown)}`);
+    check(folder === '0', `git show light:<the committed contract> printed ${folder} line(s) with the contract's bytes; expected none`);
+    const names2 = git(first.gitView, ['for-each-ref', '--format=%(refname)'])
+      .toString('utf8')
+      .split('\n')
+      .filter((line) => line !== '');
+    check(
+      names2.filter((name) => !name.startsWith('refs/replace/')).join(' ') === 'refs/tags/light refs/tags/nested refs/tags/v1',
+      `the withheld repository's refs are ${JSON.stringify(names2)}; expected the three tags beside the replace entries`,
+    );
+    const config = fs.readFileSync(path.join(first.gitView, 'config'), 'utf8');
+    check(
+      !/remote|secret|example\.test|credential/i.test(config),
+      `the withheld repository's config carries a remote or a credential:\n${config}`,
+    );
+    check(!fs.existsSync(path.join(first.gitView, 'hooks')), 'the withheld repository carries a hooks directory');
+    // A second workspace for the same commit links the first's objects and still gets the tags, and a tag added between the
+    // two is seen: the store it links from was built for another set of tags.
+    git(tagged.repository, ['tag', '--annotate', '--message', 'late', 'late', 'HEAD']);
+    second = build(tagged, 'tags-second');
+    const later = runConfined(second, tagged.folder, String.raw`git -c tag.sort=refname tag -l | tr "\n" " "`).stdout;
+    check(later === 'late light nested v1 ', `a second workspace after a tag was added lists ${JSON.stringify(later)}`);
+    const third = build(tagged, 'tags-third');
+    try {
+      check(
+        runConfined(third, tagged.folder, String.raw`git -c tag.sort=refname tag -l | tr "\n" " "`).stdout === later,
+        'a workspace that links the objects of an earlier one lost the tags',
+      );
+    } finally {
+      removeWorkspace(third);
+    }
+  } finally {
+    if (second !== null) removeWorkspace(second);
+    removeWorkspace(first);
+  }
+
+  // Configuration: a filter driver named with a space, a `required` and booleans written with no value reach the store.
+  const configured = makeHistoryRepository('reach-unit-config');
+  git(configured.repository, ['config', 'filter.my driver.clean', 'cat']);
+  git(configured.repository, ['config', 'filter.my driver.smudge', 'cat']);
+  git(configured.repository, ['config', 'filter.my driver.process', 'cat --filter']);
+  fs.appendFileSync(
+    path.join(configured.repository, '.git', 'config'),
+    '[filter "my driver"]\n\trequired\n[filter "bare"]\n\trequired\n[core]\n\tsymlinks\n\tfilemode = false\n',
+  );
+  const configuredWorkspace = build(configured, 'config');
+  try {
+    const stored = (key) =>
+      spawnSync('git', ['--git-dir', configuredWorkspace.gitView, 'config', '--get', key], {
+        env: GIT_ENV,
+        encoding: 'utf8',
+      }).stdout.trim();
+    check(
+      stored('filter.my driver.clean') === 'cat',
+      `a filter driver named with a space has clean ${JSON.stringify(stored('filter.my driver.clean'))} in the withheld repository`,
+    );
+    check(stored('filter.my driver.process') === 'cat --filter', 'a filter driver named with a space lost its process command');
+    check(stored('filter.my driver.required') === 'true', 'a required written with no value was not carried as true');
+    check(stored('filter.bare.required') === 'true', 'a driver whose only key is a required with no value was not carried');
+    check(
+      stored('core.symlinks') === 'true' && stored('core.filemode') === 'false',
+      'a core boolean written with no value was not carried as true',
+    );
+  } finally {
+    removeWorkspace(configuredWorkspace);
+  }
+
+  // A partial clone builds from the objects on disk: the promisor remote is never asked, and a pack that fails refuses.
+  for (const filter of hostSkipsLazyFetch() ? ['blob:none', 'tree:0'] : []) {
+    const label = `unit-${filter.replace(':', '-')}`;
+    const source = makeHistoryRepository(`reach-${label}`);
+    const partial = partialCloneOf({ repository: source.repository, env: {} }, filter, label);
+    const objects = () => git(partial.repository, ['cat-file', '--batch-all-objects', '--batch-check']).toString('utf8');
+    const before = objects();
+    check(missingObjectsOf(partial.repository).length > 0, `the ${filter} clone of the history repository holds all its objects`);
+    const built = build(partial, `partial-${label}`);
+    try {
+      const seen = runConfined(
+        built,
+        partial.folder,
+        'git status --porcelain; git log --format=%H | wc -l; git show HEAD:src/a.txt; git show HEAD:docs/contract-copy.txt; git show HEAD:evals/verdict/contract.json 2>&1 | head -c 40',
+      ).stdout;
+      check(
+        /^\s*3\nsource a, changed\nsecret contract two\n(?!secret)/.test(seen),
+        `git in a ${filter} clone's withheld repository printed ${JSON.stringify(seen)}; expected a clean status, three commits, the tracked file and the shared copy, and no committed contract`,
+      );
+      check(!fs.existsSync(partial.fetchLog), `a process fetched from the promisor remote of the ${filter} clone`);
+      check(objects() === before, `building over the ${filter} clone changed its objects`);
+    } finally {
+      removeWorkspace(built);
+    }
+  }
+  // A git that cannot be told not to fetch (before 2.44) is refused for a partial clone, with the way out.
+  const oldGit = makeHistoryRepository('reach-unit-old-git');
+  const oldGitPartial = partialCloneOf({ repository: oldGit.repository, env: {} }, 'blob:none', 'old-git');
+  let oldGitRefusal = null;
+  withGitWrapper('if [ "$1" = --version ]; then echo "git version 2.43.0"; exit 0; fi', null, () => {
+    try {
+      build(oldGitPartial, 'partial-old-git');
+    } catch (error) {
+      oldGitRefusal = error;
+    }
+  });
+  check(
+    oldGitRefusal instanceof WorkspaceRefusal &&
+      oldGitRefusal.message.includes('git version 2.43.0') &&
+      oldGitRefusal.message.includes('2.44') &&
+      oldGitRefusal.message.includes('"confinement": false'),
+    `a partial clone under git 2.43 was not refused with the version and both ways out: ${oldGitRefusal?.message}`,
+  );
+  check(!fs.existsSync(oldGitPartial.fetchLog), 'a refused partial build under git 2.43 fetched from the remote');
+  const failing = makeHistoryRepository('reach-unit-partial-pack');
+  const failingPartial = partialCloneOf({ repository: failing.repository, env: {} }, 'blob:none', 'failing');
+  const failingTemp = tempDir('reach-unit-partial-pack-temp');
+  let refusal = null;
+  if (hostSkipsLazyFetch()) {
+    withGitWrapper('case " $* " in\n  *" pack-objects "*) echo "the case broke the pack" >&2; exit 1 ;;\nesac', failingTemp, () => {
+      try {
+        build(failingPartial, 'partial-failing');
+      } catch (error) {
+        refusal = error;
+      }
+    });
+    check(
+      refusal instanceof WorkspaceRefusal &&
+        refusal.message.includes('rev-list') &&
+        refusal.message.includes('pack-objects') &&
+        refusal.message.includes('the case broke the pack'),
+      `a failing pack over a partial clone did not refuse naming both stages and the cause: ${refusal?.message}`,
+    );
+    check(
+      !git(failingPartial.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes('tea-evaluate-partial-failing'),
+      'a refused partial build left a worktree registration',
+    );
+    // A stage a signal kills is named with the signal, and the status the supervisor reports is the shell's.
+    const killedTemp = tempDir('reach-unit-partial-kill-temp');
+    let killed = null;
+    withGitWrapper('case " $* " in\n  *" pack-objects "*) kill -TERM $$ ;;\nesac', killedTemp, () => {
+      try {
+        build(failingPartial, 'partial-killed');
+      } catch (error) {
+        killed = error;
+      }
+    });
+    check(
+      killed instanceof WorkspaceRefusal &&
+        killed.message.includes('git pack-objects was killed by SIGTERM') &&
+        killed.message.includes('ended 143'),
+      `a pack a signal killed did not refuse naming the stage and the signal: ${killed?.message}`,
+    );
+    check(
+      fs.readdirSync(failingTemp).length === 0,
+      `a refused partial build left ${JSON.stringify(fs.readdirSync(failingTemp))} in the temp directory`,
+    );
+  }
+
+  // Every spelling git accepts for a true `promisor` marks a partial clone, so the build reads the project as a partial clone
+  // (the git 2.43 refusal names it) and never as a full one.
+  for (const [spelling, write] of [
+    ['yes', (repository) => git(repository, ['config', 'remote.origin.promisor', 'yes'])],
+    ['1', (repository) => git(repository, ['config', 'remote.origin.promisor', '1'])],
+    ['on', (repository) => git(repository, ['config', 'remote.origin.promisor', 'on'])],
+    ['a key with no value', (repository) => fs.appendFileSync(path.join(repository, '.git', 'config'), '[remote "origin"]\n\tpromisor\n')],
+  ]) {
+    const marked = makeHistoryRepository(`reach-unit-promisor-${spelling.replaceAll(/\W+/g, '-')}`);
+    write(marked.repository);
+    let marker = null;
+    withGitWrapper('if [ "$1" = --version ]; then echo "git version 2.43.0"; exit 0; fi', null, () => {
+      try {
+        build(marked, 'promisor-spelling');
+      } catch (error) {
+        marker = error;
+      }
+    });
+    check(
+      marker instanceof WorkspaceRefusal && marker.message.includes('remote.origin.promisor is true'),
+      `a promisor marker written as ${spelling} was not read as a partial clone: ${marker?.message ?? 'built'}`,
+    );
+  }
+
+  // A folder whose name ends in " tree", present only in a later commit: the answers for the commits that lack it are
+  // `<commit>:<path> missing`, and none of them is a tree.
+  const spaced = makeHistoryRepository('reach-unit-spaced');
+  const spacedFolder = path.join(spaced.repository, 'evals', 'my tree');
+  fs.mkdirSync(spacedFolder, { recursive: true });
+  fs.writeFileSync(path.join(spacedFolder, 'answers.txt'), 'SECRET-SPACED\n');
+  git(spaced.repository, ['add', '--all']);
+  git(spaced.repository, ['commit', '--quiet', '--message', 'a folder whose name ends in tree']);
+  const spacedWorkspace = build({ repository: spaced.repository, folder: spacedFolder }, 'spaced');
+  try {
+    check(
+      runConfined(
+        spacedWorkspace,
+        spacedFolder,
+        'git show "HEAD:evals/my tree/answers.txt" 2>/dev/null | grep -c SECRET; git show HEAD:src/a.txt',
+      ).stdout === '0\nsource a, changed\n',
+      'a folder named "my tree" was readable through the target\'s git, or the build lost the rest of the tree',
+    );
+  } finally {
+    removeWorkspace(spacedWorkspace);
+  }
+
+  // A confined run fetches nothing: the checkout of a revision whose objects a partial clone lacks is refused naming it, the
+  // clone's head still builds, and the remote is never asked.
+  for (const filter of hostSkipsLazyFetch() ? ['blob:none', 'tree:0'] : []) {
+    const label = `historical-${filter.replace(':', '-')}`;
+    const source = makeHistoryRepository(`reach-unit-${label}`);
+    const partial = partialCloneOf({ repository: source.repository, env: {} }, filter, label);
+    const old = git(partial.repository, ['rev-parse', 'HEAD~2']).toString('utf8').trim();
+    let historical = null;
+    try {
+      createWorkspace({ root: partial.repository, kind: 'git', exclude: [partial.folder], label, commit: old, withholdHistory: true });
+    } catch (error) {
+      historical = error;
+    }
+    check(
+      historical instanceof WorkspaceRefusal &&
+        historical.message.includes(old) &&
+        historical.message.includes('partial clone') &&
+        historical.message.includes('"confinement": false'),
+      `a confined checkout of ${old} in a ${filter} clone was not refused naming the revision: ${historical?.message ?? 'built'}`,
+    );
+    check(!fs.existsSync(partial.fetchLog), `the checkout of an older revision fetched from the remote of the ${filter} clone`);
+    check(
+      !git(partial.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes(`tea-evaluate-${label}`),
+      `a refused checkout in a ${filter} clone left a worktree registration`,
+    );
+  }
+
+  // The streaming reader holds one line at a time: with a heap of 48 MB it reads 2,000,000 commit ids and as many answers,
+  // and 2,000,000 object ids, and keeps only what it is asked to.
+  const stubs = tempDir('reach-unit-stream');
+  fs.writeFileSync(
+    path.join(stubs, 'git'),
+    `#!/bin/sh\ncase " $* " in\n  *" rev-list "*)\n    exec awk 'BEGIN { for (i = 1; i <= 2000000; i++) printf "%040x\\n", i; print "?${'a'.repeat(40)}"; print "?${'b'.repeat(40)}" }'\n    ;;\n  *" cat-file "*)\n    exec awk '{ printf "%040x tree 0\\n", NR % 3 }'\n    ;;\nesac\nexit 2\n`,
+    { mode: 0o755 },
+  );
+  const reader = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'git-lines.js');
+  const stream = (job) =>
+    spawnSync(process.execPath, ['--max-old-space-size=48', reader], {
+      encoding: 'utf8',
+      input: JSON.stringify(job),
+      env: { ...BASE_ENV, PATH: `${stubs}${path.delimiter}${BASE_ENV.PATH}` },
+      timeout: SPAWN_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    });
+  const missingRead = stream({ mode: 'missing', git: ['rev-list', '--objects', '--missing=print', 'HEAD'], keep: null });
+  check(
+    missingRead.status === 0 && missingRead.stdout === `${'a'.repeat(40)}\n${'b'.repeat(40)}\n`,
+    `the streaming reader over 2,000,000 object ids ended ${missingRead.status} and printed ${JSON.stringify(missingRead.stdout.slice(0, 100))}: ${missingRead.stderr.slice(0, 200)}`,
+  );
+  const kept = stream({ mode: 'missing', git: ['rev-list', '--objects', '--missing=print', 'HEAD'], keep: ['b'.repeat(40)] });
+  check(
+    kept.status === 0 && kept.stdout === `${'b'.repeat(40)}\n`,
+    `the streaming reader with a keep list printed ${JSON.stringify(kept.stdout)}`,
+  );
+  const treesRead = stream({ mode: 'trees', list: ['rev-list', 'HEAD'], ask: ['cat-file', '--batch-check'], path: 'evals/verdict' });
+  check(
+    treesRead.status === 0 && treesRead.stdout.split('\n').filter((line) => line !== '').length === 3,
+    `the streaming reader over 2,000,000 commits ended ${treesRead.status} and printed ${JSON.stringify(treesRead.stdout.slice(0, 200))}: ${treesRead.stderr.slice(0, 200)}`,
+  );
+  const failedRead = spawnSync(process.execPath, [reader], {
+    encoding: 'utf8',
+    input: JSON.stringify({ mode: 'missing', git: ['unknown-command'], keep: null }),
+    env: { ...BASE_ENV, PATH: `${stubs}${path.delimiter}${BASE_ENV.PATH}` },
+  });
+  check(
+    failedRead.status === 2 && failedRead.stdout === '',
+    `the streaming reader over a failing git ended ${failedRead.status} and printed ${JSON.stringify(failedRead.stdout)}`,
+  );
+
+  // A stage that dies partway fails the whole job and prints nothing, so a history read in part never reads as a whole.
+  const dying = tempDir('reach-unit-dying');
+  fs.writeFileSync(
+    path.join(dying, 'git'),
+    `#!/bin/sh\ncase " $* " in\n  *" rev-list "*)\n    if [ "$STUB_DIE" = list ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; exit 3; fi\n    if [ "$STUB_DIE" = listkill ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; kill -KILL $$; fi\n    exec awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'\n    ;;\n  *" cat-file "*)\n    if [ "$STUB_DIE" = ask ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; exit 4; fi\n    if [ "$STUB_DIE" = askkill ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; kill -KILL $$; fi\n    exec awk '{ printf "%040x tree 0\\n", NR }'\n    ;;\nesac\nexit 2\n`,
+    { mode: 0o755 },
+  );
+  for (const [who, expected, named] of [
+    ['list', 3, 'git rev-list exited 3'],
+    ['ask', 4, 'git cat-file exited 4'],
+    ['listkill', 137, 'git rev-list was killed by SIGKILL'],
+    ['askkill', 137, 'git cat-file was killed by SIGKILL'],
+  ]) {
+    const died = spawnSync(process.execPath, [reader], {
+      encoding: 'utf8',
+      input: JSON.stringify({ mode: 'trees', list: ['rev-list', 'HEAD'], ask: ['cat-file', '--batch-check'], path: 'evals/verdict' }),
+      env: { ...BASE_ENV, STUB_DIE: who, PATH: `${dying}${path.delimiter}${BASE_ENV.PATH}` },
+      timeout: 60_000,
+      killSignal: 'SIGKILL',
+    });
+    check(
+      died.status === expected && died.stdout === '' && died.stderr.includes(named),
+      `the streaming reader over a ${who} that dies ended ${died.status}, printed ${JSON.stringify(died.stdout.slice(0, 80))} and said ${JSON.stringify(died.stderr.slice(0, 120))}; expected ${expected}, nothing and "${named}"`,
+    );
+  }
+  // The same through a build: a commit list that fails refuses the workspace, and no folder tree goes unreplaced.
+  const listing = makeHistoryRepository('reach-unit-listing');
+  let listingRefusal = null;
+  withGitWrapper(
+    'case " $* " in\n  *" rev-list "*) case " $* " in\n    *--objects*) ;;\n    *) echo "rev-list broke" >&2; exit 1 ;;\n  esac ;;\nesac',
+    null,
+    () => {
+      try {
+        build(listing, 'listing');
+      } catch (error) {
+        listingRefusal = error;
+      }
+    },
+  );
+  check(
+    listingRefusal instanceof WorkspaceRefusal && listingRefusal.message.includes('rev-list'),
+    `a failing commit list did not refuse the workspace: ${listingRefusal?.message}`,
+  );
+
+  // Every walk of the history that grows with it goes through the streaming reader, not a buffered `runGit`.
+  const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'workspace.js'), 'utf8');
+  const treesBody = source.slice(source.indexOf('function treesAtPath('), source.indexOf('function tagsWithin('));
+  check(
+    treesBody.includes("mode: 'trees'") && !/\brunGit\(/.test(treesBody),
+    "treesAtPath no longer reads the history's commits and trees through the streaming reader",
+  );
+  check(
+    source.includes("mode: 'missing'") && source.includes("mode: 'pack'") && source.includes("mode: 'reached'"),
+    "the build no longer reads the store walk, the folder's objects and a partial clone's pack through the streaming reader",
+  );
+
+  // A pack job's revisions travel on standard input, so a history with thousands of tags and folder trees is no argument
+  // vector's problem, and a pack that dies early ends the job at once with its own status.
+  const packers = tempDir('reach-unit-pack');
+  fs.writeFileSync(
+    path.join(packers, 'git'),
+    `#!/bin/sh\ncase " $* " in\n  *" rev-list "*)\n    cat >/dev/null\n    exec awk 'BEGIN { for (i = 1; i <= 2000000; i++) printf "%040x\\n", i }'\n    ;;\n  *" pack-objects "*)\n    if [ -n "$STUB_PACK_FAIL" ]; then echo "pack-objects broke" >&2; exit 3; fi\n    if [ -n "$STUB_PACK_KILL" ]; then kill -TERM $$; fi\n    exec cat >/dev/null\n    ;;\nesac\nexit 2\n`,
+    { mode: 0o755 },
+  );
+  const manyRevs = Array.from({ length: 20_000 }, (_, index) => `^${index.toString(16).padStart(40, '0')}`);
+  for (const [label, env, expected, named] of [
+    ['a pack of 20,000 revisions', {}, 0, ''],
+    ['a pack that fails early', { STUB_PACK_FAIL: '1' }, 3, 'git pack-objects exited 3'],
+    ['a pack a signal kills', { STUB_PACK_KILL: '1' }, 143, 'git pack-objects was killed by SIGTERM'],
+  ]) {
+    const packed = spawnSync(process.execPath, [reader], {
+      encoding: 'utf8',
+      input: JSON.stringify({ mode: 'pack', list: ['rev-list', '--objects', '--stdin'], pack: ['pack-objects', 'out'], revs: manyRevs }),
+      env: { ...BASE_ENV, ...env, PATH: `${packers}${path.delimiter}${BASE_ENV.PATH}` },
+      timeout: 60_000,
+      killSignal: 'SIGKILL',
+    });
+    check(
+      packed.status === expected && packed.stderr.includes(named),
+      `the streaming reader over ${label} ended ${packed.status} ${packed.error?.code ?? ''}; expected ${expected} and "${named}": ${packed.stderr.slice(0, 200)}`,
+    );
+  }
+
+  // A withheld path with a non-ASCII name: the folder is found at the commit that tracks it, and one removed from the index
+  // but still in the history is withheld there.
+  const unicode = makeHistoryRepository('reach-unit-unicode');
+  const accented = path.join(unicode.repository, 'évaluation');
+  fs.mkdirSync(accented);
+  fs.writeFileSync(path.join(accented, 'answers.txt'), 'SECRET-ANSWER\n');
+  git(unicode.repository, ['add', '--all']);
+  git(unicode.repository, ['commit', '--quiet', '--message', 'accented folder']);
+  const accentedWorkspace = build({ repository: unicode.repository, folder: accented }, 'unicode-tracked');
+  try {
+    check(
+      runConfined(accentedWorkspace, accented, 'git show HEAD:évaluation/answers.txt 2>/dev/null | grep -c SECRET; git show HEAD:src/a.txt')
+        .stdout === '0\nsource a, changed\n',
+      "a folder with a non-ASCII name was readable through the target's git, or the build lost the rest of the tree",
+    );
+  } finally {
+    removeWorkspace(accentedWorkspace);
+  }
+  git(unicode.repository, ['rm', '--quiet', '--cached', '-r', 'évaluation']);
+  fs.writeFileSync(path.join(unicode.repository, '.gitignore'), 'évaluation/\n');
+  git(unicode.repository, ['add', '--all']);
+  git(unicode.repository, ['commit', '--quiet', '--message', 'untrack the accented folder']);
+  check(
+    git(unicode.repository, ['show', 'HEAD~1:évaluation/answers.txt']).toString('utf8') === 'SECRET-ANSWER\n',
+    'the project itself cannot read the untracked accented folder from its history, so the case below proves nothing',
+  );
+  const removedWorkspace = build({ repository: unicode.repository, folder: accented }, 'unicode-removed');
+  try {
+    const removed = runConfined(
+      removedWorkspace,
+      accented,
+      'git cat-file -t HEAD~1:évaluation; git ls-tree -r HEAD~1:évaluation | wc -l | tr -d " "; git show HEAD~1:évaluation/answers.txt 2>/dev/null | grep -c SECRET',
+    );
+    check(
+      removed.stdout === 'tree\n0\n0\n',
+      `a folder with a non-ASCII name that the index no longer tracks was readable in the history through the target's git: ${JSON.stringify(removed)}`,
+    );
+  } finally {
+    removeWorkspace(removedWorkspace);
+  }
+}
+
 /** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
 function checkConfinementReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -7386,6 +8082,24 @@ function checkConfinementReference() {
       section.includes("the project's git directory is withheld") &&
       /a target that must read the project's git directory opts out/i.test(section),
     "the reference's confinement section does not say the target's git sees the evaluation folder as an empty tree, that the project's git directory is withheld and that a target that must read it opts out",
+  );
+  // Story 1.80: the three limits the withheld repository had are gone, and the section says what replaces each.
+  check(
+    !/no branches or tags/.test(section) &&
+      !/six million objects/.test(section) &&
+      !/A project that is a partial clone[^\n]*is refused/.test(section) &&
+      !/Five limits apply/.test(section) &&
+      /^ {2}Two limits apply\.$/m.test(section),
+    "the reference's confinement section still lists the partial-clone, tag or very-large-history limit, or does not count the two limits that remain",
+  );
+  check(
+    section.includes('A project cloned with a promisor remote') &&
+      section.includes('no process of a confined run fetches from the remote') &&
+      section.includes('lists the tags of your project that point into the evaluated commit') &&
+      section.includes('reads every walk that grows with the history as a stream') &&
+      section.includes('a driver whose name holds a space and a `required` written with no value') &&
+      section.includes('an older git makes a partial-clone project exit 12, with the way out named'),
+    "the reference's confinement section does not say a promisor-remote project runs without a fetch, that the target's git lists the project's tags, that the history is read as a stream and that a filter driver's whole configuration is carried",
   );
   // Story 1.59: the one private home a confined trial may write, and the variables that name it.
   check(
@@ -8819,6 +9533,8 @@ const CASES = [
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement', lossy: true },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
+  { name: "a confined target's git reach", body: checkWithheldHistoryReach, group: 'confinement' },
+  { name: "the withheld git history's reach units", body: checkWithheldHistoryReachUnits, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
   { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
   { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },

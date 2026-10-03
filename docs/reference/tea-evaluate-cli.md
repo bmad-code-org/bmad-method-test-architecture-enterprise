@@ -389,15 +389,19 @@ Each target runs confined, and so does every process it starts, one still runnin
   Each tree your history holds at the evaluation folder's path is replaced by the empty tree (a `refs/replace/` entry), so `git show` and `git cat-file` find no committed file of the folder at the evaluated commit, at an older one or by a blob id read from `git log --raw`, `git --no-replace-objects` finds no folder object, and `git status`, `git log`, `git diff` and `git show HEAD:<path>` work over the rest of the tree and list no deletion.
   A file outside the folder that holds a folder file's bytes stays readable, and so does a directory outside the folder with the same content as one inside it, since those bytes are readable at that other path.
   The object directories your git directory borrows from (`objects/info/alternates`) are withheld the same way.
-  The runtime packs the history for the first workspace of a confined run and links its objects into each later workspace for the same commit, so a large history costs time at the start of the run, and a step of the build that fails exits 12 and removes the workspace.
+  The runtime packs the history for the first workspace of a confined run and links its objects into each later workspace for the same commit and tags, so a large history costs time at the start of the run, and a step of the build that fails exits 12 and removes the workspace.
+  It reads every walk that grows with the history as a stream, so no buffer bounds the size of a history it builds, and each step has a limit of 10 minutes.
+  A project cloned with a promisor remote (`--filter=blob:none`, `--filter=tree:0` and the like) runs confined: the private repository holds the objects your clone holds on disk, and no process of a confined run fetches from the remote.
+  The runtime asks git not to fetch lazily, which git 2.44 and later honors; an older git makes a partial-clone project exit 12, with the way out named.
+  A historical probe's checkout of a revision whose objects your clone lacks on disk exits 12 and names the revision, since a confined run fetches nothing; check the revision out once in your clone, or set `"confinement": false`.
+  A command in the target that needs an object your clone lacks, such as `git log -p` across a commit whose blobs you never fetched, ends with git's own missing-object error.
+  The target's git lists the tags of your project that point into the evaluated commit's history, lightweight and annotated, with their annotations, so `git tag -l`, `git describe --tags` and a build that reads a tag work.
+  The target's worktree is on a detached `HEAD`, as it is in a run that opted out, and your branches are not carried.
   The private repository carries your local `core.autocrlf`, `core.eol`, `core.safecrlf`, `core.filemode`, `core.ignorecase`, `core.symlinks`, `core.precomposeunicode`, `core.trustctime` and `core.checkstat`, and your `info/exclude` and `info/attributes`, so the target's `git status` reads the tree as yours does; it carries no remote, URL, credential or hook.
-  The target's git carries the project's tracked filter drivers (`filter.<name>.clean`, `.smudge`, `.process` and `.required`), so a file a driver filters reads as unmodified in the target's `git status`, as it does in yours.
-  Five limits apply.
+  The target's git carries the project's tracked filter drivers (`filter.<name>.clean`, `.smudge`, `.process` and `.required`, a driver whose name holds a space and a `required` written with no value included), and a `core.` setting from the list above written with no value reads as true, so a file a driver filters reads as unmodified in the target's `git status`, as it does in yours.
+  Two limits apply.
   The withheld path is the evaluation folder's current path, so a folder that moved stays readable in the history at its old path.
   A directory outside the folder whose tree is identical to a tree of the folder reads as empty.
-  The target's git carries `HEAD` and the history but no branches or tags of your project.
-  A history of more than about six million objects (about four million in a SHA-256 repository) is refused with exit 12 in a confined run, since the walk's output exceeds the buffer the runtime reads it into.
-  A project that is a partial clone (`extensions.partialClone`, or a remote with `promisor` set) is refused with exit 12 in a confined run, since packing its history would fetch all of it: fetch the full history, or set `"confinement": false`.
   A target that must read the project's git directory opts out;
 - cannot change its worktree's git state: `git add`, `git commit`, `git stash` and `git checkout -b` write the index, objects and refs of the private repository and the worktree's entry in your git directory, outside the workspace, and fail; a target that must commit opts out;
 - cannot start a setuid program under Seatbelt (`ps` and `sudo` on macOS), which the system refuses to any sandboxed process; `pgrep` lists processes there;
