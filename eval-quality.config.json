@@ -988,6 +988,14 @@
           "reason": "an evaluation.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/evaluation.schema.json), which this gate does not scan"
         },
         {
+          "token": "installDigest",
+          "reason": "a framework-versions.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/framework-versions.schema.json), which this gate does not scan"
+        },
+        {
+          "token": "installSource",
+          "reason": "a framework-versions.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/framework-versions.schema.json), which this gate does not scan"
+        },
+        {
           "token": "minimumAgreement",
           "reason": "a field of evaluation.json's judgeCalibration and evaluatorQualification blocks, declared by the runtime's JSON schema, which this gate does not scan"
         },
