@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-004",
+  "mutationSource": "references/gaps.md: the tea-evaluate 13 row of the AD-10 exit table is gone",
+  "targetArtifact": "src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "| `tea-evaluate 13`       | evaluation evidence drift                     | Read the differences the `pr` replay lists and repair what moved them, or run `tea-evaluate compare --accept` once the adopter confirms the new evidence is intended; `ci --tier pr` exits 13 on drift.                                                                                                                                                                                                                                                                                                                                      |\n",
+    "replace": "",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "Asked for the complete exit table, Stage 11 lists twelve rows, so the list-exit-table reply carries an exits array of twelve records without tea-evaluate 13."
+}

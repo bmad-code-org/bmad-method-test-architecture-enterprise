@@ -97,7 +97,7 @@ A Linux target whose call to a model provider, an outside service or a database 
 
 ## Map AD-10 exits and classes to repairs
 
-Preserve source, exit, stderr, and artifact path. The same numeric exit can name different faults from different tools.
+Preserve source, exit, stderr, and artifact path. The same numeric exit can name different faults from different tools. A request that names no command or no exit, or names an exit this table does not list for that source, has no class: say so, ask for the source, exit and stderr, and never guess a class.
 
 | Source and exit         | AD-10 class                                   | Concrete repair                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

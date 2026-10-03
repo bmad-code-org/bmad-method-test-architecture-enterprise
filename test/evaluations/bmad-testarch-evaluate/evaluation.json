@@ -3,7 +3,7 @@
   "evaluationId": "bmad-testarch-evaluate",
   "requirements": {
     "path": "requirements.md",
-    "digest": "sha256:b1e246bffd06e8dff03fa6c4c03a1dac53b6d94b3a925bd72a49f5dbccec054b"
+    "digest": "sha256:6aec0ba2b9477862ff58c95fd5e92722d5829f46678adce791595f41829f9204"
   },
   "targetKind": "skill",
   "interface": "cli",
@@ -47,6 +47,7 @@
       "node_modules"
     ]
   },
+  "confinement": false,
   "arms": [
     "clean",
     "mutated"
