@@ -2,7 +2,7 @@
 title: 'Prove a sealed-brief accepted-baseline replay through ci starts no agent version probe'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7364dc4aae01252f3e92a5682376cdd5c264a6d4'

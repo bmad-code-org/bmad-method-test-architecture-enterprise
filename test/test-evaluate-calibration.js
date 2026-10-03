@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { calibrationObservation, calibrationProblems } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationProblems, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
 const { suite } = require('./lib/evaluate-story-121');
 
 const test = suite('tea-evaluate-calibration');
@@ -74,6 +74,18 @@ try {
   );
   assert.equal(seen.length, 1);
   assert.equal(typeof seen[0].interfaceId, 'string', 'the calibration observation names no interface');
+  // Story 1.103: a criterion's step gives its own interface and operation, also where two interfaces share the operation ID.
+  const shared = {
+    interactionPlan: [
+      { stepId: 'first-run', interfaceId: 'grader-cli', operationId: 'grade-answer' },
+      { stepId: 'second-run', interfaceId: 'grader-api', operationId: 'grade-answer' },
+    ],
+  };
+  const pairOf = (contract, stepId) => calibrationStepPair(contract, { evidence: `/interactions/${stepId}/stdout` });
+  assert.deepEqual(pairOf(shared, 'first-run'), { interfaceId: 'grader-cli', operationId: 'grade-answer' });
+  assert.deepEqual(pairOf(shared, 'second-run'), { interfaceId: 'grader-api', operationId: 'grade-answer' });
+  assert.deepEqual(pairOf(shared, 'absent-run'), { interfaceId: 'calibration', operationId: 'calibration' });
+  assert.deepEqual(pairOf({}, 'first-run'), { interfaceId: 'calibration', operationId: 'calibration' });
 
   const project = test.project(
     'judge',

@@ -2611,7 +2611,7 @@ So that the two-interface attribution of Story 1.42 stays protected at every loo
 **Given** the review round's list of surviving mutants in `story-1.42.md` (the phase snapshot and unclassified-observation findings in `score.js`, the `degenerateAnswer` and `armPortFor` lookups in `sealed-brief-agent.js`, the calibration observation and step ceiling in `run.js`, `calibration.js` and `arm.js`, and the option-set and gameability lookups in `check.js`)
 **When** each mutant is applied in a disposable copy and the suites that read it run
 **Then** every one fails a named test, and a mutant that still survives gets a test that fails on it in the same pull request
-**And** the Story 2.4 capture-record guard fails when a `migrations` entry names a false `from` digest, when the entry is absent and when `evaluation.json` changes by anything but the declared migration
+**And** the Story 2.4 capture-record guard fails when a `migrations` entry names a digest (`from` or `to`, which Story 1.42's review removed from the entry because the rebuilt bytes are the only authority), when a `wrote` digest is retyped, when the entry is absent and when `evaluation.json` changes by anything but the declared migration
 **And** a lookup site that no test can reach from a compiled contract is recorded in the story record as unreachable with the engine rule that makes it so.
 
 **Dependencies:** 1.42.

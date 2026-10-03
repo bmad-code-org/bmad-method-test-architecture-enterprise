@@ -77,7 +77,7 @@ development_status:
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: done
   1-40-calibrate-rubric-scores-imported-from-harness-records: done
   1-41-confine-score-output-during-concurrent-run-directory-changes: done
-  1-42-attribute-reused-operation-ids-to-their-interfaces: review
+  1-42-attribute-reused-operation-ids-to-their-interfaces: done
   1-43-keep-ungraded-framework-errors-out-of-target-findings: done
   1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
@@ -135,7 +135,7 @@ development_status:
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: review
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
-  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
+  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: review
   1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
   1-105-partition-rubrics-in-a-partition-plan: backlog
   1-106-partition-waivers-in-a-partition-plan: backlog
@@ -151,7 +151,7 @@ development_status:
   1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract: backlog
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
-  1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: review
+  1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
   epic-1-retrospective: optional
 

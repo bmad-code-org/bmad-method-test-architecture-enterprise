@@ -270,6 +270,8 @@ function checkOperationPhaseCoverage() {
       'skill-root': { literal: 'skill' },
       'timeout-ms': { literal: '5000' },
     };
+    const [step] = value.interactionPlan;
+    value.interactionPlan.push({ ...structuredClone(step), stepId: 'second-run', interfaceId: 'second-interface' });
   });
   editJson(tight, 'evaluation.json', (value) => {
     for (const entry of value.registry) Object.assign(entry, { target: 'tea-skill-runner', infrastructureExitCodes: [3, 4, 5, 6] });
@@ -277,8 +279,12 @@ function checkOperationPhaseCoverage() {
   });
   const tightResult = runCli(['check', '--evaluation', tight]);
   check(
-    !/interactionPlan\[\d+\] hands/.test(tightResult.output),
+    !tightResult.output.includes('interactionPlan[0] hands'),
     `a second interface with a tighter ceiling drew a finding for the first interface's step\n${tightResult.output}`,
+  );
+  check(
+    tightResult.output.includes('interactionPlan[1] hands') && tightResult.output.includes("must be below the entry's maxElapsedMs (1000)"),
+    `the step on the second interface was not held to its own entry's ceiling\n${tightResult.output}`,
   );
   const second = copyValid();
   declareOnSecondInterface(second);
@@ -288,13 +294,39 @@ function checkOperationPhaseCoverage() {
     value.interactionPlan.push({ ...structuredClone(step), stepId: 'second-run', interfaceId: 'second-interface' });
   });
   plantGameability(second, {
-    response: (degenerate) => (degenerate.steps['second-run'] = { stdout: '', stderr: '', exitCode: 9 }),
+    response: (degenerate) => {
+      // Both interfaces share the executable and an answer of 9, which only the second interface's entry declares as infrastructure.
+      degenerate.steps['tea-atdd-runner-run'] = { stdout: '', stderr: '', exitCode: 9 };
+      degenerate.steps['second-run'] = { stdout: '', stderr: '', exitCode: 9 };
+    },
   });
   const secondResult = runCli(['check', '--evaluation', second]);
   check(
     secondResult.output.includes('step second-run exits 9, which its registry entry declares as an infrastructure exit code') &&
       !secondResult.output.includes('step tea-atdd-runner-run exits'),
     `a gameability answer for a step on the second interface was not held to that interface's codes\n${secondResult.output}`,
+  );
+  // A principal is mapped to the interface its step names: with the operation ID on two interfaces, the step on the first
+  // interface draws no mapping finding and the step on the second one, mapped to the first, draws one.
+  const principals = copyValid();
+  declareOnSecondInterface(principals);
+  editJson(principals, 'contract.json', (value) => {
+    value.testData.principals = { operator: { kind: 'human' } };
+    value.interactionPlan[0].inputBinding.stdin.prompt = { principal: 'operator' };
+    const [step] = value.interactionPlan;
+    value.interactionPlan.push({ ...structuredClone(step), stepId: 'second-run', interfaceId: 'second-interface' });
+  });
+  editJson(principals, 'evaluation.json', (value) => {
+    value.principalMappings = { operator: { interfaceId: 'tea-atdd-runner', environmentKey: 'HOME' } };
+  });
+  const principalResult = runCli(['check', '--evaluation', principals]);
+  check(
+    principalResult.output.includes(
+      'interactionPlan[1].inputBinding.stdin.prompt maps principal "operator" to interface "tea-atdd-runner"',
+    ) &&
+      principalResult.output.includes('uses "second-interface"') &&
+      !principalResult.output.includes('interactionPlan[0].inputBinding'),
+    `a principal mapping was not held to the interface of each step that shares an operation ID\n${principalResult.output}`,
   );
   const repeated = copyValid();
   editJson(repeated, 'contract.json', (value) =>

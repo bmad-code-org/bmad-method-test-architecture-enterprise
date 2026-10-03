@@ -2529,11 +2529,14 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
  * names no placement. `bytes` is the repository as committed; a revert case changes one of its entries.
  */
 const EVALUATION_FILE = 'evals/answer-grade/evaluation.json';
+/** What a `migrations` entry may carry: the file, the story that moved it and the change in words. */
+const MIGRATION_FIELDS = ['file', 'story', 'change'];
 
 /**
  * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
  * `operationPhases` flattened from `{ interfaceId: { operationId: phase } }` to `{ operationId: phase }`, serialized as the
- * session left it. `null` when the file is not a schema 2 file with nested phases, or an operation ID repeats across interfaces.
+ * session left it. `null` when the file is not a schema 2 file with nested phases in the runtime's serialization, or an operation
+ * ID repeats across interfaces.
  */
 function reverseSchema2Migration(buffer) {
   let value;
@@ -2543,6 +2546,8 @@ function reverseSchema2Migration(buffer) {
     return null;
   }
   if (value?.schemaVersion !== 2 || value.operationPhases === null || typeof value.operationPhases !== 'object') return null;
+  // The migrated file is the serialization the runtime writes, so any other byte (whitespace included) is an edit.
+  if (buffer.toString('utf8') !== `${JSON.stringify(value, null, 2)}\n`) return null;
   const flat = {};
   for (const byOperation of Object.values(value.operationPhases)) {
     if (byOperation === null || typeof byOperation !== 'object') return null;
@@ -2577,6 +2582,12 @@ function captureProblems(name, record, bytes) {
     if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42' || migrated.has(migration.file))
       problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
     migrated.add(migration?.file);
+    // The rebuilt bytes are the only authority: a digest the entry names (`from`, `to`) is a second claim nothing checks.
+    const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.includes(key));
+    if (claims.length > 0)
+      problems.push(
+        `${name}: the migration of ${migration?.file} names ${claims.join(', ')}, which the rebuilt bytes are the only authority for`,
+      );
   }
   for (const relative of WROTE_KEYS) {
     const digest = record.wrote?.[relative];
@@ -2906,34 +2917,6 @@ function checkRepositoryPlans() {
       captureProblems(side.name, record, changedRepository).some((problem) => problem.includes('a repository file changed')),
       `${side.name}: a changed repository file passed`,
     );
-    // Story 1.42: the schema 2 migration is the only edit the session's evaluation.json may carry.
-    const unmigrated = structuredClone(record);
-    delete unmigrated.migrations;
-    assert.ok(
-      captureProblems(side.name, unmigrated, side.repository.bytes).some((problem) =>
-        problem.includes('is not the file the live session wrote'),
-      ),
-      `${side.name}: a migrated evaluation.json with no declared migration passed`,
-    );
-    const evaluationBytes = side.repository.bytes.get(EVALUATION_FILE);
-    const retiered = new Map(side.repository.bytes);
-    retiered.set(EVALUATION_FILE, Buffer.from(evaluationBytes.toString('utf8').replace('"pr"', '"merge"')));
-    assert.ok(
-      captureProblems(side.name, record, retiered).some((problem) => problem.includes('is not the file the live session wrote')),
-      `${side.name}: an edit to evaluation.json beyond the declared migration passed`,
-    );
-    const asWritten = new Map(side.repository.bytes);
-    asWritten.set(EVALUATION_FILE, reverseSchema2Migration(evaluationBytes));
-    assert.ok(
-      captureProblems(side.name, record, asWritten).some((problem) => problem.includes('declared migration could have produced')),
-      `${side.name}: a declared migration over a file that was never migrated passed`,
-    );
-    const unknown = structuredClone(record);
-    unknown.migrations.push({ file: 'evals/answer-grade/ci/evaluation-ci-plan.json', story: '1.42', change: 'none' });
-    assert.ok(
-      captureProblems(side.name, unknown, side.repository.bytes).some((problem) => problem.includes('the tests do not know')),
-      `${side.name}: a migration of the plan passed`,
-    );
     const undigested = structuredClone(record);
     delete undigested.repositoryRead;
     assert.ok(
@@ -2952,6 +2935,118 @@ function checkRepositoryPlans() {
       const plan = structuredClone(side.plan);
       drift(plan.checks.find((item) => item.id === 'twin-run' && item.placement.tier !== 'pr'));
       assert.ok(planProblems(side.name, plan, side.repository, side.required, side.folder).length > 0, `${side.name}: ${label} passed`);
+    }
+  }
+}
+
+/**
+ * The Story 2.4 capture-record guard (Story 1.103). Each `wrote` digest is the one a live session produced, and `evaluation.json`
+ * moved to schema 2 after it, so the record declares that migration and the guard rebuilds the session's bytes by reversing it. Every
+ * case below is a record or a tree that the guard has to refuse by the problem it names; a guard that read the entry's shape alone,
+ * or compared nothing, passes the cases it names a mutant of.
+ */
+function checkCaptureRecordGuard() {
+  for (const [name, { root }] of Object.entries(REPOSITORIES)) {
+    const record = read(path.join(ROOT, root, 'capture-record.json'));
+    const { bytes } = loadRepository(root);
+    assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the committed record fails its own guard`);
+    assert.deepEqual(
+      record.migrations?.map((migration) => Object.keys(migration).sort()),
+      [MIGRATION_FIELDS.toSorted()],
+      `${name}: the committed migration entry carries more than ${MIGRATION_FIELDS.join(', ')}`,
+    );
+    const evaluationBytes = bytes.get(EVALUATION_FILE);
+    const wrongDigest = `sha256:${'0'.repeat(64)}`;
+    const planKey = 'evals/answer-grade/ci/evaluation-ci-plan.json';
+    const withMigrations = (migrations) => ({ ...structuredClone(record), migrations });
+    const withEvaluation = (text) => new Map([...bytes, [EVALUATION_FILE, Buffer.from(text)]]);
+    const evaluationText = evaluationBytes.toString('utf8');
+    const evaluationValue = JSON.parse(evaluationText);
+    const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`;
+    const cases = [
+      [
+        'a migration entry that names a false from digest',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, from: wrongDigest }))),
+        bytes,
+        'which the rebuilt bytes are the only authority for',
+      ],
+      [
+        'a migration entry that names a false to digest',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, to: wrongDigest }))),
+        bytes,
+        'which the rebuilt bytes are the only authority for',
+      ],
+      [
+        'a wrote digest retyped to the migrated file as it stands',
+        { ...structuredClone(record), wrote: { ...record.wrote, [EVALUATION_FILE]: sha(evaluationBytes) } },
+        bytes,
+        'is not the file the live session wrote',
+      ],
+      [
+        'a record with no migrations entry',
+        (({ migrations: _migrations, ...rest }) => rest)(structuredClone(record)),
+        bytes,
+        'is not the file the live session wrote',
+      ],
+      ['a record with an empty migrations list', withMigrations([]), bytes, 'is not the file the live session wrote'],
+      [
+        'an evaluation.json whose tiers changed beyond the declared migration',
+        record,
+        withEvaluation(evaluationText.replace('"pr"', '"merge"')),
+        'is not the file the live session wrote',
+      ],
+      [
+        'an evaluation.json with a byte appended beyond the declared migration',
+        record,
+        withEvaluation(`${evaluationText} `),
+        'declared migration could have produced',
+      ],
+      [
+        'an evaluation.json whose operationPhases changed beyond the declared migration',
+        record,
+        withEvaluation(evaluationText.replace(/"(?:process|outcome)"/, (phase) => (phase === '"process"' ? '"outcome"' : '"process"'))),
+        'is not the file the live session wrote',
+      ],
+      [
+        'a migrated file that claims schema 1 beside its nested phases',
+        record,
+        withEvaluation(serialized({ ...evaluationValue, schemaVersion: 1 })),
+        'declared migration could have produced',
+      ],
+      [
+        'a migrated file that reuses an operation ID across two interfaces, which no flat map could have held',
+        record,
+        withEvaluation(
+          serialized({
+            ...evaluationValue,
+            operationPhases: {
+              ...evaluationValue.operationPhases,
+              'second-interface': structuredClone(Object.values(evaluationValue.operationPhases)[0]),
+            },
+          }),
+        ),
+        'declared migration could have produced',
+      ],
+      [
+        'a declared migration over a file that was never migrated',
+        record,
+        new Map([...bytes, [EVALUATION_FILE, reverseSchema2Migration(evaluationBytes)]]),
+        'declared migration could have produced',
+      ],
+      [
+        'a migration of a file the tests do not know',
+        withMigrations([...record.migrations, { file: planKey, story: '1.42', change: 'none' }]),
+        bytes,
+        'the tests do not know',
+      ],
+      ['a migration declared twice', withMigrations([...record.migrations, ...record.migrations]), bytes, 'the tests do not know'],
+    ];
+    for (const [label, candidate, tree, expected] of cases) {
+      const problems = captureProblems(name, candidate, tree);
+      assert.ok(
+        problems.some((problem) => problem.includes(expected)),
+        `${name}: ${label} did not fail with "${expected}"; the guard said ${JSON.stringify(problems)}`,
+      );
     }
   }
 }
@@ -2982,6 +3077,7 @@ async function main() {
     ['the fixture adopters', checkFixtureTiers],
     ['the committed live tiers', checkCommittedLiveTiers],
     ['the plans of two repositories', checkRepositoryPlans],
+    ['the capture-record guard', checkCaptureRecordGuard],
     ['the live tiers', checkLiveTiers],
     ['the strength floor', checkStrengthFloors],
     ['a weak target', checkWeakProject],
