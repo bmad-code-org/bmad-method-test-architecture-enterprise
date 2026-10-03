@@ -109,6 +109,7 @@ An adopter describes a target, confirms its required behavior, and chooses or bu
 - Story 1.108: Compile and seal each partition view in `ci`
 - Story 1.109: Partition gameability degenerate responses
 - Story 1.110: Designate one oracle per behavior in the both view
+- Story 1.111: Guide Stage 6 preflight by partition and refuse an unpartitioned plan preflight
 - Story 1.76: Require an explicit custom-agent version response
 
 ## Requirements & Constraints

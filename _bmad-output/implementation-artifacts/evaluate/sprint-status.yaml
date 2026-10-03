@@ -138,6 +138,7 @@ development_status:
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
   1-109-partition-gameability-degenerate-responses: backlog
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
+  1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
   1-76-require-an-explicit-custom-agent-version-response: backlog
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: backlog
   epic-1-retrospective: optional
@@ -224,6 +225,7 @@ parallel_lanes:
     - 1-108-compile-and-seal-each-partition-view-in-ci
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
+    - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
@@ -243,4 +245,5 @@ owner_handoff:
       - 1-108-compile-and-seal-each-partition-view-in-ci
       - 1-109-partition-gameability-degenerate-responses
       - 1-110-designate-one-oracle-per-behavior-in-the-both-view
+      - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

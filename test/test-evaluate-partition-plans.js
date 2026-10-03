@@ -486,7 +486,8 @@ try {
   assert.equal(unarmed.status, 0, unarmed.output);
   // A path outside corpus/held-out/ opens nothing, whatever the file there holds.
   const outside = path.resolve(guarded.folder, '../../../outside.json');
-  fs.writeFileSync(outside, '{"canary-outside": true}');
+  // A valid plan with a canary step ID, so a reader that opens it parses, validates and views it instead of failing the plan shape.
+  fs.writeFileSync(outside, fs.readFileSync(planFile, 'utf8').replaceAll('held-out-run', 'canary-outside-run'));
   const traversal = checked(() => change('evaluation.json', (value) => (value.partitionPlan.heldOutPlan = '../../../outside.json')));
   assert.equal(traversal.status, 10, traversal.output);
   assert.match(
@@ -504,7 +505,7 @@ try {
         },
         partition: 'held-out',
       }),
-    PartitionPlanError,
+    (error) => error instanceof PartitionPlanError && /is not a file directly under corpus\/held-out\//.test(error.message),
   );
   // A corpus directory that is a link to a folder elsewhere holds a file the pattern admits and the folder does not own.
   const elsewhere = path.join(guarded.directory, 'elsewhere');

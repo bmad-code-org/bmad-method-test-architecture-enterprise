@@ -676,6 +676,7 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'Add no `partition` field to a step',
     'names every defect by path and ID without quoting the plan',
     '`tea-evaluate preflight --partition held-out`',
+    'neither the plan file nor a held-out baseline under `baseline/`',
     'beside any evaluator but the deterministic one',
     'has no designated oracle there',
     'selects with an `any` matcher',
@@ -1392,6 +1393,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'Under a `partitionPlan`, add `--partition development` to that preflight',
       'builds the both view and launches the held-out request during authoring',
       'run `--partition held-out` only after the development review',
+      '<evaluation-folder>`. Under a `partitionPlan`',
+      'development review. A nonzero exit halts this stage',
     ])
       requireText(adapterGuide, marker, 'adapters.md partition plan preflight', failures);
     const adapterOpening = adapterGuide.split('\n## ')[0];
@@ -3138,6 +3141,7 @@ function checkGapsGuidance(guide, engine, failures) {
         'validCount',
         'caughtCount',
         'development',
+        'a held-out baseline under `baseline/` included',
       ],
     ],
   ])
@@ -3965,6 +3969,12 @@ async function main() {
         (text) => text.replace('selects with an `any` matcher', 'selects with the private literal'),
       ],
       [
+        'corpus partition plan closed baseline removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('neither the plan file nor a held-out baseline under `baseline/`', 'no plan file'),
+      ],
+      [
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
@@ -4030,6 +4040,12 @@ async function main() {
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
         (text) => text.replace(/^\| `caught`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps closed baseline removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(' and a held-out baseline under `baseline/` included', ' included'),
       ],
       [
         'gaps discipline removal',

@@ -25,7 +25,7 @@ The gameability response blocks use one illustrative `decide` step. After Story 
 
 ## Isolate held-out steps from the development plan
 
-A held-out probe that needs a request of its own must not put that request in `contract.json`, because a development run launches the whole plan and records every step's request and response, and the gap loop edits that same file. Declare a `partitionPlan` in `evaluation.json` instead, and keep the held-out request in a sealed plan file beside the corpus. Every step stays one of three kinds: shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) and held-out (only in the plan file). Add no `partition` field to a step.
+A held-out probe that needs a request of its own must not put that request in `contract.json`, because a development run launches the whole plan and records every step's request and response, and the gap loop edits that same file. Declare a `partitionPlan` in `evaluation.json` instead, and keep the held-out request in a sealed plan file beside the corpus. Every step stays one of three kinds: shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) and held-out (only in the plan file). Add no `partition` field to a step. The authoring loop reads neither the plan file nor a held-out baseline under `baseline/`.
 
 <!-- example:partition-plan -->
 

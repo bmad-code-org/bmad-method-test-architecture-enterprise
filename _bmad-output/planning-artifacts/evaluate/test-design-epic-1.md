@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.77, 1.80 to 1.85, 1.90 to 1.110 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.110. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.77, 1.80 to 1.85, 1.90 to 1.111 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.111. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1517,6 +1517,17 @@ Added 2026-10-03 from Story 1.51's build. Levels: scoring over the both view wit
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ------------------------------------------------------------------ |
 | Both probes are caught  | Score a both run of a behavior with a development and a held-out oracle; assert each probe `caught` against its own oracle | Integration         | P0  | A behavior with two oracles scores `caught: false` for both probes |
 | A both baseline replays | Accept the both run and run `ci --tier pr`; assert no stale warning and both probes caught                                 | Integration, replay | P1  | The replay reads the both view as stale or uncaught                |
+
+### Story 1.111: Guide Stage 6 preflight by partition and refuse an unpartitioned plan preflight
+
+Added 2026-10-03 from Story 1.51's reviews. Levels: guidance contract, CLI integration over the partition-plan fixture, live capture replay.
+
+| AC                                    | Test                                                                                                                                                                 | Level               | P   | Revert check                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | --------------------------------------------------------------------------------------- |
+| Stage 6 names the partition           | Read `SKILL.md` Stage 6 in `test:evaluate-guidance`; assert the `--partition development` clause and the held-out-after-review sentence                              | Guidance contract   | P0  | Deleting the clause fails the marker                                                    |
+| The records pin the edited `SKILL.md` | Run `test:evaluate-ci` over the regenerated `capture-record.json` files                                                                                              | Integration, replay | P0  | The old records beside the edited `SKILL.md` fail with the changed-since-read message   |
+| An unpartitioned plan preflight stops | Run `tea-evaluate preflight` with no `--partition` over the partition-plan fixture; assert exit 64 naming the flag and no run directory holding the held-out step ID | CLI integration     | P0  | Removing the refusal launches the held-out request and puts its ID in the run directory |
+| No plan, no new refusal               | Run `preflight` with no flag over a fixture with no `partitionPlan`; assert the committed replay bytes are unchanged                                                 | CLI integration     | P1  | Refusing every flagless preflight fails the verdict fixture                             |
 
 ## The Dogfood Proof (AD-15)
 
