@@ -1642,6 +1642,15 @@ function writePrCiPlan(folder) {
       ...entry,
       command: entry.command.map((word) => (word === fixtureFolder ? EVALUATION.split(path.sep).join('/') : word)),
     }));
+  check(
+    JSON.stringify(plan.checks.map((entry) => entry.id)) ===
+      JSON.stringify(['check', 'compile', 'seal', 'gameability', 'oracle-agreement', 'replay']),
+    `the verdict plan's pr tier holds ${JSON.stringify(plan.checks.map((entry) => entry.id))}`,
+  );
+  check(
+    plan.checks.every((entry) => entry.command.includes(EVALUATION.split(path.sep).join('/')) || entry.command[0] !== 'tea-evaluate'),
+    'a pr entry of the plan still names the fixture folder',
+  );
   fs.mkdirSync(path.join(folder, 'ci'), { recursive: true });
   writeJson(path.join(folder, 'ci', 'evaluation-ci-plan.json'), plan);
   return plan.checks.map((entry) => entry.id);
@@ -1664,6 +1673,7 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `sealed-brief run exited ${ran.status}: ${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
+  check(runDirectory !== null, 'the sealed-brief run left no run directory');
   if (ran.status !== 0 || runDirectory === null) return;
   const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(runDirectory)], project.env);
   check(scored.status === 0, `sealed-brief run did not score: ${scored.output}`);
@@ -1671,7 +1681,6 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   check(accepted.status === 0, `sealed-brief baseline was not accepted: ${accepted.output}`);
   if (scored.status !== 0 || accepted.status !== 0) return;
   baselines.commitAll(project.repository, 'accept the sealed-brief baseline');
-  const launchesBeforeReplay = captures(capture).length;
   // The runner lacks the agent CLI: the command becomes a tripwire that records any invocation, a version read included.
   const tripwire = path.join(path.dirname(agentScript), 'invoked.log');
   fs.writeFileSync(
@@ -1702,7 +1711,16 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
       );
       const replay = ci.checks.find((row) => row.id === 'replay');
       check(replay?.exit === 0 && replay.class === 'pass', `the replay row was ${JSON.stringify(replay)}`);
-      for (const row of ci.checks) check(row.exit === 0, `the ${row.id} row exited ${row.exit} over a sealed-brief baseline`);
+      // The replay carries eval-quality's CONCERNS as warnings, as the ci suite's fixture does; every other row passes plain.
+      for (const row of ci.checks)
+        check(
+          row.exit === 0 && row.action === (row.id === 'replay' ? 'warn' : 'pass'),
+          `the ${row.id} row was exit ${row.exit}, action ${row.action} over a sealed-brief baseline`,
+        );
+      check(
+        (replay?.warnings ?? []).every((line) => /CONCERNS/.test(line)),
+        `the replay warned beyond CONCERNS: ${JSON.stringify(replay?.warnings)}`,
+      );
       const baselineScores = path.join(
         copiedFolder,
         'baseline',
@@ -1720,7 +1738,6 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
         );
       }
     }
-    check(captures(capture).length === launchesBeforeReplay, 'the pr tier launched the removed agent CLI');
     check(!fs.existsSync(tripwire), `the pr tier invoked the removed agent CLI, a version read included: ${tripwire}`);
   } finally {
     for (const copy of copies) fs.rmSync(copy, { recursive: true, force: true });
