@@ -384,7 +384,7 @@ The `atdd`, `automate`, `ci`, `framework`, `nfr`, `teach-me-testing`, `test-desi
 | `bmad-testarch-atdd`        | 3                        | Yes; one unimplemented fixture and five acceptance criteria                         |
 | `bmad-testarch-automate`    | 5                        | Yes; four hand-authored spec sets against a fixed service and its seeded regression |
 | `bmad-testarch-ci`          | 2                        | Yes; one full request, one minimal request and one request over an evaluation plan  |
-| `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, a gap-guide class swap seeded and a second held out         |
+| `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, five seeded probes and four clean controls                  |
 | `bmad-testarch-framework`   | 3                        | Yes; install and smoke-test generated scaffold in network-isolated sandbox          |
 | `bmad-testarch-nfr`         | 2                        | Yes; one evidence bundle with known gaps and one clean bundle                       |
 | `bmad-testarch-test-design` | 5                        | Yes; one seeded epic and one clean control epic                                     |
@@ -395,7 +395,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains 110 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 110 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
+`npm test` chains 111 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 111 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, and the fragment-selection case count. A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.

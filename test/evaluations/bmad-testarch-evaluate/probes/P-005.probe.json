@@ -1,0 +1,90 @@
+{
+  "probeId": "P-005",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[representative] Seeded defect: M-003 changes the one sentence that states the web-application rule to the web interface kind, which no contract may declare.",
+  "defects": [
+    {
+      "defectId": "D-003",
+      "behaviorId": "B-002",
+      "summary": "Stage 1 maps a web application to the web interface kind, which eval-quality never compiles.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-web-interface",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"targetKind\":{\"type\":\"string\"},\"interface\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"targetKind\",\"interface\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 1 (Inspection) of this skill for the target described below, and stop once it is classified. Answer from the skill's own guides; do not run commands and do not write files.\n\nTarget: a web application for booking dental appointments. Patients use it in a browser; it serves HTML pages and a JSON HTTP API. It has no AI features.\n\nClassify the target with the skill's mapping. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"targetKind\": \"<the targetKind value>\", \"interface\": \"<the interface kind>\"}\n"
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-web-interface/stdout/interface"
+            },
+            {
+              "literal": "web"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Run only Stage 1 (Inspection) of this skill for the target described below, and stop once it is classified. Answer from the skill's own guides; do not run commands and do not write files.\n\nTarget: a web application for booking dental appointments. Patients use it in a browser; it serves HTML pages and a JSON HTTP API. It has no AI features.\n\nClassify the target with the skill's mapping. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"targetKind\": \"<the targetKind value>\", \"interface\": \"<the interface kind>\"}\n"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/interface"
+          },
+          {
+            "literal": "web"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-003"
+  }
+}

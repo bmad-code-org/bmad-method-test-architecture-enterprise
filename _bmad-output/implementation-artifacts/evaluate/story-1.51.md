@@ -2,7 +2,7 @@
 title: 'Story 1.51: Isolate interaction plans by evaluation partition'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 baseline_commit: 'c041cf9655d93a0f00bcb44412f563e6f44fe7a1'
 route: 'dispatch'
 review_loop_iteration: 0

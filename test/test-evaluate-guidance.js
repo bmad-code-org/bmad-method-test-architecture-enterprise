@@ -132,7 +132,7 @@ function checkInspection(inspection, failures) {
     ],
     ['Tool-use system: tool server', '`mcp`', '`createMcpAdapter`', 'Registry entry supplying `McpTargetAuthorization`'],
     [
-      'AI feature or any web application',
+      'AI feature',
       '`api`',
       'adopter-owned `EnvironmentProbePort`',
       '`adapter/http-probe-port.mjs` and its conformance file, with address decisions delegated to eval-quality',
@@ -187,6 +187,41 @@ function checkInspection(inspection, failures) {
     'incident notes',
   ])
     requireText(inspection, marker, 'inspection.md', failures);
+  // Story 1.46: the dogfood suite's seeded B-002 probe edits this one sentence, and a mutation that edits one place
+  // qualifies only while the rule is stated in that place alone. The word `web`, `webapp` or `website` appears in one line of the skill, the
+  // sentence of inspection.md that states the rule, so a second line naming it (a restatement in any spelling, a bare
+  // `API` or an unquoted `AI feature` included) fails here and the seed's mutation could no longer manifest.
+  {
+    const skillFiles = Object.fromEntries(
+      fs
+        .readdirSync(SKILL_ROOT, { recursive: true, encoding: 'utf8' })
+        .filter((file) => fs.statSync(path.join(SKILL_ROOT, file)).isFile() && !file.endsWith('.memlog.md'))
+        .sort()
+        .map((file) => [file, fs.readFileSync(path.join(SKILL_ROOT, file), 'utf8')]),
+    );
+    const webLines = (files) =>
+      Object.entries(files).flatMap(([file, text]) =>
+        text.split('\n').flatMap((line, index) => (/\bweb(?:apps?|sites?)?\b/i.test(line) ? [`${file}:${index + 1}`] : [])),
+      );
+    const found = webLines(skillFiles);
+    if (found.length !== 1 || !found[0].startsWith(path.join('references', 'inspection.md')))
+      failures.push(`the web-application rule must be stated once, in inspection.md; found ${JSON.stringify(found)}`);
+    // The guard fires on a planted restatement in any guide.
+    for (const planted of [
+      'Treat any web application as an `api` interface target.',
+      'Every web application is an ai-feature target.',
+      'A web app is an `ai-feature` target reached as `api`.',
+      'Treat any web application as an API target.',
+      'Route every web application through the api interface.',
+      'Web applications are reached as api.',
+      'A web application maps to the AI feature kind over HTTP.',
+      'A webapp is an `ai-feature` target reached as `api`.',
+      'Websites are reached as api.',
+    ]) {
+      const copy = { ...skillFiles, [path.join('references', 'run.md')]: `${skillFiles[path.join('references', 'run.md')]}\n${planted}\n` };
+      if (webLines(copy).length !== 2) failures.push(`the single-statement guard missed a planted restatement: ${planted}`);
+    }
+  }
   const worked = {
     'Entry points': ['skills/reservation-review/SKILL.md', 'stdin', '--skill-root'],
     Behaviors: ['B-001', 'B-002', 'references/limits.md'],
@@ -1438,7 +1473,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'Workflow',
       'Tool-use system: calling agent',
       'Tool-use system: tool server',
-      'AI feature or any web application',
+      'AI feature',
       'Tool server reached over HTTP',
       'Test-review mechanism',
     ];
@@ -3180,17 +3215,27 @@ function checkGapsGuidance(guide, engine, failures) {
       if (row.length !== column.length || !concreteRepair(row[1]))
         failures.push(`gaps.md ${heading} lacks concrete repair: ${row.join(' | ')}`);
   };
+  // Story 1.46: the sentence the dogfood seed M-005 edits; it makes a request with no usable exit a refusal.
+  requireText(
+    headingBody(guide, '## Map AD-10 exits and classes to repairs'),
+    'A request that names no command or no exit, or names an exit this table does not list for that source, has no class: say so, ask for the source, exit and stderr, and never guess a class.',
+    'gaps.md AD-10 exit mapping',
+    failures,
+  );
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   checkIsolationViolationGuidance(guide, failures);
-  // Story 1.61: the dogfood mutations M-001 and M-002 replace two exit-table rows byte for byte, so the rows stay as they are.
-  for (const id of ['M-001', 'M-002']) {
-    const { operator } = JSON.parse(
-      fs.readFileSync(path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations', `${id}.mutation.json`), 'utf8'),
-    );
-    const found = guide.split(operator.find).length - 1;
+  // Stories 1.61 and 1.46: each dogfood mutation replaces bytes of a guide exactly once, so the exit-table rows M-001, M-002 and
+  // M-004 edit and the sentence M-003 edits stay as they are.
+  const mutationFolder = path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations');
+  const mutationFiles = fs.readdirSync(mutationFolder).sort();
+  if (mutationFiles.length === 0) failures.push('the dogfood evaluation holds no mutation for gaps.md to keep intact');
+  for (const name of mutationFiles) {
+    const { mutationId, targetArtifact, operator } = JSON.parse(fs.readFileSync(path.join(mutationFolder, name), 'utf8'));
+    const target = fs.readFileSync(path.join(__dirname, '..', targetArtifact), 'utf8');
+    const found = target.split(operator.find).length - 1;
     if (found !== operator.occurrences)
       failures.push(
-        `gaps.md holds ${found} of the ${operator.occurrences} occurrence(s) of the row ${id} replaces: ${JSON.stringify(operator.find)}`,
+        `${targetArtifact} holds ${found} of the ${operator.occurrences} occurrence(s) of the text ${mutationId} replaces: ${JSON.stringify(operator.find)}`,
       );
   }
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
