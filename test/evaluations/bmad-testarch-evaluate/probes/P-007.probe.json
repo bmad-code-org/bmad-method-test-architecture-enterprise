@@ -1,0 +1,90 @@
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[representative] Seeded defect: M-004 removes the tea-evaluate 13 row from the exit table, so Stage 11 lists twelve exits and an adopter learns no class for the evidence-drift exit.",
+  "defects": [
+    {
+      "defectId": "D-004",
+      "behaviorId": "B-003",
+      "summary": "The exit table lacks its tea-evaluate 13 row.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-list-twelve",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"id\",\"class\"],\"additionalProperties\":false}}},\"required\":[\"basis\",\"status\",\"exits\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+          }
+        },
+        "relation": {
+          "op": "count-tolerance",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-list-twelve/stdout/exits"
+            }
+          ],
+          "expected": 12,
+          "tolerance": 0,
+          "relative": false
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "count-tolerance",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/exits"
+          }
+        ],
+        "expected": 12,
+        "tolerance": 0,
+        "relative": false
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-004"
+  }
+}

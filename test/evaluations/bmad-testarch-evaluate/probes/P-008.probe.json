@@ -1,0 +1,12 @@
+{
+  "probeId": "P-008",
+  "probeClass": "zero-action",
+  "behaviorId": "B-004",
+  "expectedClean": true,
+  "rationale": "[malformed] The declared stdin.prompt key receives a type-violating value, so the request names no command and no exit; the clean skill refuses and gives no class.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No guide change is known to make Stage 11 invent a class at this revision."
+  }
+}

@@ -132,7 +132,7 @@ function checkInspection(inspection, failures) {
     ],
     ['Tool-use system: tool server', '`mcp`', '`createMcpAdapter`', 'Registry entry supplying `McpTargetAuthorization`'],
     [
-      'AI feature or any web application',
+      'AI feature',
       '`api`',
       'adopter-owned `EnvironmentProbePort`',
       '`adapter/http-probe-port.mjs` and its conformance file, with address decisions delegated to eval-quality',
@@ -187,6 +187,21 @@ function checkInspection(inspection, failures) {
     'incident notes',
   ])
     requireText(inspection, marker, 'inspection.md', failures);
+  // Story 1.46: the dogfood suite's seeded B-002 probe edits this one sentence, and a mutation that edits one place
+  // qualifies only while the rule is stated in that place alone. The rule names `web application` with its kind or its
+  // interface, so a restatement anywhere in the skill fails here and the seed's mutation could no longer manifest.
+  {
+    const ruleStatements = [];
+    for (const file of fs.readdirSync(SKILL_ROOT, { recursive: true, encoding: 'utf8' }).sort()) {
+      const full = path.join(SKILL_ROOT, file);
+      if (!fs.statSync(full).isFile() || !/\.(md|json|toml|mjs|gitignore)$/.test(file) || file.endsWith('.memlog.md')) continue;
+      for (const [index, line] of fs.readFileSync(full, 'utf8').split('\n').entries())
+        if (/web application/i.test(line) && /ai-feature|reached (?:as|through)[^.]*`api`|`api` surface/.test(line))
+          ruleStatements.push(`${file}:${index + 1}`);
+    }
+    if (ruleStatements.length !== 1 || !ruleStatements[0].startsWith(path.join('references', 'inspection.md')))
+      failures.push(`the web-application-to-api rule must be stated once, in inspection.md; found ${JSON.stringify(ruleStatements)}`);
+  }
   const worked = {
     'Entry points': ['skills/reservation-review/SKILL.md', 'stdin', '--skill-root'],
     Behaviors: ['B-001', 'B-002', 'references/limits.md'],
@@ -1438,7 +1453,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'Workflow',
       'Tool-use system: calling agent',
       'Tool-use system: tool server',
-      'AI feature or any web application',
+      'AI feature',
       'Tool server reached over HTTP',
       'Test-review mechanism',
     ];
