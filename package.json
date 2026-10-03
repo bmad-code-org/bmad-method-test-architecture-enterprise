@@ -288,7 +288,7 @@
     "zod-to-json-schema": "3.25.1"
   },
   "peerDependencies": {
-    "eval-quality": ">=6.0.1"
+    "eval-quality": ">=7.0.0"
   },
   "peerDependenciesMeta": {
     "eval-quality": {

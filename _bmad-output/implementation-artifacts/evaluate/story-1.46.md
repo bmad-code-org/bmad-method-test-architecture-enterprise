@@ -2,7 +2,7 @@
 title: "Story 1.46: Close the dogfood suite's coverage gaps"
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 baseline_commit: '76356837d84193880b2de8472b3e82376dc713d9'
 route: 'dispatch'
 review_loop_iteration: 1
