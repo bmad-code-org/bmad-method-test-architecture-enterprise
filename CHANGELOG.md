@@ -322,6 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The CI quality chain now uses 12 shards and refreshed measured weights. After the eval-quality 6.0.1 update, the eight-shard run completed every chain 4 script with zero failures but reached the 20-minute job cap before coverage upload; the wider split gives the long agent suite its own runner (Story 1.73).
 - The learned Autoevals pantry fixture now scores `PASS` on published eval-quality 6.0.1 for all three development probes and the held-out probe. Its scalar CLI oracle checks exit code 0 and exact whole stdout together; the critical `success-indicator-separation` gap closes without changing the contract or its three-trial clean and defect outcomes. TeA's optional peer floor, publish guard, release metadata gate, CLI prerequisite and missing-engine guidance now require 6.0.1. Three accepted CI fixture baselines were reaccepted with 6.0.1 while preserving their verdicts and evidence (Story 1.55).
 - The CI chain shards use refreshed evaluator timings and a 20-minute job bound. Story 1.72's evaluator suite took 491 seconds under coverage, twice its old shard weight; the old 15-minute job cap canceled shard 8 during its final markdown lint script after all tests had passed.
 - On POSIX, a detached watchdog now ends an agent's process group if its guardian is stopped and the leader and supervisor die together (Story 1.53). The guardian waits for watchdog readiness before launching the agent; setup failure leaves the agent unstarted.
