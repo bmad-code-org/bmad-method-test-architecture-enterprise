@@ -6,9 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { engineProjection, phaseOf, projectTrial, writeInterpretation } = require('../cli/lib/evaluate/interpret');
+const { ArmError, runArm } = require('../cli/lib/evaluate/arm');
+const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
+const { phaseSnapshotProblems } = require('../cli/lib/evaluate/score');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { buildProject, API_INTERFACE, CLI_INTERFACE, CLI_STEP: CLI_STEP_ID, OPERATION_ID } = require('./lib/evaluate-reused-operation');
 const { scratchDirectories } = require('./lib/scratch-directories');
@@ -190,6 +193,32 @@ async function checkReusedOperation() {
     refuses('a snapshot with an unknown phase', /operation report-release of interface grader unknown phase "setup"/);
     rewritePhases((phases) => (phases[CLI_INTERFACE]['ghost-operation'] = 'process'));
     refuses('a snapshot with an undeclared pair', /run\.json classifies undeclared operation ghost-operation of interface grader-cli/);
+    // A pair whose operation ID another interface declares is judged by its own interface. The records observe both routes, so
+    // `score` meets their unclassified observation first; the snapshot rules are held against the run's real contract directly.
+    const snapshotProblems = (edit) => {
+      const edited = structuredClone(snapshot);
+      edit(edited);
+      return phaseSnapshotProblems({ operationPhases: edited }, contract);
+    };
+    assert.deepEqual(
+      snapshotProblems(() => {}),
+      [],
+      'the run snapshot is complete',
+    );
+    assert.deepEqual(
+      snapshotProblems((phases) => delete phases[CLI_INTERFACE][OPERATION_ID]),
+      [`operation ${OPERATION_ID} of interface ${CLI_INTERFACE} has no phase in run.json`],
+      'a reused operation ID classified on the HTTP interface does not stand in for the command pair',
+    );
+    assert.deepEqual(
+      snapshotProblems((phases) => (phases[CLI_INTERFACE]['report-release'] = 'process')),
+      [`run.json classifies undeclared operation report-release of interface ${CLI_INTERFACE}`],
+      'an operation only the HTTP interface declares is undeclared on the command interface',
+    );
+    assert.deepEqual(
+      snapshotProblems((phases) => (phases[API_INTERFACE][OPERATION_ID] = 'setup')),
+      [`run.json gives operation ${OPERATION_ID} of interface ${API_INTERFACE} unknown phase "setup"`],
+    );
     // A record whose observation names a pair the snapshot does not classify.
     const ghostFile = path.join(run, recordPaths[0]);
     const ghost = read(ghostFile);
@@ -199,6 +228,18 @@ async function checkReusedOperation() {
     ghostRun.artifacts.records[recordPaths[0]] = sha256Of(ghostFile);
     fs.writeFileSync(runJsonFile, `${JSON.stringify(ghostRun, null, 2)}\n`);
     refuses('an observation of an unclassified pair', /names unclassified operation ghost-operation of interface/);
+    // An operation ID the snapshot classifies on another interface does not classify this observation.
+    const crossed = read(ghostFile);
+    const crossedObservation = crossed.observations.find((observation) => observation.interfaceId === CLI_INTERFACE);
+    crossedObservation.operationId = 'report-release';
+    fs.writeFileSync(ghostFile, `${JSON.stringify(crossed, null, 2)}\n`);
+    const crossedRun = read(runJsonFile);
+    crossedRun.artifacts.records[recordPaths[0]] = sha256Of(ghostFile);
+    fs.writeFileSync(runJsonFile, `${JSON.stringify(crossedRun, null, 2)}\n`);
+    refuses(
+      'an observation of an operation the snapshot classifies on another interface',
+      new RegExp(`names unclassified operation report-release of interface ${CLI_INTERFACE}`),
+    );
 
     // A gameability call is answered from the step of its own interface when two interfaces of one kind share an operation ID.
     const twin = structuredClone(read(path.join(run, index.contract)));
@@ -208,8 +249,24 @@ async function checkReusedOperation() {
     second.operations[0].invocation.executable = 'grader-cli-b';
     twin.permittedInterfaces.push(second);
     twin.interactionPlan.push({ ...structuredClone(planned.get(CLI_STEP_ID)), stepId: 'grade-run-cli-b', interfaceId: 'grader-cli-b' });
+    // The command interface also declares a second operation of the same kind under another executable, with a step of its
+    // own: each call is answered from the step of its own operation, not from the first step of its interface.
+    const extra = structuredClone(command.operations[0]);
+    extra.operationId = 'grade-extra';
+    extra.invocation.executable = 'grader-cli-x';
+    command.operations.push(extra);
+    twin.interactionPlan.push({
+      ...structuredClone(planned.get(CLI_STEP_ID)),
+      stepId: 'grade-run-x',
+      interfaceId: CLI_INTERFACE,
+      operationId: 'grade-extra',
+    });
     const twinRegistry = createRegistry(
-      [...evaluationFile.registry, { ...entryOf(CLI_INTERFACE), interfaceId: 'grader-cli-b', executable: 'grader-cli-b' }],
+      [
+        ...evaluationFile.registry,
+        { ...entryOf(CLI_INTERFACE), interfaceId: 'grader-cli-b', executable: 'grader-cli-b' },
+        { ...entryOf(CLI_INTERFACE), executable: 'grader-cli-x' },
+      ],
       { root: project.root },
     );
     const trap = {
@@ -224,20 +281,84 @@ async function checkReusedOperation() {
       degenerate: {
         [CLI_STEP_ID]: { stdout: 'verdict: first\n', stderr: '', exitCode: 0 },
         'grade-run-cli-b': { stdout: 'verdict: second\n', stderr: '', exitCode: 0 },
+        'grade-run-x': { stdout: 'verdict: extra\n', stderr: '', exitCode: 0 },
       },
       label: 'trial-1',
       taken: new Set(),
       firstSequence: 1,
-      budget: 4,
+      budget: 6,
       nonce: crypto.randomBytes(16).toString('hex'),
     });
     const answers = [];
     for (const [name, executable] of [
       [CLI_INTERFACE, CLI_INTERFACE],
       ['grader-cli-b', 'grader-cli-b'],
+      [CLI_INTERFACE, 'grader-cli-x'],
     ])
       answers.push(JSON.parse((await twinRouter.handle({ name, kind: 'cli' }, { arguments: [executable], stdin: 'x' })).text).stdout);
-    assert.deepEqual(answers, ['verdict: first\n', 'verdict: second\n'], 'each interface is answered from its own step');
+    assert.deepEqual(
+      answers,
+      ['verdict: first\n', 'verdict: second\n', 'verdict: extra\n'],
+      'each interface and each operation is answered from its own step',
+    );
+
+    // A step names its operation inside its own interface (Story 1.103). `check` and `compile` refuse most such plans, so the arm's
+    // own refusal is held directly: a step whose operation only another interface declares, and a step on a pair its interface
+    // declares twice. The engine refuses the second shape for the same transport signature, or when a check cites the step
+    // (`unreachable-check-evidence`). An uncited step on a duplicate of another signature compiles, so the arm is the last place
+    // that stops it, and the case compiles it first so a later engine release that refuses it fails here.
+    const armTrap = {
+      probe() {
+        throw new Error('the arm launched a step it should have refused');
+      },
+    };
+    const stepOver = (interfaceId, operationId) => ({
+      ...structuredClone(planned.get(CLI_STEP_ID)),
+      stepId: 'probe-step',
+      interfaceId,
+      operationId,
+      after: null,
+    });
+    const armRefusal = async (edit) => {
+      const edited = structuredClone(read(path.join(run, index.contract)));
+      edit(edited);
+      try {
+        await runArm({ contract: edited, port: armTrap, registry: twinRegistry, label: 'refusal' });
+      } catch (error) {
+        return error;
+      }
+      return null;
+    };
+    // Mutants Ar1 and Ar2 (a pair looked up by operation ID alone) find the HTTP interface's report-release for this step.
+    const wrongInterface = await armRefusal((edited) => (edited.interactionPlan = [stepOver(CLI_INTERFACE, 'report-release')]));
+    assert.ok(wrongInterface instanceof ArmError, `a step on an interface that does not declare its operation ran: ${wrongInterface}`);
+    assert.match(
+      wrongInterface.message,
+      new RegExp(`names operation report-release on interface ${CLI_INTERFACE}, which that interface does not declare`),
+    );
+    const duplicateReport = (edited) => {
+      const api = edited.permittedInterfaces.find((candidate) => candidate.logicalId === API_INTERFACE);
+      const twice = structuredClone(api.operations.find((operation) => operation.operationId === 'report-release'));
+      twice.pathTemplate = `${twice.pathTemplate}/again`;
+      api.operations.push(twice);
+    };
+    const compiling = structuredClone(read(path.join(folder, 'contract.json')));
+    duplicateReport(compiling);
+    compiling.interactionPlan.push(stepOver(API_INTERFACE, 'report-release'));
+    const engine = await loadEngine();
+    assert.doesNotThrow(
+      () => engine.compile(compiling),
+      'eval-quality refuses an uncited step on a pair declared twice; the arm case no longer holds',
+    );
+    const declaredTwice = await armRefusal((edited) => {
+      duplicateReport(edited);
+      edited.interactionPlan = [stepOver(API_INTERFACE, 'report-release')];
+    });
+    assert.ok(declaredTwice instanceof ArmError, `a step on a pair its interface declares twice ran: ${declaredTwice}`);
+    assert.match(
+      declaredTwice.message,
+      new RegExp(`names operation report-release on interface ${API_INTERFACE}, which that interface declares twice`),
+    );
 
     // A sealed record of the prior schema version is refused with the engine's named stamp finding, and nothing is scored.
     const [firstRecord] = recordPaths;

@@ -51,7 +51,7 @@ const { QualificationError } = require('../cli/lib/evaluate/mutation');
 const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { TARGET_ARTIFACT, deriveReplaceExact, qualifyTestDesignMutation, scoreDocument } = require('./lib/test-design-qualification');
 const { GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, run, writeCorpora } = require('../tools/generate-probes');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
@@ -786,6 +786,9 @@ async function checkSignals() {
       `signal-${signal}`,
       `if (input.phase === 'mutated') { fs.writeSync(1, 'READY ' + input.file + '\\n'); for (const end = Date.now() + 4000; Date.now() < end; ) { /* a synchronous arm */ } }`,
     );
+    // The parent the cycle makes is held before it exists: the reaper of a suite running at the same time removes the parent of
+    // every dead process, and the case needs the killed cycle's parent for the next cycle to reclaim.
+    holdPrivateParents(child.pid);
     const deadline = Date.now() + 30_000;
     while (!/READY (.+)\n/.test(printed()) && Date.now() < deadline && child.exitCode === null) {
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -803,6 +806,7 @@ async function checkSignals() {
     // Dead processes' parents: the one the killed cycle left, and one planted under a pid known to be dead.
     const left = parent === null ? [] : [parent];
     const dead = spawnSync(process.execPath, ['-e', '']);
+    holdPrivateParents(dead.pid);
     const planted = path.join(privateRootIn(privateRootBase()), `run-${dead.pid}-planted`);
     fs.mkdirSync(planted);
     fs.writeFileSync(path.join(planted, 'design.md'), 'x');

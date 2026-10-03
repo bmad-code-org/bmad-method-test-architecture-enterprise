@@ -742,7 +742,8 @@ function pairKey(interfaceId, operationId) {
 
 /**
  * Each operation the contract declares, by `(interfaceId, operationId)`, with its interface. Two interfaces may declare
- * one operation identifier; one interface declaring it twice is ambiguous and the engine's compile refuses it.
+ * one operation identifier. One interface declaring it twice is ambiguous: the engine's compile refuses that for one transport
+ * signature or when a check cites a step that names the pair, and an uncited step on it compiles, so the arm refuses it.
  */
 function operationsByPair(contract) {
   const index = new Map();

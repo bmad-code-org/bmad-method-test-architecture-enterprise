@@ -2,7 +2,7 @@
 title: 'Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository'
 type: 'bugfix'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c041cf9655d93a0f00bcb44412f563e6f44fe7a1'

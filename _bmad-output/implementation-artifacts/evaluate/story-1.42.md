@@ -2,7 +2,7 @@
 title: 'Story 1.42: Attribute reused operation IDs to their interfaces'
 type: 'feature'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3401cbfb6393a1a3e9375e62fb30e0ddab0e0079'

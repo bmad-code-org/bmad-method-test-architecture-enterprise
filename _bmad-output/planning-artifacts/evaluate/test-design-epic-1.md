@@ -1257,6 +1257,16 @@ Added 2026-10-03 in Story 1.78's round 1 review. Levels: integration. File: `tes
 | The gameability branch scores under the wire | Story 1.78's case over a sealed-brief project that holds a gameability probe; assert the `gameability` row passes, its notes omit `no gameability probe`, and the wire records nothing | Integration | P1  | A version read after the check's no-probe return trips the wire |
 | The stub keeps its other modes               | The other sealed-brief cases of the suite run unchanged against the extended stub                                                                                                      | Integration | P2  | A stub change that alters another mode fails that mode's case   |
 
+### Story 1.120: Hold the partial-clone failing-pack refusal to one outcome on Linux
+
+Added 2026-10-03 in Story 1.103's round 2. Levels: Linux repro loop, integration. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`) and a loop script that runs its case repeatedly.
+
+| AC                                        | Test                                                                                                                                                       | Level      | P   | Revert check                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --- | ------------------------------------------------------------------------- |
+| One refusal on every run                  | Run the failing-pack case 200 times on Linux, serially and eight at a time; assert each refusal names `rev-list`, `pack-objects` and the wrapper's message | Repro loop | P1  | The loop fails at least once on the unfixed code and passes after the fix |
+| The cause is named and fixed at its site  | Read the story record for the cause (`git-lines.js`, the store cache or the case) and the change that closes it                                            | Record     | P2  | A fix with no named cause fails the review                                |
+| The loop runs on demand in CI's Linux job | Run the committed loop script from the Linux job's manual trigger                                                                                          | CI         | P2  | A loop that cannot run on the Linux image fails its own job               |
+
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 
 Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
@@ -1550,13 +1560,15 @@ Added 2026-10-02 in Story 1.42. Levels: engine unit, compile contract, registry 
 
 ### Story 1.103: Prove the Story 1.42 review fixes against their mutants
 
-Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real eval-quality, contract. Files: the Evaluate suites named in the story gate and `test/test-evaluate-ci.js`.
+Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real eval-quality, contract. Files: the Evaluate suites named in the story gate (which include `test:evaluate-mutation` and `test:test-design-qualification`, whose private-parent cases hold their parents through `test/lib/scratch-directories.js`) and `test/test-evaluate-ci.js`.
 
-| AC                                             | Test                                                                                                                                                    | Level    | P   | Revert check                                                               |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- | -------------------------------------------------------------------------- |
-| Each survivor's test kills its mutant          | Apply each listed mutant in a /tmp copy and run the suites that read the site; record the failing test per mutant                                       | Mutation | P0  | A mutant that still passes every suite has no test and is added in this PR |
-| The capture-record guard rejects a false entry | Set a `migrations` entry's `from` to a wrong digest, remove the entry, and change `evaluation.json` beyond the declared migration; each fails the suite | Contract | P0  | A guard that checks only the entry's shape passes the false `from`         |
-| Unreachable sites are recorded with the reason | Read the story record for each site no compiled contract reaches and the engine rule that blocks it                                                     | Record   | P2  | An unexplained untested site fails the review                              |
+Amended 2026-10-03 in Story 1.103's build: the entry no longer has `from` or `to` (Story 1.42's review removed them, since the rebuilt bytes are the only authority), so the guard row reads a digest the entry must not carry and a retyped `wrote` digest where it first read a false `from`.
+
+| AC                                             | Test                                                                                                                                                                                                              | Level    | P   | Revert check                                                                                                                                                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each survivor's test kills its mutant          | Apply each listed mutant in a /tmp copy and run the suites that read the site; record the failing test per mutant                                                                                                 | Mutation | P0  | A mutant that still passes every suite has no test and is added in this PR                                                                                                                      |
+| The capture-record guard rejects a false entry | Add a `from` or `to` digest to a `migrations` entry, retype a `wrote` digest, remove the entry, and change `evaluation.json` beyond the declared migration; each fails a named case of `the capture-record guard` | Contract | P0  | A guard that allows `migrations` entry fields beyond `file`, `story` and `change` passes the named digest, and one that never compares `wrote` with the rebuilt bytes passes the retyped digest |
+| Unreachable sites are recorded with the reason | Read the story record for each site no compiled contract reaches and the engine rule that blocks it                                                                                                               | Record   | P2  | An unexplained untested site fails the review                                                                                                                                                   |
 
 ### Story 1.104: Count only behavior-linked oracles for success separation
 

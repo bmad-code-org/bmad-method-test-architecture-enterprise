@@ -39,7 +39,13 @@ const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 const { suite } = require('./lib/evaluate-story-121');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const {
+  holdPrivateParents,
+  liveHolder,
+  releasePrivateParents,
+  removeDeadPrivateParents,
+  scratchDirectories,
+} = require('./lib/scratch-directories');
 
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
@@ -1572,45 +1578,54 @@ async function checkInterruptedReplay() {
   // staging included, and the next ci run over the same folder removes all of it.
   fs.rmSync(mark, { force: true });
   const killedRun = ciChild(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_MARK: mark }));
-  assert.ok(await appears(mark), 'the replay did not reach the engine stage');
-  // ci first, so no cleanup runs, then the stage it was waiting on.
-  killedRun.child.kill('SIGKILL');
-  await killedRun.exited;
-  process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
-  const killedPid = killedRun.child.pid;
-  assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
-  const [replay] = replaysOf(killedPid);
-  const owner = read(path.join(replay, '.tea-evaluate-ci-owner.json'));
-  assert.equal(owner.folder, fs.realpathSync.native(folder));
-  assert.equal(owner.pid, killedPid);
-  assert.ok(fs.readdirSync(path.join(replay, 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
-  const dead = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
-  // A parent whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
-  const planted = [];
-  const plant = (parentName, name, value) => {
-    const parent = path.join(PRIVATE_ROOT, parentName);
-    fs.mkdirSync(path.join(parent, name), { recursive: true });
-    fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
-    planted.push(parent);
-    return parentName;
-  };
+  // The parent this ci makes is held before it exists: the reaper of a suite running at the same time removes the parent of
+  // every dead process, which this ci is about to become, before the next ci run gets to it.
+  holdPrivateParents(killedRun.child.pid);
   try {
-    const live = plant(`run-${process.pid}-liveown`, 'tea-evaluate-replay-live-owner', {
-      pid: process.pid,
-      folder: fs.realpathSync.native(folder),
-    });
-    const other = plant(`run-${dead.pid}-otherfol`, 'tea-evaluate-replay-other-folder', {
-      pid: dead.pid,
-      folder: path.join(temp, 'some-other-evaluation'),
-    });
-    const again = ci(folder, 'pr', env());
-    assert.equal(again.status, 0, again.output);
-    assert.match(again.stderr, /removed the replay scratch directory/);
-    assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the dead owner's scratch directory of this folder");
-    for (const name of [live, other]) assert.ok(privateNames().includes(name), `the next ci run removed ${name}`);
-    assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+    assert.ok(await appears(mark), 'the replay did not reach the engine stage');
+    // ci first, so no cleanup runs, then the stage it was waiting on.
+    killedRun.child.kill('SIGKILL');
+    await killedRun.exited;
+    process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
+    const killedPid = killedRun.child.pid;
+    assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
+    const [replay] = replaysOf(killedPid);
+    const owner = read(path.join(replay, '.tea-evaluate-ci-owner.json'));
+    assert.equal(owner.folder, fs.realpathSync.native(folder));
+    assert.equal(owner.pid, killedPid);
+    assert.ok(fs.readdirSync(path.join(replay, 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
+    const dead = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
+    holdPrivateParents(dead.pid);
+    // A parent whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
+    const planted = [];
+    const plant = (parentName, name, value) => {
+      const parent = path.join(PRIVATE_ROOT, parentName);
+      fs.mkdirSync(path.join(parent, name), { recursive: true });
+      fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
+      planted.push(parent);
+      return parentName;
+    };
+    try {
+      const live = plant(`run-${process.pid}-liveown`, 'tea-evaluate-replay-live-owner', {
+        pid: process.pid,
+        folder: fs.realpathSync.native(folder),
+      });
+      const other = plant(`run-${dead.pid}-otherfol`, 'tea-evaluate-replay-other-folder', {
+        pid: dead.pid,
+        folder: path.join(temp, 'some-other-evaluation'),
+      });
+      const again = ci(folder, 'pr', env());
+      assert.equal(again.status, 0, again.output);
+      assert.match(again.stderr, /removed the replay scratch directory/);
+      assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the dead owner's scratch directory of this folder");
+      for (const name of [live, other]) assert.ok(privateNames().includes(name), `the next ci run removed ${name}`);
+      assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+    } finally {
+      for (const parent of planted) fs.rmSync(parent, { recursive: true, force: true });
+    }
   } finally {
-    for (const parent of planted) fs.rmSync(parent, { recursive: true, force: true });
+    // A case that fails before the second ci run leaves the killed ci's parent, which its hold keeps from every reaper.
+    for (const name of privateParents(killedRun.child.pid)) fs.rmSync(path.join(PRIVATE_ROOT, name), { recursive: true, force: true });
   }
 }
 
@@ -2529,13 +2544,32 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
  * names no placement. `bytes` is the repository as committed; a revert case changes one of its entries.
  */
 const EVALUATION_FILE = 'evals/answer-grade/evaluation.json';
+const CONTRACT_FILE = 'evals/answer-grade/contract.json';
+/** What a `migrations` entry may carry: the file, the story that moved it and the change in words. */
+const MIGRATION_FIELDS = ['file', 'story', 'change'];
 
 /**
  * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
  * `operationPhases` flattened from `{ interfaceId: { operationId: phase } }` to `{ operationId: phase }`, serialized as the
- * session left it. `null` when the file is not a schema 2 file with nested phases, or an operation ID repeats across interfaces.
+ * session left it. `null` when the file is not a schema 2 file with nested phases in the runtime's serialization, a phase
+ * interface is not one of its registry's, a phase pair is not one the contract beside it declares (`pairs`, as JSON
+ * `[interfaceId, operationId]`), or an operation ID repeats across interfaces.
  */
-function reverseSchema2Migration(buffer) {
+
+/** The `[interfaceId, operationId]` pairs, as JSON, the contract in `bytes` declares. */
+function declaredPairs(bytes) {
+  try {
+    const contract = JSON.parse(bytes.get(CONTRACT_FILE).toString('utf8'));
+    return new Set(
+      contract.permittedInterfaces.flatMap((iface) =>
+        iface.operations.map((operation) => JSON.stringify([iface.logicalId, operation.operationId])),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
+}
+function reverseSchema2Migration(buffer, pairs) {
   let value;
   try {
     value = JSON.parse(buffer.toString('utf8'));
@@ -2543,10 +2577,18 @@ function reverseSchema2Migration(buffer) {
     return null;
   }
   if (value?.schemaVersion !== 2 || value.operationPhases === null || typeof value.operationPhases !== 'object') return null;
+  // The migrated file is the serialization the runtime writes, so any other byte (whitespace included) is an edit.
+  if (buffer.toString('utf8') !== `${JSON.stringify(value, null, 2)}\n`) return null;
+  // Each interface key is one the file declares, so phases re-keyed under an interface it never declared are an edit.
+  const declared = new Set(Array.isArray(value.registry) ? value.registry.map((entry) => entry?.interfaceId) : []);
   const flat = {};
-  for (const byOperation of Object.values(value.operationPhases)) {
+  for (const [interfaceId, byOperation] of Object.entries(value.operationPhases)) {
+    if (!declared.has(interfaceId)) return null;
     if (byOperation === null || typeof byOperation !== 'object') return null;
     for (const [operationId, phase] of Object.entries(byOperation)) {
+      // The flat map keeps no interface, so an operation moved between two declared interfaces would rebuild the same bytes;
+      // each pair has to be one the file's contract declares.
+      if (!pairs.has(JSON.stringify([interfaceId, operationId]))) return null;
       if (Object.hasOwn(flat, operationId)) return null;
       flat[operationId] = phase;
     }
@@ -2574,15 +2616,22 @@ function captureProblems(name, record, bytes) {
   // the only edit the file may carry.
   const migrated = new Set();
   for (const migration of record.migrations ?? []) {
-    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42' || migrated.has(migration.file))
+    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42')
       problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
+    else if (migrated.has(migration.file)) problems.push(`${name}: the capture record declares the migration of ${migration.file} twice`);
     migrated.add(migration?.file);
+    // The rebuilt bytes are the only authority: a digest the entry names (`from`, `to`) is a second claim nothing checks.
+    const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.includes(key));
+    if (claims.length > 0)
+      problems.push(
+        `${name}: the migration of ${migration?.file} names ${claims.join(', ')}, which the rebuilt bytes are the only authority for`,
+      );
   }
   for (const relative of WROTE_KEYS) {
     const digest = record.wrote?.[relative];
     let written = bytes.get(relative) ?? Buffer.alloc(0);
     if (migrated.has(relative)) {
-      const rebuilt = reverseSchema2Migration(written);
+      const rebuilt = reverseSchema2Migration(written, declaredPairs(bytes));
       if (rebuilt === null) problems.push(`${name}: ${relative} is not a schema 2 file the declared migration could have produced`);
       else written = rebuilt;
     }
@@ -2906,34 +2955,6 @@ function checkRepositoryPlans() {
       captureProblems(side.name, record, changedRepository).some((problem) => problem.includes('a repository file changed')),
       `${side.name}: a changed repository file passed`,
     );
-    // Story 1.42: the schema 2 migration is the only edit the session's evaluation.json may carry.
-    const unmigrated = structuredClone(record);
-    delete unmigrated.migrations;
-    assert.ok(
-      captureProblems(side.name, unmigrated, side.repository.bytes).some((problem) =>
-        problem.includes('is not the file the live session wrote'),
-      ),
-      `${side.name}: a migrated evaluation.json with no declared migration passed`,
-    );
-    const evaluationBytes = side.repository.bytes.get(EVALUATION_FILE);
-    const retiered = new Map(side.repository.bytes);
-    retiered.set(EVALUATION_FILE, Buffer.from(evaluationBytes.toString('utf8').replace('"pr"', '"merge"')));
-    assert.ok(
-      captureProblems(side.name, record, retiered).some((problem) => problem.includes('is not the file the live session wrote')),
-      `${side.name}: an edit to evaluation.json beyond the declared migration passed`,
-    );
-    const asWritten = new Map(side.repository.bytes);
-    asWritten.set(EVALUATION_FILE, reverseSchema2Migration(evaluationBytes));
-    assert.ok(
-      captureProblems(side.name, record, asWritten).some((problem) => problem.includes('declared migration could have produced')),
-      `${side.name}: a declared migration over a file that was never migrated passed`,
-    );
-    const unknown = structuredClone(record);
-    unknown.migrations.push({ file: 'evals/answer-grade/ci/evaluation-ci-plan.json', story: '1.42', change: 'none' });
-    assert.ok(
-      captureProblems(side.name, unknown, side.repository.bytes).some((problem) => problem.includes('the tests do not know')),
-      `${side.name}: a migration of the plan passed`,
-    );
     const undigested = structuredClone(record);
     delete undigested.repositoryRead;
     assert.ok(
@@ -2954,6 +2975,318 @@ function checkRepositoryPlans() {
       assert.ok(planProblems(side.name, plan, side.repository, side.required, side.folder).length > 0, `${side.name}: ${label} passed`);
     }
   }
+}
+
+/**
+ * The Story 2.4 capture-record guard (Story 1.103). Each `wrote` digest is the one a live session produced, and `evaluation.json`
+ * moved to schema 2 after it, so the record declares that migration and the guard rebuilds the session's bytes by reversing it. Every
+ * case below is a record or a tree that the guard has to refuse by the problem it names; a guard that read the entry's shape alone,
+ * or compared nothing, passes the cases it names a mutant of.
+ */
+function checkCaptureRecordGuard() {
+  for (const [name, { root }] of Object.entries(REPOSITORIES)) {
+    const record = read(path.join(ROOT, root, 'capture-record.json'));
+    const { bytes } = loadRepository(root);
+    assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the committed record fails its own guard`);
+    assert.deepEqual(
+      record.migrations?.map((migration) => Object.keys(migration).sort()),
+      [MIGRATION_FIELDS.toSorted()],
+      `${name}: the committed migration entry carries more than ${MIGRATION_FIELDS.join(', ')}`,
+    );
+    const evaluationBytes = bytes.get(EVALUATION_FILE);
+    const wrongDigest = `sha256:${'0'.repeat(64)}`;
+    const planKey = 'evals/answer-grade/ci/evaluation-ci-plan.json';
+    const withMigrations = (migrations) => ({ ...structuredClone(record), migrations });
+    const withEvaluation = (text) => new Map([...bytes, [EVALUATION_FILE, Buffer.from(text)]]);
+    const evaluationText = evaluationBytes.toString('utf8');
+    const evaluationValue = JSON.parse(evaluationText);
+    const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`;
+    // The contract of the tree with one more interface, a copy of its first under `interfaceId` with `operationId` in place of its operation.
+    const withInterface = (tree, interfaceId, operationId = null) => {
+      const contract = JSON.parse(tree.get(CONTRACT_FILE).toString('utf8'));
+      const added = structuredClone(contract.permittedInterfaces[0]);
+      added.logicalId = interfaceId;
+      if (operationId !== null) added.operations[0].operationId = operationId;
+      contract.permittedInterfaces.push(added);
+      return new Map([...tree, [CONTRACT_FILE, Buffer.from(serialized(contract))]]);
+    };
+    const cases = [
+      [
+        'a migration entry that names a false from digest',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, from: wrongDigest }))),
+        bytes,
+        'which the rebuilt bytes are the only authority for',
+      ],
+      [
+        'a migration entry that names a false to digest',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, to: wrongDigest }))),
+        bytes,
+        'which the rebuilt bytes are the only authority for',
+      ],
+      [
+        'a wrote digest retyped to the migrated file as it stands',
+        { ...structuredClone(record), wrote: { ...record.wrote, [EVALUATION_FILE]: sha(evaluationBytes) } },
+        bytes,
+        'is not the file the live session wrote',
+      ],
+      [
+        'a record with no migrations entry',
+        (({ migrations: _migrations, ...rest }) => rest)(structuredClone(record)),
+        bytes,
+        'is not the file the live session wrote',
+      ],
+      ['a record with an empty migrations list', withMigrations([]), bytes, 'is not the file the live session wrote'],
+      [
+        'an evaluation.json whose tiers changed beyond the declared migration',
+        record,
+        withEvaluation(evaluationText.replace('"pr"', '"merge"')),
+        'is not the file the live session wrote',
+      ],
+      [
+        'an evaluation.json with a byte appended beyond the declared migration',
+        record,
+        withEvaluation(`${evaluationText} `),
+        'declared migration could have produced',
+      ],
+      [
+        'an evaluation.json whose operationPhases changed beyond the declared migration',
+        record,
+        withEvaluation(evaluationText.replace(/"(?:process|outcome)"/, (phase) => (phase === '"process"' ? '"outcome"' : '"process"'))),
+        'is not the file the live session wrote',
+      ],
+      [
+        'a migrated file that claims schema 1 beside its nested phases',
+        record,
+        withEvaluation(serialized({ ...evaluationValue, schemaVersion: 1 })),
+        'declared migration could have produced',
+      ],
+      [
+        'a migrated file that reuses an operation ID across two interfaces, which no flat map could have held',
+        record,
+        withInterface(
+          withEvaluation(
+            serialized({
+              ...evaluationValue,
+              registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+              operationPhases: {
+                ...evaluationValue.operationPhases,
+                'second-interface': structuredClone(Object.values(evaluationValue.operationPhases)[0]),
+              },
+            }),
+          ),
+          'second-interface',
+        ),
+        'declared migration could have produced',
+      ],
+      [
+        'a declared migration over a file that was never migrated',
+        record,
+        new Map([...bytes, [EVALUATION_FILE, reverseSchema2Migration(evaluationBytes, declaredPairs(bytes))]]),
+        'declared migration could have produced',
+      ],
+      [
+        'a migration of a file the tests do not know',
+        withMigrations([...record.migrations, { file: planKey, story: '1.42', change: 'none' }]),
+        bytes,
+        'the tests do not know',
+      ],
+      [
+        'a migration declared twice',
+        withMigrations([...record.migrations, ...record.migrations]),
+        bytes,
+        `declares the migration of ${EVALUATION_FILE} twice`,
+      ],
+      [
+        'a migration credited to another story',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, story: '1.43' }))),
+        bytes,
+        'the tests do not know',
+      ],
+      [
+        'a migrated file whose phases are keyed under an interface its registry never declared',
+        record,
+        // The contract declares the ghost interface, so only the registry can refuse it.
+        withInterface(
+          withEvaluation(
+            serialized({ ...evaluationValue, operationPhases: { 'ghost-interface': Object.values(evaluationValue.operationPhases)[0] } }),
+          ),
+          'ghost-interface',
+        ),
+        'declared migration could have produced',
+      ],
+    ];
+    for (const [label, candidate, tree, expected] of cases) {
+      const problems = captureProblems(name, candidate, tree);
+      assert.ok(
+        problems.some((problem) => problem.includes(expected)),
+        `${name}: ${label} did not fail with "${expected}"; the guard said ${JSON.stringify(problems)}`,
+      );
+    }
+    // An operation moved between two interfaces the file declares rebuilds the same flat bytes, since the flat map keeps no
+    // interface: the pair has to be one the contract declares. The honest file and the moved one flatten alike.
+    const [operationId, phase] = Object.entries(Object.values(evaluationValue.operationPhases)[0])[0];
+    const [interfaceId] = Object.keys(evaluationValue.operationPhases);
+    const twoInterfaces = (phases) =>
+      withInterface(
+        withEvaluation(
+          serialized({
+            ...evaluationValue,
+            registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+            operationPhases: phases,
+          }),
+        ),
+        'second-interface',
+        'second-operation',
+      );
+    const honestPhases = { [interfaceId]: { [operationId]: phase }, 'second-interface': { 'second-operation': 'process' } };
+    const movedPhases = { [interfaceId]: { [operationId]: phase, 'second-operation': 'process' }, 'second-interface': {} };
+    const flatBytes = Buffer.from(
+      serialized({
+        ...evaluationValue,
+        schemaVersion: 1,
+        registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+        operationPhases: { [operationId]: phase, 'second-operation': 'process' },
+      }),
+    );
+    const sessionRecord = { ...structuredClone(record), wrote: { ...record.wrote, [EVALUATION_FILE]: sha(flatBytes) } };
+    const rewritten = (problems) =>
+      problems.filter((problem) => problem.includes('could have produced') || problem.includes('is not the file'));
+    assert.deepEqual(
+      rewritten(captureProblems(name, sessionRecord, twoInterfaces(honestPhases))),
+      [],
+      `${name}: the honest two-interface file was refused`,
+    );
+    assert.ok(
+      rewritten(captureProblems(name, sessionRecord, twoInterfaces(movedPhases))).some((problem) =>
+        problem.includes('could have produced'),
+      ),
+      `${name}: an operation moved to another declared interface, keeping order, was accepted`,
+    );
+  }
+}
+
+/**
+ * The holds of `test/lib/scratch-directories.js` (Story 1.103): the reaper of dead processes' private parents leaves a parent
+ * a live suite holds, and a hold whose text names no live positive process id holds nothing.
+ */
+function checkScratchHolds() {
+  const uid = process.getuid();
+  const holdsName = `tea-evaluate-test-holds-p${uid}`;
+  const gonePid = () => spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  const gone = gonePid();
+  for (const [text, expected] of [
+    [String(process.pid), true],
+    ['', false],
+    ['0', false],
+    ['-1', false],
+    ['x', false],
+    ['1.5', false],
+    [String(gone), false],
+  ])
+    assert.equal(liveHolder(text), expected, `a hold reading ${JSON.stringify(text)} is ${expected ? 'live' : 'no hold'}`);
+  const library = path.join(__dirname, 'lib', 'scratch-directories.js');
+  const reapIn = (base) => `require(${JSON.stringify(library)}).removeDeadPrivateParents(${JSON.stringify(base)})`;
+  const privateRootOf = (base) => {
+    const root = path.join(base, `tea-evaluate-p${uid}`);
+    fs.mkdirSync(root, { mode: 0o700 });
+    return root;
+  };
+
+  const base = scratch.make('holds-base');
+  const root = privateRootOf(base);
+  const holds = path.join(base, holdsName);
+  const second = gonePid();
+  const third = gonePid();
+  const unplanted = gonePid();
+  const deadHolder = gonePid();
+  holdPrivateParents(gone, base);
+  for (const owner of [gone, second, third]) fs.mkdirSync(path.join(root, `run-${owner}-planted`));
+  // A hold left by a suite that is gone holds nothing, and the reaper removes it whether or not a parent is named for it; so do
+  // an empty hold (a hold is written whole, so it is not a write in progress), a staged file of a gone suite and a stray file.
+  fs.writeFileSync(path.join(holds, String(third)), String(second));
+  fs.writeFileSync(path.join(holds, String(unplanted)), String(deadHolder));
+  fs.writeFileSync(path.join(holds, String(second)), '');
+  fs.writeFileSync(path.join(holds, `${unplanted}.${deadHolder}.tmp`), String(deadHolder));
+  fs.writeFileSync(path.join(holds, `${unplanted}.${process.pid}.tmp`), String(process.pid));
+  fs.writeFileSync(path.join(holds, 'stray.txt'), 'x');
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root).sort(), [`run-${gone}-planted`], 'the reaper removed a held parent or kept an unheld one');
+  assert.deepEqual(
+    fs.readdirSync(holds).sort(),
+    [`${unplanted}.${process.pid}.tmp`, String(gone)].sort(),
+    'the reaper kept a hold of a gone suite, an empty hold, a staged file of a gone suite or a stray file, or removed a live one',
+  );
+  fs.rmSync(path.join(holds, `${unplanted}.${process.pid}.tmp`));
+  // A reaper this suite started reaps what the suite holds, the cycle a holding case waits on. One that a started process
+  // started in turn does not: it is another suite's reaper as far as the hold goes.
+  const grandchild = spawnSync(
+    process.execPath,
+    ['-e', `require('node:child_process').execFileSync(process.execPath, ['-e', ${JSON.stringify(reapIn(base))}])`],
+    { encoding: 'utf8' },
+  );
+  assert.equal(grandchild.status, 0, grandchild.stderr);
+  assert.deepEqual(fs.readdirSync(root), [`run-${gone}-planted`], 'a reaper two processes down removed a parent the suite holds');
+  const child = spawnSync(process.execPath, ['-e', reapIn(base)], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(fs.readdirSync(root), [], "the suite's own reaper left the parent the suite holds");
+  fs.mkdirSync(path.join(root, `run-${gone}-again`));
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root), [`run-${gone}-again`], 'the holding process itself removed a parent it holds');
+
+  // A release removes only a hold that still names this process.
+  const guarded = gonePid();
+  holdPrivateParents(guarded, base);
+  fs.writeFileSync(path.join(holds, String(guarded)), String(process.ppid));
+  releasePrivateParents();
+  assert.equal(
+    fs.readFileSync(path.join(holds, String(guarded)), 'utf8'),
+    String(process.ppid),
+    'a release removed a hold another process holds',
+  );
+  assert.equal(fs.existsSync(path.join(holds, String(gone))), false, 'a release kept a hold of this process');
+  fs.rmSync(path.join(holds, String(guarded)));
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root), [], 'a released hold still kept its parent');
+
+  // The holds directory is held to the private root's checks: a link is neither written through nor read.
+  const linkedBase = scratch.make('holds-linked');
+  const linkedRoot = privateRootOf(linkedBase);
+  const elsewhere = scratch.make('holds-elsewhere');
+  fs.symlinkSync(elsewhere, path.join(linkedBase, holdsName));
+  assert.throws(() => holdPrivateParents(gone, linkedBase), /not a link/, 'a hold was written into a linked holds directory');
+  assert.deepEqual(fs.readdirSync(elsewhere), [], 'a hold was written through the link');
+  fs.mkdirSync(path.join(linkedRoot, `run-${gone}-linked`));
+  // The hold behind the link names a gone suite, which holds nothing: a reaper that read it would remove the parent.
+  fs.writeFileSync(path.join(elsewhere, String(gone)), String(gonePid()));
+  removeDeadPrivateParents(linkedBase);
+  assert.deepEqual(
+    fs.readdirSync(linkedRoot),
+    [`run-${gone}-linked`],
+    'the reaper read holds through a linked holds directory, or reaped beside it',
+  );
+
+  // A hold that is not a regular file is never opened for reading: a FIFO would block the reaper for good.
+  const fifoBase = scratch.make('holds-fifo');
+  const fifoRoot = privateRootOf(fifoBase);
+  const fifoHolds = path.join(fifoBase, holdsName);
+  fs.mkdirSync(fifoHolds, { mode: 0o700 });
+  assert.equal(spawnSync('mkfifo', [path.join(fifoHolds, String(gone))]).status, 0, 'mkfifo failed');
+  fs.mkdirSync(path.join(fifoRoot, `run-${gone}-fifo`));
+  const fifoReap = spawnSync(process.execPath, ['-e', reapIn(fifoBase)], { encoding: 'utf8', timeout: 20_000 });
+  assert.equal(fifoReap.status, 0, `the reaper blocked or failed over a FIFO hold: ${fifoReap.error ?? fifoReap.stderr}`);
+  assert.deepEqual(fs.readdirSync(fifoRoot), [], 'a FIFO hold held a parent');
+  assert.equal(fs.lstatSync(path.join(fifoHolds, String(gone))).isFIFO(), true, 'the reaper removed a FIFO it does not own');
+
+  // The staged file is made exclusively: a link planted at its name is replaced and never written through.
+  const stagedBase = scratch.make('holds-staged');
+  const victim = path.join(scratch.make('holds-victim'), 'victim');
+  fs.writeFileSync(victim, 'keep');
+  fs.mkdirSync(path.join(stagedBase, holdsName), { mode: 0o700 });
+  fs.symlinkSync(victim, path.join(stagedBase, holdsName, `${gone}.${process.pid}.tmp`));
+  holdPrivateParents(gone, stagedBase);
+  assert.equal(fs.readFileSync(victim, 'utf8'), 'keep', 'a hold was written through a link planted at the staged name');
+  assert.equal(fs.readFileSync(path.join(stagedBase, holdsName, String(gone)), 'utf8'), String(process.pid));
+  releasePrivateParents();
 }
 
 async function main() {
@@ -2982,6 +3315,8 @@ async function main() {
     ['the fixture adopters', checkFixtureTiers],
     ['the committed live tiers', checkCommittedLiveTiers],
     ['the plans of two repositories', checkRepositoryPlans],
+    ['the capture-record guard', checkCaptureRecordGuard],
+    ['the scratch holds', checkScratchHolds],
     ['the live tiers', checkLiveTiers],
     ['the strength floor', checkStrengthFloors],
     ['a weak target', checkWeakProject],
