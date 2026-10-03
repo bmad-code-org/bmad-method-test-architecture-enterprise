@@ -181,7 +181,102 @@ function secretForms(secrets) {
       }
     }
   }
-  return Object.freeze([...forms].sort((a, b) => b.length - a.length));
+  const result = Object.freeze([...forms].sort((a, b) => b.length - a.length));
+  valuesByForms.set(result, [...secrets]);
+  return result;
+}
+
+/** The injected values behind a frozen forms array; a hand-built array still uses the literal matcher. */
+const valuesByForms = new WeakMap();
+
+/** Escape a literal fragment for a regular expression. */
+function regexLiteral(text) {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/** Bound work on a hostile near-match. A refusal seals no target evidence. */
+const ESCAPED_MATCH_BASE_WORK_LIMIT = 2_000_000;
+const ESCAPED_MATCH_MAX_WORK_LIMIT = 64_000_000;
+function escapedWork(text) {
+  return { count: 0, limit: Math.min(ESCAPED_MATCH_MAX_WORK_LIMIT, ESCAPED_MATCH_BASE_WORK_LIMIT + 32 * text.length) };
+}
+const choiceMatchers = new Map();
+function choiceLength(text, offset, choice, work) {
+  if (++work.count > work.limit) throw new ArmError('Escaped secret matching exceeded its work limit');
+  if (text.startsWith(choice, offset)) return choice.length;
+  let matcher = choiceMatchers.get(choice);
+  if (matcher === undefined) {
+    matcher = new RegExp(regexLiteral(choice), 'iyu');
+    choiceMatchers.set(choice, matcher);
+  }
+  matcher.lastIndex = offset;
+  return matcher.exec(text)?.[0].length ?? 0;
+}
+
+/**
+ * A code point's case variants, each written raw or at one or two JSON escape
+ * levels. Keeping choices at each position makes the source linear in the
+ * injected value, including letters whose case mapping expands to two units.
+ */
+const escapedChoicesCache = new Map();
+function escapedChoices(character) {
+  const cached = escapedChoicesCache.get(character);
+  if (cached !== undefined) return cached;
+  const variants = new Set(caseVariants(character));
+  if ('Σσς'.includes(character)) variants.add('ς');
+  const choices = new Set();
+  for (const variant of variants) {
+    choices.add(variant);
+    for (const once of escapingsOf(variant)) {
+      choices.add(once);
+      for (const twice of escapingsOf(once)) choices.add(twice);
+    }
+  }
+  const result = [...choices].sort((a, b) => b.length - a.length);
+  escapedChoicesCache.set(character, result);
+  return result;
+}
+
+/** Match an escaped leading part, including a final fragment inside `\\uXXXX`. */
+function escapedCutPrefix(tail, tokens, work) {
+  if (tail.length < MIN_CUT_PREFIX_LENGTH) return false;
+  let offsets = new Set([0]);
+  for (const choices of tokens) {
+    const next = new Set();
+    for (const offset of offsets) {
+      if (offset === tail.length) return true;
+      for (const choice of choices) {
+        if (++work.count > work.limit) throw new ArmError('Escaped secret matching exceeded its work limit');
+        const remaining = tail.length - offset;
+        if (
+          choice.length > remaining &&
+          foldedText(choice.slice(0, remaining), false).folded === foldedText(tail.slice(offset), false).folded
+        )
+          return true;
+        const length = choiceLength(tail, offset, choice, work);
+        if (length > 0) next.add(offset + length);
+      }
+    }
+    if (next.size === 0) return false;
+    offsets = next;
+  }
+  return false;
+}
+
+/** Match one long escaped echo without building a regular expression for it. */
+function escapedTokenEnd(text, start, tokens, work) {
+  let offsets = new Set([start]);
+  for (const choices of tokens) {
+    const next = new Set();
+    for (const offset of offsets)
+      for (const choice of choices) {
+        const length = choiceLength(text, offset, choice, work);
+        if (length > 0) next.add(offset + length);
+      }
+    if (next.size === 0) return null;
+    offsets = next;
+  }
+  return Math.max(...offsets);
 }
 
 /**
@@ -218,7 +313,7 @@ function foldedText(text, withMap = true) {
 }
 
 /** What `matcherFor` gives an array that holds no form. */
-const NO_MATCHER = Object.freeze({ forms: [], heads: new Set(), longest: 0 });
+const NO_MATCHER = Object.freeze({ forms: [], heads: new Set(), longest: 0, escaped: [], escapedSource: '', escapedLongest: 0 });
 
 /** The compiled matching of each `secrets` array `scrub` has been given, so a walk over an observation folds the forms once. */
 const matchers = new WeakMap();
@@ -247,10 +342,26 @@ function matcherFor(secrets) {
         }),
       ),
     ];
+    const escaped = [];
+    for (const value of valuesByForms.get(secrets) ?? []) {
+      const characters = [...value];
+      const tokens = characters.map(escapedChoices);
+      if (!tokens.some((choices) => choices.some((choice) => choice.includes('\\')))) continue;
+      const source = characters.length <= 512 ? tokens.map((choices) => `(?:${choices.map(regexLiteral).join('|')})`).join('') : '';
+      const longest = tokens.reduce((sum, choices) => sum + choices[0].length, 0);
+      escaped.push({ tokens, source, longest, heads: new Set(tokens[0].map((choice) => foldedText(choice[0], false).folded)) });
+    }
     matcher =
       forms.length === 0
         ? NO_MATCHER
-        : { forms, heads: new Set(forms.map((form) => form[0])), longest: Math.max(...forms.map((form) => form.length)) };
+        : {
+            forms,
+            heads: new Set(forms.map((form) => form[0])),
+            longest: Math.max(...forms.map((form) => form.length), 0),
+            escaped,
+            escapedSource: escaped.map(({ source }) => source).join('|'),
+            escapedLongest: Math.max(0, ...escaped.map(({ longest }) => longest)),
+          };
     matchers.set(secrets, matcher);
   }
   return matcher;
@@ -286,19 +397,42 @@ function numberHoldsSecret(value, secrets) {
 
 /** `text` with each secret it holds, in whatever letter case, replaced; the text itself when it holds none. */
 function scrubText(text, secrets) {
-  const { forms } = matcherFor(secrets);
+  const { forms, escaped } = matcherFor(secrets);
   if (forms.length === 0) return text;
+  const spans = [];
   const { folded } = foldedText(text, false);
-  if (!forms.some((form) => folded.includes(form))) return text;
-  const { folded: mapped, starts, ends } = foldedText(text);
+  if (forms.some((form) => folded.includes(form))) {
+    const { folded: mapped, starts, ends } = foldedText(text);
+    for (const [start, end] of secretSpans(mapped, forms)) {
+      spans.push([starts === null ? start : starts[start], ends === null ? end : ends[end - 1]]);
+    }
+  }
+  if (text.includes('\\')) {
+    const work = escapedWork(text);
+    for (const { tokens, heads, longest } of escaped) {
+      let checkedThrough = -1;
+      // An escaped echo must contain a backslash. Check only starts near one,
+      // including overlapping starts, so one slash in ordinary text does not
+      // make every occurrence of the secret's first letter consume the budget.
+      for (let slash = text.indexOf('\\'); slash !== -1; slash = text.indexOf('\\', slash + 1)) {
+        const first = Math.max(checkedThrough + 1, slash - longest + 1);
+        for (let at = first; at <= slash; at += 1) {
+          if (!heads.has(foldedText(text[at], false).folded)) continue;
+          const end = escapedTokenEnd(text, at, tokens, work);
+          if (end !== null && text.slice(at, end).includes('\\')) spans.push([at, end]);
+        }
+        checkedThrough = slash;
+      }
+    }
+  }
+  if (spans.length === 0) return text;
+  spans.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
   let scrubbed = '';
   let kept = 0;
-  for (const [start, end] of secretSpans(mapped, forms)) {
-    const from = starts === null ? start : starts[start];
-    const to = ends === null ? end : ends[end - 1];
+  for (const [from, to] of spans) {
     if (from < kept) {
       // The span starts inside the character the one before it ended on (`ß` folds to `ss`): the run is one replacement.
-      kept = to;
+      kept = Math.max(kept, to);
       continue;
     }
     scrubbed += text.slice(kept, from) + SCRUBBED;
@@ -347,7 +481,7 @@ function scrub(value, secrets) {
  */
 function scrubCutText(text, secrets) {
   const scrubbed = scrubText(text, secrets);
-  const { forms, heads, longest } = matcherFor(secrets);
+  const { forms, heads, longest, escaped, escapedLongest } = matcherFor(secrets);
   if (forms.length === 0) return scrubbed;
   // A fold drops the combining dots an `i` carries (any number of them), so the stretch read is widened by every dot it holds:
   // walking back from the end, a dot costs no folded unit and any other character costs one, until the longest form is covered.
@@ -364,7 +498,20 @@ function scrubCutText(text, secrets) {
     const tail = folded.slice(at);
     if (forms.some((form) => form.length > tail.length && form.startsWith(tail))) return `${scrubbed.slice(0, window + from)}${SCRUBBED}`;
   }
+  const escapedWindow = Math.max(0, scrubbed.length - escapedLongest);
+  const work = escapedWork(scrubbed);
+  for (let at = escapedWindow; at <= scrubbed.length - MIN_CUT_PREFIX_LENGTH; at += 1) {
+    const tail = scrubbed.slice(at);
+    if (escaped.some(({ tokens, heads }) => heads.has(foldedText(tail[0], false).folded) && escapedCutPrefix(tail, tokens, work))) {
+      return `${scrubbed.slice(0, at)}${SCRUBBED}`;
+    }
+  }
   return scrubbed;
+}
+
+/** The bounded matcher representation's source length, without exposing mutable cached matching state. */
+function escapedPatternSize(secrets) {
+  return matcherFor(secrets).escapedSource.length;
 }
 
 /**
@@ -1142,5 +1289,6 @@ module.exports = {
   scrub,
   scrubCutText,
   secretForms,
+  escapedPatternSize,
   stoppedFromOutside,
 };
