@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.89, 1.90 to 1.116 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.89, 1.90 to 1.116. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.89, 1.90 to 1.116, 1.130 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.89, 1.90 to 1.116, 1.130. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1393,6 +1393,17 @@ Added 2026-10-03 in Story 1.82's build, review round 4. Levels: unit, static. Fi
 | No shell stands in the path                       | The launcher's argument vector holds no `/bin/sh`, no `SHELL_VARIABLES` pair and no `env` restore; the launcher opens descriptor 3 and executes the command in its own place                      | Unit   | P1  | Restoring the shell launcher fails the vector check                             |
 | The audit still traces Bubblewrap alone           | A confined call under the audit's `strace` with a hidden socket lists the same observed mounts as one with none; the golden holds the new vector, a diff the story states                         | Unit   | P1  | A launcher inside `strace` changes the traced process and fails the trace case  |
 | The reference states the exact environment        | Read `### File-system confinement` under its exact heading; the sentence that states the limit is gone                                                                                            | Static | P2  | Leaving the limit sentence fails the case                                       |
+
+### Story 1.130: Retry and verify the actionlint download so a GitHub outage cannot fail a shard
+
+Added 2026-10-03 in Story 1.82's merge. Levels: static, integration. Files: `.github/workflows/quality.yaml`, `.github/workflows/publish.yaml` and the workflow structure check behind `test:ci-coverage`. The integration case runs the install step's shell against a stub server in the ubuntu CI job and is skipped elsewhere with its reason named.
+
+| AC                                          | Test                                                                                                                                                                   | Level       | P   | Revert check                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------- |
+| The download retries a transient failure    | A stub answers 503 twice and then a real gzip tarball; the step ends with actionlint installed after three attempts                                                    | Integration | P1  | A step with no retry fails on the first 503                   |
+| A body that is no gzip file is not unpacked | A stub answers an HTML error page; the step retries, and when every attempt fails it exits non-zero without calling `tar` on the body                                  | Integration | P1  | A step that extracts without `gzip -t` runs `tar` on the page |
+| The final failure names its cause           | The last error names the attempts made, the last HTTP status and that the body was no gzip file                                                                        | Integration | P2  | The bare `gzip: stdin: not in gzip format` fails the case     |
+| Both workflows keep the retry and the check | Read `quality.yaml` and `publish.yaml` for the retry, the tarball check and the floating version; the version is not pinned and the download script stays hash-checked | Static      | P1  | Dropping any of the three from either file fails the check    |
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

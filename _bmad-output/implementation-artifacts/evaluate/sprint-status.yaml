@@ -121,6 +121,7 @@ development_status:
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
+  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: backlog
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
@@ -222,6 +223,7 @@ parallel_lanes:
     - 1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets
     - 1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets
     - 1-89-pass-the-targets-exact-environment-through-the-socket-launcher
+    - 1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
