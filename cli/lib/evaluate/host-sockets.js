@@ -156,7 +156,10 @@ function socketOwner(file, fileSystem, uidOf) {
   }
 }
 
-/** The spellable entries of `directory` as `{ name, socket, directory }` in name order; none when it cannot be read. */
+/** The errors that mean a path is gone or one the runtime cannot reach, which names nothing to hide; any other error (`EMFILE`, `EIO`) fails the list so a scan that did not finish cannot leave a socket unmasked. */
+const UNREACHABLE = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM']);
+
+/** The spellable entries of `directory` as `{ name, socket, directory }` in name order; none when it is gone or the runtime cannot reach it. */
 function entriesOf(directory, fileSystem) {
   try {
     return fileSystem
@@ -166,8 +169,9 @@ function entriesOf(directory, fileSystem) {
         return name === null ? [] : [{ name, socket: entry.isSocket(), directory: entry.isDirectory() }];
       })
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  } catch {
-    return [];
+  } catch (error) {
+    if (UNREACHABLE.has(error?.code)) return [];
+    throw error;
   }
 }
 
@@ -199,8 +203,9 @@ function socketsUnder(root, directories, fileSystem) {
   let top;
   try {
     top = fileSystem.realpathSync.native(root);
-  } catch {
-    return [];
+  } catch (error) {
+    if (UNREACHABLE.has(error?.code)) return [];
+    throw error;
   }
   const found = [];
   let budget = directories;

@@ -10022,6 +10022,35 @@ async function checkPathSocketUnits() {
       !hostPathSockets({ table: path.join(base, 'absent'), roots: [scanned], except: [path.join(scanned, 'one')] }).includes(middle),
       'a scan listed a socket inside a directory left out',
     );
+    // A scan that fails for a reason that is no path to hide (a process out of descriptors, an I/O error) fails the list, so a
+    // socket only the scan would find is never left unmasked by a scan that did not finish; a root that is gone or one nobody can
+    // search names nothing to hide.
+    const scanTree = { [scanned]: [{ name: 'one.sock', type: 'socket' }] };
+    const failingScan = (code) => {
+      const standIn = listFileSystem({ tree: scanTree });
+      standIn.readdirSync = () => {
+        throw Object.assign(new Error(`${code}: scan failed`), { code });
+      };
+      return standIn;
+    };
+    for (const code of ['EMFILE', 'EIO']) {
+      let thrown = null;
+      try {
+        hostPathSockets({ table: path.join(base, 'absent'), roots: [scanned], fileSystem: failingScan(code) });
+      } catch (error) {
+        thrown = error;
+      }
+      check(
+        thrown?.code === code,
+        `a scan that failed with ${code} gave ${thrown === null ? 'a list' : thrown.code}; expected the list to fail with it`,
+      );
+    }
+    for (const code of ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM']) {
+      check(
+        hostPathSockets({ table: path.join(base, 'absent'), roots: [scanned], fileSystem: failingScan(code) }).length === 0,
+        `a scan that failed with ${code} did not list nothing`,
+      );
+    }
     // A name the runtime cannot spell: a socket file whose name is no UTF-8 (another user can make one in /tmp) and a directory whose
     // name is none decode to a path that is another file, and a mount over it stops every call. Neither is listed, the sockets
     // beside them are, and `lstat` is never asked about the decoded path. The table's row decodes to the same path and names
