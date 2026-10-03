@@ -10320,8 +10320,8 @@ async function checkPathSocketUnits() {
         hugeList.sockets.length === MAX_HIDDEN_SOCKETS &&
         hugeList.sockets[0] === '/home/pad/n-000000.sock' &&
         hugeList.left === hugeNames.length - MAX_HIDDEN_SOCKETS &&
-        huge.asked.length === MAX_HIDDEN_SOCKETS,
-      `${hugeNames.length} socket files beside one moved path ended in ${hugeError === null ? `${hugeList.sockets.length} sockets with ${hugeList.left} cut after ${huge.asked.length} lstat call(s)` : `${hugeError.name}: ${hugeError.message}`}; expected ${MAX_HIDDEN_SOCKETS} listed, ${hugeNames.length - MAX_HIDDEN_SOCKETS} cut and no more lstat calls than the room`,
+        huge.asked.length === hugeNames.length + 1,
+      `${hugeNames.length} socket files beside one moved path ended in ${hugeError === null ? `${hugeList.sockets.length} sockets with ${hugeList.left} cut after ${huge.asked.length} lstat call(s)` : `${hugeError.name}: ${hugeError.message}`}; expected ${MAX_HIDDEN_SOCKETS} listed, ${hugeNames.length - MAX_HIDDEN_SOCKETS} cut and one lstat call for each name and one for the directory (the owner of each is read)`,
     );
     // Many rows that name a path gone from one directory: the directory is read once and each of its neighbors is added once,
     // whatever the number of rows.
@@ -10343,8 +10343,88 @@ async function checkPathSocketUnits() {
       reads.length === 1 &&
         goneList.sockets.length === MAX_HIDDEN_SOCKETS &&
         goneList.left === 1000 &&
-        goneFileSystem.asked.length === MAX_HIDDEN_SOCKETS,
-      `${gone.length} table rows for paths gone from one directory of ${crowdNames.length} socket files read the directory ${reads.length} time(s), listed ${goneList.sockets.length} with ${goneList.left} cut after ${goneFileSystem.asked.length} lstat call(s); expected one read, ${MAX_HIDDEN_SOCKETS} listed, 1000 cut and no more lstat calls than the room`,
+        goneFileSystem.asked.length === crowdNames.length + 1,
+      `${gone.length} table rows for paths gone from one directory of ${crowdNames.length} socket files read the directory ${reads.length} time(s), listed ${goneList.sockets.length} with ${goneList.left} cut after ${goneFileSystem.asked.length} lstat call(s); expected one read, ${MAX_HIDDEN_SOCKETS} listed, 1000 cut and one lstat call for each name and one for the directory, whatever the number of rows`,
+    );
+    // The neighbors are ranked by their owner, whichever directory the table names first: another user's directory of 3,000 socket
+    // files (one moved socket held open beside them) cannot push out the runtime user's own moved socket (an SSH control master
+    // binds `cm-host.tmp` and links it to `cm-host.sock`), root's, or a third user's, in either order of the table's rows. The
+    // owners are injected (`uidOf`).
+    const neighborOwners = (file) =>
+      file === '/tmp/shared' || file === '/tmp/shared/z-root.sock' || file.startsWith('/var/lib/svc')
+        ? 0
+        : file.startsWith('/srv/me')
+          ? 1000
+          : file.startsWith('/tmp/carol')
+            ? 1002
+            : 65_534;
+    const neighborTree = {
+      ...socketEntries('/home/pad', crowdNames),
+      ...socketEntries('/srv/me/.ssh', ['cm-host.sock']),
+      ...socketEntries('/var/lib/svc', ['svc.sock']),
+      ...socketEntries('/tmp/carol', ['agent.sock']),
+      ...socketEntries('/tmp/shared', [...crowdNames, 'z-root.sock']),
+    };
+    const neighborRows = [
+      ['/home/pad/tmp-name', '/srv/me/.ssh/cm-host.tmp', '/var/lib/svc/svc.tmp', '/tmp/carol/agent.tmp'],
+      ['/tmp/carol/agent.tmp', '/var/lib/svc/svc.tmp', '/srv/me/.ssh/cm-host.tmp', '/home/pad/tmp-name'],
+    ];
+    for (const rows of neighborRows) {
+      const ownRanked = listHostSockets({
+        ownUid: 1000,
+        uidOf: neighborOwners,
+        table: moveTable(...rows, ...rows.map((row) => `${row}-again`)),
+        roots: [],
+        pinned: [],
+        fileSystem: rankFileSystem(neighborTree),
+      });
+      const wanted = ['/var/lib/svc/svc.sock', '/srv/me/.ssh/cm-host.sock', '/tmp/carol/agent.sock'];
+      check(
+        wanted.every((socket) => ownRanked.sockets.includes(socket)) &&
+          ownRanked.sockets.slice(0, 2).join(',') === wanted.slice(0, 2).join(',') &&
+          ownRanked.sockets.length === MAX_HIDDEN_SOCKETS &&
+          ownRanked.left === crowdNames.length - MAX_HIDDEN_SOCKETS + 3 &&
+          ownRanked.refused === null,
+        `with ${crowdNames.length} socket files of another user beside a moved path read ${rows[0] === '/home/pad/tmp-name' ? 'before' : 'after'} the moved paths of root's, the runtime user's and a third user's sockets the list held ${JSON.stringify(ownRanked.sockets.slice(0, 4))} (${ownRanked.sockets.length} long) with ${ownRanked.left} cut and the refusal ${ownRanked.refused}; expected root's, the runtime user's and the third user's sockets listed, root's and the runtime user's first, and no refusal`,
+      );
+    }
+    // Root's socket in the very directory another user filled, sorting after 2,000 of theirs: charged to its own owner, it is listed.
+    const sharedList = listHostSockets({
+      ownUid: 1000,
+      uidOf: neighborOwners,
+      table: moveTable('/tmp/shared/gone'),
+      roots: [],
+      pinned: [],
+      fileSystem: rankFileSystem(neighborTree),
+    });
+    check(
+      sharedList.sockets[0] === '/tmp/shared/z-root.sock' &&
+        sharedList.sockets.length === MAX_HIDDEN_SOCKETS &&
+        sharedList.left === crowdNames.length - MAX_HIDDEN_SOCKETS + 1 &&
+        sharedList.refused === null,
+      `root's socket in a directory where another user's ${crowdNames.length} socket files sort first was ${JSON.stringify(sharedList.sockets.slice(0, 2))}, ${sharedList.sockets.length} long with ${sharedList.left} cut; expected it first and the other user's cut`,
+    );
+    // The directories are visited by who owns them: 100 sockets of one user in a root-owned directory (the shape of a shared temp
+    // directory) are listed ahead of the same user's 2,000 in a directory of their own that sorts first by name.
+    const visitList = listHostSockets({
+      ownUid: 1000,
+      uidOf: (file) => (file === '/run/x' ? 0 : 65_534),
+      table: moveTable('/home/pad/gone', '/run/x/gone'),
+      roots: [],
+      pinned: [],
+      fileSystem: rankFileSystem({
+        ...socketEntries('/home/pad', crowdNames.slice(0, MAX_HIDDEN_SOCKETS)),
+        ...socketEntries(
+          '/run/x',
+          crowdNames.slice(0, 100).map((name) => `x-${name}`),
+        ),
+      }),
+    });
+    check(
+      visitList.sockets.length === MAX_HIDDEN_SOCKETS &&
+        crowdNames.slice(0, 100).every((name) => visitList.sockets.includes(`/run/x/x-${name}`)) &&
+        visitList.left === 100,
+      `100 sockets of one user in a root-owned directory and 2,000 of theirs in a directory of their own that sorts first were ${visitList.sockets.length} long with ${visitList.left} cut and ${crowdNames.slice(0, 100).filter((name) => visitList.sockets.includes(`/run/x/x-${name}`)).length} of the first 100 listed; expected the root-owned directory read first, all 100 listed and 100 of the other directory cut`,
     );
     // A pinned service socket leads the list whoever owns it and however many sockets follow, a pin the host lacks is skipped, and
     // a pinned socket counts toward the sockets whose count refuses the call.
@@ -10649,9 +10729,10 @@ async function checkPathSocketUnits() {
       `the retry of a call with 3100 arguments asked for the room ${sizeAsks.length} time(s) in all and held ${maskedSockets(again)?.length} sockets in ${counted(again, '/usr/bin/bwrap')} arguments; expected the first list less one, within the bound`,
     );
 
-    // The target's environment does not depend on how many sockets the host holds: the launcher's shell leaves `PWD` (dash), `SHLVL`,
-    // `_` and `OLDPWD` (bash) in the environment of what it executes and resets `IFS`, `OPTIND` and `PPID` (dash) when the call's
-    // environment held them, and `env` puts each back as the call had it. The stub
+    // The target's environment equals the call's for every variable whose name is a valid shell identifier and that the shell does
+    // not initialize, whether or not the host holds sockets: the launcher's shell leaves `PWD` (dash), `SHLVL`, `_` and `OLDPWD`
+    // (bash) in the environment of what it executes and resets `IFS`, `OPTIND` and `PPID` (dash) when the call's environment held
+    // them, and `env` puts each back as the call had it. The limit below holds what the launcher does not carry (Story 1.89). The stub
     // stands in for Bubblewrap and is no shell (a shell would set the same variables again), and the full environment is compared.
     const envStubs = tempDir('environment-stubs');
     const envStub = path.join(envStubs, 'bwrap');
@@ -10681,6 +10762,10 @@ async function checkPathSocketUnits() {
       ['an IFS, an OPTIND and a PPID', { FOO: '1', PATH: process.env.PATH, IFS: 'x', OPTIND: '5', PPID: '7' }],
       ['an empty IFS and an OPTIND of 0', { PATH: process.env.PATH, IFS: '', OPTIND: '0' }],
       ['an OPTIND that is no number', { FOO: '1', PATH: process.env.PATH, OPTIND: 'abc' }],
+      [
+        'ordinary names that are valid shell identifiers',
+        { PATH: process.env.PATH, my_setting: 'a b', _x1: '', HOME: '/home/tester', LANG: 'C', TERM: 'dumb', Mixed_Case9: '=x=' },
+      ],
     ]) {
       const without = environmentOf([], environment);
       const hiding = environmentOf([hostSocket], environment);
@@ -10689,6 +10774,30 @@ async function checkPathSocketUnits() {
         `with ${what} the target's environment was ${without.out} without hidden sockets and ${hiding.out} with them (exit ${without.status} and ${hiding.status}: ${without.err}${hiding.err}); expected the same`,
       );
     }
+    // The limit the reference states: a name no shell can hold, an exported shell function and a variable bash initializes itself
+    // are the shell's to change, so the environment of a call that hides sockets can differ from the call's. The control (no hidden
+    // socket) holds each exactly, and on any one host's `sh` at least one of the three differs; Story 1.89 replaces the launcher and
+    // turns this check into byte-identity.
+    const limitEnvironments = [
+      ['a name that is no valid shell name', { PATH: process.env.PATH, 'my.setting': 'v' }],
+      ['an exported shell function', { PATH: process.env.PATH, 'BASH_FUNC_f%%': '() { echo f; }' }],
+      ['a held PS1', { PATH: process.env.PATH, PS1: 'prompt> ' }],
+    ];
+    let limitDiffers = 0;
+    for (const [what, environment] of limitEnvironments) {
+      const without = environmentOf([], environment);
+      const hiding = environmentOf([hostSocket], environment);
+      const [key, value] = Object.entries(environment).find(([name]) => name !== 'PATH');
+      check(
+        !without.hid && hiding.hid && without.status === 0 && hiding.status === 0 && without.out.includes(JSON.stringify([key, value])),
+        `with ${what} the call without hidden sockets printed ${without.out} (exit ${without.status}: ${without.err}); expected the control to hold ${key} exactly`,
+      );
+      if (without.out !== hiding.out) limitDiffers += 1;
+    }
+    check(
+      limitDiffers > 0,
+      "the three environments the launcher does not carry (a name no shell holds, an exported function, a held PS1) all reached the target unchanged on this host's sh; the reference states the limit and Story 1.89 closes it, so update both together",
+    );
     // What the calls left reachable once the room ran out is counted for the run to record (`socketReport`): the calls that listed,
     // those the room cut and the most sockets one call left; a sandbox that hides none (Seatbelt) reports nothing.
     const lefts = [0, 7, 3];
@@ -11237,6 +11346,22 @@ function checkBridgeReference() {
     ],
     [
       "The list is ranked by who can create a socket before it is cut: the Docker, containerd, Podman, system bus and systemd sockets by name first, then the sockets of root and of the system accounts, then those of the user running the call, then every other user's in turns (the first socket of each owner, then the second of each), so a local user who makes sockets in bulk cannot push out another user's socket while the room left after those holds one socket for each owner, and a socket in `/dev` or `/proc` takes no room since the vector replaces both.",
+      ['the path socket units'],
+    ],
+    [
+      "The socket files beside a path a process moved after it bound (OpenSSH's control master does this) join the list in that same order of owners: the directories are read by who owns them, each socket is charged to its own owner, and one other user's socket files stop joining once that user holds the whole room, so one user's directory of socket files cannot push out the moved socket of root, of a system account, of the user running the call or of a third user, whichever directory the kernel's table names first.",
+      ['the path socket units'],
+    ],
+    [
+      'The bound that remains: the socket files of one other user beside a moved path past the room stay reachable and are counted in `socketsLeftReachable`.',
+      ['the path socket units'],
+    ],
+    [
+      "The launcher that hands Bubblewrap the mounts leaves the target's environment as the call gave it for every variable whose name is a valid shell identifier and that the shell does not initialize, and it restores `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` to the call's value (or leaves each unset).",
+      ['the path socket units'],
+    ],
+    [
+      'The limit: a call that hides sockets can change or drop a variable whose name a shell cannot hold (`my.setting`, `BASH_FUNC_f%%`), an exported shell function, and a variable bash initializes itself (`PS1`, `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH`, `BASH_VERSION`) when `sh` is bash, and Story 1.89 closes it.',
       ['the path socket units'],
     ],
     [

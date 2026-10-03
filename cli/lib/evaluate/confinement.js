@@ -382,8 +382,9 @@ const SOCKET_LAUNCHER = Object.freeze(['/bin/sh', '-c', `exec ${SOCKET_ARGUMENTS
  * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on and resets
  * `IFS`, `OPTIND` and `PPID` whenever the call's environment held them, and bash (the `sh` of some hosts) decrements `SHLVL` and sets
  * `_` and `OLDPWD`.
- * `env` restores each to what the call's environment held (an unset one stays unset), so a target's environment does not depend on
- * how many sockets the host holds.
+ * `env` restores each to what the call's environment held (an unset one stays unset), so a variable whose name is a valid shell
+ * identifier and that the shell does not initialize reaches the target as the call gave it.
+ * A name no shell can hold, an exported shell function and the variables bash initializes itself are the shell's to change (Story 1.89).
  */
 const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID']);
 
