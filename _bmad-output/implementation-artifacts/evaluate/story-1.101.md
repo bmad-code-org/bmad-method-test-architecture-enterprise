@@ -58,12 +58,12 @@ TeA:
 
 **Execution:**
 
-- [ ] Engine `src/application/*` -- pre-parse stamp read for the six artifacts and the policy in `aggregate-strength`
-- [ ] Engine tests -- per artifact a fixture with a current-shape body and a stale stamp, a previous-shape fixture, a `null` case, a CLI exit-5 case; revert of one artifact's read makes its fixture score
-- [ ] Engine docs, counts, doc-claims, CHANGELOG (BREAKING) -- `npm run validate` green
-- [ ] Engine release (major) -- `npm view eval-quality version`
-- [ ] TeA floor, lockfile, AD-5 record, CHANGELOG, sprint row, story record -- engine check and replay suites green
-- [ ] Flip Story 1.46 row and record to `done`
+- [x] Engine `src/application/*` -- pre-parse stamp read for the six artifacts and the policy in `aggregate-strength`
+- [x] Engine tests -- per artifact a fixture with a current-shape body and a stale stamp, a previous-shape fixture, a `null` case, a CLI exit-5 case; revert of one artifact's read makes its fixture score
+- [x] Engine docs, counts, doc-claims, CHANGELOG (BREAKING) -- `npm run validate` green
+- [x] Engine release (major) -- `npm view eval-quality version`
+- [x] TeA floor, lockfile, AD-5 record, CHANGELOG, sprint row, story record -- engine check and replay suites green
+- [x] Flip Story 1.46 row and record to `done`
 
 **Acceptance Criteria:**
 
@@ -82,6 +82,12 @@ Review: engine round 1 (adversarial and test quality, Opus) found a fits-shape f
 Release: the one-step `release:major` run failed at the `doc-claims` gate because the tool-use how-to pinned its end-to-end route run to 6.0.0. The route was re-run against the built 7.0.0 CLI (19 commands, expected exits) and the pin moved through the pull-request path (#181).
 TeA: floor `>=7.0.0` in `package.json`, the lockfile, `tools/guard-publish.js`, `test/test-guard-publish.js`, `test/test-release-metadata.js`, the engine-missing message, `docs/reference/tea-evaluate-cli.md` and the AD-5 record. The three accepted fixture baselines (`evaluate/mutation` verdict-ci, `evaluate-mcp` grader, `evaluate-api` grader) were stamped 6.0.1 and are re-recorded with `compare --accept`. Story 1.46 row and record flipped to `done`.
 Undone: none. TeA's own `SCHEMA_VERSION_CONSTANTS` stays without the private artifact manifest (TeA never passes `--private-manifest`).
+
+## Revert observations
+
+- Engine: removing one artifact's stamp read in `score` (checked in scratch copies during #180's review rounds, one artifact at a time) made that artifact's current-shape stale-stamp fixture score and failed 3 to 5 tests that name it, and none of another artifact's; removing the `preflight` probe read failed the previous-shape probe tests and the CLI exit-5 case; removing the `aggregate-strength` policy read failed its tests. Round 1 caught that three fixtures used stamp 0 and never scored under the reverted read; they now use a stamp the schema accepts.
+- TeA floor: lowering `package.json`'s peer floor to `>=6.0.1` fails `test:release-metadata` ("its floor must be 7.0.0 or later" and a lockfile root mismatch); lowering `ENGINE_FLOOR` in `tools/guard-publish.js` to 6.0.1 fails `test/test-guard-publish.js` ("accepts a manifest with a peer floor of 6.0.1"). Both were run against the worktree files and restored from the pre-run copies.
+- Replay: the committed baselines stamped 6.0.1 fail `test:evaluate-ci` against the 7.0.0 engine ("recorded on another engine release"); the re-recorded ones pass.
 
 ## Spec Change Log
 
