@@ -4985,7 +4985,27 @@ async function checkShellTargetAudit() {
 async function checkObserverRefusalRun() {
   const stubs = tempDir('observer-stubs');
   const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-  stub('bwrap', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  stub(
+    'bwrap',
+    String.raw`dev_dst=""; dev_src=""; prev=""; last_src=""
+for a in "$@"; do
+  if [ "$prev" = "--bind" ]; then last_src="$a"
+  elif [ -n "$last_src" ]; then
+    case "$a" in /dev/*) dev_src="$last_src"; dev_dst="$a" ;; esac
+    last_src=""
+  fi
+  prev="$a"
+done
+while [ "$1" != "--" ]; do shift; done
+shift
+if [ -n "$dev_dst" ]; then
+  for a in "$@"; do
+    if [ "$a" = "$dev_dst" ]; then set -- "$@" "$dev_src"; else set -- "$@" "$a"; fi
+    shift
+  done
+fi
+exec "$@"`,
+  );
   const environment = (project) => ({ ...project.env, PATH: `${stubs}${path.delimiter}${process.env.PATH}`, [PLATFORM_ENV]: 'linux' });
 
   stub('strace', 'echo "strace: ptrace(PTRACE_TRACEME): Operation not permitted" >&2; exit 1');
