@@ -107,7 +107,7 @@ development_status:
   1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: done
   1-70-refuse-promptfoo-assertions-that-run-adopter-code-or-call-a-model: done
   1-71-bound-a-framework-version-probe-with-its-own-timeout: done
-  1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version: backlog
+  1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version: done
   1-73-bind-the-declared-frameworks-install-state-not-only-their-versions: backlog
   1-74-scrub-an-echo-whose-letters-change-case-unevenly-and-reach-the-evidence-as-escapes: backlog
   1-75-name-a-report-operation-signature-collision-at-check-before-the-run: backlog
@@ -130,6 +130,7 @@ development_status:
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: backlog
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
+  1-76-require-an-explicit-custom-agent-version-response: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -158,6 +159,7 @@ parallel_lanes:
     - 1-73-bind-the-declared-frameworks-install-state-not-only-their-versions
     - 1-74-scrub-an-echo-whose-letters-change-case-unevenly-and-reach-the-evidence-as-escapes
     - 1-75-name-a-report-operation-signature-collision-at-check-before-the-run
+    - 1-76-require-an-explicit-custom-agent-version-response
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta

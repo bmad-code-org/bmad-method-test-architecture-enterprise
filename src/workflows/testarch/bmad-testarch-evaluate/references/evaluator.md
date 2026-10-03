@@ -36,6 +36,10 @@ Write `evaluator-configuration.json` first (the two `tea.judgeCalibration*` bind
 
 The [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#the-evaluation-layer) gives the required record layout and the calibration judgments layout.
 
+### Installed agent adapter version
+
+`tea-evaluate run` observes the configured agent executable's installed adapter version before calibration or qualification. A custom adapter needs its configured command and arguments to expose one parseable installed version. The run records that version in `evaluator-configuration.json` as `tea.evaluatorAgentVersion` and in `run.json` under `evaluator.version`. A missing, unreadable or changed version stops the run with exit 12 before an affected judgment counts. The run checks again before every agent launch and after each trial. An agent CLI upgrade changes the evaluator configuration digest and scoring version, so run a fresh qualification and update `evaluator/LEARNED.md` with the new installed version and what changed. Keep the declared model snapshot fixed while comparing runs across an adapter upgrade.
+
 ## Selection rubric
 
 Discuss each criterion with the adopter before choosing an option. Record the reason and installed version in the evaluation folder. The table's `evaluator.kind` values are the four values the runtime accepts. For a `command` choice, keep framework-specific code under the adopter's `evaluator/` folder, install its dependencies in the adopter's evaluation folder, and declare the executable, timeout and permitted environment keys in `evaluation.json`, and each installed framework in `evaluator/frameworks.json`.

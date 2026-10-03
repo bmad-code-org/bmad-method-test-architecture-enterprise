@@ -127,7 +127,8 @@ const { calibrationObservation, calibrationStepPair, runCalibration } = require(
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { runTrial, scoreAttempt } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
-const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
+const { AGENT_ADAPTERS, AGENT_VERSION_TIMEOUT_MS, AGENT_VERSION_CEILING_MS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
+const baselines = require('./lib/evaluate-baseline');
 const { runSupervised } = require('../cli/lib/run-agent');
 const { EvaluatorLayerError, configurationFields, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { observeFrameworks } = require('../cli/lib/evaluate/command-evaluator');
@@ -1411,6 +1412,15 @@ function useSealedBriefAgent(
     counter = null,
     modeFrom = null,
     announce = null,
+    versionFile = null,
+    versionReadCounter = null,
+    versionFlipAtRead = null,
+    requireVersionEnv = null,
+    versionDelayAtRead = null,
+    versionDelayMs = null,
+    flipVersionOnAgent = null,
+    agentCommand = process.execPath,
+    agentScript = STUB_AGENT,
   },
 ) {
   fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
@@ -1419,9 +1429,9 @@ function useSealedBriefAgent(
     evaluation.evaluator = {
       kind: 'sealed-brief-agent',
       agent: 'custom',
-      agentCommand: process.execPath,
+      agentCommand,
       agentArgs: [
-        STUB_AGENT,
+        agentScript,
         '--capture',
         capture,
         '--mode',
@@ -1429,6 +1439,13 @@ function useSealedBriefAgent(
         ...(counter === null ? [] : ['--counter', counter]),
         ...(modeFrom === null ? [] : ['--mode-from', String(modeFrom)]),
         ...(announce === null ? [] : ['--announce', announce]),
+        ...(versionFile === null ? [] : ['--version-file', versionFile]),
+        ...(versionReadCounter === null ? [] : ['--version-read-counter', versionReadCounter]),
+        ...(versionFlipAtRead === null ? [] : ['--version-flip-at-read', String(versionFlipAtRead)]),
+        ...(requireVersionEnv === null ? [] : ['--require-version-env', requireVersionEnv]),
+        ...(versionDelayAtRead === null ? [] : ['--version-delay-at-read', String(versionDelayAtRead)]),
+        ...(versionDelayMs === null ? [] : ['--version-delay-ms', String(versionDelayMs)]),
+        ...(flipVersionOnAgent === null ? [] : ['--flip-version-on-agent', String(flipVersionOnAgent)]),
       ],
       timeoutMs: 60_000,
     };
@@ -1444,6 +1461,264 @@ function useSealedBriefAgent(
     evaluator: { modelSnapshot: AGENT_SNAPSHOT },
   });
   if (rubric) addRubric(folder);
+}
+
+async function checkAgentVersionUpgrade() {
+  const capture = path.join(scratch.make('agent-version-capture'), 'calls.jsonl');
+  const versionFile = path.join(scratch.make('agent-version-file'), 'version.txt');
+  const agentScript = path.join(scratch.make('agent-version-executable'), 'stub-evaluator-agent.js');
+  fs.copyFileSync(STUB_AGENT, agentScript);
+  fs.writeFileSync(versionFile, '1.0.0\n');
+  const project = makeProject('agent-version-upgrade', {
+    edit: ({ folder }) => useSealedBriefAgent(folder, { capture, versionFile, agentScript }),
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `first agent version run exited ${first.status}: ${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstConfiguration = readJson(path.join(firstDirectory, 'evaluator-configuration.json'));
+  const firstRun = readJson(path.join(firstDirectory, 'run.json'));
+  const manifest = readJson(path.join(firstDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
+  check(
+    manifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 3 * AGENT_VERSION_CEILING_MS) * TRIALS) / 60_000,
+    'the sealed-brief trial ceiling omitted a bounded agent version read',
+  );
+  fs.writeFileSync(versionFile, '1.0.1\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `upgraded agent version run exited ${second.status}: ${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondConfiguration = readJson(path.join(secondDirectory, 'evaluator-configuration.json'));
+  const secondRun = readJson(path.join(secondDirectory, 'run.json'));
+  check(firstConfiguration.decodingParameters['tea.evaluatorAgentVersion'] === '1.0.0', 'first installed agent version was not recorded');
+  check(
+    secondConfiguration.decodingParameters['tea.evaluatorAgentVersion'] === '1.0.1',
+    'upgraded installed agent version was not recorded',
+  );
+  check(
+    firstRun.evaluator?.version === '1.0.0' && secondRun.evaluator?.version === '1.0.1',
+    'run.json omitted the installed agent version',
+  );
+  check(firstRun.evaluatorConfigurationDigest !== secondRun.evaluatorConfigurationDigest, 'agent upgrade collided on configuration digest');
+  const firstScore = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(firstDirectory)], project.env);
+  const secondScore = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(secondDirectory)], project.env);
+  check(firstScore.status === 0 && secondScore.status === 0, 'both installed agent versions did not score');
+  const evidenceVersion = (directory) => {
+    const scores = path.join(directory, 'scores');
+    const latest = fs.readdirSync(scores).sort().at(-1);
+    return readJson(path.join(scores, latest, 'P-002', 'evidence-artifact.json')).scoringVersion;
+  };
+  if (firstScore.status === 0 && secondScore.status === 0)
+    check(evidenceVersion(firstDirectory) !== evidenceVersion(secondDirectory), 'agent upgrade collided on scoring version');
+  const latestEvidenceBytes = (directory) => {
+    const scores = path.join(directory, 'scores');
+    return fs.readFileSync(path.join(scores, fs.readdirSync(scores).sort().at(-1), 'P-002', 'evidence-artifact.json'));
+  };
+  const scoredBytes = latestEvidenceBytes(firstDirectory);
+  const accepted = evaluate(['compare', '--accept', '--evaluation', project.folder, '--run', path.basename(firstDirectory)], project.env);
+  check(accepted.status === 0, `agent version baseline was not accepted: ${accepted.output}`);
+  if (accepted.status !== 0) return;
+  baselines.commitAll(project.repository, 'accept the agent version baseline');
+  const launchesBeforeReplay = captures(capture).length;
+  fs.unlinkSync(agentScript);
+  const replayed = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(firstDirectory)], project.env);
+  check(replayed.status === 0, `recorded score failed after the agent CLI was removed: ${replayed.output}`);
+  if (replayed.status === 0)
+    check(scoredBytes.equals(latestEvidenceBytes(firstDirectory)), 'recorded score evidence changed after CLI removal');
+  check(captures(capture).length === launchesBeforeReplay, 'recorded score launched the removed agent CLI');
+  const copies = [];
+  try {
+    const copiedFolder = baselines.copyOf(project, copies);
+    const acceptedRun = baselines.placeBaseline(copiedFolder, path.basename(firstDirectory));
+    const copiedReplay = evaluate(['score', '--evaluation', copiedFolder, '--run', path.basename(acceptedRun)], project.env);
+    check(copiedReplay.status === 0, `accepted baseline replay failed without the agent CLI: ${copiedReplay.output}`);
+    if (copiedReplay.status === 0)
+      check(scoredBytes.equals(latestEvidenceBytes(acceptedRun)), 'copied accepted baseline replay changed the evidence bytes');
+    check(captures(capture).length === launchesBeforeReplay, 'copied accepted baseline replay launched the removed agent CLI');
+  } finally {
+    for (const copy of copies) fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+async function checkAgentVersionFaults() {
+  for (const mode of ['missing', 'fail', 'malformed', 'hang']) {
+    const capture = path.join(scratch.make(`agent-version-${mode}-capture`), 'calls.jsonl');
+    const versionFile = path.join(scratch.make(`agent-version-${mode}-file`), 'version.txt');
+    fs.writeFileSync(versionFile, `${mode}\n`);
+    const project = makeProject(`agent-version-${mode}`, {
+      edit: ({ folder }) =>
+        useSealedBriefAgent(folder, {
+          capture,
+          versionFile,
+          agentCommand: mode === 'missing' ? '/no-such-agent-version-executable' : process.execPath,
+        }),
+    });
+    const began = Date.now();
+    const result = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(result.status === 12, `${mode} agent version probe exited ${result.status}; expected 12: ${result.output}`);
+    if (mode === 'hang') check(Date.now() - began < 12_000, 'agent version probe inherited the evaluator timeout');
+    const directory = runDirectoryOf(project.folder);
+    check(directory !== null && !fs.existsSync(path.join(directory, 'trial-sets.json')), `${mode} agent version sealed a trial set`);
+    check(captures(capture).length === 0, `${mode} agent version launched a qualification attempt`);
+  }
+}
+
+async function checkAgentVersionEnvironmentAndDelimiter() {
+  const key = 'TEA_EVALUATOR_VERSION_ONLY_KEY';
+  for (const declared of [false, true]) {
+    const capture = path.join(scratch.make(`agent-version-env-${declared}`), 'calls.jsonl');
+    const project = makeProject(`agent-version-env-${declared}`, {
+      edit: ({ folder }) => {
+        useSealedBriefAgent(folder, { capture, requireVersionEnv: key });
+        if (declared) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.evaluator.environmentKeys = [key]));
+      },
+    });
+    const result = evaluate(['run', '--evaluation', project.folder], { ...project.env, [key]: 'allowed' });
+    check(
+      result.status === (declared ? 0 : 12),
+      `the ${declared ? 'declared' : 'undeclared'} version key exited ${result.status}: ${result.output}`,
+    );
+    if (!declared) check(captures(capture).length === 0, 'an unreadable version launched the agent before qualification');
+  }
+  const capture = path.join(scratch.make('agent-version-delimiter'), 'calls.jsonl');
+  const project = makeProject('agent-version-delimiter', {
+    edit: ({ folder }) => {
+      useSealedBriefAgent(folder, { capture });
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => evaluation.evaluator.agentArgs.push('--'));
+    },
+  });
+  const result = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(result.status === 12 && result.output.includes('standalone --'), `a version flag behind -- was launched: ${result.output}`);
+  check(captures(capture).length === 0, 'a delimiter configuration launched the agent');
+}
+
+async function checkAgentVersionPostTrialUse() {
+  const capture = path.join(scratch.make('agent-version-use-capture'), 'calls.jsonl');
+  const reads = path.join(scratch.make('agent-version-use-reads'), 'reads.txt');
+  const project = makeProject('agent-version-use', {
+    edit: ({ folder }) => useSealedBriefAgent(folder, { capture, versionReadCounter: reads, versionDelayAtRead: 16, versionDelayMs: 400 }),
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `the delayed post-trial version read exited ${ran.status}: ${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  if (ran.status !== 0 || directory === null) return;
+  const records = fs
+    .readdirSync(path.join(directory, 'trial-sets', 'P-001'))
+    .filter((name) => name.startsWith('record-'))
+    .map((name) => readJson(path.join(directory, 'trial-sets', 'P-001', name)));
+  const evidence = records.map((record) => readJson(path.join(project.folder, record.actionsArtifact.path)));
+  check(
+    records.some((record, index) => record.resourceUse.wallClockSeconds * 1000 - evidence[index].elapsedMs >= 300),
+    'sealed resource use omitted a delayed post-trial version read',
+  );
+
+  const attemptCapture = path.join(scratch.make('agent-version-attempt-use-capture'), 'calls.jsonl');
+  const attemptReads = path.join(scratch.make('agent-version-attempt-use-reads'), 'reads.txt');
+  const attemptProject = makeProject('agent-version-attempt-use', {
+    edit: ({ folder }) =>
+      useSealedBriefAgent(folder, {
+        capture: attemptCapture,
+        versionReadCounter: attemptReads,
+        versionDelayAtRead: 4,
+        versionDelayMs: 400,
+      }),
+  });
+  const attempted = evaluate(['run', '--evaluation', attemptProject.folder], attemptProject.env);
+  check(attempted.status === 0, `the delayed post-attempt version read exited ${attempted.status}: ${attempted.output}`);
+  const attemptRun = runDirectoryOf(attemptProject.folder);
+  if (attempted.status !== 0 || attemptRun === null) return;
+  const attemptSet = path.join(attemptRun, attemptDirectory('clean', 1, 'P-001'));
+  const attemptRecord = readJson(path.join(attemptSet, 'record-1.json'));
+  const attemptEvidence = readJson(path.join(attemptProject.folder, attemptRecord.actionsArtifact.path));
+  check(
+    attemptRecord.resourceUse.wallClockSeconds * 1000 - attemptEvidence.elapsedMs >= 300,
+    'qualification record resource use omitted a delayed post-attempt version read',
+  );
+}
+
+async function checkAgentVersionMoves() {
+  const selected = process.argv.find((value) => value.startsWith('--where='))?.slice('--where='.length) ?? null;
+  for (const where of ['before-calibration', 'last-calibration', 'before-attempt', 'after-agent', 'after-attempt', 'after-trial']) {
+    if (selected !== null && where !== selected) continue;
+    const capture = path.join(scratch.make(`agent-version-${where}-capture`), 'calls.jsonl');
+    const versionFile = path.join(scratch.make(`agent-version-${where}-file`), 'version.txt');
+    const reads = path.join(scratch.make(`agent-version-${where}-reads`), 'reads.txt');
+    const counter = path.join(scratch.make(`agent-version-${where}-agents`), 'agents.txt');
+    fs.writeFileSync(versionFile, '1.0.0\n');
+    const project = makeProject(`agent-version-${where}`, {
+      edit: ({ folder }) => {
+        useSealedBriefAgent(folder, {
+          capture,
+          versionFile,
+          versionReadCounter: reads,
+          versionFlipAtRead:
+            where === 'before-calibration' || where === 'before-attempt'
+              ? 2
+              : where === 'last-calibration'
+                ? 5
+                : where === 'after-attempt'
+                  ? 4
+                  : where === 'after-trial'
+                    ? 16
+                    : null,
+          counter,
+          flipVersionOnAgent: where === 'after-agent' ? 1 : null,
+          rubric: where === 'before-calibration' || where === 'last-calibration',
+        });
+        if (where === 'last-calibration') setHalfAgreement(folder);
+      },
+    });
+    const result = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(result.status === 12, `${where} agent version change exited ${result.status}; expected 12: ${result.output}`);
+    if (where === 'after-attempt')
+      check(result.output.includes('after an evaluator attempt'), 'the changed attempt received a vote before its final version read');
+    if (where === 'after-trial')
+      check(result.output.includes('after a trial'), 'the changed trial was not stopped by its final version read');
+    const directory = runDirectoryOf(project.folder);
+    check(directory !== null && !fs.existsSync(path.join(directory, 'trial-sets.json')), `${where} change sealed a trial set`);
+    if (where === 'before-attempt' || where === 'before-calibration')
+      check(captures(capture).length === 0, 'changed agent launched the affected calibration or qualification attempt');
+    if (where === 'after-attempt' || where === 'after-agent')
+      check(!fs.existsSync(path.join(directory, 'evaluator-qualification.json')), 'changed qualification attempt received a vote');
+    if (where === 'last-calibration')
+      check(
+        result.output.includes('during calibration') &&
+          captures(capture).length === 2 &&
+          !fs.existsSync(path.join(directory, 'evaluator-qualification.json')),
+        'the last calibration call did not stop with exit 12 before qualification',
+      );
+  }
+}
+
+async function checkAgentVersionAdapterBoundary() {
+  check(AGENT_VERSION_CEILING_MS === AGENT_VERSION_TIMEOUT_MS + 5000, 'the version ceiling omitted supervisor cleanup time');
+  check(
+    JSON.stringify(AGENT_ADAPTERS.claude.versionArgv()) === '["--version"]' &&
+      JSON.stringify(AGENT_ADAPTERS.claude.versionArgv(['--model', 'fixed'])) === '["--model","fixed","--version"]' &&
+      AGENT_ADAPTERS.claude.parseVersion('2.1.282 (Claude Code)') === '2.1.282' &&
+      AGENT_ADAPTERS.custom.parseVersion('stub-evaluator-agent 1.0.1') === '1.0.1' &&
+      AGENT_ADAPTERS.custom.parseVersion('unknown') === null,
+    'the adapters do not own their version invocation and output parsing',
+  );
+  for (const file of ['run.js', 'evaluators.js', 'sealed-brief-agent.js']) {
+    const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', file), 'utf8');
+    check(!source.includes('--version') && !source.includes('parseInstalledVersion'), `${file} owns a vendor version flag or parser`);
+  }
+  let missing = null;
+  try {
+    configurationFields({
+      layer: {
+        evaluator: { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub', timeoutMs: 1 },
+        treeDigest: 't',
+        mapping: { keys: {} },
+      },
+      conditions: { evaluator: { modelSnapshot: 'fixed' } },
+      digestBytes: (await loadEngine()).digestBytes,
+    });
+  } catch (error) {
+    missing = error;
+  }
+  check(missing instanceof TypeError, 'a sealed-brief configuration accepted an unobserved adapter version');
 }
 
 /** A target model's system prompt digest, as a target that runs a model would name it. */
@@ -5047,7 +5322,7 @@ async function checkUnits() {
   check(refusedMissing instanceof TypeError, 'a command evaluator configuration was built with no observed framework versions');
 
   // Story 1.34: a sealed-brief agent's qualification is a condition of its verdicts, so it moves the scoring version.
-  const agentFields = (qualification) =>
+  const agentFields = (qualification, agentVersion = '1.0.0') =>
     configurationFields({
       layer: {
         evaluator: { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub', timeoutMs: 1 },
@@ -5058,8 +5333,29 @@ async function checkUnits() {
       judgeConfiguration: null,
       digestBytes: engine.digestBytes,
       qualification,
+      agentVersion,
     }).decodingParameters;
   const qualified = agentFields({ attempts: 2, minimumAgreement: 0.9 });
+  check(
+    qualified['tea.evaluatorAgentVersion'] === '1.0.0' &&
+      JSON.stringify(qualified) !== JSON.stringify(agentFields({ attempts: 2, minimumAgreement: 0.9 }, '1.0.1')),
+    'the sealed-brief configuration does not change with the observed adapter version alone',
+  );
+  const agentConfigurationDigest = (version) =>
+    engine.digestArtifact(
+      {
+        schemaVersion: 1,
+        evaluatorIdentity: 'sealed-brief-agent',
+        modelSnapshot: 'an-agent',
+        systemPromptDigest: 'fixed',
+        decodingParameters: agentFields({ attempts: 2, minimumAgreement: 0.9 }, version),
+      },
+      'EvaluatorConfiguration',
+    );
+  check(
+    agentConfigurationDigest('1.0.0') !== agentConfigurationDigest('1.0.1'),
+    'the observed agent version alone left the configuration digest unchanged',
+  );
   check(
     qualified['tea.evaluatorQualificationAttempts'] === 2 &&
       qualified['tea.evaluatorQualificationMinimumAgreement'] === 0.9 &&
@@ -5190,6 +5486,7 @@ async function checkReferenceQualifiesSealedBriefAgent() {
       judgeConfiguration: null,
       digestBytes: (await loadEngine()).digestBytes,
       qualification: { attempts: 2, minimumAgreement: 0.9 },
+      agentVersion: '1.0.0',
     }).decodingParameters,
   ).filter((key) => key.startsWith('tea.evaluatorQualification'));
   check(decodingKeys.length === 2, `the configuration carries ${JSON.stringify(decodingKeys)}; expected the qualification's two keys`);
@@ -6091,6 +6388,24 @@ const CASES = [
   { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'private' },
   { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
   { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
+  { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators' },
+  { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators' },
+  { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults, group: 'evaluators' },
+  {
+    name: 'an agent version probe receives only declared environment keys and refuses a delimiter',
+    body: checkAgentVersionEnvironmentAndDelimiter,
+    group: 'evaluators',
+  },
+  {
+    name: 'post-trial and post-attempt agent version reads count in sealed resource use',
+    body: checkAgentVersionPostTrialUse,
+    group: 'evaluators',
+  },
+  {
+    name: 'an installed agent version changing during the run stops the attempt or trial',
+    body: checkAgentVersionMoves,
+    group: 'evaluators',
+  },
   { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents' },
   { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents' },
   { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents' },
@@ -6155,6 +6470,22 @@ async function main() {
       await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
       await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
       await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
+      return report();
+    }
+    if (process.argv.includes('--agent-version-only')) {
+      const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length) ?? '';
+      for (const { name, body } of [
+        { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary },
+        { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade },
+        { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults },
+        {
+          name: 'an agent version probe receives only declared environment keys and refuses a delimiter',
+          body: checkAgentVersionEnvironmentAndDelimiter,
+        },
+        { name: 'post-trial and post-attempt agent version reads count in sealed resource use', body: checkAgentVersionPostTrialUse },
+        { name: 'an installed agent version changing during the run stops the attempt or trial', body: checkAgentVersionMoves },
+      ])
+        if (name.includes(only)) await runCase(name, body);
       return report();
     }
     // `--held-attempts-only` runs Story 1.69's cases alone (its revert checks); `--only=<text>` keeps those whose name has the text.

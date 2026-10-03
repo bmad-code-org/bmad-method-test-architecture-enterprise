@@ -19,8 +19,47 @@ const { spawnSync } = require('node:child_process');
 function copyOf(project, copies) {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-evaluate-baseline-copy-'));
   copies.push(root);
-  fs.cpSync(project.repository, path.join(root, 'repository'), { recursive: true });
-  return path.join(root, 'repository', path.relative(project.repository, project.folder));
+  const repository = path.join(root, 'repository');
+  // Node's native cpSync aborts if a loose-object directory disappears
+  // during traversal on macOS. Let Git copy its own store, restore the source
+  // HEAD and deletions, then overlay the working tree and ignored run evidence.
+  const cloned = spawnSync('git', ['clone', '--quiet', '--no-local', project.repository, repository], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+  });
+  assert.equal(cloned.status, 0, `clone: ${cloned.stderr}`);
+  const git = (location, args) =>
+    spawnSync('git', ['-C', location, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+    });
+  const sourceHead = git(project.repository, ['rev-parse', 'HEAD']);
+  assert.equal(sourceHead.status, 0, `source HEAD: ${sourceHead.stderr}`);
+  const sourceBranch = git(project.repository, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+  assert.ok(sourceBranch.status === 0 || sourceBranch.status === 1, `source branch: ${sourceBranch.stderr}`);
+  const checkedOut = git(
+    repository,
+    sourceBranch.status === 0
+      ? ['checkout', '--quiet', '-B', sourceBranch.stdout.trim(), sourceHead.stdout.trim()]
+      : ['checkout', '--quiet', '--detach', sourceHead.stdout.trim()],
+  );
+  assert.equal(checkedOut.status, 0, `copy HEAD: ${checkedOut.stderr}`);
+  const tracked = git(repository, ['ls-files', '-z']);
+  assert.equal(tracked.status, 0, `tracked paths: ${tracked.stderr}`);
+  for (const relative of tracked.stdout.split('\0').filter(Boolean)) {
+    try {
+      fs.lstatSync(path.join(project.repository, relative));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      fs.rmSync(path.join(repository, relative), { recursive: true, force: true });
+    }
+  }
+  fs.cpSync(project.repository, repository, {
+    recursive: true,
+    force: true,
+    filter: (source) => source !== path.join(project.repository, '.git'),
+  });
+  return path.join(repository, path.relative(project.repository, project.folder));
 }
 
 /** Commits the repository's current state, as the reviewed pull request that accepts a baseline does. */

@@ -351,6 +351,7 @@ function evaluatorLayerChange(folder, files) {
  * @param {{ attempts: number, minimumAgreement: number }|null} [options.qualification] a sealed-brief agent's `evaluatorQualification`
  * @param {Array<{ package: string, version: string }>|null} [options.frameworks] a command evaluator's installed
  *   framework versions as the run observed them (`frameworks.js` `observedVersions`); required for that kind
+ * @param {string|null} [options.agentVersion] the installed sealed-brief agent version observed for this run
  * @returns {{ evaluatorIdentity: string, modelSnapshot: string, systemPromptDigest: string, decodingParameters: object, judgeConfiguration: object|null }}
  */
 function configurationFields({
@@ -362,6 +363,7 @@ function configurationFields({
   calibrationMinimumAgreement = null,
   qualification = null,
   frameworks = null,
+  agentVersion = null,
 }) {
   const { evaluator } = layer;
   const noPrompt = digestBytes(new Uint8Array(0));
@@ -389,6 +391,9 @@ function configurationFields({
     return { evaluatorIdentity: `${IDENTITIES.command} ${evaluator.command}`, ...target, decodingParameters, judgeConfiguration: null };
   }
   // A sealed-brief agent is the model this configuration describes; the target's own model, when it runs one, stays recorded.
+  if (typeof agentVersion !== 'string' || agentVersion.length === 0)
+    throw new TypeError("a sealed-brief agent's configuration needs its observed adapter version");
+  decodingParameters['tea.evaluatorAgentVersion'] = agentVersion;
   decodingParameters['tea.evaluatorAgent'] = evaluator.agent;
   decodingParameters['tea.evaluatorModel'] = recordedEvaluatorModel(evaluator);
   // The qualification is a condition of the verdicts the agent's records carry: changing it changes the scoring version.

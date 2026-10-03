@@ -128,6 +128,10 @@ function codexSandbox(capabilities) {
 /** The tool list the review CLI runs with, kept under its historical name for the callers that read it. */
 const TOOLS = claudeTools(DEFAULT_CAPABILITIES);
 const MODEL_VALUE_PATTERN = /^[\w.:[\]/-]+$/;
+const AGENT_VERSION_TIMEOUT_MS = 3000;
+const { SUPERVISOR_BACKSTOP_MS } = require('./agent-supervisor-bounds');
+/** The maximum wall time reserved for one supervised version read. */
+const AGENT_VERSION_CEILING_MS = AGENT_VERSION_TIMEOUT_MS + SUPERVISOR_BACKSTOP_MS;
 
 function modelArgumentError(code, message) {
   const error = new Error(message);
@@ -226,6 +230,8 @@ function mcpServersConfig({ name, command, args, env }) {
 const AGENT_ADAPTERS = {
   claude: {
     command: 'claude',
+    versionArgv: (extra = []) => [...extra, '--version'],
+    parseVersion: (output) => parseInstalledVersion(output),
     defaultModel: 'sonnet',
     modelFlags: ['--model'],
     // --safe-mode strips repo customizations for the review run; --tools/
@@ -385,6 +391,8 @@ const AGENT_ADAPTERS = {
   },
   custom: {
     command: null,
+    versionArgv: (extra = []) => [...extra, '--version'],
+    parseVersion: (output) => parseInstalledVersion(output),
     defaultModel: null,
     modelFlags: [],
     // The custom runner contract is intentionally small: read the complete
@@ -426,6 +434,44 @@ const AGENT_ADAPTERS = {
     envNames: [],
   },
 };
+
+/** A bounded, supervised read of the CLI that will run a sealed-brief evaluator. */
+async function observeAgentVersion({ evaluator, scratch, env = process.env, spawnPrefix = [] }) {
+  const adapter = AGENT_ADAPTERS[evaluator.agent];
+  if (!adapter?.versionArgv || !adapter.parseVersion) throw new Error(`the ${evaluator.agent} adapter cannot report its version`);
+  if ((evaluator.agentArgs ?? []).includes('--'))
+    throw new Error('agentArgs contains a standalone --, which hides the adapter version flag');
+  const command = evaluator.agentCommand || adapter.command;
+  if (!command) throw new Error(`the ${evaluator.agent} adapter has no configured executable`);
+  const { runSupervised, buildMinimalEnv } = require('./run-agent');
+  const { makeScratchDirectory, releaseScratchDirectory } = require('./evaluate/workspace');
+  const cwd = makeScratchDirectory(scratch, 'tea-evaluate-agent-version-');
+  const args = adapter.versionArgv(evaluator.agentArgs ?? []);
+  const isolated = spawnPrefix.length > 0;
+  try {
+    const result = await runSupervised({
+      command: isolated ? spawnPrefix[0] : command,
+      args: isolated ? [...spawnPrefix.slice(1), command, ...args] : args,
+      cwd,
+      env: buildMinimalEnv(evaluator.environmentKeys ?? [], env, adapter.envNames),
+      timeout: AGENT_VERSION_TIMEOUT_MS,
+    });
+    if (result.outcome.timedOut) throw new Error(`the agent version probe timed out after ${AGENT_VERSION_TIMEOUT_MS} ms`);
+    if (result.outcome.spawnError || result.outcome.failure || result.outcome.status !== 0)
+      throw new Error(`the agent version probe failed: ${JSON.stringify(result.outcome)}`);
+    const version = adapter.parseVersion(`${result.stdout}\n${result.stderr}`);
+    if (version === null) throw new Error('the agent version probe returned no parseable version');
+    return version;
+  } finally {
+    releaseScratchDirectory(scratch, cwd);
+  }
+}
+
+/** Common CLI version shape, with vendor-specific argv kept in this adapter table. */
+function parseInstalledVersion(output) {
+  const matches = [...output.matchAll(/(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)(?=\s|$)/g)];
+  return matches.length === 1 ? matches[0][1] : null;
+}
 
 /** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */
 function agentReplyAndUsage(agent, stdout, stderr) {
@@ -538,6 +584,8 @@ function bridgedArgsRefused(agent, extra = []) {
 
 module.exports = {
   AGENT_ADAPTERS,
+  AGENT_VERSION_CEILING_MS,
+  AGENT_VERSION_TIMEOUT_MS,
   agentReplyAndUsage,
   bridgedArgsRefused,
   DEFAULT_CAPABILITIES,
@@ -547,6 +595,7 @@ module.exports = {
   codexSandbox,
   resolveModel,
   modelFromArgs,
+  observeAgentVersion,
   strongestCapability,
   validateModelValue,
 };

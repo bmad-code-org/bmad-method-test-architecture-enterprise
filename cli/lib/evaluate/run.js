@@ -19,7 +19,9 @@
  *      records the declared and observed versions, and a package that is missing or at another version exits 12
  *      with no trial; the run reads them again before each launch of the evaluator and after each trial, and a
  *      change exits 12 with no record for that trial;
- *   1b. a sealed-brief agent evaluator qualified before any trial (Story 1.34): the agent runs
+ *   1b. a sealed-brief evaluator's installed agent CLI version is observed before calibration or qualification
+ *      (Story 1.72), bound into the configuration and held before each launch and after each attempt or trial;
+ *   1c. a sealed-brief agent evaluator qualified before any trial (Story 1.34): the agent runs
  *      `evaluatorQualification.attempts` times on the clean arm and on each mutated arm, each attempt in a
  *      workspace of its own that writes under `evaluator-qualification/` alone, its record scored by
  *      `eval-quality score`, and `evaluator-qualification.json` reports each attempt's outcome, copied from the
@@ -81,6 +83,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
+const { AGENT_VERSION_CEILING_MS, observeAgentVersion } = require('../agent-adapters');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
@@ -735,6 +738,8 @@ async function concludeWithRows(context, facts) {
     // The installed frameworks sit outside the tracked tree, so they are read again beside it (Story 1.44).
     const moved = await frameworkChange(context);
     if (moved !== null) throw new EvaluatorError(`the installed frameworks changed ${when}: ${moved}`);
+    const agentMoved = await agentVersionChange(context);
+    if (agentMoved !== null) throw new EvaluatorError(`the installed agent version could not be held ${when}: ${agentMoved}`);
   };
   const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
   const { observationLabel, streams } = trialNames(context);
@@ -936,6 +941,22 @@ async function frameworkChange(context) {
   return problems.length === 0 ? null : problems.join('; ');
 }
 
+/** The sealed-brief CLI version held beside the evaluator layer at every read position. */
+async function agentVersionChange(context) {
+  if (context.snapshot.layer.evaluator.kind !== 'sealed-brief-agent') return null;
+  try {
+    const version = await observeAgentVersion({
+      evaluator: context.snapshot.layer.evaluator,
+      scratch: context.scratch,
+      env: context.env,
+      spawnPrefix: layerPrefix(context.registry.confinement),
+    });
+    return version === context.agentVersion ? null : `observed ${version}; run began with ${context.agentVersion}`;
+  } catch (error) {
+    return error.message;
+  }
+}
+
 /** The trial sets, the evaluator configuration and the index, after the preflight verdict passed. */
 async function runTrialSets(given) {
   // The trials judge with the scoring policy the run copies, read before anything ran.
@@ -1032,6 +1053,20 @@ async function runTrialSets(given) {
 
   // A command evaluator's installed frameworks are read before anything it judges runs (Story 1.44).
   const observedFrameworks = kind === 'command' ? await observeInstalledFrameworks(context) : null;
+  let observedAgentVersion = null;
+  if (kind === 'sealed-brief-agent') {
+    try {
+      observedAgentVersion = await observeAgentVersion({
+        evaluator: snapshot.layer.evaluator,
+        scratch: context.scratch,
+        env: context.env,
+        spawnPrefix: layerPrefix(registry.confinement),
+      });
+      context.agentVersion = observedAgentVersion;
+    } catch (error) {
+      throw stop({ stage: 'trial', exitCode: 12, message: `the installed agent version could not be observed: ${error.message}` });
+    }
+  }
 
   let calibrationDigest = null;
   if ((contract.rubrics ?? []).length > 0) {
@@ -1059,6 +1094,9 @@ async function runTrialSets(given) {
       if (changedBefore !== null) throw new EvaluatorError(`the evaluation layer changed before calibration: ${changedBefore}`);
       const movedBefore = await frameworkChange(context);
       if (movedBefore !== null) throw new EvaluatorError(`the installed frameworks changed before calibration: ${movedBefore}`);
+      const agentMovedBefore = await agentVersionChange(context);
+      if (agentMovedBefore !== null)
+        throw new EvaluatorError(`the installed agent version could not be held before calibration: ${agentMovedBefore}`);
       if (kind === 'command') {
         const result = await runCommandEvaluator({
           folder,
@@ -1116,6 +1154,9 @@ async function runTrialSets(given) {
       if (changedAfter !== null) throw new EvaluatorError(`the evaluation layer changed during calibration: ${changedAfter}`);
       const movedAfter = await frameworkChange(context);
       if (movedAfter !== null) throw new EvaluatorError(`the installed frameworks changed during calibration: ${movedAfter}`);
+      const agentMovedAfter = await agentVersionChange(context);
+      if (agentMovedAfter !== null)
+        throw new EvaluatorError(`the installed agent version could not be held during calibration: ${agentMovedAfter}`);
       treeUnchanged('calibration');
       return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
     };
@@ -1161,6 +1202,7 @@ async function runTrialSets(given) {
     calibrationMinimumAgreement: evaluation.judgeCalibration?.minimumAgreement ?? null,
     qualification: kind === 'sealed-brief-agent' ? (evaluation.evaluatorQualification ?? null) : null,
     frameworks: observedFrameworks,
+    agentVersion: observedAgentVersion,
   });
   // The tools a sealed-brief agent had: one per interface the bridge exposed.
   const bridged =
@@ -1197,7 +1239,8 @@ async function runTrialSets(given) {
     kind === 'command'
       ? 2 * layer.frameworks.reduce((total, framework) => total + effectiveProbeTimeoutMs(framework, layer.evaluator), 0)
       : 0;
-  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0) + probePassesMs;
+  const versionPassesMs = kind === 'sealed-brief-agent' ? 3 * AGENT_VERSION_CEILING_MS : 0;
+  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0) + probePassesMs + versionPassesMs;
   // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   const sealing = {
@@ -1219,7 +1262,13 @@ async function runTrialSets(given) {
     arm.trials = [];
     for (let trialIndex = 1; trialIndex <= trialCount; trialIndex += 1) {
       log(`${arm.conditionArm}: trial ${trialIndex} of ${trialCount}`);
-      arm.trials.push(await runTrial({ ...context, arm, trialIndex }));
+      const trial = await runTrial({ ...context, arm, trialIndex });
+      const versionReadBegan = Date.now();
+      const agentMoved = await agentVersionChange(context);
+      if (agentMoved !== null)
+        throw stop({ stage: 'trial', exitCode: 12, message: `the installed agent version could not be held after a trial: ${agentMoved}` });
+      trial.elapsedMs += Date.now() - versionReadBegan;
+      arm.trials.push(trial);
       // Read after every trial, so a target that writes into the project stops the run at once.
       treeUnchanged('trials');
     }
@@ -1306,7 +1355,9 @@ async function runTrialSets(given) {
       kind,
       identity: configuration.evaluatorIdentity,
       ...(kind === 'command' ? { command: layer.evaluator.command, frameworks: observedFrameworks } : {}),
-      ...(kind === 'sealed-brief-agent' ? { agent: layer.evaluator.agent, model: recordedEvaluatorModel(layer.evaluator) } : {}),
+      ...(kind === 'sealed-brief-agent'
+        ? { agent: layer.evaluator.agent, model: recordedEvaluatorModel(layer.evaluator), version: observedAgentVersion }
+        : {}),
     },
     model: { modelSnapshot: configuration.modelSnapshot, systemPromptDigest: configuration.systemPromptDigest },
     judge:
@@ -1581,6 +1632,15 @@ async function qualifyEvaluator(context) {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       log(`${arm.conditionArm}: evaluator attempt ${attempt} of ${attempts}`);
       const trial = await runTrial({ ...context, arm, trialIndex: 1, attempt });
+      const versionReadBegan = Date.now();
+      const agentMoved = await agentVersionChange(context);
+      if (agentMoved !== null)
+        throw stop({
+          stage: 'trial',
+          exitCode: 12,
+          message: `the installed agent version could not be held after an evaluator attempt: ${agentMoved}`,
+        });
+      trial.elapsedMs += Date.now() - versionReadBegan;
       // Read after every attempt, so a target that writes into the project stops the run at once.
       treeUnchanged('qualification attempts');
       // The engine reads the run directory next: it must hold what the runtime wrote, and nothing else.
