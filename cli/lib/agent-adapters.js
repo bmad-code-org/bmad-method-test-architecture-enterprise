@@ -129,9 +129,9 @@ function codexSandbox(capabilities) {
 const TOOLS = claudeTools(DEFAULT_CAPABILITIES);
 const MODEL_VALUE_PATTERN = /^[\w.:[\]/-]+$/;
 const AGENT_VERSION_TIMEOUT_MS = 3000;
-const { SUPERVISOR_BACKSTOP_MS } = require('./agent-supervisor-bounds');
+const { supervisedAgentCeilingMs } = require('./agent-supervisor-bounds');
 /** The maximum wall time reserved for one supervised version read. */
-const AGENT_VERSION_CEILING_MS = AGENT_VERSION_TIMEOUT_MS + SUPERVISOR_BACKSTOP_MS;
+const AGENT_VERSION_CEILING_MS = supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS);
 
 function modelArgumentError(code, message) {
   const error = new Error(message);
