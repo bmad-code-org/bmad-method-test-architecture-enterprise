@@ -71,6 +71,8 @@ context:
 - Both requirements copies date the guard-bypass extension to Story 1.56 on 2026-10-03. The original 2026-09-29 confirmation stays attributed to Story 1.26. Published eval-quality `digestBytes` gives the amended requirements `sha256:d42b2f7534aaef8b7d3d9fbca840b9182c135d46dfd612b4b9d2ffbfef98f605`, recorded in both manifest and contract.
 - Real preflight qualified both B-002 probes. Each qualification records baseline refusal at exit 2, empty stdout and exact stderr; mutated response at exit 0, summary stdout and empty stderr; distinct pre and mutated digests; restored digest equal to the original; and a passing baseline rerun. A no-op M-002 fails preflight. A blocked restore exits 12 in `runMutationCycle`. The focused assertion rejects removal of each O-002 equality.
 - Development P-005 and held-out P-006 each score three `caught` votes, with O-002 findings quoting an observed channel. P-004 scores three `passed-clean-control` votes. B-001 and B-002 defect evidence reports comparable strength with a defect rate of 1. Every scored probe reports `contractVerdict: PASS` and no coverage gaps or waiver.
+- The two guard-bypass probes use separate records and partitions with the same deterministic malformed request. The runtime executes one contract interaction plan for each probe and materializes the type-violating string binding as `42`; this evidence measures one controlled defect and does not measure input diversity.
+- Revert observations: changing M-002 to a no-op locally made `test:evaluate-learned-framework` fail with 4 failures, including `preflight exited 11` because the mutated arm did not fail; the file was restored. Removing the O-002 stdout equality locally made that gate fail with 5 failures, including `O-002 must require the exit code, exact stderr, and empty stdout`; the file was restored. Hard-coding the malformed refusal row to pass locally made the gate fail with 19 failures, including `unexpected malformed stdout did not fail its judgment row` and `framework scores 1/0: wrapper ignored scorer result`; the evaluator was restored. The focused suite also blocks restoration in a disposable copy and observes `runMutationCycle` exit 12 with no restored digest and a write-failure message. A clean focused run passed 162 checks after these controls.
 
 ## Spec Change Log
 
@@ -85,6 +87,9 @@ context:
 - Blind Hunter, P-005 witness input: **medium, patch**. Its raw `42` witness differs from the serialized type-violating prompt scored in all three trials. Aligning witness bytes with the scored request makes qualification directly prove the scored manifestation.
 - Blind Hunter, pending `npm test` recorded as passed: **low, rejected as a spec-edit finding**. The verification command list is aspirational while the observed paragraph says the host slot is pending. Record the actual full-gate result when lane 2 releases the slot.
 - Verification Gap Reviewer, pending `npm test` recorded as passed: **low, rejected as a spec-edit finding**. This is the same inconsistent verification status observed independently; the actual full-gate result will settle it.
+- Final PR review, duplicated P-006 scored input: **low, accepted limitation**. The reviewer withdrew the blocker after tracing the shared interaction plan and deterministic type-violating binding. Separate probe records and partitions satisfy this story's measured one-defect claim; input diversity would require runtime support beyond this story.
+- Final PR review, missing revert observations: **medium, patched**. The implementation notes now record the concrete no-op, blocked-restore, removed-channel and hard-coded-pass gate failures and restoration.
+- Final PR review, `npm test` described as passed while queued: **low, patched**. The command entry below now reflects the current pending slot and will receive its observed result after execution.
 
 ## Verification
 
@@ -93,6 +98,6 @@ context:
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"` -- published export exists.
 - `npm run test:evaluate-learned-framework` -- clean control, both defects and rollback assertions pass.
 - `npm run test:atdd-workflow-guidance` -- regenerated contract guidance stays valid.
-- `npm test` -- full local gate passes in the coordinated host slot.
+- `npm test` -- pending the coordinated host slot after lane 2.
 
 **Observed:** Published engine export check, `tea-evaluate check`, direct preflight, `test:evaluate-learned-framework` (162 checks), `test:atdd-workflow-guidance`, `lint`, `lint:md`, and `format:check` passed. The coordinated full `npm test` slot remains pending.
