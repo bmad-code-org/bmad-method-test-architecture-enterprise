@@ -2,7 +2,7 @@
 title: 'Story 1.56: Prove the malformed CLI refusal against a controlled defect'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7e3585d9e81219ce6c36771b9a8546df47d8b198'
@@ -98,6 +98,6 @@ context:
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"` -- published export exists.
 - `npm run test:evaluate-learned-framework` -- clean control, both defects and rollback assertions pass.
 - `npm run test:atdd-workflow-guidance` -- regenerated contract guidance stays valid.
-- `npm test` -- pending the coordinated host slot after lane 2.
+- `npm test` -- passed on rebased head `716aa0dd4e0e22aec78f8256b5ad8ef833331642` in the coordinated host slot.
 
-**Observed:** Published engine export check, `tea-evaluate check`, direct preflight, `test:evaluate-learned-framework` (162 checks), `test:atdd-workflow-guidance`, `lint`, `lint:md`, and `format:check` passed. The coordinated full `npm test` slot remains pending.
+**Observed:** Published engine export check, `tea-evaluate check`, direct preflight, `test:evaluate-learned-framework` (162 checks), `test:atdd-workflow-guidance`, `lint`, `lint:md`, and `format:check` passed. The rebased full `npm test` command exited 0; PID/PGID 24058 and its process group have no remaining members. PR #310 fresh 12-shard CI, coverage and Windows passed on head `716aa0dd` with no review threads; two post-rebase native Codex reviews passed. Automatic Publish run 37107932380 on Story 1.73 main remains the main-merge hold.
