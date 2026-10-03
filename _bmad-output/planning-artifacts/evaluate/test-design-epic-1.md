@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.85, 1.90 to 1.111 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.85, 1.90 to 1.111. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.85, 1.90 to 1.115 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.85, 1.90 to 1.115. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1539,6 +1539,50 @@ Added 2026-10-03 from Story 1.51's reviews. Levels: guidance contract, CLI integ
 | The records pin the edited `SKILL.md` | Run `test:evaluate-ci` over the regenerated `capture-record.json` files                                                                                              | Integration, replay | P0  | The old records beside the edited `SKILL.md` fail with the changed-since-read message   |
 | An unpartitioned plan preflight stops | Run `tea-evaluate preflight` with no `--partition` over the partition-plan fixture; assert exit 64 naming the flag and no run directory holding the held-out step ID | CLI integration     | P0  | Removing the refusal launches the held-out request and puts its ID in the run directory |
 | No plan, no new refusal               | Run `preflight` with no flag over a fixture with no `partitionPlan`; assert the committed replay bytes are unchanged                                                 | CLI integration     | P1  | Refusing every flagless preflight fails the verdict fixture                             |
+
+### Story 1.112: Keep other sessions' commits from failing a run's adopter-tree check
+
+Added 2026-10-03 from Story 1.46's live runs. Levels: CLI integration over a slow fixture target, on each confinement mechanism the host provides.
+
+| AC                                         | Test                                                                                                                                                                     | Level           | P   | Revert check                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | --- | ----------------------------------------------------------------- |
+| A foreign ref does not stop a confined run | Start a confined run of a target that waits, create a ref in the shared git directory from the test, release the target; assert exit 0 and `adopterTree.unchanged: true` | CLI integration | P0  | Restoring the shared-state comparison for a confined run exits 12 |
+| The working tree is still compared         | Repeat with an edited tracked file and then a new untracked file; assert exit 12 each time                                                                               | CLI integration | P0  | Dropping the status comparison lets either edit pass              |
+| An opted-out run keeps the comparison      | Run an opted-out target that runs `git update-ref` and one that writes `.git/config`; assert exit 12 each                                                                | CLI integration | P0  | Removing the opted-out comparison lets both pass                  |
+| The reference names the clone advice       | Read `docs/reference/tea-evaluate-cli.md`; assert it tells an opted-out evaluation over a shared repository to run from a standalone clone                               | Static          | P2  | Deleting the sentence fails the doc assertion                     |
+
+### Story 1.113: Run a subscription-authenticated agent target confined
+
+Added 2026-10-03 from Story 1.46's live preflight. Levels: CLI integration with a fake login, live confined preflight.
+
+| AC                                   | Test                                                                                                                                                                           | Level           | P   | Revert check                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | --- | -------------------------------------------------------------- |
+| The login reaches the confined agent | Confine a stub agent that needs a login file the real home holds; assert its call exits 0 and `run.json` records the confinement                                               | CLI integration | P0  | Removing the grant makes the call exit 4                       |
+| Nothing else under the home opens    | Add a target that reads a second file under the real home; assert `observedMounts` lists it and `score` exits 3                                                                | CLI integration | P0  | Widening the grant to the whole home passes the second file    |
+| The manifest names the source        | Read the isolation manifest of the first case; assert it names the source and holds no byte of the login                                                                       | CLI integration | P1  | Writing the login's content into the manifest fails the case   |
+| The dogfood evaluation runs confined | Under the grant, drop `"confinement": false` and run the Stage 6 preflight of `test/evaluations/bmad-testarch-evaluate` live; assert it passes with `seatbelt` or `bubblewrap` | Live            | P1  | Restoring the opt-out fails the recorded-confinement assertion |
+| The alternative is documented        | Under the recorded alternative, read the CLI reference; assert it documents the opt-out for a subscription login and the dogfood evaluation keeps its reason                   | Static          | P2  | Deleting the documented opt-out fails the doc assertion        |
+
+### Story 1.114: Carve the corpus guide into one guide per target kind
+
+Added 2026-10-03 from Story 1.46's Analyze run. Levels: guidance contract and the builder's Analyze run.
+
+| AC                                   | Test                                                                                                                  | Level             | P   | Revert check                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------- | --- | ------------------------------------------------------ |
+| Each guide is within budget          | Count the tokens of `corpus.md` and each `corpus-<kind>.md` in `test:evaluate-guidance`; assert each is at most 9,000 | Guidance contract | P0  | Moving one kind's section back over the budget fails   |
+| Every named section is where it says | Assert each heading by exact name in its own file and each tagged example through its engine or runtime schema        | Guidance contract | P0  | Deleting a per-kind file or breaking one example fails |
+| No stale reference                   | Assert no guide names a heading that moved and `SKILL.md` bytes are unchanged                                         | Guidance contract | P1  | A reference to the old heading fails                   |
+| The Analyze run clears the high      | Run the builder's Analyze over the skill; assert no high finding names `corpus.md`                                    | Review gate       | P1  | The uncarved guide reports the high again              |
+
+### Story 1.115: Give the skill a command that prints a file's digest
+
+Added 2026-10-03 from Story 1.46's Analyze run. Levels: CLI integration and guidance contract.
+
+| AC                               | Test                                                                                                             | Level             | P   | Revert check                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------- | --- | --------------------------------------------------- |
+| The command prints `digestBytes` | Run `digest --file` over a requirements file; assert the output equals the engine's `digestBytes` over its bytes | CLI integration   | P0  | Hashing the path instead of the bytes fails         |
+| Bad paths exit 64                | Pass a path outside the folder, a link and a directory; assert exit 64 and nothing written                       | CLI integration   | P0  | Accepting a link prints a digest and fails the case |
+| The guides name the command      | Assert Stage 3's and Stage 5's guides name `digest --file` where they say to stamp the digest                    | Guidance contract | P1  | Deleting the sentence fails the marker              |
 
 ## The Dogfood Proof (AD-15)
 
