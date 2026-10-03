@@ -365,15 +365,15 @@ function bubblewrapTargetArguments({
   git = null,
   privateRoot = null,
   rootHome = null,
+  statusFile,
+  statusMount,
   network = 'isolated',
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
-  const privateRootPath = privateRoot === null ? null : realOf(privateRoot);
-  const privateWritable = privateRootPath === null ? [] : writable.map(realOf).filter((entry) => isInside(privateRootPath, entry));
-  const binds = [workspace, ...writable]
-    .map(realOf)
-    .filter((entry) => privateRootPath === null || !isInside(privateRootPath, entry))
-    .flatMap((entry) => ['--bind', entry, entry]);
+  const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
+    const real = realOf(entry);
+    return ['--bind', real, real];
+  });
   // The git directory and each object directory it borrows from are covered by an empty file system; the worktree's own
   // entry is bound back in read-only before the git directory is remounted read-only.
   const gitArguments =
@@ -394,11 +394,10 @@ function bubblewrapTargetArguments({
       ? []
       : [
           '--tmpfs',
-          privateRootPath,
+          realOf(privateRoot),
           ...(rootHome === null ? [] : ['--bind', realOf(rootHome), realOf(rootHome)]),
-          ...privateWritable.flatMap((entry) => ['--bind', entry, entry]),
           '--remount-ro',
-          privateRootPath,
+          realOf(privateRoot),
         ];
   const withheld = realOf(evaluationFolder);
   return [
@@ -414,6 +413,7 @@ function bubblewrapTargetArguments({
     ...binds,
     ...gitArguments,
     ...privateArguments,
+    ...(statusMount === statusFile ? [] : ['--bind', realOf(statusFile), statusMount]),
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -714,11 +714,7 @@ function targetSandbox({
     ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings)),
     ...(privateRoot === null ? [] : spellings(privateRoot)),
   ];
-  const withheldExcept = (statusFile = null) => [
-    ...(git?.metadata ? spellings(git.metadata) : []),
-    ...(rootHome === null ? [] : spellings(rootHome)),
-    ...(statusFile === null ? [] : spellings(statusFile)),
-  ];
+  const withheldExcept = () => [...(git?.metadata ? spellings(git.metadata) : []), ...(rootHome === null ? [] : spellings(rootHome))];
   return {
     mode: confinement.mode,
     /** Whether this sandbox audits what its processes open. */
@@ -771,14 +767,20 @@ function targetSandbox({
       // status of a call it is not part of.
       const statusFile = path.join(status, `status-${calls}-${crypto.randomBytes(8).toString('hex')}.json`);
       fs.writeFileSync(statusFile, '', { mode: 0o600 });
+      // The source stays under the owned parent for killed-run recovery. A synthetic /dev mount keeps its directory
+      // out of the target's otherwise empty private root and out of the target home's parent listing.
+      const statusMount =
+        privateRoot !== null && isInside(privateRoot, statusFile) ? path.join('/dev', path.basename(statusFile)) : statusFile;
       const vector = bubblewrapTargetArguments({
         executable: confinement.executable,
         workspace,
-        writable: [...grants, statusFile],
+        writable: grants,
         evaluationFolder,
         git,
         privateRoot,
         rootHome,
+        statusFile,
+        statusMount,
         network,
       });
       const command = [
@@ -787,7 +789,7 @@ function targetSandbox({
         process.execPath,
         STATUS_SHIM,
         ...(bridge === null ? [] : ['--bridge', bridge]),
-        statusFile,
+        statusMount,
         target,
         ...args,
       ];
@@ -802,12 +804,12 @@ function targetSandbox({
           file,
           marker: { program: process.execPath, text: path.basename(statusFile) },
           grants: {
-            read: readRoots([...grants, ...readable, statusFile]),
+            read: readRoots([...grants, ...readable, statusMount]),
             requested: REQUESTED_ROOTS.flatMap(spellings),
             // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
-            write: [workspace, ...grants, ...(home === null ? [] : [home]), statusFile, ...ownGitEntries()].flatMap(spellings),
+            write: [workspace, ...grants, ...(home === null ? [] : [home]), statusMount, ...ownGitEntries()].flatMap(spellings),
             withheld: withheldRoots(),
-            withheldExcept: withheldExcept(statusFile),
+            withheldExcept: withheldExcept(),
           },
         },
       };
