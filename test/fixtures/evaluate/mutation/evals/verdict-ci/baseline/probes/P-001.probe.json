@@ -6,19 +6,19 @@
   "probeClass": "zero-action",
   "behaviorId": "B-001",
   "systemId": "verdict-ci",
-  "implementationDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
-  "artifactDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
-  "commitDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
+  "implementationDigest": "sha256:bb78bdc6dff194bf6273279521279ae53663b4e42225165fd5bcb9eedc109a71",
+  "artifactDigest": "sha256:bb78bdc6dff194bf6273279521279ae53663b4e42225165fd5bcb9eedc109a71",
+  "commitDigest": "sha256:bb78bdc6dff194bf6273279521279ae53663b4e42225165fd5bcb9eedc109a71",
   "rationale": "Clean control: under the committed strict policy the verdict command accepts the request.",
   "qualification": {
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261003T041121879Z-34490448/qualification/P-001/baseline-pass.json",
+      "path": "runs/20261003T212908860Z-34ccb0d3/qualification/P-001/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:fc8de7a730cb2a3f54780ad259bd6089890c38c72b95b0397417efa23f4544fa"
     },
-    "revisionCommitDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
+    "revisionCommitDigest": "sha256:bb78bdc6dff194bf6273279521279ae53663b4e42225165fd5bcb9eedc109a71",
     "noKnownDefectStatement": "The strict policy has no known defect."
   },
   "expectedClean": true,

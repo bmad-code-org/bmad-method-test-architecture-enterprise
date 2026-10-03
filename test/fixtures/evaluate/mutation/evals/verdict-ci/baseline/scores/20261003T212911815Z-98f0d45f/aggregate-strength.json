@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/ee3f7d75-cf5e-4a9d-9e04-9abac2c7638a/scratchpad/work/verdict/mutation/evals/verdict-ci/runs/20261003T212908860Z-34ccb0d3/scores/20261003T212911815Z-98f0d45f/P-001/evidence-artifact.json",
+    "--evidence",
+    "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/ee3f7d75-cf5e-4a9d-9e04-9abac2c7638a/scratchpad/work/verdict/mutation/evals/verdict-ci/runs/20261003T212908860Z-34ccb0d3/scores/20261003T212911815Z-98f0d45f/P-002/evidence-artifact.json",
+    "--floors",
+    "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/ee3f7d75-cf5e-4a9d-9e04-9abac2c7638a/scratchpad/work/verdict/mutation/evals/verdict-ci/runs/20261003T212908860Z-34ccb0d3/scores/20261003T212911815Z-98f0d45f/strength-floors.json",
+    "--policy",
+    "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/ee3f7d75-cf5e-4a9d-9e04-9abac2c7638a/scratchpad/work/verdict/mutation/evals/verdict-ci/runs/20261003T212908860Z-34ccb0d3/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-65119-Ilvx45/tea-evaluate-aggregate-gb7Ebz/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261003T041133837Z-cd3776d9",
-  "seed": "20261003T041133837Z-cd3776d9",
+  "invocationId": "20261003T212945932Z-ba3d881a",
+  "seed": "20261003T212945932Z-ba3d881a",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "6.0.1",
+  "evalQualityVersion": "7.0.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,8 +17,8 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-d8eb1283-0a5e-41f5-82a4-aa981c16bfc4/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-bbf1d246-6f6a-4ca0-a49b-420891644fbd/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-9cab2890-7b02-400b-93b0-d60e8ef04661/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-12091244-07eb-476f-8a88-d3297e5a705d/target"
   },
   "confinement": "seatbelt",
   "hostNetwork": [],
@@ -31,22 +31,22 @@
     "contract": "sha256:33143cca64e0109bef1d6d680f44842b15f225c5e39129309c1696a76d48cd13",
     "operationPhases": "sha256:9a43bec805733114afeeda862fd2b8fd739f3022e0fb59e03c52ed9400f4eb31",
     "evaluatorConfiguration": "sha256:2907b081b447204bfc4892e329feb7f77dc37ede31467280acbff0b5f4745722",
-    "preflightVerdict": "sha256:bc8a664f3a91110bf9edd0b8a08456b7db7ae165a774d642a5e21e98ac57d685",
+    "preflightVerdict": "sha256:18ddba9e08ddf2dc3cf2312f94623462cce62aeba0ff5a8a6b031de5a20c554e",
     "probes": {
-      "P-001": "sha256:fecaaddfd9083ae69c5453f62818fef4a4d1480a73de591f2dfe85b365aa3ad4",
-      "P-002": "sha256:adb596c688c3800af47b922c4a98168e38f399b7d230cd127c15c1f0e2bba370"
+      "P-001": "sha256:6c0077c31be7dc7053afe1287d1718902a9a48c7d916bdef2997d4acb85817c9",
+      "P-002": "sha256:4b79dbef13cfe4684d15835db31cc2cd7022a26f13a7ed0486ac955d400b76f1"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:456c991b967c8c7c836306c4a8ea7dc72a61414c7b877c197e278b99573e6d7e",
-      "trial-sets/P-001/record-2.json": "sha256:15619b21f6ae041b23a00cc53291a7c5b840aa25ba03bd27f9b13e13ab32df08",
-      "trial-sets/P-001/record-3.json": "sha256:f7cd56d96a739770d4de7c3b4b3401879f1ab6ad28ef3956a13a9c68d5ea0f5b",
-      "trial-sets/P-002/record-1.json": "sha256:a8f7572aeb8aca9c9445c05b1c12e138da12eb28dde2e3152d36366956e43a4c",
-      "trial-sets/P-002/record-2.json": "sha256:9f15c422ef124028dd269dc825b02420db3ffc36ad007f7142cc9fc5bca1f110",
-      "trial-sets/P-002/record-3.json": "sha256:9db111eddb661f4bea0d1a893c3861e360058e591b52265c5f7f312406323db3"
+      "trial-sets/P-001/record-1.json": "sha256:ed56a657cc63114dc4cb4f3597024aebe02af43e8059e73210054f9eebdbf1dc",
+      "trial-sets/P-001/record-2.json": "sha256:467c2ed487dc4dd28aaa7c1fa33bec2e4d6e364b3fc5654cd8972987ff03dd09",
+      "trial-sets/P-001/record-3.json": "sha256:9f08fdff0b926a4b6c477e098a5e8e9ffc42c19c1a4e73b1c6a287ab74fa3faf",
+      "trial-sets/P-002/record-1.json": "sha256:1390804de9610e11b3899cf57c8851fa2988e6a110152c3736f88d17609f67b7",
+      "trial-sets/P-002/record-2.json": "sha256:b90ef56ee51afd1fded599edf9f3c1ada522ba9ad121756d774c506a754fb046",
+      "trial-sets/P-002/record-3.json": "sha256:ac94d9bb190320a9fb5ad5c74f340b85842df0019c72c0b88ef08829d1ad9e1f"
     },
     "isolationManifests": {
-      "P-001": "sha256:050f8e74284ddd6b16d487fdb400bdb05df40ffaaeb9e43eb6ea409dd6d10a53",
-      "P-002": "sha256:936d418543b4125e6861fe5593cd881eb5815be66e20959c5c743e2d40e9a03c"
+      "P-001": "sha256:9e50004e8e23f1145e32b053c9eee24f50d8a0cbd1fe6f2f28b68a494fde8063",
+      "P-002": "sha256:f29885a4765c07a92d6f332dc06f31f57cfcaa2c3147132bf8b84d7282a0a2e2"
     }
   },
   "contractDigest": "sha256:a2f730f44041a36317f2ca873fca3ff249c5ff06c8129338196f868b5e881a84",
@@ -144,12 +144,62 @@
       ]
     }
   ],
-  "startedAt": "2026-10-03T04:11:33.264Z",
-  "durationMs": 4329,
+  "observedMountsChannel": [
+    {
+      "conditionArm": "clean",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 6,
+      "canariesDelivered": 6,
+      "logReportedLoss": false
+    }
+  ],
+  "startedAt": "2026-10-03T21:29:45.301Z",
+  "durationMs": 5033,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261003T041133837Z-cd3776d9"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261003T212945932Z-ba3d881a"
   }
 }
