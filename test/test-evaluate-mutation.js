@@ -1301,6 +1301,7 @@ async function checkInterrupted() {
     stdio: 'ignore',
   });
   const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  holdPrivateParents(child.pid);
   let target = null;
   for (let waited = 0; waited < 20_000 && target === null; waited += 50) {
     if (fs.existsSync(pidFile) && Number(fs.readFileSync(pidFile, 'utf8')) > 0) target = Number(fs.readFileSync(pidFile, 'utf8'));
@@ -1372,6 +1373,7 @@ async function checkKilledRun(
       stdio: 'ignore',
     });
     const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+    holdPrivateParents(child.pid);
     started.push({ child, closed });
     return { child, closed };
   };
@@ -1632,6 +1634,7 @@ async function checkKilledEngineStage() {
       stdio: 'ignore',
     });
     otherClosed = new Promise((resolve) => otherChild.once('close', (code, signal) => resolve({ code, signal })));
+    holdPrivateParents(otherChild.pid);
     for (let waited = 0; waited < 20_000 && !fs.existsSync(otherReady); waited += 50) await delay(50);
     check(fs.existsSync(otherReady), 'the unrelated real preflight never reached its held engine compile');
     if (!fs.existsSync(otherReady)) return;
@@ -2118,6 +2121,7 @@ async function checkKilledCheckout() {
     stdio: 'ignore',
   });
   const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  holdPrivateParents(child.pid);
   let filterPid = null;
   try {
     for (let elapsed = 0; elapsed < 20_000 && filterPid === null; elapsed += 50) {

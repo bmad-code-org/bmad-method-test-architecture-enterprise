@@ -2544,6 +2544,7 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
  * names no placement. `bytes` is the repository as committed; a revert case changes one of its entries.
  */
 const EVALUATION_FILE = 'evals/answer-grade/evaluation.json';
+const CONTRACT_FILE = 'evals/answer-grade/contract.json';
 /** What a `migrations` entry may carry: the file, the story that moved it and the change in words. */
 const MIGRATION_FIELDS = ['file', 'story', 'change'];
 
@@ -2551,9 +2552,24 @@ const MIGRATION_FIELDS = ['file', 'story', 'change'];
  * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
  * `operationPhases` flattened from `{ interfaceId: { operationId: phase } }` to `{ operationId: phase }`, serialized as the
  * session left it. `null` when the file is not a schema 2 file with nested phases in the runtime's serialization, a phase
- * interface is not one of its registry's, or an operation ID repeats across interfaces.
+ * interface is not one of its registry's, a phase pair is not one the contract beside it declares (`pairs`, as JSON
+ * `[interfaceId, operationId]`), or an operation ID repeats across interfaces.
  */
-function reverseSchema2Migration(buffer) {
+
+/** The `[interfaceId, operationId]` pairs, as JSON, the contract in `bytes` declares. */
+function declaredPairs(bytes) {
+  try {
+    const contract = JSON.parse(bytes.get(CONTRACT_FILE).toString('utf8'));
+    return new Set(
+      contract.permittedInterfaces.flatMap((iface) =>
+        iface.operations.map((operation) => JSON.stringify([iface.logicalId, operation.operationId])),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
+}
+function reverseSchema2Migration(buffer, pairs) {
   let value;
   try {
     value = JSON.parse(buffer.toString('utf8'));
@@ -2570,6 +2586,9 @@ function reverseSchema2Migration(buffer) {
     if (!declared.has(interfaceId)) return null;
     if (byOperation === null || typeof byOperation !== 'object') return null;
     for (const [operationId, phase] of Object.entries(byOperation)) {
+      // The flat map keeps no interface, so an operation moved between two declared interfaces would rebuild the same bytes;
+      // each pair has to be one the file's contract declares.
+      if (!pairs.has(JSON.stringify([interfaceId, operationId]))) return null;
       if (Object.hasOwn(flat, operationId)) return null;
       flat[operationId] = phase;
     }
@@ -2612,7 +2631,7 @@ function captureProblems(name, record, bytes) {
     const digest = record.wrote?.[relative];
     let written = bytes.get(relative) ?? Buffer.alloc(0);
     if (migrated.has(relative)) {
-      const rebuilt = reverseSchema2Migration(written);
+      const rebuilt = reverseSchema2Migration(written, declaredPairs(bytes));
       if (rebuilt === null) problems.push(`${name}: ${relative} is not a schema 2 file the declared migration could have produced`);
       else written = rebuilt;
     }
@@ -2982,6 +3001,15 @@ function checkCaptureRecordGuard() {
     const evaluationText = evaluationBytes.toString('utf8');
     const evaluationValue = JSON.parse(evaluationText);
     const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`;
+    // The contract of the tree with one more interface, a copy of its first under `interfaceId` with `operationId` in place of its operation.
+    const withInterface = (tree, interfaceId, operationId = null) => {
+      const contract = JSON.parse(tree.get(CONTRACT_FILE).toString('utf8'));
+      const added = structuredClone(contract.permittedInterfaces[0]);
+      added.logicalId = interfaceId;
+      if (operationId !== null) added.operations[0].operationId = operationId;
+      contract.permittedInterfaces.push(added);
+      return new Map([...tree, [CONTRACT_FILE, Buffer.from(serialized(contract))]]);
+    };
     const cases = [
       [
         'a migration entry that names a false from digest',
@@ -3035,22 +3063,25 @@ function checkCaptureRecordGuard() {
       [
         'a migrated file that reuses an operation ID across two interfaces, which no flat map could have held',
         record,
-        withEvaluation(
-          serialized({
-            ...evaluationValue,
-            registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
-            operationPhases: {
-              ...evaluationValue.operationPhases,
-              'second-interface': structuredClone(Object.values(evaluationValue.operationPhases)[0]),
-            },
-          }),
+        withInterface(
+          withEvaluation(
+            serialized({
+              ...evaluationValue,
+              registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+              operationPhases: {
+                ...evaluationValue.operationPhases,
+                'second-interface': structuredClone(Object.values(evaluationValue.operationPhases)[0]),
+              },
+            }),
+          ),
+          'second-interface',
         ),
         'declared migration could have produced',
       ],
       [
         'a declared migration over a file that was never migrated',
         record,
-        new Map([...bytes, [EVALUATION_FILE, reverseSchema2Migration(evaluationBytes)]]),
+        new Map([...bytes, [EVALUATION_FILE, reverseSchema2Migration(evaluationBytes, declaredPairs(bytes))]]),
         'declared migration could have produced',
       ],
       [
@@ -3074,8 +3105,12 @@ function checkCaptureRecordGuard() {
       [
         'a migrated file whose phases are keyed under an interface its registry never declared',
         record,
-        withEvaluation(
-          serialized({ ...evaluationValue, operationPhases: { 'ghost-interface': Object.values(evaluationValue.operationPhases)[0] } }),
+        // The contract declares the ghost interface, so only the registry can refuse it.
+        withInterface(
+          withEvaluation(
+            serialized({ ...evaluationValue, operationPhases: { 'ghost-interface': Object.values(evaluationValue.operationPhases)[0] } }),
+          ),
+          'ghost-interface',
         ),
         'declared migration could have produced',
       ],
@@ -3087,6 +3122,46 @@ function checkCaptureRecordGuard() {
         `${name}: ${label} did not fail with "${expected}"; the guard said ${JSON.stringify(problems)}`,
       );
     }
+    // An operation moved between two interfaces the file declares rebuilds the same flat bytes, since the flat map keeps no
+    // interface: the pair has to be one the contract declares. The honest file and the moved one flatten alike.
+    const [operationId, phase] = Object.entries(Object.values(evaluationValue.operationPhases)[0])[0];
+    const [interfaceId] = Object.keys(evaluationValue.operationPhases);
+    const twoInterfaces = (phases) =>
+      withInterface(
+        withEvaluation(
+          serialized({
+            ...evaluationValue,
+            registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+            operationPhases: phases,
+          }),
+        ),
+        'second-interface',
+        'second-operation',
+      );
+    const honestPhases = { [interfaceId]: { [operationId]: phase }, 'second-interface': { 'second-operation': 'process' } };
+    const movedPhases = { [interfaceId]: { [operationId]: phase, 'second-operation': 'process' }, 'second-interface': {} };
+    const flatBytes = Buffer.from(
+      serialized({
+        ...evaluationValue,
+        schemaVersion: 1,
+        registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
+        operationPhases: { [operationId]: phase, 'second-operation': 'process' },
+      }),
+    );
+    const sessionRecord = { ...structuredClone(record), wrote: { ...record.wrote, [EVALUATION_FILE]: sha(flatBytes) } };
+    const rewritten = (problems) =>
+      problems.filter((problem) => problem.includes('could have produced') || problem.includes('is not the file'));
+    assert.deepEqual(
+      rewritten(captureProblems(name, sessionRecord, twoInterfaces(honestPhases))),
+      [],
+      `${name}: the honest two-interface file was refused`,
+    );
+    assert.ok(
+      rewritten(captureProblems(name, sessionRecord, twoInterfaces(movedPhases))).some((problem) =>
+        problem.includes('could have produced'),
+      ),
+      `${name}: an operation moved to another declared interface, keeping order, was accepted`,
+    );
   }
 }
 
@@ -3095,7 +3170,10 @@ function checkCaptureRecordGuard() {
  * a live suite holds, and a hold whose text names no live positive process id holds nothing.
  */
 function checkScratchHolds() {
-  const gone = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  const uid = process.getuid();
+  const holdsName = `tea-evaluate-test-holds-p${uid}`;
+  const gonePid = () => spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  const gone = gonePid();
   for (const [text, expected] of [
     [String(process.pid), true],
     ['', false],
@@ -3106,43 +3184,109 @@ function checkScratchHolds() {
     [String(gone), false],
   ])
     assert.equal(liveHolder(text), expected, `a hold reading ${JSON.stringify(text)} is ${expected ? 'live' : 'no hold'}`);
+  const library = path.join(__dirname, 'lib', 'scratch-directories.js');
+  const reapIn = (base) => `require(${JSON.stringify(library)}).removeDeadPrivateParents(${JSON.stringify(base)})`;
+  const privateRootOf = (base) => {
+    const root = path.join(base, `tea-evaluate-p${uid}`);
+    fs.mkdirSync(root, { mode: 0o700 });
+    return root;
+  };
+
   const base = scratch.make('holds-base');
-  const root = path.join(base, `tea-evaluate-p${process.getuid()}`);
-  fs.mkdirSync(root, { mode: 0o700 });
-  const second = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
-  const third = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  const root = privateRootOf(base);
+  const holds = path.join(base, holdsName);
+  const second = gonePid();
+  const third = gonePid();
+  const unplanted = gonePid();
+  const deadHolder = gonePid();
   holdPrivateParents(gone, base);
   for (const owner of [gone, second, third]) fs.mkdirSync(path.join(root, `run-${owner}-planted`));
-  // A hold left by a suite that is gone holds nothing.
-  fs.mkdirSync(path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`), { recursive: true });
-  fs.writeFileSync(path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`, String(third)), String(second));
-  // A hold file read half written is empty, and an empty hold is not removed: the writer is about to finish it.
-  const holds = path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`);
+  // A hold left by a suite that is gone holds nothing, and the reaper removes it whether or not a parent is named for it; so do
+  // an empty hold (a hold is written whole, so it is not a write in progress), a staged file of a gone suite and a stray file.
+  fs.writeFileSync(path.join(holds, String(third)), String(second));
+  fs.writeFileSync(path.join(holds, String(unplanted)), String(deadHolder));
   fs.writeFileSync(path.join(holds, String(second)), '');
+  fs.writeFileSync(path.join(holds, `${unplanted}.${deadHolder}.tmp`), String(deadHolder));
+  fs.writeFileSync(path.join(holds, `${unplanted}.${process.pid}.tmp`), String(process.pid));
+  fs.writeFileSync(path.join(holds, 'stray.txt'), 'x');
   removeDeadPrivateParents(base);
   assert.deepEqual(fs.readdirSync(root).sort(), [`run-${gone}-planted`], 'the reaper removed a held parent or kept an unheld one');
-  assert.equal(fs.existsSync(path.join(holds, String(third))), false, 'the reaper kept a hold whose suite is gone');
-  assert.equal(fs.existsSync(path.join(holds, String(second))), true, 'the reaper removed a hold that reads empty');
+  assert.deepEqual(
+    fs.readdirSync(holds).sort(),
+    [`${unplanted}.${process.pid}.tmp`, String(gone)].sort(),
+    'the reaper kept a hold of a gone suite, an empty hold, a staged file of a gone suite or a stray file, or removed a live one',
+  );
+  fs.rmSync(path.join(holds, `${unplanted}.${process.pid}.tmp`));
   // A reaper this suite started reaps what the suite holds, the cycle a holding case waits on. One that a started process
   // started in turn does not: it is another suite's reaper as far as the hold goes.
-  const library = path.join(__dirname, 'lib', 'scratch-directories.js');
-  const reap = `require(${JSON.stringify(library)}).removeDeadPrivateParents(${JSON.stringify(base)})`;
   const grandchild = spawnSync(
     process.execPath,
-    ['-e', `require('node:child_process').execFileSync(process.execPath, ['-e', ${JSON.stringify(reap)}])`],
+    ['-e', `require('node:child_process').execFileSync(process.execPath, ['-e', ${JSON.stringify(reapIn(base))}])`],
     { encoding: 'utf8' },
   );
   assert.equal(grandchild.status, 0, grandchild.stderr);
   assert.deepEqual(fs.readdirSync(root), [`run-${gone}-planted`], 'a reaper two processes down removed a parent the suite holds');
-  const child = spawnSync(process.execPath, ['-e', reap], { encoding: 'utf8' });
+  const child = spawnSync(process.execPath, ['-e', reapIn(base)], { encoding: 'utf8' });
   assert.equal(child.status, 0, child.stderr);
   assert.deepEqual(fs.readdirSync(root), [], "the suite's own reaper left the parent the suite holds");
   fs.mkdirSync(path.join(root, `run-${gone}-again`));
   removeDeadPrivateParents(base);
   assert.deepEqual(fs.readdirSync(root), [`run-${gone}-again`], 'the holding process itself removed a parent it holds');
+
+  // A release removes only a hold that still names this process.
+  const guarded = gonePid();
+  holdPrivateParents(guarded, base);
+  fs.writeFileSync(path.join(holds, String(guarded)), String(process.ppid));
   releasePrivateParents();
+  assert.equal(
+    fs.readFileSync(path.join(holds, String(guarded)), 'utf8'),
+    String(process.ppid),
+    'a release removed a hold another process holds',
+  );
+  assert.equal(fs.existsSync(path.join(holds, String(gone))), false, 'a release kept a hold of this process');
+  fs.rmSync(path.join(holds, String(guarded)));
   removeDeadPrivateParents(base);
   assert.deepEqual(fs.readdirSync(root), [], 'a released hold still kept its parent');
+
+  // The holds directory is held to the private root's checks: a link is neither written through nor read.
+  const linkedBase = scratch.make('holds-linked');
+  const linkedRoot = privateRootOf(linkedBase);
+  const elsewhere = scratch.make('holds-elsewhere');
+  fs.symlinkSync(elsewhere, path.join(linkedBase, holdsName));
+  assert.throws(() => holdPrivateParents(gone, linkedBase), /not a link/, 'a hold was written into a linked holds directory');
+  assert.deepEqual(fs.readdirSync(elsewhere), [], 'a hold was written through the link');
+  fs.mkdirSync(path.join(linkedRoot, `run-${gone}-linked`));
+  // The hold behind the link names a gone suite, which holds nothing: a reaper that read it would remove the parent.
+  fs.writeFileSync(path.join(elsewhere, String(gone)), String(gonePid()));
+  removeDeadPrivateParents(linkedBase);
+  assert.deepEqual(
+    fs.readdirSync(linkedRoot),
+    [`run-${gone}-linked`],
+    'the reaper read holds through a linked holds directory, or reaped beside it',
+  );
+
+  // A hold that is not a regular file is never opened for reading: a FIFO would block the reaper for good.
+  const fifoBase = scratch.make('holds-fifo');
+  const fifoRoot = privateRootOf(fifoBase);
+  const fifoHolds = path.join(fifoBase, holdsName);
+  fs.mkdirSync(fifoHolds, { mode: 0o700 });
+  assert.equal(spawnSync('mkfifo', [path.join(fifoHolds, String(gone))]).status, 0, 'mkfifo failed');
+  fs.mkdirSync(path.join(fifoRoot, `run-${gone}-fifo`));
+  const fifoReap = spawnSync(process.execPath, ['-e', reapIn(fifoBase)], { encoding: 'utf8', timeout: 20_000 });
+  assert.equal(fifoReap.status, 0, `the reaper blocked or failed over a FIFO hold: ${fifoReap.error ?? fifoReap.stderr}`);
+  assert.deepEqual(fs.readdirSync(fifoRoot), [], 'a FIFO hold held a parent');
+  assert.equal(fs.lstatSync(path.join(fifoHolds, String(gone))).isFIFO(), true, 'the reaper removed a FIFO it does not own');
+
+  // The staged file is made exclusively: a link planted at its name is replaced and never written through.
+  const stagedBase = scratch.make('holds-staged');
+  const victim = path.join(scratch.make('holds-victim'), 'victim');
+  fs.writeFileSync(victim, 'keep');
+  fs.mkdirSync(path.join(stagedBase, holdsName), { mode: 0o700 });
+  fs.symlinkSync(victim, path.join(stagedBase, holdsName, `${gone}.${process.pid}.tmp`));
+  holdPrivateParents(gone, stagedBase);
+  assert.equal(fs.readFileSync(victim, 'utf8'), 'keep', 'a hold was written through a link planted at the staged name');
+  assert.equal(fs.readFileSync(path.join(stagedBase, holdsName, String(gone)), 'utf8'), String(process.pid));
+  releasePrivateParents();
 }
 
 async function main() {

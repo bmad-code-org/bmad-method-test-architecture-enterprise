@@ -38,8 +38,8 @@ context:
 
 The review round's survivor list names sites, so this story fixed one edit per site.
 Thirty-eight mutants cover every site the list names (`score.js` phase snapshot and unclassified observation, `sealed-brief-agent.js` `degenerateAnswer` and `armPortFor`, `run.js` calibration observation and step ceiling, `calibration.js`, `arm.js`, `check.js` option sets, gameability lookups, principal mappings and phase coverage, the workflow suite's skipped-step entry) plus the other pair sites Story 1.42 touched (`interpret.js` `phaseOf`, `records-calibration.js`, `historical.js`, `release-report.js`, `admission.js`).
-Eleven more mutants cover the capture-record guard.
-The independent review of the first commit added five mutants of the same sites (A1b, K1c, K2c, K7b, K8b, each dropping the other half of a pair lookup) and two guard mutants (G6b, G10); they survived the first tests and each now has a case.
+Twelve more mutants cover the capture-record guard.
+The independent review of the first commit added five mutants of the same sites (A1b, K1c, K2c, K7b, K8b, each dropping the other half of a pair lookup) and two guard mutants (G6b, G10) and a third round added G11 (an operation moved between two declared interfaces); they survived the first tests and each now has a case.
 
 A committed harness would run the suites of the gate list once per mutant, far past the pre-commit budget, so it stays out of the repository.
 The mutant list and the failing test per mutant live in this record.
@@ -57,8 +57,8 @@ The mutants ran in four scratch copies under the session's scratchpad, one file 
 - **`test/test-evaluate-ci.js`.** The Story 2.4 capture-record guard moved out of `checkRepositoryPlans` into its own case, `the capture-record guard`, a table where each failure is a named case (see below).
   `captureProblems` refuses a `migrations` entry that names anything beyond `file`, `story` and `change`, and `reverseSchema2Migration` requires the migrated file to be the runtime's own serialization with phases keyed under interfaces its registry declares (`JSON.stringify(value, null, 2)` and a newline), so a whitespace edit no longer survives the rebuild.
 - **`cli/lib/evaluate/arm.js`.** The `operationsByPair` comment now says when compile refuses a pair declared twice (one transport signature, or a check that cites the step) and that the arm refuses an uncited step on it.
-- **`test/lib/scratch-directories.js`.** `holdPrivateParents(pid)` writes the holder's process id to a file named for `pid` in `/tmp/tea-evaluate-test-holds-p<uid>`, beside the private root and outside every parent, and the reaper of dead private parents leaves every parent named `run-<pid>-*` while that holder runs. A hold is written before the parent exists, whole and renamed into place, and a reaper the holder started itself ignores it.
-- **`test/test-evaluate-mutation.js` and `test/test-test-design-qualification.js`.** The auxiliary-journal edge case holds its planted dead pid, the killed-engine-stage case and the qualification signal case hold the pid of the child they kill, and the qualification case holds its planted dead pid.
+- **`test/lib/scratch-directories.js`.** `holdPrivateParents(pid)` writes the holder's process id to a file named for `pid` in `/tmp/tea-evaluate-test-holds-p<uid>`, beside the private root and outside every parent, and the reaper of dead private parents leaves every parent named `run-<pid>-*` while that holder runs. A hold is written before the parent exists, into a staged file made exclusively and renamed into place, and a reaper the holder started itself ignores it. The directory gets the private root's checks (`heldPrivateRoot`: a real directory the user owns, no link; `holdPrivateParents` throws and the reaper reaps nothing when it fails), a hold is opened without blocking and read only when it is a regular file, and the reaper removes every regular file there that is not a hold or staged file of a running suite.
+- **`test/test-evaluate-mutation.js` and `test/test-test-design-qualification.js`.** Every case that spawns a child whose private parent it later reads or expects to be reclaimed holds that child's pid right after the spawn (the interrupted preflight, the launched pair of preflights, the killed engine stage, the unrelated live run, the Git-checkout hold), the auxiliary-journal edge case holds its planted dead pid, and the qualification signal case holds the pid of the child it kills and its planted dead pid.
 - **Plan.** `epics.md` Story 1.103 and `test-design-epic-1.md` amend the guard criterion (see the amendment below).
 
 ## Acceptance criteria and their revert checks
@@ -67,7 +67,7 @@ The mutants ran in four scratch copies under the session's scratchpad, one file 
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Every listed survivor fails a named test                                | The mutant table below: each of the 37 reachable mutants fails the test named beside it. Reverting any new case lets its mutant pass again.                                               |
 | A surviving mutant gets a test                                          | Thirteen mutants survived the review round's tests and the first version of this story's (S2, S3, S5, C2, Ar4, K3, K7, K8, A1b, K1c, K2c, K7b, K8b). Each now has a case and fails on it. |
-| The capture-record guard fails on a false entry, an absent one, an edit | Eleven guard mutants (G1 to G10 and G6b) each fail a named case of `the capture-record guard`.                                                                                            |
+| The capture-record guard fails on a false entry, an absent one, an edit | Twelve guard mutants (G1 to G11 and G6b) each fail a named case of `the capture-record guard`.                                                                                            |
 | Unreachable sites are recorded with the reason                          | `check.js` `infrastructureObservation` is the one site no contract can reach (below).                                                                                                     |
 
 ## Mutants
@@ -122,19 +122,20 @@ Each mutant is one edit to one file of a scratch copy.
 The guard of Story 2.4 (`test:evaluate-ci`, case `the capture-record guard`) holds each named case below.
 `G` rows are mutants of the guard.
 
-| ID  | Mutant                                                                                      | Failing case                                                                                           |
-| --- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| G1  | a digest the entry names (`from` or `to`) is accepted                                       | `a migration entry that names a false from digest`                                                     |
-| G2  | a `wrote` digest is not compared with the bytes                                             | `a wrote digest retyped to the migrated file as it stands`                                             |
-| G3  | the migration is reversed whether or not the record declares it                             | `a record with no migrations entry`                                                                    |
-| G4  | the rebuild is ignored and the migrated bytes are digested as they stand                    | `the committed record fails its own guard`                                                             |
-| G5  | the rebuild accepts any serialization of the migrated file                                  | `an evaluation.json with a byte appended beyond the declared migration`                                |
-| G6  | a migration of a file the tests do not know is accepted                                     | `a migration of a file the tests do not know`                                                          |
-| G6b | a migration credited to another story is accepted (`migration.story !== '1.42'` dropped)    | `a migration credited to another story`                                                                |
-| G7  | a migration declared twice is accepted                                                      | `a migration declared twice`                                                                           |
-| G8  | the rebuild accepts one operation ID under two interfaces                                   | `a migrated file that reuses an operation ID across two interfaces, which no flat map could have held` |
-| G9  | the rebuild does not require schema 2                                                       | `a migrated file that claims schema 1 beside its nested phases`                                        |
-| G10 | a migrated file whose phases sit under an interface its registry never declared is accepted | `a migrated file whose phases are keyed under an interface its registry never declared`                |
+| ID  | Mutant                                                                                                                                                        | Failing case                                                                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| G1  | a digest the entry names (`from` or `to`) is accepted                                                                                                         | `a migration entry that names a false from digest`                                                     |
+| G2  | a `wrote` digest is not compared with the bytes                                                                                                               | `a wrote digest retyped to the migrated file as it stands`                                             |
+| G3  | the migration is reversed whether or not the record declares it                                                                                               | `a record with no migrations entry`                                                                    |
+| G4  | the rebuild is ignored and the migrated bytes are digested as they stand                                                                                      | `the committed record fails its own guard`                                                             |
+| G5  | the rebuild accepts any serialization of the migrated file                                                                                                    | `an evaluation.json with a byte appended beyond the declared migration`                                |
+| G6  | a migration of a file the tests do not know is accepted                                                                                                       | `a migration of a file the tests do not know`                                                          |
+| G6b | a migration credited to another story is accepted (`migration.story !== '1.42'` dropped)                                                                      | `a migration credited to another story`                                                                |
+| G7  | a migration declared twice is accepted                                                                                                                        | `a migration declared twice`                                                                           |
+| G8  | the rebuild accepts one operation ID under two interfaces                                                                                                     | `a migrated file that reuses an operation ID across two interfaces, which no flat map could have held` |
+| G9  | the rebuild does not require schema 2                                                                                                                         | `a migrated file that claims schema 1 beside its nested phases`                                        |
+| G10 | a migrated file whose phases sit under an interface its registry never declared is accepted                                                                   | `a migrated file whose phases are keyed under an interface its registry never declared`                |
+| G11 | a phase pair the file's contract does not declare is accepted (an operation moved to another declared interface, keeping order, rebuilds the same flat bytes) | `a moved operation ... was accepted` (the two-interface block after the case table)                    |
 
 The table of cases also holds `a migration entry that names a false to digest`, `a record with an empty migrations list`, an `evaluation.json` whose tiers changed, one whose `operationPhases` changed, and a declared migration over a file that was never migrated.
 G8 and G9 survived the first version of the table, which is why their two cases exist.
@@ -163,12 +164,13 @@ G8 and G9 survived the first version of the table, which is why their two cases 
   An `fs` hook that logged the callers showed `removeDeadPrivateParents` as the only remover, and the runtime's own sweep skips another folder's parent.
   The first fix put a hold file inside each parent.
   It left a window between creating a parent and marking it, treated an empty or `0` hold as live, and could not serve the cases whose parents the runtime inspects.
-  The hold is now a file beside the root, keyed by the owner's process id and written before the parent exists, so it needs no marking window and touches no parent.
-  It names a positive process id only, and an empty hold is left for its writer to finish.
-  The cases closed: the interrupted-replay case (planted parents and the killed `ci`'s parent), `checkAuxiliaryJournalEdges` (planted dead-pid parents), `checkKilledEngineStage` (the killed preflight's parent) and the qualification signal case (the killed cycle's parent and its planted one).
+  The second kept the hold beside the root but trusted the directory like any other, so a link in its place took the writes and a FIFO named like a pid blocked every reaper.
+  The hold directory now gets the private root's checks, is read only through a non-blocking open of a regular file, is written through an exclusive staged file, and is swept of every regular file that is not a live hold or a live holder's staged file.
+  A hold is written whole, so a file that names no running process is stale.
+  The cases closed: every case of `test-evaluate-ci.js`, `test-evaluate-mutation.js` and `test-test-design-qualification.js` that plants a parent under a dead pid or reads the parent of a child it kills.
   The qualification case also stopped passing vacuously when another suite's reaper removed what the next cycle was meant to reclaim: the next cycle is a process the holder started, which ignores the hold.
-  Twelve concurrent runs of the interrupted-replay case passed with a tight-loop reaper running, ten more runs of `--auxiliary-only` passed in isolation, and the hold unit case (`the scratch holds`) has seven mutants of the hold that behave differently, all killed (an eighth, dropping the release's `clear`, changes nothing a test can see).
-  Still open: the other kill sites of `test/test-evaluate-mutation.js` (`child.kill('SIGKILL')` near the lines that read a dead run's parent) are the same class and hold nothing, and a suite run from a checkout without this change reaps the parents of the checkouts that have it.
+  The unit case `the scratch holds` covers the pid texts, the sweep (a stale hold with and without a planted parent, an empty hold, a gone suite's staged file, a stray file), the release guard, a linked holds directory, a FIFO hold and a link planted at the staged name; its mutants L1 to L10 are all killed.
+  Still open: a suite run from a checkout without this change still reaps the parents of the checkouts that have it, which resolves once this lands.
   `--auxiliary-only` failed two runs in ten under a tight-loop reaper while another lane's `test-evaluate-run` was running, and the hook showed no removal by this checkout's reaper, so the foreign reaper is the likely cause.
 - **Where the mutants ran.** Every experiment ran in a `git archive HEAD` copy with a link to `node_modules`, one file edited and restored per mutant.
   The harness lives in the session scratchpad and is not committed.
@@ -179,11 +181,12 @@ G8 and G9 survived the first version of the table, which is why their two cases 
 
 Gates run in this checkout on the final tree:
 
-- `test:evaluate-check` (1132 checks), `-interpret`, `-arms`, `-agents`, `-mcp`, `-run`, `-records`, `-calibration`, `-ci`, `-compare`.
+- `test:evaluate-check` (1132 checks), `-interpret`, `-arms`, `-agents`, `-mcp`, `-run`, `-records`, `-calibration`, `-ci`, `-compare`, `-mutation` (727 checks) and `test:test-design-qualification` (206 checks).
 - `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
 - The full `npm test` was not run; CI carries it.
 
 ## Undone
 
+- A foreign-checkout reaper: a suite run from a checkout without `test/lib/scratch-directories.js` holds still removes held parents until this merges.
 - A committed mutation harness.
   The mutants need the suites they run, which take longer than the pre-commit budget, so the list in this record is the reproduction.

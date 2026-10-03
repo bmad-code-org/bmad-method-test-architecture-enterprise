@@ -1560,7 +1560,7 @@ Added 2026-10-02 in Story 1.42. Levels: engine unit, compile contract, registry 
 
 ### Story 1.103: Prove the Story 1.42 review fixes against their mutants
 
-Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real eval-quality, contract. Files: the Evaluate suites named in the story gate and `test/test-evaluate-ci.js`.
+Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real eval-quality, contract. Files: the Evaluate suites named in the story gate (which include `test:evaluate-mutation` and `test:test-design-qualification`, whose private-parent cases hold their parents through `test/lib/scratch-directories.js`) and `test/test-evaluate-ci.js`.
 
 Amended 2026-10-03 in Story 1.103's build: the entry no longer has `from` or `to` (Story 1.42's review removed them, since the rebuilt bytes are the only authority), so the guard row reads a digest the entry must not carry and a retyped `wrote` digest where it first read a false `from`.
 

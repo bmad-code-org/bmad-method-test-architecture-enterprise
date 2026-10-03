@@ -2616,7 +2616,7 @@ So that the two-interface attribution of Story 1.42 stays protected at every loo
 **And** a lookup site that no test can reach from a compiled contract is recorded in the story record as unreachable with the engine rule that makes it so.
 
 **Dependencies:** 1.42.
-**Gate:** `npm run test:evaluate-check`, `test:evaluate-interpret`, `test:evaluate-arms`, `test:evaluate-agents`, `test:evaluate-mcp`, `test:evaluate-run`, `test:evaluate-records`, `test:evaluate-calibration`, `test:evaluate-ci`, `test:evaluate-compare`, then `npm test`.
+**Gate:** `npm run test:evaluate-check`, `test:evaluate-interpret`, `test:evaluate-arms`, `test:evaluate-agents`, `test:evaluate-mcp`, `test:evaluate-run`, `test:evaluate-records`, `test:evaluate-calibration`, `test:evaluate-ci`, `test:evaluate-compare`, `test:evaluate-mutation` and `test:test-design-qualification` (the shared scratch helper their private-parent cases use), then `npm test`.
 
 ### Story 1.104: Count only behavior-linked oracles for success separation
 
