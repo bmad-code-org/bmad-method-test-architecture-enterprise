@@ -2988,7 +2988,7 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 Run by the owner coordinator after all three lanes have drained, including Stories 1.104 to 1.116. No `/bmad-build` worker runs this story.
 
-**Engine status (2026-10-03):** eval-quality 6.0.1 is published and Story 1.55 raises TeA's peer floor to that release. Story 1.104 will publish and adopt a later engine patch before H.1 runs. H.1 uses the published engine resolved by the final merged TeA lockfile.
+**Engine status (2026-10-03):** eval-quality 7.0.0 is published and Story 1.101 raises TeA's peer floor to that release. Stories 1.102 and 1.104 will publish and adopt later engine releases before H.1 runs. H.1 uses the published engine resolved by the final merged TeA lockfile.
 
 As the owner,
 I want the dirty proof run replaced by a clean one on the merged tree,
