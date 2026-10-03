@@ -5841,12 +5841,26 @@ function checkTreeProbeMetadata() {
     return result.status === 0 ? JSON.parse(result.stdout).installDigest : null;
   };
   const original = observed();
+  fs.chmodSync(modeFile, 0o600);
+  const nonExecutableModeChanged = observed();
+  check(
+    original !== null && nonExecutableModeChanged === original,
+    'changing only non-executable file permission bits moved the tree digest',
+  );
   fs.chmodSync(modeFile, 0o755);
   const modeChanged = observed();
-  check(original !== null && modeChanged !== original, 'changing only file mode kept the tree digest');
-  fs.mkdirSync(path.join(packageRoot, 'empty'));
+  check(nonExecutableModeChanged !== null && modeChanged !== nonExecutableModeChanged, 'changing file execute status kept the tree digest');
+  const emptyDirectory = path.join(packageRoot, 'empty');
+  fs.mkdirSync(emptyDirectory);
+  fs.chmodSync(emptyDirectory, 0o755);
   const emptyAdded = observed();
   check(emptyAdded !== null && emptyAdded !== modeChanged, 'adding an empty directory kept the tree digest');
+  fs.chmodSync(emptyDirectory, 0o700);
+  const directoryModeChanged = observed();
+  check(
+    directoryModeChanged !== null && directoryModeChanged === emptyAdded,
+    'changing only directory permission bits moved the tree digest',
+  );
   fs.unlinkSync(link);
   fs.symlinkSync('target-b.txt', link);
   const linkChanged = observed();

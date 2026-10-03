@@ -253,7 +253,7 @@ function readProbeAnswer(framework, stdout) {
       : keys.includes('installDigest') || keys.includes('installSource'))
   ) {
     return {
-      fault: `its output must be an object with exactly the properties package, version${requiresDigest ? ', installSource and installDigest' : ''}`,
+      fault: `its output must be an object with exactly the properties ${requiresDigest ? 'package, version, installSource and installDigest' : 'package and version'}`,
     };
   }
   if (typeof answer.package !== 'string' || typeof answer.version !== 'string' || answer.version === '') {

@@ -35,7 +35,7 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 
-/** Digest paths, file bytes, modes, empty directories and link text in sorted order. */
+/** Digest paths, file bytes, file execute status, empty directories and link text in sorted order. */
 function treeDigest(root) {
   const hash = crypto.createHash('sha256');
   const visiting = new Set();
@@ -46,7 +46,7 @@ function treeDigest(root) {
   }
   function walk(file, relative) {
     const link = fs.lstatSync(file);
-    if (link.isSymbolicLink()) record('link', relative, link.mode & 0o7777, Buffer.from(fs.readlinkSync(file)));
+    if (link.isSymbolicLink()) record('link', relative, 0, Buffer.from(fs.readlinkSync(file)));
     let stat;
     try {
       stat = link.isSymbolicLink() ? fs.statSync(file) : link;
@@ -61,7 +61,7 @@ function treeDigest(root) {
       const real = fs.realpathSync(file);
       if (visiting.has(real)) throw new Error(`directory link cycle at ${relative}`);
       visiting.add(real);
-      record('directory', relative, stat.mode & 0o7777);
+      record('directory', relative, 0);
       for (const entry of fs.readdirSync(file).sort()) {
         walk(path.join(file, entry), relative === '' ? entry : `${relative}/${entry}`);
       }
@@ -70,7 +70,7 @@ function treeDigest(root) {
       const descriptor = fs.openSync(file, 'r');
       try {
         const size = fs.fstatSync(descriptor).size;
-        hash.update(Buffer.from(`file\0${relative}\0${stat.mode & 0o7777}\0${size}\0`));
+        hash.update(Buffer.from(`file\0${relative}\0${stat.mode & 0o111 ? 'x' : '-'}\0${size}\0`));
         const buffer = Buffer.allocUnsafe(64 * 1024);
         let remaining = size;
         while (remaining > 0) {
