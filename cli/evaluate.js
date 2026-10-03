@@ -198,7 +198,10 @@ async function runDriven(name, command, options, extra) {
 }
 
 function preflightCommand(options) {
-  return runDriven('preflight', runPreflightCommand, options, { fromWorkingTree: options.fromWorkingTree === true });
+  return runDriven('preflight', runPreflightCommand, options, {
+    fromWorkingTree: options.fromWorkingTree === true,
+    partition: options.partition,
+  });
 }
 
 function runCommand(options) {
@@ -257,6 +260,7 @@ function buildProgram(run) {
     )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
+    .option('--partition <name>', 'development or held-out; omitted qualifies both')
     .action((options) => run(preflightCommand, options));
   program
     .command('run')

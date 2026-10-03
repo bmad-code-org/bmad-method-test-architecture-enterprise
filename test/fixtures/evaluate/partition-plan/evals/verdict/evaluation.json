@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 2,
+  "evaluationId": "verdict-partition-plan",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:138828696b2668286b9dec5149bf1b349fbd7f3b8d94fb916e5715aa74288007"
+  },
+  "targetKind": "agent",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "verdict",
+      "executable": "verdict",
+      "target": "bin/partition-target.js",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {},
+      "environmentKeys": [
+        "VERDICT_MARKER"
+      ],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [
+        3
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "git",
+    "provision": [
+      "vendor"
+    ]
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  },
+  "operationPhases": {
+    "verdict": {
+      "judge-request": "outcome"
+    }
+  },
+  "heldOutProbes": [
+    "P-003"
+  ],
+  "partitionPlan": {
+    "developmentOnlySteps": [
+      "development-run"
+    ],
+    "heldOutPlan": "corpus/held-out/plan.json"
+  }
+}

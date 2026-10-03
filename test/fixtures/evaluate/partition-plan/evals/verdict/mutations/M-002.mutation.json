@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "rules/policy.txt: gate-2 relaxed to lenient",
+  "targetArtifact": "rules/policy.txt",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "gate-2: strict",
+    "replace": "gate-2: lenient",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The verdict command rejects the request and reports relaxed: gate-2 on stdout."
+}

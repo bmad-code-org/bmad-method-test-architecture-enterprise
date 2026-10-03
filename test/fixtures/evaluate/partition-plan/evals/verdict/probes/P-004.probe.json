@@ -1,0 +1,83 @@
+{
+  "probeId": "P-004",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-002 relaxes gate-2 to lenient, and the verdict command then rejects the development case and reports the relaxed gate on stdout.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The relaxed policy makes the verdict command reject the development case it must accept.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-development",
+        "interfaceId": "verdict",
+        "operationId": "judge-request",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Judge the development witness."
+          }
+        },
+        "relation": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-development/stdout"
+            },
+            {
+              "literal": "relaxed: gate-2"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "verdict",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Judge the development case."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "relaxed: gate-2"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}

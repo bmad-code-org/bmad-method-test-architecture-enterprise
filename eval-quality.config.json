@@ -1634,6 +1634,18 @@
         {
           "token": "floorDecisions",
           "reason": "a field of eval-quality's StrengthAggregate artifact since 4.7.0, declared by the engine's published schema and read by TeA only to compare the recorded floors"
+        },
+        {
+          "token": "partitionPlan",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "developmentOnlySteps",
+          "reason": "a field of `partitionPlan` that the runtime schema `evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "behaviorOracles",
+          "reason": "a field of the held-out plan that the runtime schema `held-out-plan.schema.json` declares; the code reads it as a property"
         }
       ]
     },
