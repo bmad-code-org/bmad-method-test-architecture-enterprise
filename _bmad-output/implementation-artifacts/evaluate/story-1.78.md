@@ -40,7 +40,7 @@ context:
 - The case lives in the evaluators suite. The sealed-brief project, its stub agent and its baseline acceptance are there, and `test/test-evaluate-ci.js` has no sealed-brief fixture. Rebuilding that in the ci suite would duplicate it, so the AC's "`test:evaluate-ci` case" is amended to `test:evaluate-evaluators` and the gate list keeps both suites.
 - The plan is the verdict fixture's `pr` entries with the folder rewritten, committed with the project, so the case runs the six `pr` checks of the verdict plan, an adopter's default seven less api-conformance (the fixture declares no HTTP target).
 - Evidence bytes compared: each probe's `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json`, the set the ci suite compares. The other files in `replay/scores` are call records, which the replay row excludes too.
-- The two rows of the test design are one case: the wire is one log for the whole `ci` run, and the case asserts the plan's ids ran, each exited 0 and the log stayed empty.
+- The two rows of the test design are one case: the wire is one log for the whole `ci` run, and the case asserts the plan's ids ran, each exited 0 with action `pass` (the replay `warn`, CONCERNS only) and the log stayed empty.
 
 Story 1.79 is appended at the end of lane 1 for the gameability scoring branch (epics.md section, test-design section, dependency row, sprint row and both lane lists).
 
