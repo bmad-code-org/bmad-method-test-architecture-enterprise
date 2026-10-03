@@ -65,7 +65,7 @@
  *                ask the Docker daemon or the system bus to run a job outside
  *                the sandbox. The list is ranked by who can create a socket
  *                (the well-known service sockets, root and the system accounts,
- *                the runtime's own user, then every other user) and cut to the
+ *                the runtime's own user, then every other user in turns) and cut to the
  *                mounts the call's own command leaves room for; a call whose
  *                room cannot hold the first three ranks is refused (exit 12),
  *                and what the room cut is recorded in `run.json`
@@ -379,11 +379,13 @@ const SOCKET_ARGUMENTS_FD = 3;
 const SOCKET_LAUNCHER = Object.freeze(['/bin/sh', '-c', `exec ${SOCKET_ARGUMENTS_FD}<"$1" || exit 126; shift; exec "$@"`, 'sh']);
 
 /**
- * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on, and bash
- * (the `sh` of some hosts) decrements `SHLVL` and sets `_` and `OLDPWD`.
- * `env` restores each to what the call's environment held, so a target's environment does not depend on how many sockets the host holds.
+ * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on and resets
+ * `IFS`, `OPTIND` and `PPID` whenever the call's environment held them, and bash (the `sh` of some hosts) decrements `SHLVL` and sets
+ * `_` and `OLDPWD`.
+ * `env` restores each to what the call's environment held (an unset one stays unset), so a target's environment does not depend on
+ * how many sockets the host holds.
  */
-const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_']);
+const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID']);
 
 /** The program that restores `SHELL_VARIABLES` between the launcher's shell and the command. */
 const ENVIRONMENT_PROGRAM = '/usr/bin/env';
@@ -423,7 +425,9 @@ function launchedCommand(socketFile, environment, argv) {
     ...SHELL_VARIABLES.filter((name) => !held(name)).flatMap((name) => ['-u', name]),
     ...SHELL_VARIABLES.filter(held).map((name) => `${name}=${environment[name]}`),
   ];
-  return [...SOCKET_LAUNCHER, socketFile, ENVIRONMENT_PROGRAM, ...restore, ...argv];
+  // Dash stops on an `OPTIND` that is no number (`Illegal number`), so the shell never sees one the call held.
+  const shell = held('OPTIND') ? [ENVIRONMENT_PROGRAM, '-u', 'OPTIND', ...SOCKET_LAUNCHER] : SOCKET_LAUNCHER;
+  return [...shell, socketFile, ENVIRONMENT_PROGRAM, ...restore, ...argv];
 }
 
 /**

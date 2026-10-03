@@ -224,6 +224,7 @@ const WRAP_RUN_DIRECTORY = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate
 const REPORT_LISTENER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'report-listener.cjs');
 const CONFINEMENT_STATUS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
 const LOSSY_LOG = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'lossy-log.cjs');
+const CUT_SOCKET_REPORT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'cut-socket-report.cjs');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
 /** The confinement this host runs targets under (Story 1.31); the suite runs where one exists, as TeA's CI does. */
@@ -5531,6 +5532,58 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
 }
 
+/**
+ * What a cut list of host sockets reaches in a real run (Story 1.82), through the real CLI: no test host holds more sockets than a
+ * call can hide, so a preload (`fixtures/evaluate/cut-socket-report.cjs`) makes each target sandbox report one cut call of two with five
+ * sockets left reachable, as the registry's probe port reads it. Each audited trial then appears under `hostSocketTruncation` in
+ * `run.json` with its counts, and the run's summary and the command's own output name each of them. The units hold the sandbox's
+ * count and the entry's shape; this case holds the wiring between them (the registry's port, the trial, `run.json`, the summary), so
+ * a registry that reports nothing, a run that does not record the report and a summary without the note each fail it.
+ */
+async function checkHostSocketRecordRun() {
+  if (process.platform === 'linux') {
+    const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+    if (absent.length > 0) {
+      skipCase('host socket record', `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+      return;
+    }
+  } else if (process.platform !== 'darwin') {
+    skipCase('host socket record', `Seatbelt and Bubblewrap exist on macOS and Linux only, and this host is ${process.platform}`);
+    return;
+  }
+  const project = makeProject('host-socket-record');
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env, ['--require', CUT_SOCKET_REPORT]);
+  check(ran.status === 0, `a confined run whose sandboxes report a cut list exited ${ran.status}; expected 0\n${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
+  const entries = Array.isArray(record.hostSocketTruncation) ? record.hostSocketTruncation : [];
+  check(
+    JSON.stringify(entries) ===
+      JSON.stringify(
+        auditedTrials().map(({ conditionArm, trialIndex }) => ({
+          conditionArm,
+          trialIndex,
+          calls: 2,
+          truncatedCalls: 1,
+          socketsLeftReachable: 5,
+        })),
+      ),
+    `run.json records the host-socket truncation ${JSON.stringify(record.hostSocketTruncation)}; expected one entry for each audited trial (${JSON.stringify(auditedTrials())}) with 2 calls, 1 cut and 5 sockets left reachable`,
+  );
+  const summary = record.outcome?.message ?? '';
+  check(
+    entries.length > 0 &&
+      summary.endsWith(leftSocketsNote(entries)) &&
+      entries.every((entry) => summary.includes(`${entry.conditionArm} trial ${entry.trialIndex} (1 of 2 call(s), up to 5 socket(s))`)) &&
+      summary.includes('the host held more Unix sockets than a call can hide'),
+    `the run's summary does not name each trial whose calls left sockets reachable with its counts: ${JSON.stringify(summary)}`,
+  );
+  check(
+    entries.length > 0 && ran.output.includes(leftSocketsNote(entries)),
+    `the command's own output does not carry the summary's note on the sockets left reachable\n${ran.output}`,
+  );
+}
+
 /** A platform with no mechanism: refused, unless the evaluation opts out, which run.json and the notes record (Story 1.31). */
 async function checkPlatformRefusal() {
   const platformless = makeProject('confinement-platformless');
@@ -10060,7 +10113,8 @@ async function checkPathSocketUnits() {
       `a list bounded at two was ${JSON.stringify(few)}`,
     );
     // The list is ranked by who can create a socket before it is cut (the host's own sockets first, then the runtime's user's, then
-    // every other user's), so a local user who makes sockets in bulk can push out only their own. The owner is injected (`uidOf`),
+    // every other user's), so a local user who makes sockets in bulk can push out only their own and, taken in turns, no other user's
+    // while the room holds a socket for each owner. The owner is injected (`uidOf`),
     // since a unit cannot chown. Each padding socket sorts before `/run`, the shape that pushed a service out of the list.
     const owners = (file) => (file.startsWith('/run') ? 0 : file.startsWith('/srv') ? 1000 : file.startsWith('/svc') ? 33 : 65_534);
     const rankOptions = { ownUid: 1000, uidOf: owners };
@@ -10193,6 +10247,104 @@ async function checkPathSocketUnits() {
     check(
       crowdedByOthers.refused === null && crowdedByOthers.sockets.length === 3 && crowdedByOthers.left === 2,
       `five sockets of another user over a room of three were ${JSON.stringify(crowdedByOthers)}; expected three listed, two cut and no refusal`,
+    );
+    // Every other user's sockets are taken in turns (the first socket of each owner, then the second of each), so one user's padding
+    // cannot push out a third user's socket: `carol` serves one socket and `nobody` binds 2,100 that sort ahead of it, the shape that
+    // listed none of carol's before the turns. The owners are injected (`uidOf`).
+    const turnOwners = (file) =>
+      file.startsWith('/home/pad') ? 65_534 : file.startsWith('/srv/dave') ? 1003 : file.startsWith('/tmp/carol') ? 1002 : 0;
+    const turnOptions = { ownUid: 1000, uidOf: turnOwners, table: path.join(base, 'absent'), pinned: [] };
+    const socketEntries = (directory, names) => ({ [directory]: names.map((name) => ({ name, type: 'socket' })) });
+    const padded2100 = listHostSockets({
+      ...turnOptions,
+      roots: ['/home/pad', '/tmp/carol'],
+      fileSystem: rankFileSystem({
+        ...socketEntries(
+          '/home/pad',
+          Array.from({ length: MAX_HIDDEN_SOCKETS + 100 }, (_, at) => `a-${String(at).padStart(5, '0')}.sock`),
+        ),
+        ...socketEntries('/tmp/carol', ['agent.sock']),
+      }),
+    });
+    check(
+      padded2100.sockets.length === MAX_HIDDEN_SOCKETS &&
+        padded2100.sockets.includes('/tmp/carol/agent.sock') &&
+        padded2100.left === 101 &&
+        padded2100.refused === null,
+      `${MAX_HIDDEN_SOCKETS + 100} sockets of one user sorting before another user's socket left the list as ${padded2100.sockets.length} long, carol's socket ${padded2100.sockets.includes('/tmp/carol/agent.sock') ? 'listed' : 'missing'}, with ${padded2100.left} cut; expected the other user's socket listed and 101 cut`,
+    );
+    const owners3 = rankFileSystem({
+      ...socketEntries(
+        '/home/pad',
+        Array.from({ length: 10 }, (_, at) => `a${at}.sock`),
+      ),
+      ...socketEntries('/srv/dave', ['d0.sock', 'd1.sock', 'd2.sock']),
+      ...socketEntries('/tmp/carol', ['c0.sock']),
+    });
+    const inTurns = listHostSockets({ ...turnOptions, roots: ['/home/pad', '/srv/dave', '/tmp/carol'], fileSystem: owners3, limit: 5 });
+    check(
+      JSON.stringify(inTurns.sockets) ===
+        JSON.stringify(['/home/pad/a0.sock', '/srv/dave/d0.sock', '/tmp/carol/c0.sock', '/home/pad/a1.sock', '/srv/dave/d1.sock']) &&
+        inTurns.left === 9,
+      `ten sockets of one user, three of another and one of a third over a room of five were ${JSON.stringify(inTurns.sockets)} with ${inTurns.left} cut; expected the first socket of each owner, then the second of each while the room lasts`,
+    );
+    const fewerThanOwners = listHostSockets({
+      ...turnOptions,
+      roots: ['/home/pad', '/srv/dave', '/tmp/carol'],
+      fileSystem: owners3,
+      limit: 2,
+    });
+    check(
+      JSON.stringify(fewerThanOwners.sockets) === JSON.stringify(['/home/pad/a0.sock', '/srv/dave/d0.sock']),
+      `a room of two for three owners listed ${JSON.stringify(fewerThanOwners.sockets)}; expected the first two owners' first sockets (the stated bound: the room is smaller than the owners)`,
+    );
+    // A directory holding a very large number of socket files beside one moved path: the neighbors join the list in a loop that
+    // stops at the room, so no argument list or array grows with the directory (a spread of 150,000 elements overflows the stack),
+    // and the sockets the room cut are counted. The directory reader is injected, so no 150,000 files are made.
+    const moveTable = (...names) => {
+      const file = path.join(base, `moved-${names.length}-table`);
+      fs.writeFileSync(file, socketTable(...names));
+      return file;
+    };
+    const hugeNames = Array.from({ length: 150_001 }, (_, at) => `n-${String(at).padStart(6, '0')}.sock`);
+    const huge = rankFileSystem(socketEntries('/home/pad', hugeNames));
+    let hugeList = null;
+    let hugeError = null;
+    try {
+      hugeList = listHostSockets({ ...rankOptions, table: moveTable('/home/pad/tmp-name'), roots: [], pinned: [], fileSystem: huge });
+    } catch (error) {
+      hugeError = error;
+    }
+    check(
+      hugeError === null &&
+        hugeList.sockets.length === MAX_HIDDEN_SOCKETS &&
+        hugeList.sockets[0] === '/home/pad/n-000000.sock' &&
+        hugeList.left === hugeNames.length - MAX_HIDDEN_SOCKETS &&
+        huge.asked.length === MAX_HIDDEN_SOCKETS,
+      `${hugeNames.length} socket files beside one moved path ended in ${hugeError === null ? `${hugeList.sockets.length} sockets with ${hugeList.left} cut after ${huge.asked.length} lstat call(s)` : `${hugeError.name}: ${hugeError.message}`}; expected ${MAX_HIDDEN_SOCKETS} listed, ${hugeNames.length - MAX_HIDDEN_SOCKETS} cut and no more lstat calls than the room`,
+    );
+    // Many rows that name a path gone from one directory: the directory is read once and each of its neighbors is added once,
+    // whatever the number of rows.
+    const crowdNames = hugeNames.slice(0, MAX_HIDDEN_SOCKETS + 1000);
+    const gone = Array.from({ length: 300 }, (_, at) => `/home/pad/gone-${String(at).padStart(3, '0')}`);
+    const goneFileSystem = rankFileSystem(socketEntries('/home/pad', crowdNames));
+    const reads = [];
+    const goneList = listHostSockets({
+      ...rankOptions,
+      table: moveTable(...gone),
+      roots: [],
+      pinned: [],
+      fileSystem: {
+        ...goneFileSystem,
+        readdirSync: (directory, options) => (reads.push(directory), goneFileSystem.readdirSync(directory, options)),
+      },
+    });
+    check(
+      reads.length === 1 &&
+        goneList.sockets.length === MAX_HIDDEN_SOCKETS &&
+        goneList.left === 1000 &&
+        goneFileSystem.asked.length === MAX_HIDDEN_SOCKETS,
+      `${gone.length} table rows for paths gone from one directory of ${crowdNames.length} socket files read the directory ${reads.length} time(s), listed ${goneList.sockets.length} with ${goneList.left} cut after ${goneFileSystem.asked.length} lstat call(s); expected one read, ${MAX_HIDDEN_SOCKETS} listed, 1000 cut and no more lstat calls than the room`,
     );
     // A pinned service socket leads the list whoever owns it and however many sockets follow, a pin the host lacks is skipped, and
     // a pinned socket counts toward the sockets whose count refuses the call.
@@ -10497,8 +10649,9 @@ async function checkPathSocketUnits() {
       `the retry of a call with 3100 arguments asked for the room ${sizeAsks.length} time(s) in all and held ${maskedSockets(again)?.length} sockets in ${counted(again, '/usr/bin/bwrap')} arguments; expected the first list less one, within the bound`,
     );
 
-    // The target's environment does not depend on how many sockets the host holds: the launcher's shell leaves `PWD` (dash) and
-    // `SHLVL`, `_` and `OLDPWD` (bash) in the environment of what it executes, and `env` puts each back as the call had it. The stub
+    // The target's environment does not depend on how many sockets the host holds: the launcher's shell leaves `PWD` (dash), `SHLVL`,
+    // `_` and `OLDPWD` (bash) in the environment of what it executes and resets `IFS`, `OPTIND` and `PPID` (dash) when the call's
+    // environment held them, and `env` puts each back as the call had it. The stub
     // stands in for Bubblewrap and is no shell (a shell would set the same variables again), and the full environment is compared.
     const envStubs = tempDir('environment-stubs');
     const envStub = path.join(envStubs, 'bwrap');
@@ -10525,6 +10678,9 @@ async function checkPathSocketUnits() {
         { FOO: '1', PATH: process.env.PATH, PWD: '/nonexistent', SHLVL: '7', OLDPWD: '/old', _: '/usr/bin/odd' },
       ],
       ['an empty PWD', { PATH: process.env.PATH, PWD: '' }],
+      ['an IFS, an OPTIND and a PPID', { FOO: '1', PATH: process.env.PATH, IFS: 'x', OPTIND: '5', PPID: '7' }],
+      ['an empty IFS and an OPTIND of 0', { PATH: process.env.PATH, IFS: '', OPTIND: '0' }],
+      ['an OPTIND that is no number', { FOO: '1', PATH: process.env.PATH, OPTIND: 'abc' }],
     ]) {
       const without = environmentOf([], environment);
       const hiding = environmentOf([hostSocket], environment);
@@ -11080,7 +11236,7 @@ function checkBridgeReference() {
       ['the path socket units', 'the path socket route'],
     ],
     [
-      "The list is ranked by who can create a socket before it is cut: the Docker, containerd, Podman, system bus and systemd sockets by name first, then the sockets of root and of the system accounts, then those of the user running the call, then every other user's, so a local user who makes sockets in bulk can push out only sockets of their own, and a socket in `/dev` or `/proc` takes no room since the vector replaces both.",
+      "The list is ranked by who can create a socket before it is cut: the Docker, containerd, Podman, system bus and systemd sockets by name first, then the sockets of root and of the system accounts, then those of the user running the call, then every other user's in turns (the first socket of each owner, then the second of each), so a local user who makes sockets in bulk cannot push out another user's socket while the room left after those holds one socket for each owner, and a socket in `/dev` or `/proc` takes no room since the vector replaces both.",
       ['the path socket units'],
     ],
     [
@@ -11089,7 +11245,11 @@ function checkBridgeReference() {
     ],
     [
       "`run.json`'s `hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the room ran out, with its `conditionArm`, `trialIndex`, `calls`, `truncatedCalls` and `socketsLeftReachable`, and the run's summary names those trials; the list is empty when no call was cut.",
-      ['the path socket units', 'the run and its scores', "the audit's channel"],
+      ['the path socket units', 'the run and its scores', "the audit's channel", 'the host socket record'],
+    ],
+    [
+      'A completed `run` that ran trials also records `hostSocketTruncation`, the trials whose calls left sockets of other users reachable because the room for mounts ran out (`[]` when no call was cut; see [File-system confinement](#file-system-confinement)).',
+      ['the path socket units', 'the run and its scores', 'the host socket record'],
     ],
     [
       'A socket file the runtime cannot reach by its exact path (a directory it cannot search, a file that went away) is left out, since the target cannot reach it either.',
@@ -11278,6 +11438,7 @@ const CASES = [
   { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement' },
   { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement' },
   { name: "the audit's channel", body: checkAuditChannelRun, group: 'confinement', lossy: true },
+  { name: 'the host socket record', body: checkHostSocketRecordRun, group: 'confinement' },
   { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement', lossy: true },
   { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement', lossy: true },
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement', lossy: true },

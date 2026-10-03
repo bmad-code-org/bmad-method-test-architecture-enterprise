@@ -27,12 +27,17 @@
  *
  * A call has room for a bounded number of mounts (`socketBudget`), so the list is ranked by who can create a socket before it is cut.
  * The pinned sockets come first, then the sockets of root and of the system accounts, then the runtime's own user's, then every other user's.
- * Another local user can fill the budget with sockets of their own and push out only the sockets they could create themselves.
+ * The last rank is taken in turns, the first socket of each owner, then the second of each, so a local user who makes sockets in bulk
+ * cannot push out another user's socket while the budget left after those holds one socket for each owner.
  * When the pinned sockets and those of root, of the system accounts and of the runtime's own user exceed the budget alone,
  * the call is refused (`refused`), since a socket left reachable could be a service's.
  * No other user can make that happen.
  * The sockets the budget cut stay reachable and are counted (`left`), so the run can record them.
  * `/dev` and `/proc` take no budget: the vector replaces both (`--dev /dev`, `--proc /proc`), so the caller leaves them out.
+ *
+ * The socket files beside a moved path join the list in name order up to the budget and no further, so a directory holding a very large
+ * number of socket files costs a bounded list; the rest are counted as left reachable, and a socket of root's or of a system account's
+ * that sits past the budget in such a directory (outside the scanned directories, where another user can also write) stays reachable.
  *
  * What the list cannot hold: a socket bound after it was read, one bound in another network namespace outside the scanned directories,
  * one whose path holds a line break in a directory the scan does not walk (the table's rows end at a line break),
@@ -163,15 +168,13 @@ function entriesOf(directory, fileSystem) {
   }
 }
 
-/** The real paths of the socket files in the directory `candidate` sat in, or none when the directory is gone or unreadable. */
+/** The directory `candidate` sat in and the names of the socket files in it in name order, or none when the directory is gone or unreadable. */
 function socketsBeside(candidate, fileSystem) {
   try {
     const directory = fileSystem.realpathSync.native(path.dirname(candidate));
-    return entriesOf(directory, fileSystem)
-      .filter((entry) => entry.socket)
-      .map((entry) => path.join(directory, entry.name));
+    return { directory, names: entriesOf(directory, fileSystem).flatMap((entry) => (entry.socket ? [entry.name] : [])) };
   } catch {
-    return [];
+    return { directory: null, names: [] };
   }
 }
 
@@ -253,7 +256,7 @@ function listHostSockets({
   const add = (real, pin = false) => {
     if (found.has(real) || except.some((root) => isInside(root, real))) return;
     const uid = socketOwner(real, fileSystem, uidOf);
-    if (uid !== null) found.set(real, { rank: pin ? PINNED : rankOf(uid), group });
+    if (uid !== null) found.set(real, { rank: pin ? PINNED : rankOf(uid), group, uid });
   };
   for (const pin of pinned) {
     try {
@@ -263,40 +266,69 @@ function listHostSockets({
     }
   }
   group += 1;
-  // The sockets beside a path are read once for each directory, however many rows of the table name a path in it.
-  const beside = new Map();
-  const neighbors = [];
+  // A socket a process moved after it bound is listed under a path that no longer exists; one row of the table stands for each
+  // directory, however many rows name a path in it.
+  const moved = new Map();
   for (const candidate of candidates) {
     try {
       add(fileSystem.realpathSync.native(candidate));
     } catch (error) {
       // A socket another mount namespace bound, one whose file is gone or one the runtime cannot reach names nothing to hide.
-      // A socket a process moved after it bound is listed under a path that no longer exists.
-      if (error?.code === 'ENOENT') {
-        const directory = path.dirname(candidate);
-        if (!beside.has(directory)) beside.set(directory, socketsBeside(candidate, fileSystem));
-        neighbors.push(...beside.get(directory));
-      }
+      if (error?.code === 'ENOENT' && !moved.has(path.dirname(candidate))) moved.set(path.dirname(candidate), candidate);
     }
   }
   group += 1;
-  for (const neighbor of neighbors) add(neighbor);
+  // The socket files beside a moved path are appended once for each directory, in a loop that stops at the call's room: the final
+  // list cannot hold more, so a directory holding a very large number of socket files costs a bounded list. What the room cut is
+  // counted (at least one for a directory left unread) so the record shows it.
+  let neighbors = 0;
+  let neighborsCut = 0;
+  for (const candidate of moved.values()) {
+    if (neighbors >= limit) {
+      neighborsCut += 1;
+      continue;
+    }
+    const { directory, names } = socketsBeside(candidate, fileSystem);
+    for (let at = 0; at < names.length; at += 1) {
+      if (neighbors >= limit) {
+        neighborsCut += names.length - at;
+        break;
+      }
+      const before = found.size;
+      add(path.join(directory, names[at]));
+      if (found.size > before) neighbors += 1;
+    }
+  }
   for (const root of roots) {
     group += 1;
     for (const socket of socketsUnder(root, directories, fileSystem)) add(socket);
   }
-  const ranked = [...found.entries()]
-    .sort(([a, left], [b, right]) => left.rank - right.rank || left.group - right.group || (a < b ? -1 : a > b ? 1 : 0))
-    .map(([real, held]) => ({ real, rank: held.rank }));
+  // Every user above the system accounts but the runtime's own shares one rank, taken in turns: the first socket of each owner, then
+  // the second of each, so one user's bulk cannot crowd another user's sockets out until the room is smaller than the owners.
+  const entries = [...found.entries()].map(([real, held]) => ({ real, ...held, round: 0 }));
+  const taken = new Map();
+  for (const entry of entries
+    .filter((held) => held.rank === OTHER)
+    .sort((a, b) => a.group - b.group || (a.real < b.real ? -1 : a.real > b.real ? 1 : 0))) {
+    entry.round = taken.get(entry.uid) ?? 0;
+    taken.set(entry.uid, entry.round + 1);
+  }
+  const ranked = entries.sort(
+    (a, b) => a.rank - b.rank || a.round - b.round || a.group - b.group || (a.real < b.real ? -1 : a.real > b.real ? 1 : 0),
+  );
   const owned = ranked.filter((socket) => socket.rank <= SELF).length;
   if (owned > limit) {
     return {
       sockets: [],
-      left: ranked.length,
+      left: ranked.length + neighborsCut,
       refused: `the host holds ${owned} Unix sockets that only root, a system account or the user running the call can create, and the call has room to hide ${limit}`,
     };
   }
-  return { sockets: ranked.slice(0, limit).map((socket) => socket.real), left: Math.max(0, ranked.length - limit), refused: null };
+  return {
+    sockets: ranked.slice(0, limit).map((socket) => socket.real),
+    left: Math.max(0, ranked.length - limit) + neighborsCut,
+    refused: null,
+  };
 }
 
 /**

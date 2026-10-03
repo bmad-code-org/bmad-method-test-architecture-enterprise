@@ -2995,6 +2995,10 @@ function checkRunGuidance(guide, failures) {
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
     '`hostNetwork` lists the interface ID of every entry that declares `"network": "host"` and is `[]` when none does',
     'Read both before reading a verdict',
+    // Story 1.82: a socket file of the host is closed to a Bubblewrap target under either network value, and run.json records the cut.
+    'A Bubblewrap target cannot connect to a socket file of the host under either value, so a target that needs a host service through one opts out with `"confinement": false`',
+    '`hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the host held more Unix sockets than a call can hide, and is `[]` when no call was cut',
+    "when an entry is listed, say so before reading that trial's verdict",
   ])
     requireText(confined, marker, 'run.md ## Run confined', failures);
   // Story 1.80: a partial-clone project and a very large history run confined, so the guide names neither as a reason to opt out.
@@ -3075,9 +3079,14 @@ function checkIsolationViolationGuidance(guide, failures) {
     "On macOS `run.json`'s `observedMountsChannel` records each audited trial as `complete` (the log delivered every canary read the audit sent) or `lossy` with `canariesSent` and `canariesDelivered`",
     'the summary line of `run` names each lossy trial, so read an empty list from a lossy trial as unconfirmed and rerun it on a quiet host',
     'a `complete` trial can still have dropped a single report between two canaries',
-    'A Linux target whose call to a model provider, an outside service or a database on the host fails to connect runs in a network namespace with a loopback and nothing else',
+    "A Linux target whose call to a model provider, an outside service or a database on the host's loopback fails to connect runs in a network namespace with a loopback and nothing else",
     'Declare `"network": "host"` on its entry, confirm `run.json` lists the entry under `hostNetwork`, and rerun',
     "the entry then keeps a route to the host's abstract Unix sockets until Story 1.83",
+    // Story 1.82: a host service behind a socket file is out of a Bubblewrap target's reach under either `network`, and the escape is the opt-out.
+    'A Bubblewrap target cannot reach a host service through a socket file under either `network` value',
+    "a connection to the Docker socket (testcontainers) or to a database's Unix socket such as `/var/run/postgresql/.s.PGSQL.5432` answers `ECONNREFUSED`",
+    "since the runtime mounts an empty device file over every socket file outside the call's own grants",
+    'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
     "find each further cause (a failed step in building the target's private git repository, an observer that fails mid-run) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)",
   ])
