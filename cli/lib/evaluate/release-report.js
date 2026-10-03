@@ -20,13 +20,12 @@
 
 'use strict';
 
-const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { hostEnvironmentPort, runArm } = require('./arm');
 const { EngineUnavailableError, loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
+const { makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
 
 /** The step the report request runs as; no plan step of the contract carries it. */
 const REPORT_STEP = 'release-report';
@@ -179,9 +178,11 @@ function reportedInterfaces(deployments) {
  * @returns {string|null}
  */
 function signatureCollisionLine(contractPath, env = process.env) {
+  // A scratch list of its own, since `check` has no run: the directory goes through the layer's one scratch path (`makeScratchDirectory`) and is released the same way.
+  const scratch = [];
   let staging;
   try {
-    staging = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-check-'));
+    staging = makeScratchDirectory(scratch, 'tea-evaluate-check-');
   } catch {
     // A temporary directory that cannot be made leaves the stage unrun: `run` reports it, and this rule stays quiet.
     return null;
@@ -200,7 +201,7 @@ function signatureCollisionLine(contractPath, env = process.env) {
     if (error instanceof EngineStageError || error instanceof EngineUnavailableError) return null;
     throw error;
   } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+    releaseScratchDirectory(scratch, staging);
   }
 }
 

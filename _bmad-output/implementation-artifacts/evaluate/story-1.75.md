@@ -84,6 +84,8 @@ context:
   `test:evaluate-check` passes 1,095 checks after the repair.
 - Deferred to Story 1.77 (appended to Epic 1, lane 1): a probe that names one report colliding with an ordinary `api` operation, and two probes that each name one report. The trigger stays at two reported interfaces here, as the frozen Intent says.
 
+- CI chain 6/12 on round 2's head cfe68ba0 failed `test:evaluate-confinement`: `checkPrivateDirectorySources` counts `mkdtempSync(` per file under `cli/lib/evaluate/` and holds a private directory of the evaluation layer to `makeScratchDirectory`. A real defect, not machine load, so no rerun. `signatureCollisionLine` now stages through `makeScratchDirectory` and `releaseScratchDirectory` with a scratch list of its own, leaving the per-file counts at the expected set; `test:evaluate-check` passes 1,098 checks and the count matches.
+
 ## Route
 
 Route B: `check` calls the engine's own compile and quotes its refusal.
@@ -126,6 +128,8 @@ Round 2 (blind, edge case, verification gap; fresh Opus reviewers on the repaire
 - One fixture still builds a colliding contract (blind 7): **medium**, patch. `checkReportOperationReusedAcrossInterfaces` clones the whole grader interface; give the clone paths of its own so Story 1.77 does not turn it red.
 - `checkEvaluation` JSDoc omits `platform` and `env` (blind 8): **low**, patch.
 - Staging ignores the caller's `TMPDIR` (edge 2): **low**, rejected. `os.tmpdir()` reads the process environment, the caller's `env` chooses the engine, and nothing in production passes a different one.
+
+Round 3 (regressions and material defects only; one fresh Opus reviewer on the round 2 repair commit): no material findings. The reviewer re-ran `test:evaluate-check` (1,098 checks), ESLint and Prettier. The missing-temporary-directory case runs the real engine on the colliding folder and fails without the catch. Not material: the `EngineUnavailableError` branch has no case of its own (the existing engine-unavailable case raises `EngineStageError`).
 
 ## Design Notes
 
