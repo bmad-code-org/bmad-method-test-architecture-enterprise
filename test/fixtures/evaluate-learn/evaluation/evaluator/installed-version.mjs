@@ -148,13 +148,13 @@ if (validName(name) && validImporterArgs) {
       const foundImporter = installedManifest(origin, importer);
       if (foundImporter === null) throw new Error(`importer chain cannot resolve ${importer} from ${origin}`);
       if (foundImporter.manifest?.name !== importer || typeof foundImporter.manifest.version !== 'string')
-        throw new Error(`importer chain found ${foundImporter.manifestFile}, which does not describe ${importer} with a version`);
+        throw new Error(`importer chain found a manifest that does not describe ${importer} with a version: ${foundImporter.manifestFile}`);
       origin = fs.realpathSync(path.dirname(foundImporter.manifestFile));
     }
     const found = installedManifest(origin, name);
     if (found === null) throw new Error(`${name} is not installed in a node_modules directory above ${origin}`);
     if (found.manifest?.name !== name || typeof found.manifest.version !== 'string')
-      throw new Error(`${found.manifestFile} does not describe ${name} with a version${found.problem ? `: ${found.problem}` : ''}`);
+      throw new Error(`does not describe ${name} with a version: ${found.manifestFile}${found.problem ? `: ${found.problem}` : ''}`);
     const packageRoot = path.dirname(found.manifestFile);
     const installDigest =
       source === 'tree' ? treeDigest(packageRoot) : source === 'lockfile' ? lockfileDigest(packageRoot, found.manifest.version) : undefined;

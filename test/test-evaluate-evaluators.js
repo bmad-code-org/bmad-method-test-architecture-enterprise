@@ -5308,6 +5308,10 @@ async function checkUnits() {
   };
   const observedA = [{ package: 'probe-fw', version: '1.0.0' }];
   check(
+    configurationDigestOf(observedA) === 'sha256:1b743b59fb8e7018ffa8e6b0683c2c6ce766ca586278efe71671ba532a88c125',
+    'the fixed-input legacy framework configuration digest moved',
+  );
+  check(
     JSON.stringify(commandFields([], observedA)['tea.evaluatorFrameworks']) === JSON.stringify(observedA) &&
       JSON.stringify(commandFields([])['tea.evaluatorFrameworks']) === '[]' &&
       configurationDigestOf(observedA) === configurationDigestOf([{ package: 'probe-fw', version: '1.0.0', extra: 'ignored' }]) &&
@@ -6438,10 +6442,6 @@ async function checkInstalledFrameworks() {
   );
   const firstRecord = readJson(path.join(firstRun, 'run.json'));
   check(
-    firstRecord.evaluatorConfigurationDigest === 'sha256:1a7fc1dbd34afbc6f7ef3c8b2dbe8790502acd1bf544c80adad1929717c26697',
-    `the legacy declaration differs from the engine 6.0 configuration digest: ${firstRecord.evaluatorConfigurationDigest}`,
-  );
-  check(
     canonical(firstRecord.evaluator.frameworks) === canonical(observed),
     "run.json's evaluator does not record the observed frameworks",
   );
@@ -7220,6 +7220,10 @@ async function main() {
         ),
       ])
         if (name.includes(only)) await runCase(name, body);
+      return report();
+    }
+    if (process.argv.includes('--probe-shapes-only')) {
+      await runCase('a framework probe reads one observation or a fault', checkFrameworkProbeShapes);
       return report();
     }
     if (process.argv.includes('--frameworks-only')) {
