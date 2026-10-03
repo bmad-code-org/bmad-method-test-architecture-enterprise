@@ -797,12 +797,10 @@
         "withheld": [
           "/proj/evaluations/demo",
           "/proj/.git",
-          "<status>/owned-root",
           "<status>/owned-root"
         ],
         "withheldExcept": [
           "/proj/.git/worktrees/tea-workspace",
-          "<status>/owned-root/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
           "<status>/owned-root/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf"
         ]
       }
