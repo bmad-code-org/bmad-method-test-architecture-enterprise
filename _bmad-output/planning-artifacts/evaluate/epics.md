@@ -2586,7 +2586,7 @@ So that a held-out plan that cannot compile fails the pull request that wrote it
 
 **Given** a held-out plan whose oracle the engine refuses at compile
 **When** `tea-evaluate ci --tier pr` runs
-**Then** the `compile` and `seal` checks run once for each view (development, held-out and both), name the view that failed with the engine's exit, and write each view's `eval-contract.json` and sealed brief under the check's evidence path
+**Then** the `compile` and `seal` checks run once for each view (development, held-out and both), name the view whose compile the engine refused with the engine's exit and its evidence, and write `eval-contract.json` and the sealed brief under the check's evidence path for each view that compiles; a view that fails to compile is never sealed
 **And** a plan with no `partitionPlan` compiles once, as today, with no new evidence path.
 **And** compiling only `contract.json` passes the broken plan and fails the case, and a second evidence path for a plan with no `partitionPlan` changes the committed replay and fails the replay case.
 
@@ -2624,7 +2624,7 @@ So that a both run scores the probes of a behavior that has a development and a 
 
 **Given** a behavior with a development oracle and a held-out oracle, one probe in each partition
 **When** the evaluation runs with no `--partition`
-**Then** each probe is scored against the oracle of its own partition and is caught, or `check` names the behavior and refuses the shape with the rule that makes it unscoreable
+**Then** each probe is scored against the oracle of its own partition and is caught
 **And** a both baseline accepted by `compare --accept` replays through `ci --tier pr` with both probes caught, and the held-out and development partitions keep their own scores unchanged.
 **And** a behavior with two oracles that scores `caught: false` for both probes fails the case, and a replay that reads the both view as stale or uncaught fails the replay case.
 

@@ -739,6 +739,17 @@ try {
   assert.equal(heldOutCi.status, 0, heldOutCi.output);
   assert.doesNotMatch(heldOutCi.output, /stale/, 'a held-out baseline replays as stale: its contract is compiled from the wrong view');
   heldOutLog.push(heldOutCi.output);
+  // A view that cannot be derived is a stale reason of its own: the baseline never passes without its digest comparison.
+  const sourceContractFile = path.join(flow.folder, 'contract.json');
+  const sourceContract = fs.readFileSync(sourceContractFile);
+  try {
+    fs.writeFileSync(sourceContractFile, '{');
+    const unreadable = cli(flow, 'ci', ['--tier', 'pr']);
+    assert.notEqual(unreadable.status, 0, unreadable.output);
+    assert.match(unreadable.output, /the held-out view of the contract cannot be derived \(an unexpected SyntaxError while deriving it\)/);
+  } finally {
+    fs.writeFileSync(sourceContractFile, sourceContract);
+  }
   assert.deepEqual(
     heldOutLog.flatMap((text) => KEEP_OUT['held-out'].filter((token) => text.includes(token))),
     [],

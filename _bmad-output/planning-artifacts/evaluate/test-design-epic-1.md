@@ -1495,10 +1495,10 @@ Added 2026-10-03 from Story 1.51's build. Levels: command evaluator integration 
 
 Added 2026-10-03 from Story 1.51's build. Levels: ci integration over real eval-quality.
 
-| AC                           | Test                                                                                                                                               | Level               | P   | Revert check                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ----------------------------------------------------- |
-| Each view compiles and seals | Run `ci --tier pr` over a plan whose held-out oracle the engine refuses; assert the failing view, the engine's exit and one evidence file per view | Integration         | P0  | Compiling only `contract.json` passes the broken plan |
-| No plan, no new path         | Run the committed verdict fixture's `pr` tier; assert one compile, one seal and the existing evidence paths                                        | Integration, replay | P0  | A second evidence path changes the committed replay   |
+| AC                           | Test                                                                                                                                                                                                       | Level               | P   | Revert check                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ----------------------------------------------------- |
+| Each view compiles and seals | Run `ci --tier pr` over a plan whose held-out oracle the engine refuses; assert the failing view, the engine's exit and its evidence, and a compiled contract and sealed brief for each view that compiles | Integration         | P0  | Compiling only `contract.json` passes the broken plan |
+| No plan, no new path         | Run the committed verdict fixture's `pr` tier; assert one compile, one seal and the existing evidence paths                                                                                                | Integration, replay | P0  | A second evidence path changes the committed replay   |
 
 ### Story 1.109: Partition gameability degenerate responses
 
