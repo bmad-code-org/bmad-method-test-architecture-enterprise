@@ -712,7 +712,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * (`confinement-audit.js`), which `observedMounts()` reads (async) and which
    * is empty otherwise; `releaseHome()` ends the audit and removes the home.
    *
-   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => Promise<string[]>, auditChannel: () => ({ canariesSent: number, canariesDelivered: number, logReportedLoss: boolean }|null), releaseHome: () => void, resetHome: () => void}>}
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => Promise<string[]>, auditChannel: () => ({ canariesSent: number, canariesDelivered: number, logReportedLoss: boolean }|null), hostSocketReport: () => ({ calls: number, truncatedCalls: number, socketsLeftReachable: number }|null), releaseHome: () => void, resetHome: () => void}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);
@@ -813,6 +813,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       observedMounts: async () => (sandbox === null ? [] : await sandbox.observedMounts()),
       // How complete the audit's reports were, read after `observedMounts`; `null` where nothing audits (Story 1.81).
       auditChannel: () => (sandbox === null ? null : sandbox.auditChannel()),
+      // What the calls' lists of host sockets left reachable once their budget ran out; `null` where nothing hides sockets (Story 1.82).
+      hostSocketReport: () => (sandbox === null ? null : sandbox.socketReport()),
       releaseHome,
       resetHome,
     };
