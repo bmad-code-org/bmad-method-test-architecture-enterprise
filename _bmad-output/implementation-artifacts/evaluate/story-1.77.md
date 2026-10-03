@@ -19,7 +19,7 @@ context:
 
 **Problem:** Story 1.75 compiles at `check` only when one `historical` probe's deployments name report operations on two or more interfaces. A report operation whose method and path equal an ordinary `api` operation of another interface, and two probes that each name a report for a different interface, still pass `check` and fail `run` at exit 4.
 
-**Approach:** The trigger becomes any `historical` probe that names a report operation. The compile is contract-wide, so one compile and one finding on the first such probe cover every probe. The finding is worded around the two operations the engine's line names, whichever kinds they are. TeA still compares no template (AD-1).
+**Approach:** The trigger becomes any `historical` probe that names a report operation. The compile is contract-wide, so one compile and one finding cover every probe. The finding is worded around the two operations the engine's line names, whichever kinds they are. TeA still compares no template (AD-1).
 
 ## Boundaries & Constraints
 
@@ -31,7 +31,7 @@ context:
 
 ## Code Map
 
-- `cli/lib/evaluate/check.js`: `checkProbes` notes the first `historical` probe whose deployments name at least one report (`reportedInterfaces(...).length > 0`); `checkReportCollision` words the finding.
+- `cli/lib/evaluate/check.js`: `checkProbes` collects each `historical` probe's reported `(interface, operation)` pairs (`reportedOperations`); `checkReportCollision` compiles once, keeps the refusal only when its line names a reported pair (`lineNamesOperation`) and places the finding on the first probe whose report the line names.
 - `docs/reference/tea-evaluate-cli.md`: `### Against deployments` and the `historical` row of the rules table.
 - `test/test-evaluate-check.js`: `checkReportCollidingWithAnyOperation`, `plantCollidingOrdinaryInterface`, and the one-report cases of `checkReportSignatureCollision`.
 - `test/test-evaluate-arms.js`: `checkHistoricalReference` reads the widened wording and fails while "two or more interfaces" remains.
@@ -40,9 +40,12 @@ context:
 ## Design Decisions
 
 - The first build kept every `duplicate-operation-signature` refusal once a probe named a report. Round 1 (edge, blind) showed that is wrong: every valid deployments probe names a report, so the rule fired on any collision of the contract, including `cli` pairs, and took over the CI plan's `compile` check. The finding is now kept only when the engine's line names an operation a probe's report names, as `logicalId=<interface>].operations[operationId=<operation>]`. This matches identifiers on the engine's own line and compares no template (AD-1).
+- The engine names the first collision it meets, so a report collision behind an unrelated one shows after that one is fixed; TeA cannot reach it without comparing templates (AD-1). The reference and CHANGELOG say so.
 - The finding is worded around "a deployment's report operation shares an identity with another operation", since the other operation can be a report or an ordinary one.
 - A collision between operations no report names makes no finding here and stays the CI plan's `compile` check; with no probe naming a report there is no compile call either.
 - Two probes that each name a report for a different interface are refused by Story 1.65's coverage rule already; the case holds the one collision finding beside those findings. Epics AC 2 and the test-design row are amended to say so.
+
+Round 2 (adversarial and edge, verification): the adversarial and edge reviewer found cross-probe collection untested (**medium**, patched with a case where only the second probe's report collides), the finding sitting on a probe whose own report does not collide (**low**, patched: it sits on the first probe whose report the line names), a report collision hidden behind an earlier one (**low**, documented) and a stale code map (**low**, patched).
 
 ## Verification
 

@@ -2740,6 +2740,7 @@ function checkHistoricalReference() {
       "When a probe's deployments name a report operation, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature whose line names a report operation, exits 10 with one `historical` finding that quotes the engine's line",
     ) &&
       deployments.includes('A collision between two operations that no report names stays the CI plan') &&
+      deployments.includes("so a report operation's collision behind another collision shows once that one is fixed") &&
       deployments.includes('another report operation or an ordinary `api` operation of the contract') &&
       deployments.includes('so one reported interface is enough') &&
       !deployments.includes('two or more interfaces') &&

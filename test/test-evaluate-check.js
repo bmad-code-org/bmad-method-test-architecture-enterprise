@@ -867,6 +867,41 @@ async function checkReportCollidingWithAnyOperation() {
 
   const shim = engineShim();
 
+  // The reports of every `historical` probe count: only the second probe's report collides, and the finding sits on that probe.
+  const second = copyApi();
+  plantApiHistorical(second, DEPLOYMENTS);
+  editJson(second, 'contract.json', (value) => {
+    const [grader] = value.permittedInterfaces;
+    const report = grader.operations.find((operation) => operation.operationId === 'report-release');
+    grader.operations.push({ ...structuredClone(report), operationId: 'report-alt', pathTemplate: '/alt' });
+    value.permittedInterfaces.push({
+      ...structuredClone(grader),
+      logicalId: 'status',
+      operations: [{ ...structuredClone(report), operationId: 'status-alt', pathTemplate: '/alt' }],
+    });
+  });
+  editJson(second, 'evaluation.json', (value) => {
+    value.operationPhases.grader['report-alt'] = 'outcome';
+    value.operationPhases.status = { 'status-alt': 'outcome' };
+  });
+  const firstProbe = JSON.parse(fs.readFileSync(path.join(second, 'probes', 'P-002.probe.json'), 'utf8'));
+  const secondDeployments = structuredClone(firstProbe.qualification.deployments);
+  for (const side of ['preFix', 'fix']) secondDeployments[side].reports.grader = { ...REPORT, operationId: 'report-alt' };
+  fs.writeFileSync(
+    path.join(second, 'probes', 'P-003.probe.json'),
+    `${JSON.stringify({ ...firstProbe, probeId: 'P-003', qualification: { ...firstProbe.qualification, deployments: secondDeployments } }, null, 2)}\n`,
+  );
+  await writeCorpusIndex(second);
+  const secondRun = runCli(['check', '--evaluation', second], { env: environment });
+  const secondFound = signature(secondRun.stdout);
+  check(
+    secondRun.status === 10 &&
+      secondFound.length === 1 &&
+      secondFound[0].startsWith('probes/P-003.probe.json: [historical] ') &&
+      secondFound[0].includes('operationId=report-alt'),
+    `${label}: a collision of only the second probe's report did not draw one finding on that probe (exit ${secondRun.status}, findings ${JSON.stringify(secondFound)})\n${secondRun.output}`,
+  );
+
   // A collision between operations no report names, with a probe that does name a report, draws no finding from this rule.
   const unrelated = copyApi();
   plantApiHistorical(unrelated, DEPLOYMENTS);

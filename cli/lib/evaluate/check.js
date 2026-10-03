@@ -1526,12 +1526,15 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
  * template), so a collision between other operations, of any shape, stays the CI plan's `compile` check and `run`'s,
  * as does every other outcome of compile.
  */
-function checkReportCollision(report, folder, relative, reportedOperationList, env) {
+function checkReportCollision(report, folder, reportingProbes, env) {
   const line = signatureCollisionLine(path.join(folder, CONTRACT_NAME), env);
-  // A collision the line shows between operations no report names is not this rule's: it stays the CI plan's `compile` check and `run`'s.
-  if (line === null || !lineNamesOperation(line, reportedOperationList)) return;
+  if (line === null) return;
+  // The finding sits on the first probe whose own report the line names. A collision the line shows between operations no
+  // report names is not this rule's: it stays the CI plan's `compile` check and `run`'s.
+  const probe = reportingProbes.find(({ operations }) => lineNamesOperation(line, operations));
+  if (probe === undefined) return;
   report.add(
-    relative,
+    probe.relative,
     'historical',
     `a deployment's report operation shares an identity with another operation of the contract, and eval-quality's compile refuses the contract (${line}); change one of the two operations the line names (a method and path template is unique among the api operations of the contract)`,
   );
@@ -1540,8 +1543,7 @@ function checkReportCollision(report, folder, relative, reportedOperationList, e
 /** Checks every committed probe; returns the qualification routes they take. */
 function checkProbes(report, folder, context, behaviors, mutations, registry, env) {
   const routes = new Set();
-  let collisionProbe = null;
-  const reportedOperationList = [];
+  const reportingProbes = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -1563,14 +1565,11 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, en
     if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
     if (probe.qualification?.route === 'historical') {
       const named = reportedOperations(probe.qualification.deployments);
-      if (named.length > 0) {
-        collisionProbe ??= relative;
-        reportedOperationList.push(...named);
-      }
+      if (named.length > 0) reportingProbes.push({ relative, operations: named });
     }
   }
-  // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe that names a report.
-  if (collisionProbe !== null) checkReportCollision(report, folder, collisionProbe, reportedOperationList, env);
+  // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe whose report the engine's line names.
+  if (reportingProbes.length > 0) checkReportCollision(report, folder, reportingProbes, env);
   return routes;
 }
 
