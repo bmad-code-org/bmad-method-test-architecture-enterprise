@@ -1584,6 +1584,10 @@ async function checkKilledEngineStage() {
   });
   const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
   let parent;
+  let otherChild;
+  let otherClosed;
+  let otherParent;
+  let otherReady;
   try {
     for (let waited = 0; waited < 20_000 && !fs.existsSync(ready); waited += 50) await delay(50);
     check(fs.existsSync(ready), 'the real preflight never reached the held engine compile');
@@ -1599,6 +1603,33 @@ async function checkKilledEngineStage() {
     const unrelated = runPreflight(other);
     check(unrelated.status === 0, `an unrelated evaluation preflight exited ${unrelated.status}\n${unrelated.output}`);
     check(fs.existsSync(parent), 'another evaluation reclaimed the live parent');
+    otherReady = path.join(tempDir('unrelated-engine-stage-ready'), 'pid');
+    otherChild = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', other.folder], {
+      cwd: PROJECT_ROOT,
+      env: {
+        ...BASE_ENV,
+        ...other.temp.env,
+        [ENGINE_CLI_ENV]: SHIM,
+        TEA_EVALUATE_SHIM_LOG: path.join(tempDir('unrelated-engine-stage-log'), 'calls.jsonl'),
+        TEA_EVALUATE_SHIM_HOLD_STAGE: 'compile',
+        TEA_EVALUATE_SHIM_READY: otherReady,
+      },
+      stdio: 'ignore',
+    });
+    otherClosed = new Promise((resolve) => otherChild.once('close', (code, signal) => resolve({ code, signal })));
+    for (let waited = 0; waited < 20_000 && !fs.existsSync(otherReady); waited += 50) await delay(50);
+    check(fs.existsSync(otherReady), 'the unrelated real preflight never reached its held engine compile');
+    if (!fs.existsSync(otherReady)) return;
+    otherParent = path.join(
+      privateRoot,
+      fs.readdirSync(privateRoot).find((name) => name.startsWith(`run-${otherChild.pid}-`)) ?? 'missing',
+    );
+    const otherStage = fs.existsSync(otherParent)
+      ? fs.readdirSync(otherParent).find((name) => name.startsWith('tea-evaluate-engine-'))
+      : null;
+    check(otherStage !== undefined && otherStage !== null, 'the unrelated held engine compile has no staging directory');
+    const otherStagePath = path.join(otherParent, otherStage ?? 'missing');
+    check(fs.existsSync(otherParent) && fs.existsSync(otherStagePath), 'the unrelated live run has no private parent and engine stage');
     child.kill('SIGKILL');
     check((await Promise.race([closed, delay(5000).then(() => null)]))?.signal === 'SIGKILL', 'the held preflight did not die by SIGKILL');
     check(
@@ -1635,12 +1666,29 @@ async function checkKilledEngineStage() {
     check(recovered.output.includes(parent), `recovery did not report the killed parent ${parent}`);
     check(recovered.output.includes(path.join(parent, stage)), `recovery did not report the killed engine stage ${stage}`);
     check(!fs.existsSync(parent), `recovery left the killed engine stage parent ${parent}`);
+    check(otherChild.exitCode === null && otherChild.signalCode === null, 'the unrelated engine owner ended before recovery');
+    check(
+      fs.existsSync(otherParent) && fs.existsSync(otherStagePath),
+      'same-evaluation recovery removed the unrelated live engine stage or parent',
+    );
     const auxiliaryRecords = fs
       .readdirSync(path.join(fixture.folder, 'runs', '.workspace-journal'))
       .filter((name) => name.startsWith('aux-'));
     check(auxiliaryRecords.length === 0, `normal exit or recovery left auxiliary ownership records: ${auxiliaryRecords}`);
     checkUntouched('killed engine recovery', fixture, before, false, { checkTemp: false });
   } finally {
+    if (otherChild) {
+      otherChild.kill('SIGKILL');
+      await Promise.race([otherClosed, delay(5000)]);
+      if (otherReady && fs.existsSync(otherReady)) {
+        try {
+          process.kill(Number(fs.readFileSync(otherReady, 'utf8')), 'SIGKILL');
+        } catch {
+          /* The shim ended. */
+        }
+      }
+      if (otherParent && fs.existsSync(otherParent)) removeScratchDirectory(otherParent);
+    }
     child.kill('SIGKILL');
     await Promise.race([closed, delay(5000)]);
     if (fs.existsSync(ready)) {
@@ -1772,6 +1820,38 @@ function checkAuxiliaryJournalEdges() {
       reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
       check(!fs.existsSync(parent), `recovery retained a ${label} interrupted private-parent marker`);
     }
+    const interruptedParent = record(currentRoot);
+    const interruptedJournal = records.at(-1);
+    const firstChild = path.join(interruptedParent, 'tea-evaluate-engine-first');
+    const secondChild = path.join(interruptedParent, 'tea-evaluate-engine-second');
+    fs.mkdirSync(firstChild);
+    fs.mkdirSync(secondChild);
+    const originalRemove = fs.rmSync;
+    let interrupted = false;
+    try {
+      fs.rmSync = (candidate, options) => {
+        if (candidate === path.join(path.basename(interruptedParent), path.basename(secondChild))) {
+          interrupted = true;
+          throw new Error('injected child-removal failure');
+        }
+        return originalRemove(candidate, options);
+      };
+      reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    } finally {
+      fs.rmSync = originalRemove;
+    }
+    check(interrupted, 'recovery did not attempt to remove the second auxiliary child');
+    check(!fs.existsSync(firstChild) && fs.existsSync(secondChild), 'interrupted recovery did not stop between auxiliary children');
+    check(
+      fs.existsSync(path.join(interruptedParent, '.tea-evaluate-private-owner.json')) && fs.existsSync(interruptedJournal),
+      'interrupted recovery lost its parent marker or journal record',
+    );
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    check(!fs.existsSync(interruptedParent) && !fs.existsSync(interruptedJournal), 'retry did not reclaim the interrupted parent');
+    check(
+      log.some((line) => line.includes(secondChild)),
+      'retry did not report the remaining auxiliary child',
+    );
     const occupied = record(currentRoot, { markerBytes: (expected) => expected.subarray(0, 24), extra: true });
     reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
     check(fs.existsSync(occupied), 'recovery removed a partial-marker parent containing another entry');

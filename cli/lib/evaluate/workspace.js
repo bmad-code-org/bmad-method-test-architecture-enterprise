@@ -726,17 +726,37 @@ function reclaimDeadPrivateParents({ folder, root, journal, log = () => {}, plat
             if (!partial) continue;
           }
         }
-        const auxiliary = fs.readdirSync(entry.directory).filter((item) => item !== PRIVATE_PARENT_MARKER);
+        const auxiliary = fs
+          .readdirSync(entry.directory)
+          .filter((item) => item !== PRIVATE_PARENT_MARKER)
+          .sort();
         heldRoot.inDirectory('', () => {
           const current = fs.lstatSync(parentName);
           if (current.dev !== parentStat.dev || current.ino !== parentStat.ino || !current.isDirectory()) {
             throw new WorkspaceRefusal(`private parent ${entry.directory} changed during recovery`);
           }
-          removeScratchDirectory(parentName);
+          for (const item of auxiliary) {
+            removeScratchDirectory(path.join(parentName, item));
+            log(`reclaimed auxiliary scratch from killed run ${entry.runId}: ${path.join(entry.directory, item)}`);
+          }
+          const remaining = fs.readdirSync(parentName);
+          if (markerStat === null) {
+            if (remaining.length > 0) throw new WorkspaceRefusal(`private parent ${entry.directory} gained an entry during recovery`);
+          } else {
+            const currentMarker = fs.lstatSync(path.join(parentName, PRIVATE_PARENT_MARKER));
+            if (
+              remaining.length !== 1 ||
+              remaining[0] !== PRIVATE_PARENT_MARKER ||
+              !currentMarker.isFile() ||
+              currentMarker.dev !== markerStat.dev ||
+              currentMarker.ino !== markerStat.ino
+            )
+              throw new WorkspaceRefusal(`private parent ${entry.directory} changed its marker during recovery`);
+            fs.rmSync(path.join(parentName, PRIVATE_PARENT_MARKER));
+          }
+          fs.rmdirSync(parentName);
         });
         journal.inDirectory('', () => fs.rmSync(name));
-        for (const item of auxiliary)
-          log(`reclaimed auxiliary scratch from killed run ${entry.runId}: ${path.join(entry.directory, item)}`);
         log(`reclaimed private parent from killed run ${entry.runId}: ${entry.directory}`);
       } finally {
         heldRoot.close();

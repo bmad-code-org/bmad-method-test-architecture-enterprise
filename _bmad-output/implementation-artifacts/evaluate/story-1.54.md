@@ -91,6 +91,8 @@ The Epic 1 criterion and test design now distinguish engine staging in `prefligh
 - Verification gap 1, `medium`, `patch`: a helper forced through the Windows branch did not prove production CLI behavior. The native Windows CI step runs preflight after `TEMP` changes and checks the original parent is reported and removed.
 - Verification gap 2, `medium`, `patch`: no test exercised an absent marker after parent creation. The auxiliary journal edge case now checks that empty parent is reclaimed.
 - Verification gap other, `medium`, `patch`: macOS immutable scratch exposed a real cleanup fault: recursive parent removal could delete its marker before failing on a child. Cleanup now handles children first and retains the marked parent when any child fails; the scratch case checks later recovery.
+- Final test-quality review 1, `medium`, `patch`: the unrelated project's preflight completed before recovery, leaving no unrelated scratch to preserve. The integration case now holds that project's real engine stage and parent through recovery and asserts both exact paths survive.
+- Final architecture review 1, `medium`, `patch`: recursive parent removal could delete the marker before a later child, leaving nonempty unmarked scratch after interruption. Recovery now removes children first and retains marker and journal through a forced mid-cleanup failure, then succeeds on retry.
 
 ## Design Notes
 
@@ -104,7 +106,9 @@ Follow-up review found that Windows recovery compared a recorded root with the n
 
 Final review found that auxiliary ownership was attempted before a missing `launch.root` reached its established workspace refusal, a short journal write could survive an exception, handled signals left a cleaned parent's journal entry, and ownership reads could follow a file swapped after inspection. The runtime now checks the root first, writes records completely, removes a new journal entry on write or sync failure, retires successful signal cleanup, and reads a verified descriptor without following a link or blocking on a FIFO. The test covers journal-only and unmarked-parent kill windows and a native Windows CLI recovery step after `TEMP` changes. A macOS immutable child exposed a cleanup ordering gap: children are now removed first, and a failed child keeps the parent and its marker until a later preflight can reclaim it.
 
-The final narrow auxiliary regression passed 57/57. The corrected tree passed the full local `npm test` chain with exit 0, including preflight 324/324, mutation 712/712 and evaluators 575/575. The native Windows recovery case remains gated by CI's Windows job.
+The last recovery review found that recursive removal could erase the marker before it finished removing auxiliary children. Recovery now removes children one at a time while the marker remains, then removes the marker and empty parent before retiring the journal. An injected failure on the second child checks that the marker and journal survive and a later recovery completes. The real killed-engine case also keeps an unrelated preflight's engine stage and private parent live through same-evaluation recovery and checks their exact paths survive.
+
+Before the last review patch, the narrow auxiliary regression passed 57/57 and the full local `npm test` chain exited 0, including preflight 324/324, mutation 712/712 and evaluators 575/575. The new interrupted-recovery and unrelated-live-owner assertions need a focused rerun after lane 3 releases the host slot. The native Windows recovery case passed in PR #311's first Windows CI run; the final head will receive fresh CI.
 
 ## Verification
 
@@ -113,5 +117,5 @@ The final narrow auxiliary regression passed 57/57. The corrected tree passed th
 - `npm run test:evaluate-mutation`: real preflight recovery and ownership cases pass.
 - `npm run test:evaluate-evaluators`: command evaluator and private-parent cases pass.
 - `npm run docs:validate-links`, `npm run docs:build`, `npm run lint`, `npm run lint:md`, `npm run format:check`: required gates pass.
-- `npm test`: passed with exit 0 on the corrected tree.
+- `npm test`: passed with exit 0 before the final review patch; the final head awaits focused tests and fresh CI.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`: engine export remains available.
