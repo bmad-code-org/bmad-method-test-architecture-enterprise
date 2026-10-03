@@ -3197,15 +3197,16 @@ function checkGapsGuidance(guide, engine, failures) {
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   checkIsolationViolationGuidance(guide, failures);
-  // Story 1.61: the dogfood mutations M-001 and M-002 replace two exit-table rows byte for byte, so the rows stay as they are.
-  for (const id of ['M-001', 'M-002']) {
-    const { operator } = JSON.parse(
-      fs.readFileSync(path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations', `${id}.mutation.json`), 'utf8'),
-    );
-    const found = guide.split(operator.find).length - 1;
+  // Stories 1.61 and 1.46: each dogfood mutation replaces bytes of a guide exactly once, so the exit-table rows M-001, M-002 and
+  // M-004 edit and the sentence M-003 edits stay as they are.
+  const mutationFolder = path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations');
+  for (const name of fs.readdirSync(mutationFolder).sort()) {
+    const { mutationId, targetArtifact, operator } = JSON.parse(fs.readFileSync(path.join(mutationFolder, name), 'utf8'));
+    const target = fs.readFileSync(path.join(__dirname, '..', targetArtifact), 'utf8');
+    const found = target.split(operator.find).length - 1;
     if (found !== operator.occurrences)
       failures.push(
-        `gaps.md holds ${found} of the ${operator.occurrences} occurrence(s) of the row ${id} replaces: ${JSON.stringify(operator.find)}`,
+        `${targetArtifact} holds ${found} of the ${operator.occurrences} occurrence(s) of the text ${mutationId} replaces: ${JSON.stringify(operator.find)}`,
       );
   }
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
