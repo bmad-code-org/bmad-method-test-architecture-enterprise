@@ -117,6 +117,20 @@
  *                           `refused <code>` for a file read), and the
  *                           worktree's own operations as `<name>: exit <code>`
  *                           (Story 1.57)
+ *   probe-history           answer as usual, then ask the worktree's git what it
+ *                           shows of the project, printing one `<name>: <how>`
+ *                           line each (Story 1.80): `status` and `log` with their
+ *                           exit and line count, `show-tracked`, `show-folder` and
+ *                           `show-shared` (`printed` or `none <exit>`) for a tracked
+ *                           file, the committed contract and a file outside the folder
+ *                           that holds the contract's bytes, `tags` (the `git tag -l` names, comma
+ *                           separated), `describe`, `tag-tracked` and `tag-folder`
+ *                           (`<tag>=printed|none` for each tag), `remotes`, `carried`
+ *                           (config lines that name a remote, URL, credential, hook
+ *                           or promisor), `hooks`, `filters` (the filter driver
+ *                           configuration, one `key=value` per driver key, sorted)
+ *                           and `required` (`git config --type=bool` of the
+ *                           `filter.upper.required` key)
  *   probe-private           answer as usual, then look for what the run keeps
  *                           from a target, in the call the sealed-brief agent
  *                           stub makes (its request, `Judge a request of my
@@ -366,6 +380,39 @@ if (act === 'probe-git') {
     `commondir-file: ${commondirOf(own)}`,
     `git-view: ${fs.existsSync(path.join(path.dirname(ask('rev-parse', '--show-toplevel').stdout.trim()), 'git-view')) ? 'present' : 'absent'}`,
   );
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+if (act === 'probe-history') {
+  const ask = (...args) => spawnSync('git', args, { encoding: 'utf8' });
+  const printed = (result) => (result.status === 0 && result.stdout.length > 0 ? 'printed' : `none ${result.status}`);
+  const exit = (result) => `exit ${result.status} (${result.stdout.split('\n').filter((line) => line.length > 0).length} line(s))`;
+  const tags = ask('-c', 'tag.sort=refname', 'tag', '-l').stdout.split('\n').filter((name) => name.length > 0);
+  const own = ask('rev-parse', '--git-common-dir').stdout.trim();
+  const config = ask('config', '--list', '--local').stdout.split('\n');
+  const described = ask('describe', '--tags');
+  const hooks = (() => {
+    try {
+      return fs.readdirSync(path.join(own, 'hooks')).length;
+    } catch {
+      return 0;
+    }
+  })();
+  const lines = [
+    `status: ${exit(ask('status', '--porcelain'))}`,
+    `log: ${exit(ask('log', '--oneline'))}`,
+    `show-tracked: ${printed(ask('show', 'HEAD:rules/policy.txt'))}`,
+    `show-folder: ${printed(ask('show', 'HEAD:evals/verdict/contract.json'))}`,
+    `show-shared: ${printed(ask('show', 'HEAD:docs/contract-copy.json'))}`,
+    `tags: ${tags.join(',')}`,
+    `describe: ${described.status === 0 ? described.stdout.trim() : `none ${described.status}`}`,
+    `tag-tracked: ${tags.map((tag) => `${tag}=${printed(ask('show', `${tag}:rules/policy.txt`)).split(' ')[0]}`).join(',')}`,
+    `tag-folder: ${tags.map((tag) => `${tag}=${printed(ask('show', `${tag}:evals/verdict/contract.json`)).split(' ')[0]}`).join(',')}`,
+    `remotes: ${ask('remote', '-v').stdout.split('\n').filter((line) => line.length > 0).length}`,
+    `carried: ${config.filter((line) => /remote|url|credential|hook|promisor|partialclone/i.test(line)).length}`,
+    `hooks: ${hooks}`,
+    `filters: ${config.filter((line) => /^filter\./.test(line)).sort().join(' | ')}`,
+    `required: ${ask('config', '--type=bool', '--get', 'filter.upper.required').stdout.trim() || 'unset'}`,
+  ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 if (act === 'probe-private') {

@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred three stories, including H.1 (Stories 1.27 to 1.77, 1.80 to 1.84, 1.90 to 1.104 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred four stories, including H.1 (Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.104 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.77, 1.80 to 1.84, 1.90 to 1.104.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.104.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -164,111 +164,112 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after every lane drains, including the engine patch and TeA adoption in Story 1.104.
 
-| Order | Story | Depends on                   |
-| ----- | ----- | ---------------------------- |
-| 1     | 1.1   | none                         |
-| 2     | 1.2   | 1.1                          |
-| 3     | 1.3   | 1.2                          |
-| 4     | 1.4   | 1.3                          |
-| 5     | 1.5   | 1.4                          |
-| 6     | 1.6   | 1.5                          |
-| 7     | 1.7   | 1.6                          |
-| 8     | 1.8   | 1.7                          |
-| 9     | 1.9   | 1.8                          |
-| 10    | 1.17  | 1.9                          |
-| 11    | 1.10  | 1.8, 1.17                    |
-| 12    | 1.11  | 1.1, 1.8, 1.17               |
-| 13    | 1.32  | 1.9, 1.11                    |
-| 14    | 1.18  | 1.8                          |
-| 15    | 1.19  | 1.17                         |
-| 16    | 1.20  | 1.17                         |
-| 17    | 1.21  | 1.17                         |
-| 18    | 1.22  | 1.17                         |
-| 19    | 1.12  | 1.4, 1.21                    |
-| 20    | 1.13  | 1.10, 1.11, 1.12, 1.18, 1.19 |
-| 21    | 1.23  | 1.13, 1.19, 1.20, 1.21       |
-| 22    | 1.14  | 1.9, 1.13, 1.22, 1.23        |
-| 23    | 1.15  | 1.14                         |
-| 24    | 1.16  | 1.15                         |
-| 25    | 1.24  | 1.16                         |
-| 26    | 1.25  | 1.24                         |
-| 27    | 1.26  | 1.23, 1.25                   |
-| 28    | 1.27  | 1.7                          |
-| 29    | 1.28  | 1.7                          |
-| 30    | 1.29  | 1.8                          |
-| 31    | 1.30  | 1.8                          |
-| 32    | 1.31  | 1.8, 1.17                    |
-| 33    | 1.33  | 1.10, 1.11, 1.17             |
-| 34    | 1.34  | 1.17, 1.21                   |
-| 35    | 1.35  | 1.10                         |
-| 36    | 1.36  | 1.11                         |
-| 37    | 1.37  | 1.11                         |
-| 38    | 1.38  | 1.32                         |
-| 39    | 1.39  | 1.18                         |
-| 40    | 1.40  | 1.17, 1.21                   |
-| 41    | 1.41  | 1.8, 1.21                    |
-| 42    | 1.42  | 1.22                         |
-| 43    | 1.43  | 1.20, 1.23                   |
-| 44    | 1.44  | 1.17, 1.23                   |
-| 45    | 1.45  | 1.8, 1.14, 1.21              |
-| 46    | 1.46  | 1.16                         |
-| 47    | 1.47  | 1.27                         |
-| 48    | 1.48  | 1.27                         |
-| 49    | 1.49  | 1.27                         |
-| 50    | 1.50  | 1.11, 1.24                   |
-| 51    | 1.51  | 1.21, 1.24                   |
-| 52    | 1.52  | 1.28                         |
-| 53    | 1.53  | 1.28                         |
-| 54    | 1.54  | 1.28                         |
-| 55    | 1.55  | 1.26                         |
-| 56    | 1.56  | 1.26, 1.55                   |
-| 57    | 1.57  | 1.31                         |
-| 58    | 1.58  | 1.31                         |
-| 59    | 1.59  | 1.31                         |
-| 60    | 1.60  | 1.31                         |
-| 61    | 1.61  | 1.31                         |
-| 62    | 1.62  | 1.31                         |
-| 63    | 1.63  | 1.31, 1.60                   |
-| 64    | 1.64  | 1.38, 1.65                   |
-| 65    | 1.65  | 1.38                         |
-| 66    | 1.66  | 1.11, 1.38                   |
-| 67    | 1.67  | 1.40                         |
-| 68    | 1.68  | 1.41                         |
-| 69    | 1.69  | 1.68                         |
-| 70    | 1.70  | 1.43                         |
-| 71    | 1.71  | 1.44                         |
-| 72    | 1.72  | 1.34, 1.44                   |
-| 73    | 1.73  | 1.44, 1.71                   |
-| 74    | 1.74  | 1.66                         |
-| 75    | 1.75  | 1.65                         |
-| 76    | 1.80  | 1.57                         |
-| 77    | 1.81  | 1.60                         |
-| 78    | 1.82  | 1.63                         |
-| 79    | 1.83  | 1.63                         |
-| 80    | 1.84  | 1.61, 1.83                   |
-| 81    | 1.90  | 2.1                          |
-| 82    | 1.91  | 2.1                          |
-| 83    | 1.92  | 2.2                          |
-| 84    | 1.93  | 2.3                          |
-| 85    | 1.94  | 2.3                          |
-| 86    | 1.95  | 2.3                          |
-| 87    | 1.96  | 2.4                          |
-| 88    | 1.97  | 2.3, 2.4                     |
-| 89    | 1.98  | 1.24, 2.4                    |
-| 90    | 1.99  | 1.49                         |
-| 91    | 1.100 | 1.48, 1.99                   |
-| 92    | 1.101 | 1.42                         |
-| 93    | 1.102 | 1.42                         |
-| 94    | 1.103 | 1.42                         |
-| 95    | 1.104 | 1.55                         |
-| 96    | 1.76  | 1.72                         |
-| 97    | 1.77  | 1.75                         |
-| 98    | 2.1   | 1.16, 1.26, 1.45             |
-| 99    | 2.2   | 2.1                          |
-| 100   | 2.3   | 2.2                          |
-| 101   | 2.4   | 2.3                          |
-| 102   | 2.5   | 2.4                          |
-| 103   | H.1   | 1.76, 1.77, 1.84, 1.104, 2.5 |
+| Order | Story | Depends on                         |
+| ----- | ----- | ---------------------------------- |
+| 1     | 1.1   | none                               |
+| 2     | 1.2   | 1.1                                |
+| 3     | 1.3   | 1.2                                |
+| 4     | 1.4   | 1.3                                |
+| 5     | 1.5   | 1.4                                |
+| 6     | 1.6   | 1.5                                |
+| 7     | 1.7   | 1.6                                |
+| 8     | 1.8   | 1.7                                |
+| 9     | 1.9   | 1.8                                |
+| 10    | 1.17  | 1.9                                |
+| 11    | 1.10  | 1.8, 1.17                          |
+| 12    | 1.11  | 1.1, 1.8, 1.17                     |
+| 13    | 1.32  | 1.9, 1.11                          |
+| 14    | 1.18  | 1.8                                |
+| 15    | 1.19  | 1.17                               |
+| 16    | 1.20  | 1.17                               |
+| 17    | 1.21  | 1.17                               |
+| 18    | 1.22  | 1.17                               |
+| 19    | 1.12  | 1.4, 1.21                          |
+| 20    | 1.13  | 1.10, 1.11, 1.12, 1.18, 1.19       |
+| 21    | 1.23  | 1.13, 1.19, 1.20, 1.21             |
+| 22    | 1.14  | 1.9, 1.13, 1.22, 1.23              |
+| 23    | 1.15  | 1.14                               |
+| 24    | 1.16  | 1.15                               |
+| 25    | 1.24  | 1.16                               |
+| 26    | 1.25  | 1.24                               |
+| 27    | 1.26  | 1.23, 1.25                         |
+| 28    | 1.27  | 1.7                                |
+| 29    | 1.28  | 1.7                                |
+| 30    | 1.29  | 1.8                                |
+| 31    | 1.30  | 1.8                                |
+| 32    | 1.31  | 1.8, 1.17                          |
+| 33    | 1.33  | 1.10, 1.11, 1.17                   |
+| 34    | 1.34  | 1.17, 1.21                         |
+| 35    | 1.35  | 1.10                               |
+| 36    | 1.36  | 1.11                               |
+| 37    | 1.37  | 1.11                               |
+| 38    | 1.38  | 1.32                               |
+| 39    | 1.39  | 1.18                               |
+| 40    | 1.40  | 1.17, 1.21                         |
+| 41    | 1.41  | 1.8, 1.21                          |
+| 42    | 1.42  | 1.22                               |
+| 43    | 1.43  | 1.20, 1.23                         |
+| 44    | 1.44  | 1.17, 1.23                         |
+| 45    | 1.45  | 1.8, 1.14, 1.21                    |
+| 46    | 1.46  | 1.16                               |
+| 47    | 1.47  | 1.27                               |
+| 48    | 1.48  | 1.27                               |
+| 49    | 1.49  | 1.27                               |
+| 50    | 1.50  | 1.11, 1.24                         |
+| 51    | 1.51  | 1.21, 1.24                         |
+| 52    | 1.52  | 1.28                               |
+| 53    | 1.53  | 1.28                               |
+| 54    | 1.54  | 1.28                               |
+| 55    | 1.55  | 1.26                               |
+| 56    | 1.56  | 1.26, 1.55                         |
+| 57    | 1.57  | 1.31                               |
+| 58    | 1.58  | 1.31                               |
+| 59    | 1.59  | 1.31                               |
+| 60    | 1.60  | 1.31                               |
+| 61    | 1.61  | 1.31                               |
+| 62    | 1.62  | 1.31                               |
+| 63    | 1.63  | 1.31, 1.60                         |
+| 64    | 1.64  | 1.38, 1.65                         |
+| 65    | 1.65  | 1.38                               |
+| 66    | 1.66  | 1.11, 1.38                         |
+| 67    | 1.67  | 1.40                               |
+| 68    | 1.68  | 1.41                               |
+| 69    | 1.69  | 1.68                               |
+| 70    | 1.70  | 1.43                               |
+| 71    | 1.71  | 1.44                               |
+| 72    | 1.72  | 1.34, 1.44                         |
+| 73    | 1.73  | 1.44, 1.71                         |
+| 74    | 1.74  | 1.66                               |
+| 75    | 1.75  | 1.65                               |
+| 76    | 1.80  | 1.57                               |
+| 77    | 1.81  | 1.60                               |
+| 78    | 1.82  | 1.63                               |
+| 79    | 1.83  | 1.63                               |
+| 80    | 1.84  | 1.61, 1.83                         |
+| 81    | 1.85  | 1.80                               |
+| 82    | 1.90  | 2.1                                |
+| 83    | 1.91  | 2.1                                |
+| 84    | 1.92  | 2.2                                |
+| 85    | 1.93  | 2.3                                |
+| 86    | 1.94  | 2.3                                |
+| 87    | 1.95  | 2.3                                |
+| 88    | 1.96  | 2.4                                |
+| 89    | 1.97  | 2.3, 2.4                           |
+| 90    | 1.98  | 1.24, 2.4                          |
+| 91    | 1.99  | 1.49                               |
+| 92    | 1.100 | 1.48, 1.99                         |
+| 93    | 1.101 | 1.42                               |
+| 94    | 1.102 | 1.42                               |
+| 95    | 1.103 | 1.42                               |
+| 96    | 1.104 | 1.55                               |
+| 97    | 1.76  | 1.72                               |
+| 98    | 1.77  | 1.75                               |
+| 99    | 2.1   | 1.16, 1.26, 1.45                   |
+| 100   | 2.2   | 2.1                                |
+| 101   | 2.3   | 2.2                                |
+| 102   | 2.4   | 2.3                                |
+| 103   | 2.5   | 2.4                                |
+| 104   | H.1   | 1.76, 1.77, 1.84, 1.85, 1.104, 2.5 |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -276,7 +277,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75, 1.76, 1.77. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end. Story 1.76 was appended from Story 1.72's review; it tightens the custom adapter's version response contract and follows the initial version binding. Story 1.77 was appended from Story 1.75's round 1 review; it widens the collision rule that 1.75 writes in `check.js`, so it needs only 1.75 and joins the end.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84, 1.85. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner. Story 1.85 was appended from Story 1.80's build and follows 1.80, whose build it changes; it joins the end.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102, 1.103, 1.104. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5), so it runs first, and 2.5 waits for every story that changes committed evidence bytes before it baselines the fixtures (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
@@ -2093,11 +2094,11 @@ So that a confined run needs neither an opt-out nor a changed target (AD-7, AD-8
 
 **Given** a confined run over a project cloned with a promisor remote whose evaluation folder is committed
 **When** the run starts and a stub target runs `git status`, `git log` and `git show HEAD:<a tracked file>`
-**Then** the run completes with no exit 12, the stub's commands exit 0 over the objects the project holds on disk, no process fetches from the remote, and `git show` of the committed contract finds no object; restoring the refusal makes the run exit 12, which the case catches
-**And** a stub target in a confined run over a project with a lightweight and an annotated tag lists both with `git tag -l`, resolves `git describe --tags`, and reads the tagged commit's files, while no remote URL, credential or hook reaches the private repository; dropping the tag copy makes `git tag -l` print nothing, which the case catches
-**And** a confined run over a history of more than six million objects (the object walk streamed from a stub `git` that prints that many ids, so no such repository is built) completes, and a walk that buffers its whole output fails the case
-**And** a project whose local config sets a filter driver named with a space, or `required` with no value, shows the target the same `git status` as the project, a case that fails while the driver is dropped
-**And** the reference's `### File-system confinement` drops its three limits (a partial-clone project is refused; the target's git has no branches or tags; a history of more than about six million objects is refused), and a case reading that section under its exact heading fails while any remains.
+**Then** the run completes with no exit 12, the stub's commands exit 0 over the objects the project holds on disk, no process fetches from the remote, and `git show` of the committed contract finds no object; restoring the refusal makes the run exit 12, which the case catches (amended 2026-10-03 in Story 1.80's build: git before 2.44 cannot be told not to fetch, so a partial-clone project exits 12 there with the way out named, and the checkout of a revision whose objects the clone lacks on disk, a historical probe's among them, exits 12 naming the revision, so that no process of a confined run fetches; a `test:evaluate-arms` case runs a historical probe over a blob-less clone)
+**And** a stub target in a confined run over a project with a lightweight and an annotated tag lists both with `git tag -l`, resolves `git describe --tags`, and reads the tagged commit's files, while no remote URL, credential or hook reaches the private repository and a tag on a commit outside the evaluated history or on a tree is left out; dropping the tag copy makes `git tag -l` print nothing, which the case catches (amended 2026-10-03 in Story 1.80's build: the last clause names the tags the build leaves out, since a ref to an object the private repository lacks breaks `git for-each-ref`)
+**And** a confined run over a history of more than six million objects (the object walk streamed from a stub `git` that prints seven million ids, so no such repository is built) completes, and a walk that buffers its whole output fails the case (amended 2026-10-03 in Story 1.80's build: the 256 MB buffer holds about 6,547,000 ids of 41 bytes, so a stub that prints 6,500,000 ids passes the buffered walk and seven million does not; the build also streams the commit list that finds the folder's trees)
+**And** a project whose local config sets a filter driver named with a space, or `required` with no value, gives the target's git the same driver configuration (`git config --get` of each key prints what it prints in the project) and the same `git status`, a case that fails while the driver is dropped (amended 2026-10-03 in Story 1.80's build: no attribute can name a driver whose name holds a space, since `.gitattributes` splits a value at whitespace, so that driver changes no `git status` and the case reads its configuration; the `required` key is read the same way, since a driver whose command works reads alike with or without it)
+**And** the reference's `### File-system confinement` drops its three limits (a partial-clone project is refused; the target's git has no branches or tags; a history of more than about six million objects is refused), and a case reading that section under its exact heading fails while any remains (amended 2026-10-03 in Story 1.80's build: the first limit is the general refusal of a partial-clone project, which goes; the section keeps the one refusal that stays, a git before 2.44 exits 12 for a partial-clone project with the way out named, and the case fails if that statement disappears).
 
 **Dependencies:** 1.57.
 **Gate:** `test:evaluate-confinement`, `npm test`.
@@ -2186,6 +2187,28 @@ So that the plan's live checks reach the model provider on a Linux runner (CAP-1
 
 **Dependencies:** 1.61, 1.83.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
+
+### Story 1.85: Show a sparse-checkout project to the target's git as the project shows it
+
+Added 2026-10-03 in Story 1.80's build.
+A project whose worktree uses sparse checkout (`git sparse-checkout set`, the usual shape of a large monorepo, and a blob-less clone made with `--sparse`) has a worktree that inherits the cone, so the files outside it are absent from the checkout.
+The private repository's index is rebuilt with `git read-tree HEAD`, which sets no skip-worktree bit, so the target's `git status` lists every tracked file outside the cone as deleted where the project's status lists nothing.
+Story 1.57 has this defect for any sparse project, and Story 1.80 makes it reachable for partial clones.
+
+As an adopter whose project uses sparse checkout,
+I want the target's git to show the cone's files and the same clean status as the project,
+So that a confined run needs neither an opt-out nor a changed target (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a confined run over a project whose worktree is sparse, with a cone that leaves tracked files out of the checkout
+**When** a stub target runs `git status --porcelain`, `git ls-files` and `git sparse-checkout list`
+**Then** the status lists no deletion and equals the project's, `git ls-files` lists the files outside the cone, and the cone's patterns read as the project's; rebuilding the index with a plain `read-tree` lists the files outside the cone as deleted, which the case catches
+**And** a project that is not sparse keeps the index it has today, a case that compares the target's `git status` and `git ls-files` with the project's and fails while a sparse rule reaches a non-sparse worktree
+**And** the reference's `### File-system confinement` says a sparse project shows the target the project's status, and a case reading that section under its exact heading fails while the sentence is absent.
+
+**Dependencies:** 1.80.
+**Gate:** `test:evaluate-confinement`, `npm test`.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 
@@ -2689,7 +2712,7 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` chain script, which the `chain` matrix of `quality.yaml` runs (amended 2026-09-25 in Story 1.9), in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
 4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
-**Dependencies:** 1.76, 1.77, 1.84, 1.104, 2.5.
+**Dependencies:** 1.76, 1.77, 1.84, 1.85, 1.104, 2.5.
 
 ## Traceability
 

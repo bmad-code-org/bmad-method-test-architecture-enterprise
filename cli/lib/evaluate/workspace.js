@@ -60,6 +60,8 @@ const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 /** How long one pack of a withheld repository may take: it holds the project's whole history. */
 const GIT_HISTORY_TIMEOUT_MS = 10 * 60_000;
 const WITHHELD_REPOSITORY = 'git-view';
+/** The streaming reader of a git answer that can exceed any buffer (Story 1.80). */
+const GIT_LINES = path.join(__dirname, 'git-lines.js');
 const OWNER_MARKER = '.tea-evaluate-owner.json';
 const JOURNAL_DIRECTORY = '.workspace-journal';
 const PRIVATE_PARENT_MARKER = '.tea-evaluate-private-owner.json';
@@ -930,12 +932,20 @@ const GIT_OUTPUT_BYTES = 256 * 1024 * 1024;
  *
  * @returns {{ok: true, stdout: string}|{ok: false, status?: number, detail: string}}
  */
-function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false, input = null } = {}) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false, input = null, env: extra = {} } = {}) {
+  return runCommand('git', args, { label: `git ${args.join(' ')}`, timeoutMs, supervised, input, extra });
+}
+
+/**
+ * Runs `command` as `runGit` runs git: supervised, `command` is the one the supervisor starts, so a timeout, a signal or
+ * the runtime's death stops every process it started.
+ */
+function runCommand(command, args, { label, timeoutMs, supervised, input, extra }) {
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_'))), ...extra };
   const result = supervised
     ? spawnSync(
         process.execPath,
-        [path.join(__dirname, '..', 'agent-supervisor.js'), String(process.pid), String(timeoutMs), 'git', ...args],
+        [path.join(__dirname, '..', 'agent-supervisor.js'), String(process.pid), String(timeoutMs), command, ...args],
         {
           encoding: 'utf8',
           env,
@@ -944,7 +954,7 @@ function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false,
           stdio: [input === null ? 'ignore' : 'pipe', 'pipe', 'pipe', 'pipe'],
         },
       )
-    : spawnSync('git', args, {
+    : spawnSync(command, args, {
         encoding: 'utf8',
         env,
         timeout: timeoutMs,
@@ -952,28 +962,47 @@ function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false,
         maxBuffer: GIT_OUTPUT_BYTES,
         ...(input === null ? {} : { input }),
       });
-  if (result.error) return { ok: false, detail: `git ${args.join(' ')} could not run: ${result.error.code ?? result.error.message}` };
+  if (result.error) return { ok: false, detail: `${label} could not run: ${result.error.code ?? result.error.message}` };
   if (supervised) {
     let report;
     try {
       report = JSON.parse(result.output?.[3] ?? '');
     } catch {
-      return { ok: false, detail: `git ${args.join(' ')} supervisor gave no report` };
+      return { ok: false, detail: `${label} supervisor gave no report` };
     }
     if (report.timedOut || report.failure || report.spawnError || report.signal || report.status !== 0) {
       return {
         ok: false,
         status: report.status ?? undefined,
-        detail: `git ${args.join(' ')} ${report.failure ?? report.spawnError?.message ?? (report.timedOut ? 'timed out' : `ended ${report.signal ?? report.status}: ${String(result.stderr).trim()}`)}`,
+        detail: `${label} ${report.failure ?? report.spawnError?.message ?? (report.timedOut ? 'timed out' : `ended ${report.signal ?? report.status}: ${String(result.stderr).trim()}`)}`,
       };
     }
     return { ok: true, stdout: result.stdout };
   }
-  if (result.signal !== null) return { ok: false, detail: `git ${args.join(' ')} was killed by ${result.signal}` };
+  if (result.signal !== null) return { ok: false, detail: `${label} was killed by ${result.signal}` };
   if (result.status !== 0) {
-    return { ok: false, status: result.status, detail: `git ${args.join(' ')} exited ${result.status}: ${String(result.stderr).trim()}` };
+    return { ok: false, status: result.status, detail: `${label} exited ${result.status}: ${String(result.stderr).trim()}` };
   }
   return { ok: true, stdout: result.stdout };
+}
+
+/**
+ * Runs one of `git-lines.js`'s jobs (a walk or a pipeline of git commands whose output can exceed any buffer) under the
+ * supervisor and returns the lines it kept; see that script for the jobs.
+ *
+ * @returns {{ok: true, lines: string[]}|{ok: false, status?: number, detail: string}}
+ */
+function runGitLines(job, { timeoutMs = GIT_HISTORY_TIMEOUT_MS, env = {} } = {}) {
+  // A job that pipes two commands names both, so a failure reads as the stage that failed.
+  const label = job.git === undefined ? `git ${job.list.join(' ')} | git ${(job.pack ?? job.ask).join(' ')}` : `git ${job.git.join(' ')}`;
+  const result = runCommand(process.execPath, [GIT_LINES], {
+    label,
+    timeoutMs,
+    supervised: true,
+    input: JSON.stringify(job),
+    extra: env,
+  });
+  return result.ok ? { ok: true, lines: result.stdout.split('\n').filter((line) => line.length > 0) } : result;
 }
 
 /**
@@ -1159,45 +1188,91 @@ function alternatesOf(gitDirectory) {
  */
 const ADOPTER_FACTS = new Map();
 
+/**
+ * Asked of every git call that reads the adopter's repository during a build: a partial clone's objects that are not on
+ * disk are never fetched, so the build holds what the project holds (Story 1.80).
+ */
+const NO_LAZY_FETCH = { GIT_NO_LAZY_FETCH: '1' };
+
 function adopterFacts(repository, gitDirectory) {
   const known = ADOPTER_FACTS.get(gitDirectory);
   if (known !== undefined) return known;
-  const partial = partialCloneCause(repository);
-  const facts = { partial, objectFormat: null, refFormat: null, carried: [], filters: [] };
-  if (partial === null) {
-    // Git before 2.45 does not know `--show-ref-format` and echoes the flag with exit 0, and before 2.38 not
-    // `--show-object-format`: an answer that is not a known format means the format is unknown and is not passed on.
-    const objectFormat = runGit(['-C', repository, 'rev-parse', '--show-object-format']);
-    if (objectFormat.ok && /^(sha1|sha256)$/.test(objectFormat.stdout.trim())) facts.objectFormat = objectFormat.stdout.trim();
-    const refFormat = runGit(['-C', repository, 'rev-parse', '--show-ref-format']);
-    if (refFormat.ok && /^(files|reftable)$/.test(refFormat.stdout.trim())) facts.refFormat = refFormat.stdout.trim();
-    // One question for the `core.` and `filter.` sections; the names git prints are lower case, a filter's own name apart.
-    const local = runGit(['--git-dir', gitDirectory, 'config', '--local', '--get-regexp', String.raw`^(core|filter)\.`]);
-    if (local.ok) {
-      const wanted = new Set(CARRIED_CONFIGURATION.map((key) => key.toLowerCase()));
-      const values = new Map();
-      const filters = new Map();
-      for (const line of local.stdout.split('\n')) {
-        const [, key = '', value = ''] = /^(\S+)\s+(.*)$/.exec(line.trim()) ?? [];
-        if (wanted.has(key) && /^[A-Za-z0-9_.-]+$/.test(value)) values.set(key, value);
+  const facts = { partial: partialCloneCause(repository), objectFormat: null, refFormat: null, carried: [], filters: [] };
+  // Git before 2.45 does not know `--show-ref-format` and echoes the flag with exit 0, and before 2.38 not
+  // `--show-object-format`: an answer that is not a known format means the format is unknown and is not passed on.
+  const objectFormat = runGit(['-C', repository, 'rev-parse', '--show-object-format']);
+  if (objectFormat.ok && /^(sha1|sha256)$/.test(objectFormat.stdout.trim())) facts.objectFormat = objectFormat.stdout.trim();
+  const refFormat = runGit(['-C', repository, 'rev-parse', '--show-ref-format']);
+  if (refFormat.ok && /^(files|reftable)$/.test(refFormat.stdout.trim())) facts.refFormat = refFormat.stdout.trim();
+  // One question for the `core.` and `filter.` sections. With `-z` each answer is `<key>\n<value>` and a boolean written
+  // with no value is the key alone, so a driver's name may hold a space and a `required` may stand bare. Git prints the
+  // section and variable names in lower case and a filter's own name as written.
+  const local = runGit(['--git-dir', gitDirectory, 'config', '--local', '-z', '--get-regexp', String.raw`^(core|filter)\.`]);
+  if (local.ok) {
+    const wanted = new Set(CARRIED_CONFIGURATION.map((key) => key.toLowerCase()));
+    const values = new Map();
+    const filters = new Map();
+    for (const entry of local.stdout.split('\0')) {
+      if (entry === '') continue;
+      const newline = entry.indexOf('\n');
+      const key = newline === -1 ? entry : entry.slice(0, newline);
+      const value = newline === -1 ? null : entry.slice(newline + 1);
+      if (wanted.has(key)) {
+        if (value === null) values.set(key, 'true');
+        else if (/^[A-Za-z0-9_.-]+$/.test(value)) values.set(key, value);
+      } else if (/^filter\..+\.(clean|smudge|process|required)$/i.test(key)) {
         // A clean or smudge filter a `.gitattributes` names: without it every file it filters reads as modified.
-        else if (/^filter\..+\.(clean|smudge|process|required)$/i.test(key) && value !== '') filters.set(key, value);
+        if (value === null) {
+          if (/\.required$/i.test(key)) filters.set(key, 'true');
+        } else if (value !== '') filters.set(key, value);
       }
-      facts.carried = [...values];
-      facts.filters = [...filters];
     }
+    facts.carried = [...values];
+    facts.filters = [...filters];
   }
   ADOPTER_FACTS.set(gitDirectory, facts);
   return facts;
 }
 
-/** Why `repository` is a partial clone, or null: its history is not all on disk, so a pack or a walk would fetch it. */
+/** The `git --version` text and its `[major, minor]` numbers (null when unreadable); one process, asked only for a partial clone. */
+function gitVersionOf() {
+  const asked = runGit(['--version']);
+  const match = asked.ok ? /(\d+)\.(\d+)/.exec(asked.stdout) : null;
+  return { text: asked.ok ? asked.stdout.trim() : 'unknown', numbers: match === null ? null : [Number(match[1]), Number(match[2])] };
+}
+
+/** Whether this git honors `GIT_NO_LAZY_FETCH` (2.44 and later): without it a partial clone's build fetches one object at a time. */
+function skipsLazyFetch({ numbers }) {
+  return numbers !== null && (numbers[0] > 2 || (numbers[0] === 2 && numbers[1] >= 44));
+}
+
+/**
+ * Refuses a partial-clone project under a git that cannot be told not to fetch (before 2.44), before any git call of a
+ * confined workspace could fetch from the promisor remote.
+ */
+function assertSkipsLazyFetch(repository, gitDirectory) {
+  const facts = adopterFacts(repository, gitDirectory);
+  if (facts.partial === null) return;
+  const version = gitVersionOf();
+  if (skipsLazyFetch(version)) return;
+  throw new WorkspaceRefusal(
+    `the project is a partial clone (${facts.partial}) and this git (${version.text}) cannot be told not to fetch missing objects, which git 2.44 and later can; upgrade git, fetch the full history, or set "confinement": false in evaluation.json to run the targets unconfined`,
+  );
+}
+
+/** The refusal for a revision a partial clone does not hold on disk: the confined run will not fetch it. */
+function partialCheckoutRefusal(partial, commit, detail = '') {
+  return `the project is a partial clone (${partial}) and does not hold the objects of commit ${commit} on disk, so checking it out would fetch them from the remote, which a confined run does not do; fetch them first (check the revision out once in your clone), or set "confinement": false in evaluation.json to run the targets unconfined${detail === '' ? '' : `: ${detail}`}`;
+}
+
+/** Why `repository` is a partial clone, or null: part of its history is not on disk, and a git command that needs it would fetch it. */
 function partialCloneCause(repository) {
   const extension = runGit(['-C', repository, 'config', '--get', 'extensions.partialclone']);
   if (extension.ok && extension.stdout.trim() !== '') return `extensions.partialClone names the remote ${extension.stdout.trim()}`;
-  const promisor = runGit(['-C', repository, 'config', '--get-regexp', String.raw`^remote\..*\.promisor$`]);
+  // `--type=bool` reads every spelling git accepts (`true`, `yes`, `on`, `1` and a key written with no value) as `true`.
+  const promisor = runGit(['-C', repository, 'config', '--type=bool', '--get-regexp', String.raw`^remote\..*\.promisor$`]);
   if (promisor.ok) {
-    const line = promisor.stdout.split('\n').find((entry) => /\s+true$/i.test(entry.trim()));
+    const line = promisor.stdout.split('\n').find((entry) => /\s+true$/.test(entry.trim()));
     if (line !== undefined) return `${line.trim().split(/\s+/)[0]} is true`;
   }
   return null;
@@ -1206,25 +1281,36 @@ function partialCloneCause(repository) {
 /**
  * The object ids of `path` (a repository-relative path in POSIX form) at every
  * commit `commit` reaches that holds a tree there, once each, read from the
- * repository's own graph (its replace refs ignored).
+ * repository's own graph (its replace refs ignored). The commits and the answers
+ * stream through `git-lines.js`, so a history of millions of commits is not held
+ * in memory.
  */
 function treesAtPath(repository, commit, withheldPath) {
-  const commits = runGit(['--no-replace-objects', '-C', repository, 'rev-list', commit], { timeoutMs: GIT_HISTORY_TIMEOUT_MS });
-  if (!commits.ok) return { failure: commits.detail };
-  const lines = commits.stdout.split('\n').filter((line) => line.length > 0);
-  if (lines.length === 0) return { trees: [] };
-  // One batch question for the whole history, where `rev-parse --verify --quiet <commit>:<path>` would start a process per commit.
-  const asked = runGit(['--no-replace-objects', '-C', repository, 'cat-file', '--batch-check'], {
-    timeoutMs: GIT_HISTORY_TIMEOUT_MS,
-    input: `${lines.map((line) => `${line}:${withheldPath}`).join('\n')}\n`,
-  });
-  if (!asked.ok) return { failure: asked.detail };
-  const trees = new Set();
-  for (const answer of asked.stdout.split('\n')) {
-    const parts = answer.split(' ');
-    if (parts.length === 3 && parts[1] === 'tree') trees.add(parts[0]);
+  const read = ['--no-replace-objects', '-C', repository];
+  const found = runGitLines(
+    { mode: 'trees', list: [...read, 'rev-list', commit], ask: [...read, 'cat-file', '--batch-check'], path: withheldPath },
+    { env: NO_LAZY_FETCH },
+  );
+  return found.ok ? { trees: found.lines } : { failure: found.detail };
+}
+
+/**
+ * The tags of `repository` whose commit `commit` reaches, as `[id, ref]` pairs (an annotated tag's id is its tag
+ * object's): the ones a target's `git tag -l` and `git describe` can name over the evaluated history. A tag on a commit
+ * outside that history, or on a tree or a blob, is left out, so no tag names an object the withheld repository lacks.
+ */
+function tagsWithin(repository, commit) {
+  const listed = runGit(
+    ['--no-replace-objects', '-C', repository, 'for-each-ref', '--merged', commit, '--format=%(objectname) %(refname)', 'refs/tags'],
+    { timeoutMs: GIT_HISTORY_TIMEOUT_MS, env: NO_LAZY_FETCH },
+  );
+  if (!listed.ok) return { failure: listed.detail };
+  const tags = [];
+  for (const line of listed.stdout.split('\n')) {
+    const match = /^([0-9a-f]+) (refs\/tags\/.+)$/.exec(line);
+    if (match !== null) tags.push([match[1], match[2]]);
   }
-  return { trees: [...trees] };
+  return { tags };
 }
 
 /** Hard-links every file under `from` to the same place under `to`, which is made as needed. */
@@ -1253,7 +1339,13 @@ function linkTree(from, to) {
  * repository: its objects are only read, and the worktree's metadata
  * directory is the one the worktree add already made.
  *
- * A second workspace for the same commit and paths links the first one's
+ * The tags of the repository whose commits the history reaches are carried with
+ * their annotations, and no branch, remote, URL, credential or hook is. A
+ * partial clone's store holds the objects the project holds on disk: nothing
+ * fetches from the promisor remote, and an object the project lacks is absent
+ * from the store as it is from the project.
+ *
+ * A second workspace for the same commit, paths and tags links the first one's
  * objects when that store still exists, and packs the history only when it
  * does not.
  *
@@ -1273,28 +1365,52 @@ function buildWithheldRepository(workspace, withheld) {
     if (!result.ok) throw refuse(result.detail);
     return result.stdout;
   };
-  // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
-  const inAdopter = (args, options) =>
-    runGit(['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`, ...args], options);
-  const inStore = (args, options) => runGit([`--git-dir=${store}`, '-c', `core.hooksPath=${hooks}`, ...args], options);
-  const packInto = (args, input) =>
-    must(
-      inAdopter(['pack-objects', '--quiet', ...args, path.join(store, 'objects', 'pack', 'pack')], {
-        timeoutMs: GIT_HISTORY_TIMEOUT_MS,
-        supervised: true,
-        input,
-      }),
-    );
-
   if (workspace.metadata === null) throw refuse('the worktree has no metadata directory in the repository');
   const relatives = withheld.map((entry) => posix(path.relative(top, entry)));
-  const key = JSON.stringify([workspace.repository, workspace.commit, [...relatives].sort()]);
   const facts = adopterFacts(workspace.repository, workspace.gitDirectory);
-  if (facts.partial !== null) {
-    throw refuse(
-      `the project is a partial clone (${facts.partial}), so most of its history is not on disk and packing it would fetch all of it from the remote; fetch the full history (clone again without --filter), or set "confinement": false in evaluation.json to run the targets unconfined`,
+  // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
+  const inAdopter = (args, options) =>
+    runGit(['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`, ...args], {
+      ...options,
+      env: NO_LAZY_FETCH,
+    });
+  const inStore = (args, options) => runGit([`--git-dir=${store}`, '-c', `core.hooksPath=${hooks}`, ...args], options);
+  // A partial clone does not hold every object the walk reaches: what is missing is left out, as the project leaves it out.
+  // `pack-objects --revs` stops at a tree the project does not hold, so a partial clone's objects are walked by `rev-list`
+  // and piped into `pack-objects`, which `git-lines.js` runs without holding them.
+  const partial = facts.partial !== null;
+  const readAdopter = ['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`];
+  const packFile = path.join(store, 'objects', 'pack', 'pack');
+  const packInto = (revs) => {
+    if (!partial) {
+      must(
+        inAdopter(['pack-objects', '--quiet', '--revs', packFile], {
+          timeoutMs: GIT_HISTORY_TIMEOUT_MS,
+          supervised: true,
+          input: `${revs.join('\n')}\n`,
+        }),
+      );
+      return;
+    }
+    const packed = runGitLines(
+      {
+        mode: 'pack',
+        list: [...readAdopter, 'rev-list', '--objects', '--missing=allow-any', '--stdin'],
+        pack: [...readAdopter, 'pack-objects', '--quiet', packFile],
+        revs,
+      },
+      { env: NO_LAZY_FETCH },
     );
-  }
+    if (!packed.ok) throw refuse(packed.detail);
+  };
+  const tagged = tagsWithin(workspace.repository, workspace.commit);
+  if (tagged.failure !== undefined) throw refuse(tagged.failure);
+  const key = JSON.stringify([
+    workspace.repository,
+    workspace.commit,
+    [...relatives].sort(),
+    tagged.tags.map(([id, ref]) => `${id} ${ref}`).sort(),
+  ]);
   // (1) The folder's tree at each commit of the history, when no store for this commit and these paths exists to link
   // from. A path that is tracked at the commit and yields no tree there is spelled differently from the repository's
   // (case, Unicode form), and nothing would be replaced.
@@ -1303,7 +1419,9 @@ function buildWithheldRepository(workspace, withheld) {
     for (const relative of relatives) {
       const found = treesAtPath(workspace.repository, workspace.commit, relative);
       if (found.failure !== undefined) throw refuse(found.failure);
-      const tracked = runGit(['--no-replace-objects', '-C', workspace.repository, 'ls-tree', workspace.commit, '--', relative]);
+      const tracked = runGit(['--no-replace-objects', '-C', workspace.repository, 'ls-tree', workspace.commit, '--', relative], {
+        env: NO_LAZY_FETCH,
+      });
       if (!tracked.ok) throw refuse(tracked.detail);
       for (const line of tracked.stdout.split('\n')) {
         const match = /^\d+ tree ([0-9a-f]+)\t/.exec(line);
@@ -1359,8 +1477,9 @@ function buildWithheldRepository(workspace, withheld) {
   }
   if (!linked) {
     findFolderTrees();
-    // (3) Everything reachable from the commit except what only the folder's trees reach.
-    packInto(['--revs'], `${[workspace.commit, ...[...folderTrees].map((tree) => `^${tree}`)].join('\n')}\n`);
+    // (3) Everything reachable from the commit and the tags (the tag objects, which name commits the history holds) except
+    // what only the folder's trees reach.
+    packInto([workspace.commit, ...tagged.tags.map(([id]) => id), ...[...folderTrees].map((tree) => `^${tree}`)]);
     // (4) The empty tree, and one replacement per folder tree (a folder tree that is the empty tree replaces itself).
     const empty = must(inStore(['hash-object', '-t', 'tree', '-w', '--stdin'], { input: '' })).trim();
     folderTrees.delete(empty);
@@ -1374,27 +1493,58 @@ function buildWithheldRepository(workspace, withheld) {
     // (5) What the walk still misses, other than the folder's trees, is content the folder shares with the rest of the
     // tree (a blob, or a subtree, that sits in both): the pack above left it out, and it comes from the adopter's
     // repository with everything under it. The walk then runs again, and a pass that misses what the last one missed
-    // has made no progress.
+    // has made no progress. The walk's output is read as a stream (a history of millions of objects prints more than any
+    // buffer holds) and only the missing ids are kept. A partial clone's store also misses every object the project does
+    // not hold, and those are not restored, so its walk keeps only the objects the folder's trees reach (the only ones the
+    // pack can have left out of the store that the project holds).
+    let shared = null;
+    if (partial) {
+      if (folderTrees.size === 0) shared = [];
+      else {
+        const reachedByFolder = runGitLines(
+          {
+            mode: 'reached',
+            git: [...readAdopter, 'rev-list', '--objects', '--no-object-names', '--missing=print', '--stdin'],
+            revs: [...folderTrees],
+          },
+          { env: NO_LAZY_FETCH },
+        );
+        if (!reachedByFolder.ok) throw refuse(reachedByFolder.detail);
+        shared = reachedByFolder.lines;
+      }
+    }
     let previous = null;
     for (;;) {
-      const walked = must(
-        inStore(['rev-list', '--objects', '--no-object-names', '--missing=print', workspace.commit], {
-          timeoutMs: GIT_HISTORY_TIMEOUT_MS,
-        }),
+      const walked = runGitLines(
+        {
+          mode: 'missing',
+          git: [
+            `--git-dir=${store}`,
+            '-c',
+            `core.hooksPath=${hooks}`,
+            'rev-list',
+            '--objects',
+            '--no-object-names',
+            '--missing=print',
+            workspace.commit,
+          ],
+          keep: shared,
+        },
+        { env: NO_LAZY_FETCH },
       );
-      const missing = walked
-        .split('\n')
-        .filter((line) => line.startsWith('?'))
-        .map((line) => line.slice(1).trim())
-        .filter((id) => !folderTrees.has(id))
-        .sort();
+      if (!walked.ok) throw refuse(walked.detail);
+      const missing = walked.lines.filter((id) => !folderTrees.has(id)).sort();
       if (missing.length === 0) break;
       if (previous !== null && previous === missing.join('\n')) {
         throw refuse(`${missing.length} object(s) shared with the folder could not be restored from the repository`);
       }
       previous = missing.join('\n');
-      packInto(['--revs'], `${missing.join('\n')}\n`);
+      packInto(missing);
     }
+  }
+  // (5b) The tags the history reaches: each names an object the pack holds or the linked objects carry.
+  if (tagged.tags.length > 0) {
+    must(inStore(['update-ref', '--stdin'], { input: `${tagged.tags.map(([id, ref]) => `update ${ref} ${id}`).join('\n')}\n` }));
   }
   if (!BUILT_REPOSITORIES.has(key) || !fs.existsSync(path.join(BUILT_REPOSITORIES.get(key), 'objects'))) BUILT_REPOSITORIES.set(key, store);
   // (6) The worktree reads the store, and its index matches the replaced tree.
@@ -1455,9 +1605,18 @@ function createWorkspace({
     if (basis !== null || !worktree) {
       throw new WorkspaceRefusal(`the ${label} workspace names commit ${commit}, which only a worktree made with no basis can check out`);
     }
-    const tree = runGit(['-C', repository.top, 'rev-parse', '--verify', '--quiet', '--end-of-options', `${commit}^{tree}`]);
-    if (!tree.ok)
-      throw new WorkspaceRefusal(`the ${label} workspace names commit ${commit}, which the repository at ${repository.top} does not hold`);
+    if (withholdHistory) assertSkipsLazyFetch(repository.top, repository.gitDirectory);
+    const tree = runGit(['-C', repository.top, 'rev-parse', '--verify', '--quiet', '--end-of-options', `${commit}^{tree}`], {
+      env: withholdHistory ? NO_LAZY_FETCH : {},
+    });
+    if (!tree.ok) {
+      const partial = withholdHistory ? adopterFacts(repository.top, repository.gitDirectory).partial : null;
+      throw new WorkspaceRefusal(
+        partial === null
+          ? `the ${label} workspace names commit ${commit}, which the repository at ${repository.top} does not hold`
+          : partialCheckoutRefusal(partial, commit),
+      );
+    }
     revision = { commit, tree: tree.stdout.trim() };
   }
   let temp;
@@ -1521,6 +1680,9 @@ function createWorkspace({
     if (worktree) {
       const hooks = path.join(directory, 'no-hooks');
       fs.mkdirSync(hooks);
+      // A confined run fetches nothing from a promisor remote: the checkout of a revision whose objects a partial clone
+      // lacks fails, and says which revision.
+      if (withholdHistory) assertSkipsLazyFetch(workspace.repository, workspace.gitDirectory);
       const added = runGit(
         [
           '-C',
@@ -1536,10 +1698,17 @@ function createWorkspace({
           workspace.top,
           workspace.commit,
         ],
-        { timeoutMs: GIT_CHECKOUT_TIMEOUT_MS, supervised: true },
+        { timeoutMs: GIT_CHECKOUT_TIMEOUT_MS, supervised: true, env: withholdHistory ? NO_LAZY_FETCH : {} },
       );
       workspace.metadata = worktreeMetadataOf(workspace);
-      if (!added.ok) throw new WorkspaceRefusal(`git worktree add could not check out ${workspace.commit}: ${added.detail}`);
+      if (!added.ok) {
+        const partial = withholdHistory ? adopterFacts(workspace.repository, workspace.gitDirectory).partial : null;
+        throw new WorkspaceRefusal(
+          partial === null
+            ? `git worktree add could not check out ${workspace.commit}: ${added.detail}`
+            : partialCheckoutRefusal(partial, workspace.commit, added.detail),
+        );
+      }
       workspace.root = path.join(workspace.top, path.relative(workspace.repository, root));
       const submodules = gitlinksUnder(workspace, root);
       if (submodules.length > 0) {
