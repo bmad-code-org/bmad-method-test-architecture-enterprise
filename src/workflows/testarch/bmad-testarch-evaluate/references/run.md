@@ -4,7 +4,7 @@ Run from the sealed evaluation folder after its target registry, evaluator, muta
 
 ## Install the private latest-spec runtime
 
-In `{tea_evaluations_folder}`, create a private `package.json` with TeA and eval-quality as `devDependencies` at the `latest` spec. The adopter decides whether to track this manifest and its lockfile for reproducibility. Keep the installed versions in the run log. Node >=22.20.0 is required. Install with `npm install --prefix {tea_evaluations_folder}`. Stage 6 installs `assets/evaluation-folder.gitignore` as `<evaluation-folder>/.gitignore` before the first preflight; verify that it still ignores `runs/` before this run. When `{project-root}` is TeA's own package, invoke `node cli/evaluate.js` from the repository root for TeA commands so the local source is tested. Use the same local engine installation for `eval-quality`.
+In `{tea_evaluations_folder}`, create a private `package.json` with TeA and eval-quality as `devDependencies` at the `latest` spec. The adopter decides whether to track this manifest and its lockfile for reproducibility. Keep the installed versions in the run log. Node >=22.20.0 is required. Install with `npm install --prefix {tea_evaluations_folder}`. Stage 6 installs `assets/evaluation-folder.gitignore` as `<evaluation-folder>/.gitignore` before the first preflight; verify that it still ignores `runs/`, `compiled-contract.json` and `sealed-brief.json` before this run. When `{project-root}` is TeA's own package, invoke `node cli/evaluate.js` from the repository root for TeA commands so the local source is tested. Use the same local engine installation for `eval-quality`.
 
 <!-- example:package -->
 

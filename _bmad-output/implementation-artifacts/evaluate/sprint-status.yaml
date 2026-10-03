@@ -81,12 +81,12 @@ development_status:
   1-43-keep-ungraded-framework-errors-out-of-target-findings: done
   1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
-  1-46-close-the-dogfood-suites-coverage-gaps: backlog
+  1-46-close-the-dogfood-suites-coverage-gaps: review
   1-47-distinguish-reference-risk-tables-from-the-scored-register: done
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: done
   1-49-prove-test-design-mutation-rollback-before-claiming-it: done
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: done
-  1-51-isolate-interaction-plans-by-evaluation-partition: review
+  1-51-isolate-interaction-plans-by-evaluation-partition: done
   1-52-stop-agent-descendants-on-windows: done
   1-53-bound-an-agent-whose-guardian-is-stopped: done
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: done
@@ -139,6 +139,10 @@ development_status:
   1-109-partition-gameability-degenerate-responses: backlog
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
+  1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: backlog
+  1-113-run-a-subscription-authenticated-agent-target-confined: backlog
+  1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
+  1-115-give-the-skill-a-command-that-prints-a-files-digest: backlog
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: review
@@ -207,6 +211,8 @@ parallel_lanes:
     - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
     - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
     - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
+    - 1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check
+    - 1-113-run-a-subscription-authenticated-agent-target-confined
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
@@ -230,6 +236,8 @@ parallel_lanes:
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
     - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
+    - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
+    - 1-115-give-the-skill-a-command-that-prints-a-files-digest
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
@@ -252,4 +260,8 @@ owner_handoff:
       - 1-109-partition-gameability-degenerate-responses
       - 1-110-designate-one-oracle-per-behavior-in-the-both-view
       - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
+      - 1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check
+      - 1-113-run-a-subscription-authenticated-agent-target-confined
+      - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
+      - 1-115-give-the-skill-a-command-that-prints-a-files-digest
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

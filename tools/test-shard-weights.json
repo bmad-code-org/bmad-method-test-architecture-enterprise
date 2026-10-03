@@ -59,6 +59,7 @@
   "test:evaluate-ci-render": 0.9,
   "test:evaluate-compare": 96.9,
   "test:evaluate-confinement": 450.4,
+  "test:evaluate-dogfood": 58.7,
   "test:evaluate-evaluators": 491,
   "test:evaluate-gap-loop": 8.7,
   "test:evaluate-guidance": 113.8,

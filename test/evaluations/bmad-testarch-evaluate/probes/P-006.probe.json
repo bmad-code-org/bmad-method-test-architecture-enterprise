@@ -1,0 +1,12 @@
+{
+  "probeId": "P-006",
+  "probeClass": "zero-action",
+  "behaviorId": "B-003",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: the committed exit table holds thirteen rows, and Stage 11 lists every one with a class the table uses.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The exit table in references/gaps.md holds the thirteen rows the contract's reference set names at this revision, which test:evaluate-dogfood holds."
+  }
+}
