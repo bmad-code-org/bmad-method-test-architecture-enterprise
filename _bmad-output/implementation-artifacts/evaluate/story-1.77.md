@@ -46,6 +46,7 @@ context:
 - Two probes that each name a report for a different interface are refused by Story 1.65's coverage rule already; the case holds the one collision finding beside those findings. Epics AC 2 and the test-design row are amended to say so.
 
 Round 2 (adversarial and edge, verification): the adversarial and edge reviewer found cross-probe collection untested (**medium**, patched with a case where only the second probe's report collides), the finding sitting on a probe whose own report does not collide (**low**, patched: it sits on the first probe whose report the line names), a report collision hidden behind an earlier one (**low**, documented) and a stale code map (**low**, patched).
+The verification reviewer found three surviving mutants (**medium**, patched): the other-refusal stand-in line named no operation so a rule accepting any `eval-quality:` line passed (it now names the reported operation), no case named two ordinary operations of the reported interface so an interface-only filter passed (a stand-in line added), and cross-probe collection (the second-probe case above).
 
 ## Verification
 

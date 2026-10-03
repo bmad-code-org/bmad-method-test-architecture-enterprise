@@ -647,9 +647,8 @@ async function checkReportSignatureCollision() {
   const clean = runCli(['check', '--evaluation', distinct], { env: environment });
   check(clean.status === 0, `report operations at distinct paths: check exited ${clean.status}; expected 0\n${clean.output}`);
 
-  // The stand-in refuses compile with a line of the chosen code and logs each call.
+  // The stand-in refuses compile with the line it is given and logs each call.
   const shim = engineShim();
-  const refused = (code) => `eval-quality: ${code}: EvalContract.permittedInterfaces: stand-in refusal`;
   // A collision line in the engine's own shape that names the report operation of the grader, which every case below reports.
   const collisionLine =
     'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=ledger].operations[operationId=report-ledger-release]: collides with permittedInterfaces[logicalId=grader].operations[operationId=report-release] after parameter-name erasure ("GET /release") among api-shaped operations (AD-19, AD-40)';
@@ -714,7 +713,11 @@ async function checkReportSignatureCollision() {
   );
 
   // Another refusal: this rule stays quiet; `run` and the compile check own it.
-  const other = shimmed(distinct, refused('unknown-interface'));
+  // The line names the reported operation, so only the code in it keeps this rule quiet.
+  const other = shimmed(
+    distinct,
+    'eval-quality: unknown-interface: EvalContract.permittedInterfaces[logicalId=grader].operations[operationId=report-release]: stand-in refusal',
+  );
   check(
     other.run.status === 0 && historicalFindingsOf(other.run.stdout).length === 0 && other.calls.length === 1,
     `a compile refusal for another cause drew a finding from this rule (exit ${other.run.status})\n${other.run.output}`,
@@ -945,6 +948,10 @@ async function checkReportCollidingWithAnyOperation() {
     [
       'two cli operations that share the identity they render',
       'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=tool].operations[operationId=run-a]: collides with permittedInterfaces[logicalId=tool].operations[operationId=run-b] on the identity it renders ("tool") among cli-shaped operations',
+    ],
+    [
+      'two ordinary operations of the reported interface, which no report names',
+      'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=grader].operations[operationId=grade-answer]: collides with permittedInterfaces[logicalId=grader].operations[operationId=grade-other] after parameter-name erasure ("GET /grade") among api-shaped operations',
     ],
     [
       "the report's operation ID on an interface no report names",
