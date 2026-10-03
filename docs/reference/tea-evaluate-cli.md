@@ -390,7 +390,7 @@ A completed `run` adds the contract, corpus, sealed brief and evaluator configur
 `preflight` and `run` confine every process they start, before any of them starts, through the mechanism the host provides:
 
 - macOS: Seatbelt, through `/usr/bin/sandbox-exec` and a profile the runtime generates for each call.
-- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, and an empty `/run/user`.
+- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, an empty `/run/user`, and an empty device file over each path-based Unix socket the host serves.
   What a target leaves running ends with it, and killing the `bwrap` the runtime started ends what that process forked.
 
 Each mechanism also needs the observer its audit reads (see below): on macOS the kernel's sandbox reports through `/usr/bin/log stream`, which needs a session that may read the unified log; on Linux `strace` (`apt-get install strace`, version 6.1, which the design was verified against, or a later one that supports `--seccomp-bpf` and `--decode-pids=pidns`), which needs ptrace.
@@ -501,7 +501,11 @@ An entry that declares `"network": "host"` keeps the host's network under Bubble
 A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.
 An entry that declares `"network": "host"` keeps a route to the host's abstract Unix sockets, which Story 1.83 closes, and `run.json` lists each such entry under `hostNetwork` while the isolation manifest's forbidden-input notes name them.
 The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.
-Path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, and Story 1.82 closes that route.
+A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, whatever the entry's `network`, since the runtime mounts an empty device file over each one when a call starts.
+A socket inside the target's workspace or inside a private directory of the call (the bridge's directory included) stays connectable.
+The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break and a second path to the same socket file through another mount.
+The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.
+macOS Seatbelt hides no host socket apart from the ones under the user's private root, so a macOS target can connect to a path-based socket outside that root.
 macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.

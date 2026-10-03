@@ -57,6 +57,14 @@
  *                (`confinement-status.cjs`, `confinement-relay.js`,
  *                `http-target.js`). A command target and a tool server have no
  *                bridge. Seatbelt has no abstract sockets and is unchanged.
+ *   sockets      a path-based Unix socket is a file, and the read-only view of
+ *                `/` does not stop a `connect()` to it, so under Bubblewrap each
+ *                call lists the sockets the kernel reports bound on the host
+ *                (`host-sockets.js`) and mounts an empty device file over each
+ *                one outside the call's own grants (Story 1.82): a target cannot
+ *                ask the Docker daemon or the system bus to run a job outside
+ *                the sandbox. A socket bound after the call started stays
+ *                reachable for that call, and Seatbelt hides none.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -105,6 +113,7 @@
 
 const crypto = require('node:crypto');
 const { signedStatus } = require('./confinement-status.cjs');
+const { hostPathSockets } = require('./host-sockets');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -343,6 +352,15 @@ function bubblewrapIsolation() {
 const BUBBLEWRAP_NETWORK = Object.freeze(['--unshare-net']);
 
 /**
+ * What hides a host socket from a target (Story 1.82): the empty device file is mounted over the socket's file, so a
+ * `connect()` finds no socket there and answers `ECONNREFUSED`, as it does for a path nothing listens on.
+ */
+const SOCKET_MASK_SOURCE = '/dev/null';
+
+/** How many times a call whose Bubblewrap could not start over a socket that went away is started at most, each time over a fresh list of the host's sockets. */
+const MASKED_START_ATTEMPTS = 3;
+
+/**
  * What the probes run a trivial process under: the target's isolation, whatever
  * binds the target gets, so what a probe confirms is what a target runs under.
  */
@@ -361,7 +379,11 @@ function bubblewrapProbeArguments(executable) {
  * system, so nothing under it can be read or written. A network namespace of
  * its own (`BUBBLEWRAP_NETWORK`) unless the entry declares `network: 'host'`:
  * a started HTTP server listens in it and the runtime reaches it through the
- * bridge of `confinement-relay.js`.
+ * bridge of `confinement-relay.js`. Each of `sockets` (real paths of the host's
+ * path-based Unix sockets, `host-sockets.js`) is covered by an empty device file
+ * (Story 1.82); the mounts come before the binds, so a grant bound over one wins.
+ * A socket's path goes into the vector as it is, since an argument carries any
+ * character and a socket another user bound must not be able to refuse every call.
  */
 function bubblewrapTargetArguments({
   executable,
@@ -374,6 +396,7 @@ function bubblewrapTargetArguments({
   statusFile,
   statusMount,
   network = 'isolated',
+  sockets = [],
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
   const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
@@ -416,6 +439,12 @@ function bubblewrapTargetArguments({
     '--dev',
     '/dev',
     ...bubblewrapIsolation(),
+    ...sockets.flatMap((socket) => {
+      if (typeof socket !== 'string' || !path.isAbsolute(socket) || socket.includes('\0')) {
+        throw new ConfinementError(`the host socket ${JSON.stringify(socket)} has no absolute path a mount can name`);
+      }
+      return ['--ro-bind', SOCKET_MASK_SOURCE, socket];
+    }),
     ...binds,
     ...gitArguments,
     ...privateArguments,
@@ -640,6 +669,9 @@ function layerPrefix(confinement) {
  *   `observer` its selection probed.
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
+ * @param {(options: { except: string[] }) => string[]} [options.hostSockets] under Bubblewrap, the real paths of the host's
+ *   path-based Unix sockets a call must not reach, asked for each call with the real paths its grants and the sandbox's own
+ *   mounts already cover (`host-sockets.js` reads the kernel's table); a case replaces it with a fixed list
  */
 function targetSandbox({
   confinement,
@@ -649,6 +681,7 @@ function targetSandbox({
   home: initialHome = null,
   audit = null,
   status = null,
+  hostSockets = hostPathSockets,
 }) {
   const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
   if (typeof workspace !== 'string' || workspace.length === 0) {
@@ -771,6 +804,10 @@ function targetSandbox({
           writable.some((held) => spellings(held).some((entry) => spellings(bridge).some((socket) => isInside(entry, socket))));
         if (!granted) throw new ConfinementError('the bridge socket must be a path inside a directory the call may write');
       }
+      // Every socket the host serves that the call does not own: the call's grants and what the sandbox covers already stay out.
+      const sockets = hostSockets({
+        except: [workspace, ...grants, ...withheldRoots(), ...(fs.existsSync('/run/user') ? ['/run/user'] : [])].flatMap(spellings),
+      });
       calls += 1;
       // A name the target cannot guess, made here and the only status file it may write, so no process can plant the
       // status of a call it is not part of.
@@ -792,6 +829,7 @@ function targetSandbox({
         statusFile,
         statusMount,
         network,
+        sockets,
       });
       const command = [
         vector[0],
@@ -803,7 +841,9 @@ function targetSandbox({
         target,
         ...args,
       ];
-      const holdKey = (wrapped) => Object.defineProperty(wrapped, 'statusKey', { value: statusKey });
+      // The key and the number of sockets the call hides stay out of what a caller copies: a call whose Bubblewrap failed to start
+      // with sockets hidden may have lost the race with a socket that went away, and is made again.
+      const holdKey = (wrapped) => Object.defineProperties(wrapped, { statusKey: { value: statusKey }, hiddenSockets: { value: sockets } });
       if (observer === null) return holdKey({ target: command[0], args: command.slice(1), statusFile });
       const file = path.join(audit.directory, `trace-${calls}-${crypto.randomBytes(6).toString('hex')}.txt`);
       const traced = [...straceCommand(confinement.observer.executable, file), ...command];
@@ -1203,53 +1243,75 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         ...(typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : []),
         ...(bridge === null ? [] : [path.dirname(bridge)]),
       ];
-      const temporary = callTemporary(scratch);
-      let wrapped = null;
-      let started = false;
-      let read = false;
-      try {
-        wrapped = sandbox.wrap(
-          request.target,
-          [...request.subcommandPath, ...request.argv],
-          [...writable, temporary],
-          systemPathsOf(request.target),
-          { bridge, network: networkOf(request.target) },
-        );
-        const result = await base.run(
-          {
-            ...request,
-            target: wrapped.target,
-            subcommandPath: [],
-            argv: wrapped.args,
-            env: withTemporary(request.env, temporary, sandbox.home ?? null),
-          },
-          signal,
-        );
-        const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        read = true;
-        started = status.started;
-        if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
-        if (!status.started) {
-          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
-          const said = stderrTail(result?.stderr?.value ?? result?.stderr);
-          throw new ConfinementError(
-            `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+      for (let attempt = 1; ; attempt += 1) {
+        const temporary = callTemporary(scratch);
+        let wrapped = null;
+        let started = false;
+        let read = false;
+        try {
+          wrapped = sandbox.wrap(
+            request.target,
+            [...request.subcommandPath, ...request.argv],
+            [...writable, temporary],
+            systemPathsOf(request.target),
+            { bridge, network: networkOf(request.target) },
           );
+          const result = await base.run(
+            {
+              ...request,
+              target: wrapped.target,
+              subcommandPath: [],
+              argv: wrapped.args,
+              env: withTemporary(request.env, temporary, sandbox.home ?? null),
+            },
+            signal,
+          );
+          const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          read = true;
+          started = status.started;
+          if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
+          if (!status.started) {
+            if (mayRetryMaskedStart(wrapped, attempt, signal, status)) continue;
+            // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
+            const said = stderrTail(result?.stderr?.value ?? result?.stderr);
+            throw new ConfinementError(
+              `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+            );
+          }
+          if (status.valid === true && status.complete !== true)
+            throw new ConfinementError('the confined target status failed integrity verification');
+          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+        } finally {
+          // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
+          if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
+          await sandbox.collect?.(wrapped, { started });
+          releaseTemporary(scratch, temporary);
         }
-        if (status.valid === true && status.complete !== true)
-          throw new ConfinementError('the confined target status failed integrity verification');
-        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-      } finally {
-        // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
-        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
-        await sandbox.collect?.(wrapped, { started });
-        releaseTemporary(scratch, temporary);
       }
     },
     readArtifact(absolute, maxOutputBytes) {
       return base.readArtifact(absolute, maxOutputBytes);
     },
   };
+}
+
+/**
+ * Whether a call whose Bubblewrap never started its shim is made again (Story 1.82): a socket it hid went away between the list
+ * and the mount, and Bubblewrap cannot make a mount point of a file that is gone on a read-only `/`, so it refuses to start.
+ * Only a call with a hidden socket that no longer is one is made again, since any other failure to start would fail again; the
+ * target did not run, so the second call, over a list read again, has nothing to undo. Only a status file that still holds the
+ * runtime's own untouched line counts as a call that never started, so a target that damages its status file is not run again,
+ * and a run that was aborted is not started again either. A call is started three times at most.
+ */
+function mayRetryMaskedStart(wrapped, attempt, signal, status) {
+  if (status.valid !== true || attempt >= MASKED_START_ATTEMPTS || signal?.aborted === true) return false;
+  return (wrapped.hiddenSockets ?? []).some((socket) => {
+    try {
+      return !fs.lstatSync(socket).isSocket();
+    } catch {
+      return true;
+    }
+  });
 }
 
 /**
@@ -1263,39 +1325,50 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
 function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
   return {
     async callTool(request, signal) {
-      const temporary = callTemporary(scratch);
-      let wrapped = null;
-      let status = null;
-      try {
-        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
-          network: networkOf(request.target),
-        });
-        const result = await base.callTool(
-          {
-            ...request,
-            target: wrapped.target,
-            targetArgs: wrapped.args,
-            env: withTemporary(request.env, temporary, sandbox.home ?? null),
-          },
-          signal,
-        );
-        status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
-        if (typeof result.exitCode !== 'number') return result;
-        if (!status.started) {
-          // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
-          throw new ConfinementError(
-            `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
-          );
+      for (let attempt = 1; ; attempt += 1) {
+        const temporary = callTemporary(scratch);
+        let wrapped = null;
+        let status = null;
+        try {
+          wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
+            network: networkOf(request.target),
+          });
+          let result;
+          try {
+            result = await base.callTool(
+              {
+                ...request,
+                target: wrapped.target,
+                targetArgs: wrapped.args,
+                env: withTemporary(request.env, temporary, sandbox.home ?? null),
+              },
+              signal,
+            );
+          } catch (error) {
+            // A server whose Bubblewrap never started ends the session before it answers, which the adapter throws.
+            status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+            if (mayRetryMaskedStart(wrapped, attempt, signal, status)) continue;
+            throw error;
+          }
+          status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
+          if (typeof result.exitCode !== 'number') return result;
+          if (!status.started) {
+            if (mayRetryMaskedStart(wrapped, attempt, signal, status)) continue;
+            // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
+            throw new ConfinementError(
+              `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
+            );
+          }
+          if (status.valid === true && status.complete !== true)
+            throw new ConfinementError('the confined tool server status failed integrity verification');
+          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+        } finally {
+          // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
+          if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          await sandbox.collect?.(wrapped, { started: status?.started === true });
+          releaseTemporary(scratch, temporary);
         }
-        if (status.valid === true && status.complete !== true)
-          throw new ConfinementError('the confined tool server status failed integrity verification');
-        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-      } finally {
-        // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
-        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        await sandbox.collect?.(wrapped, { started: status?.started === true });
-        releaseTemporary(scratch, temporary);
       }
     },
   };

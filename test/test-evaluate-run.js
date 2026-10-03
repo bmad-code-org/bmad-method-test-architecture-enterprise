@@ -145,6 +145,7 @@ const { channelEntry, lostCanaryNote, readObservedMounts, runTrial, setRecommend
 const { createRegistry, networkResolver, registryProblems } = require('../cli/lib/evaluate/registry');
 const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
 const { executableOnPath } = require('../cli/lib/isolation-primitives');
+const { hostPathSockets, socketTablePaths } = require('../cli/lib/evaluate/host-sockets');
 const {
   TRACE_CLONES,
   TRACE_PATH_SYSCALLS,
@@ -7039,7 +7040,8 @@ async function checkPrivateRootAcrossRuns() {
       const firstParent = parentFor(first, firstTemp);
       const sandboxes = {
         root: targetSandbox({ confinement, workspace, privateRoot: first.privateRoot, status }),
-        parentOnly: targetSandbox({ confinement, workspace, privateRoot: firstParent, status }),
+        // The host's sockets are hidden from every Bubblewrap target (Story 1.82), so the control is told to hide none.
+        parentOnly: targetSandbox({ confinement, workspace, privateRoot: firstParent, status, hostSockets: () => [] }),
       };
       const second = [];
       const secondParent = parentFor(second, secondTemp);
@@ -9592,10 +9594,9 @@ function runToEnd(command, args, options = {}) {
 
 /**
  * The route to the host's abstract sockets, on a Linux host with Bubblewrap and strace only (Story 1.63; the Linux CI job
- * proves it, a macOS host skips it). The runtime serves an abstract Unix socket, a loopback TCP port and a path-based
- * socket; a confined process connects to each. The abstract socket and the TCP port are refused (`ECONNREFUSED`), the path
- * socket the read-only `/` still shows is reached; the same commands with `--unshare-net` taken out of the real vector
- * connect to all three, which is the revert check (a vector that lost the flag fails the first assertion, and a control that
+ * proves it, a macOS host skips it). The runtime serves an abstract Unix socket and a loopback TCP port; a confined process
+ * connects to each and both are refused (`ECONNREFUSED`); the same commands with `--unshare-net` taken out of the real vector
+ * connect to both, which is the revert check (a vector that lost the flag fails the first assertion, and a control that
  * cannot connect proves the case vacuous). A command target's process has a loopback and nothing else, and its status file
  * and exit code are as before. A service the target starts is reached through the bridge from the host (`bridgeAccepts`,
  * `startForwarder`), asked about a port of the host's own loopback the target's namespace does not hold, and the target
@@ -9628,9 +9629,6 @@ async function checkAbstractSocketRoute() {
   });
   const tcpServer = net.createServer((socket) => socket.end());
   await new Promise((resolve) => tcpServer.listen(0, '127.0.0.1', resolve));
-  const pathSocket = path.join(socketDirectory(), 'host.sock');
-  const pathServer = net.createServer((socket) => socket.end());
-  await new Promise((resolve) => pathServer.listen(pathSocket, resolve));
   const attempt = async (kind, target, { stripped = false, network = 'isolated' } = {}) => {
     const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target], [], [], { network });
     const ran = await launch(stripped ? withoutNetwork(wrapped) : wrapped);
@@ -9658,12 +9656,6 @@ async function checkAbstractSocketRoute() {
         `a confined process whose entry declares network host, connecting to ${what}, got ${JSON.stringify(hosted)}; expected connected`,
       );
     }
-    const reached = await attempt('path', pathSocket);
-    check(
-      reached === 'connected',
-      `a confined process connecting to a path-based socket the read-only / shows got ${JSON.stringify(reached)}; expected connected (Story 1.82 closes that)`,
-    );
-
     // A command target runs with a loopback only; its output, exit code and status file are what they were.
     const command = sandbox.wrap(process.execPath, ['-e', "console.log(Object.keys(require('node:os').networkInterfaces()).join(','))"]);
     const listed = await launch(command);
@@ -9746,7 +9738,460 @@ async function checkAbstractSocketRoute() {
       }
     }
   } finally {
-    for (const server of [abstractServer, tcpServer, pathServer]) await closeServer(server);
+    for (const server of [abstractServer, tcpServer]) await closeServer(server);
+  }
+}
+
+// ---------------------------------------------------------------- Story 1.82: no route to the host's path-based sockets
+
+/** The kernel's own header and rows of `/proc/net/unix`, as a stand-in table for the cases below. */
+function socketTable(...entries) {
+  const row = (name, inode) => `0000000000000000: 00000002 00000000 00010000 0001 01 ${inode}${name === null ? '' : ` ${name}`}`;
+  return (
+    ['Num       RefCount Protocol Flags    Type St Inode Path', ...entries.map((name, index) => row(name, 20_000 + index))].join('\n') +
+    '\n'
+  );
+}
+
+/** Listens on a Unix socket file and answers each connection with its end; the server and its path. */
+async function listenOnSocket(socketPath) {
+  const server = net.createServer((socket) => socket.end());
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, resolve);
+  });
+  return server;
+}
+
+/** A Bubblewrap command with every empty-device mount over a socket taken out, which is the case's control. */
+function withoutSocketMasks(wrapped) {
+  const args = [];
+  for (let at = 0; at < wrapped.args.length; at += 1) {
+    if (wrapped.args[at] === '--ro-bind' && wrapped.args[at + 1] === '/dev/null') at += 2;
+    else args.push(wrapped.args[at]);
+  }
+  return { ...wrapped, args };
+}
+
+/**
+ * The list of the host's sockets and the mounts it makes (Story 1.82), on every host: the table's rows (a path with a space,
+ * an abstract name, an unnamed socket and a relative name); the real socket files that survive the filter (a link to a socket
+ * or to its directory gives the socket's real path once, and a regular file, a vanished path and a path inside a granted
+ * directory are left out); a missing table (a host with no Unix sockets, or a stand-in for Linux on another system) and an
+ * unreadable one; the vector of a Bubblewrap call (one empty device file over each socket before the binds, whatever the
+ * entry's network, the grants and the sandbox's own mounts handed to the list as what to leave out, a path no vector can carry
+ * refused); a Seatbelt call that asks for no list; and the call that is made again when Bubblewrap could not start over a
+ * socket that went away.
+ */
+async function checkPathSocketUnits() {
+  const base = socketDirectory();
+  const servers = [];
+  try {
+    // The table's rows.
+    const text = socketTable(
+      '/run/dbus/system_bus_socket',
+      '/tmp/a dir/with space.sock',
+      '@abstract-name',
+      null,
+      'relative.sock',
+      '/var/run/docker.sock',
+    );
+    check(
+      JSON.stringify(socketTablePaths(text)) ===
+        JSON.stringify(['/run/dbus/system_bus_socket', '/tmp/a dir/with space.sock', '/var/run/docker.sock']),
+      `the table's paths were ${JSON.stringify(socketTablePaths(text))}; expected the three absolute paths, the space kept, and none for an abstract, an unnamed or a relative socket`,
+    );
+
+    // The real files the table names.
+    const own = path.join(base, 'own');
+    const elsewhere = path.join(base, 'elsewhere');
+    fs.mkdirSync(own);
+    fs.mkdirSync(elsewhere);
+    const hostSocket = path.join(elsewhere, 'host.sock');
+    const ownSocket = path.join(own, 'own.sock');
+    servers.push(await listenOnSocket(hostSocket), await listenOnSocket(ownSocket));
+    const link = path.join(base, 'link.sock');
+    fs.symlinkSync(hostSocket, link);
+    const linkedDirectory = path.join(base, 'linked');
+    fs.symlinkSync(elsewhere, linkedDirectory);
+    const regular = path.join(elsewhere, 'regular');
+    fs.writeFileSync(regular, '');
+    const table = path.join(base, 'unix');
+    fs.writeFileSync(
+      table,
+      socketTable(
+        hostSocket,
+        link,
+        path.join(linkedDirectory, 'host.sock'),
+        ownSocket,
+        regular,
+        path.join(elsewhere, 'gone.sock'),
+        'host.sock',
+        '@abstract',
+      ),
+    );
+    const listed = hostPathSockets({ table, roots: [] });
+    check(
+      JSON.stringify(listed) === JSON.stringify([hostSocket, ownSocket].sort()),
+      `the list was ${JSON.stringify(listed)}; expected the two real socket files once each, by real path: a link and a link to a directory resolve to them, a regular file, a vanished path, a relative name and an abstract name name nothing`,
+    );
+    const kept = hostPathSockets({ table, except: [own], roots: [] });
+    check(
+      JSON.stringify(kept) === JSON.stringify([hostSocket]),
+      `with a granted directory left out the list was ${JSON.stringify(kept)}; expected only the socket outside it`,
+    );
+    // A socket moved after it bound is listed under a path that is gone; the socket files beside that path are listed.
+    const moved = path.join(base, 'moved');
+    fs.mkdirSync(moved);
+    const final = path.join(moved, 'control');
+    servers.push(await listenOnSocket(final));
+    const movedTable = path.join(base, 'moved-table');
+    fs.writeFileSync(movedTable, socketTable(path.join(moved, 'control.XXXXXXXXXXXXXXXX'), path.join(base, 'no-such-directory', 'x.sock')));
+    const beside = hostPathSockets({ table: movedTable, roots: [] });
+    check(
+      JSON.stringify(beside) === JSON.stringify([final]),
+      `with a table row for a path that was moved the list was ${JSON.stringify(beside)}; expected the socket file beside it`,
+    );
+    // The directories sockets are kept in are scanned for socket files the table does not name (a Docker socket shared into a
+    // container, a socket bound by a relative path): the directory's own and its directories' are found, the ones below are not.
+    const scanned = path.join(base, 'scanned');
+    fs.mkdirSync(path.join(scanned, 'one', 'two'), { recursive: true });
+    const shallow = path.join(scanned, 'shared.sock');
+    const middle = path.join(scanned, 'one', 'middle.sock');
+    const deep = path.join(scanned, 'one', 'two', 'deep.sock');
+    for (const socketPath of [shallow, middle, deep]) servers.push(await listenOnSocket(socketPath));
+    const found = hostPathSockets({ table: path.join(base, 'absent'), roots: [scanned, path.join(base, 'no-such-root')] });
+    check(
+      JSON.stringify(found) === JSON.stringify([middle, shallow].sort()),
+      `a scan of a directory found ${JSON.stringify(found)}; expected the sockets in it and in its directories, and none below`,
+    );
+    check(
+      !hostPathSockets({ table: path.join(base, 'absent'), roots: [scanned], except: [path.join(scanned, 'one')] }).includes(middle),
+      'a scan listed a socket inside a directory left out',
+    );
+    check(hostPathSockets({ table: path.join(base, 'absent'), roots: [] }).length === 0, 'a host with no socket table listed a socket');
+    let unreadable = null;
+    try {
+      hostPathSockets({ table: base, roots: [] });
+    } catch (error) {
+      unreadable = error;
+    }
+    check(
+      unreadable !== null,
+      'a socket table the runtime could not read was taken for an empty one, which would leave every socket reachable',
+    );
+
+    // The vector of a Bubblewrap call.
+    const root = fs.realpathSync(tempDir('path-socket-units'));
+    const folder = path.join(root, 'evals', 'verdict');
+    const workspace = path.join(root, 'workspace');
+    const status = path.join(root, 'status');
+    const callDirectory = path.join(root, 'call');
+    const privateRoot = path.join(root, 'private');
+    const gitDirectory = path.join(root, 'project', '.git');
+    for (const directory of [folder, workspace, status, callDirectory, privateRoot, gitDirectory])
+      fs.mkdirSync(directory, { recursive: true });
+    const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
+    const asked = [];
+    const sandbox = targetSandbox({
+      confinement: bubblewrap,
+      workspace,
+      status,
+      privateRoot,
+      git: { directory: gitDirectory, metadata: null },
+      hostSockets: (options) => (asked.push(options), ['/run/docker.sock', '/tmp/agent/agent.sock']),
+    });
+    const wrapped = sandbox.wrap('/bin/true', [], [callDirectory]);
+    const at = wrapped.args.indexOf('/dev/null');
+    const masks = wrapped.args.flatMap((argument, index) =>
+      argument === '/dev/null' ? [`${wrapped.args[index - 1]} ${wrapped.args[index + 1]}`] : [],
+    );
+    check(
+      JSON.stringify(masks) === JSON.stringify(['--ro-bind /run/docker.sock', '--ro-bind /tmp/agent/agent.sock']) &&
+        at > wrapped.args.indexOf('--unsetenv') &&
+        at > wrapped.args.indexOf('--ro-bind') &&
+        at < wrapped.args.indexOf('--bind') &&
+        wrapped.hiddenSockets.length === 2,
+      `a Bubblewrap call's vector is ${wrapped.args.join(' ')}; expected an empty device file over each socket the list named, after the root bind and the isolation and before the first bind, and a list of two`,
+    );
+    const left = asked[0]?.except ?? [];
+    const named = (directory) => left.includes(directory);
+    check(
+      [workspace, callDirectory, folder, gitDirectory, privateRoot, ...(fs.existsSync('/run/user') ? ['/run/user'] : [])].every(named),
+      `the list was asked to leave out ${JSON.stringify(left)}; expected the workspace, the call's directory, the evaluation folder, the git directory, the private root and /run/user where it exists, which the call owns or the sandbox covers`,
+    );
+    const hosted = sandbox.wrap('/bin/true', [], [], [], { network: 'host' });
+    check(
+      !hosted.args.includes('--unshare-net') && hosted.args.includes('/dev/null') && hosted.hiddenSockets.length === 2,
+      `a call whose entry declares network host has the vector ${hosted.args.join(' ')}; expected the sockets hidden as well`,
+    );
+    // A socket another user bound under a name no profile could carry cannot refuse every call: the argument carries it as it is.
+    const odd = targetSandbox({ confinement: bubblewrap, workspace, status, hostSockets: () => [String.raw`/tmp/a"b\c.sock`] }).wrap(
+      '/bin/true',
+      [],
+    );
+    check(
+      odd.args.includes(String.raw`/tmp/a"b\c.sock`) && odd.hiddenSockets.length === 1,
+      `a socket whose path holds a quote and a backslash was not carried into the vector: ${odd.args.join(' ')}`,
+    );
+    let relative = null;
+    try {
+      targetSandbox({ confinement: bubblewrap, workspace, status, hostSockets: () => ['relative.sock'] }).wrap('/bin/true', []);
+    } catch (error) {
+      relative = error;
+    }
+    check(relative?.name === 'ConfinementError', `a socket with no absolute path was not refused: ${relative}`);
+    const none = targetSandbox({ confinement: bubblewrap, workspace, status, hostSockets: () => [] }).wrap('/bin/true', []);
+    check(!none.args.includes('/dev/null') && none.hiddenSockets.length === 0, 'a call for a host with no socket carried a mask');
+    let seatbeltAsked = false;
+    targetSandbox({
+      confinement: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+      workspace,
+      hostSockets: () => ((seatbeltAsked = true), []),
+    }).wrap('/bin/true', []);
+    check(!seatbeltAsked, 'a Seatbelt call asked for the host sockets, which only Bubblewrap hides');
+    const layer = layerPrefix(bubblewrap);
+    check(!layer.includes('/dev/null'), "the evaluation layer's vector hides a socket, which only a target's does");
+
+    // The call that is made again.
+    const stubs = tempDir('masked-start-stubs');
+    const counter = path.join(stubs, 'count');
+    const failures = path.join(stubs, 'failures');
+    fs.writeFileSync(
+      path.join(stubs, 'bwrap'),
+      `#!/bin/sh
+n=$(cat ${JSON.stringify(counter)} 2>/dev/null || echo 0); n=$((n + 1)); echo $n > ${JSON.stringify(counter)}
+if [ "$n" -le "$(cat ${JSON.stringify(failures)})" ]; then echo "bwrap: Can't create file at /tmp/agent/agent.sock: Read-only file system" >&2; exit 1; fi
+while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
+`,
+      { mode: 0o755 },
+    );
+    const stubbed = { mode: 'bubblewrap', executable: path.join(stubs, 'bwrap'), evaluationFolder: folder };
+    const launch = (request) =>
+      runToEnd(request.target, request.argv ?? request.targetArgs, { env: { PATH: process.env.PATH }, cwd: workspace }).then((ran) => ({
+        exitCode: ran.status,
+        stdout: ran.stdout,
+        stderr: ran.stderr,
+      }));
+    // The adapter throws when a tool server's process ends before the session answers, as Bubblewrap that never started does.
+    const tool = async (request) => {
+      const ran = await launch(request);
+      if (ran.exitCode !== 0) throw new Error('the server exited during initialize');
+      return ran;
+    };
+    const inner = { run: launch, callTool: tool };
+    const command = { target: process.execPath, subcommandPath: [], argv: ['-e', "console.log('ran')"], env: {} };
+    const attempt = async (list, failing, { signal = new AbortController().signal, tool = false } = {}) => {
+      fs.writeFileSync(failures, String(failing));
+      fs.rmSync(counter, { force: true });
+      let lists = 0;
+      const hostSockets = () => ((lists += 1), list);
+      const sandboxed = targetSandbox({ confinement: stubbed, workspace, status, hostSockets });
+      const mechanism = tool
+        ? confinedMcpMechanism(inner, sandboxed, () => [], [])
+        : confinedCommandMechanism(inner, sandboxed, () => [], []);
+      let outcome;
+      try {
+        outcome = tool
+          ? await mechanism.callTool({ target: process.execPath, targetArgs: command.argv, env: {} }, signal)
+          : await mechanism.run(command, signal);
+      } catch (error) {
+        outcome = error;
+      }
+      return { outcome, calls: Number(fs.readFileSync(counter, 'utf8')), lists };
+    };
+    // A socket that went away: the list names a path that is no socket now.
+    const sockets = ['/tmp/agent/agent.sock'];
+    const once = await attempt(sockets, 1);
+    check(
+      once.calls === 2 && once.lists === 2 && once.outcome.exitCode === 0 && once.outcome.stdout.trim() === 'ran',
+      `a call whose Bubblewrap failed once over a hidden socket made ${once.calls} start(s) and ended ${JSON.stringify(once.outcome.message ?? once.outcome)}; expected a second start over a list read again that ran the target`,
+    );
+    const always = await attempt(sockets, 99);
+    check(
+      always.calls === 3 &&
+        always.outcome?.name === 'ConfinementError' &&
+        always.outcome.message.includes("Can't create file at /tmp/agent/agent.sock"),
+      `a call whose Bubblewrap never started over a hidden socket made ${always.calls} start(s) and ended ${JSON.stringify(always.outcome?.message ?? always.outcome)}; expected three, then the refusal naming Bubblewrap's words`,
+    );
+    const plain = await attempt([], 1);
+    check(
+      plain.calls === 1 && plain.outcome?.name === 'ConfinementError',
+      `a call that hides no socket and failed to start made ${plain.calls} start(s); expected one, since nothing it hid can have gone away`,
+    );
+    // A hidden socket that is still there and a start that failed all the same is no race, and fails at once.
+    const still = await attempt([hostSocket], 99);
+    check(
+      still.calls === 1 && still.outcome?.name === 'ConfinementError',
+      `a call whose hidden socket still existed made ${still.calls} start(s); expected one, since the socket did not go away`,
+    );
+    const aborted = new AbortController();
+    aborted.abort();
+    const stopped = await attempt(sockets, 99, { signal: aborted.signal });
+    check(stopped.calls === 1, `a call that was aborted made ${stopped.calls} start(s); expected one`);
+    const tooled = await attempt(sockets, 1, { tool: true });
+    check(
+      tooled.calls === 2 && tooled.outcome.exitCode === 0,
+      `a tool server whose Bubblewrap failed once over a hidden socket made ${tooled.calls} start(s); expected a second that ran it`,
+    );
+    const tooledAlways = await attempt(sockets, 99, { tool: true });
+    check(
+      tooledAlways.calls === 3 && /exited during initialize/.test(tooledAlways.outcome?.message ?? ''),
+      `a tool server whose Bubblewrap never started made ${tooledAlways.calls} start(s) and ended ${JSON.stringify(tooledAlways.outcome?.message)}; expected three, then the adapter's own error`,
+    );
+    // A target that damages its status file is not run again as a call that never started.
+    fs.writeFileSync(
+      path.join(stubs, 'bwrap'),
+      `#!/bin/sh
+n=$(cat ${JSON.stringify(counter)} 2>/dev/null || echo 0); n=$((n + 1)); echo $n > ${JSON.stringify(counter)}
+for argument in "$@"; do case "$argument" in */status-*.json) chmod 000 "$argument" ;; esac; done
+exit 1
+`,
+      { mode: 0o755 },
+    );
+    const damaged = await attempt(sockets, 0);
+    check(damaged.calls === 1, `a call whose status file was damaged made ${damaged.calls} start(s); expected one`);
+  } finally {
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/** The probe a confined process runs once its go file exists: connects to an early and a late socket and prints each answer. */
+const LATE_PROBE = `
+const net = require('node:net');
+const fs = require('node:fs');
+const [go, early, late] = process.argv.slice(1);
+const connect = (target) => new Promise((resolve) => {
+  const socket = net.connect({ path: target });
+  socket.on('connect', () => { socket.destroy(); resolve('connected'); });
+  socket.on('error', (error) => resolve('refused ' + error.code));
+});
+(async () => {
+  while (!fs.existsSync(go)) await new Promise((resolve) => setTimeout(resolve, 20));
+  console.log(JSON.stringify({ early: await connect(early), late: await connect(late) }));
+})();
+`;
+
+/**
+ * The route to the host's path-based sockets, on a Linux host with Bubblewrap and strace only (Story 1.82; the Linux CI job
+ * proves it, a macOS host skips it). The runtime serves a Unix socket file under the temp directory outside every grant, and the
+ * host's own `/run/dbus/system_bus_socket` and `/var/run/docker.sock` are tried where they exist and the runtime's user can
+ * connect to them (neither is bound here). A confined process connecting to each is refused (`ECONNREFUSED`), by the file and
+ * by a link to it, with the entry's network isolated or host, and the same commands with the empty device files taken out of
+ * the real vector connect to each, which is the revert check. A socket in the workspace and one in a private directory of the
+ * call stay connectable. A socket the runtime binds after the call started is reached, which is the limit the reference states.
+ */
+async function checkPathSocketRoute() {
+  const label = 'path-socket route';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('path-socket-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = socketDirectory();
+  const callDirectory = socketDirectory();
+  const outsideDirectory = socketDirectory();
+  const sandbox = targetSandbox({ confinement, workspace, status: tempDir('path-socket-status') });
+  const launch = (wrapped) => runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
+  const attempt = async (target, { stripped = false, network = 'isolated' } = {}) => {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', target], [callDirectory], [], { network });
+    const ran = await launch(stripped ? withoutSocketMasks(wrapped) : wrapped);
+    return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+  };
+  const servers = [];
+  try {
+    const outside = path.join(outsideDirectory, 'host.sock');
+    servers.push(await listenOnSocket(outside));
+    const link = path.join(outsideDirectory, 'link.sock');
+    fs.symlinkSync(outside, link);
+    const targets = [
+      ['a Unix socket file the runtime serves under the temp directory, outside the grants', outside],
+      ['a link to that socket file', link],
+    ];
+    // The host's own services, where the runtime's user can reach them, so the case proves nothing less than a real route.
+    for (const system of ['/run/dbus/system_bus_socket', '/var/run/docker.sock']) {
+      let reachable = false;
+      try {
+        reachable =
+          fs.statSync(system).isSocket() &&
+          (await runToEnd(process.execPath, ['-e', CONNECT_PROBE, 'path', system])).stdout.trim() === 'connected';
+      } catch {
+        reachable = false;
+      }
+      if (reachable) targets.push([`the host's ${system}`, system]);
+      else console.log(`  the host's ${system} is absent here or not reachable to this user; the case tries the sockets it can reach`);
+    }
+    for (const [what, target] of targets) {
+      const refused = await attempt(target);
+      check(
+        refused === 'refused ECONNREFUSED',
+        `a confined process connecting to ${what} got ${JSON.stringify(refused)}; expected refused ECONNREFUSED`,
+      );
+      const hosted = await attempt(target, { network: 'host' });
+      check(
+        hosted === 'refused ECONNREFUSED',
+        `a confined process whose entry declares network host, connecting to ${what}, got ${JSON.stringify(hosted)}; expected refused ECONNREFUSED`,
+      );
+      const control = await attempt(target, { stripped: true });
+      check(
+        control === 'connected',
+        `with the empty device files taken out of the vector, a confined process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+    }
+
+    // What the call owns stays connectable: a socket in its workspace and one in a private directory of the call.
+    const ownSockets = [path.join(workspace, 'workspace.sock'), path.join(callDirectory, 'call.sock')];
+    for (const socketPath of ownSockets) servers.push(await listenOnSocket(socketPath));
+    const ownVector = sandbox.wrap(process.execPath, ['-e', 'void 0'], [callDirectory]);
+    check(
+      ownSockets.every((socketPath) => !ownVector.args.includes(socketPath)) && ownVector.hiddenSockets.length > 0,
+      "the vector of a call hides a socket of the call's own, or hides none, so the case below proves nothing",
+    );
+    for (const socketPath of ownSockets) {
+      const reached = await attempt(socketPath);
+      check(
+        reached === 'connected',
+        `a confined process connecting to its own socket ${path.relative('/tmp', socketPath)} got ${JSON.stringify(reached)}; expected connected`,
+      );
+    }
+
+    // A socket the runtime binds after the call started: the list was read when the call began, so it is reached.
+    const lateSocket = path.join(outsideDirectory, 'late.sock');
+    const goFile = path.join(workspace, 'go');
+    const wrapped = sandbox.wrap(process.execPath, ['-e', LATE_PROBE, goFile, outside, lateSocket], [callDirectory]);
+    const child = spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const closed = new Promise((resolve) => child.once('close', resolve));
+    try {
+      servers.push(await listenOnSocket(lateSocket));
+      fs.writeFileSync(goFile, '');
+      let giveUp;
+      await Promise.race([closed, new Promise((resolve) => (giveUp = setTimeout(resolve, 30_000)))]);
+      clearTimeout(giveUp);
+      let answers = null;
+      try {
+        answers = JSON.parse(output.trim());
+      } catch {
+        answers = output;
+      }
+      check(
+        answers?.early === 'refused ECONNREFUSED' && answers?.late === 'connected',
+        `a process started before a socket was bound answered ${JSON.stringify(answers)}; expected the early socket refused and the late one reached, the limit the reference states`,
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+  } finally {
+    for (const server of servers) await closeServer(server);
   }
 }
 
@@ -9821,8 +10266,8 @@ function checkBridgeReference() {
       ['the bridged server', 'the bridged server, stood in'],
     ],
     [
-      'Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, and an empty `/run/user`.',
-      ['the network namespace units'],
+      'Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, an empty `/run/user`, and an empty device file over each path-based Unix socket the host serves.',
+      ['the network namespace units', 'the path socket units'],
     ],
     [
       'The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces, or a container that forbids creating a network namespace).',
@@ -9877,8 +10322,24 @@ function checkBridgeReference() {
       ['the network namespace units'],
     ],
     [
-      'Path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, and Story 1.82 closes that route.',
-      ['the abstract socket route'],
+      "A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, whatever the entry's `network`, since the runtime mounts an empty device file over each one when a call starts.",
+      ['the path socket route', 'the path socket units'],
+    ],
+    [
+      "A socket inside the target's workspace or inside a private directory of the call (the bridge's directory included) stays connectable.",
+      ['the path socket route', 'the path socket units', 'the confined pipeline'],
+    ],
+    [
+      "The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break and a second path to the same socket file through another mount.",
+      ['the path socket route', 'the path socket units'],
+    ],
+    [
+      "The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.",
+      ['the path socket units'],
+    ],
+    [
+      "macOS Seatbelt hides no host socket apart from the ones under the user's private root, so a macOS target can connect to a path-based socket outside that root.",
+      ['the Seatbelt network and Mach services'],
     ],
     [
       'macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.',
@@ -9922,6 +10383,7 @@ function checkBridgeReference() {
     'An entry that declares `"network": "isolated"` can reach an outside service.',
     'The runtime puts a firewall around every target.',
     'An abstract socket of the host is closed to a macOS target.',
+    'A Bubblewrap target can connect to a path-based socket of the host.',
   ];
   const heading = '### File-system confinement\n';
   const at = reference.indexOf(heading) + heading.length;
@@ -9945,6 +10407,20 @@ function checkBridgeReference() {
   check(
     !/shares the host's network namespace/.test(reference) && !/Story 1\.63 closes that route/.test(reference),
     "the reference still says a Bubblewrap target shares the host's network namespace",
+  );
+  // Story 1.82: the sentence that listed the host's sockets as connectable is gone, and the one that replaces it names what is hidden.
+  const confinementSection = (reference.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+  check(
+    !/Path-based Unix sockets that the read-only `\/` still shows/.test(reference) &&
+      !/Story 1\.82 closes that route/.test(reference) &&
+      !/stay connectable, and Story/.test(reference) &&
+      confinementSection.includes('`/var/run/docker.sock`') &&
+      confinementSection.includes('`/run/dbus/system_bus_socket`') &&
+      confinementSection.includes('answer `ECONNREFUSED`') &&
+      confinementSection.includes("A socket inside the target's workspace") &&
+      confinementSection.includes('stays reachable for that call') &&
+      confinementSection.includes('answer `ECONNREFUSED`'),
+    "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
   );
 }
 
@@ -9975,6 +10451,20 @@ async function checkSeatbeltNetworkAndMach() {
         connected.stdout.trim() === 'connected',
         `a Seatbelt target with network ${network} connecting to the host's loopback got ${JSON.stringify(connected.stdout.trim())}; expected connected`,
       );
+    }
+    // Seatbelt hides no host socket but the private root's: a path-based socket outside it is reached (Story 1.82).
+    const hostSocket = path.join(socketDirectory(), 'host.sock');
+    const hostServer = net.createServer((socket) => socket.end());
+    await new Promise((resolve) => hostServer.listen(hostSocket, resolve));
+    try {
+      const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', hostSocket]);
+      const connected = await runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
+      check(
+        connected.stdout.trim() === 'connected',
+        `a Seatbelt target connecting to a path-based socket outside the private root got ${JSON.stringify(connected.stdout.trim())}; expected connected, which the reference states`,
+      );
+    } finally {
+      await closeServer(hostServer);
     }
     const asked = sandbox.wrap('/usr/bin/dscl', ['.', '-read', '/Users/root', 'UniqueID']);
     const answered = await runToEnd(asked.target, asked.args, { cwd: workspace });
@@ -10044,6 +10534,8 @@ const CASES = [
   { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement' },
   { name: 'the network field', body: checkNetworkField, group: 'confinement' },
   { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
+  { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement' },
+  { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement' },
   { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
   { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
 ];
