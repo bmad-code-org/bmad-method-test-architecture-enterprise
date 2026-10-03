@@ -136,7 +136,7 @@ const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { reportedInterfaces, reportsProblems, signatureCollisionLine } = require('./release-report');
+const { lineNamesOperation, reportedOperations, reportsProblems, signatureCollisionLine } = require('./release-report');
 const {
   apiRegistryProblems,
   kindOf,
@@ -1521,16 +1521,19 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
  * contract (a method and an erased path template is unique among all `api` operations of all interfaces, AD-40), which
  * `run` meets at exit 4. The refusal can name two report operations or a report operation and an ordinary one, and
  * TeA compares no template (AD-1): the one `historical` finding quotes the engine's own line, which names both
- * interfaces, both operation IDs and the shared method and path, and words itself around those operations. No other
- * outcome of compile is this rule's, and a contract no probe names a report for keeps the CI plan's `compile` check.
+ * interfaces, both operation IDs and the shared method and path, and words itself around those operations. The rule
+ * keeps only a refusal whose line names an operation a probe's report names (by interface and operation ID, no
+ * template), so a collision between other operations, of any shape, stays the CI plan's `compile` check and `run`'s,
+ * as does every other outcome of compile.
  */
-function checkReportCollision(report, folder, relative, env) {
+function checkReportCollision(report, folder, relative, reportedOperationList, env) {
   const line = signatureCollisionLine(path.join(folder, CONTRACT_NAME), env);
-  if (line === null) return;
+  // A collision the line shows between operations no report names is not this rule's: it stays the CI plan's `compile` check and `run`'s.
+  if (line === null || !lineNamesOperation(line, reportedOperationList)) return;
   report.add(
     relative,
     'historical',
-    `the deployments name a report operation, and eval-quality's compile refuses the contract for two operations that share an identity (${line}); change one of the operations the line names (a method and path template is unique among the api operations of the contract)`,
+    `a deployment's report operation shares an identity with another operation of the contract, and eval-quality's compile refuses the contract (${line}); change one of the two operations the line names (a method and path template is unique among the api operations of the contract)`,
   );
 }
 
@@ -1538,6 +1541,7 @@ function checkReportCollision(report, folder, relative, env) {
 function checkProbes(report, folder, context, behaviors, mutations, registry, env) {
   const routes = new Set();
   let collisionProbe = null;
+  const reportedOperationList = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -1557,15 +1561,16 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, en
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
     if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
-    if (
-      collisionProbe === null &&
-      probe.qualification?.route === 'historical' &&
-      reportedInterfaces(probe.qualification.deployments).length > 0
-    )
-      collisionProbe = relative;
+    if (probe.qualification?.route === 'historical') {
+      const named = reportedOperations(probe.qualification.deployments);
+      if (named.length > 0) {
+        collisionProbe ??= relative;
+        reportedOperationList.push(...named);
+      }
+    }
   }
   // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe that names a report.
-  if (collisionProbe !== null) checkReportCollision(report, folder, collisionProbe, env);
+  if (collisionProbe !== null) checkReportCollision(report, folder, collisionProbe, reportedOperationList, env);
   return routes;
 }
 

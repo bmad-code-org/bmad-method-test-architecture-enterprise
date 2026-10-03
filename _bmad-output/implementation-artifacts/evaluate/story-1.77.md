@@ -39,16 +39,23 @@ context:
 
 ## Design Decisions
 
-- The finding does not filter on whether the engine's line names a report operation. A collision between two ordinary operations draws the finding when some probe names a report, because the compile refuses the contract and `run` would exit 4 either way; the wording ("two operations that share an identity") does not claim a report is involved. Filtering would make TeA parse the engine's line to decide.
-- A collision between two ordinary operations with no probe naming a report makes no compile call here and stays the CI plan's `compile` check, as the story's third criterion requires.
-- Two probes that each name a report for a different interface are reachable only through a registry whose `reports` already draw their own findings; the collision finding is still one, on the first probe.
+- The first build kept every `duplicate-operation-signature` refusal once a probe named a report. Round 1 (edge, blind) showed that is wrong: every valid deployments probe names a report, so the rule fired on any collision of the contract, including `cli` pairs, and took over the CI plan's `compile` check. The finding is now kept only when the engine's line names an operation a probe's report names, as `logicalId=<interface>].operations[operationId=<operation>]`. This matches identifiers on the engine's own line and compares no template (AD-1).
+- The finding is worded around "a deployment's report operation shares an identity with another operation", since the other operation can be a report or an ordinary one.
+- A collision between operations no report names makes no finding here and stays the CI plan's `compile` check; with no probe naming a report there is no compile call either.
+- Two probes that each name a report for a different interface are refused by Story 1.65's coverage rule already; the case holds the one collision finding beside those findings. Epics AC 2 and the test-design row are amended to say so.
 
 ## Verification
 
-- `npm run test:evaluate-check` (1120 checks) and `npm run test:evaluate-arms` (732 checks) pass.
-- Revert observation: narrowing the trigger back to `> 1` fails 11 checks (the one-report case, the report-versus-ordinary case, its preflight and wording asserts, and the two-probe case).
+- `npm run test:evaluate-check` (1126 checks) and `npm run test:evaluate-arms` (732 checks) pass.
+- Revert observations: narrowing the trigger back to `> 1` fails 11 checks; compiling for any `historical` probe, keeping every refusal, and the 1.75 wording each fail their own cases (round 1 verification).
 - `npm run lint`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links` pass.
 
 ## Review Triage Log
 
-Round 1: pending.
+Round 1 (blind, edge case, verification gap; three Opus reviewers):
+
+- The finding fired on every engine collision once a probe named a report, `cli` pairs included (edge 1, blind 1): **medium**, patched. Kept only when the line names a reported interface and operation ID; cases for an `api` pair, a `cli` pair and the report's operation ID on another interface.
+- The ordinary-only case had no `historical` probe, so "compile for any historical probe" survived (verification 1): **medium**, patched. The case plants a `fixCommit` probe and asserts the engine refuses the fixture.
+- The wording guard banned only the 1.75 strings (verification 2): **low**, patched. It asserts `report operations` is absent and `shares an identity with another operation` is present.
+- AC 2 and the CHANGELOG overstated the two-probe case (verification 3, blind 2): **low**, patched. The case was already refused by Story 1.65's coverage rule; AC, test-design row and CHANGELOG say so.
+- The reference said the other operation is on another interface (blind 1): **low**, patched to "of the contract".

@@ -142,22 +142,38 @@ const SIGNATURE_COLLISION = 'duplicate-operation-signature';
 const COMPILE_REFUSED = 4;
 
 /**
- * The interface IDs a probe's deployments name a report operation for, sorted:
- * the keys of each side's `reports` whose entry names an operation.
+ * The report operations a probe's deployments name, as `{ interfaceId, operationId }` pairs in sorted order: each
+ * entry of either side's `reports` that names an operation, once.
  *
  * @param {unknown} deployments a probe's `qualification.deployments`
- * @returns {string[]}
+ * @returns {{ interfaceId: string, operationId: string }[]}
  */
-function reportedInterfaces(deployments) {
-  const named = new Set();
+function reportedOperations(deployments) {
+  const named = new Map();
   for (const side of ['preFix', 'fix']) {
     const reports = deployments?.[side]?.reports;
     if (reports === null || typeof reports !== 'object' || Array.isArray(reports)) continue;
-    for (const [id, entry] of Object.entries(reports)) {
-      if (typeof entry?.operationId === 'string') named.add(id);
+    for (const [interfaceId, entry] of Object.entries(reports)) {
+      if (typeof entry?.operationId === 'string')
+        named.set(JSON.stringify([interfaceId, entry.operationId]), { interfaceId, operationId: entry.operationId });
     }
   }
-  return [...named].sort();
+  return [...named.values()].sort((a, b) => (a.interfaceId + '\0' + a.operationId).localeCompare(b.interfaceId + '\0' + b.operationId));
+}
+
+/**
+ * Whether eval-quality's refusal line names one of `operations` as one of the two operations it refuses. The engine
+ * names an operation as `permittedInterfaces[logicalId=<interface>].operations[operationId=<operation>]`; this matches
+ * identifiers on that line and compares no method or path template (AD-1).
+ *
+ * @param {string} line the engine's refusal line
+ * @param {{ interfaceId: string, operationId: string }[]} operations
+ * @returns {boolean}
+ */
+function lineNamesOperation(line, operations) {
+  return operations.some(({ interfaceId, operationId }) =>
+    line.includes(`logicalId=${interfaceId}].operations[operationId=${operationId}]`),
+  );
 }
 
 /**
@@ -294,7 +310,8 @@ module.exports = {
   isJsonPointer,
   quotedIdentifier,
   reportProblems,
-  reportedInterfaces,
+  reportedOperations,
+  lineNamesOperation,
   reportedRelease,
   reportsProblems,
   signatureCollisionLine,

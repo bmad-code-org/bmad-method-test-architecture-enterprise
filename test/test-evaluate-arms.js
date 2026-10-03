@@ -2737,15 +2737,16 @@ function checkHistoricalReference() {
   const rulesRow = text.split('\n').find((line) => line.startsWith('| `historical` ')) ?? '';
   check(
     deployments.includes(
-      "When a probe's deployments name a report operation, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature, exits 10 with one `historical` finding that quotes the engine's line",
+      "When a probe's deployments name a report operation, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature whose line names a report operation, exits 10 with one `historical` finding that quotes the engine's line",
     ) &&
-      deployments.includes('a report operation and an ordinary `api` operation of another interface') &&
+      deployments.includes('A collision between two operations that no report names stays the CI plan') &&
+      deployments.includes('another report operation or an ordinary `api` operation of the contract') &&
       deployments.includes('so one reported interface is enough') &&
       !deployments.includes('two or more interfaces') &&
       !deployments.includes('`check` exits 0 for such a registry') &&
       deployments.includes("is left to the CI plan's `compile` check and to `run`.") &&
       rulesRow.includes(
-        "when a probe's deployments name a report operation, a duplicate operation signature that eval-quality's compile refuses",
+        "when a probe's deployments name a report operation, a duplicate operation signature between that report operation and another operation that eval-quality's compile refuses",
       ) &&
       !rulesRow.includes('two or more interfaces'),
     'the reference does not state, in "### Against deployments" and the `historical` rules row, that `check` names a report-operation signature collision for any named report, or still says "two or more interfaces" or that `check` exits 0 for such a registry',

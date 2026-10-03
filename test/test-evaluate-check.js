@@ -650,6 +650,9 @@ async function checkReportSignatureCollision() {
   // The stand-in refuses compile with a line of the chosen code and logs each call.
   const shim = engineShim();
   const refused = (code) => `eval-quality: ${code}: EvalContract.permittedInterfaces: stand-in refusal`;
+  // A collision line in the engine's own shape that names the report operation of the grader, which every case below reports.
+  const collisionLine =
+    'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=ledger].operations[operationId=report-ledger-release]: collides with permittedInterfaces[logicalId=grader].operations[operationId=report-release] after parameter-name erasure ("GET /release") among api-shaped operations (AD-19, AD-40)';
   const shimmed = (folder, line, { exit = 4, stream = 'stderr' } = {}) => {
     const log = path.join(tempDir('shim-log'), 'calls.log');
     const run = runCli(['check', '--evaluation', folder], {
@@ -659,22 +662,20 @@ async function checkReportSignatureCollision() {
   };
 
   // The stand-in's collision line is quoted as it is printed, which shows the rule runs the engine stage and computes nothing.
-  const quoted = shimmed(distinct, refused('duplicate-operation-signature'));
+  const quoted = shimmed(distinct, collisionLine);
   check(
     quoted.run.status === 10 &&
       historicalFindingsOf(quoted.run.stdout).length === 1 &&
-      quoted.run.stdout.includes(refused('duplicate-operation-signature')) &&
+      quoted.run.stdout.includes(collisionLine) &&
       quoted.calls.length === 1 &&
       quoted.calls[0].startsWith('compile --in '),
     `a collision line the engine printed was not quoted from one compile call\n${quoted.run.output}\n${quoted.calls}`,
   );
 
   // A collision line on stdout is quoted too.
-  const onStdout = shimmed(distinct, refused('duplicate-operation-signature'), { stream: 'stdout' });
+  const onStdout = shimmed(distinct, collisionLine, { stream: 'stdout' });
   check(
-    onStdout.run.status === 10 &&
-      historicalFindingsOf(onStdout.run.stdout).length === 1 &&
-      onStdout.run.stdout.includes(refused('duplicate-operation-signature')),
+    onStdout.run.status === 10 && historicalFindingsOf(onStdout.run.stdout).length === 1 && onStdout.run.stdout.includes(collisionLine),
     `a collision line printed on stdout was not quoted\n${onStdout.run.output}`,
   );
 
@@ -684,7 +685,7 @@ async function checkReportSignatureCollision() {
   const second = JSON.parse(fs.readFileSync(path.join(several, 'probes', 'P-002.probe.json'), 'utf8'));
   fs.writeFileSync(path.join(several, 'probes', 'P-003.probe.json'), `${JSON.stringify({ ...second, probeId: 'P-003' }, null, 2)}\n`);
   await writeCorpusIndex(several);
-  const many = shimmed(several, refused('duplicate-operation-signature'));
+  const many = shimmed(several, collisionLine);
   const manyFindings = historicalFindingsOf(many.run.stdout);
   check(
     many.run.status === 10 &&
@@ -698,7 +699,7 @@ async function checkReportSignatureCollision() {
   const single = copyApi();
   plantApiHistorical(single, DEPLOYMENTS);
   await writeCorpusIndex(single);
-  const one = shimmed(single, refused('duplicate-operation-signature'));
+  const one = shimmed(single, collisionLine);
   check(
     one.run.status === 10 && historicalFindingsOf(one.run.stdout).length === 1 && one.calls.length === 1,
     `a probe naming a report for one interface did not draw one finding from one compile call (exit ${one.run.status}, calls ${JSON.stringify(one.calls)})\n${one.run.output}`,
@@ -726,7 +727,7 @@ async function checkReportSignatureCollision() {
     ['exit 3, which no compile documents', { exit: 3 }],
     ['exit 4 with no duplicate-operation-signature line', { exit: 4, stream: 'none' }],
   ]) {
-    const quiet = shimmed(distinct, refused('duplicate-operation-signature'), options);
+    const quiet = shimmed(distinct, collisionLine, options);
     check(
       quiet.run.status === 0 && historicalFindingsOf(quiet.run.stdout).length === 0 && quiet.calls.length === 1,
       `a compile that ended at ${name} drew a finding from this rule (exit ${quiet.run.status}, calls ${quiet.calls.length})\n${quiet.run.output}`,
@@ -822,6 +823,10 @@ async function checkReportCollidingWithAnyOperation() {
     check(finding.includes(needle), `${label}: the finding does not name ${needle}\n${finding}`);
   }
   // The two operations are a report and an ordinary one, so the finding must not call both of them reports.
+  check(
+    /report operations/.test(finding) === false && finding.includes('shares an identity with another operation'),
+    `${label}: the finding is worded as if both operations were reports\n${finding}`,
+  );
   for (const assumption of ['report operations on more than one interface', "each interface's report operation", 'both report']) {
     check(!finding.includes(assumption), `${label}: the finding assumes both operations are reports ("${assumption}")\n${finding}`);
   }
@@ -860,10 +865,68 @@ async function checkReportCollidingWithAnyOperation() {
     `two probes naming a report each for a different interface did not draw one collision finding on P-002 (exit ${together.status}, findings ${JSON.stringify(togetherFound)})\n${together.output}`,
   );
 
-  // An ordinary-only collision with no probe naming a report: no compile call, no finding from this rule.
   const shim = engineShim();
+
+  // A collision between operations no report names, with a probe that does name a report, draws no finding from this rule.
+  const unrelated = copyApi();
+  plantApiHistorical(unrelated, DEPLOYMENTS);
+  editJson(unrelated, 'contract.json', (value) => {
+    const [grader] = value.permittedInterfaces;
+    const original = grader.operations.find((operation) => operation.operationId === 'grade-answer');
+    value.permittedInterfaces.push({
+      ...structuredClone(grader),
+      logicalId: 'status',
+      operations: ['status-a', 'status-b'].map((operationId) => ({ ...structuredClone(original), operationId, pathTemplate: '/status/x' })),
+    });
+  });
+  editJson(unrelated, 'evaluation.json', (value) => {
+    value.operationPhases.status = { 'status-a': 'outcome', 'status-b': 'outcome' };
+  });
+  await writeCorpusIndex(unrelated);
+  const unrelatedRun = runCli(['check', '--evaluation', unrelated], { env: environment });
+  check(
+    signature(unrelatedRun.stdout).length === 0,
+    `${label}: a real collision between two ordinary operations drew a finding although no report names either\n${unrelatedRun.output}`,
+  );
+  const engineLines = spawnSync(
+    process.execPath,
+    [engineCliPath({}), 'compile', '--in', path.join(unrelated, 'contract.json'), '--out', path.join(tempDir('direct-177'), 'out.json')],
+    { encoding: 'utf8' },
+  ).stderr.split('\n');
+  check(
+    engineLines.some((line) => line.includes('duplicate-operation-signature') && line.includes('operationId=status-')),
+    `${label}: the fixture's two ordinary operations do not collide at the engine, so the case proves nothing (${JSON.stringify(engineLines)})`,
+  );
+
+  // The same shapes through the stand-in: an engine line that names a cli-shaped pair, or the report's operation ID on another interface, is not a report's collision.
+  const shimmedOn = (folder, line) => {
+    const calls = path.join(tempDir('shim-log-177b'), 'calls.log');
+    const run = runCli(['check', '--evaluation', folder], {
+      env: { ...environment, [ENGINE_CLI_ENV]: shim, SHIM_LOG: calls, SHIM_LINE: line, SHIM_EXIT: '4' },
+    });
+    return { run, calls: fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [] };
+  };
+  for (const [name, line] of [
+    [
+      'two cli operations that share the identity they render',
+      'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=tool].operations[operationId=run-a]: collides with permittedInterfaces[logicalId=tool].operations[operationId=run-b] on the identity it renders ("tool") among cli-shaped operations',
+    ],
+    [
+      "the report's operation ID on an interface no report names",
+      'eval-quality: duplicate-operation-signature: EvalContract.permittedInterfaces[logicalId=status].operations[operationId=report-release]: collides with permittedInterfaces[logicalId=status].operations[operationId=status-b] after parameter-name erasure ("GET /status/x") among api-shaped operations',
+    ],
+  ]) {
+    const outcome = shimmedOn(unrelated, line);
+    check(
+      signature(outcome.run.stdout).length === 0 && outcome.run.status === 0 && outcome.calls.length === 1,
+      `${label}: ${name} drew a finding from this rule (exit ${outcome.run.status}, calls ${outcome.calls.length})\n${outcome.run.output}`,
+    );
+  }
+
+  // An ordinary-only collision with no probe naming a report: no compile call, no finding from this rule.
   const log = path.join(tempDir('shim-log-177'), 'calls.log');
   const ordinary = copyApi();
+  plantHistorical(ordinary, { fixCommit: 'a1b2c3d' });
   plantCollidingOrdinaryInterface(ordinary, 'grade-answer');
   await writeCorpusIndex(ordinary);
   const ordinaryRun = runCli(['check', '--evaluation', ordinary], {
@@ -878,6 +941,15 @@ async function checkReportCollidingWithAnyOperation() {
   check(
     signature(ordinaryRun.stdout).length === 0 && !fs.existsSync(log),
     `${label}: a collision between ordinary operations with no probe naming a report drew a finding or a compile call (calls ${fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : 'none'})\n${ordinaryRun.output}`,
+  );
+  const ordinaryEngine = spawnSync(
+    process.execPath,
+    [engineCliPath({}), 'compile', '--in', path.join(ordinary, 'contract.json'), '--out', path.join(tempDir('direct-177c'), 'out.json')],
+    { encoding: 'utf8' },
+  );
+  check(
+    ordinaryEngine.status === 4 && ordinaryEngine.stderr.includes('duplicate-operation-signature'),
+    `${label}: the engine does not refuse the ordinary-only fixture, so its case proves nothing (exit ${ordinaryEngine.status})\n${ordinaryEngine.stderr}`,
   );
   const ordinaryReal = runCli(['check', '--evaluation', ordinary], { env: environment });
   check(
