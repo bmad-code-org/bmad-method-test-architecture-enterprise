@@ -2,7 +2,7 @@
 title: "Name a report operation's collision with any other api operation at check"
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'cc1ab7934ee78ec36268fcfbc719269a731c23d8'

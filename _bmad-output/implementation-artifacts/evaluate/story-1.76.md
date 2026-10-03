@@ -2,7 +2,7 @@
 title: 'Require an explicit custom-agent version response'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '32e16176783215c5719f819d5b116a6f7eadbb39'
