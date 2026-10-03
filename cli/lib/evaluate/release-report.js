@@ -25,7 +25,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { hostEnvironmentPort, runArm } = require('./arm');
-const { loadEngine } = require('./engine');
+const { EngineUnavailableError, loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 
 /** The step the report request runs as; no plan step of the contract carries it. */
@@ -182,6 +182,11 @@ function signatureCollisionLine(contractPath, env = process.env) {
   let staging;
   try {
     staging = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-check-'));
+  } catch {
+    // A temporary directory that cannot be made leaves the stage unrun: `run` reports it, and this rule stays quiet.
+    return null;
+  }
+  try {
     const stage = runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
       runDirectory: staging,
       recordPath: path.join(staging, 'compile-record.json'),
@@ -191,11 +196,11 @@ function signatureCollisionLine(contractPath, env = process.env) {
     const line = `${stage.stderr}\n${stage.stdout}`.split('\n').find((candidate) => candidate.includes(`${SIGNATURE_COLLISION}:`));
     return line === undefined ? null : line.trim();
   } catch (error) {
-    // The stage could not start, was killed or exited undocumented: `run` reports it, and this rule stays quiet.
-    if (error instanceof EngineStageError) return null;
+    // The stage could not start, was killed or exited undocumented, or no engine CLI is installed: `run` reports it, and this rule stays quiet.
+    if (error instanceof EngineStageError || error instanceof EngineUnavailableError) return null;
     throw error;
   } finally {
-    if (staging !== undefined) fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 

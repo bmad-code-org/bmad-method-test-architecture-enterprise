@@ -113,6 +113,20 @@ Round 1 (edge case, blind, verification gap; three Opus reviewers):
 - Several probes: one compile and one finding untested (verification gap 1): **medium**, patch. Add a case with two qualifying historical probes: one finding on the first probe, one compile call.
 - `env` not threaded (verification gap, other): **medium**, patch. `checkEvaluation` takes `env` and the CI and preflight call sites pass theirs, so `check` and the run's own compile choose one engine.
 
+Round 2 (blind, edge case, verification gap; fresh Opus reviewers on the repaired diff):
+
+- Finding still says "api operations" and blames report paths for any collision (blind 1): **medium**, patch. The engine also refuses cli and mcp identities and any two operations, so the text must claim only what the quoted line says.
+- Unusable temporary directory crashes `check` (edge 1, verification gap other, reproduced with `TMPDIR=/nonexistent`): **medium**, patch. Round 1's narrowed catch left `mkdtemp` failures to propagate; an unusable staging directory is a reason the rule cannot run and stays quiet like an engine that cannot start.
+- `EngineUnavailableError` from the engine path lookup is not caught (edge 4): **low**, patch (one more class in the same catch; the docs say an engine that cannot start draws no finding).
+- Docs and CHANGELOG list the quiet outcomes without a killed stage or an undocumented exit (blind 2): **low**, patch (wording only). A silent skip stays: `run` reports an engine that cannot start, and `check` writes nothing by design.
+- Compile record deleted, `log` not passed, substitution unannounced (blind 3, edge 3): **low**, rejected. The quoted engine line is the evidence the finding carries, `check` writes nothing outside a private directory (frozen Boundaries), and the substitution notice belongs to the stage records of `run`.
+- `run` and the CI plan compile twice (blind 4): **low**, rejected. One 0.3 s spawn on a path with two reported interfaces; the accepted cost is recorded here.
+- Undocumented exit and signal have no test (blind 5): **low**, patch (one more `SHIM_EXIT` case).
+- No case shows `preflight` or `run` stopping at `check` for a collision (blind 6): **medium**, patch. The CHANGELOG states that `run` used to exit 4 and now stops earlier; add a `preflight` case.
+- One fixture still builds a colliding contract (blind 7): **medium**, patch. `checkReportOperationReusedAcrossInterfaces` clones the whole grader interface; give the clone paths of its own so Story 1.77 does not turn it red.
+- `checkEvaluation` JSDoc omits `platform` and `env` (blind 8): **low**, patch.
+- Staging ignores the caller's `TMPDIR` (edge 2): **low**, rejected. `os.tmpdir()` reads the process environment, the caller's `env` chooses the engine, and nothing in production passes a different one.
+
 ## Design Notes
 
 Route B record: eval-quality's refusal is contract-wide on purpose (AD-40). A defect signature is a method plus erased path and has no interface ID, so `resolveHomeOperation` is unambiguous only because compile refuses duplicates. Route A would need a schema change and an engine release. Quoting the engine's line keeps AD-1 whole and also covers a report operation colliding with any other `api` operation.

@@ -544,6 +544,7 @@ function checkReportOperationReusedAcrossInterfaces() {
   editJson(folder, 'contract.json', (value) => {
     const other = structuredClone(value.permittedInterfaces[0]);
     other.logicalId = 'status';
+    for (const operation of other.operations) operation.pathTemplate = `/status${operation.pathTemplate}`;
     value.permittedInterfaces.push(other);
   });
   editJson(folder, 'evaluation.json', (value) => (value.operationPhases.status = structuredClone(value.operationPhases.grader)));
@@ -714,6 +715,7 @@ async function checkReportSignatureCollision() {
   for (const [name, options] of [
     ['exit 5', { exit: 5 }],
     ['exit 64', { exit: 64 }],
+    ['exit 3, which no compile documents', { exit: 3 }],
     ['exit 4 with no duplicate-operation-signature line', { exit: 4, stream: 'none' }],
   ]) {
     const quiet = shimmed(distinct, refused('duplicate-operation-signature'), options);
@@ -722,6 +724,25 @@ async function checkReportSignatureCollision() {
       `a compile that ended at ${name} drew a finding from this rule (exit ${quiet.run.status}, calls ${quiet.calls.length})\n${quiet.run.output}`,
     );
   }
+
+  // A temporary directory that cannot be made leaves the stage unrun; this rule stays quiet.
+  const noTemp = runCli(['check', '--evaluation', collided], {
+    env: { TMPDIR: path.join(privateTemp, 'missing'), TEMP: path.join(privateTemp, 'missing'), TMP: path.join(privateTemp, 'missing') },
+  });
+  check(
+    noTemp.status === 0 && historicalFindingsOf(noTemp.stdout).length === 0,
+    `a temporary directory that cannot be made drew a finding from this rule (exit ${noTemp.status})\n${noTemp.output}`,
+  );
+
+  // `preflight` and `run` stop at the check stage with the same finding, before any engine stage of their own.
+  const stopped = runCli(['preflight', '--evaluation', collided], { env: environment });
+  check(
+    stopped.status === 10 &&
+      historicalFindingsOf(stopped.stdout).length === 1 &&
+      stopped.stdout.includes('duplicate-operation-signature') &&
+      stopped.stdout.includes(engineLine.trim()),
+    `preflight over the colliding registry did not stop at the check stage with the engine's line (exit ${stopped.status})\n${stopped.output}`,
+  );
 
   // Engine unavailable: the stage cannot start; this rule stays quiet.
   const unavailable = runCli(['check', '--evaluation', distinct], {

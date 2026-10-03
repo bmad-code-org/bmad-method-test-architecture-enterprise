@@ -1525,7 +1525,7 @@ function checkReportCollision(report, folder, relative, env) {
   report.add(
     relative,
     'historical',
-    `the deployments name report operations on more than one interface, and eval-quality's compile refuses the contract for two api operations that share a method and a path template (${line}); change the path of one of the operations the line names, and give each interface's report operation a path no other api operation of the contract uses`,
+    `the deployments name report operations on more than one interface, and eval-quality's compile refuses the contract for two operations that share an identity (${line}); change one of the operations the line names (each interface's report operation needs a method and path template of its own)`,
   );
 }
 
@@ -2045,6 +2045,9 @@ function checkOperationPhases(report, evaluation, contract) {
  * Every finding in the evaluation folder.
  *
  * @param {string} folder
+ * @param {object} [options]
+ * @param {NodeJS.Platform} [options.platform] the platform the evaluation is held to
+ * @param {NodeJS.ProcessEnv} [options.env] the environment the engine stage runs in, so `check` uses the engine the caller's own compile uses
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
 async function checkEvaluation(folder, { platform = process.platform, env = process.env } = {}) {

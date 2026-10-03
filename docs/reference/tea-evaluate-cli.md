@@ -591,7 +591,7 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
   Services that serve their release at the same path need distinct paths, for example a path prefix their proxy strips.
   When a probe's deployments name report operations on two or more interfaces, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature, exits 10 with one `historical` finding that quotes the engine's line, which names both interfaces, both operation IDs and the shared method and path.
   The compile output and its record go to a private temporary directory that `check` removes, so nothing is written under the evaluation folder.
-  Any other compile outcome (an accepted contract, another refusal, a fault, an engine that cannot start) draws no finding from this rule and is left to the CI plan's `compile` check and to `run`.
+  Any other compile outcome (an accepted contract, another refusal, a fault, a stage that cannot start, is killed or ends with an exit the CLI does not document, or a temporary directory that cannot be made) draws no finding from this rule and is left to the CI plan's `compile` check and to `run`.
   `operationId` names an operation the contract declares on the `api` interface its key names, which the registry serves over HTTP; `check` refuses an operation that interface does not declare, even when another interface declares an operation with that ID.
   It is a permitted operation of the contract like any other, so `operationPhases` in `evaluation.json` names its phase, and adding it changes the compiled contract.
   The request reads a release and goes to each live deployment before any arm runs, so `check` refuses an operation the contract marks as changing state.
