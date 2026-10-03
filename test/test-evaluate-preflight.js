@@ -95,6 +95,7 @@ const BASE_ENV = Object.fromEntries(
     ([name]) =>
       name !== ENGINE_CLI_ENV &&
       name !== 'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE' &&
+      name !== 'TEA_POSIX_WATCHDOG_TEST_FAILURE' &&
       !name.startsWith('TEA_EVALUATE_SHIM_') &&
       name !== 'TEA_EVALUATE_WRAP_RUNPREFLIGHT' &&
       name !== 'TEA_STUB_SECRET',
@@ -387,10 +388,10 @@ async function checkRunnerProcesses() {
 }
 
 /** A runner started in the background on `input`, with its output collected and its ending awaited. */
-function startRunner(args, input, { detached = false } = {}) {
+function startRunner(args, input, { detached = false, env = {} } = {}) {
   const child = spawn(process.execPath, [RUNNER, '--skill-root', STUB_SKILL, ...STUB_OPTIONS, ...args], {
     cwd: PROJECT_ROOT,
-    env: BASE_ENV,
+    env: { ...BASE_ENV, ...env },
     detached,
   });
   let stdout = '';
@@ -1033,6 +1034,18 @@ function checkWindowsRunnerReference() {
   );
 }
 
+function checkPosixRunnerReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  check(
+    section.includes('detached watchdog') &&
+      section.includes('leader-only pipe') &&
+      section.includes('10 s') &&
+      section.includes('before the guardian starts the agent'),
+    'the tea-skill-runner reference must name its detached watchdog, leader-only pipe, prelaunch arm and 10 s descendant bound',
+  );
+}
+
 /**
  * The agent's process group outlives no ending of the runner or of the
  * processes between them, and the runner learns how the agent ended: a signal
@@ -1083,8 +1096,10 @@ setInterval(() => {}, 1000);
     cwd: PROJECT_ROOT,
     detached: true,
     env: { ...BASE_ENV, NODE_OPTIONS: `--require=${pidFailurePreload}`, TEA_PID_FAILURE_FILE: pidFailureFile },
-    stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe', 'pipe', 'pipe'],
   });
+  pidFailureGuardian.stdio[5].destroy();
+  pidFailureGuardian.stdio[6].end('armed\n');
   let pidFailureReport = '';
   pidFailureGuardian.stdio[3].on('data', (chunk) => (pidFailureReport += chunk));
   const pidFailureClosed = ended(pidFailureGuardian);
@@ -1213,6 +1228,74 @@ setInterval(() => {}, 1000);
     }
   }
 
+  // A stopped guardian cannot act on its lifeline; an independent owner must stop its group.
+  const ownedPid = path.join(tempDir('stopped-guardian-dual-kill'), 'pid');
+  const owned = startRunner(long, `Say alpha. STUB-ORPHAN ${ownedPid} STUB-SLEEP 30000`);
+  const ownedChild = await pidFrom(ownedPid);
+  const [ownedSupervisor] = childrenOf(owned.child.pid);
+  const [ownedLeader] = childrenOf(ownedSupervisor ?? 0);
+  const [ownedGuardian] = childrenOf(ownedLeader ?? 0);
+  const [ownedAgent] = childrenOf(ownedGuardian ?? 0);
+  try {
+    check(
+      ownedSupervisor !== undefined &&
+        ownedLeader !== undefined &&
+        ownedGuardian !== undefined &&
+        ownedAgent !== undefined &&
+        ownedChild !== null,
+      'the stopped-guardian case did not start supervisor, leader, guardian, agent and child',
+    );
+    if (ownedGuardian !== undefined) process.kill(ownedGuardian, 'SIGSTOP');
+    if (ownedLeader !== undefined) process.kill(ownedLeader, 'SIGKILL');
+    if (ownedSupervisor !== undefined) process.kill(ownedSupervisor, 'SIGKILL');
+    const killedAt = Date.now();
+    const [ending, guardianEnded, agentEnded, childEnded] = await Promise.all([
+      Promise.race([owned.closed, delay(10_000).then(() => null)]),
+      ownedGuardian === undefined ? Promise.resolve(false) : processEnds(ownedGuardian, 10_000),
+      ownedAgent === undefined ? Promise.resolve(false) : processEnds(ownedAgent, 10_000),
+      ownedChild === null ? Promise.resolve(false) : processEnds(ownedChild, 10_000),
+    ]);
+    check(
+      ending?.code === EXIT_CODES['environment-transport'],
+      `the stopped-guardian runner did not report transport failure: ${ending?.code ?? 'still running'} ${ending?.stderr ?? ''}`,
+    );
+    check(
+      guardianEnded && agentEnded && childEnded && Date.now() - killedAt <= 10_000,
+      `the stopped guardian, agent or child survived 10 s after the dual kill: ${JSON.stringify({ guardianEnded, agentEnded, childEnded })}`,
+    );
+  } finally {
+    if (ownedGuardian !== undefined) {
+      try {
+        process.kill(-ownedGuardian, 'SIGKILL');
+      } catch {
+        // The owner already stopped the group.
+      }
+    }
+    owned.child.kill('SIGKILL');
+    await Promise.race([owned.closed, delay(1000)]);
+    if (ownedChild !== null) reap(ownedChild);
+  }
+
+  const unarmedPid = path.join(tempDir('watchdog-setup-failure'), 'pid');
+  const unarmed = startRunner(
+    ['--timeout-ms', '20000', '--env-pass', 'TEA_POSIX_WATCHDOG_TEST_FAILURE'],
+    `Say alpha. STUB-ORPHAN ${unarmedPid}`,
+    {
+      env: { TEA_POSIX_WATCHDOG_TEST_FAILURE: '1' },
+    },
+  );
+  const unarmedEnding = await Promise.race([unarmed.closed, delay(15_000).then(() => null)]);
+  check(
+    unarmedEnding?.code === EXIT_CODES['environment-transport'] && unarmedEnding.stderr.includes('POSIX watchdog setup failed'),
+    `a failed POSIX watchdog setup did not produce a controlled transport failure: ${unarmedEnding?.code ?? 'still running'} ${unarmedEnding?.stderr ?? ''}`,
+  );
+  check(!fs.existsSync(unarmedPid), 'the guardian launched an agent after POSIX watchdog setup failed');
+  if (unarmedEnding === null) {
+    unarmed.child.kill('SIGKILL');
+    await Promise.race([unarmed.closed, delay(1000)]);
+  }
+  if (fs.existsSync(unarmedPid)) reap(Number(fs.readFileSync(unarmedPid, 'utf8')));
+
   // The supervisor stopped on its own: the leader reports its timeout to the runner and kills the stopped supervisor.
   const stoppedPid = path.join(tempDir('supervisor-stop'), 'pid');
   const stopped = startRunner(['--timeout-ms', '1000'], `Say alpha. STUB-ORPHAN ${stoppedPid} STUB-SLEEP 30000`);
@@ -1307,6 +1390,41 @@ setInterval(() => {}, 1000);
   if (leftChild !== null) {
     check(await processEnds(leftChild), `a child the agent left behind (pid ${leftChild}) outlived the agent's exit`);
     reap(leftChild);
+  }
+
+  const ownerExitPid = path.join(tempDir('watchdog-normal-exit'), 'pid');
+  const ownerExit = startRunner(['--timeout-ms', '10000'], `Say alpha. STUB-LEAVE ${ownerExitPid} STUB-SLEEP 2000`);
+  const ownerExitChild = await pidFrom(ownerExitPid);
+  const [ownerExitSupervisor] = childrenOf(ownerExit.child.pid);
+  const [ownerExitLeader] = childrenOf(ownerExitSupervisor ?? 0);
+  const ownerExitPeers = childrenOf(ownerExitLeader ?? 0);
+  const ownerExitGuardian = ownerExitPeers.find((pid) =>
+    String(spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout).includes('--agent-guardian'),
+  );
+  const ownerExitWatchdog = ownerExitPeers.find((pid) =>
+    String(spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout).includes('--guardian-watchdog'),
+  );
+  try {
+    check(
+      ownerExitGuardian !== undefined && ownerExitWatchdog !== undefined && ownerExitChild !== null,
+      'the normal-exit case did not record its guardian, watchdog and child',
+    );
+    if (ownerExitGuardian !== undefined && ownerExitWatchdog !== undefined) {
+      const groupOf = (pid) => Number(spawnSync('ps', ['-p', String(pid), '-o', 'pgid='], { encoding: 'utf8' }).stdout.trim());
+      check(groupOf(ownerExitGuardian) !== groupOf(ownerExitWatchdog), 'the POSIX watchdog joined the guardian process group');
+    }
+    const ownerExitEnding = await Promise.race([ownerExit.closed, delay(10_000).then(() => null)]);
+    check(
+      ownerExitEnding?.code === 0 && ownerExitEnding.stdout.includes('skill: stub-skill'),
+      `the normal-exit case did not preserve the runner answer: ${ownerExitEnding?.code ?? 'still running'} ${ownerExitEnding?.stderr ?? ''}`,
+    );
+    if (ownerExitChild !== null) check(await processEnds(ownerExitChild), `agent child ${ownerExitChild} survived a normal agent exit`);
+    if (ownerExitWatchdog !== undefined)
+      check(await processEnds(ownerExitWatchdog), `POSIX watchdog ${ownerExitWatchdog} survived verified normal teardown`);
+  } finally {
+    ownerExit.child.kill('SIGKILL');
+    if (ownerExitChild !== null) reap(ownerExitChild);
+    if (ownerExitWatchdog !== undefined) reap(ownerExitWatchdog);
   }
 
   // The agent answers and exits, leaving a child in a new session that holds its standard input, output and error:
@@ -2385,6 +2503,7 @@ async function main() {
     await checkSupervision();
     await checkWindowsSupervision();
     checkWindowsRunnerReference();
+    if (process.platform !== 'win32') checkPosixRunnerReference();
     checkPasses();
     checkRemovedEntry();
     checkShim();

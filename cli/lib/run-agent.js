@@ -311,8 +311,8 @@ function runAgent(prompt, options = {}) {
   // spawnSync gets no timeout of its own: its timer counts time the runner
   // spends suspended (Ctrl-Z), and on expiry it closes the pipes before reading
   // what they hold, the agent's reply included. The group leader owns the wall
-  // clock, and the supervisor the backstop past it. On Windows the guardian's
-  // Job Object setup has a separate 90 s bound before that clock starts.
+  // clock, and the supervisor the backstop past it. The guardian arms POSIX
+  // watchdog ownership or the Windows Job Object before that clock starts.
   const result = spawnSync(process.execPath, invocation.supervisorArgs, {
     cwd: invocation.cwd,
     encoding: 'utf8',
