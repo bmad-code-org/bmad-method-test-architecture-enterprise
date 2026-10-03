@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "Bypass the adopter-owned malformed-request guard for B-002.",
+  "targetArtifact": "target/summarizer.js",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "if (!/^List [a-z]+$/.test(request)) {",
+    "replace": "if (false) {",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The type-violating request prints a pantry summary to stdout and exits 0 without the refusal diagnostic."
+}

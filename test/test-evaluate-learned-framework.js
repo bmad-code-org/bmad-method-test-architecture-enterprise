@@ -3,7 +3,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
+const { runMutationCycle } = require('../cli/lib/evaluate/mutation');
 
 const ROOT = path.join(__dirname, '..');
 const FIXTURE = path.join(__dirname, 'fixtures', 'evaluate-learn');
@@ -21,6 +23,7 @@ const REFUSAL = 'error: invalid list request\n';
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !/(?:API_KEY|TOKEN|SECRET|CREDENTIAL|AUTHORIZATION)/i.test(key)),
 );
+const BYPASSED = `Summary for ${JSON.stringify({ prompt: 42 })}: apples, pears\n`;
 const temporaryProjects = [];
 const failures = [];
 let checks = 0;
@@ -196,7 +199,39 @@ function evidenceRecord() {
     'transcript lacks the ordered final digest, development, and held-out evidence',
   );
   const mutations = fs.readdirSync(path.join(EVALUATION, 'mutations')).filter((name) => name.endsWith('.mutation.json'));
-  check(mutations.length === 1 && mutations[0] === 'M-001.mutation.json', `expected one committed mutation: ${mutations}`);
+  check(
+    JSON.stringify(mutations.sort()) === JSON.stringify(['M-001.mutation.json', 'M-002.mutation.json']),
+    `expected two committed mutations: ${mutations}`,
+  );
+  const guard = read(path.join(EVALUATION, 'mutations', 'M-002.mutation.json'));
+  const target = fs.readFileSync(path.join(FIXTURE, guard.targetArtifact), 'utf8');
+  check(
+    guard.operator.kind === 'replace-exact' &&
+      guard.operator.occurrences === 1 &&
+      guard.targetArtifact === 'target/summarizer.js' &&
+      target.split(guard.operator.find).length === 2 &&
+      !target.includes(guard.operator.replace),
+    'guard mutation no longer makes one copied-target edit',
+  );
+  const evaluation = read(path.join(EVALUATION, 'evaluation.json'));
+  check(JSON.stringify(evaluation.heldOutProbes) === JSON.stringify(['P-003', 'P-006']), 'held-out defect partition changed');
+  for (const [probeId, partition] of [
+    ['P-005', 'development'],
+    ['P-006', 'held-out'],
+  ]) {
+    const probe = read(path.join(EVALUATION, 'probes', `${probeId}.probe.json`));
+    check(
+      probe.behaviorId === 'B-002' &&
+        probe.qualification.mutation === 'M-002' &&
+        probe.defects[0]?.manifestationWitness?.inputs?.stdin?.kind === 'json' &&
+        probe.defects[0]?.manifestationWitness?.inputs?.stdin?.value?.prompt === 42 &&
+        probe.defects[0]?.manifestationWitness?.relation?.operands[1]?.literal === BYPASSED &&
+        probe.defectSignature.observableChannel === 'stdout' &&
+        probe.defectSignature.condition.predicate.operands[1]?.literal === BYPASSED &&
+        probe.rationale.startsWith(`[${partition}]`),
+      `${probeId} lost its guard-bypass witness or channel signature`,
+    );
+  }
   const mapping = read(path.join(EVALUATION, 'evaluator', 'mapping.json')).keys;
   check(
     mapping['pantry-exact-summary']?.oracleId === 'O-001' &&
@@ -207,8 +242,11 @@ function evidenceRecord() {
     `framework result mapping changed: ${JSON.stringify(mapping)}`,
   );
   const contract = read(path.join(EVALUATION, 'contract.json'));
-  const oracleLiteral = (oracleId, pointer) => {
-    const oracle = contract.oracles.find((item) => item.id === oracleId);
+  check(contract.waivers.length === 0, 'pantry contract gained an engine waiver');
+  const authored = command(process.execPath, [CLI, 'check', '--evaluation', EVALUATION]);
+  check(authored.status === 0, `committed fixture has stale authored digests: ${authored.output}`);
+  const oracleLiteral = (oracleId, pointer, source = contract) => {
+    const oracle = source.oracles.find((item) => item.id === oracleId);
     const equality = oracle?.check?.operands.find(
       (operand) => operand.op === 'equality' && operand.operands.some((item) => item.pointer === pointer),
     );
@@ -222,6 +260,29 @@ function evidenceRecord() {
       oracleLiteral('O-002', '/interactions/reject-malformed/exit-code') === 2,
     'contract oracle literals drifted from the evaluator expectations',
   );
+  const refusalChecks = [
+    ['/interactions/reject-malformed/exit-code', 2],
+    ['/interactions/reject-malformed/stderr', REFUSAL],
+    ['/interactions/reject-malformed/stdout', ''],
+  ];
+  const refusalOracle = contract.oracles.find((item) => item.id === 'O-002');
+  check(
+    refusalOracle?.check?.op === 'all' &&
+      refusalOracle.check.operands.length === 3 &&
+      refusalChecks.every(
+        ([pointer, expected]) => oracleLiteral('O-002', pointer) === expected && refusalOracle.direction.evidenceTargets.includes(pointer),
+      ),
+    'O-002 must require the exit code, exact stderr, and empty stdout',
+  );
+  for (const [pointer] of refusalChecks) {
+    const weakened = structuredClone(contract);
+    const oracle = weakened.oracles.find((item) => item.id === 'O-002');
+    oracle.check.operands = oracle.check.operands.filter((operand) => !operand.operands.some((item) => item.pointer === pointer));
+    check(
+      !refusalChecks.every(([required, expected]) => oracleLiteral('O-002', required, weakened) === expected),
+      `O-002 removal control accepted a missing ${pointer} check`,
+    );
+  }
   const behaviors = Object.fromEntries(contract.behaviors.map((behavior) => [behavior.id, behavior]));
   check(
     behaviors['B-001']?.oracles.length === 1 &&
@@ -327,7 +388,10 @@ async function installedApi() {
 function project(edit = () => {}) {
   const root = fs.mkdtempSync(path.join(__dirname, '.tea-learn-'));
   temporaryProjects.push(root);
-  fs.cpSync(FIXTURE, root, { recursive: true });
+  fs.cpSync(FIXTURE, root, {
+    recursive: true,
+    filter: (source) => source !== path.join(EVALUATION, 'runs') && !source.startsWith(`${path.join(EVALUATION, 'runs')}${path.sep}`),
+  });
   const folder = path.join(root, 'evaluation');
   edit(folder);
   const digest = command(process.execPath, [CLI, 'digest', '--evaluation', folder]);
@@ -359,6 +423,83 @@ function scored(run, probeId) {
   return read(path.join(folder, batch, probeId, 'evidence-artifact.json'));
 }
 
+function guardQualification(run, probeId, witnessId) {
+  const folder = path.join(run, 'qualification', probeId);
+  const baseline = read(path.join(folder, 'baseline-pass.json'));
+  const mutated = read(path.join(folder, 'mutated-fail.json'));
+  const rollback = read(path.join(folder, 'rollback.json'));
+  const sourceDigest = `sha256:${crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(path.join(FIXTURE, 'target', 'summarizer.js')))
+    .digest('hex')}`;
+  const refusal = (arm) => arm.steps.find((step) => step.stepId === 'reject-malformed')?.observation;
+  const clean = [baseline, ...rollback.rePasses].every(
+    (arm) =>
+      arm.verdict === 'held' &&
+      refusal(arm)?.exitCode === 2 &&
+      refusal(arm)?.stderr?.value === REFUSAL &&
+      refusal(arm)?.stdout?.value === '',
+  );
+  const broken = refusal(mutated);
+  check(
+    baseline.verdict === 'held' &&
+      mutated.verdict === 'violated' &&
+      clean &&
+      broken?.exitCode === 0 &&
+      broken?.stderr?.value === '' &&
+      broken?.stdout?.value === BYPASSED,
+    `${probeId} did not witness the clean refusal and defective summary`,
+  );
+  check(
+    rollback.mutationId === 'M-002' &&
+      rollback.targetArtifact === 'target/summarizer.js' &&
+      rollback.preDigest === sourceDigest &&
+      rollback.mutatedDigest !== rollback.preDigest &&
+      rollback.restoredDigest === rollback.preDigest &&
+      rollback.rollbackVerified === true &&
+      rollback.rePasses.length > 0,
+    `${probeId} lacks applied-mutation and rollback proof: ${JSON.stringify(rollback)}`,
+  );
+  const qualified = read(path.join(run, 'probes', `${probeId}.probe.json`));
+  check(
+    qualified.qualification.rollbackVerified === true &&
+      qualified.artifactDigest === rollback.preDigest &&
+      qualified.defects[0]?.oracleEvidence[0]?.path?.endsWith(`qualification/${probeId}/mutated-fail.json`),
+    `${probeId} lost qualified defect evidence`,
+  );
+  const witnessFile = fs.readdirSync(path.join(run, 'observations')).find((name) => name.endsWith(`-${witnessId}.json`));
+  const witness = witnessFile && read(path.join(run, 'observations', witnessFile));
+  check(
+    witness?.workspace === 'mutated:M-002' &&
+      witness.request?.channels?.stdin?.kind === 'json' &&
+      witness.request?.channels?.stdin?.value?.prompt === 42 &&
+      witness.observation.exitCode === 0 &&
+      witness.observation.stdout.value === BYPASSED &&
+      witness.observation.stderr.value === '',
+    `${probeId} manifestation witness did not observe the bypass`,
+  );
+}
+
+function guardFindings(run, probeId) {
+  const set = read(path.join(run, 'trial-sets.json')).trialSets.find((item) => item.probeId === probeId);
+  check(set?.records.length === 3, `${probeId} has no three-trial set`);
+  for (const relative of set?.records ?? []) {
+    const record = read(path.join(run, relative));
+    const finding = record.findings.find((item) => item.oracleId === 'O-002');
+    const observation = record.observations.find((item) => item.observationId === finding?.observationIds[0]);
+    const quoted = finding?.quotedEvidence[0];
+    const allowed = {
+      'exit-code': String(observation?.exitCode),
+      stderr: observation?.stderr?.value,
+      stdout: observation?.stdout?.value,
+    };
+    check(
+      finding?.findingType === 'defect' && quoted && Object.hasOwn(allowed, quoted.channel) && quoted.quote === allowed[quoted.channel],
+      `${probeId} finding lacks a permitted observed quote: ${JSON.stringify(finding)}`,
+    );
+  }
+}
+
 function pipeline() {
   const folder = project();
   for (const subcommand of ['check', 'preflight']) {
@@ -366,6 +507,17 @@ function pipeline() {
     check(result.status === 0, `${subcommand} exited ${result.status}: ${result.output}`);
     if (result.status !== 0) return;
   }
+  const preflight = latestRun(folder);
+  const verdict = read(path.join(preflight, 'preflight-verdict.json'));
+  check(
+    verdict.passed === true &&
+      ['D-005', 'D-006'].every((defectId) =>
+        verdict.checks.some((item) => item.kind === 'seeded-fault-fired' && item.note === defectId && item.outcome === 'satisfied'),
+      ),
+    'preflight did not qualify both guard-bypass defects',
+  );
+  guardQualification(preflight, 'P-005', 'manifest-accepted-malformed');
+  guardQualification(preflight, 'P-006', 'manifest-held-out-accepted-malformed');
   const development = command(process.execPath, [CLI, 'run', '--evaluation', folder, '--partition', 'development']);
   check(development.status === 0, `development run exited ${development.status}: ${development.output}`);
   if (development.status !== 0) return;
@@ -375,13 +527,14 @@ function pipeline() {
   if (developmentScore.status !== 0) return;
   const index = read(path.join(run, 'trial-sets.json'));
   check(
-    JSON.stringify(index.trialSets.map((set) => set.probeId).sort()) === JSON.stringify(['P-001', 'P-002', 'P-004']),
+    JSON.stringify(index.trialSets.map((set) => set.probeId).sort()) === JSON.stringify(['P-001', 'P-002', 'P-004', 'P-005']),
     `development partition selected wrong probes: ${index.trialSets.map((set) => set.probeId)}`,
   );
   for (const [probeId, expected] of [
     ['P-001', 'passed-clean-control'],
     ['P-004', 'passed-clean-control'],
     ['P-002', 'caught'],
+    ['P-005', 'caught'],
   ]) {
     const evidence = scored(run, probeId);
     const votes = evidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
@@ -392,9 +545,10 @@ function pipeline() {
     );
   }
   const defectEvidence = scored(run, 'P-002');
+  const guardEvidence = scored(run, 'P-005');
   check(
-    defectEvidence.strength?.comparable === true && defectEvidence.strength.vector.defect.rate === 1,
-    `mutated probe lost comparable defect strength: ${JSON.stringify(defectEvidence.strength)}`,
+    [defectEvidence, guardEvidence].every((item) => item.strength?.comparable === true && item.strength.vector.defect.rate === 1),
+    `development defects lost comparable strength: ${JSON.stringify([defectEvidence.strength, guardEvidence.strength])}`,
   );
   const config = read(path.join(run, 'evaluator-configuration.json'));
   check(config.modelSnapshot === 'none' && config.judgeConfiguration === null, 'model-free evaluator gained a model condition');
@@ -409,6 +563,7 @@ function pipeline() {
       `finding lacks a verbatim captured stdout quote: ${JSON.stringify(finding)}`,
     );
   }
+  guardFindings(run, 'P-005');
 
   const heldOut = command(process.execPath, [CLI, 'run', '--evaluation', folder, '--partition', 'held-out']);
   check(heldOut.status === 0, `held-out run exited ${heldOut.status}: ${heldOut.output}`);
@@ -420,6 +575,7 @@ function pipeline() {
   check(heldOutScore.status === 0, `held-out score exited ${heldOutScore.status}: ${heldOutScore.output}`);
   if (heldOutScore.status !== 0) return;
   const heldOutEvidence = scored(heldOutRun, 'P-003');
+  const heldOutGuard = scored(heldOutRun, 'P-006');
   const heldOutEvidenceVotes = heldOutEvidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
   check(
     heldOutEvidenceVotes.length === 3 && heldOutEvidenceVotes.every((state) => state === 'caught'),
@@ -429,10 +585,23 @@ function pipeline() {
     heldOutEvidence.contractVerdict === 'PASS' && heldOutEvidence.coverageGaps.length === 0,
     `P-003 contract verdict or coverage gaps: ${heldOutEvidence.contractVerdict}, ${JSON.stringify(heldOutEvidence.coverageGaps)}`,
   );
+  const heldOutGuardVotes = heldOutGuard.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
+  check(
+    heldOutGuardVotes.length === 3 &&
+      heldOutGuardVotes.every((state) => state === 'caught') &&
+      heldOutGuard.contractVerdict === 'PASS' &&
+      heldOutGuard.coverageGaps.length === 0 &&
+      heldOutGuard.strength?.comparable === true &&
+      heldOutGuard.strength.vector.defect.rate === 1 &&
+      heldOutEvidence.strength?.comparable === true &&
+      heldOutEvidence.strength.vector.defect.rate === 1,
+    `held-out defect evidence weakened: ${JSON.stringify([heldOutEvidence.strength, heldOutGuard.strength])}`,
+  );
+  guardFindings(heldOutRun, 'P-006');
   const heldOutIndex = read(path.join(heldOutRun, 'trial-sets.json'));
   check(
-    JSON.stringify(heldOutIndex.trialSets.map((set) => set.probeId)) === JSON.stringify(['P-003']) &&
-      heldOutIndex.trialSets[0]?.records.length === 3,
+    JSON.stringify(heldOutIndex.trialSets.map((set) => set.probeId).sort()) === JSON.stringify(['P-003', 'P-006']) &&
+      heldOutIndex.trialSets.every((set) => set.records.length === 3),
     `held-out partition selected wrong trials: ${JSON.stringify(heldOutIndex.trialSets)}`,
   );
   const gap = read(path.join(heldOutRun, 'gap-view.json'));
@@ -441,6 +610,15 @@ function pipeline() {
   check(
     votes?.length === 3 && votes.every((state) => state === 'caught') && outcome.caughtCount === 3 && outcome.validCount === 3,
     `held-out P-003 gap result: ${JSON.stringify(outcome)}`,
+  );
+  const guardOutcome = gap['held-out']?.find((entry) => entry.probeId === 'P-006')?.outcome;
+  const guardVotes = guardOutcome?.trialVotes.map((vote) => vote.state);
+  check(
+    guardVotes?.length === 3 &&
+      guardVotes.every((state) => state === 'caught') &&
+      guardOutcome.caughtCount === 3 &&
+      guardOutcome.validCount === 3,
+    `held-out P-006 gap result: ${JSON.stringify(guardOutcome)}`,
   );
 }
 
@@ -456,6 +634,48 @@ function brokenMapping() {
   check(
     result.status === 12 && result.output.includes('judgment-rows schema') && result.output.includes('wrong-key'),
     `broken mapping ran successfully: ${result.output}`,
+  );
+}
+
+function missingGuardApplication() {
+  const folder = project((evaluation) => {
+    const file = path.join(evaluation, 'mutations', 'M-002.mutation.json');
+    const mutation = read(file);
+    mutation.operator.replace = mutation.operator.find;
+    fs.writeFileSync(file, `${JSON.stringify(mutation, null, 2)}\n`);
+  });
+  const result = command(process.execPath, [CLI, 'preflight', '--evaluation', folder]);
+  check(
+    result.status !== 0 && /M-002.*(did not fail|same bytes|identical)/.test(result.output),
+    `no-op guard mutation qualified: ${result.output}`,
+  );
+}
+
+async function blockedGuardRestore() {
+  const folder = project();
+  const root = path.dirname(folder);
+  const mutation = read(path.join(folder, 'mutations', 'M-002.mutation.json'));
+  const target = path.join(root, mutation.targetArtifact);
+  let failure;
+  try {
+    await runMutationCycle({
+      root,
+      mutation,
+      reExecutionCap: 1,
+      runArm: async (phase) => ({ verdict: phase === 'mutated' ? 'violated' : 'held' }),
+      log: (line) => {
+        if (line.includes('step 4, the original bytes restored')) {
+          fs.rmSync(target);
+          fs.mkdirSync(target);
+        }
+      },
+    });
+  } catch (error) {
+    failure = error;
+  }
+  check(
+    failure?.exitCode === 12 && failure.evidence?.restoredDigest === null && failure.message.includes('could not be written'),
+    `blocked restore was accepted: ${failure?.stack ?? 'no failure'}`,
   );
 }
 
@@ -520,6 +740,8 @@ function frameworkControlsJudgment() {
     evidenceRecord();
     await installedApi();
     pipeline();
+    missingGuardApplication();
+    await blockedGuardRestore();
     brokenMapping();
     changedResultShape();
     frameworkControlsJudgment();

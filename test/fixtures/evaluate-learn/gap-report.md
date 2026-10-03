@@ -24,3 +24,7 @@ No waiver was claimed. A waiver requires an adopter-approved machine-checkable c
 ## Post-release resolution
 
 Story 1.55 rescored this fixture with published eval-quality 6.0.1. The engine now recognizes O-001's paired exit-code 0 and exact whole-stdout checks for the same scalar CLI step. `test:evaluate-learned-framework` confirms `contractVerdict: PASS` and an empty `coverageGaps` list in development P-001, P-004 and P-002, and held-out P-003. Each keeps its three historical trial votes. The earlier invocations and their `CONCERNS` verdicts remain above as the record of the gap that led to this repair.
+
+## Story 1.56 current outcome, 2026-10-03
+
+M-002 now commits the guard-bypass defect in a copied target. Development P-005 and held-out P-006 each catch it in all three scored trials; their O-002 findings quote an observed channel. P-004 still passes all three clean-control trials. B-001 probes P-002 and P-003 and B-002 probes P-005 and P-006 each have comparable defect strength with rate 1. All six development and held-out evidence artifacts report `contractVerdict: PASS`, no coverage gaps and no waiver on published eval-quality 6.0.1. The earlier account of removing the exploratory mutation describes the 2026-09-29 run.
