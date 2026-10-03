@@ -730,7 +730,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       // Bubblewrap forks the command it confines, so a private directory carries the signal that ended a target.
       let status = null;
       if (confinement.mode === 'bubblewrap') {
-        status = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-status-'));
+        status = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-status-'));
         scratch.push(status);
       }
       sandbox = targetSandbox({

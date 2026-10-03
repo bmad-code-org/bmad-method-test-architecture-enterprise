@@ -597,6 +597,12 @@ function makePrivateParent(scratch, ownership = null) {
   }
   scratch.unshift(directory);
   Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
+  const parentStat = fs.lstatSync(directory);
+  Object.defineProperty(scratch, 'privateParentIdentity', {
+    value: { dev: parentStat.dev, ino: parentStat.ino },
+    enumerable: false,
+    configurable: true,
+  });
   Object.defineProperty(scratch, 'privateRoot', { value: root, enumerable: false, configurable: true, writable: true });
   if (pendingOwnership !== null) {
     const { name, journal, entry, contents } = pendingOwnership;
@@ -793,6 +799,24 @@ function makeScratchDirectory(scratch, prefix, root = scratch.privateParent ?? o
 function removeScratchDirectory(directory) {
   unlockDirectories(directory);
   fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/** Remove a private parent's direct children while its ownership marker remains available for recovery. */
+function removePrivateParentDirectory(directory, expected) {
+  const verify = () => {
+    const current = fs.lstatSync(directory);
+    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== expected?.dev || current.ino !== expected?.ino)
+      throw new WorkspaceRefusal(`private parent ${directory} changed before cleanup`);
+  };
+  verify();
+  for (const name of fs.readdirSync(directory)) {
+    verify();
+    if (name !== PRIVATE_PARENT_MARKER) removeScratchDirectory(path.join(directory, name));
+  }
+  verify();
+  fs.rmSync(path.join(directory, PRIVATE_PARENT_MARKER), { force: true });
+  verify();
+  fs.rmdirSync(directory);
 }
 
 /**
@@ -1954,6 +1978,7 @@ module.exports = {
   realPathLoosely,
   releaseScratchDirectory,
   retirePrivateParentOwnership,
+  removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
   reclaimDeadPrivateParents,

@@ -81,6 +81,7 @@ const { admissionRefusal, armVerdict } = require('../cli/lib/evaluate/preflight'
 const { dispositionOf } = require('../cli/lib/evaluate/evaluator');
 const { QualificationError, countOccurrences, qualifiedProbe, runMutationCycle } = require('../cli/lib/evaluate/mutation');
 const {
+  WorkspaceRefusal,
   cacheOnlyPort,
   cachingPort,
   createWorkspace,
@@ -91,6 +92,7 @@ const {
   privateRootName,
   reclaimDeadPrivateParents,
   retirePrivateParentOwnership,
+  removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
   requestKey,
@@ -1246,6 +1248,16 @@ async function checkUnits() {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+function processIsLive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
 /** A failed ps lookup cannot identify a reused PID, so it is uncertain until the kernel says the PID is gone. */
 function commandProcessState(pid, command) {
   const listed = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
@@ -1595,7 +1607,8 @@ async function checkKilledEngineStage() {
     parent = path.join(privateRoot, fs.readdirSync(privateRoot).find((name) => name.startsWith(`run-${child.pid}-`)) ?? 'missing');
     check(fs.existsSync(parent), 'the held engine compile has no private parent');
     const stage = fs.existsSync(parent) ? fs.readdirSync(parent).find((name) => name.startsWith('tea-evaluate-engine-')) : null;
-    check(stage !== undefined, 'the held engine compile has no staging directory');
+    check(stage !== null && stage !== undefined, 'the held engine compile has no staging directory');
+    if (stage === null || stage === undefined) return;
     const livePreflight = evaluate(['preflight', '--evaluation', fixture.folder], fixture.temp.env);
     check(livePreflight.status === 0, `a second preflight beside a live owner exited ${livePreflight.status}\n${livePreflight.output}`);
     check(fs.existsSync(parent), 'a second preflight reclaimed a live owner’s private parent');
@@ -1661,12 +1674,22 @@ async function checkKilledEngineStage() {
       fs.rmSync(parent);
       fs.renameSync(parked, parent);
     }
+    await delay(100);
+    check(
+      otherChild.exitCode === null && otherChild.signalCode === null && processIsLive(otherChild.pid),
+      'the unrelated engine owner ended before same-evaluation recovery',
+    );
     const recovered = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: laterTemp, TMP: laterTemp, TEMP: laterTemp });
+    const otherLiveAfterRecovery = processIsLive(otherChild.pid);
+    await delay(100);
     check(recovered.status === 0, `recovery after a killed engine compile exited ${recovered.status}\n${recovered.output}`);
     check(recovered.output.includes(parent), `recovery did not report the killed parent ${parent}`);
     check(recovered.output.includes(path.join(parent, stage)), `recovery did not report the killed engine stage ${stage}`);
     check(!fs.existsSync(parent), `recovery left the killed engine stage parent ${parent}`);
-    check(otherChild.exitCode === null && otherChild.signalCode === null, 'the unrelated engine owner ended before recovery');
+    check(
+      otherLiveAfterRecovery && otherChild.exitCode === null && otherChild.signalCode === null && processIsLive(otherChild.pid),
+      'the unrelated engine owner ended during same-evaluation recovery',
+    );
     check(
       fs.existsSync(otherParent) && fs.existsSync(otherStagePath),
       'same-evaluation recovery removed the unrelated live engine stage or parent',
@@ -1715,6 +1738,66 @@ function checkAuxiliaryJournalEdges() {
   const made = [];
   const records = [];
   const log = [];
+  const linked = [];
+  const linkedParent = makePrivateParent(linked, { folder: fixture.folder, root: fixture.project, journal, runId: 'linked-cleanup' });
+  const parkedParent = `${linkedParent}-parked`;
+  const victim = tempDir('private-parent-swap-victim');
+  const survivor = path.join(victim, 'survivor');
+  fs.writeFileSync(survivor, 'keep');
+  fs.renameSync(linkedParent, parkedParent);
+  fs.symlinkSync(victim, linkedParent, 'dir');
+  let refusedLinkedParent = false;
+  try {
+    removePrivateParentDirectory(linkedParent, linked.privateParentIdentity);
+  } catch (error) {
+    refusedLinkedParent = error instanceof WorkspaceRefusal;
+  } finally {
+    fs.rmSync(linkedParent, { force: true });
+    fs.renameSync(parkedParent, linkedParent);
+  }
+  check(refusedLinkedParent && fs.existsSync(survivor), 'private-parent cleanup followed a replaced link into another tree');
+  removePrivateParentDirectory(linkedParent, linked.privateParentIdentity);
+  retirePrivateParentOwnership(linked);
+  const unregistered = [];
+  const unregisteredParent = makePrivateParent(unregistered, {
+    folder: fixture.folder,
+    root: fixture.project,
+    journal,
+    runId: 'unregistered-child',
+  });
+  const unregisteredChild = path.join(unregisteredParent, 'tea-evaluate-unregistered');
+  const unregisteredRecord = path.join(journal.root, unregistered.privateOwnership.name);
+  fs.mkdirSync(unregisteredChild);
+  const originalRemoveUnregistered = fs.rmSync;
+  let refusedUnregistered = false;
+  try {
+    fs.rmSync = (candidate, options) => {
+      if (candidate === unregisteredChild) throw new Error('injected unregistered-child removal failure');
+      return originalRemoveUnregistered(candidate, options);
+    };
+    try {
+      removePrivateParentDirectory(unregisteredParent, unregistered.privateParentIdentity);
+    } catch (error) {
+      refusedUnregistered = error.message === 'injected unregistered-child removal failure';
+    }
+  } finally {
+    fs.rmSync = originalRemoveUnregistered;
+  }
+  try {
+    check(refusedUnregistered, 'private-parent cleanup skipped the unregistered direct child');
+    check(
+      fs.existsSync(unregisteredChild) &&
+        fs.existsSync(path.join(unregisteredParent, '.tea-evaluate-private-owner.json')) &&
+        fs.existsSync(unregisteredRecord),
+      'failed unregistered-child cleanup lost the parent marker or journal',
+    );
+    removePrivateParentDirectory(unregisteredParent, unregistered.privateParentIdentity);
+    retirePrivateParentOwnership(unregistered);
+    check(!fs.existsSync(unregisteredParent) && !fs.existsSync(unregisteredRecord), 'private-parent cleanup retry left scratch or journal');
+  } finally {
+    if (fs.existsSync(unregisteredParent)) removeScratchDirectory(unregisteredParent);
+    retirePrivateParentOwnership(unregistered);
+  }
   for (const failure of ['write', 'fsync', 'marker']) {
     const originalWrite = fs.writeFileSync;
     const originalFsync = fs.fsyncSync;

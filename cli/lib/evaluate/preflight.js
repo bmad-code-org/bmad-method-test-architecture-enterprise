@@ -124,6 +124,7 @@ const {
   realPathLoosely,
   releaseScratchDirectory,
   retirePrivateParentOwnership,
+  removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
   reclaimDeadPrivateParents,
@@ -578,7 +579,7 @@ async function pipeline(
       if (childFailed) scratch.unshift(parent);
       else {
         try {
-          removeScratchDirectory(parent);
+          removePrivateParentDirectory(parent, scratch.privateParentIdentity);
         } catch (error) {
           scratch.unshift(parent);
           log(`could not remove the private directory ${parent}: ${error.message}`);

@@ -5720,6 +5720,38 @@ async function checkTargetHomeUnits() {
       at('--remount-ro', privateRoot) > at('--bind', rootHome, rootHome),
     `the Bubblewrap vector does not bind the home beneath the private root between the root's empty file system and its remount: ${rootArguments.join(' ')}`,
   );
+  const rootStatus = path.join(privateRoot, 'run-1-abc', 'tea-evaluate-status-x');
+  fs.mkdirSync(rootStatus);
+  const statusWrapped = build('bubblewrap', { privateRoot, home: rootHome, status: rootStatus }).wrap('/bin/true', []);
+  const statusAt = (...words) =>
+    statusWrapped.args.findIndex((argument, index) => words.every((word, offset) => statusWrapped.args[index + offset] === word));
+  check(
+    statusAt('--bind', statusWrapped.statusFile, statusWrapped.statusFile) > statusAt('--tmpfs', privateRoot) &&
+      statusAt('--bind', statusWrapped.statusFile, statusWrapped.statusFile) < statusAt('--remount-ro', privateRoot) &&
+      statusAt('--bind', rootStatus, rootStatus) === -1,
+    `the Bubblewrap vector did not bind only its status file into the hidden private root: ${statusWrapped.args.join(' ')}`,
+  );
+  const auditedStatus = targetSandbox({
+    confinement: { ...modes.bubblewrap, observer: { executable: '/usr/bin/strace' } },
+    workspace,
+    privateRoot,
+    home: rootHome,
+    status: rootStatus,
+    audit: { directory: root },
+  }).wrap('/bin/true', []);
+  const statusAccess = {
+    kind: 'write',
+    path: auditedStatus.statusFile,
+    real: auditedStatus.statusFile,
+    ok: true,
+    errno: null,
+  };
+  check(
+    auditedStatus.trace.grants.withheldExcept.includes(auditedStatus.statusFile) &&
+      !auditedStatus.trace.grants.withheldExcept.includes(rootStatus) &&
+      traceDecision(statusAccess, auditedStatus.trace.grants) === null,
+    'the audited Bubblewrap status-file write was treated as access to the withheld private root',
+  );
   // The report rule comes before the home's re-grant, which overrides it, so the home is no violation, and the root's
   // denial after it carries the token, so a refused read of the root is reported.
   const auditedRoot = auditedProfile({ privateRoot, home: rootHome });
