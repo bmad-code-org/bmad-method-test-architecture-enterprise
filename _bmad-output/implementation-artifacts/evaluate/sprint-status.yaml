@@ -87,7 +87,7 @@ development_status:
   1-49-prove-test-design-mutation-rollback-before-claiming-it: done
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
-  1-52-stop-agent-descendants-on-windows: in-progress
+  1-52-stop-agent-descendants-on-windows: done
   1-53-bound-an-agent-whose-guardian-is-stopped: backlog
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog

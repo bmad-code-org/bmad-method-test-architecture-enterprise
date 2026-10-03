@@ -2,7 +2,7 @@
 title: 'Story 1.52: Stop agent descendants on Windows'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '214e1e70ee76ad72a2839592f0f69ba4359e3e29'
@@ -51,7 +51,7 @@ context:
 - [x] Add Windows real-runner cases for normal agent exit, simultaneous leader and supervisor termination, and job setup failure. Observe the expected child survivor before the production fix.
 - [x] Establish Job Object ownership before agent launch, hold it through the turn, and close it on every agent end or guardian loss.
 - [x] Add a Windows CI gate, reference assertions, changelog entry, and sprint status updates.
-- [ ] Run focused, docs, release-metadata, engine export, and full repository gates. Verify each criterion by temporarily removing its implementation or assertion.
+- [x] Run focused, docs, release-metadata, engine export, and full repository gates. Verify each criterion by temporarily removing its implementation or assertion.
 
 **Acceptance Criteria:**
 
@@ -67,6 +67,10 @@ The Windows CI job runs the real `tea-skill-runner` with a detached child that w
 [Windows startup probe 37069059035](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37069059035) isolated the helper's C# `Add-Type` block under the runner's minimal environment. The standalone PowerShell 5.1 process took 25,799 ms end to end, exited 0 with empty stderr, and spent 581 ms in `Add-Type`. The guardian's helper reached READY about 14.7 s after spawn, with 14,447 ms inside `Add-Type`; its agent launched and reported exit 0. The earlier 15 s setup bound had no useful margin. Windows setup now gets a separate measured bound, and the agent wall clock starts after confirmed launch. Removing `kill-on-close` from the runner reference made `test:evaluate-preflight` fail 1 of 301 checks at the intended documentation assertion; the passage was restored.
 
 [The bounded asynchronous probe 37069233644](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37069233644) repeated the result: the standalone process took 24,796 ms, exited 0 with empty stderr, and its `Add-Type` step took 548 ms; the guardian helper's `Add-Type` step took 16,354 ms, beyond the former 15 s bound. It recorded an agent PID and a successful FD3 report.
+
+[Windows run 37076100971](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37076100971) passed both direct startup probes and all 36 real-runner preflight checks after the hostile-cwd fixture was corrected. The fixture contains a fake `powershell.exe` that prints READY, and it verifies that the fake is never executed. Normal exit, dual kill, helper death, wall-clock timeout, and each setup failure ended with zero accumulated failures. The guardian launches PowerShell from the host runner's absolute SystemRoot path before applying target environment overrides. The leader's dedicated report pipe carries the guardian PID, agent readiness, and completion with a 2 s write bound; this removed the Windows FD3 synchronous write stall seen in [job 111055413783](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37072644356). The later [job 111066996561](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37076342186) repeated the 36-check pass on the documentation-aligned head.
+
+[Final CI run 37077418302](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/actions/runs/37077418302) passed the Windows job, all eight test shards, coverage, docs, lint, and supply-chain checks after the documentation contract fix. The local full `npm test` completed with exit code 0 using `eval-quality` 5.0.0. Native Codex adversarial and test-quality reviews were clear on the final code fixes. CodeRabbit processed all 24 changed files through the documentation fix with no actionable comments or unresolved review threads.
 
 ## Spec Change Log
 
@@ -88,6 +92,10 @@ The Windows CI job runs the real `tea-skill-runner` with a detached child that w
 | Edge 1: signal during setup            | high. The guardian's `launch()` can run after `stop()` and after its 2 s force-kill timer expires.                                                                                                                                                                                   | patch with Blind 4 |
 | Edge 2: scanner capitalization         | medium. The helper exception uses case-sensitive `indexOf`; case-varied engine or rollback names bypass this check.                                                                                                                                                                  | patch              |
 | Verification gap 1: assignment failure | medium. The injected exception occurs before `AssignProcessToJobObject`; removing the assignment failure check would leave all current Windows cases green on a host where assignment succeeds.                                                                                      | patch with Blind 6 |
+| Final review: hostile cwd fixture      | high. A relative skill root under the hostile working directory failed before the helper could launch, so the fake PowerShell assertion was vacuous. The fixture now copies the skill under that directory and observes the complete runner path.                                    | patch              |
+| Final review: PID report failure       | high. A closed guardian PID pipe on POSIX killed only the direct agent and then dereferenced a null Windows job stream. The error path now kills the POSIX group; a new end-to-end regression first proved a surviving child on the faulty branch.                                   | patch              |
+| Final review: SystemRoot scrubbing     | medium. The host SystemRoot was included in secret forms, which redacted ordinary Windows paths in target output. It remains a host-owned helper path and is excluded from secret scrubbing.                                                                                         | patch              |
+| Final review: docs and CI              | medium. The skill-runner rule omitted the Windows 120 s reserve, the startup probe left temporary files, and the 25 minute Windows job could expire before its bounded matrix. The reference, probe cleanup, and 35 minute CI bound now cover these paths.                           | patch              |
 
 The final native review found that the 10 s PID checks began after runner closure and ran sequentially. Both PIDs now share one deadline anchored to the agent exit marker or dual kill.
 
