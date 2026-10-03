@@ -153,6 +153,7 @@ development_status:
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
+  1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -194,6 +195,7 @@ parallel_lanes:
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
+    - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -277,4 +279,5 @@ owner_handoff:
       - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
       - 1-115-give-the-skill-a-command-that-prints-a-files-digest
       - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
+      - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

@@ -1257,6 +1257,16 @@ Added 2026-10-03 in Story 1.78's round 1 review. Levels: integration. File: `tes
 | The gameability branch scores under the wire | Story 1.78's case over a sealed-brief project that holds a gameability probe; assert the `gameability` row passes, its notes omit `no gameability probe`, and the wire records nothing | Integration | P1  | A version read after the check's no-probe return trips the wire |
 | The stub keeps its other modes               | The other sealed-brief cases of the suite run unchanged against the extended stub                                                                                                      | Integration | P2  | A stub change that alters another mode fails that mode's case   |
 
+### Story 1.120: Hold the partial-clone failing-pack refusal to one outcome on Linux
+
+Added 2026-10-03 in Story 1.103's round 2. Levels: Linux repro loop, integration. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`) and a loop script that runs its case repeatedly.
+
+| AC                                        | Test                                                                                                                                                       | Level      | P   | Revert check                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --- | ------------------------------------------------------------------------- |
+| One refusal on every run                  | Run the failing-pack case 200 times on Linux, serially and eight at a time; assert each refusal names `rev-list`, `pack-objects` and the wrapper's message | Repro loop | P1  | The loop fails at least once on the unfixed code and passes after the fix |
+| The cause is named and fixed at its site  | Read the story record for the cause (`git-lines.js`, the store cache or the case) and the change that closes it                                            | Record     | P2  | A fix with no named cause fails the review                                |
+| The loop runs on demand in CI's Linux job | Run the committed loop script from the Linux job's manual trigger                                                                                          | CI         | P2  | A loop that cannot run on the Linux image fails its own job               |
+
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 
 Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
