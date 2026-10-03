@@ -2,7 +2,7 @@
 title: 'Story 1.55: Recognize process and answer separation for scalar CLI output'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7338b5c04fb312d7e976672c05750974ad322b1a'
@@ -55,7 +55,7 @@ context:
 - [x] `bmad-eval-quality/src/core/coverage/satisfaction.ts` and coverage tests: recognize exact scalar process and answer checks, retaining negative and structured behavior.
 - [x] `bmad-eval-quality/CHANGELOG.md` and generated coverage artifacts: validate, merge and publish the engine change, then verify npm version and tag.
 - [x] `package-lock.json`, pantry fixture and `test/test-evaluate-learned-framework.js`: install published engine and prove three-trial clean and mutated replays with PASS evidence.
-- [ ] TeA `CHANGELOG.md`, sprint row and story record: document the change and run all gates.
+- [x] TeA `CHANGELOG.md`, sprint row and story record: document the change and run all gates.
 
 **Acceptance Criteria:**
 
@@ -71,22 +71,25 @@ context:
 - The engine PR also repaired its website audit gate after GHSA-ch52-4w7c-c8xp blocked CI. `http-cache-semantics@4.2.0` remains the latest npm release and no patched version exists as of 2026-10-03. The narrow, expiring exception applies only to Astro's locked static GitHub Pages build graph and keeps other high severity findings and incomplete or failed audits red. The documentation build reported `output: "static"` and 17 generated pages. The exception expires 2026-10-17.
 - Engine Publish run `37092731848` completed successfully. npm `latest` is `eval-quality@6.0.1`; `v6.0.1` dereferences to release commit `906d950cbe8166c64ab8e8090a564f5428347280` on engine `main`.
 - TeA keeps the `latest` devDependency, raises the optional peer floor to `>=6.0.1`, and resolves `6.0.1` in `package-lock.json`. The pantry contract and probes were already correct, so no contract or probe regeneration was needed. The test asserts `PASS` and an empty gap list on development P-001, P-004 and P-002 and held-out P-003, while retaining three expected votes per probe.
-- Red-phase check on eval-quality 6.0.0: `test:evaluate-learned-framework` failed exactly four new assertions, one for each artifact with a critical `success-indicator-separation` gap. On published 6.0.1 it passed 121 checks after the held-out evidence vote assertion. `test:atdd-workflow-guidance`, `test:release-metadata`, `test:guard-publish`, `format:check`, `lint:md`, `lint`, `docs:validate-links` and `docs:build` passed after rebasing onto TeA `c17cfafa`. A full local `npm test` was stopped at the relay owner's direction to avoid concurrent load with lane 2; it will be rerun after lane 2 exits.
+- Red-phase check on eval-quality 6.0.0: `test:evaluate-learned-framework` failed exactly four new assertions, one for each artifact with a critical `success-indicator-separation` gap. On published 6.0.1 it passed 121 checks after the held-out evidence vote assertion. `test:atdd-workflow-guidance`, `test:release-metadata`, `test:guard-publish`, `format:check`, `lint:md`, `lint`, `docs:validate-links` and `docs:build` passed after rebasing onto TeA `c17cfafa`. The first local full `npm test` was stopped at the relay owner's direction to avoid concurrent load with lane 2. The later full run, PID 53563, passed all runtime and test suites and ESLint, then exited 1 at Markdown lint because a review-table row added after the test started had three MD060 alignment errors. The row was formatted, and `lint:md`, `format:check` and `docs:validate-links` passed on the corrected tree. The relay owner directed final PR CI to serve as the pushed-head full gate.
+- CI shard 3 exposed three accepted fixture baselines stamped with eval-quality 6.0.0. Regenerated only the verdict CI, MCP grader and API grader accepted snapshots through TeA's `check`, `preflight`, `run`, `score` and `compare --accept` commands in disposable copies. Each snapshot retains 45 JSON artifacts; all 44 child hashes in each manifest verify. A field-by-field comparison with the 6.0.0 backups found unchanged verdicts, gaps, votes, qualifications, probes, strength values, trial actions and source content. Changed values are the 6.0.1 stamp and replay provenance: linked IDs, paths, hashes, elapsed times and API HTTP Date headers. Timing and Date values vary between runs. The three complete snapshots are the minimum coherent tool-owned set because their manifests and score records cross-reference the regenerated files. `test:evaluate-ci` and `test:evaluate-compare` passed after regeneration.
 
 ## Spec Change Log
 
 ## Review Triage Log
 
-| Finding                                                              | Decision                | Evidence                                                                                                                                                                          |
-| -------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Story record claimed the full TeA gate had passed before it finished | Fixed                   | Verification now records the stopped lane 3 run and pending rerun after lane 2 exits.                                                                                             |
-| Release guard and release-metadata test still accepted engine 6.0.0  | Fixed                   | Raised both floors to 6.0.1; focused guard and release-metadata suites pass.                                                                                                      |
-| Architecture and CLI reference named the old engine floor            | Fixed                   | Updated the stack record and CLI prerequisite to 6.0.1; formatting and link checks pass.                                                                                          |
-| Engine separation rule counts an oracle that no behavior references  | Deferred to Story 1.104 | The same contract-wide scan affects scalar and structured responses. Story 1.104 specifies negative fixtures, revert checks, the engine release and TeA adoption.                 |
-| H.1 hand-off text still started after Story 2.5                      | Fixed                   | The dependency row, H.1 instructions and sprint owner hand-off now wait for all lanes, including Story 1.104.                                                                     |
-| FR10 and CAP-10 maps omitted the new coverage story                  | Fixed                   | Both maps now name Story 1.104 and its orphan-oracle negative fixtures.                                                                                                           |
-| Missing-engine CLI guidance still recommended 6.0.0                  | Fixed                   | Reproduced exit 12 with the engine hidden; the message now recommends the declared 6.0.1 peer floor, covered by the existing dynamic peer-range assertion in test:evaluate-check. |
-| Held-out evidence votes were checked only through gap-view           | Fixed                   | P-003 evidence now directly asserts three caught votes, matching the development evidence checks.                                                                                 |
+| Finding                                                               | Decision                | Evidence                                                                                                                                                                          |
+| --------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Story record claimed the full TeA gate had passed before it finished  | Fixed                   | Verification records both the stopped run and PID 53563's exact exit at Markdown lint, followed by the focused recovery.                                                          |
+| Release guard and release-metadata test still accepted engine 6.0.0   | Fixed                   | Raised both floors to 6.0.1; focused guard and release-metadata suites pass.                                                                                                      |
+| Architecture and CLI reference named the old engine floor             | Fixed                   | Updated the stack record and CLI prerequisite to 6.0.1; formatting and link checks pass.                                                                                          |
+| Engine separation rule counts an oracle that no behavior references   | Deferred to Story 1.104 | The same contract-wide scan affects scalar and structured responses. Story 1.104 specifies negative fixtures, revert checks, the engine release and TeA adoption.                 |
+| H.1 hand-off text still started after Story 2.5                       | Fixed                   | The dependency row, H.1 instructions and sprint owner hand-off now wait for all lanes, including Story 1.104.                                                                     |
+| FR10 and CAP-10 maps omitted the new coverage story                   | Fixed                   | Both maps now name Story 1.104 and its orphan-oracle negative fixtures.                                                                                                           |
+| Missing-engine CLI guidance still recommended 6.0.0                   | Fixed                   | Reproduced exit 12 with the engine hidden; the message now recommends the declared 6.0.1 peer floor, covered by the existing dynamic peer-range assertion in test:evaluate-check. |
+| Held-out evidence votes were checked only through gap-view            | Fixed                   | P-003 evidence now directly asserts three caught votes, matching the development evidence checks.                                                                                 |
+| CI shard 3 found three accepted baselines stamped with engine 6.0.0   | Fixed                   | Reaccepted the three complete snapshots with 6.0.1. All manifest hashes verify; independent comparison found only version and replay provenance changes.                          |
+| A post-start review-table edit triggered MD060 in the local full gate | Fixed                   | Formatted the table and reran `lint:md`, `format:check` and `docs:validate-links` successfully on the corrected tree.                                                             |
 
 ## Verification
 
@@ -96,4 +99,6 @@ context:
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"` in TeA: published export exists.
 - `npm run test:evaluate-learned-framework` (121 checks), `npm run test:atdd-workflow-guidance`, `npm run test:release-metadata`, `npm run test:guard-publish`, `npm run docs:validate-links`, `npm run docs:build`, `npm run format:check`, `npm run lint:md` and `npm run lint` in TeA: passed after the rebase.
 - Missing-engine CLI check with the engine hidden: exit 12 now recommends `eval-quality@">=6.0.1"`.
-- `npm test` in TeA: pending until lane 2's full test exits, per the relay owner's process ownership instruction.
+- `npm run test:evaluate-ci` and `npm run test:evaluate-compare` in TeA: passed after the three accepted baselines were regenerated.
+- `npm test` in TeA, PID 53563: exited 1 at `lint:md` with three MD060 table-alignment errors in this story record. All preceding runtime/test suites, including the 121-check learned-framework suite, and ESLint passed. The row was added after the run started.
+- Post-start documentation recovery: formatted the review table; `npm run lint:md`, `npm run format:check` and `npm run docs:validate-links` passed. Final PR CI must pass on the pushed head.
