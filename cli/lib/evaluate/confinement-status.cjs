@@ -43,9 +43,14 @@
  */
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const net = require('node:net');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
+
+function signedStatus(secret, status) {
+  return { ...status, mac: crypto.createHmac('sha256', Buffer.from(secret, 'hex')).update(JSON.stringify(status)).digest('hex') };
+}
 
 /** The hosts a bridge connects to: the namespace's own loopback. */
 const BRIDGE_HOSTS = Object.freeze(['127.0.0.1', '::1', 'localhost']);
@@ -243,13 +248,37 @@ function parseArguments(argv) {
 function main() {
   const { bridge, statusFile, target, args } = parseArguments(process.argv.slice(2));
   const FORWARDED = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT', 'SIGUSR1', 'SIGUSR2'];
+  let secret = null;
+  try {
+    const initial = fs.readFileSync(statusFile, 'utf8');
+    if (initial !== '') {
+      const seed = JSON.parse(initial);
+      if (!/^[0-9a-f]{64}$/.test(seed.secret) || initial !== `${JSON.stringify({ secret: seed.secret })}\n`)
+        throw new Error('invalid status seed');
+      secret = seed.secret;
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      process.stderr.write(`status seed: ${error.message}\n`);
+      process.exitCode = 126;
+      return;
+    }
+  }
+  const writeStatus = (status) => {
+    const record = secret === null ? { ...status } : signedStatus(secret, status);
+    if (secret === null) delete record.complete;
+    fs.writeFileSync(statusFile, `${JSON.stringify(record)}\n`);
+  };
 
   // The mark that this process ran: Bubblewrap that fails before starting it leaves the file empty, which the runtime
   // reads as a target that never started and not as one that exited with Bubblewrap's own code.
   try {
-    fs.writeFileSync(statusFile, `${JSON.stringify({ started: true })}\n`);
+    writeStatus({ started: true });
   } catch {
-    // The runtime then reads the call as one that never started.
+    if (secret !== null) {
+      process.exitCode = 126;
+      return;
+    }
   }
   let closeBridge = null;
   const run = () => {
@@ -257,6 +286,11 @@ function main() {
     for (const name of FORWARDED) process.on(name, () => child.kill(name));
     child.once('error', (error) => {
       closeBridge?.();
+      try {
+        writeStatus({ started: true, complete: true });
+      } catch {
+        // The host rejects an incomplete signed status.
+      }
       process.stderr.write(`${target}: ${error.message}\n`);
       process.exitCode = error.code === 'ENOENT' ? 127 : 126;
     });
@@ -264,11 +298,16 @@ function main() {
     child.once('exit', (code, signal) => {
       closeBridge?.();
       if (signal === null) {
+        try {
+          writeStatus({ started: true, complete: true });
+        } catch {
+          // The host rejects an incomplete signed status.
+        }
         process.exitCode = code ?? 1;
         return;
       }
       try {
-        fs.writeFileSync(statusFile, `${JSON.stringify({ started: true, signal })}\n`);
+        writeStatus({ started: true, complete: true, signal });
       } catch {
         // The runtime then reads Bubblewrap's own exit, 128 plus the signal's number.
       }
@@ -292,6 +331,11 @@ function main() {
       run();
     },
     (error) => {
+      try {
+        writeStatus({ started: true, complete: true });
+      } catch {
+        // The host rejects an incomplete signed status.
+      }
       process.stderr.write(`bridge ${bridge}: ${error.message}\n`);
       process.exitCode = 126;
     },
@@ -309,5 +353,6 @@ module.exports = {
   parseArguments,
   parseBridgeLine,
   serveBridge,
+  signedStatus,
   splice,
 };

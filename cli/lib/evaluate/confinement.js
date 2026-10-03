@@ -104,6 +104,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { signedStatus } = require('./confinement-status.cjs');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -766,7 +767,8 @@ function targetSandbox({
       // A name the target cannot guess, made here and the only status file it may write, so no process can plant the
       // status of a call it is not part of.
       const statusFile = path.join(status, `status-${calls}-${crypto.randomBytes(8).toString('hex')}.json`);
-      fs.writeFileSync(statusFile, '', { mode: 0o600 });
+      const statusKey = crypto.randomBytes(32).toString('hex');
+      fs.writeFileSync(statusFile, `${JSON.stringify({ secret: statusKey })}\n`, { mode: 0o600 });
       // The source stays under the owned parent for killed-run recovery. A synthetic /dev mount keeps its directory
       // out of the target's otherwise empty private root and out of the target home's parent listing.
       const statusMount =
@@ -793,10 +795,11 @@ function targetSandbox({
         target,
         ...args,
       ];
-      if (observer === null) return { target: command[0], args: command.slice(1), statusFile };
+      const holdKey = (wrapped) => Object.defineProperty(wrapped, 'statusKey', { value: statusKey });
+      if (observer === null) return holdKey({ target: command[0], args: command.slice(1), statusFile });
       const file = path.join(audit.directory, `trace-${calls}-${crypto.randomBytes(6).toString('hex')}.txt`);
       const traced = [...straceCommand(confinement.observer.executable, file), ...command];
-      return {
+      return holdKey({
         target: traced[0],
         args: traced.slice(1),
         statusFile,
@@ -812,7 +815,7 @@ function targetSandbox({
             withheldExcept: withheldExcept(),
           },
         },
-      };
+      });
     },
     /**
      * Reads what a call's processes opened, once the call has ended: under
@@ -931,7 +934,7 @@ function makeObserver({ confinement, audit, cwd }) {
  * not set up its namespace ran nothing) and the signal that ended it, if a
  * signal did. A call with no status file (Seatbelt) counts as started.
  */
-function recordedStatus(statusFile) {
+function recordedStatus(statusFile, statusKey = null) {
   if (statusFile === null) return { started: true, signal: null };
   let text;
   try {
@@ -940,6 +943,25 @@ function recordedStatus(statusFile) {
     return { started: false, signal: null };
   }
   fs.rmSync(statusFile, { force: true });
+  if (statusKey !== null) {
+    if (text === `${JSON.stringify({ secret: statusKey })}\n`) return { started: false, signal: null, valid: true };
+    try {
+      const { mac, ...status } = JSON.parse(text);
+      const expected = signedStatus(statusKey, status).mac;
+      if (
+        status.started === true &&
+        (status.complete === undefined || status.complete === true) &&
+        (status.signal === undefined || os.constants.signals[status.signal] !== undefined) &&
+        typeof mac === 'string' &&
+        /^[0-9a-f]{64}$/.test(mac) &&
+        crypto.timingSafeEqual(Buffer.from(mac, 'hex'), Buffer.from(expected, 'hex'))
+      )
+        return { started: true, signal: status.signal ?? null, valid: true, complete: status.complete === true };
+    } catch {
+      // An invalid or unfinished status has no authority over the target's outcome.
+    }
+    return { started: true, signal: null, valid: false };
+  }
   try {
     const { started, signal } = JSON.parse(text);
     return { started: started === true, signal: typeof signal === 'string' && os.constants.signals[signal] !== undefined ? signal : null };
@@ -1177,9 +1199,10 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
           },
           signal,
         );
-        const status = recordedStatus(wrapped.statusFile);
+        const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
         read = true;
         started = status.started;
+        if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
         if (!status.started) {
           // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
           const said = stderrTail(result?.stderr?.value ?? result?.stderr);
@@ -1187,10 +1210,12 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
             `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
           );
         }
+        if (status.valid === true && status.complete !== true)
+          throw new ConfinementError('the confined target status failed integrity verification');
         return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
         // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
-        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile).started;
+        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
         await sandbox.collect?.(wrapped, { started });
         releaseTemporary(scratch, temporary);
       }
@@ -1228,7 +1253,8 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
           },
           signal,
         );
-        status = recordedStatus(wrapped.statusFile);
+        status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+        if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
         if (typeof result.exitCode !== 'number') return result;
         if (!status.started) {
           // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
@@ -1236,10 +1262,12 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
             `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
           );
         }
+        if (status.valid === true && status.complete !== true)
+          throw new ConfinementError('the confined tool server status failed integrity verification');
         return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
         // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
-        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile);
+        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
         await sandbox.collect?.(wrapped, { started: status?.started === true });
         releaseTemporary(scratch, temporary);
       }
