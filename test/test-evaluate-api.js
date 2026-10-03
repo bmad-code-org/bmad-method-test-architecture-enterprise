@@ -2669,7 +2669,7 @@ async function checkLetterCases() {
 
 /** A serializer must not expose a secret whose individual letters changed case before escaping. */
 async function checkUnevenEscapedCases() {
-  const { scrub, scrubCutText, secretForms, matcherFor } = require('../cli/lib/evaluate/arm');
+  const { scrub, scrubCutText, secretForms, escapedPatternSize } = require('../cli/lib/evaluate/arm');
   const registry = (secret) => ({ apiSecrets: () => [secret] });
   const probe = (answer, secret) => hostEnvironmentPort({ port: answering(answer), registry: registry(secret) }).probe(API_REQUEST);
   const failure = async (fault, secret) =>
@@ -2683,7 +2683,7 @@ async function checkUnevenEscapedCases() {
     })
       .probe(API_REQUEST)
       .catch((error) => error);
-  const secrets = ['münich-κόσμος-ключ-𐐨-0123', 'admin-index-token'];
+  const secrets = ['münich-κόσμος-ключ-𐐨-0123', 'admin-index-token', 'straße-Secret-ünï-0123'];
   const formats = [
     ['one level, lower hex', (text) => asciiEscaped(text, false)],
     ['one level, upper hex', (text) => asciiEscaped(text, true)],
@@ -2730,6 +2730,37 @@ async function checkUnevenEscapedCases() {
       }
     }
   }
+  const kelvinSecret = 'key-ü-ö-token';
+  const kelvinEcho = String.raw`Key-\u00dc-\u00f6-token`;
+  const { observation: kelvinObservation } = await probe(echoingAnswer(kelvinEcho), kelvinSecret);
+  check(
+    JSON.stringify(kelvinObservation) === JSON.stringify({ ...API_REQUEST, kind: 'api', ...echoingAnswer(SCRUBBED_TEXT) }),
+    `a case-fold equivalent in an escaped echo leaked: ${JSON.stringify(kelvinObservation)}`,
+  );
+  check(
+    scrub(String.raw`üüüüüüüü\u00fc`, secretForms(['üüüüüüüü'])) === SCRUBBED_TEXT,
+    'an escaped match overlapping a raw match left its suffix visible',
+  );
+  const slashes = '\\'.repeat(16);
+  const nearStart = performance.now();
+  check(
+    scrub(`${slashes}${slashes}X`, secretForms([`${slashes}Y`])) === `${slashes}${slashes}X`,
+    'an ambiguous near-match changed ordinary text',
+  );
+  check(performance.now() - nearStart < 5000, 'an ambiguous near-match took over five seconds');
+  const longNearSecret = `${'a'.repeat(9600)}b`;
+  const longNearText = `\\${'a'.repeat(19_200)}`;
+  const longNearStart = performance.now();
+  let longNearRefusal;
+  try {
+    scrub(longNearText, secretForms([longNearSecret]));
+  } catch (error) {
+    longNearRefusal = error;
+  }
+  check(
+    longNearRefusal?.message === 'Escaped secret matching exceeded its work limit' && performance.now() - longNearStart < 5000,
+    `a hostile long near-match did not fail closed in time: ${String(longNearRefusal?.message)}`,
+  );
   const longSecret = 'münich'.repeat(90);
   const longEcho = asciiEscaped(LETTER_CASES.alternating(longSecret), true);
   check(
@@ -2742,8 +2773,9 @@ async function checkUnevenEscapedCases() {
     [...forty].length === 40 && [...forty].every((letter) => letter.codePointAt(0) > 0x7f && /\p{L}/u.test(letter)),
     'the bound fixture is not forty non-ASCII letters',
   );
-  const matcher = matcherFor(secretForms([forty]));
-  check(matcher.escapedSource.length < 120_000, `forty letters made ${matcher.escapedSource.length} pattern characters`);
+  const patternSize = escapedPatternSize(secretForms([forty]));
+  check(patternSize < 120_000, `forty letters made ${patternSize} pattern characters`);
+  check(require('../cli/lib/evaluate/arm').matcherFor === undefined, 'the mutable cached matcher is exported');
   const ordinary = 'ordinary evidence '.repeat(65_536);
   const started = performance.now();
   check(scrub(ordinary, secretForms([forty])) === ordinary, 'the ordinary megabyte changed');

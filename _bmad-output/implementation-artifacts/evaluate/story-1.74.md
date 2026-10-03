@@ -68,6 +68,7 @@ context:
 - The forty-letter fixture compiled to a 3,402-character source, below the 120,000-character bound. Scrubbing 1,179,648 bytes of ordinary text took 5 ms in one local measurement and remained below the 5,000 ms assertion.
 - The focused escaped suite passed 127 checks and Story 1.66's focused suite passed 3,891 checks. The complete API suite passed 4,381 checks. `docs:validate-links`, `docs:build`, `test:release-metadata`, `lint`, `lint:md`, `format:check` and the engine export check passed. `npm test` awaits the assigned host slot.
 - A scratch-module revert of the escaped match exposed `Admin-\\u0130ndex-Token`. A separate revert of escaped prefix matching exposed `Admin-\\u01`. Restoring the old limit sentence triggered the reference assertion. The live checkout was unchanged by these revert checks.
+- Review repair replaced the full escaped regex search with a token walk, retained original text spans and scanned overlapping starts. A sticky Unicode case-insensitive comparison covers `K` beside `K`; the existing per-character alternatives cover `ß` becoming `SS`. Each scrub has a fixed work limit. A hostile long near-match raises an infrastructure fault before any observation can be sealed. The matcher-size test now reads a scalar and no mutable matcher is exported. The focused escaped suite passed 193 checks, Story 1.66's suite passed 3,891, and the complete API suite passed 4,447. ESLint, Prettier and whitespace checks passed after this repair.
 
 ## Spec Change Log
 
@@ -83,6 +84,7 @@ context:
 - Edge 1, overlapping escaped match: **high**. Reproduced with the same eight-`ü` case as Blind 2. Fix with Blind 2.
 - Edge 2, long-value scan: **medium**. The long token walker rechecks every candidate start in a repeated near-match. Fix with Blind 4.
 - Verification gap 1, case expansion: **medium**. The new fake-port suite lacks a case-expanding secret, so dropping the `ß` to `SS` choice would survive its checks. Add an uneven escaped `straße` echo to the regression.
+- Review repair outcome: Blind 1 to 4, Blind 6, Edge 1 and 2, and Verification gap 1 were patched and covered by the new fake-port, overlap, backslash near-match, long near-match, export and case-expansion assertions. Blind 5 was rejected on the `faultRecord` boundary evidence above. A fresh focused review remains the next gate.
 
 ## Design Notes
 
