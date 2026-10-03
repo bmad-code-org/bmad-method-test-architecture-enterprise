@@ -2666,6 +2666,18 @@ function checkHistoricalReference() {
     ),
     'the reference\'s "### Against deployments" section does not state the three points at which the pre-fix deployment is asked which release it runs',
   );
+  // Story 1.75: `check` names a report-operation signature collision before the run, the rules table's `historical` row
+  // names the finding, and the sentence that `check` exits 0 for such a registry is gone.
+  const rulesRow = text.split('\n').find((line) => line.startsWith('| `historical` ')) ?? '';
+  check(
+    deployments.includes(
+      "When a probe's deployments name report operations on two or more interfaces, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature, exits 10 with one `historical` finding that quotes the engine's line",
+    ) &&
+      !deployments.includes('`check` exits 0 for such a registry') &&
+      deployments.includes("is left to the CI plan's `compile` check and to `run`.") &&
+      rulesRow.includes("a duplicate operation signature that eval-quality's compile refuses"),
+    'the reference does not state, in "### Against deployments" and the `historical` rules row, that `check` names a report-operation signature collision, or still says that `check` exits 0 for such a registry',
+  );
   check(
     !deployments.includes("asks the deployment's other interfaces nothing") && !deployments.includes('One operation reports one interface'),
     'the reference\'s "### Against deployments" section still says that one operation reports one interface\'s release and the other interfaces are asked nothing',

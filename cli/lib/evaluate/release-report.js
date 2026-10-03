@@ -20,8 +20,13 @@
 
 'use strict';
 
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
 const { hostEnvironmentPort, runArm } = require('./arm');
 const { loadEngine } = require('./engine');
+const { EngineStageError, runEngineStage } = require('./engine-cli');
 
 /** The step the report request runs as; no plan step of the contract carries it. */
 const REPORT_STEP = 'release-report';
@@ -132,6 +137,68 @@ function reportsProblems({ reports, contract, interfaces, where }) {
   return problems;
 }
 
+/** The refusal code eval-quality's compile gives two `api` operations of one contract that share a method and an erased path template. */
+const SIGNATURE_COLLISION = 'duplicate-operation-signature';
+/** The exit of eval-quality's compile for a contract it refuses as a structural failure. */
+const COMPILE_REFUSED = 4;
+
+/**
+ * The interface IDs a probe's deployments name a report operation for, sorted:
+ * the keys of each side's `reports` whose entry names an operation.
+ *
+ * @param {unknown} deployments a probe's `qualification.deployments`
+ * @returns {string[]}
+ */
+function reportedInterfaces(deployments) {
+  const named = new Set();
+  for (const side of ['preFix', 'fix']) {
+    const reports = deployments?.[side]?.reports;
+    if (reports === null || typeof reports !== 'object' || Array.isArray(reports)) continue;
+    for (const [id, entry] of Object.entries(reports)) {
+      if (typeof entry?.operationId === 'string') named.add(id);
+    }
+  }
+  return [...named].sort();
+}
+
+/**
+ * The line eval-quality's own compile refuses a contract with when two `api`
+ * operations of its interfaces share a method and an erased path template
+ * (`duplicate-operation-signature`, AD-19 and AD-40), or `null` when compile
+ * accepts the contract, refuses it for another cause, faults, or cannot start
+ * (those are the `compile` check's findings and `run`'s, not this rule's).
+ * The refusal names both interfaces, both operation IDs and the shared method
+ * and path; TeA compares no template (AD-1) and quotes the engine's line.
+ *
+ * Compile runs in a private temporary directory, which holds its output and
+ * the stage record and is removed afterward, so nothing is written under the
+ * evaluation folder.
+ *
+ * @param {string} contractPath the evaluation's `contract.json`
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string|null}
+ */
+function signatureCollisionLine(contractPath, env = process.env) {
+  let staging;
+  try {
+    staging = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-check-'));
+    const stage = runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
+      runDirectory: staging,
+      recordPath: path.join(staging, 'compile-record.json'),
+      env,
+    });
+    if (stage.exitCode !== COMPILE_REFUSED) return null;
+    const line = `${stage.stderr}\n${stage.stdout}`.split('\n').find((candidate) => candidate.includes(`${SIGNATURE_COLLISION}:`));
+    return line === undefined ? null : line.trim();
+  } catch (error) {
+    // The stage could not start, was killed or exited undocumented: `run` reports it, and this rule stays quiet.
+    if (error instanceof EngineStageError) return null;
+    throw error;
+  } finally {
+    if (staging !== undefined) fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 /** What a value found at the pointer is, for a refusal to name: its JSON type alone. */
 function typeNote(value) {
   if (Array.isArray(value)) return 'an array';
@@ -217,4 +284,12 @@ async function reportedRelease({ contract, report, interfaceId, port, registry, 
   return { reported: found };
 }
 
-module.exports = { isJsonPointer, quotedIdentifier, reportProblems, reportedRelease, reportsProblems };
+module.exports = {
+  isJsonPointer,
+  quotedIdentifier,
+  reportProblems,
+  reportedInterfaces,
+  reportedRelease,
+  reportsProblems,
+  signatureCollisionLine,
+};

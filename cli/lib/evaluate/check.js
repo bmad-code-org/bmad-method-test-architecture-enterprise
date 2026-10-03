@@ -136,7 +136,7 @@ const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { reportsProblems } = require('./release-report');
+const { reportedInterfaces, reportsProblems, signatureCollisionLine } = require('./release-report');
 const {
   apiRegistryProblems,
   kindOf,
@@ -863,6 +863,8 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
  * each naming an operation of that `api` interface of the contract that needs
  * no input, with a JSON pointer (`reportsProblems`). Whether an origin is one
  * the registry's policy authorizes is eval-quality's to decide at run time.
+ * Whether two interfaces' report operations collide on a method and path is
+ * eval-quality's compile to say (`checkReportCollision`, Story 1.75).
  */
 function historicalBoundaryProblems(qualification, registry, contract) {
   const { fixCommit, deployments } = qualification ?? {};
@@ -1510,9 +1512,27 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
   }
 }
 
+/**
+ * Story 1.75: when a deployment-routed probe names report operations on two or more interfaces, eval-quality's compile
+ * says whether the contract keeps them apart. It refuses `duplicate-operation-signature` across the whole contract
+ * (a method and an erased path template is unique among all `api` operations of all interfaces, AD-40), which `run`
+ * meets at exit 4. TeA compares no template (AD-1): the one `historical` finding quotes the engine's own line, which
+ * names both interfaces, both operation IDs and the shared method and path. No other outcome of compile is this rule's.
+ */
+function checkReportCollision(report, folder, relative, env) {
+  const line = signatureCollisionLine(path.join(folder, CONTRACT_NAME), env);
+  if (line === null) return;
+  report.add(
+    relative,
+    'historical',
+    `the deployments name report operations on more than one interface, and eval-quality's compile refuses the contract for two api operations that share a method and a path template (${line}); change the path of one of the operations the line names, and give each interface's report operation a path no other api operation of the contract uses`,
+  );
+}
+
 /** Checks every committed probe; returns the qualification routes they take. */
-function checkProbes(report, folder, context, behaviors, mutations, registry) {
+function checkProbes(report, folder, context, behaviors, mutations, registry, env) {
   const routes = new Set();
+  let collisionProbe = null;
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -1532,7 +1552,15 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
     if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
+    if (
+      collisionProbe === null &&
+      probe.qualification?.route === 'historical' &&
+      reportedInterfaces(probe.qualification.deployments).length > 1
+    )
+      collisionProbe = relative;
   }
+  // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe that names two reports.
+  if (collisionProbe !== null) checkReportCollision(report, folder, collisionProbe, env);
   return routes;
 }
 
@@ -2019,7 +2047,7 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {string} folder
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder, { platform = process.platform } = {}) {
+async function checkEvaluation(folder, { platform = process.platform, env = process.env } = {}) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2058,7 +2086,7 @@ async function checkEvaluation(folder, { platform = process.platform } = {}) {
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
-  const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
+  const routes = checkProbes(report, folder, context, behaviors, mutations, registry, env);
   checkHeldOut(report, folder, evaluation);
   checkCalibration(report, folder, evaluation, context.contract, context.engine);
   const policy = checkScoringPolicy(report, folder, context, routes);
