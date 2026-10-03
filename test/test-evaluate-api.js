@@ -2667,6 +2667,96 @@ async function checkLetterCases() {
   );
 }
 
+/** A serializer must not expose a secret whose individual letters changed case before escaping. */
+async function checkUnevenEscapedCases() {
+  const { scrub, scrubCutText, secretForms, matcherFor } = require('../cli/lib/evaluate/arm');
+  const registry = (secret) => ({ apiSecrets: () => [secret] });
+  const probe = (answer, secret) => hostEnvironmentPort({ port: answering(answer), registry: registry(secret) }).probe(API_REQUEST);
+  const failure = async (fault, secret) =>
+    hostEnvironmentPort({
+      port: {
+        probe: async () => {
+          throw fault;
+        },
+      },
+      registry: registry(secret),
+    })
+      .probe(API_REQUEST)
+      .catch((error) => error);
+  const secrets = ['münich-κόσμος-ключ-𐐨-0123', 'admin-index-token'];
+  const formats = [
+    ['one level, lower hex', (text) => asciiEscaped(text, false)],
+    ['one level, upper hex', (text) => asciiEscaped(text, true)],
+    ['two levels, lower hex', (text) => JSON.stringify(asciiEscaped(text, false)).slice(1, -1)],
+    ['two levels, upper hex', (text) => JSON.stringify(asciiEscaped(text, true)).slice(1, -1)],
+    ['escaped at the second level', (text) => asciiEscaped(JSON.stringify(text).slice(1, -1), true)],
+  ];
+  for (const secret of secrets) {
+    for (const [caseName, change] of [
+      ['capitalized', LETTER_CASES.capitalized],
+      ['alternating', LETTER_CASES.alternating],
+      ['Turkish capitalized', LETTER_CASES['Turkish capitalized']],
+    ]) {
+      const echo = change(secret);
+      for (const [format, write] of formats) {
+        const written = write(echo);
+        const { observation } = await probe(echoingAnswer(written), secret);
+        const expected = { ...API_REQUEST, kind: 'api', ...echoingAnswer(SCRUBBED_TEXT) };
+        check(
+          JSON.stringify(observation) === JSON.stringify(expected),
+          `${secret} ${caseName} ${format} leaked in the observation: ${JSON.stringify(observation)}`,
+        );
+        const cut = written.slice(0, Math.max(4, written.indexOf(String.raw`\u`) + 4));
+        const fault = Object.assign(new Error(`denied ${written}`), {
+          code: 'forbidden-target',
+          captured: `printed ${cut}`,
+          cause: Object.assign(new Error(`cause ${written}`), { captured: `printed ${cut}` }),
+        });
+        const faulted = await failure(fault, secret);
+        check(
+          faulted.code === 'forbidden-target' &&
+            faulted.message === `denied ${SCRUBBED_TEXT}: printed ${SCRUBBED_TEXT}` &&
+            faulted.scrubbedCause === `cause ${SCRUBBED_TEXT}: printed ${SCRUBBED_TEXT}`,
+          `${secret} ${caseName} ${format} leaked in a fault: ${JSON.stringify([faulted.message, faulted.scrubbedCause])}`,
+        );
+        check(
+          scrubCutText(`printed ${cut}`, secretForms([secret])) === `printed ${SCRUBBED_TEXT}`,
+          `${secret} ${format} leaked a cut escape`,
+        );
+        check(
+          scrubCutText(`printed ${written.slice(0, 3)}`, secretForms([secret])) === `printed ${written.slice(0, 3)}`,
+          `${secret} ${format} scrubbed a three-character prefix`,
+        );
+      }
+    }
+  }
+  const longSecret = 'münich'.repeat(90);
+  const longEcho = asciiEscaped(LETTER_CASES.alternating(longSecret), true);
+  check(
+    scrub(`before ${longEcho} after`, secretForms([longSecret])) === `before ${SCRUBBED_TEXT} after`,
+    'a long uneven escaped echo leaked',
+  );
+  const letters = [...'üκόσμοςключ𐐨'];
+  const forty = Array.from({ length: 40 }, (_, index) => letters[index % letters.length]).join('');
+  check(
+    [...forty].length === 40 && [...forty].every((letter) => letter.codePointAt(0) > 0x7f && /\p{L}/u.test(letter)),
+    'the bound fixture is not forty non-ASCII letters',
+  );
+  const matcher = matcherFor(secretForms([forty]));
+  check(matcher.escapedSource.length < 120_000, `forty letters made ${matcher.escapedSource.length} pattern characters`);
+  const ordinary = 'ordinary evidence '.repeat(65_536);
+  const started = performance.now();
+  check(scrub(ordinary, secretForms([forty])) === ordinary, 'the ordinary megabyte changed');
+  check(performance.now() - started < 5000, 'scrubbing a megabyte took over five seconds');
+  const reference = fs.readFileSync(path.join(__dirname, '../docs/reference/tea-evaluate-cli.md'), 'utf8');
+  const httpSection = reference.split('## The registry')[1]?.split('\n## ')[0] ?? '';
+  check(
+    httpSection.includes('uneven capitalization') && httpSection.includes(String.raw`\u0130`),
+    'the HTTP reference does not describe unevenly cased escapes',
+  );
+  check(!httpSection.includes('is not replaced, since the escape digits'), 'the HTTP reference still states the old escaped-case limit');
+}
+
 // ---------------------------------------------------------------- the pipeline
 
 async function checkPipeline() {
@@ -5393,11 +5483,16 @@ async function main() {
       await runCase('the scrub in every letter case', checkLetterCases);
       return report();
     }
+    if (process.argv.includes('--uneven-escapes-only')) {
+      await runCase('unevenly escaped echoes', checkUnevenEscapedCases);
+      return report();
+    }
     await runCase('the templates', checkTemplates);
     await runCase('the port, in process', checkPortUnits);
     await runCase('the conformance file', checkConformance);
     await runCase('the units', checkUnits);
     await runCase('the scrub in every letter case', checkLetterCases);
+    await runCase('unevenly escaped echoes', checkUnevenEscapedCases);
     await runCase("an unsealed run's evidence", checkSealedEvidence);
     await runCase("the port's process", checkPortProcess);
     await runCase('the pipeline', checkPipeline);
