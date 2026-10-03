@@ -79,6 +79,18 @@ context:
 
 ## Review Triage Log
 
+Round 1 (blind, edge case, verification gap; three Opus reviewers):
+
+- No length bound on `agentVersion` (edge 1): **medium**, patch. A 30 MiB value reached the configuration, the digest and `run.json`. Both parsers now refuse a version over 256 characters.
+- Regex accepts non-SemVer values such as `01.02.03` and `1.2.3-..` (edge 2, blind 1): **low**, patch. The custom parser uses the SemVer 2.0.0 grammar; `claude` keeps its free-text shape.
+- Duplicate `agentVersion` keys bind the last silently (blind 2): **low**, patch. A line that repeats the key, escaped spellings included, is refused.
+- The Story 1.72 changelog line promised a follow-up contract (blind 3): **low**, patch. It now points at the keyed response.
+- The static guard scanned for two needles only (blind 4): **low**, patch. It scans for all four version identifiers in `run.js`, `evaluators.js` and `sealed-brief-agent.js`, and a tree walk over `cli/` holds the probe and the adapter parsers to `agent-adapters.js` and `run.js`.
+- A best-effort version read in `score` would pass (verification 1): **medium**, patch. The removed command is now a tripwire that records any invocation; score and the copied-baseline replay assert it was never touched.
+- Baseline replay is simulated with `score`, not `tea-evaluate ci` (verification 2): **medium**, partly patched. The `ci` replay for a sealed-brief run needs a CI fixture the suite does not have; the tree walk fails any `ci.js` or other file that imports the probe or restates the vendor flag, which is the only way a replay could read a version. Recorded as accepted.
+- Refused shapes ran without calibration configured (verification 3): **low**, patch. They run with `rubric: true`.
+- CLI reference markers read the whole file (verification 4): **low**, patch. They read `### The evaluation layer`.
+
 ## Verification
 
 **Commands:**

@@ -2213,7 +2213,12 @@ function checkEvaluatorGuidance(guide, failures) {
     'stderr is free for its own logging',
     'must change that output to the JSON line',
   ])
-    requireText(cliReference, marker, 'docs/reference/tea-evaluate-cli.md custom agent version response', failures);
+    requireText(
+      headingBody(cliReference, '### The evaluation layer'),
+      marker,
+      'docs/reference/tea-evaluate-cli.md custom agent version response',
+      failures,
+    );
   // Story 1.42: a sealed observation names its interface beside its operation, in a harness's records and in each calibration input.
   requireText(
     headingBody(guide, '## Emit judgment rows or sealed records'),

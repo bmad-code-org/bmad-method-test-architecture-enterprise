@@ -475,10 +475,30 @@ async function observeAgentVersion({ evaluator, scratch, env = process.env, spaw
   }
 }
 
+/** The longest version string a record may carry; a longer answer is not a version. */
+const MAX_AGENT_VERSION_LENGTH = 256;
+
+/** Semantic Versioning 2.0.0: no leading zeros in numeric parts, no empty prerelease or build identifier. */
+const SEMANTIC_VERSION =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
 /** Common CLI version shape, with vendor-specific argv kept in this adapter table. */
 function parseInstalledVersion(output) {
   const matches = [...output.matchAll(/(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)(?=\s|$)/g)];
-  return matches.length === 1 ? matches[0][1] : null;
+  return matches.length === 1 && matches[0][1].length <= MAX_AGENT_VERSION_LENGTH ? matches[0][1] : null;
+}
+
+/** True when `"agentVersion"` is a key more than once in the line; JSON.parse would keep the last silently. */
+function repeatsAgentVersionKey(line) {
+  let seen = 0;
+  for (const token of line.match(/"(?:[^"\\]|\\.)*"(?=\s*:)/g) ?? []) {
+    try {
+      if (JSON.parse(token) === 'agentVersion') seen += 1;
+    } catch {
+      // A slice that is not a JSON string cannot be the key.
+    }
+  }
+  return seen > 1;
 }
 
 /** A custom command's keyed version response: one line of JSON whose `agentVersion` is a semantic version, or null. */
@@ -492,7 +512,8 @@ function parseCustomAgentVersion(output) {
     return null;
   }
   const version = response !== null && typeof response === 'object' && !Array.isArray(response) ? response.agentVersion : undefined;
-  return typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version) ? version : null;
+  if (typeof version !== 'string' || version.length > MAX_AGENT_VERSION_LENGTH || !SEMANTIC_VERSION.test(version)) return null;
+  return repeatsAgentVersionKey(line) ? null : version;
 }
 
 /** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */

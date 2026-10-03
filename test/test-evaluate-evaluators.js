@@ -1605,12 +1605,18 @@ async function checkAgentVersionUpgrade() {
   if (accepted.status !== 0) return;
   baselines.commitAll(project.repository, 'accept the agent version baseline');
   const launchesBeforeReplay = captures(capture).length;
-  fs.unlinkSync(agentScript);
+  // The removed command leaves a tripwire: any invocation, a version read included, is recorded and fails.
+  const tripwire = path.join(path.dirname(agentScript), 'invoked.log');
+  fs.writeFileSync(
+    agentScript,
+    `require('node:fs').appendFileSync(${JSON.stringify(tripwire)}, process.argv.slice(2).join(' ') + '\\n'); process.exit(1);\n`,
+  );
   const replayed = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(firstDirectory)], project.env);
   check(replayed.status === 0, `recorded score failed after the agent CLI was removed: ${replayed.output}`);
   if (replayed.status === 0)
     check(scoredBytes.equals(latestEvidenceBytes(firstDirectory)), 'recorded score evidence changed after CLI removal');
   check(captures(capture).length === launchesBeforeReplay, 'recorded score launched the removed agent CLI');
+  check(!fs.existsSync(tripwire), `recorded score invoked the removed agent CLI, a version read included: ${tripwire}`);
   const copies = [];
   try {
     const copiedFolder = baselines.copyOf(project, copies);
@@ -1620,6 +1626,7 @@ async function checkAgentVersionUpgrade() {
     if (copiedReplay.status === 0)
       check(scoredBytes.equals(latestEvidenceBytes(acceptedRun)), 'copied accepted baseline replay changed the evidence bytes');
     check(captures(capture).length === launchesBeforeReplay, 'copied accepted baseline replay launched the removed agent CLI');
+    check(!fs.existsSync(tripwire), `copied accepted baseline replay invoked the removed agent CLI, a version read included: ${tripwire}`);
   } finally {
     for (const copy of copies) fs.rmSync(copy, { recursive: true, force: true });
   }
@@ -1636,6 +1643,7 @@ async function checkAgentVersionFaults() {
         useSealedBriefAgent(folder, {
           capture,
           versionFile,
+          rubric: true,
           agentCommand: mode === 'missing' ? '/no-such-agent-version-executable' : process.execPath,
         }),
     });
@@ -1795,6 +1803,7 @@ async function checkAgentVersionAdapterBoundary() {
       JSON.stringify(AGENT_ADAPTERS.claude.versionArgv(['--model', 'fixed'])) === '["--model","fixed","--version"]' &&
       AGENT_ADAPTERS.claude.parseVersion('2.1.282 (Claude Code)') === '2.1.282' &&
       AGENT_ADAPTERS.claude.parseVersion('{"agentVersion":"1.0.0"}') === null &&
+      AGENT_ADAPTERS.claude.parseVersion(`1.2.3-${'a'.repeat(300)}`) === null &&
       AGENT_ADAPTERS.claude.versionStreams === undefined &&
       AGENT_ADAPTERS.custom.versionStreams === 'stdout' &&
       AGENT_ADAPTERS.custom.parseVersion('unknown') === null,
@@ -1817,6 +1826,13 @@ async function checkAgentVersionAdapterBoundary() {
       '{"agentVersion":"1.0.0"}\n\n',
       '{"agentVersion":"latest"}\n',
       '{"agentVersion":"1.0"}\n',
+      '{"agentVersion":"01.02.03"}\n',
+      '{"agentVersion":"1.2.3-01"}\n',
+      '{"agentVersion":"1.2.3-.."}\n',
+      '{"agentVersion":"1.2.3+."}\n',
+      '{"agentVersion":"9.9.9","agentVersion":"1.0.0"}\n',
+      '{"agentVersion":"1.0.0","agent\\u0056ersion":"9.9.9"}\n',
+      `{"agentVersion":"1.2.3-${'a'.repeat(300)}"}\n`,
       '{"agentVersion":1}\n',
       '["1.0.0"]\n',
       'null\n',
@@ -1826,7 +1842,28 @@ async function checkAgentVersionAdapterBoundary() {
   );
   for (const file of ['run.js', 'evaluators.js', 'sealed-brief-agent.js']) {
     const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', file), 'utf8');
-    check(!source.includes('--version') && !source.includes('parseInstalledVersion'), `${file} owns a vendor version flag or parser`);
+    check(
+      !['--version', 'parseInstalledVersion', 'parseCustomAgentVersion', 'versionStreams', 'versionExpectation'].some((needle) =>
+        source.includes(needle),
+      ),
+      `${file} owns a vendor version flag, parser or output stream`,
+    );
+  }
+  // Only the adapter table and the run's one probe site touch the version probe; a score, replay or CI path that reads a
+  // version would have to import it or restate the vendor flag.
+  const cliFiles = (directory) =>
+    fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return cliFiles(entryPath);
+      return /\.(?:c|m)?js$/.test(entry.name) ? [entryPath] : [];
+    });
+  for (const file of cliFiles(path.join(PROJECT_ROOT, 'cli'))) {
+    const relative = path.relative(PROJECT_ROOT, file).split(path.sep).join('/');
+    const source = fs.readFileSync(file, 'utf8');
+    if (relative !== 'cli/lib/agent-adapters.js')
+      check(!/versionArgv|parseVersion|parseCustomAgentVersion/.test(source), `${relative} reaches an adapter's version parsing`);
+    if (relative !== 'cli/lib/agent-adapters.js' && relative !== 'cli/lib/evaluate/run.js')
+      check(!source.includes('observeAgentVersion'), `${relative} starts the agent version probe`);
   }
   let missing = null;
   try {
