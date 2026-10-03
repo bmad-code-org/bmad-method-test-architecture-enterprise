@@ -18,6 +18,8 @@ const YAML = require('yaml');
 const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
+const { addFormats } = require('../cli/lib/evaluate/formats');
+const { contractView, partitionPlanProblems } = require('../cli/lib/evaluate/partition');
 
 const Ajv = AjvModule.default ?? AjvModule;
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
@@ -288,6 +290,7 @@ function checkCorpus(corpus, engine, failures) {
     'minimumTrialCount',
   ])
     requireText(corpus, marker, 'corpus.md', failures);
+  checkPartitionPlanGuidance(corpus, failures);
 
   const kinds = ['Agent', 'Skill', 'Workflow', 'Tool-use system', 'AI feature', 'Test-review mechanism'];
   const headingNames = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
@@ -653,6 +656,73 @@ function checkCorpus(corpus, engine, failures) {
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
   if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
+}
+
+/**
+ * The corpus guide's partition plan (Story 1.51): a tagged `evaluation.json` fragment the runtime schema accepts and a tagged held-out
+ * plan the plan schema accepts, which together, laid over the partition-plan fixture they were written against, raise no `check` finding
+ * and make a held-out view the engine's contract schema accepts. A fragment or plan the runtime would refuse fails here.
+ */
+function checkPartitionPlanGuidance(corpus, failures) {
+  const heading = '## Isolate held-out steps from the development plan';
+  requireHeading(corpus, heading, 'corpus.md', failures);
+  const body = headingBody(corpus, heading);
+  for (const marker of [
+    '`partitionPlan`',
+    '`developmentOnlySteps`',
+    '`corpus/held-out/`',
+    '`behaviorOracles`',
+    'never opens the plan file',
+    'Add no `partition` field to a step',
+    'names every defect by path and ID without quoting the plan',
+    '`tea-evaluate preflight --partition held-out`',
+    'beside any evaluator but the deterministic one',
+    'has no designated oracle there',
+    'selects with an `any` matcher',
+    'witnesses with a non-private input',
+    'under one, replace it that way',
+  ])
+    requireText(body, marker, 'corpus.md partition plan', failures);
+  const fragments = taggedExamples(body, 'partition-plan');
+  const plans = taggedExamples(body, 'held-out-plan');
+  if (fragments.length !== 1 || plans.length !== 1) {
+    failures.push(
+      `corpus.md needs one tagged partition-plan and one tagged held-out-plan example; found ${fragments.length} and ${plans.length}`,
+    );
+    return;
+  }
+  const fixture = path.join(__dirname, 'fixtures', 'evaluate', 'partition-plan', 'evals', 'verdict');
+  const contractBytes = fs.readFileSync(path.join(fixture, 'contract.json'));
+  const { validate: validateEvaluation, starter } = evaluationValidator();
+  const evaluation = { ...JSON.parse(fs.readFileSync(path.join(fixture, 'evaluation.json'), 'utf8')), ...fragments[0] };
+  if (!validateEvaluation({ ...starter, ...fragments[0] }))
+    failures.push(`corpus.md partitionPlan fragment fails the runtime schema: ${JSON.stringify(validateEvaluation.errors)}`);
+  if (validateEvaluation({ ...starter, partitionPlan: { ...fragments[0].partitionPlan, heldOutPlan: 'plan.json' } }))
+    failures.push('the runtime schema accepts a held-out plan outside corpus/held-out/, so the fragment check proves nothing');
+  const planSchema = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'held-out-plan.schema.json')),
+  );
+  const validatePlan = new Ajv({ strict: false, allErrors: true }).compile(planSchema);
+  if (!validatePlan(plans[0])) failures.push(`corpus.md held-out plan fails the plan schema: ${JSON.stringify(validatePlan.errors)}`);
+  const contract = JSON.parse(contractBytes.toString('utf8'));
+  const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan: plans[0], heldOutBehaviors: new Set(['B-002']) });
+  if (problems.length > 0) failures.push(`corpus.md partition plan raises check findings over its fixture: ${JSON.stringify(problems)}`);
+  if (problems.length === 0) {
+    const view = contractView({ contractBytes, evaluation, heldOutPlan: plans[0], partition: 'held-out' }).contract;
+    const contractAjv = new Ajv({ strict: false, allErrors: true });
+    addFormats(contractAjv);
+    const validateContract = contractAjv.compile(JSON.parse(fs.readFileSync(engineSchemaPath('eval-contract.schema.json'), 'utf8')));
+    if (!validateContract(view))
+      failures.push(`corpus.md held-out plan makes a view the engine schema refuses: ${JSON.stringify(validateContract.errors)}`);
+  }
+  const collided = partitionPlanProblems({
+    contract,
+    evaluation,
+    heldOutPlan: { ...plans[0], oracles: plans[0].oracles.map((oracle) => ({ ...oracle, id: 'O-001' })) },
+    heldOutBehaviors: new Set(['B-002']),
+  });
+  if (collided.length === 0)
+    failures.push('the partition plan check accepts an oracle ID that contract.json declares, so the example check proves nothing');
 }
 
 function taggedExamples(content, tag) {
@@ -1318,6 +1388,12 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     }
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
+    for (const marker of [
+      'Under a `partitionPlan`, add `--partition development` to that preflight',
+      'builds the both view and launches the held-out request during authoring',
+      'run `--partition held-out` only after the development review',
+    ])
+      requireText(adapterGuide, marker, 'adapters.md partition plan preflight', failures);
     const adapterOpening = adapterGuide.split('\n## ')[0];
     for (const marker of [
       'assets/evaluator-conditions.template.json',
@@ -2821,6 +2897,12 @@ function checkRunGuidance(guide, failures) {
     './node_modules/.bin/eval-quality compile',
   ])
     requireText(guide, marker, 'run.md', failures);
+  for (const marker of [
+    'Under a `partitionPlan`, give the `preflight` command `--partition development`',
+    'builds the both view and launches the held-out request while the gap loop is still open',
+    'run `--partition held-out` only after the development review',
+  ])
+    requireText(guide, marker, 'run.md partition plan preflight', failures);
   // Story 1.61: each platform's mechanism and observer, the exit-12 refusal, the opt-out, the network namespace and what run.json records.
   const confined = headingBody(guide, '## Run confined');
   for (const marker of [
@@ -3851,6 +3933,42 @@ async function main() {
         'mutation',
         checkMutationGuidance,
         (text) => text.replace('sign the descriptor-nominated stdout.', 'sign the descriptor-nominated stderr.'),
+      ],
+      [
+        'corpus partition plan example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-plan -->', ''),
+      ],
+      [
+        'corpus partition plan behaviorOracles removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"behaviorOracles": { "B-002": ["O-101"] }', '"behaviorOracles": {}'),
+      ],
+      [
+        'corpus partition plan dangling step',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replaceAll('/interactions/held-out-run/stdout', '/interactions/development-run/stdout'),
+      ],
+      [
+        'corpus partition plan closed-plan sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('never opens the plan file', 'reads the plan file'),
+      ],
+      [
+        'corpus partition plan held-out probe move removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('selects with an `any` matcher', 'selects with the private literal'),
+      ],
+      [
+        'run partition plan preflight removal',
+        'run',
+        checkRunGuidance,
+        (text) => text.replace('give the `preflight` command `--partition development`', 'give the `preflight` command no flag'),
       ],
       ['harness confined example removal', 'harness', checkHarnessGuidance, (text) => text.replace('<!-- example:registry -->', '')],
       [

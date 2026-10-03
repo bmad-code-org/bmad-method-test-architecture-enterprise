@@ -155,6 +155,7 @@ const { answeredKind, degenerateResponsePath } = require('./gameability');
 /** How a finding names a call of each interface kind. */
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
+const { PartitionPlanError, contractView, partitionPlanProblems, readHeldOutPlan } = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -276,6 +277,7 @@ async function buildContext() {
       mutation: runtimeSchema('mutation.schema.json'),
       evaluatorConditions: runtimeSchema('evaluator-conditions.schema.json'),
       degenerateResponse: runtimeSchema('degenerate-response.schema.json'),
+      heldOutPlan: runtimeSchema('held-out-plan.schema.json'),
       contract: ajv.compile(contractSchema),
       scoringPolicy: ajv.compile(readJsonFile(engineSchemaPath('scoring-policy.schema.json'))),
       defectSignature: ajv.compile({ $ref: `${branchPointer}/defectSignature` }),
@@ -1596,6 +1598,132 @@ function checkHeldOut(report, folder, evaluation) {
   }
 }
 
+/** Every property name a schema declares, at any depth: the public vocabulary of the format, as against the adopter's own keys. */
+function declaredNames(schema) {
+  const names = new Set();
+  const visit = (node) => {
+    if (Array.isArray(node)) for (const item of node) visit(item);
+    else if (isPlainObject(node)) {
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'properties' && isPlainObject(value)) for (const name of Object.keys(value)) names.add(name);
+        visit(value);
+      }
+    }
+  };
+  visit(schema);
+  return names;
+}
+
+/**
+ * An instance path as a finding may print it: array indices and the schema's declared property names stay, and every other
+ * segment is `*`, because it is a key the adopter chose (a binding name, a key of a JSON value, a behavior ID) and the held-out
+ * plan's keys never reach a line.
+ */
+function declaredPath(instancePath, declared) {
+  return instancePath
+    .split('/')
+    .slice(1)
+    .map((segment) => segment.replaceAll('~1', '/').replaceAll('~0', '~'))
+    .map((segment) => (/^\d+$/.test(segment) || declared.has(segment) ? segment : '*'))
+    .map((segment) => `/${segment}`)
+    .join('');
+}
+
+/**
+ * One finding per distinct schema error, from a path and the schema's own wording only: a key or a value the held-out plan holds
+ * never reaches a line, which is what `describeErrors` would add for an unexpected property, and `declaredPath` keeps the path to
+ * the schema's own names. `locate` maps that path to where the author edits it.
+ */
+function plainSchemaFindings(report, file, validate, locate = (instancePath) => instancePath || '(root)') {
+  const declared = declaredNames(validate.schema);
+  const lines = [
+    ...new Set((validate.errors ?? []).map((error) => `${locate(declaredPath(error.instancePath, declared))} ${error.message}`)),
+  ];
+  for (const line of lines.slice(0, SCHEMA_ERROR_LIMIT)) report.add(file, 'partition-plan', line);
+  if (lines.length > SCHEMA_ERROR_LIMIT) {
+    report.add(
+      file,
+      'partition-plan',
+      `${lines.length - SCHEMA_ERROR_LIMIT} more schema error(s) not shown; fix the ones above and run check again`,
+    );
+  }
+}
+
+/**
+ * `partitionPlan` (Story 1.51): the development-only steps exist, the held-out plan is a valid file of its own, and the held-out
+ * view it makes keeps every behavior an oracle. Every finding names a path or an ID and none quotes held-out plan bytes, so the
+ * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
+ * run here (`check` compiles nothing); a compile defect surfaces at a held-out or both preflight.
+ */
+function checkPartitionPlan(report, folder, evaluation, context, { openPlan = true } = {}) {
+  const plan = evaluation.partitionPlan;
+  const contract = context.contract;
+  if (!isPlainObject(plan) || typeof plan.heldOutPlan !== 'string' || contract === undefined) return;
+  const kind = evaluatorOf(evaluation).kind;
+  if (kind !== 'deterministic') {
+    report.add(
+      MANIFEST_NAME,
+      'partition-plan',
+      `partitionPlan requires the deterministic evaluator; evaluator.kind is ${JSON.stringify(kind)}`,
+    );
+  }
+  const selected = Array.isArray(evaluation.heldOutProbes) ? evaluation.heldOutProbes : [];
+  if (selected.length === 0) {
+    report.add(MANIFEST_NAME, 'partition-plan', 'partitionPlan declares a held-out plan and heldOutProbes names no probe that runs it');
+  }
+  const heldOutBehaviors = new Set();
+  for (const entry of listDirectory(folder, 'probes') ?? []) {
+    if (!entry.isFile || !PROBE_FILE.test(entry.name)) continue;
+    let probe;
+    try {
+      probe = readJsonFile(path.join(folder, 'probes', entry.name));
+    } catch {
+      continue;
+    }
+    if (probe?.qualification?.route === 'gameability') {
+      report.add(
+        `probes/${entry.name}`,
+        'partition-plan',
+        'is a gameability probe; its degenerate response answers one plan, so a partitionPlan does not partition gameability probes yet',
+      );
+    }
+    if (!selected.includes(probe?.probeId) || (probe.probeClass !== 'defect' && probe.probeClass !== 'gameability')) continue;
+    const defects = Array.isArray(probe.defects) ? probe.defects : [];
+    for (const behaviorId of [probe.behaviorId, ...defects.map((defect) => defect?.behaviorId)]) {
+      if (typeof behaviorId === 'string') heldOutBehaviors.add(behaviorId);
+    }
+  }
+  let heldOutPlan;
+  try {
+    if (openPlan) heldOutPlan = readHeldOutPlan(folder, evaluation, { shaped: false });
+  } catch (error) {
+    if (!(error instanceof PartitionPlanError)) throw error;
+    report.add(plan.heldOutPlan, 'partition-plan', error.message);
+  }
+  if (heldOutPlan !== undefined && !context.validate.heldOutPlan(heldOutPlan)) {
+    plainSchemaFindings(report, plan.heldOutPlan, context.validate.heldOutPlan);
+    heldOutPlan = undefined;
+  }
+  const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehaviors });
+  for (const problem of problems) report.add(problem.file, problem.rule, problem.message);
+  if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return;
+  const sourceBytes = Buffer.from(JSON.stringify(contract));
+  const { contract: view } = contractView({ contractBytes: sourceBytes, evaluation, heldOutPlan, partition: 'held-out' });
+  if (context.validate.contract(view)) return;
+  const developmentOnly = new Set(plan.developmentOnlySteps);
+  const sharedSteps = (contract.interactionPlan ?? []).filter((step) => !developmentOnly.has(step?.stepId)).length;
+  const retainedOracles = view.oracles.length - heldOutPlan.oracles.length;
+  // A step or oracle of the held-out view that is past the shared ones is the held-out plan's, named by its index there.
+  const locate = (instancePath) => {
+    const [, collection, index, rest = ''] = /^\/(interactionPlan|oracles)\/(\d+)(.*)$/.exec(instancePath) ?? [];
+    const base = collection === 'interactionPlan' ? sharedSteps : retainedOracles;
+    return collection !== undefined && Number(index) >= base
+      ? `${collection}[${Number(index) - base}]${rest}`
+      : `held-out view ${instancePath || '(root)'}`;
+  };
+  plainSchemaFindings(report, plan.heldOutPlan, context.validate.contract, locate);
+}
+
 function checkCalibration(report, folder, evaluation, contract, engine) {
   let calibration;
   try {
@@ -2048,9 +2176,11 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {object} [options]
  * @param {NodeJS.Platform} [options.platform] the platform the evaluation is held to
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine stage runs in, so `check` uses the engine the caller's own compile uses
+ * @param {string} [options.partition] the partition a run is about to execute. A `development` run neither opens the held-out plan
+ *   nor hashes it for the corpus index (Story 1.51), so the plan's own findings are those of `check` and of a held-out or both run.
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder, { platform = process.platform, env = process.env } = {}) {
+async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition } = {}) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2091,6 +2221,8 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry, env);
   checkHeldOut(report, folder, evaluation);
+  const openPlan = partition !== 'development';
+  checkPartitionPlan(report, folder, evaluation, context, { openPlan });
   checkCalibration(report, folder, evaluation, context.contract, context.engine);
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
@@ -2107,7 +2239,8 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkCiPlan(report, folder);
 
   try {
-    const stale = await corpusIndexProblem(folder);
+    const planFile = evaluation.partitionPlan?.heldOutPlan;
+    const stale = await corpusIndexProblem(folder, { unread: openPlan || typeof planFile !== 'string' ? [] : [planFile] });
     if (stale !== null) report.add(INDEX_NAME, 'stale-index', stale);
   } catch (error) {
     if (!(error instanceof CorpusIndexError)) throw error;

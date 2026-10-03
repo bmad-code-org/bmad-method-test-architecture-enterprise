@@ -1,0 +1,83 @@
+{
+  "probeId": "P-003",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-003 relaxes gate-3 to lenient, and the verdict command then rejects the held-out case and reports the relaxed gate on stdout.",
+  "defects": [
+    {
+      "defectId": "D-003",
+      "behaviorId": "B-002",
+      "summary": "The relaxed gate makes the verdict command reject the held-out case it must accept.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-gate",
+        "interfaceId": "verdict",
+        "operationId": "judge-request",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Judge the held-out witness."
+          }
+        },
+        "relation": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-gate/stdout"
+            },
+            {
+              "literal": "relaxed: gate-3"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "verdict",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "matcher": "any"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "relaxed: gate-3"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-003"
+  }
+}

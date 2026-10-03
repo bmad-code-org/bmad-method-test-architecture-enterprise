@@ -28,11 +28,18 @@ function suite(name) {
    * `marker`, every launch of the target appends a line to a file outside its
    * workspace, a write a confined run refuses, so the evaluation opts out of
    * file-system confinement (Story 1.31); without it the project runs confined.
+   *
+   * `fixture` names a directory laid over the verdict project in place of its `evals/verdict` (the project's target,
+   * rules and vendor files stay), and `evaluation` holds fields set on `evaluation.json` after the one-trial default.
    */
-  function project(label, edit = () => {}, { marker = false } = {}) {
+  function project(label, edit = () => {}, { marker = false, fixture = null, evaluation: overrides = {} } = {}) {
     const directory = scratch.make(label);
     const repository = path.join(directory, 'repository');
     fs.cpSync(FIXTURE, repository, { recursive: true, filter: (file) => path.basename(file) !== 'runs' });
+    if (fixture !== null) {
+      fs.rmSync(path.join(repository, 'evals/verdict'), { recursive: true });
+      fs.cpSync(fixture, repository, { recursive: true, filter: (file) => path.basename(file) !== 'runs' });
+    }
     fs.writeFileSync(path.join(repository, '.gitignore'), 'vendor/\n');
     const folder = path.join(repository, 'evals/verdict');
     const manifest = path.join(folder, 'evaluation.json');
@@ -40,6 +47,7 @@ function suite(name) {
     const evaluation = JSON.parse(fs.readFileSync(manifest, 'utf8'));
     evaluation.trials = 1;
     if (marker) evaluation.confinement = false;
+    Object.assign(evaluation, overrides);
     fs.writeFileSync(manifest, `${JSON.stringify(evaluation, null, 2)}\n`);
     const scoring = JSON.parse(fs.readFileSync(policy, 'utf8'));
     scoring.minimumTrialCount = 1;

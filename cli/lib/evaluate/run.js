@@ -107,6 +107,7 @@ const { holdDeployment, recordRefusal } = require('./historical');
 const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
+const { committedProbes, selectPartition, unknownPartition } = require('./partition');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
@@ -124,7 +125,6 @@ const Ajv = AjvModule.default ?? AjvModule;
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
 const INDEX_PATH = 'corpus-index.json';
-const PROBE_FILE = /\.probe\.json$/;
 const RUNNABLE_ROUTES = ['clean-control', 'controlled-mutation', 'historical', 'gameability'];
 const DENIAL_FAULT = 'forbidden-target';
 /** Where the scoring policy sits in the run directory. */
@@ -175,17 +175,6 @@ function runnerOf(entry, registry) {
     };
   }
   return { interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target };
-}
-
-/** Every committed probe, sorted by file name, parsed. */
-function committedProbes(folder) {
-  const directory = path.join(folder, 'probes');
-  if (!fs.existsSync(directory)) return [];
-  return fs
-    .readdirSync(directory)
-    .filter((name) => PROBE_FILE.test(name))
-    .sort()
-    .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }));
 }
 
 /** An artifact eval-quality reads, written through the run directory's writer as its canonical serialization (RFC 8785, one artifact per file). */
@@ -246,35 +235,27 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
         message: `unknown trial count ${JSON.stringify(trials)}; choose a positive integer`,
       }),
     );
-  if (partition !== undefined && !['development', 'held-out'].includes(partition))
-    return Promise.resolve(
-      new PreflightOutcome({
-        stage: 'check',
-        exitCode: 64,
-        message: `unknown partition ${JSON.stringify(partition)}; choose development or held-out`,
-      }),
-    );
+  const unknown = unknownPartition(partition);
+  if (unknown !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...unknown }));
   let heldOut;
-  let probes;
+  let selection;
   try {
     heldOut = new Set(readJson(path.join(folder, 'evaluation.json')).heldOutProbes ?? []);
-    probes = committedProbes(folder);
+    selection = selectPartition({ partition, heldOutProbes: heldOut, probes: partition === undefined ? [] : committedProbes(folder) });
   } catch {
-    // The pipeline's check reports malformed source files with authoring findings.
-    return runPipeline(folder, { command: 'run', fromWorkingTree, seed, env, log });
+    // The pipeline's check reports malformed source files with authoring findings; it keeps the partition, so a development
+    // run still does not open the held-out plan.
+    return runPipeline(folder, { command: 'run', partition, fromWorkingTree, seed, env, log });
   }
-  const selectedProbeIds =
-    partition === undefined
-      ? null
-      : new Set(probes.filter(({ probe }) => (partition === 'held-out') === heldOut.has(probe.probeId)).map(({ probe }) => probe.probeId));
-  if (partition === 'held-out' && selectedProbeIds.size === 0)
-    return Promise.resolve(new PreflightOutcome({ stage: 'check', exitCode: 10, message: 'held-out partition has no selected probes' }));
+  if (selection.refusal !== undefined) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...selection.refusal }));
+  const { selectedProbeIds } = selection;
   const started = Date.now();
   // What the scores read is taken once, before anything runs, so an edit to
   // the evaluation folder during the run cannot reach the trial sets.
   let snapshot = null;
   return runPipeline(folder, {
     command: 'run',
+    partition,
     selectedProbeIds,
     fromWorkingTree,
     seed,
@@ -290,7 +271,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
         layer = readEvaluatorLayer({
           folder,
           evaluation: context.evaluation,
-          contract: readJson(path.join(folder, 'contract.json')),
+          contract: context.contract,
           engine: await loadEngine(),
         });
       } catch (error) {

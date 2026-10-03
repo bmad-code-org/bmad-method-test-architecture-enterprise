@@ -81,6 +81,7 @@ const { runEngineStage } = require('./engine-cli');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
 const { PLAN_PATH, TIERS, classify, mostSevere, readPlan } = require('./ci-plan');
+const { PartitionPlanError, loadContractView } = require('./partition');
 const { calibrationShortfalls } = require('./calibration');
 const { ensureRunsDirectory, newInvocationId, readJson, runPreflightCommand } = require('./preflight');
 const { createArtifactValidator } = require('./records');
@@ -773,7 +774,25 @@ function staleBaseline(context, baseline) {
     }
     const staging = stagingDirectory(context, 'tea-evaluate-engine-');
     const compiled = path.join(staging, 'eval-contract.json');
-    const stage = runEngineStage('compile', ['--in', path.join(context.folder, CONTRACT_NAME), '--out', compiled], {
+    // The baseline's compiled contract is the one its partition ran (Story 1.51), which under a partition plan is the
+    // folder's contract.json for the development partition and a derived view for the others.
+    let contractFile = path.join(context.folder, CONTRACT_NAME);
+    let viewProblem = null;
+    try {
+      const evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+      if (evaluation.partitionPlan !== undefined && baseline.manifest.partition !== 'development') {
+        contractFile = path.join(staging, CONTRACT_NAME);
+        fs.writeFileSync(
+          contractFile,
+          loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition }).bytes,
+        );
+      }
+    } catch (error) {
+      // An evaluation.json that cannot be read is the check's finding; a held-out plan that cannot be read says so here.
+      if (error instanceof PartitionPlanError) viewProblem = error.message;
+    }
+    if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);
+    const stage = runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
       runDirectory: context.writer.root,
       recordPath: 'baseline-staleness/engine.json',
       writer: context.writer,

@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.77, 1.80 to 1.85, 1.90 to 1.104 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.104. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.77, 1.80 to 1.85, 1.90 to 1.110 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.110. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -832,13 +832,20 @@ Added in Story 1.24. Levels: published engine schema, HTTP adapter integration, 
 
 ### Story 1.51: Isolate interaction plans by evaluation partition
 
-Added in Story 1.24. Levels: partition-specific execution, artifact isolation and held-out replay.
+Added in Story 1.24. Levels: partition-specific execution, artifact isolation, held-out replay and `check` rules. Files: `test/test-evaluate-partition-plans.js` (`test:evaluate-partition-plans`) over `test/fixtures/evaluate/partition-plan/`, which holds a shared step, a development-only step and a held-out plan step whose request carries a private canary.
 
-| AC                              | Test                                                                                                                   | Level               | P   | Revert check                                          |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ----------------------------------------------------- |
-| Each partition runs its request | Instrument two distinct requests and assert one launch per authorized partition in preflight and run                   | Runtime integration | P0  | Restoring shared-plan execution launches both         |
-| Development cannot leak canary  | Put a held-out canary in the private request and scan development observations, records, logs and replay for its bytes | Integrity fixture   | P0  | Removing the filter exposes the canary                |
-| Held-out score remains valid    | Run development first, then held-out; independently replay and score the latter                                        | Live and replay     | P1  | Missing held-out interaction fails preflight or score |
+| AC                                        | Test                                                                                                                                                                                                                                                                                                                                                                                                                           | Level               | P   | Revert check                                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- | --- | ---------------------------------------------------------------------------------------------------------- |
+| Each partition runs its own requests      | Count the target's launches by request and workspace in `preflight` and `run` for development, held-out and both: a trial launches each authorized step once, a qualification once per arm, and no other request launches                                                                                                                                                                                                      | Runtime integration | P0  | Restoring shared-plan execution launches the held-out request in a development run and the other way round |
+| Development cannot leak the canary        | Scan the development run directory, scores, baseline and every command's output for the canary, the held-out step ID, its oracle and its witness; scan the held-out side for the development ones                                                                                                                                                                                                                              | Integrity fixture   | P0  | Removing the view leaves the canary in every development artifact                                          |
+| A development run never opens the plan    | Replace the held-out plan with unparsable bytes, then delete it, re-index, and run `preflight --partition development` (exit 0) beside `--partition held-out` and no flag (exit 10, finding without the bytes)                                                                                                                                                                                                                 | Integration         | P0  | Loading the plan for a development run exits 10 on the unparsable plan                                     |
+| Held-out score stays valid and closed     | Run development, then held-out; the probe is caught, its gap row is ID, class and outcome, rescoring after deleting the development run gives equal outcomes, `compare --accept` and `ci --tier pr` replay each baseline with no stale warning                                                                                                                                                                                 | Live and replay     | P1  | Compiling `contract.json` for a held-out baseline reads as stale in `ci`                                   |
+| Source bytes pass through                 | With no `partitionPlan`, the run's `contract.json` equals the folder's in every partition; the committed fixtures, baselines and replays stay byte-identical under `test:evaluate-authoring`, `test:evaluate-ci` and `test:evaluate-compare`                                                                                                                                                                                   | Integration, replay | P0  | Re-serializing the contract changes a committed baseline byte                                              |
+| `check` names paths and IDs only          | One case per rule (unknown step, ID collision or repeat, dangling `after` or pointer, view empties a behavior that had an oracle, non-deterministic evaluator, gameability probe, a rubric or a waiver that reads a development-only step, empty `heldOutProbes`, invalid plan or schema); a canary-named binding key, `behaviorOracles` key, free-text step ID, oracle ID and `after` clause each leave no byte in the output | Integration         | P1  | A finding that quotes the plan or a rule left out fails its case                                           |
+| Pointers are read from reference fields   | A shared oracle whose literal, commentary or scope spells a development-only pointer stays in the held-out view, and `check` neither flags nor prints it; `stepsReadBy` reads `pointer`, `captured`, `evidenceTargets`, `evidence`, a waiver's `condition` and `after` only                                                                                                                                                    | Unit, integration   | P1  | Scanning every string drops the oracle and prints the literal                                              |
+| The plan path stays in `corpus/held-out/` | `../../../outside.json` and a `corpus` link to another folder: `check` and `loadContractView` refuse and open nothing                                                                                                                                                                                                                                                                                                          | Integration         | P1  | A reader that checks only the last path component opens the file                                           |
+
+The both view gives a behavior its development and held-out oracles, so the probes of a behavior with both are scored without a designated oracle there; the fixture asserts only that every probe is scored and that the probes of a one-oracle behavior read as in their own partition (Story 1.110 owns the rest).
 
 ### Story 1.52: Stop agent descendants on Windows
 
@@ -1456,6 +1463,60 @@ Added 2026-10-03 from Story 1.55's independent review. Levels: engine coverage u
 | Scalar orphan oracle leaves a gap     | Compile a scalar CLI contract with an exact exit-code and whole-stdout oracle omitted from the behavior's oracle list; evaluate coverage and assert unsatisfied separation. Link that oracle and assert satisfaction. | Engine unit | P0  | Removing the behavior-link filter satisfies the orphan fixture       |
 | Structured orphan oracle leaves a gap | Repeat with structured success and payload fields; assert the orphan fails and linked oracle passes.                                                                                                                  | Engine unit | P0  | Reverting the filter satisfies the orphan fixture                    |
 | Pantry and release follow             | After publishing the engine, assert the pantry's behavior-linked O-001 still yields PASS and no gaps, and the peer floor and lockfile resolve the release.                                                            | Integration | P1  | An unlinked pantry oracle or stale dependency fails the focused gate |
+
+### Story 1.105: Partition rubrics in a partition plan
+
+Added 2026-10-03 from Story 1.51's build. Levels: partition views over a fixture with a rubric, calibration.
+
+| AC                                     | Test                                                                                                                                                                 | Level       | P   | Revert check                                              |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------------- |
+| Each view holds its criteria           | Derive each view over a rubric with one criterion per partition; assert the held-out view holds only its criterion and calibration scores only items of its criteria | Integration | P0  | Keeping the other partition's criterion fails the fixture |
+| `check` names an unreachable criterion | Point a criterion at a step no view holds; assert a finding by criterion ID                                                                                          | Integration | P1  | A criterion no view reaches passes `check`                |
+
+### Story 1.106: Partition waivers in a partition plan
+
+Added 2026-10-03 from Story 1.51's build. Levels: partition views over a fixture with waivers.
+
+| AC                             | Test                                                                                               | Level       | P   | Revert check                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- | ---------------------------------------------------- |
+| Each view holds its waivers    | Waive one oracle per partition; assert each view carries only its own and holds no other oracle ID | Integration | P0  | A view that keeps the other waiver fails the fixture |
+| `check` names an orphan waiver | Waive an oracle no view holds; assert a finding by waiver and oracle ID                            | Integration | P1  | An orphan waiver passes `check`                      |
+
+### Story 1.107: Partition evaluator mappings in a partition plan
+
+Added 2026-10-03 from Story 1.51's build. Levels: command evaluator integration over a partition plan.
+
+| AC                                               | Test                                                                                               | Level       | P   | Revert check                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------------------ |
+| The evaluator sees one partition                 | Run each partition under a command evaluator; read the evaluator's recorded stdin and mapping rows | Integration | P0  | A development run whose evaluator receives a held-out row fails the scan |
+| Records are refused when they carry another step | Import records with a step the view lacks; assert exit 12 naming the step                          | Integration | P1  | An accepted foreign step reaches `score`                                 |
+
+### Story 1.108: Compile and seal each partition view in `ci`
+
+Added 2026-10-03 from Story 1.51's build. Levels: ci integration over real eval-quality.
+
+| AC                           | Test                                                                                                                                               | Level               | P   | Revert check                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ----------------------------------------------------- |
+| Each view compiles and seals | Run `ci --tier pr` over a plan whose held-out oracle the engine refuses; assert the failing view, the engine's exit and one evidence file per view | Integration         | P0  | Compiling only `contract.json` passes the broken plan |
+| No plan, no new path         | Run the committed verdict fixture's `pr` tier; assert one compile, one seal and the existing evidence paths                                        | Integration, replay | P0  | A second evidence path changes the committed replay   |
+
+### Story 1.109: Partition gameability degenerate responses
+
+Added 2026-10-03 from Story 1.51's build. Levels: gameability arm over a partition plan.
+
+| AC                             | Test                                                                                                                                        | Level       | P   | Revert check                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ---------------------------------------------------------------------------- |
+| Each arm answers its view      | Run the gameability arm in each partition and the both view; assert every step of the view is answered and no step of another view is named | Integration | P0  | An arm answering the whole plan puts a held-out ID in a development artifact |
+| `check` names a missing answer | Remove a response for a view's step; assert a finding by probe and step ID                                                                  | Integration | P1  | A missing answer passes `check`                                              |
+
+### Story 1.110: Designate one oracle per behavior in the both view
+
+Added 2026-10-03 from Story 1.51's build. Levels: scoring over the both view with real eval-quality.
+
+| AC                      | Test                                                                                                                       | Level               | P   | Revert check                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------- | --- | ------------------------------------------------------------------ |
+| Both probes are caught  | Score a both run of a behavior with a development and a held-out oracle; assert each probe `caught` against its own oracle | Integration         | P0  | A behavior with two oracles scores `caught: false` for both probes |
+| A both baseline replays | Accept the both run and run `ci --tier pr`; assert no stale warning and both probes caught                                 | Integration, replay | P1  | The replay reads the both view as stale or uncaught                |
 
 ## The Dogfood Proof (AD-15)
 

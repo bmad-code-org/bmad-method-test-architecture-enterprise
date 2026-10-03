@@ -107,6 +107,7 @@ const {
   routeIdentity,
 } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
+const { PartitionPlanError, committedProbes, loadContractView, selectPartition, unknownPartition } = require('./partition');
 const { createArtifactValidator } = require('./records');
 const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
 const { registryFromEvaluation } = require('./registry');
@@ -425,10 +426,29 @@ function writeQualificationEvidence(writer, directory, { probe, evidence, worksp
  * @param {boolean} [options.fromWorkingTree] evaluate the working tree, uncommitted work included, in a temp copy
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine CLI stage runs under
  * @param {(line: string) => void} [options.log] progress lines for an operator
+ * @param {string} [options.partition] `development` or `held-out`; everything when absent. Only that partition's probes are
+ *   qualified, over the contract that partition runs (`partition.js`, Story 1.51)
  * @returns {Promise<PreflightOutcome>}
  */
-function runPreflightCommand(folder, options = {}) {
-  return runPipeline(folder, { ...options, command: 'preflight' });
+function runPreflightCommand(folder, { partition, ...options } = {}) {
+  const unknown = unknownPartition(partition);
+  if (unknown !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...unknown }));
+  let selection;
+  try {
+    selection = selectPartition({
+      partition,
+      heldOutProbes: readJson(path.join(folder, MANIFEST_NAME)).heldOutProbes ?? [],
+      probes: partition === undefined ? [] : committedProbes(folder),
+    });
+  } catch {
+    // The pipeline's check reports malformed source files with authoring findings; it keeps the partition, so a development
+    // run still does not open the held-out plan.
+    return runPipeline(folder, { ...options, command: 'preflight', partition });
+  }
+  if (selection.refusal !== undefined) {
+    return Promise.resolve(new PreflightOutcome({ stage: 'check', ...selection.refusal }));
+  }
+  return runPipeline(folder, { ...options, command: 'preflight', partition, selectedProbeIds: selection.selectedProbeIds });
 }
 
 /**
@@ -452,6 +472,8 @@ function runPreflightCommand(folder, options = {}) {
  * @param {'preflight'|'run'} options.command recorded in `run.json`
  * @param {boolean} [options.fromWorkingTree]
  * @param {string} [options.seed] matcher seed recorded in run.json
+ * @param {'development'|'held-out'} [options.partition] the partition whose contract the run derives (`partition.js`); both when absent
+ * @param {Set<string>|null} [options.selectedProbeIds] the probes the partition selects; every probe when null
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
  * @param {(context: object) => PreflightOutcome|null|Promise<PreflightOutcome|null>} [options.prepare]
@@ -513,16 +535,27 @@ async function pipeline(
     prepare = () => null,
     afterVerdict = null,
     selectedProbeIds = null,
+    partition,
     seed,
   },
   state,
 ) {
-  const findings = await checkEvaluation(folder, { env });
+  const findings = await checkEvaluation(folder, { env, partition });
   if (findings.length > 0) {
     return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `${findings.length} authoring defect(s)`, findings });
   }
 
   const evaluation = readJson(path.join(folder, MANIFEST_NAME));
+  // The contract this partition runs, derived once and before anything starts (Story 1.51): every launch, the run's
+  // contract.json, the compiled contract, the sealed brief and every artifact after them carry its steps and no others.
+  // With no partitionPlan these are the folder's own bytes, and a development run never opens the held-out plan.
+  let view;
+  try {
+    view = loadContractView({ folder, evaluation, partition: partition ?? 'both' });
+  } catch (error) {
+    if (!(error instanceof PartitionPlanError)) throw error;
+    return new PreflightOutcome({ stage: 'check', exitCode: 10, message: error.message });
+  }
   const seeded = seededProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
   const unqualifiable = seeded.filter(({ probe }) => !QUALIFIED_ROUTES.includes(probe.qualification?.route));
   if (unqualifiable.length > 0) {
@@ -619,7 +652,7 @@ async function pipeline(
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
-    const refused = await prepare({ folder, evaluation, seeded });
+    const refused = await prepare({ folder, evaluation, seeded, contract: view.contract });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
@@ -671,6 +704,7 @@ async function pipeline(
       folder,
       root,
       evaluation,
+      view,
       seeded,
       gameability,
       pristine,
@@ -730,6 +764,7 @@ async function runInWorkspaces({
   folder,
   root,
   evaluation,
+  view,
   seeded,
   gameability,
   pristine,
@@ -790,11 +825,10 @@ async function runInWorkspaces({
   const writeRun = () => writer.replaceJson('run.json', run);
   writeRun();
 
-  // The run keeps its own copy of the contract, so every stage below reads the
+  // The run keeps its own copy of the contract this partition runs, so every stage below reads the
   // same bytes and the verdict can be reproduced from the run directory alone.
-  const contractBytes = fs.readFileSync(path.join(folder, CONTRACT_NAME));
-  const contractPath = writer.write(CONTRACT_NAME, contractBytes);
-  const contract = JSON.parse(contractBytes.toString('utf8'));
+  const contractPath = writer.write(CONTRACT_NAME, view.bytes);
+  const contract = JSON.parse(view.bytes.toString('utf8'));
 
   // An engine stage writes its output into a private directory made for the
   // call, which no target has seen, and the runtime copies it into the run

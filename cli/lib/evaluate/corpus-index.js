@@ -67,9 +67,13 @@ function byPath(left, right) {
  * Recomputes the index from the folder's bytes.
  *
  * @param {string} folder
+ * @param {object} [options]
+ * @param {Iterable<string>} [options.unread] paths relative to the folder that are left out and never opened (the held-out plan,
+ *   for a development run's staleness check); the index `tea-evaluate digest` writes never leaves one out
  * @returns {Promise<Array<{ path: string, sha256: string }>>}
  */
-async function buildCorpusIndex(folder) {
+async function buildCorpusIndex(folder, { unread = [] } = {}) {
+  const skipped = new Set(unread);
   const engine = await loadEngine();
   const entries = [];
   for (const root of INDEXED_ROOTS) {
@@ -87,11 +91,10 @@ async function buildCorpusIndex(folder) {
       );
     }
     for (const absolute of filesUnder(path.join(folder, root), folder)) {
+      const relative = path.relative(folder, absolute).split(path.sep).join('/');
+      if (skipped.has(relative)) continue;
       const digest = engine.digestBytes(fs.readFileSync(absolute));
-      entries.push({
-        path: path.relative(folder, absolute).split(path.sep).join('/'),
-        sha256: digest.slice(DIGEST_PREFIX.length),
-      });
+      entries.push({ path: relative, sha256: digest.slice(DIGEST_PREFIX.length) });
     }
   }
   return entries.sort(byPath);
@@ -142,9 +145,13 @@ async function writeCorpusIndex(folder) {
  * Why the committed index is stale, or null when it matches the folder.
  *
  * @param {string} folder
+ * @param {object} [options]
+ * @param {Iterable<string>} [options.unread] paths relative to the folder that this comparison neither opens nor compares, so a
+ *   development run never reads the held-out plan (Story 1.51); the full comparison is `check`'s and a held-out run's
  * @returns {Promise<string|null>}
  */
-async function corpusIndexProblem(folder) {
+async function corpusIndexProblem(folder, { unread = [] } = {}) {
+  const skipped = new Set(unread);
   const indexPath = path.join(folder, INDEX_NAME);
   if (!isRegularOrAbsent(indexPath)) return `${INDEX_NAME} is a directory or a symbolic link; remove it and run tea-evaluate digest`;
   let committed;
@@ -155,7 +162,8 @@ async function corpusIndexProblem(folder) {
       ? `${INDEX_NAME} is missing; run tea-evaluate digest`
       : `${INDEX_NAME} is not valid JSON (${error.message}); run tea-evaluate digest`;
   }
-  const recomputed = await buildCorpusIndex(folder);
+  const recomputed = await buildCorpusIndex(folder, { unread: skipped });
+  if (skipped.size > 0 && Array.isArray(committed)) committed = committed.filter((entry) => !skipped.has(entry?.path));
   let committedDigest;
   try {
     committedDigest = await corpusDigestOf(committed);

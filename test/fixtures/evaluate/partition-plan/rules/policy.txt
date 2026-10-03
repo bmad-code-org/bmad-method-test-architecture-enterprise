@@ -1,0 +1,4 @@
+mode: strict
+gate-1: strict
+gate-2: strict
+gate-3: strict

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "interactionPlan": [
+    {
+      "stepId": "held-out-run",
+      "interfaceId": "verdict",
+      "operationId": "judge-request",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "canary-9c41d7e2: judge the held-out case."
+          }
+        }
+      }
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-101",
+      "polarity": "expects-hold",
+      "commentary": "The verdict command read the strict policy, so the held-out run says verdict: accepted and exited 0.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and stdout of the held-out-run call.",
+        "negativeDomain": "A run that exited non-zero, or whose stdout does not say verdict: accepted.",
+        "evidenceTargets": [
+          "/interactions/held-out-run/exit-code",
+          "/interactions/held-out-run/stdout"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/held-out-run/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/held-out-run/stdout"
+              },
+              {
+                "literal": "verdict: accepted"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "behaviorOracles": {
+    "B-002": [
+      "O-101"
+    ]
+  }
+}

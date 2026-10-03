@@ -175,6 +175,25 @@
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^P-[0-9]{3,}$" }
     },
+    "partitionPlan": {
+      "description": "Isolates interaction plan steps by evaluation partition (Story 1.51, AD-9, AD-22). Absent, every partition runs the whole contract.json plan. Declared, the development partition runs contract.json, whose plan holds the shared steps and the development-only ones, and the held-out partition runs the shared steps and the steps and oracles of a sealed held-out plan, so no artifact of one partition carries a request, an observation or an oracle meant only for the other. Requires the deterministic evaluator.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["developmentOnlySteps", "heldOutPlan"],
+      "properties": {
+        "developmentOnlySteps": {
+          "description": "The stepIds of contract.json's interactionPlan that only the development partition runs. The held-out view removes them, and every oracle that reads one, from the contract it compiles and runs.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        },
+        "heldOutPlan": {
+          "description": "The held-out plan file, a regular file directly under corpus/held-out/ (so corpus-index.json digests it), shaped by held-out-plan.schema.json. A development run never opens it.",
+          "type": "string",
+          "pattern": "^corpus/held-out/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$"
+        }
+      }
+    },
     "judgeCalibration": {
       "description": "The adopter's minimum exact agreement against labelled rubric examples.",
       "type": "object",
