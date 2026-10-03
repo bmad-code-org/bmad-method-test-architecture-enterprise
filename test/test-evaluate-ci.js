@@ -39,7 +39,7 @@ const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 const { suite } = require('./lib/evaluate-story-121');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const { HOLD_NAME, scratchDirectories } = require('./lib/scratch-directories');
 
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
@@ -193,6 +193,8 @@ const scratchNames = (temp) => fs.readdirSync(temp).filter((name) => name.starts
 
 /** The user's private root (`workspace.js` `makePrivateParent`): `/tmp/tea-evaluate-p<uid>`, whatever the run's TMPDIR is. */
 const PRIVATE_ROOT = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+/** Marks a private parent as held by this suite, so the scratch reaper of a suite running at the same time leaves it. */
+const holdParent = (parentName) => fs.writeFileSync(path.join(PRIVATE_ROOT, parentName, HOLD_NAME), String(process.pid));
 const privateNames = () => (fs.existsSync(PRIVATE_ROOT) ? fs.readdirSync(PRIVATE_ROOT) : []);
 /** The private parents (`run-<pid>-*`) the process `pid` holds under the private root. */
 const privateParents = (pid) => privateNames().filter((name) => name.startsWith(`run-${pid}-`));
@@ -1573,6 +1575,9 @@ async function checkInterruptedReplay() {
   fs.rmSync(mark, { force: true });
   const killedRun = ciChild(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_MARK: mark }));
   assert.ok(await appears(mark), 'the replay did not reach the engine stage');
+  // The parent is held while this suite runs: the reaper of a suite running at the same time removes the parent of every dead
+  // process, which this one is about to become, before the next ci run gets to it.
+  for (const parent of privateParents(killedRun.child.pid)) holdParent(parent);
   // ci first, so no cleanup runs, then the stage it was waiting on.
   killedRun.child.kill('SIGKILL');
   await killedRun.exited;
@@ -1590,6 +1595,7 @@ async function checkInterruptedReplay() {
   const plant = (parentName, name, value) => {
     const parent = path.join(PRIVATE_ROOT, parentName);
     fs.mkdirSync(path.join(parent, name), { recursive: true });
+    holdParent(parentName);
     fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
     planted.push(parent);
     return parentName;
@@ -2535,8 +2541,8 @@ const MIGRATION_FIELDS = ['file', 'story', 'change'];
 /**
  * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
  * `operationPhases` flattened from `{ interfaceId: { operationId: phase } }` to `{ operationId: phase }`, serialized as the
- * session left it. `null` when the file is not a schema 2 file with nested phases in the runtime's serialization, or an operation
- * ID repeats across interfaces.
+ * session left it. `null` when the file is not a schema 2 file with nested phases in the runtime's serialization, a phase
+ * interface is not one of its registry's, or an operation ID repeats across interfaces.
  */
 function reverseSchema2Migration(buffer) {
   let value;
@@ -2548,8 +2554,11 @@ function reverseSchema2Migration(buffer) {
   if (value?.schemaVersion !== 2 || value.operationPhases === null || typeof value.operationPhases !== 'object') return null;
   // The migrated file is the serialization the runtime writes, so any other byte (whitespace included) is an edit.
   if (buffer.toString('utf8') !== `${JSON.stringify(value, null, 2)}\n`) return null;
+  // Each interface key is one the file declares, so phases re-keyed under an interface it never declared are an edit.
+  const declared = new Set(Array.isArray(value.registry) ? value.registry.map((entry) => entry?.interfaceId) : []);
   const flat = {};
-  for (const byOperation of Object.values(value.operationPhases)) {
+  for (const [interfaceId, byOperation] of Object.entries(value.operationPhases)) {
+    if (!declared.has(interfaceId)) return null;
     if (byOperation === null || typeof byOperation !== 'object') return null;
     for (const [operationId, phase] of Object.entries(byOperation)) {
       if (Object.hasOwn(flat, operationId)) return null;
@@ -2579,8 +2588,9 @@ function captureProblems(name, record, bytes) {
   // the only edit the file may carry.
   const migrated = new Set();
   for (const migration of record.migrations ?? []) {
-    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42' || migrated.has(migration.file))
+    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42')
       problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
+    else if (migrated.has(migration.file)) problems.push(`${name}: the capture record declares the migration of ${migration.file} twice`);
     migrated.add(migration?.file);
     // The rebuilt bytes are the only authority: a digest the entry names (`from`, `to`) is a second claim nothing checks.
     const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.includes(key));
@@ -3019,6 +3029,7 @@ function checkCaptureRecordGuard() {
         withEvaluation(
           serialized({
             ...evaluationValue,
+            registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
             operationPhases: {
               ...evaluationValue.operationPhases,
               'second-interface': structuredClone(Object.values(evaluationValue.operationPhases)[0]),
@@ -3039,7 +3050,26 @@ function checkCaptureRecordGuard() {
         bytes,
         'the tests do not know',
       ],
-      ['a migration declared twice', withMigrations([...record.migrations, ...record.migrations]), bytes, 'the tests do not know'],
+      [
+        'a migration declared twice',
+        withMigrations([...record.migrations, ...record.migrations]),
+        bytes,
+        `declares the migration of ${EVALUATION_FILE} twice`,
+      ],
+      [
+        'a migration credited to another story',
+        withMigrations(record.migrations.map((migration) => ({ ...migration, story: '1.43' }))),
+        bytes,
+        'the tests do not know',
+      ],
+      [
+        'a migrated file whose phases are keyed under an interface its registry never declared',
+        record,
+        withEvaluation(
+          serialized({ ...evaluationValue, operationPhases: { 'ghost-interface': Object.values(evaluationValue.operationPhases)[0] } }),
+        ),
+        'declared migration could have produced',
+      ],
     ];
     for (const [label, candidate, tree, expected] of cases) {
       const problems = captureProblems(name, candidate, tree);

@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const { engineProjection, phaseOf, projectTrial, writeInterpretation } = require('../cli/lib/evaluate/interpret');
 const { ArmError, runArm } = require('../cli/lib/evaluate/arm');
+const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
@@ -248,8 +249,24 @@ async function checkReusedOperation() {
     second.operations[0].invocation.executable = 'grader-cli-b';
     twin.permittedInterfaces.push(second);
     twin.interactionPlan.push({ ...structuredClone(planned.get(CLI_STEP_ID)), stepId: 'grade-run-cli-b', interfaceId: 'grader-cli-b' });
+    // The command interface also declares a second operation of the same kind under another executable, with a step of its
+    // own: each call is answered from the step of its own operation, not from the first step of its interface.
+    const extra = structuredClone(command.operations[0]);
+    extra.operationId = 'grade-extra';
+    extra.invocation.executable = 'grader-cli-x';
+    command.operations.push(extra);
+    twin.interactionPlan.push({
+      ...structuredClone(planned.get(CLI_STEP_ID)),
+      stepId: 'grade-run-x',
+      interfaceId: CLI_INTERFACE,
+      operationId: 'grade-extra',
+    });
     const twinRegistry = createRegistry(
-      [...evaluationFile.registry, { ...entryOf(CLI_INTERFACE), interfaceId: 'grader-cli-b', executable: 'grader-cli-b' }],
+      [
+        ...evaluationFile.registry,
+        { ...entryOf(CLI_INTERFACE), interfaceId: 'grader-cli-b', executable: 'grader-cli-b' },
+        { ...entryOf(CLI_INTERFACE), executable: 'grader-cli-x' },
+      ],
       { root: project.root },
     );
     const trap = {
@@ -264,25 +281,37 @@ async function checkReusedOperation() {
       degenerate: {
         [CLI_STEP_ID]: { stdout: 'verdict: first\n', stderr: '', exitCode: 0 },
         'grade-run-cli-b': { stdout: 'verdict: second\n', stderr: '', exitCode: 0 },
+        'grade-run-x': { stdout: 'verdict: extra\n', stderr: '', exitCode: 0 },
       },
       label: 'trial-1',
       taken: new Set(),
       firstSequence: 1,
-      budget: 4,
+      budget: 6,
       nonce: crypto.randomBytes(16).toString('hex'),
     });
     const answers = [];
     for (const [name, executable] of [
       [CLI_INTERFACE, CLI_INTERFACE],
       ['grader-cli-b', 'grader-cli-b'],
+      [CLI_INTERFACE, 'grader-cli-x'],
     ])
       answers.push(JSON.parse((await twinRouter.handle({ name, kind: 'cli' }, { arguments: [executable], stdin: 'x' })).text).stdout);
-    assert.deepEqual(answers, ['verdict: first\n', 'verdict: second\n'], 'each interface is answered from its own step');
+    assert.deepEqual(
+      answers,
+      ['verdict: first\n', 'verdict: second\n', 'verdict: extra\n'],
+      'each interface and each operation is answered from its own step',
+    );
 
     // A step names its operation inside its own interface (Story 1.103). `check` and `compile` refuse most such plans, so the arm's
     // own refusal is held directly: a step whose operation only another interface declares, and a step on a pair its interface
-    // declares twice. The engine refuses the second shape only when a check cites the step (`unreachable-check-evidence`), and an
-    // uncited step compiles, so the arm is the last place that stops it.
+    // declares twice. The engine refuses the second shape for the same transport signature, or when a check cites the step
+    // (`unreachable-check-evidence`). An uncited step on a duplicate of another signature compiles, so the arm is the last place
+    // that stops it, and the case compiles it first so a later engine release that refuses it fails here.
+    const armTrap = {
+      probe() {
+        throw new Error('the arm launched a step it should have refused');
+      },
+    };
     const stepOver = (interfaceId, operationId) => ({
       ...structuredClone(planned.get(CLI_STEP_ID)),
       stepId: 'probe-step',
@@ -294,21 +323,35 @@ async function checkReusedOperation() {
       const edited = structuredClone(read(path.join(run, index.contract)));
       edit(edited);
       try {
-        await runArm({ contract: edited, port: trap, registry: twinRegistry, label: 'refusal' });
+        await runArm({ contract: edited, port: armTrap, registry: twinRegistry, label: 'refusal' });
       } catch (error) {
         return error;
       }
       return null;
     };
+    // Mutants Ar1 and Ar2 (a pair looked up by operation ID alone) find the HTTP interface's report-release for this step.
     const wrongInterface = await armRefusal((edited) => (edited.interactionPlan = [stepOver(CLI_INTERFACE, 'report-release')]));
     assert.ok(wrongInterface instanceof ArmError, `a step on an interface that does not declare its operation ran: ${wrongInterface}`);
     assert.match(
       wrongInterface.message,
       new RegExp(`names operation report-release on interface ${CLI_INTERFACE}, which that interface does not declare`),
     );
-    const declaredTwice = await armRefusal((edited) => {
+    const duplicateReport = (edited) => {
       const api = edited.permittedInterfaces.find((candidate) => candidate.logicalId === API_INTERFACE);
-      api.operations.push(structuredClone(api.operations.find((operation) => operation.operationId === 'report-release')));
+      const twice = structuredClone(api.operations.find((operation) => operation.operationId === 'report-release'));
+      twice.pathTemplate = `${twice.pathTemplate}/again`;
+      api.operations.push(twice);
+    };
+    const compiling = structuredClone(read(path.join(folder, 'contract.json')));
+    duplicateReport(compiling);
+    compiling.interactionPlan.push(stepOver(API_INTERFACE, 'report-release'));
+    const engine = await loadEngine();
+    assert.doesNotThrow(
+      () => engine.compile(compiling),
+      'eval-quality refuses an uncited step on a pair declared twice; the arm case no longer holds',
+    );
+    const declaredTwice = await armRefusal((edited) => {
+      duplicateReport(edited);
       edited.interactionPlan = [stepOver(API_INTERFACE, 'report-release')];
     });
     assert.ok(declaredTwice instanceof ArmError, `a step on a pair its interface declares twice ran: ${declaredTwice}`);

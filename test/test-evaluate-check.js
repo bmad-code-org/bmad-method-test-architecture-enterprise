@@ -138,6 +138,26 @@ function declareOnSecondInterface(folder, secondPhase = 'process') {
   });
 }
 
+/**
+ * Declares a second operation on the fixture's one interface under another executable, with a registry entry, a phase and a
+ * step of its own (`second-run`), so one interface carries two command entries that differ in their executable only.
+ */
+function declareSecondOperation(folder) {
+  editJson(folder, 'contract.json', (value) => {
+    const [iface] = value.permittedInterfaces;
+    const operation = structuredClone(iface.operations[0]);
+    operation.operationId = 'second-operation';
+    operation.invocation.executable = 'second-runner';
+    iface.operations.push(operation);
+    const [step] = value.interactionPlan;
+    value.interactionPlan.push({ ...structuredClone(step), stepId: 'second-run', operationId: 'second-operation' });
+  });
+  editJson(folder, 'evaluation.json', (value) => {
+    value.registry.push({ ...structuredClone(value.registry[0]), executable: 'second-runner' });
+    value.operationPhases[PHASE_INTERFACE]['second-operation'] = 'process';
+  });
+}
+
 async function checkWindowsRunnerBudget() {
   const source = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate');
   const original = path.join(source, 'preflight');
@@ -283,7 +303,7 @@ function checkOperationPhaseCoverage() {
     `a second interface with a tighter ceiling drew a finding for the first interface's step\n${tightResult.output}`,
   );
   check(
-    tightResult.output.includes('interactionPlan[1] hands') && tightResult.output.includes("must be below the entry's maxElapsedMs (1000)"),
+    /interactionPlan\[1\] hands tea-skill-runner --timeout-ms .*maxElapsedMs \(1000\)/.test(tightResult.output),
     `the step on the second interface was not held to its own entry's ceiling\n${tightResult.output}`,
   );
   const second = copyValid();
@@ -305,6 +325,36 @@ function checkOperationPhaseCoverage() {
     secondResult.output.includes('step second-run exits 9, which its registry entry declares as an infrastructure exit code') &&
       !secondResult.output.includes('step tea-atdd-runner-run exits'),
     `a gameability answer for a step on the second interface was not held to that interface's codes\n${secondResult.output}`,
+  );
+  // One interface, two operations under two executables: the second entry alone has the 1000 ms ceiling and exit code 9, so
+  // each lookup has to resolve the step's operation as well as its interface (Story 1.103).
+  const sameInterface = copyValid();
+  declareSecondOperation(sameInterface);
+  editJson(sameInterface, 'contract.json', (value) => {
+    for (const step of value.interactionPlan)
+      step.inputBinding.option = { ...step.inputBinding.option, 'skill-root': { literal: 'skill' }, 'timeout-ms': { literal: '5000' } };
+  });
+  editJson(sameInterface, 'evaluation.json', (value) => {
+    for (const entry of value.registry) Object.assign(entry, { target: 'tea-skill-runner', infrastructureExitCodes: [3, 4, 5, 6] });
+    value.registry[1].maxElapsedMs = 1000;
+    value.registry[1].infrastructureExitCodes = [3, 4, 5, 6, 9];
+  });
+  plantGameability(sameInterface, {
+    response: (degenerate) => {
+      degenerate.steps['tea-atdd-runner-run'] = { stdout: '', stderr: '', exitCode: 9 };
+      degenerate.steps['second-run'] = { stdout: '', stderr: '', exitCode: 9 };
+    },
+  });
+  const sameResult = runCli(['check', '--evaluation', sameInterface]);
+  check(
+    /interactionPlan\[1\] hands tea-skill-runner --timeout-ms .*maxElapsedMs \(1000\)/.test(sameResult.output) &&
+      !sameResult.output.includes('interactionPlan[0] hands tea-skill-runner --timeout-ms'),
+    `a step was not held to the ceiling of its own operation's entry on a shared interface\n${sameResult.output}`,
+  );
+  check(
+    sameResult.output.includes('step second-run exits 9, which its registry entry declares as an infrastructure exit code') &&
+      !sameResult.output.includes('step tea-atdd-runner-run exits'),
+    `a gameability answer was not held to the infrastructure codes of its own operation's entry on a shared interface\n${sameResult.output}`,
   );
   // A principal is mapped to the interface its step names: with the operation ID on two interfaces, the step on the first
   // interface draws no mapping finding and the step on the second one, mapped to the first, draws one.
