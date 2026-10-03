@@ -1573,9 +1573,9 @@ So that the next preflight leaves no owned temporary directory from the killed r
 
 **Acceptance Criteria:**
 
-**Given** a preflight with an active evaluator command scratch directory
-**When** the preflight receives `SIGKILL` and another preflight starts for the same evaluation
-**Then** the next preflight verifies ownership, reports and removes the dead run's auxiliary directory, including after `TMPDIR` changes, while preserving live and unrelated scratch; an integration case asserts each path and its cleanup, and reverting the recovery leaves the owned directory
+**Given** a preflight with active engine staging, or a `run` with active command evaluator scratch
+**When** the CLI receives `SIGKILL` and another preflight starts for the same evaluation
+**Then** the next preflight verifies ownership, reports and removes the dead run's private parent with its auxiliary directory, including after `TMPDIR` changes, while preserving live, unrelated and unverifiable parents; integration cases assert each path and its cleanup, and reverting the recovery leaves the owned directory
 **And** the adopter's status and refs remain unchanged, and the CLI workspace reference names the auxiliary recovery; deleting that passage fails its documentation assertion.
 
 **Dependencies:** 1.28.

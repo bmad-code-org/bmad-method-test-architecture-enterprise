@@ -117,13 +117,16 @@ const {
   cleanUpOnSignal,
   createWorkspace,
   gitAccessOf,
+  isDirectory,
   joinAsSpelled,
   makePrivateParent,
   makeScratchDirectory,
   realPathLoosely,
   releaseScratchDirectory,
+  retirePrivateParentOwnership,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   journalDirectory,
   trackedTreeDigest,
@@ -559,17 +562,39 @@ async function pipeline(
   // Each directory is tried on its own, write bits restored first, and one that cannot be removed is reported,
   // so no failure here keeps the workspaces from being removed after it.
   const removeScratch = () => {
-    for (const directory of scratch.splice(0)) {
+    const directories = scratch.splice(0);
+    const parent = scratch.privateParent;
+    let childFailed = false;
+    for (const directory of directories.filter((entry) => entry !== parent)) {
       try {
         removeScratchDirectory(directory);
       } catch (error) {
+        childFailed = true;
         scratch.push(directory);
         log(`could not remove the private directory ${directory}: ${error.message}`);
+      }
+    }
+    if (parent && directories.includes(parent)) {
+      if (childFailed) scratch.unshift(parent);
+      else {
+        try {
+          removeScratchDirectory(parent);
+        } catch (error) {
+          scratch.unshift(parent);
+          log(`could not remove the private directory ${parent}: ${error.message}`);
+        }
       }
     }
   };
   const onSignal = (name) => {
     removeScratch();
+    if (journal) {
+      try {
+        retirePrivateParentOwnership(scratch);
+      } catch (error) {
+        log(`could not retire the private parent ownership record: ${error.message}`);
+      }
+    }
     if (state.writer === null || state.sealed) return;
     try {
       for (const file of [...retractOnSignal, ...state.retractUnlessSealed]) state.writer.remove(file);
@@ -585,18 +610,19 @@ async function pipeline(
     // The one private parent every evaluation-layer directory is made under, beneath the user's private root, before any
     // sandbox is built: a confined target's profile names the root, which covers this parent and every directory made
     // after it, and the parent of a run that starts later (`confinement.js`).
-    makePrivateParent(scratch);
+    const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
+    if (!isDirectory(root)) throw new WorkspaceRefusal(`launch.root ${root} is not a directory`);
+    const runsDirectory = ensureRunsDirectory(folder);
+    journal = journalDirectory(runsDirectory);
+    const invocationId = newInvocationId();
+    makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
+    reclaimDeadPrivateParents({ folder, root, journal, log });
+    reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
-
-    const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
-    const runsDirectory = ensureRunsDirectory(folder);
-    journal = journalDirectory(runsDirectory);
-    reclaimDeadWorkspaces({ folder, root, journal, log });
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
-    const invocationId = newInvocationId();
     const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one
     // set of bytes whatever changes in the project meanwhile.
@@ -676,6 +702,13 @@ async function pipeline(
   } finally {
     release();
     removeScratch();
+    if (journal) {
+      try {
+        retirePrivateParentOwnership(scratch);
+      } catch (error) {
+        log(`could not retire the private parent ownership record: ${error.message}`);
+      }
+    }
     for (const workspace of workspaces) {
       try {
         removeWorkspace(workspace);

@@ -37,6 +37,10 @@ const { engineCliPath } = require('../../../cli/lib/evaluate/engine');
 
 const [stage = ''] = process.argv.slice(2);
 fs.appendFileSync(process.env.TEA_EVALUATE_SHIM_LOG, `${JSON.stringify(process.argv.slice(2))}\n`);
+if (process.env.TEA_EVALUATE_SHIM_HOLD_STAGE === stage) {
+  fs.writeFileSync(process.env.TEA_EVALUATE_SHIM_READY, `${process.pid}\n`);
+  setInterval(() => {}, 1000);
+}
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--probe');
 const probe = at === -1 ? '-' : argv[at + 1].split(/[\\/]/).pop();

@@ -62,6 +62,31 @@ const GIT_HISTORY_TIMEOUT_MS = 10 * 60_000;
 const WITHHELD_REPOSITORY = 'git-view';
 const OWNER_MARKER = '.tea-evaluate-owner.json';
 const JOURNAL_DIRECTORY = '.workspace-journal';
+const PRIVATE_PARENT_MARKER = '.tea-evaluate-private-owner.json';
+const PRIVATE_RECORD_READ = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+
+/** Read the regular file that was inspected, without following a swapped link or blocking on a FIFO. */
+function readPrivateRecord(file, inspected) {
+  const descriptor = fs.openSync(file, PRIVATE_RECORD_READ);
+  try {
+    const opened = fs.fstatSync(descriptor);
+    const current = fs.lstatSync(file);
+    if (
+      !opened.isFile() ||
+      !current.isFile() ||
+      !privateToUser(opened) ||
+      !privateToUser(current) ||
+      opened.dev !== inspected.dev ||
+      opened.ino !== inspected.ino ||
+      current.dev !== inspected.dev ||
+      current.ino !== inspected.ino
+    )
+      return null;
+    return fs.readFileSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
 
 /** Kept beside the workspace while its contents are removed, so an interrupted cleanup still has ownership proof. */
 function ownerSidecarOf(workspace) {
@@ -519,7 +544,7 @@ function heldPrivateRoot(root) {
  * @param {string[]} scratch
  * @returns {string} the parent
  */
-function makePrivateParent(scratch) {
+function makePrivateParent(scratch, ownership = null) {
   if (typeof scratch.privateParent === 'string') return scratch.privateParent;
   const root = privateRootIn(privateRootBase());
   if (root === null) {
@@ -527,11 +552,199 @@ function makePrivateParent(scratch) {
       `no private directory for the run can be made: ${path.join(privateRootBase(), privateRootName())} must be a directory you own that is not a link; remove what is there`,
     );
   }
-  const directory = fs.mkdtempSync(path.join(root, `${PRIVATE_PARENT_PREFIX}${process.pid}-`));
+  let directory;
+  let pendingOwnership = null;
+  if (ownership === null) {
+    directory = fs.mkdtempSync(path.join(root, `${PRIVATE_PARENT_PREFIX}${process.pid}-`));
+  } else {
+    const nonce = randomUUID();
+    directory = path.join(root, `${PRIVATE_PARENT_PREFIX}${process.pid}-${nonce}`);
+    const entry = {
+      version: 1,
+      kind: 'private-parent',
+      folder: fs.realpathSync.native(ownership.folder),
+      root: fs.realpathSync.native(ownership.root),
+      runId: ownership.runId,
+      ownerPid: process.pid,
+      privateRoot: root,
+      directory,
+    };
+    const name = `aux-${nonce}.json`;
+    const contents = `${JSON.stringify(entry)}\n`;
+    ownership.journal.inDirectory(
+      '',
+      () => {
+        const descriptor = fs.openSync(
+          name,
+          fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0),
+          0o600,
+        );
+        try {
+          fs.writeFileSync(descriptor, contents);
+          fs.fsyncSync(descriptor);
+        } catch (error) {
+          fs.closeSync(descriptor);
+          fs.rmSync(name, { force: true });
+          throw error;
+        }
+        fs.closeSync(descriptor);
+      },
+      { undo: () => fs.rmSync(name, { force: true }) },
+    );
+    // The journal precedes the directory. A kill in this window leaves a record with no parent to retire.
+    fs.mkdirSync(directory, { mode: 0o700 });
+    pendingOwnership = { name, journal: ownership.journal, entry, contents };
+  }
   scratch.unshift(directory);
   Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
   Object.defineProperty(scratch, 'privateRoot', { value: root, enumerable: false, configurable: true, writable: true });
+  if (pendingOwnership !== null) {
+    const { name, journal, entry, contents } = pendingOwnership;
+    Object.defineProperty(scratch, 'privateOwnership', {
+      value: { name, journal, entry },
+      enumerable: false,
+      configurable: true,
+    });
+    const marker = fs.openSync(
+      path.join(directory, PRIVATE_PARENT_MARKER),
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    try {
+      fs.writeFileSync(marker, contents);
+      fs.fsyncSync(marker);
+    } finally {
+      fs.closeSync(marker);
+    }
+  }
   return directory;
+}
+
+/** Retire a normal run's record only after its parent has gone. A failed cleanup remains recoverable. */
+function retirePrivateParentOwnership(scratch) {
+  const ownership = scratch.privateOwnership;
+  if (!ownership) return;
+  try {
+    fs.lstatSync(ownership.entry.directory);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    ownership.journal.inDirectory('', () => fs.rmSync(ownership.name, { force: true }));
+  }
+}
+
+/** A recorded root may be from an earlier Windows temp directory; POSIX always uses its fixed root. */
+function recordedPrivateRoot(entry, platform) {
+  const root = entry.privateRoot;
+  if (
+    typeof root !== 'string' ||
+    !path.isAbsolute(root) ||
+    path.normalize(root) !== root ||
+    path.basename(root) !== privateRootName() ||
+    (platform !== 'win32' && root !== path.join(privateRootBase(), privateRootName()))
+  )
+    return null;
+  return root;
+}
+
+/** Reclaim a dead invocation's private parent only when its journal and in-parent marker agree. */
+function reclaimDeadPrivateParents({ folder, root, journal, log = () => {}, platform = process.platform }) {
+  const projectFolder = fs.realpathSync.native(folder);
+  const projectRoot = fs.realpathSync.native(root);
+  const names = journal.inDirectory('', () => fs.readdirSync('.').filter((name) => /^aux-[0-9a-f-]{36}\.json$/.test(name)));
+  for (const name of names) {
+    try {
+      const stat = journal.inDirectory('', () => fs.lstatSync(name));
+      if (!stat.isFile() || !privateToUser(stat)) continue;
+      const journalBytes = journal.inDirectory('', () => readPrivateRecord(name, stat));
+      if (journalBytes === null) continue;
+      const entry = JSON.parse(journalBytes.toString('utf8'));
+      const privateRoot = recordedPrivateRoot(entry, platform);
+      if (
+        entry.version !== 1 ||
+        entry.kind !== 'private-parent' ||
+        entry.folder !== projectFolder ||
+        entry.root !== projectRoot ||
+        !Number.isSafeInteger(entry.ownerPid) ||
+        entry.ownerPid <= 0 ||
+        typeof entry.runId !== 'string' ||
+        !/^[a-zA-Z0-9_-]+$/.test(entry.runId) ||
+        privateRoot === null ||
+        entry.directory !== path.join(privateRoot, `${PRIVATE_PARENT_PREFIX}${entry.ownerPid}-${name.slice(4, -5)}`)
+      )
+        continue;
+      // A reused PID, an inaccessible process and any uncertain liveness all preserve the parent.
+      try {
+        process.kill(entry.ownerPid, 0);
+        continue;
+      } catch (error) {
+        if (error.code !== 'ESRCH') continue;
+      }
+      // The old root may no longer exist. Retain an unverifiable record for inspection.
+      const rootStat = fs.lstatSync(privateRoot);
+      if (!rootStat.isDirectory() || rootStat.isSymbolicLink() || !privateToUser(rootStat)) continue;
+      const heldRoot = new RunDirectory(privateRoot);
+      try {
+        const expectedRoot = path.join(fs.realpathSync.native(path.dirname(privateRoot)), path.basename(privateRoot));
+        const held = heldRoot.directories.get('');
+        if (heldRoot.realRoot !== expectedRoot || held.dev !== rootStat.dev || held.ino !== rootStat.ino) continue;
+        const parentName = path.basename(entry.directory);
+        const parentStat = heldRoot.inDirectory('', () => {
+          try {
+            return fs.lstatSync(parentName);
+          } catch (error) {
+            if (error.code === 'ENOENT') return null;
+            throw error;
+          }
+        });
+        if (parentStat === null) {
+          journal.inDirectory('', () => fs.rmSync(name));
+          continue;
+        }
+        if (!parentStat.isDirectory() || parentStat.isSymbolicLink() || !privateToUser(parentStat)) continue;
+        const marker = path.join(entry.directory, PRIVATE_PARENT_MARKER);
+        let markerStat;
+        try {
+          markerStat = fs.lstatSync(marker);
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+          markerStat = null;
+        }
+        if (markerStat === null) {
+          // A kill between mkdir and marker is safe to reclaim only while the directory is empty.
+          if (fs.readdirSync(entry.directory).length > 0) continue;
+        } else {
+          if (!markerStat.isFile() || !privateToUser(markerStat)) continue;
+          const contents = readPrivateRecord(marker, markerStat);
+          if (contents === null) continue;
+          const expected = Buffer.from(`${JSON.stringify(entry)}\n`);
+          if (!contents.equals(expected)) {
+            // An interrupted exclusive marker write is safe only when its bytes are the exact prefix and nothing else exists.
+            const partial =
+              contents.length < expected.length &&
+              expected.subarray(0, contents.length).equals(contents) &&
+              fs.readdirSync(entry.directory).length === 1;
+            if (!partial) continue;
+          }
+        }
+        const auxiliary = fs.readdirSync(entry.directory).filter((item) => item !== PRIVATE_PARENT_MARKER);
+        heldRoot.inDirectory('', () => {
+          const current = fs.lstatSync(parentName);
+          if (current.dev !== parentStat.dev || current.ino !== parentStat.ino || !current.isDirectory()) {
+            throw new WorkspaceRefusal(`private parent ${entry.directory} changed during recovery`);
+          }
+          removeScratchDirectory(parentName);
+        });
+        journal.inDirectory('', () => fs.rmSync(name));
+        for (const item of auxiliary)
+          log(`reclaimed auxiliary scratch from killed run ${entry.runId}: ${path.join(entry.directory, item)}`);
+        log(`reclaimed private parent from killed run ${entry.runId}: ${entry.directory}`);
+      } finally {
+        heldRoot.close();
+      }
+    } catch (error) {
+      log(`could not verify or reclaim private parent journal ${path.join(journal.root, name)}: ${error.message}`);
+    }
+  }
 }
 
 /**
@@ -1720,8 +1933,10 @@ module.exports = {
   privateRootName,
   realPathLoosely,
   releaseScratchDirectory,
+  retirePrivateParentOwnership,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   repositoryOf,
   requestKey,
