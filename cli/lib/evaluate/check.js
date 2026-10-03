@@ -1290,7 +1290,7 @@ function checkFrameworks(report, folder, layer, untracked) {
   for (const problem of shape)
     report.add(
       FRAMEWORKS_PATH,
-      /^frameworks\[\d+\]\.probe\.probeTimeoutMs must be an integer from 1 to 60000$/.test(problem) ? 'evaluator' : 'schema',
+      /^frameworks\[\d+\]\.(?:probe\.probeTimeoutMs|installState) must be /.test(problem) ? 'evaluator' : 'schema',
       problem,
     );
   if (shape.length > 0) return;

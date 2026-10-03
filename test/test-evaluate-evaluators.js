@@ -5308,12 +5308,23 @@ async function checkUnits() {
   };
   const observedA = [{ package: 'probe-fw', version: '1.0.0' }];
   check(
+    configurationDigestOf(observedA) === 'sha256:1b743b59fb8e7018ffa8e6b0683c2c6ce766ca586278efe71671ba532a88c125',
+    'the fixed-input legacy framework configuration digest moved',
+  );
+  check(
     JSON.stringify(commandFields([], observedA)['tea.evaluatorFrameworks']) === JSON.stringify(observedA) &&
       JSON.stringify(commandFields([])['tea.evaluatorFrameworks']) === '[]' &&
       configurationDigestOf(observedA) === configurationDigestOf([{ package: 'probe-fw', version: '1.0.0', extra: 'ignored' }]) &&
       configurationDigestOf(observedA) !== configurationDigestOf([{ package: 'probe-fw', version: '1.0.1' }]) &&
       configurationDigestOf(observedA) !== configurationDigestOf([]),
     "the command evaluator's configuration does not move with the observed framework version alone",
+  );
+  const installA = [{ ...observedA[0], installSource: 'tree', installDigest: `sha256:${'a'.repeat(64)}` }];
+  const installB = [{ ...observedA[0], installSource: 'tree', installDigest: `sha256:${'b'.repeat(64)}` }];
+  check(
+    configurationDigestOf(installA) !== configurationDigestOf(installB) &&
+      commandFields([], installA)['tea.evaluatorFrameworks'][0].installDigest === installA[0].installDigest,
+    'the command configuration did not bind the observed install digest',
   );
   let refusedMissing = null;
   try {
@@ -5645,6 +5656,687 @@ function frameworkProject(
   });
 }
 
+/** A local package patch must move scoring even when package.json keeps its version. */
+function checkInstalledFrameworkTreePatch() {
+  const project = frameworkProject('framework-tree-patch', {
+    extra: ({ folder, repository }) => {
+      fs.writeFileSync(path.join(repository, 'node_modules', FRAMEWORK, 'judge.js'), 'export const judgment = 1;\n');
+      const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+      declaration.frameworks[0].installState = { source: 'tree' };
+      declaration.frameworks[0].probe.args.push('tree');
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+    },
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `the first installed-tree run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  const firstDigest = readJson(path.join(firstDirectory, 'framework-versions.json')).frameworks[0].observed.installDigest;
+  const firstScore = scoreRun(project, 'the original installed tree');
+  fs.writeFileSync(path.join(project.repository, 'node_modules', FRAMEWORK, 'judge.js'), 'export const judgment = 2;\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `the patched installed-tree run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+  const secondDigest = readJson(path.join(secondDirectory, 'framework-versions.json')).frameworks[0].observed.installDigest;
+  const secondScore = scoreRun(project, 'the patched installed tree');
+  check(
+    typeof firstDigest === 'string' &&
+      firstDigest.startsWith('sha256:') &&
+      firstDigest !== secondDigest &&
+      firstRecord.evaluatorConfigurationDigest !== secondRecord.evaluatorConfigurationDigest &&
+      firstScore.evidence['P-002']?.scoringVersion !== secondScore.evidence['P-002']?.scoringVersion &&
+      firstRecord.evaluator.frameworks[0].installSource === 'tree' &&
+      firstRecord.evaluator.frameworks[0].installDigest === firstDigest &&
+      readJson(path.join(secondDirectory, 'framework-versions.json')).frameworks[0].observed.installSource === 'tree' &&
+      readJson(path.join(secondDirectory, 'evaluator-configuration.json')).decodingParameters['tea.evaluatorFrameworks'][0]
+        .installDigest === secondDigest &&
+      readJson(path.join(secondDirectory, 'evaluator-configuration.json')).decodingParameters['tea.evaluatorFrameworks'][0]
+        .installSource === 'tree',
+    'a local package patch kept the same observed install digest or configuration digest',
+  );
+}
+
+/** The legacy version-only declaration keeps its pre-story digest after an installed file patch. */
+function checkLegacyFrameworkPatch() {
+  const project = frameworkProject('framework-legacy-tree-patch', {
+    extra: ({ repository }) => fs.writeFileSync(path.join(repository, 'node_modules', FRAMEWORK, 'judge.js'), 'original\n'),
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `the legacy package run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  fs.writeFileSync(path.join(project.repository, 'node_modules', FRAMEWORK, 'judge.js'), 'patched\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `the legacy patched package run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+  check(
+    firstRecord.evaluatorConfigurationDigest === secondRecord.evaluatorConfigurationDigest &&
+      firstRecord.evaluator.frameworks[0].installDigest === undefined &&
+      secondRecord.evaluator.frameworks[0].installDigest === undefined,
+    'an undeclared install state changed the legacy framework configuration digest',
+  );
+}
+
+/** A lockfile entry change is a new condition even when its package version is fixed. */
+function checkInstalledFrameworkLockfile() {
+  const lockfile = (repository) => path.join(repository, 'package-lock.json');
+  const project = frameworkProject('framework-lockfile-entry', {
+    extra: ({ folder, repository }) => {
+      writeJson(lockfile(repository), {
+        name: 'fixture',
+        lockfileVersion: 3,
+        packages: { '': { name: 'fixture' }, [`node_modules/${FRAMEWORK}`]: { version: '1.0.0', resolved: 'file:original' } },
+      });
+      const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+      declaration.frameworks[0].installState = { source: 'lockfile' };
+      declaration.frameworks[0].probe.args.push('lockfile');
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+    },
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `the first lockfile run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstDigest = readJson(path.join(firstDirectory, 'framework-versions.json')).frameworks[0].observed.installDigest;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  const reordered = readJson(lockfile(project.repository));
+  reordered.packages[`node_modules/${FRAMEWORK}`] = { resolved: 'file:original', version: '1.0.0' };
+  writeJson(lockfile(project.repository), reordered);
+  commitAll(project.repository, project.folder, 'reorder the lockfile entry keys');
+  const equivalent = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(equivalent.status === 0, `the reordered lockfile run exited ${equivalent.status}\n${equivalent.output}`);
+  const equivalentDirectory = runDirectoryOf(project.folder);
+  if (equivalent.status !== 0 || equivalentDirectory === null) return;
+  check(
+    readJson(path.join(equivalentDirectory, 'framework-versions.json')).frameworks[0].observed.installDigest === firstDigest &&
+      readJson(path.join(equivalentDirectory, 'run.json')).evaluatorConfigurationDigest === firstRecord.evaluatorConfigurationDigest,
+    'equivalent lockfile entry key order changed the install or configuration digest',
+  );
+  const updated = readJson(lockfile(project.repository));
+  updated.packages[`node_modules/${FRAMEWORK}`].resolved = 'file:patched';
+  writeJson(lockfile(project.repository), updated);
+  commitAll(project.repository, project.folder, 'change only the lockfile entry');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `the changed lockfile run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondDigest = readJson(path.join(secondDirectory, 'framework-versions.json')).frameworks[0].observed.installDigest;
+  check(
+    firstDigest !== secondDigest &&
+      firstRecord.evaluatorConfigurationDigest !== readJson(path.join(secondDirectory, 'run.json')).evaluatorConfigurationDigest,
+    'editing one lockfile entry kept the old install or configuration digest',
+  );
+}
+
+/** The shipped lockfile probe accepts npm generations and refuses stale or linked entries. */
+function checkLockfileProbeVersions() {
+  const project = frameworkProject('framework-lockfile-generations');
+  const file = path.join(project.repository, 'package-lock.json');
+  const probe = () =>
+    spawnSync(process.execPath, [path.join(project.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'lockfile'], {
+      encoding: 'utf8',
+    });
+  writeJson(file, { lockfileVersion: 1, dependencies: { [FRAMEWORK]: { version: '1.0.0', resolved: 'file:v1' } } });
+  const v1 = probe();
+  check(v1.status === 0 && JSON.parse(v1.stdout).installDigest?.startsWith('sha256:'), `npm lockfile v1 failed: ${v1.stderr}`);
+  writeJson(file, {
+    lockfileVersion: 2,
+    packages: { '': {}, [`node_modules/${FRAMEWORK}`]: { version: '1.0.0', resolved: 'file:v2' } },
+  });
+  const v2 = probe();
+  check(
+    v2.status === 0 && JSON.parse(v2.stdout).installDigest !== JSON.parse(v1.stdout).installDigest,
+    `npm lockfile v2 failed: ${v2.stderr}`,
+  );
+  const stale = readJson(file);
+  stale.packages[`node_modules/${FRAMEWORK}`].version = '9.9.9';
+  writeJson(file, stale);
+  const staleResult = probe();
+  check(
+    staleResult.status === 1 && staleResult.stderr.includes('installed package is 1.0.0'),
+    `a stale lockfile entry was accepted: ${staleResult.stdout}${staleResult.stderr}`,
+  );
+  stale.packages[`node_modules/${FRAMEWORK}`] = { link: true, resolved: 'linked-probe' };
+  writeJson(file, stale);
+  const linkedEntry = probe();
+  check(
+    linkedEntry.status === 1 && linkedEntry.stderr.includes('is a link; use tree install state'),
+    `a linked lockfile entry was accepted: ${linkedEntry.stdout}${linkedEntry.stderr}`,
+  );
+  stale.packages[`node_modules/${FRAMEWORK}`] = { version: '1.0.0', resolved: 'file:linked' };
+  writeJson(file, stale);
+  const installed = path.join(project.repository, 'node_modules', FRAMEWORK);
+  fs.renameSync(installed, path.join(project.repository, 'node_modules', 'real-probe'));
+  fs.symlinkSync('real-probe', installed);
+  const linkedPackage = probe();
+  const linkedTree = spawnSync(process.execPath, [path.join(project.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'tree'], {
+    encoding: 'utf8',
+  });
+  check(
+    linkedPackage.status === 1 && linkedPackage.stderr.includes('requires tree install state') && linkedTree.status === 0,
+    `a linked installed package was accepted in lockfile mode or refused in tree mode: ${linkedPackage.stderr}${linkedTree.stderr}`,
+  );
+}
+
+/** Tree observation includes metadata and link identity beside file contents. */
+function checkTreeProbeMetadata() {
+  const project = frameworkProject('framework-tree-metadata');
+  const packageRoot = path.join(project.repository, 'node_modules', FRAMEWORK);
+  const modeFile = path.join(packageRoot, 'mode.txt');
+  fs.writeFileSync(modeFile, 'same bytes\n');
+  fs.chmodSync(modeFile, 0o644);
+  fs.writeFileSync(path.join(packageRoot, 'target-a.txt'), 'same target bytes\n');
+  fs.writeFileSync(path.join(packageRoot, 'target-b.txt'), 'same target bytes\n');
+  const link = path.join(packageRoot, 'linked.txt');
+  fs.symlinkSync('target-a.txt', link);
+  const probe = () =>
+    spawnSync(process.execPath, [path.join(project.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'tree'], {
+      encoding: 'utf8',
+    });
+  const observed = () => {
+    const result = probe();
+    check(result.status === 0, `the tree probe failed: ${result.stderr}`);
+    return result.status === 0 ? JSON.parse(result.stdout).installDigest : null;
+  };
+  const original = observed();
+  fs.chmodSync(modeFile, 0o600);
+  const nonExecutableModeChanged = observed();
+  check(
+    original !== null && nonExecutableModeChanged === original,
+    'changing only non-executable file permission bits moved the tree digest',
+  );
+  fs.chmodSync(modeFile, 0o755);
+  const modeChanged = observed();
+  check(nonExecutableModeChanged !== null && modeChanged !== nonExecutableModeChanged, 'changing file execute status kept the tree digest');
+  const emptyDirectory = path.join(packageRoot, 'empty');
+  fs.mkdirSync(emptyDirectory);
+  fs.chmodSync(emptyDirectory, 0o755);
+  const emptyAdded = observed();
+  check(emptyAdded !== null && emptyAdded !== modeChanged, 'adding an empty directory kept the tree digest');
+  fs.chmodSync(emptyDirectory, 0o700);
+  const directoryModeChanged = observed();
+  check(
+    directoryModeChanged !== null && directoryModeChanged === emptyAdded,
+    'changing only directory permission bits moved the tree digest',
+  );
+  fs.unlinkSync(link);
+  fs.symlinkSync('target-b.txt', link);
+  const linkChanged = observed();
+  check(linkChanged !== null && linkChanged !== emptyAdded, 'changing only symlink text kept the tree digest');
+  const dangling = path.join(packageRoot, 'dangling.txt');
+  fs.symlinkSync('missing-a.txt', dangling);
+  const missingTarget = observed();
+  check(missingTarget !== null, 'a dangling symlink made the installed tree unreadable');
+  fs.unlinkSync(dangling);
+  fs.symlinkSync('missing-b.txt', dangling);
+  const missingRetargeted = observed();
+  check(missingRetargeted !== null && missingRetargeted !== missingTarget, 'retargeting a dangling symlink kept the tree digest');
+  const largeFile = path.join(packageRoot, 'large.bin');
+  const largeBytes = Buffer.alloc(2 * 1024 * 1024, 7);
+  fs.writeFileSync(largeFile, largeBytes);
+  const largeOriginal = observed();
+  largeBytes[largeBytes.length - 1] = 8;
+  fs.writeFileSync(largeFile, largeBytes);
+  const largeChanged = observed();
+  check(largeChanged !== null && largeChanged !== largeOriginal, 'a changed byte after several read chunks kept the tree digest');
+  fs.symlinkSync('.', path.join(packageRoot, 'cycle'));
+  const cycle = probe();
+  check(cycle.status === 1 && cycle.stderr.includes('directory link cycle'), `a directory link cycle was accepted: ${cycle.stderr}`);
+}
+
+/** A declared source cannot be qualified through a probe that reports only a version. */
+function checkMissingFrameworkInstallDigest() {
+  check(
+    schemaProblems('framework-versions')({
+      schemaVersion: 1,
+      frameworks: [{ package: FRAMEWORK, declaredVersion: '1.0.0', observed: { package: FRAMEWORK, version: '1.0.0' } }],
+    }).length === 0,
+    'the framework artifact schema rejected a historical version-only observation',
+  );
+  check(
+    schemaProblems('framework-versions')({
+      schemaVersion: 1,
+      frameworks: [
+        {
+          package: FRAMEWORK,
+          declaredVersion: '1.0.0',
+          observed: { package: FRAMEWORK, version: '1.0.0', installSource: 'tree', installDigest: `sha256:${'a'.repeat(64)}` },
+        },
+      ],
+    }).length > 0,
+    'the framework artifact schema accepted an install digest without a declared source',
+  );
+  check(
+    schemaProblems('framework-versions')({
+      schemaVersion: 1,
+      frameworks: [
+        {
+          package: FRAMEWORK,
+          declaredVersion: '1.0.0',
+          installState: { source: 'tree' },
+          observed: { package: FRAMEWORK, version: '1.0.0', installSource: 'tree' },
+        },
+      ],
+    }).length > 0,
+    'the framework artifact schema accepted an observation without its declared install digest',
+  );
+  check(
+    schemaProblems('framework-versions')({
+      schemaVersion: 1,
+      frameworks: [
+        {
+          package: FRAMEWORK,
+          declaredVersion: '1.0.0',
+          installState: { source: 'tree' },
+          observed: { package: FRAMEWORK, version: '1.0.0', installSource: 'lockfile', installDigest: `sha256:${'a'.repeat(64)}` },
+        },
+      ],
+    }).length > 0,
+    'the framework artifact schema accepted a source unlike the declaration',
+  );
+  for (const label of ['missing', 'malformed', 'mismatched source']) {
+    const project = frameworkProject(`framework-${label}-install-digest`, {
+      probe:
+        label === 'missing'
+          ? undefined
+          : { command: 'evaluator/probe.js', args: ['--mode', label === 'malformed' ? 'invalid-install-digest' : 'wrong-install-source'] },
+      extra: ({ folder }) => {
+        const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+        declaration.frameworks[0].installState = { source: 'tree' };
+        writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      },
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    const directory = runDirectoryOf(project.folder);
+    check(
+      ran.status === 12 && ran.output.includes(label === 'mismatched source' ? 'declared source is tree' : 'installDigest'),
+      `a ${label} digest probe exited ${ran.status}\n${ran.output}`,
+    );
+    checkNoSealedRecord(`a ${label} digest probe`, directory);
+    const artifact = directory === null ? null : readJson(path.join(directory, 'framework-versions.json'));
+    check(
+      artifact?.frameworks[0]?.installState?.source === 'tree' &&
+        artifact.frameworks[0].observed === null &&
+        schemaProblems('framework-versions')(artifact).length === 0,
+      `a ${label} install digest left an invalid artifact: ${JSON.stringify(artifact)}`,
+    );
+  }
+}
+
+/** The first observed digest remains the hold point around every evaluator launch. */
+function checkInstalledFrameworkDigestMidRun() {
+  const projectWithTree = (label, options = {}) =>
+    frameworkProject(label, {
+      unconfined: true,
+      ...options,
+      extra: ({ folder, repository }) => {
+        fs.writeFileSync(path.join(repository, 'node_modules', FRAMEWORK, 'judge.js'), 'original\n');
+        const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+        declaration.frameworks[0].installState = { source: 'tree' };
+        declaration.frameworks[0].probe.args.push('tree');
+        writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      },
+    });
+  const during = projectWithTree('framework-tree-changes-after-trial', {
+    mode: 'patch-package',
+    args: (repository) => ['--touch', path.join(repository, 'node_modules', FRAMEWORK, 'judge.js')],
+  });
+  const after = evaluate(['run', '--evaluation', during.folder], during.env);
+  check(
+    after.status === 12 && after.output.includes('installed probe-fw install digest changed'),
+    `a package patch during a trial exited ${after.status}; expected exit 12 at the post-trial read\n${after.output}`,
+  );
+  checkNoSealedRecord('a package patch during a trial', runDirectoryOf(during.folder));
+  const duringInitial = readJson(path.join(runDirectoryOf(during.folder), 'framework-versions.json')).frameworks[0].observed.installDigest;
+  const duringCurrent = JSON.parse(
+    spawnSync(process.execPath, [path.join(during.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'tree'], {
+      encoding: 'utf8',
+    }).stdout,
+  ).installDigest;
+  check(
+    after.output.includes(`from ${duringInitial} to ${duringCurrent}`),
+    `the post-trial digest fault omitted its initial or current value: ${after.output}`,
+  );
+
+  const before = projectWithTree('framework-tree-changes-before-launch');
+  const ran = evaluate(['run', '--evaluation', before.folder], {
+    ...before.env,
+    VERDICT_WHEN: 'trial-clean-2',
+    VERDICT_DO: 'touch',
+    VERDICT_TOUCH: path.join(before.repository, 'node_modules', FRAMEWORK, 'judge.js'),
+  });
+  check(
+    ran.status === 12 && ran.output.includes('installed probe-fw install digest changed'),
+    `a package patch before a launch exited ${ran.status}; expected exit 12 at the prelaunch read\n${ran.output}`,
+  );
+  checkNoSealedRecord('a package patch before a launch', runDirectoryOf(before.folder));
+  const beforeInitial = readJson(path.join(runDirectoryOf(before.folder), 'framework-versions.json')).frameworks[0].observed.installDigest;
+  const beforeCurrent = JSON.parse(
+    spawnSync(process.execPath, [path.join(before.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'tree'], {
+      encoding: 'utf8',
+    }).stdout,
+  ).installDigest;
+  check(
+    ran.output.includes(`from ${beforeInitial} to ${beforeCurrent}`),
+    `the prelaunch digest fault omitted its initial or current value: ${ran.output}`,
+  );
+}
+
+/** Lockfile entry changes stop both hold positions under an unchanged package version. */
+function checkLockfileDigestMidRun() {
+  const projectWithLockfile = (label, options = {}) =>
+    frameworkProject(label, {
+      unconfined: true,
+      ...options,
+      extra: ({ folder, repository }) => {
+        writeJson(path.join(repository, 'package-lock.json'), {
+          lockfileVersion: 3,
+          packages: { '': {}, [`node_modules/${FRAMEWORK}`]: { version: '1.0.0', resolved: 'file:original' } },
+        });
+        const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+        declaration.frameworks[0].installState = { source: 'lockfile' };
+        declaration.frameworks[0].probe.args.push('lockfile');
+        writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      },
+    });
+  const during = projectWithLockfile('framework-lockfile-after-trial', {
+    mode: 'patch-lockfile',
+    args: (repository) => ['--touch', path.join(repository, 'package-lock.json')],
+  });
+  const after = evaluate(['run', '--evaluation', during.folder], during.env);
+  check(
+    after.status === 12 && after.output.includes('installed probe-fw install digest changed'),
+    `a lockfile edit during a trial exited ${after.status}; expected the post-trial digest hold\n${after.output}`,
+  );
+  checkNoSealedRecord('a lockfile edit during a trial', runDirectoryOf(during.folder));
+  const before = projectWithLockfile('framework-lockfile-before-launch');
+  const ran = evaluate(['run', '--evaluation', before.folder], {
+    ...before.env,
+    VERDICT_WHEN: 'trial-clean-2',
+    VERDICT_DO: 'patch-lockfile',
+    VERDICT_TOUCH: path.join(before.repository, 'package-lock.json'),
+  });
+  check(
+    ran.status === 12 && ran.output.includes('installed probe-fw install digest changed'),
+    `a lockfile edit before a launch exited ${ran.status}; expected the prelaunch digest hold\n${ran.output}`,
+  );
+  checkNoSealedRecord('a lockfile edit before a launch', runDirectoryOf(before.folder));
+}
+
+/** Calibration holds the initial digest before and after each judgment launch. */
+function checkFrameworkDigestCalibration() {
+  for (const [flipAt, position] of [
+    [2, 'before calibration'],
+    [3, 'during calibration'],
+  ]) {
+    const counter = path.join(scratch.make(`framework-digest-calibration-${flipAt}`), 'reads.txt');
+    const project = frameworkProject(`framework-digest-calibration-${flipAt}`, {
+      probe: {
+        command: 'evaluator/probe.js',
+        args: ['--package', FRAMEWORK, '--digest-flip-at', String(flipAt), '--counter', counter],
+      },
+      extra: ({ folder }) => {
+        addRubric(folder);
+        const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+        declaration.frameworks[0].installState = { source: 'tree' };
+        writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      },
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(
+      ran.status === 12 && ran.output.includes(`installed frameworks changed ${position}`) && ran.output.includes('install digest changed'),
+      `an install digest changed ${position}: exit ${ran.status}\n${ran.output}`,
+    );
+    checkNoSealedRecord(`an install digest changed ${position}`, runDirectoryOf(project.folder));
+  }
+}
+
+/** A hoisted contributor needs its own declaration and changes scoring when it moves. */
+function checkTransitiveFrameworkDeclaration() {
+  const plugin = 'probe-fw-plugin';
+  const project = frameworkProject('framework-transitive-declaration', {
+    extra: ({ folder, repository }) => {
+      const pluginRoot = path.join(repository, 'node_modules', plugin);
+      writeJson(path.join(pluginRoot, 'package.json'), { name: plugin, version: '2.0.0' });
+      fs.writeFileSync(path.join(pluginRoot, 'judge.js'), 'original\n');
+      const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+      declaration.frameworks[0].installState = { source: 'tree' };
+      declaration.frameworks[0].probe.args.push('tree');
+      declaration.frameworks.push({
+        package: plugin,
+        version: '2.0.0',
+        installState: { source: 'tree' },
+        probe: { command: 'evaluator/installed-version.mjs', args: [plugin, 'tree'] },
+      });
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      fs.writeFileSync(
+        path.join(folder, 'evaluator', 'LEARNED.md'),
+        `# Learned evaluation framework\n\n## Framework and installed version\n\n- Installed packages: \`${FRAMEWORK}@1.0.0\`, \`${plugin}@2.0.0\`\n`,
+      );
+    },
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `a separately declared plugin run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  const firstFrameworks = firstRecord.evaluator.frameworks;
+  fs.writeFileSync(path.join(project.repository, 'node_modules', plugin, 'judge.js'), 'patched\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `a patched separately declared plugin run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+  const secondFrameworks = secondRecord.evaluator.frameworks;
+  check(
+    firstFrameworks.find((entry) => entry.package === FRAMEWORK)?.installDigest ===
+      secondFrameworks.find((entry) => entry.package === FRAMEWORK)?.installDigest &&
+      firstFrameworks.find((entry) => entry.package === plugin)?.installDigest !==
+        secondFrameworks.find((entry) => entry.package === plugin)?.installDigest &&
+      firstRecord.evaluatorConfigurationDigest !== secondRecord.evaluatorConfigurationDigest,
+    'a patched separately declared plugin kept the scoring configuration digest',
+  );
+}
+
+/** Resolve a judgment dependency through the package that imports it, including deeper nesting. */
+function checkNestedFrameworkResolution() {
+  const outer = 'probe-outer';
+  const inner = 'probe-inner';
+  const nestedKey = `node_modules/${outer}/node_modules/${inner}/node_modules/${FRAMEWORK}`;
+  for (const source of ['tree', 'lockfile']) {
+    const project = frameworkProject(`framework-nested-${source}`, {
+      extra: ({ folder, repository }) => {
+        writeJson(path.join(repository, 'node_modules', outer, 'package.json'), { name: outer, version: '3.0.0' });
+        writeJson(path.join(repository, 'node_modules', outer, 'node_modules', inner, 'package.json'), {
+          name: inner,
+          version: '4.0.0',
+        });
+        const nestedRoot = path.join(repository, ...nestedKey.split('/'));
+        writeJson(path.join(nestedRoot, 'package.json'), { name: FRAMEWORK, version: '1.0.0' });
+        fs.writeFileSync(path.join(nestedRoot, 'judge.js'), 'nested original\n');
+        fs.writeFileSync(path.join(repository, 'node_modules', FRAMEWORK, 'judge.js'), 'root fixed\n');
+        writeJson(path.join(repository, 'package-lock.json'), {
+          lockfileVersion: 3,
+          packages: {
+            '': {},
+            [`node_modules/${FRAMEWORK}`]: { version: '1.0.0', resolved: 'file:root' },
+            [nestedKey]: { version: '1.0.0', resolved: 'file:nested-original' },
+          },
+        });
+        const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+        declaration.frameworks[0].installState = { source };
+        declaration.frameworks[0].probe.args = [FRAMEWORK, source, '--importer', outer, '--importer', inner];
+        writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+      },
+    });
+    const rootProbe = () =>
+      spawnSync(process.execPath, [path.join(project.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, source], {
+        encoding: 'utf8',
+      });
+    const originalRoot = rootProbe();
+    check(originalRoot.status === 0, `the root ${source} probe failed: ${originalRoot.stderr}`);
+    const first = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(first.status === 0, `the nested ${source} run exited ${first.status}\n${first.output}`);
+    const firstDirectory = runDirectoryOf(project.folder);
+    if (first.status !== 0 || firstDirectory === null || originalRoot.status !== 0) continue;
+    const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+    const firstDigest = firstRecord.evaluator.frameworks[0].installDigest;
+    const firstScore = scoreRun(project, `the original nested ${source} run`);
+    if (source === 'tree') {
+      fs.writeFileSync(path.join(project.repository, ...nestedKey.split('/'), 'judge.js'), 'nested patched\n');
+    } else {
+      const lockfile = path.join(project.repository, 'package-lock.json');
+      const lock = readJson(lockfile);
+      lock.packages[nestedKey].resolved = 'file:nested-patched';
+      writeJson(lockfile, lock);
+      commitAll(project.repository, project.folder, 'patch only the nested lockfile entry');
+    }
+    const second = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(second.status === 0, `the patched nested ${source} run exited ${second.status}\n${second.output}`);
+    const secondDirectory = runDirectoryOf(project.folder);
+    if (second.status !== 0 || secondDirectory === null) continue;
+    const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+    const secondScore = scoreRun(project, `the patched nested ${source} run`);
+    const unchangedRoot = rootProbe();
+    check(
+      unchangedRoot.status === 0 &&
+        JSON.parse(originalRoot.stdout).installDigest === JSON.parse(unchangedRoot.stdout).installDigest &&
+        firstDigest !== secondRecord.evaluator.frameworks[0].installDigest &&
+        firstRecord.evaluatorConfigurationDigest !== secondRecord.evaluatorConfigurationDigest &&
+        firstScore.evidence['P-002']?.scoringVersion !== secondScore.evidence['P-002']?.scoringVersion &&
+        firstRecord.evaluator.frameworks[0].version === secondRecord.evaluator.frameworks[0].version,
+      `a nested ${source} change missed scoring or changed the same-name root copy`,
+    );
+    if (source === 'tree') {
+      const declarationFile = path.join(project.folder, 'evaluator', 'frameworks.json');
+      const declaration = readJson(declarationFile);
+      declaration.frameworks[0].probe.args = [FRAMEWORK, 'tree', '--importer', 'missing-importer'];
+      writeJson(declarationFile, declaration);
+      commitAll(project.repository, project.folder, 'name an importer that is absent');
+      const invalid = evaluate(['run', '--evaluation', project.folder], project.env);
+      check(
+        invalid.status === 12 && invalid.output.includes('importer chain cannot resolve missing-importer'),
+        `an invalid importer chain exited ${invalid.status}: ${invalid.output}`,
+      );
+      checkNoSealedRecord('an invalid importer chain', runDirectoryOf(project.folder));
+    }
+  }
+}
+
+/** A linked importer's real location can resolve a different same-name dependency than its symlink path. */
+function checkLinkedImporterResolution() {
+  const importer = 'probe-linked-importer';
+  const project = frameworkProject('framework-linked-importer', {
+    extra: ({ folder, repository }) => {
+      const realImporter = path.join(repository, 'vendor', 'workspace', importer);
+      writeJson(path.join(realImporter, 'package.json'), { name: importer, version: '3.0.0' });
+      fs.writeFileSync(path.join(realImporter, 'index.js'), "module.exports = require.resolve('probe-fw/package.json');\n");
+      writeJson(path.join(repository, 'vendor', 'node_modules', FRAMEWORK, 'package.json'), { name: FRAMEWORK, version: '1.0.0' });
+      fs.writeFileSync(path.join(repository, 'vendor', 'node_modules', FRAMEWORK, 'judge.js'), 'vendor original\n');
+      fs.writeFileSync(path.join(repository, 'node_modules', FRAMEWORK, 'judge.js'), 'root fixed\n');
+      fs.symlinkSync(path.relative(path.join(repository, 'node_modules'), realImporter), path.join(repository, 'node_modules', importer));
+      const declaration = readJson(path.join(folder, 'evaluator', 'frameworks.json'));
+      declaration.frameworks[0].installState = { source: 'tree' };
+      declaration.frameworks[0].probe.args = [FRAMEWORK, 'tree', '--importer', importer];
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), declaration);
+    },
+  });
+  const rootProbe = () =>
+    spawnSync(process.execPath, [path.join(project.folder, 'evaluator', 'installed-version.mjs'), FRAMEWORK, 'tree'], {
+      encoding: 'utf8',
+    });
+  const originalRoot = rootProbe();
+  check(originalRoot.status === 0, `the same-name root probe failed: ${originalRoot.stderr}`);
+  const linkedEntry = path.join(project.repository, 'node_modules', importer, 'index.js');
+  const actualResolution = spawnSync(process.execPath, ['-e', 'process.stdout.write(require(process.argv[1]))', linkedEntry], {
+    encoding: 'utf8',
+  });
+  check(
+    actualResolution.status === 0 &&
+      actualResolution.stdout === path.join(project.repository, 'vendor', 'node_modules', FRAMEWORK, 'package.json'),
+    `Node resolved the linked importer from the wrong location: ${actualResolution.stdout || actualResolution.stderr}`,
+  );
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `the linked importer run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (originalRoot.status !== 0 || first.status !== 0 || firstDirectory === null) return;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  const firstScore = scoreRun(project, 'the linked importer run');
+  fs.writeFileSync(path.join(project.repository, 'vendor', 'node_modules', FRAMEWORK, 'judge.js'), 'vendor patched\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `the patched linked importer run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+  const secondScore = scoreRun(project, 'the patched linked importer run');
+  const unchangedRoot = rootProbe();
+  check(
+    unchangedRoot.status === 0 &&
+      JSON.parse(originalRoot.stdout).installDigest === JSON.parse(unchangedRoot.stdout).installDigest &&
+      firstRecord.evaluator.frameworks[0].installDigest !== secondRecord.evaluator.frameworks[0].installDigest &&
+      firstRecord.evaluator.frameworks[0].version === secondRecord.evaluator.frameworks[0].version &&
+      firstRecord.evaluatorConfigurationDigest !== secondRecord.evaluatorConfigurationDigest &&
+      firstScore.evidence['P-002']?.scoringVersion !== secondScore.evidence['P-002']?.scoringVersion,
+    'the linked importer resolved the root copy or kept scoring after its real dependency changed',
+  );
+}
+
+/** Two importer trees cover distinct nested copies without repeating a package declaration. */
+function checkSeparateImporterTrees() {
+  const importers = ['probe-importer-alpha', 'probe-importer-beta'];
+  const project = frameworkProject('framework-separate-importer-trees', {
+    extra: ({ folder, repository }) => {
+      for (const importer of importers) {
+        const root = path.join(repository, 'node_modules', importer);
+        writeJson(path.join(root, 'package.json'), { name: importer, version: '2.0.0' });
+        const nested = path.join(root, 'node_modules', FRAMEWORK);
+        writeJson(path.join(nested, 'package.json'), { name: FRAMEWORK, version: '1.0.0' });
+        fs.writeFileSync(path.join(nested, 'judge.js'), `${importer} original\n`);
+      }
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), {
+        schemaVersion: 1,
+        frameworks: importers.map((importer) => ({
+          package: importer,
+          version: '2.0.0',
+          installState: { source: 'tree' },
+          probe: { command: 'evaluator/installed-version.mjs', args: [importer, 'tree'] },
+        })),
+      });
+      fs.writeFileSync(
+        path.join(folder, 'evaluator', 'LEARNED.md'),
+        `# Learned evaluation framework\n\n## Framework and installed version\n\n- Installed packages: ${importers.map((name) => `\`${name}@2.0.0\``).join(', ')}\n`,
+      );
+    },
+  });
+  const first = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(first.status === 0, `the two-importer run exited ${first.status}\n${first.output}`);
+  const firstDirectory = runDirectoryOf(project.folder);
+  if (first.status !== 0 || firstDirectory === null) return;
+  const firstRecord = readJson(path.join(firstDirectory, 'run.json'));
+  const firstScore = scoreRun(project, 'the two-importer run');
+  fs.writeFileSync(path.join(project.repository, 'node_modules', importers[0], 'node_modules', FRAMEWORK, 'judge.js'), 'alpha patched\n');
+  const second = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(second.status === 0, `the patched two-importer run exited ${second.status}\n${second.output}`);
+  const secondDirectory = runDirectoryOf(project.folder);
+  if (second.status !== 0 || secondDirectory === null) return;
+  const secondRecord = readJson(path.join(secondDirectory, 'run.json'));
+  const secondScore = scoreRun(project, 'the patched two-importer run');
+  const digestOf = (record, name) => record.evaluator.frameworks.find((entry) => entry.package === name)?.installDigest;
+  check(
+    digestOf(firstRecord, importers[0]) !== digestOf(secondRecord, importers[0]) &&
+      digestOf(firstRecord, importers[1]) === digestOf(secondRecord, importers[1]) &&
+      firstRecord.evaluatorConfigurationDigest !== secondRecord.evaluatorConfigurationDigest &&
+      firstScore.evidence['P-002']?.scoringVersion !== secondScore.evidence['P-002']?.scoringVersion,
+    'a nested copy patch did not change its importer tree and scoring version alone',
+  );
+}
+
 /** The runtime-owned schema `name` (under cli/lib/evaluate/schemas/) compiled; it returns the problems a value has against it. */
 function schemaProblems(name) {
   const Ajv = AjvModule.default ?? AjvModule;
@@ -5749,10 +6441,6 @@ async function checkInstalledFrameworks() {
     `the evaluator configuration records ${JSON.stringify(configuration.decodingParameters['tea.evaluatorFrameworks'])}; expected ${JSON.stringify(observed)}`,
   );
   const firstRecord = readJson(path.join(firstRun, 'run.json'));
-  check(
-    firstRecord.evaluatorConfigurationDigest === 'sha256:1a7fc1dbd34afbc6f7ef3c8b2dbe8790502acd1bf544c80adad1929717c26697',
-    `the legacy declaration differs from the engine 6.0 configuration digest: ${firstRecord.evaluatorConfigurationDigest}`,
-  );
   check(
     canonical(firstRecord.evaluator.frameworks) === canonical(observed),
     "run.json's evaluator does not record the observed frameworks",
@@ -6370,6 +7058,19 @@ const CASES = [
   { name: 'the installed framework versions bind the configuration', body: checkInstalledFrameworks, group: 'agents' },
   { name: 'the installed framework versions held during the run', body: checkInstalledFrameworksMidRun, group: 'agents' },
   { name: 'the installed framework versions held around calibration', body: checkInstalledFrameworksCalibration, group: 'agents' },
+  { name: 'an installed package patch changes scoring', body: checkInstalledFrameworkTreePatch, group: 'agents' },
+  { name: 'an undeclared package patch keeps the legacy digest', body: checkLegacyFrameworkPatch, group: 'agents' },
+  { name: 'a lockfile entry changes scoring', body: checkInstalledFrameworkLockfile, group: 'agents' },
+  { name: 'npm lockfile generations and linked entries', body: checkLockfileProbeVersions, group: 'agents' },
+  { name: 'tree metadata changes the install digest', body: checkTreeProbeMetadata, group: 'agents' },
+  { name: 'a hoisted plugin needs its own declaration', body: checkTransitiveFrameworkDeclaration, group: 'agents' },
+  { name: 'a nested package resolves through its importer chain', body: checkNestedFrameworkResolution, group: 'agents' },
+  { name: 'a linked importer resolves from its real path', body: checkLinkedImporterResolution, group: 'agents' },
+  { name: 'separate importer trees cover same-name nested copies', body: checkSeparateImporterTrees, group: 'agents' },
+  { name: 'a missing declared install digest stops the run', body: checkMissingFrameworkInstallDigest, group: 'agents' },
+  { name: 'an installed package patch stops an in-flight run', body: checkInstalledFrameworkDigestMidRun, group: 'agents' },
+  { name: 'a lockfile edit stops an in-flight run', body: checkLockfileDigestMidRun, group: 'agents' },
+  { name: 'an install digest is held during calibration', body: checkFrameworkDigestCalibration, group: 'agents' },
   { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents' },
   { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
   { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
@@ -6502,6 +7203,29 @@ async function main() {
       return report();
     }
     // `--frameworks-only` runs Story 1.44's cases alone (its revert checks), the configuration unit included.
+    if (process.argv.includes('--install-state-only')) {
+      const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length) ?? '';
+      for (const { name, body } of [
+        { name: 'the units', body: checkUnits },
+        ...CASES.filter(
+          (entry) =>
+            entry.name.includes('install digest') ||
+            entry.name.includes('package patch') ||
+            entry.name.includes('lockfile') ||
+            entry.name.includes('tree metadata') ||
+            entry.name.includes('hoisted plugin') ||
+            entry.name.includes('nested package') ||
+            entry.name.includes('linked importer') ||
+            entry.name.includes('importer trees'),
+        ),
+      ])
+        if (name.includes(only)) await runCase(name, body);
+      return report();
+    }
+    if (process.argv.includes('--probe-shapes-only')) {
+      await runCase('a framework probe reads one observation or a fault', checkFrameworkProbeShapes);
+      return report();
+    }
     if (process.argv.includes('--frameworks-only')) {
       await runCase('the units', checkUnits);
       await runCase('a framework probe reads one observation or a fault', checkFrameworkProbeShapes);
@@ -6510,6 +7234,19 @@ async function main() {
       await runCase('the installed framework versions bind the configuration', checkInstalledFrameworks);
       await runCase('the installed framework versions held during the run', checkInstalledFrameworksMidRun);
       await runCase('the installed framework versions held around calibration', checkInstalledFrameworksCalibration);
+      await runCase('an installed package patch changes scoring', checkInstalledFrameworkTreePatch);
+      await runCase('an undeclared package patch keeps the legacy digest', checkLegacyFrameworkPatch);
+      await runCase('a lockfile entry changes scoring', checkInstalledFrameworkLockfile);
+      await runCase('npm lockfile generations and linked entries', checkLockfileProbeVersions);
+      await runCase('tree metadata changes the install digest', checkTreeProbeMetadata);
+      await runCase('a hoisted plugin needs its own declaration', checkTransitiveFrameworkDeclaration);
+      await runCase('a nested package resolves through its importer chain', checkNestedFrameworkResolution);
+      await runCase('a linked importer resolves from its real path', checkLinkedImporterResolution);
+      await runCase('separate importer trees cover same-name nested copies', checkSeparateImporterTrees);
+      await runCase('a missing declared install digest stops the run', checkMissingFrameworkInstallDigest);
+      await runCase('an installed package patch stops an in-flight run', checkInstalledFrameworkDigestMidRun);
+      await runCase('a lockfile edit stops an in-flight run', checkLockfileDigestMidRun);
+      await runCase('an install digest is held during calibration', checkFrameworkDigestCalibration);
       return report();
     }
     if (process.argv.includes('--probe-timeouts-only')) {

@@ -65,8 +65,9 @@ if (mode === 'noisy') {
 }
 const flipAt = Number(flag('--flip-at', 0));
 const hangAt = Number(flag('--hang-at', 0));
+const digestFlipAt = Number(flag('--digest-flip-at', 0));
 let launch = 0;
-if (flipAt > 0 || hangAt > 0) {
+if (flipAt > 0 || hangAt > 0 || digestFlipAt > 0) {
   const counter = flag('--counter');
   launch = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0) + 1;
   fs.writeFileSync(counter, String(launch));
@@ -89,6 +90,18 @@ if (manifest === null) {
   process.exit(1);
 }
 const printed = { package: manifest.name, version: flipAt > 0 && launch >= flipAt ? '9.9.9' : manifest.version };
+if (digestFlipAt > 0) {
+  printed.installSource = 'tree';
+  printed.installDigest = `sha256:${(launch >= digestFlipAt ? 'b' : 'a').repeat(64)}`;
+}
+if (mode === 'invalid-install-digest') {
+  printed.installSource = 'tree';
+  printed.installDigest = 'sha256:invalid';
+}
+if (mode === 'wrong-install-source') {
+  printed.installSource = 'lockfile';
+  printed.installDigest = `sha256:${'a'.repeat(64)}`;
+}
 if (mode === 'wrong-package') printed.package = 'another-package';
 if (mode === 'empty-version') printed.version = '';
 if (mode === 'extra-key') printed.extra = true;

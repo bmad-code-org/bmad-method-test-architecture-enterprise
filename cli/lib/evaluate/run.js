@@ -937,7 +937,10 @@ async function frameworkChange(context) {
   const { frameworks } = context.snapshot.layer;
   // Only a command evaluator declares frameworks; any other kind has none to hold.
   if (frameworks === null || frameworks.length === 0) return null;
-  const problems = observationProblems(frameworks, await frameworkEntries(context), { changed: true });
+  const problems = observationProblems(frameworks, await frameworkEntries(context), {
+    changed: true,
+    initial: context.observedFrameworks,
+  });
   return problems.length === 0 ? null : problems.join('; ');
 }
 
@@ -1053,6 +1056,7 @@ async function runTrialSets(given) {
 
   // A command evaluator's installed frameworks are read before anything it judges runs (Story 1.44).
   const observedFrameworks = kind === 'command' ? await observeInstalledFrameworks(context) : null;
+  context.observedFrameworks = observedFrameworks;
   let observedAgentVersion = null;
   if (kind === 'sealed-brief-agent') {
     try {

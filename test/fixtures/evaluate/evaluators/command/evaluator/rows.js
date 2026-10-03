@@ -117,6 +117,13 @@ if (mode === 'bump-package') {
   const manifest = JSON.parse(fs.readFileSync(flag('--touch'), 'utf8'));
   fs.writeFileSync(flag('--touch'), `${JSON.stringify({ ...manifest, version: '9.9.9' }, null, 2)}\n`);
 }
+if (mode === 'patch-package') fs.appendFileSync(flag('--touch'), 'patched by the evaluator\n');
+if (mode === 'patch-lockfile') {
+  const file = flag('--touch');
+  const lock = JSON.parse(fs.readFileSync(file, 'utf8'));
+  lock.packages['node_modules/probe-fw'].resolved = 'file:patched-during-evaluation';
+  fs.writeFileSync(file, `${JSON.stringify(lock, null, 2)}\n`);
+}
 if (mode === 'rewrite-self') fs.appendFileSync(__filename, '// rewritten by the evaluator during its trial\n');
 if (mode === 'lock-cwd') {
   fs.mkdirSync('locked');

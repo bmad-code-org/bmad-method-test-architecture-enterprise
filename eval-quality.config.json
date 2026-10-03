@@ -682,8 +682,18 @@
         "imports": ["evaluate-evaluator-templates"],
         "externals": {
           "policy": "allow",
-          "modules": ["agentevals", "node:child_process", "node:fs", "node:module", "node:os", "node:path", "node:url", "node:util"],
-          "rule": "the evaluator templates run from the adopter's evaluator/ folder, with AgentEvals installed by the adopter; they use Node builtins for local observations, references and promptfoo CLI execution, while cli/ remains framework-neutral"
+          "modules": [
+            "agentevals",
+            "node:child_process",
+            "node:crypto",
+            "node:fs",
+            "node:module",
+            "node:os",
+            "node:path",
+            "node:url",
+            "node:util"
+          ],
+          "rule": "the evaluator templates run from the adopter's evaluator/ folder, with AgentEvals installed by the adopter; they use Node builtins for local observations, hashing, references and promptfoo CLI execution, while cli/ remains framework-neutral"
         }
       },
       {
@@ -976,6 +986,14 @@
         {
           "token": "evaluatorQualification",
           "reason": "an evaluation.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/evaluation.schema.json), which this gate does not scan"
+        },
+        {
+          "token": "installDigest",
+          "reason": "a framework-versions.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/framework-versions.schema.json), which this gate does not scan"
+        },
+        {
+          "token": "installSource",
+          "reason": "a framework-versions.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/framework-versions.schema.json), which this gate does not scan"
         },
         {
           "token": "minimumAgreement",

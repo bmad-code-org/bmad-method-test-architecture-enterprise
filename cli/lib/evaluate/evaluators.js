@@ -349,8 +349,8 @@ function evaluatorLayerChange(folder, files) {
  * @param {object|null} options.judgeConfiguration the rubric judge's, under the deterministic kind
  * @param {(bytes: Uint8Array) => string} options.digestBytes
  * @param {{ attempts: number, minimumAgreement: number }|null} [options.qualification] a sealed-brief agent's `evaluatorQualification`
- * @param {Array<{ package: string, version: string }>|null} [options.frameworks] a command evaluator's installed
- *   framework versions as the run observed them (`frameworks.js` `observedVersions`); required for that kind
+ * @param {Array<{ package: string, version: string, installSource?: string, installDigest?: string }>|null} [options.frameworks] a command evaluator's installed
+ *   framework versions and declared install sources and digests as the run observed them (`frameworks.js` `observedVersions`); required for that kind
  * @param {string|null} [options.agentVersion] the installed sealed-brief agent version observed for this run
  * @returns {{ evaluatorIdentity: string, modelSnapshot: string, systemPromptDigest: string, decodingParameters: object, judgeConfiguration: object|null }}
  */
@@ -384,7 +384,11 @@ function configurationFields({
     // The installed versions are conditions the tracked tree cannot hold: an upgrade changes the configuration digest only here.
     if (!Array.isArray(frameworks))
       throw new TypeError("a command evaluator's configuration needs the framework versions the run observed");
-    decodingParameters['tea.evaluatorFrameworks'] = frameworks.map((entry) => ({ package: entry.package, version: entry.version }));
+    decodingParameters['tea.evaluatorFrameworks'] = frameworks.map((entry) => ({
+      package: entry.package,
+      version: entry.version,
+      ...(entry.installDigest === undefined ? {} : { installSource: entry.installSource, installDigest: entry.installDigest }),
+    }));
     // A command evaluator that calls a model names it in the conditions, beside the target's.
     if (typeof conditions?.evaluator?.modelSnapshot === 'string')
       decodingParameters['tea.evaluatorModelSnapshot'] = conditions.evaluator.modelSnapshot;

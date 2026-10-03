@@ -15,7 +15,8 @@
  * `probe` is an executable under `evaluator/` that the run launches as it
  * launches the evaluator (same environment, working directory and
  * confinement). It prints one JSON object, `{ "package": "<identity>",
- * "version": "<installed version>" }`, and exits 0; any other exit, or an
+ * "version": "<installed version>" }`, with `installSource` and `installDigest` when install
+ * state is declared, and exits 0; any other exit, or an
  * answer off that shape or naming another package, is a dependency that is
  * not installed as declared (the run reports it as a version that could not be read). A dependency-free evaluator declares an empty
  * list. This module holds the pure rules (the declaration's shape, how
@@ -47,6 +48,7 @@ const SECTION_HEADING = /^## Framework and installed version[ \t]*$/;
 const PACKAGE_PATTERN = /^(?:@[A-Za-z0-9][\w.~-]*\/)?[A-Za-z0-9][\w.~-]*$/;
 /** A version is one digit-led token: a tag (`latest`), a range, a wildcard, a space or a backtick would stop it naming one installed version. */
 const VERSION_PATTERN = /^[0-9][\w.+!~-]*$/;
+const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 /** A wildcard segment (`1.x`, `1.*`) names a family of versions. */
 const WILDCARD_PATTERN = /(?:^|\.)[xX*](?:\.|$)/;
 /** The longest first line of a probe's stderr a diagnostic carries. */
@@ -92,7 +94,8 @@ function declarationProblems(declaration) {
       continue;
     }
     for (const key of Object.keys(entry)) {
-      if (!['package', 'version', 'probe'].includes(key)) problems.push(`${at} has the unknown property ${JSON.stringify(key)}`);
+      if (!['package', 'version', 'probe', 'installState'].includes(key))
+        problems.push(`${at} has the unknown property ${JSON.stringify(key)}`);
     }
     if (typeof entry.package !== 'string' || !PACKAGE_PATTERN.test(entry.package)) {
       problems.push(`${at}.package must name a package (letters, digits, dots, underscores, hyphens, an optional @scope/)`);
@@ -103,6 +106,14 @@ function declarationProblems(declaration) {
       problems.push(
         `${at}.version must be the one exact version expected, starting with a digit, with no tag, range, wildcard, space or backtick`,
       );
+    }
+    if (
+      entry.installState !== undefined &&
+      (!isObject(entry.installState) ||
+        Object.keys(entry.installState).length !== 1 ||
+        !['tree', 'lockfile'].includes(entry.installState.source))
+    ) {
+      problems.push(`${at}.installState must be { "source": "tree" } or { "source": "lockfile" }`);
     }
     const { probe } = entry;
     if (!isObject(probe)) {
@@ -133,6 +144,7 @@ function declaredFrameworks(declaration) {
     .map((entry) => ({
       package: entry.package,
       version: entry.version,
+      ...(entry.installState === undefined ? {} : { installState: { source: entry.installState.source } }),
       probe: {
         command: entry.probe.command,
         args: [...(entry.probe.args ?? [])],
@@ -218,11 +230,13 @@ function learnedProblems(frameworks, learned) {
 /**
  * One dependency's probe output read as an observation.
  *
- * @param {string} expectedPackage
+ * @param {{ package: string, installState?: { source: string } }|string} framework
  * @param {string} stdout
- * @returns {{ package: string, version: string }|{ fault: string }}
+ * @returns {{ package: string, version: string, installSource?: string, installDigest?: string }|{ fault: string }}
  */
-function readProbeAnswer(expectedPackage, stdout) {
+function readProbeAnswer(framework, stdout) {
+  const expectedPackage = typeof framework === 'string' ? framework : framework.package;
+  const requiresDigest = typeof framework !== 'string' && framework.installState !== undefined;
   let answer;
   try {
     answer = JSON.parse(stdout);
@@ -230,15 +244,32 @@ function readProbeAnswer(expectedPackage, stdout) {
     return { fault: `its output is not one JSON object { "package", "version" }` };
   }
   const keys = isObject(answer) ? Object.keys(answer).sort() : [];
-  if (keys.length !== 2 || keys[0] !== 'package' || keys[1] !== 'version') {
-    return { fault: 'its output must be an object with exactly the properties package and version' };
+  if (
+    keys.length !== (requiresDigest ? 4 : 2) ||
+    !keys.includes('package') ||
+    !keys.includes('version') ||
+    (requiresDigest
+      ? !keys.includes('installDigest') || !keys.includes('installSource')
+      : keys.includes('installDigest') || keys.includes('installSource'))
+  ) {
+    return {
+      fault: `its output must be an object with exactly the properties ${requiresDigest ? 'package, version, installSource and installDigest' : 'package and version'}`,
+    };
   }
   if (typeof answer.package !== 'string' || typeof answer.version !== 'string' || answer.version === '') {
     return { fault: 'its package and version must be strings, the version not empty' };
   }
   if (answer.package !== expectedPackage)
     return { fault: `it reports the package ${JSON.stringify(answer.package)} where ${expectedPackage} is declared` };
-  return { package: answer.package, version: answer.version };
+  if (requiresDigest && (typeof answer.installDigest !== 'string' || !DIGEST_PATTERN.test(answer.installDigest)))
+    return { fault: 'its installDigest must be a sha256 digest' };
+  if (requiresDigest && answer.installSource !== framework.installState.source)
+    return { fault: `its installSource is ${JSON.stringify(answer.installSource)}; declared source is ${framework.installState.source}` };
+  return {
+    package: answer.package,
+    version: answer.version,
+    ...(requiresDigest ? { installSource: answer.installSource, installDigest: answer.installDigest } : {}),
+  };
 }
 
 /** The first line of a probe's stderr, cut to a length a diagnostic can carry; empty when it printed none. */
@@ -251,16 +282,23 @@ function stderrNote(stderr) {
 
 /**
  * The versions observed, each dependency once, as the `{ package, version }`
- * list the configuration records, sorted by package. A dependency whose probe
+ * list the configuration records, sorted by package, with the observed install
+ * source and digest when declared. A dependency whose probe
  * failed has no version and is left out.
  *
- * @param {Array<{ package: string, observed: { package: string, version: string }|null }>} entries
- * @returns {Array<{ package: string, version: string }>}
+ * @param {Array<{ package: string, observed: { package: string, version: string, installSource?: string, installDigest?: string }|null }>} entries
+ * @returns {Array<{ package: string, version: string, installSource?: string, installDigest?: string }>}
  */
 function observedVersions(entries) {
   return entries
     .filter((entry) => entry.observed !== null)
-    .map((entry) => ({ package: entry.observed.package, version: entry.observed.version }))
+    .map((entry) => ({
+      package: entry.observed.package,
+      version: entry.observed.version,
+      ...(entry.observed.installDigest === undefined
+        ? {}
+        : { installSource: entry.observed.installSource, installDigest: entry.observed.installDigest }),
+    }))
     .sort((left, right) => (left.package < right.package ? -1 : left.package > right.package ? 1 : 0));
 }
 
@@ -276,7 +314,7 @@ function observedVersions(entries) {
  * @param {{ changed?: boolean }} [options] `changed`: the run read this version before and it moved
  * @returns {string[]}
  */
-function observationProblems(frameworks, entries, { changed = false } = {}) {
+function observationProblems(frameworks, entries, { changed = false, initial = null } = {}) {
   const problems = [];
   for (const framework of frameworks) {
     const entry = entries.find((candidate) => candidate.package === framework.package);
@@ -288,6 +326,12 @@ function observationProblems(frameworks, entries, { changed = false } = {}) {
           ? `installed ${framework.package} is ${entry.observed.version}; the run started with ${framework.version}`
           : `installed ${framework.package} is ${entry.observed.version}, and ${FRAMEWORKS_PATH} declares ${framework.version}`,
       );
+    } else if (framework.installState !== undefined && initial !== null) {
+      const original = initial.find((candidate) => candidate.package === framework.package);
+      if (entry.observed.installDigest !== original?.installDigest)
+        problems.push(
+          `installed ${framework.package} install digest changed from ${original?.installDigest} to ${entry.observed.installDigest}`,
+        );
     }
   }
   return problems;
@@ -315,6 +359,7 @@ function versionsRecord(frameworks, entries, problems) {
       return {
         package: framework.package,
         declaredVersion: framework.version,
+        ...(framework.installState === undefined ? {} : { installState: framework.installState }),
         effectiveProbeTimeoutMs: entry.effectiveProbeTimeoutMs,
         observed: entry.observed,
         ...(entry.fault

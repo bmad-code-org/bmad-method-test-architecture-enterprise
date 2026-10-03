@@ -918,15 +918,42 @@ In a confined run no process of the run can write under `evaluator/` at all (see
 ```
 
 `version` is the one exact version expected, and `probe` an executable under `evaluator/` that prints `{ "package", "version" }` for the installed package (the skill ships `installed-version.mjs` for a Node package) and exits non-zero when it is not installed.
+For a framework whose plugins, transitive dependencies or local patches can change judgments under one version, add `"installState": { "source": "tree" }` and pass `tree` after the package argument to the shipped probe. It digests installed files in sorted path order. Use `"source": "lockfile"` and pass `lockfile` to digest the package's entry in the nearest npm `package-lock.json`. The version alone suffices when the exact release completely determines the judgment dependency. The declaration pins no digest; the probe prints an observed `installDigest` in `sha256:<64 lowercase hex digits>` form.
+For a declared source, the probe also prints `installSource`, which must match `installState.source`. Put the shipped probe beside the evaluator wrapper so both resolve `node_modules` from the same location. If the wrapper loads packages elsewhere, write a custom probe that resolves from the wrapper's actual location.
+For a nested package, add repeatable `--importer <package>` arguments to the tracked `probe.args` after `tree` or `lockfile`. List importers in load order. For example, `["acme-evals-helper", "tree", "--importer", "acme-evals", "--importer", "acme-evals-plugin"]` resolves each importer from the preceding package, then resolves the helper with Node's nearest `node_modules` search from the plugin. An unresolved importer makes the probe fail.
+The probe follows a linked importer's real path before resolving the next package, as Node does by default. If two same-name dependency copies live inside different importer trees, declare each importer package with `tree` as a separate framework entry; each importer tree digest includes its nested copy. `frameworks.json` still names a package once.
+Each source covers one package. Declare every plugin or transitive package that contributes judgments as a separate framework entry, including a hoisted package outside the first package's installed tree. Use `tree` for linked or locally patched packages because their installed files can differ from a lockfile entry under the same version.
+
+```json
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "acme-evals",
+      "version": "1.2.3",
+      "installState": { "source": "tree" },
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals", "tree"] }
+    },
+    {
+      "package": "acme-evals-plugin",
+      "version": "2.0.0",
+      "installState": { "source": "tree" },
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals-plugin", "tree"] }
+    }
+  ]
+}
+```
+
 An evaluator with no framework dependency declares `"frameworks": []`.
 `check` refuses an absent or malformed declaration and runs no probe.
 It also reads `evaluator/LEARNED.md`: its `## Framework and installed version` section holds one backticked `package@version` for each declared package, and a different version, a missing one or a package the declaration omits exits 10 under `evaluator`.
 `probe.probeTimeoutMs` is optional and defaults to 10,000 ms. `check` accepts integer values from 1 to 60,000 ms. The effective bound is the smaller of that value and `evaluator.timeoutMs`; the evaluator keeps its own timeout. `run` launches each probe as it launches the evaluator (the base environment and `environmentKeys`, an empty private working directory, and the run's confinement), and reads the versions before the first trial, before each launch of the evaluator and after each trial, calibration included. After a probe faults, later declared probes are skipped.
 A package that is missing, installed at a version other than the declared one, or changed during the run exits 12 and seals no record for the affected trial; before any trial it also leaves no `evaluator/` directory in the run.
+When `installState` is declared, a missing or malformed `installDigest` also exits 12 before an affected trial seals. A changed digest under an unchanged version stops the run at its prelaunch or post-trial read.
 `framework-versions.json` in the run directory records the declared and observed versions and each probe's applied `effectiveProbeTimeoutMs`, with diagnostics and output for a failed or skipped probe. Historical schema version 1 artifacts without that field remain valid. The observed versions join `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`.
 An upgrade therefore changes the configuration digest and the scoring version only when `frameworks.json` and `LEARNED.md` are updated to it, and `score` reads the recorded configuration.
 The artifact holds the reading taken before the first trial; a change during the run is named in the stopped trial's evaluator `.json` fault beside it.
-The declaration binds the packages it lists, at the version their own `package.json` reports: a package it omits (a plugin, a transitive dependency) or a local patch to a file inside one is outside the observation.
+For declared install state, the observed digest appears beside the version in `framework-versions.json`, `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`; a different digest changes the configuration digest and scoring version. A package absent from the declaration remains outside the observation.
 
 **A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
 The executable runs from its folder, `evaluator/`, so module resolution works as usual: a package in your project's `node_modules` or a sibling file it reads resolves as it does outside a run.
