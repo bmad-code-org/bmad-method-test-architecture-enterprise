@@ -392,7 +392,12 @@ const AGENT_ADAPTERS = {
   custom: {
     command: null,
     versionArgv: (extra = []) => [...extra, '--version'],
-    parseVersion: (output) => parseInstalledVersion(output),
+    // A custom command names its own version: stdout is one line of JSON, `{"agentVersion":"1.2.3"}`.
+    // Free text could carry a dependency's version as easily as the agent's, so stderr stays free for
+    // the command's own logging and no free-text fallback exists.
+    parseVersion: (output) => parseCustomAgentVersion(output),
+    versionStreams: 'stdout',
+    versionExpectation: 'one line of JSON on stdout, such as {"agentVersion":"1.2.3"}, whose agentVersion is a three-part semantic version',
     defaultModel: null,
     modelFlags: [],
     // The custom runner contract is intentionally small: read the complete
@@ -459,8 +464,11 @@ async function observeAgentVersion({ evaluator, scratch, env = process.env, spaw
     if (result.outcome.timedOut) throw new Error(`the agent version probe timed out after ${AGENT_VERSION_TIMEOUT_MS} ms`);
     if (result.outcome.spawnError || result.outcome.failure || result.outcome.status !== 0)
       throw new Error(`the agent version probe failed: ${JSON.stringify(result.outcome)}`);
-    const version = adapter.parseVersion(`${result.stdout}\n${result.stderr}`);
-    if (version === null) throw new Error('the agent version probe returned no parseable version');
+    const version = adapter.parseVersion(adapter.versionStreams === 'stdout' ? result.stdout : `${result.stdout}\n${result.stderr}`);
+    if (version === null)
+      throw new Error(
+        `the agent version probe returned no parseable version${adapter.versionExpectation ? `; expected ${adapter.versionExpectation}` : ''}`,
+      );
     return version;
   } finally {
     releaseScratchDirectory(scratch, cwd);
@@ -471,6 +479,20 @@ async function observeAgentVersion({ evaluator, scratch, env = process.env, spaw
 function parseInstalledVersion(output) {
   const matches = [...output.matchAll(/(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)(?=\s|$)/g)];
   return matches.length === 1 ? matches[0][1] : null;
+}
+
+/** A custom command's keyed version response: one line of JSON whose `agentVersion` is a semantic version, or null. */
+function parseCustomAgentVersion(output) {
+  const line = output.replace(/\r?\n$/, '');
+  if (line.length === 0 || /[\r\n]/.test(line)) return null;
+  let response;
+  try {
+    response = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const version = response !== null && typeof response === 'object' && !Array.isArray(response) ? response.agentVersion : undefined;
+  return typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version) ? version : null;
 }
 
 /** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */

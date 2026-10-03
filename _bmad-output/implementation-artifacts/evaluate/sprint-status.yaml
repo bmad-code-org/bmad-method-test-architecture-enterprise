@@ -132,7 +132,7 @@ development_status:
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
   1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
-  1-76-require-an-explicit-custom-agent-version-response: backlog
+  1-76-require-an-explicit-custom-agent-version-response: review
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: backlog
   epic-1-retrospective: optional
 

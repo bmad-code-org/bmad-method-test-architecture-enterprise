@@ -57,7 +57,9 @@
  *                      `allowed` or `refused <code>` (Story 1.31: a confined
  *                      run's agent holds the evaluation folder read-only)
  *   --version-file <file> --version-read-counter <file> --version-flip-at-read <n>
- *                      report the file's version under --version; optionally
+ *                      report the file's version under --version as {"agentVersion":"<v>"} (a file value of
+ *                      malformed, plain-dependency, dependency-only, bad-json, multi-line, invalid-version or
+ *                      stderr-only answers with that refused shape instead); optionally
  *                      change it on the numbered version read
  *   --flip-version-on-agent <n>
  *                      change the version file after numbered agent run <n>
@@ -94,7 +96,20 @@ if (argv.includes('--version')) {
   if (reported === 'hang') while (true) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
   else if (reported === 'fail') process.exit(3);
   else {
-    process.stdout.write(reported === 'malformed' ? 'unknown\n' : `stub-evaluator-agent ${reported}\n`);
+    // The custom adapter's contract is one line of JSON naming `agentVersion`; these modes break it
+    // in the ways Story 1.76 refuses. `plain-dependency` keeps an incidental dependency version in free text.
+    const answers = {
+      malformed: 'unknown\n',
+      'plain-dependency': 'stub-evaluator-agent 1.0.1\n',
+      'dependency-only': '{"dependencyVersion":"2.3.4"}\n',
+      'bad-json': '{"agentVersion":\n',
+      'multi-line': '{"agentVersion":"1.0.0"}\n{"agentVersion":"1.0.0"}\n',
+      'invalid-version': '{"agentVersion":"latest"}\n',
+    };
+    // stderr is the command's own log: it carries a dependency version on every read and must never bind.
+    process.stderr.write('stub-evaluator-agent loaded dependency 9.9.9\n');
+    if (reported === 'stderr-only') process.stderr.write('{"agentVersion":"1.0.0"}\n');
+    else process.stdout.write(answers[reported] ?? `${JSON.stringify({ agentVersion: reported })}\n`);
     process.exit(0);
   }
 }

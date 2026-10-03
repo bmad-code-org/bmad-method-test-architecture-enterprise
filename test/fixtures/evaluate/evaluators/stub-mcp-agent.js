@@ -39,7 +39,7 @@ const flag = (name, fallback) => {
   return at === -1 ? fallback : argv[at + 1];
 };
 if (argv.includes('--version')) {
-  process.stdout.write('stub-mcp-agent 1.0.0\n');
+  process.stdout.write('{"agentVersion":"1.0.0"}\n');
   process.exit(0);
 }
 const capture = flag('--capture', null);

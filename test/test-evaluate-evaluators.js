@@ -1626,7 +1626,8 @@ async function checkAgentVersionUpgrade() {
 }
 
 async function checkAgentVersionFaults() {
-  for (const mode of ['missing', 'fail', 'malformed', 'hang']) {
+  const refusedShapes = ['plain-dependency', 'dependency-only', 'bad-json', 'multi-line', 'invalid-version', 'stderr-only'];
+  for (const mode of ['missing', 'fail', 'malformed', 'hang', ...refusedShapes]) {
     const capture = path.join(scratch.make(`agent-version-${mode}-capture`), 'calls.jsonl');
     const versionFile = path.join(scratch.make(`agent-version-${mode}-file`), 'version.txt');
     fs.writeFileSync(versionFile, `${mode}\n`);
@@ -1642,6 +1643,11 @@ async function checkAgentVersionFaults() {
     const result = evaluate(['run', '--evaluation', project.folder], project.env);
     check(result.status === 12, `${mode} agent version probe exited ${result.status}; expected 12: ${result.output}`);
     if (mode === 'hang') check(Date.now() - began < 12_000, 'agent version probe inherited the evaluator timeout');
+    if (refusedShapes.includes(mode))
+      check(
+        result.output.includes('{"agentVersion":"1.2.3"}'),
+        `${mode} agent version refusal did not name the expected response shape: ${result.output}`,
+      );
     const directory = runDirectoryOf(project.folder);
     check(directory !== null && !fs.existsSync(path.join(directory, 'trial-sets.json')), `${mode} agent version sealed a trial set`);
     check(captures(capture).length === 0, `${mode} agent version launched a qualification attempt`);
@@ -1788,9 +1794,35 @@ async function checkAgentVersionAdapterBoundary() {
     JSON.stringify(AGENT_ADAPTERS.claude.versionArgv()) === '["--version"]' &&
       JSON.stringify(AGENT_ADAPTERS.claude.versionArgv(['--model', 'fixed'])) === '["--model","fixed","--version"]' &&
       AGENT_ADAPTERS.claude.parseVersion('2.1.282 (Claude Code)') === '2.1.282' &&
-      AGENT_ADAPTERS.custom.parseVersion('stub-evaluator-agent 1.0.1') === '1.0.1' &&
+      AGENT_ADAPTERS.claude.parseVersion('{"agentVersion":"1.0.0"}') === null &&
+      AGENT_ADAPTERS.claude.versionStreams === undefined &&
+      AGENT_ADAPTERS.custom.versionStreams === 'stdout' &&
       AGENT_ADAPTERS.custom.parseVersion('unknown') === null,
     'the adapters do not own their version invocation and output parsing',
+  );
+  const keyed = AGENT_ADAPTERS.custom.parseVersion;
+  check(
+    keyed('{"agentVersion":"1.0.0"}\n') === '1.0.0' &&
+      keyed('{"agentVersion":"1.0.0"}') === '1.0.0' &&
+      keyed('{"agentVersion":"1.2.3-rc.1+build.5"}\r\n') === '1.2.3-rc.1+build.5',
+    'the custom adapter did not read the keyed agentVersion response',
+  );
+  check(
+    [
+      'stub-evaluator-agent 1.0.1\n',
+      '1.0.0\n',
+      '{"dependencyVersion":"2.3.4"}\n',
+      '{"agentVersion":\n',
+      '{"agentVersion":"1.0.0"}\n{"agentVersion":"1.0.0"}\n',
+      '{"agentVersion":"1.0.0"}\n\n',
+      '{"agentVersion":"latest"}\n',
+      '{"agentVersion":"1.0"}\n',
+      '{"agentVersion":1}\n',
+      '["1.0.0"]\n',
+      'null\n',
+      '',
+    ].every((response) => keyed(response) === null),
+    'the custom adapter accepted a response that is not one keyed agentVersion line',
   );
   for (const file of ['run.js', 'evaluators.js', 'sealed-brief-agent.js']) {
     const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', file), 'utf8');
