@@ -488,14 +488,46 @@ function parseInstalledVersion(output) {
   return matches.length === 1 && matches[0][1].length <= MAX_AGENT_VERSION_LENGTH ? matches[0][1] : null;
 }
 
-/** True when `"agentVersion"` is a key more than once in the line; JSON.parse would keep the last silently. */
+/** True when `"agentVersion"` is a key of the top-level object more than once; JSON.parse would keep the last silently. */
 function repeatsAgentVersionKey(line) {
+  // The line is already valid JSON, so the scan only tracks strings, containers and where a key may stand.
+  const containers = [];
+  let expectKey = false;
   let seen = 0;
-  for (const token of line.match(/"(?:[^"\\]|\\.)*"(?=\s*:)/g) ?? []) {
-    try {
-      if (JSON.parse(token) === 'agentVersion') seen += 1;
-    } catch {
-      // A slice that is not a JSON string cannot be the key.
+  for (let at = 0; at < line.length; at += 1) {
+    const char = line[at];
+    switch (char) {
+      case '"': {
+        let end = at + 1;
+        while (line[end] !== '"') end += line[end] === '\\' ? 2 : 1;
+        if (containers.at(-1) === '{' && expectKey) {
+          expectKey = false;
+          if (containers.length === 1 && JSON.parse(line.slice(at, end + 1)) === 'agentVersion') seen += 1;
+        }
+        at = end;
+
+        break;
+      }
+      case '{':
+      case '[': {
+        containers.push(char);
+        expectKey = char === '{';
+
+        break;
+      }
+      case '}':
+      case ']': {
+        containers.pop();
+        expectKey = false;
+
+        break;
+      }
+      case ',': {
+        expectKey = containers.at(-1) === '{';
+
+        break;
+      }
+      // No default
     }
   }
   return seen > 1;

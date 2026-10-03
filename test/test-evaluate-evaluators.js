@@ -1813,6 +1813,10 @@ async function checkAgentVersionAdapterBoundary() {
   check(
     keyed('{"agentVersion":"1.0.0"}\n') === '1.0.0' &&
       keyed('{"agentVersion":"1.0.0"}') === '1.0.0' &&
+      keyed('{"agentVersion":"1.0.0","meta":{"agentVersion":"x"}}') === '1.0.0' &&
+      keyed('{"agentVersion":"1.0.0","deps":[{"agentVersion":"2.0.0"}]}') === '1.0.0' &&
+      keyed(String.raw`{"agentVersion":"1.0.0","x":"y",":\"agentVersion":1}`) === '1.0.0' &&
+      keyed(String.raw`{"note":"a:b, \"agentVersion\": 9","agentVersion":"1.0.0"}`) === '1.0.0' &&
       keyed('{"agentVersion":"1.2.3-rc.1+build.5"}\r\n') === '1.2.3-rc.1+build.5',
     'the custom adapter did not read the keyed agentVersion response',
   );
