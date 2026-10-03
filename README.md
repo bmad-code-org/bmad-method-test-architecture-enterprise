@@ -384,7 +384,7 @@ The `atdd`, `automate`, `ci`, `framework`, `nfr`, `teach-me-testing`, `test-desi
 | `bmad-testarch-atdd`        | 3                        | Yes; one unimplemented fixture and five acceptance criteria                         |
 | `bmad-testarch-automate`    | 5                        | Yes; four hand-authored spec sets against a fixed service and its seeded regression |
 | `bmad-testarch-ci`          | 2                        | Yes; one full request, one minimal request and one request over an evaluation plan  |
-| `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, a gap-guide class swap seeded and a second held out         |
+| `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, five seeded probes and four clean controls                  |
 | `bmad-testarch-framework`   | 3                        | Yes; install and smoke-test generated scaffold in network-isolated sandbox          |
 | `bmad-testarch-nfr`         | 2                        | Yes; one evidence bundle with known gaps and one clean bundle                       |
 | `bmad-testarch-test-design` | 5                        | Yes; one seeded epic and one clean control epic                                     |

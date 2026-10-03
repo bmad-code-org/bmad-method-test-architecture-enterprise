@@ -188,25 +188,20 @@ function checkInspection(inspection, failures) {
   ])
     requireText(inspection, marker, 'inspection.md', failures);
   // Story 1.46: the dogfood suite's seeded B-002 probe edits this one sentence, and a mutation that edits one place
-  // qualifies only while the rule is stated in that place alone. The word `web` appears in one line of the skill, the
+  // qualifies only while the rule is stated in that place alone. The word `web`, `webapp` or `website` appears in one line of the skill, the
   // sentence of inspection.md that states the rule, so a second line naming it (a restatement in any spelling, a bare
   // `API` or an unquoted `AI feature` included) fails here and the seed's mutation could no longer manifest.
   {
     const skillFiles = Object.fromEntries(
       fs
         .readdirSync(SKILL_ROOT, { recursive: true, encoding: 'utf8' })
-        .filter(
-          (file) =>
-            fs.statSync(path.join(SKILL_ROOT, file)).isFile() &&
-            /\.(md|json|toml|mjs|gitignore)$/.test(file) &&
-            !file.endsWith('.memlog.md'),
-        )
+        .filter((file) => fs.statSync(path.join(SKILL_ROOT, file)).isFile() && !file.endsWith('.memlog.md'))
         .sort()
         .map((file) => [file, fs.readFileSync(path.join(SKILL_ROOT, file), 'utf8')]),
     );
     const webLines = (files) =>
       Object.entries(files).flatMap(([file, text]) =>
-        text.split('\n').flatMap((line, index) => (/\bweb\b/i.test(line) ? [`${file}:${index + 1}`] : [])),
+        text.split('\n').flatMap((line, index) => (/\bweb(?:apps?|sites?)?\b/i.test(line) ? [`${file}:${index + 1}`] : [])),
       );
     const found = webLines(skillFiles);
     if (found.length !== 1 || !found[0].startsWith(path.join('references', 'inspection.md')))
@@ -220,6 +215,8 @@ function checkInspection(inspection, failures) {
       'Route every web application through the api interface.',
       'Web applications are reached as api.',
       'A web application maps to the AI feature kind over HTTP.',
+      'A webapp is an `ai-feature` target reached as `api`.',
+      'Websites are reached as api.',
     ]) {
       const copy = { ...skillFiles, [path.join('references', 'run.md')]: `${skillFiles[path.join('references', 'run.md')]}\n${planted}\n` };
       if (webLines(copy).length !== 2) failures.push(`the single-statement guard missed a planted restatement: ${planted}`);

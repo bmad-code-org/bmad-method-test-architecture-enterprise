@@ -205,14 +205,14 @@ parallel_lanes:
     - 1-83-give-a-confined-linux-target-a-route-to-the-hosts-its-registry-entry-authorizes
     - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
     - 1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it
+    - 1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check
+    - 1-113-run-a-subscription-authenticated-agent-target-confined
     - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     - 1-108-compile-and-seal-each-partition-view-in-ci
     - 1-96-check-the-derivable-fields-of-a-ci-plan
     - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
     - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
     - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
-    - 1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check
-    - 1-113-run-a-subscription-authenticated-agent-target-confined
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
