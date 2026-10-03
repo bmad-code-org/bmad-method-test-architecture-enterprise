@@ -1,0 +1,31 @@
+{
+  "probeId": "P-005",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[development] Bypassing the malformed-request guard accepts a type-violating request.",
+  "defects": [{
+    "defectId": "D-005",
+    "behaviorId": "B-002",
+    "summary": "A malformed request produces a summary without a refusal.",
+    "severity": "material",
+    "source": "controlled-mutation",
+    "manifestationWitness": {
+      "legId": "manifest-accepted-malformed",
+      "interfaceId": "pantry-cli",
+      "operationId": "summarize",
+      "inputs": { "argument": {}, "option": {}, "environment": {}, "stdin": { "kind": "json", "value": { "prompt": 42 } } },
+      "relation": { "op": "equality", "operands": [{ "pointer": "/interactions/manifest-accepted-malformed/stdout" }, { "literal": "Summary for {\"prompt\":42}: apples, pears\n" }] }
+    }
+  }],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": { "inputBinding": { "path": null, "query": null, "header": null, "body": null, "argument": null, "option": null, "environment": null, "stdin": { "prompt": { "matcher": "type-violating" } }, "arguments": null } },
+      "predicate": { "op": "equality", "operands": [{ "pointer": "/interactions/observed/stdout" }, { "literal": "Summary for {\"prompt\":42}: apples, pears\n" }] }
+    },
+    "invocation": { "executable": "node", "subcommandPath": [] }
+  },
+  "qualification": { "route": "controlled-mutation", "mutation": "M-002" }
+}

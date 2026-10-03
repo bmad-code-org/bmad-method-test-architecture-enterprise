@@ -43,3 +43,9 @@ None observed. `npm install` warned that the package requests pnpm; installation
 - `evaluator/mapping.json` binds `pantry-exact-summary` to O-001/B-001 and `malformed-request-refusal` to O-002/B-002.
 - The evaluator compares captured stdout byte for byte with the adopter-confirmed answer and checks exit code 0. It compares the malformed request's full stderr diagnostic and checks exit code 2. It never trims a final newline.
 - Final single-mutation `check`, `compile`, `seal`, and `preflight` exited 0. Development P-001 and P-004 each resolved `passed-clean-control` in three trials. P-002 resolved `caught` in three trials. Held-out P-003 resolved `caught` in three trials via `gap-view.json`. At the time of that run, eval-quality 6.0.0 reported `CONCERNS` for `success-indicator-separation`, as the gap report records. Rescoring the same fixture with published eval-quality 6.0.1 produces `PASS` with no coverage gaps for all four evidence artifacts while retaining those trial outcomes.
+
+### Story 1.56 result, 2026-10-03
+
+The second controlled mutation, M-002, bypasses the malformed-request guard in a copied target. Development P-005 and held-out P-006 witness the same serialized type-violating stdin used in scored trials. Autoevals compares the complete stderr diagnostic, while the evaluator also requires exit code 2 and empty stdout. The guard bypass produces a summary on stdout; O-002 records a failure with a quote from the observed exit code, stdout, or stderr.
+
+Real preflight qualified both new probes with the defective response, restored original bytes and digest, and reran a passing clean baseline. P-005 and P-006 each scored three `caught` votes. P-004 retained three `passed-clean-control` votes. The development and held-out runs now produce six evidence artifacts across P-001 through P-006. Published eval-quality 6.0.1 reports `contractVerdict: PASS` with no coverage gaps or waiver for all six artifacts.

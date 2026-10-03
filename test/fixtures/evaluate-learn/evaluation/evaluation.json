@@ -47,7 +47,8 @@
     "zero-action": 1
   },
   "heldOutProbes": [
-    "P-003"
+    "P-003",
+    "P-006"
   ],
   "evaluator": {
     "kind": "command",
@@ -57,6 +58,6 @@
   },
   "requirements": {
     "path": "requirements.md",
-    "digest": "sha256:c31b832a8d49d1c5d0ff590bf124e07062e13975de2976f235b00be1f87a299a"
+    "digest": "sha256:d42b2f7534aaef8b7d3d9fbca840b9182c135d46dfd612b4b9d2ffbfef98f605"
   }
 }

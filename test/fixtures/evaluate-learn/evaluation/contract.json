@@ -1,9 +1,9 @@
 {
   "schemaVersion": 7,
-  "parentDigest": "sha256:1220189ac0c1e9284af95143f48d8831a9cf4f77aa20eb27490c6837287380dc",
-  "revisionCount": 4,
+  "parentDigest": "sha256:380f58fa178c521ca0ec39161ce77206c8864b829610abd15591fce331177630",
+  "revisionCount": 5,
   "contractId": "pantry-summary-contract",
-  "sourceSpecDigest": "sha256:c31b832a8d49d1c5d0ff590bf124e07062e13975de2976f235b00be1f87a299a",
+  "sourceSpecDigest": "sha256:d42b2f7534aaef8b7d3d9fbca840b9182c135d46dfd612b4b9d2ffbfef98f605",
   "behaviors": [
     {
       "id": "B-001",
@@ -326,10 +326,11 @@
     "maxCostUsd": "0.00"
   },
   "safetyLimits": [
-    "Only the adopter-owned rule JSON may be mutated in the copied workspace."
+    "Only the adopter-owned rule JSON or request guard may be mutated in the copied workspace."
   ],
   "requiredEvidence": [
-    "The exit code and whole stdout of every summary invocation."
+    "The exit code and whole stdout of every summary invocation.",
+    "The exit code, whole stderr, and whole stdout of every malformed-request invocation."
   ],
   "probeStepBound": 2,
   "fixtureReset": null
