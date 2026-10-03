@@ -521,6 +521,7 @@ async function runTrial(context) {
       port: null,
       mounts: [],
       observedMounts: async () => [],
+      auditChannel: () => null,
       toolCalls: [],
     });
   }
@@ -564,7 +565,7 @@ async function runTrial(context) {
       // The audit's observer could not start (Story 1.60): a trial no audit watches yields no record.
       throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
     }
-    const { port: adapter, observedMounts } = probePort;
+    const { port: adapter, observedMounts, auditChannel } = probePort;
     releaseHome = probePort.releaseHome;
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
@@ -603,6 +604,7 @@ async function runTrial(context) {
       ],
       // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
       observedMounts,
+      auditChannel,
       // The commands and tool calls the runtime made for the plan, each an observed call.
       toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
@@ -626,6 +628,39 @@ async function readObservedMounts(observedMounts, { stop, label }) {
 }
 
 /**
+ * The `run.json` entry of one audited trial (Story 1.81): the canaries the audit sent (reads of a file no target can reach,
+ * through the sandbox's own token), the ones the kernel's log delivered and whether the log itself reported lost events.
+ * The trial is `lossy` when the log delivered fewer canaries than were sent or reported a loss, and `complete` otherwise.
+ * Linux's trace loses nothing and sends none, so its trials are `complete` with none sent.
+ */
+function channelEntry(arm, trial) {
+  const { canariesSent, canariesDelivered, logReportedLoss } = trial.auditChannel;
+  return {
+    conditionArm: arm.conditionArm,
+    trialIndex: trial.trialIndex,
+    completeness: canariesDelivered < canariesSent || logReportedLoss ? 'lossy' : 'complete',
+    canariesSent,
+    canariesDelivered,
+    logReportedLoss,
+  };
+}
+
+/** The sentence the run's summary adds for the lossy trials, naming each with its counts, `''` when no trial is lossy. */
+function lostCanaryNote(entries) {
+  const lossy = entries.filter((entry) => entry.completeness === 'lossy');
+  if (lossy.length === 0) return '';
+  const named = lossy
+    .map((entry) => {
+      const lost = entry.canariesSent - entry.canariesDelivered;
+      const counts = lost > 0 ? [`${lost} of ${entry.canariesSent}`] : [];
+      if (entry.logReportedLoss) counts.push('the log reported lost events');
+      return `${entry.conditionArm} trial ${entry.trialIndex} (${counts.join('; ')})`;
+    })
+    .join(', ');
+  return `; the kernel's log lost audit reports in ${named}, so the observed mounts of ${lossy.length === 1 ? 'that trial' : 'those trials'} may be incomplete`;
+}
+
+/**
  * A trial's judgment once its plan ran, by the evaluator kind the run reads:
  * the deterministic evaluator over every probe on the arm and, when the
  * contract declares a rubric, one rubric judge call (`judgeRubrics` makes no
@@ -639,7 +674,7 @@ async function readObservedMounts(observedMounts, { stop, label }) {
 async function concludeTrial(context, facts) {
   if (convertsRows(context.snapshot.layer.evaluator.kind)) return concludeWithRows(context, facts);
   const { arm, trialIndex, contract, evaluation, policy, writer, stop } = context;
-  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, auditChannel, toolCalls } = facts;
   const elapsedMs = Date.now() - began;
   const judgments = {};
   for (const probe of arm.probes) {
@@ -691,6 +726,8 @@ async function concludeTrial(context, facts) {
     elapsedMs,
     mounts,
     observedMounts: await readObservedMounts(observedMounts, { stop, label }),
+    // Read once the audit's observed mounts are, which ends the canary reads the count needs (Story 1.81); `null` where nothing audited the trial.
+    auditChannel: auditChannel(),
     toolCalls,
     resourceUse: executed.resourceUse ?? ZERO,
     unreportedSteps: executed.unreportedSteps ?? [],
@@ -706,7 +743,7 @@ async function concludeTrial(context, facts) {
  */
 async function concludeWithRows(context, facts) {
   const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
-  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, auditChannel, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
   // before each launch and after each trial, and the frameworks it declares the same way. In a confined run no
@@ -853,6 +890,8 @@ async function concludeWithRows(context, facts) {
     mounts,
     // Read after the agent's own calls through the bridge, which ran in the trial's workspace too.
     observedMounts: await readObservedMounts(observedMounts, { stop, label }),
+    // Read once the audit's observed mounts are, which ends the canary reads the count needs (Story 1.81); `null` where nothing audited the trial.
+    auditChannel: auditChannel(),
     toolCalls: [...toolCalls, ...bridged],
     resourceUse,
     unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
@@ -1299,8 +1338,10 @@ async function runTrialSets(given) {
   const recordDigests = {};
   const manifestDigests = {};
   const unreportedResourceUse = [];
+  const observedMountsChannel = [];
   for (const arm of sealable) {
     for (const trial of arm.trials) {
+      if (trial.auditChannel !== null) observedMountsChannel.push(channelEntry(arm, trial));
       if (trial.unreportedSteps.length > 0) {
         unreportedResourceUse.push({ conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, stepIds: trial.unreportedSteps });
       }
@@ -1336,6 +1377,7 @@ async function runTrialSets(given) {
     configurationDigest,
     trialCount,
     unreportedResourceUse,
+    observedMountsChannel,
     evaluatorRecord: {
       kind,
       identity: configuration.evaluatorIdentity,
@@ -1771,6 +1813,7 @@ async function completeRun(
     configurationDigest,
     trialCount,
     unreportedResourceUse,
+    observedMountsChannel = [],
     evaluatorRecord,
     model,
     judge,
@@ -1825,7 +1868,7 @@ async function completeRun(
     message:
       trialCount === null
         ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
+        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.
@@ -1850,7 +1893,7 @@ async function completeRun(
       arms: trialCount === null ? [...new Set(trialSets.map((set) => set.conditionArm))] : arms.map((arm) => arm.conditionArm),
     },
     trialCount,
-    ...(trialCount === null ? {} : { unreportedResourceUse }),
+    ...(trialCount === null ? {} : { unreportedResourceUse, observedMountsChannel }),
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,
     completed: true,
@@ -1871,6 +1914,9 @@ module.exports = {
   runTrial,
   // The audit's failure to confirm what a trial opened ends the trial with no record; its unit drives the mapping directly.
   readObservedMounts,
+  // A trial's audit channel entry and the summary's note on the trials that lost canary reads; their unit drives both directly.
+  channelEntry,
+  lostCanaryNote,
   setRecommendation,
   // An evaluator attempt's score call; its unit drives the hold's refusal directly, which no engine call can race with.
   scoreAttempt,
