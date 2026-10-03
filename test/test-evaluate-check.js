@@ -590,10 +590,10 @@ function snapshotOf(directory) {
 }
 
 /**
- * Story 1.75 (route B): when the probes' deployments name report operations on two or more interfaces, `check` runs
- * eval-quality's own compile and quotes a `duplicate-operation-signature` refusal as one `historical` finding, so two
- * interfaces whose report operations share a method and a path exit 10 at `check` and not at the run's compile. TeA
- * compares no template: the finding carries the engine's line.
+ * Story 1.75 (route B): when a probe's deployments name a report operation (Story 1.77 widened the trigger from reports on
+ * two or more interfaces), `check` runs eval-quality's own compile and quotes a `duplicate-operation-signature` refusal as
+ * one `historical` finding, so two interfaces whose report operations share a method and a path exit 10 at `check` and
+ * not at the run's compile. TeA compares no template: the finding carries the engine's line.
  */
 async function checkReportSignatureCollision() {
   const label = 'report operations of two interfaces at one method and path';
@@ -694,14 +694,22 @@ async function checkReportSignatureCollision() {
     `two probes naming two reports did not draw one finding on P-002 from one compile call (findings ${JSON.stringify(manyFindings)}, calls ${JSON.stringify(many.calls)})\n${many.run.output}`,
   );
 
-  // One report: no compile call, no finding.
+  // One report: one compile call, and the finding only when the engine refuses (Story 1.77 widened the trigger from two reports).
   const single = copyApi();
   plantApiHistorical(single, DEPLOYMENTS);
   await writeCorpusIndex(single);
   const one = shimmed(single, refused('duplicate-operation-signature'));
   check(
-    one.run.status === 0 && one.calls.length === 0,
-    `a probe naming a report for one interface drew a compile call or a finding (exit ${one.run.status}, calls ${JSON.stringify(one.calls)})\n${one.run.output}`,
+    one.run.status === 10 && historicalFindingsOf(one.run.stdout).length === 1 && one.calls.length === 1,
+    `a probe naming a report for one interface did not draw one finding from one compile call (exit ${one.run.status}, calls ${JSON.stringify(one.calls)})\n${one.run.output}`,
+  );
+  const oneClean = copyApi();
+  plantApiHistorical(oneClean, DEPLOYMENTS);
+  await writeCorpusIndex(oneClean);
+  const oneAccepted = runCli(['check', '--evaluation', oneClean], { env: environment });
+  check(
+    oneAccepted.status === 0 && findingsOf(oneAccepted.stdout).length === 0,
+    `one reported interface with no collision did not exit 0 with no finding (exit ${oneAccepted.status})\n${oneAccepted.output}`,
   );
 
   // Another refusal: this rule stays quiet; `run` and the compile check own it.
@@ -751,6 +759,130 @@ async function checkReportSignatureCollision() {
   check(
     unavailable.status === 0 && historicalFindingsOf(unavailable.stdout).length === 0,
     `an engine stage that cannot start drew a finding from this rule (exit ${unavailable.status})\n${unavailable.output}`,
+  );
+  check(
+    fs.readdirSync(privateTemp).length === 0,
+    `the cases left ${JSON.stringify(fs.readdirSync(privateTemp))} in the temporary directory`,
+  );
+}
+
+/**
+ * Adds an interface `status` with one ordinary operation, a copy of the grader's `operationId` under another ID at the
+ * grader's own method and path, so the two share a signature and nothing else of the contract collides. The registry
+ * does not serve `status` over HTTP, which is how `checkReportOperationReusedAcrossInterfaces` plants a second interface.
+ */
+function plantCollidingOrdinaryInterface(folder, operationId) {
+  editJson(folder, 'contract.json', (value) => {
+    const [grader] = value.permittedInterfaces;
+    const original = grader.operations.find((operation) => operation.operationId === operationId);
+    value.permittedInterfaces.push({
+      ...structuredClone(grader),
+      logicalId: 'status',
+      operations: [{ ...structuredClone(original), operationId: `status-${operationId}` }],
+    });
+  });
+  editJson(folder, 'evaluation.json', (value) => {
+    value.operationPhases.status = { [`status-${operationId}`]: value.operationPhases.grader[operationId] };
+  });
+}
+
+/**
+ * Story 1.77: eval-quality's compile refuses a duplicate operation signature across the whole contract, so the rule runs
+ * for any probe that names a report operation, whichever operation the report collides with, and it reads the reports of
+ * every `historical` probe together. The finding is worded around the operations the engine's line names.
+ */
+async function checkReportCollidingWithAnyOperation() {
+  const label = 'a report operation that collides with an ordinary operation';
+  const privateTemp = tempDir('check-temp-177');
+  const environment = { TMPDIR: privateTemp, TEMP: privateTemp, TMP: privateTemp };
+  const signature = (stdout) => findingsOf(stdout).filter((line) => line.includes('duplicate-operation-signature'));
+
+  // One reported interface whose report operation shares a method and a path with an ordinary operation of another interface.
+  const colliding = copyApi();
+  plantApiHistorical(colliding, DEPLOYMENTS);
+  plantCollidingOrdinaryInterface(colliding, 'report-release');
+  await writeCorpusIndex(colliding);
+  const before = snapshotOf(colliding);
+  const result = runCli(['check', '--evaluation', colliding], { env: environment });
+  check(result.status === 10, `${label}: check exited ${result.status}; expected 10\n${result.output}`);
+  const found = signature(result.stdout);
+  check(
+    found.length === 1 && findingsOf(result.stdout).length === 1,
+    `${label}: expected one finding, the engine's collision line\n${result.output}`,
+  );
+  const [finding = ''] = found;
+  check(finding.startsWith('probes/P-002.probe.json: [historical] '), `${label}: the finding does not name the probe\n${finding}`);
+  for (const needle of [
+    'logicalId=grader',
+    'logicalId=status',
+    'operationId=report-release',
+    'operationId=status-report-release',
+    '("GET /release")',
+  ]) {
+    check(finding.includes(needle), `${label}: the finding does not name ${needle}\n${finding}`);
+  }
+  // The two operations are a report and an ordinary one, so the finding must not call both of them reports.
+  for (const assumption of ['report operations on more than one interface', "each interface's report operation", 'both report']) {
+    check(!finding.includes(assumption), `${label}: the finding assumes both operations are reports ("${assumption}")\n${finding}`);
+  }
+  check(
+    JSON.stringify(snapshotOf(colliding)) === JSON.stringify(before) && fs.readdirSync(privateTemp).length === 0,
+    `${label}: check changed the evaluation folder or left a temporary directory`,
+  );
+
+  // `preflight` stops at the check stage with the same finding.
+  const stopped = runCli(['preflight', '--evaluation', colliding], { env: environment });
+  check(
+    stopped.status === 10 && signature(stopped.stdout).length === 1,
+    `${label}: preflight did not stop at the check stage with the finding (exit ${stopped.status})\n${stopped.output}`,
+  );
+
+  // Two probes that each name a report for a different single interface: the reports count together, one compile, one finding.
+  const apart = copyApi();
+  plantApiHistorical(apart, TWO_INTERFACE_DEPLOYMENTS, { collide: true });
+  const onlyOf = (id) => {
+    const keep = (side) => ({ ...side, reports: { [id]: side.reports[id] } });
+    return { preFix: keep(TWO_INTERFACE_DEPLOYMENTS.preFix), fix: keep(TWO_INTERFACE_DEPLOYMENTS.fix) };
+  };
+  const probeOf = (id, probeId) => {
+    const base = JSON.parse(fs.readFileSync(path.join(apart, 'probes', 'P-002.probe.json'), 'utf8'));
+    base.probeId = probeId;
+    base.qualification.deployments = onlyOf(id);
+    fs.writeFileSync(path.join(apart, 'probes', `${probeId}.probe.json`), `${JSON.stringify(base, null, 2)}\n`);
+  };
+  probeOf('grader', 'P-002');
+  probeOf('ledger', 'P-003');
+  await writeCorpusIndex(apart);
+  const together = runCli(['check', '--evaluation', apart], { env: environment });
+  const togetherFound = signature(together.stdout);
+  check(
+    together.status === 10 && togetherFound.length === 1 && togetherFound[0].startsWith('probes/P-002.probe.json: [historical] '),
+    `two probes naming a report each for a different interface did not draw one collision finding on P-002 (exit ${together.status}, findings ${JSON.stringify(togetherFound)})\n${together.output}`,
+  );
+
+  // An ordinary-only collision with no probe naming a report: no compile call, no finding from this rule.
+  const shim = engineShim();
+  const log = path.join(tempDir('shim-log-177'), 'calls.log');
+  const ordinary = copyApi();
+  plantCollidingOrdinaryInterface(ordinary, 'grade-answer');
+  await writeCorpusIndex(ordinary);
+  const ordinaryRun = runCli(['check', '--evaluation', ordinary], {
+    env: {
+      ...environment,
+      [ENGINE_CLI_ENV]: shim,
+      SHIM_LOG: log,
+      SHIM_LINE: 'eval-quality: duplicate-operation-signature: stand-in refusal',
+      SHIM_EXIT: '4',
+    },
+  });
+  check(
+    signature(ordinaryRun.stdout).length === 0 && !fs.existsSync(log),
+    `${label}: a collision between ordinary operations with no probe naming a report drew a finding or a compile call (calls ${fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : 'none'})\n${ordinaryRun.output}`,
+  );
+  const ordinaryReal = runCli(['check', '--evaluation', ordinary], { env: environment });
+  check(
+    signature(ordinaryReal.stdout).length === 0,
+    `${label}: the real engine's collision between ordinary operations drew a finding from this rule\n${ordinaryReal.output}`,
   );
   check(
     fs.readdirSync(privateTemp).length === 0,
@@ -4237,6 +4369,7 @@ async function main() {
     checkOperationPhaseCoverage();
     checkReportOperationReusedAcrossInterfaces();
     await checkReportSignatureCollision();
+    await checkReportCollidingWithAnyOperation();
     checkSymlinkRefused();
     checkForgedFindingLine();
     await checkRuntimeUnits();
