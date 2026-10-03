@@ -4985,7 +4985,27 @@ async function checkShellTargetAudit() {
 async function checkObserverRefusalRun() {
   const stubs = tempDir('observer-stubs');
   const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-  stub('bwrap', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  stub(
+    'bwrap',
+    String.raw`dev_dst=""; dev_src=""; prev=""; last_src=""
+for a in "$@"; do
+  if [ "$prev" = "--bind" ]; then last_src="$a"
+  elif [ -n "$last_src" ]; then
+    case "$a" in /dev/*) dev_src="$last_src"; dev_dst="$a" ;; esac
+    last_src=""
+  fi
+  prev="$a"
+done
+while [ "$1" != "--" ]; do shift; done
+shift
+if [ -n "$dev_dst" ]; then
+  for a in "$@"; do
+    if [ "$a" = "$dev_dst" ]; then set -- "$@" "$dev_src"; else set -- "$@" "$a"; fi
+    shift
+  done
+fi
+exec "$@"`,
+  );
   const environment = (project) => ({ ...project.env, PATH: `${stubs}${path.delimiter}${process.env.PATH}`, [PLATFORM_ENV]: 'linux' });
 
   stub('strace', 'echo "strace: ptrace(PTRACE_TRACEME): Operation not permitted" >&2; exit 1');
@@ -5720,6 +5740,39 @@ async function checkTargetHomeUnits() {
       at('--remount-ro', privateRoot) > at('--bind', rootHome, rootHome),
     `the Bubblewrap vector does not bind the home beneath the private root between the root's empty file system and its remount: ${rootArguments.join(' ')}`,
   );
+  const rootStatus = path.join(privateRoot, 'run-1-abc', 'tea-evaluate-status-x');
+  fs.mkdirSync(rootStatus);
+  const statusWrapped = build('bubblewrap', { privateRoot, home: rootHome, status: rootStatus }).wrap('/bin/true', []);
+  const statusMount = path.join('/dev', path.basename(statusWrapped.statusFile));
+  const statusAt = (...words) =>
+    statusWrapped.args.findIndex((argument, index) => words.every((word, offset) => statusWrapped.args[index + offset] === word));
+  check(
+    statusAt('--bind', statusWrapped.statusFile, statusMount) > statusAt('--dev', '/dev') &&
+      statusAt('--bind', statusWrapped.statusFile, statusWrapped.statusFile) === -1 &&
+      statusAt('--bind', rootStatus, rootStatus) === -1,
+    `the Bubblewrap vector exposed the status directory beneath the private root: ${statusWrapped.args.join(' ')}`,
+  );
+  const auditedStatus = targetSandbox({
+    confinement: { ...modes.bubblewrap, observer: { executable: '/usr/bin/strace' } },
+    workspace,
+    privateRoot,
+    home: rootHome,
+    status: rootStatus,
+    audit: { directory: root },
+  }).wrap('/bin/true', []);
+  const statusAccess = {
+    kind: 'write',
+    path: path.join('/dev', path.basename(auditedStatus.statusFile)),
+    real: path.join('/dev', path.basename(auditedStatus.statusFile)),
+    ok: true,
+    errno: null,
+  };
+  check(
+    !auditedStatus.trace.grants.withheldExcept.includes(auditedStatus.statusFile) &&
+      !auditedStatus.trace.grants.withheldExcept.includes(rootStatus) &&
+      traceDecision(statusAccess, auditedStatus.trace.grants) === null,
+    'the audited Bubblewrap status-file mount was not granted outside the withheld private root',
+  );
   // The report rule comes before the home's re-grant, which overrides it, so the home is no violation, and the root's
   // denial after it carries the token, so a refused read of the root is reported.
   const auditedRoot = auditedProfile({ privateRoot, home: rootHome });
@@ -5951,6 +6004,11 @@ async function checkConfinementUnits() {
   const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
   const unitSandbox = targetSandbox({ confinement: bubblewrap, workspace: unitWorkspace, status: unitStatus });
   const wrapped = unitSandbox.wrap('/bin/true', []);
+  check(
+    /^[0-9a-f]{64}$/.test(wrapped.statusKey) &&
+      JSON.stringify(readJson(wrapped.statusFile)) === JSON.stringify({ secret: wrapped.statusKey }),
+    'the host did not seed a private 256-bit status key before Bubblewrap',
+  );
   const bound = (call) => call.args.flatMap((argument, index) => (argument === '--bind' ? [call.args[index + 1]] : []));
   check(
     ['--unshare-pid', '--proc', '--die-with-parent', '--new-session'].every((flag) => wrapped.args.includes(flag)),
@@ -6013,6 +6071,81 @@ async function checkConfinementUnits() {
       `a Bubblewrap call whose shim ${started ? 'ran' : 'never ran'} reads ${JSON.stringify(outcome?.message ?? outcome)}`,
     );
   }
+
+  // The target can write its bound status file, so unsigned outcomes and a replayed signed start cannot supply an exit.
+  for (const [name, write] of [
+    ['forged signal', (call) => fs.writeFileSync(call.statusFile, '{"started":true,"complete":true,"signal":"SIGKILL"}\n')],
+    [
+      'replayed start',
+      (call) => {
+        const { signedStatus } = require('../cli/lib/evaluate/confinement-status.cjs');
+        fs.writeFileSync(call.statusFile, `${JSON.stringify(signedStatus(call.statusKey, { started: true }))}\n`);
+      },
+    ],
+  ]) {
+    const call = unitSandbox.wrap('/bin/true', []);
+    write(call);
+    let outcome;
+    try {
+      outcome = await confinedCommandMechanism({ run: async () => ({ exitCode: 137 }) }, { wrap: () => call }).run(
+        { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+        new AbortController().signal,
+      );
+    } catch (error) {
+      outcome = error;
+    }
+    check(outcome?.name === 'ConfinementError' && outcome.message.includes('integrity'), `${name} was accepted as a target exit`);
+  }
+  for (const [name, shimArgs, engineExit, expectedExit] of [
+    ['normal', [process.execPath, '-e', 'process.exit(7)'], 7, 7],
+    ['signal', ['/bin/sh', '-c', 'kill -TERM $$'], 143, -15],
+    ['bridge error', ['--bridge', path.join(unitRoot, 'absent', 'bridge.sock'), '/bin/true'], 126, 126],
+  ]) {
+    const call = unitSandbox.wrap('/bin/true', []);
+    const args =
+      shimArgs[0] === '--bridge' ? [...shimArgs.slice(0, 2), call.statusFile, ...shimArgs.slice(2)] : [call.statusFile, ...shimArgs];
+    const shim = spawnSync(process.execPath, [CONFINEMENT_STATUS, ...args], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+    check(
+      shim.status === engineExit || (name === 'signal' && shim.signal === 'SIGTERM'),
+      `${name} shim exited ${shim.status}/${shim.signal}`,
+    );
+    let outcome;
+    try {
+      outcome = await confinedCommandMechanism({ run: async () => ({ exitCode: engineExit }) }, { wrap: () => call }).run(
+        { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+        new AbortController().signal,
+      );
+    } catch (error) {
+      outcome = error;
+    }
+    check(outcome?.exitCode === expectedExit, `${name} signed status produced ${JSON.stringify(outcome?.message ?? outcome)}`);
+  }
+  const neverStarted = unitSandbox.wrap('/bin/true', []);
+  let neverStartedOutcome;
+  try {
+    neverStartedOutcome = await confinedCommandMechanism({ run: async () => ({ exitCode: 1 }) }, { wrap: () => neverStarted }).run(
+      { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+      new AbortController().signal,
+    );
+  } catch (error) {
+    neverStartedOutcome = error;
+  }
+  check(
+    neverStartedOutcome?.name === 'ConfinementError' && !fs.existsSync(neverStarted.statusFile),
+    'a seeded call with no shim start was accepted',
+  );
+  const forgedTool = unitSandbox.wrap('/bin/true', []);
+  fs.writeFileSync(forgedTool.statusFile, '{"started":true,"complete":true,"signal":"SIGTERM"}\n');
+  let forgedToolOutcome;
+  try {
+    forgedToolOutcome = await confinedMcpMechanism(
+      { callTool: async () => ({ isError: true, exitCode: 143 }) },
+      { wrap: () => forgedTool },
+    ).callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
+  } catch (error) {
+    forgedToolOutcome = error;
+  }
+  check(forgedToolOutcome?.name === 'ConfinementError' && forgedToolOutcome.message.includes('integrity'), 'MCP accepted a forged signal');
 
   // A tool-server call answered: it has no exit, so the runtime only removes the status a signal left.
   const statusFile = path.join(tempDir('confinement-units-mcp'), 'status-1.json');

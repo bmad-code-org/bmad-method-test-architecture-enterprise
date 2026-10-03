@@ -131,6 +131,25 @@ function collectGeneratedOutputs() {
           status: statusDirectory,
         })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], ['/opt/toolchain']);
+      // Story 1.54 keeps the source status directory under the recoverable private parent. Its file is mounted at
+      // a synthetic /dev path, so neither the root nor the target home's parent gains a visible status sibling.
+      const ownedRoot = path.join(statusDirectory, 'owned-root');
+      const ownedParent = path.join(ownedRoot, 'run-501-AbCdEf');
+      const ownedHome = path.join(ownedParent, 'tea-evaluate-target-home-AbCdEf');
+      const ownedStatus = path.join(ownedParent, 'tea-evaluate-status-AbCdEf');
+      fs.mkdirSync(ownedHome, { recursive: true });
+      fs.mkdirSync(ownedStatus);
+      const bubblewrapOwnedStatusWrapped = confinement
+        .targetSandbox({
+          confinement: { ...bubblewrapConfinement, observer: { executable: '/usr/bin/strace' } },
+          workspace,
+          git,
+          privateRoot: ownedRoot,
+          home: ownedHome,
+          audit: { directory: path.join(ownedParent, 'tea-evaluate-audit-AbCdEf') },
+          status: ownedStatus,
+        })
+        .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], ['/opt/toolchain']);
       // A started HTTP server's call carries the bridge's socket, in a directory the call may write (Story 1.63).
       const bridgeDirectory = '/var/folders/ab/cd/T/tea-evaluate-netbridge-AbCdEf';
       const bubblewrapBridgeWrapped = confinement
@@ -223,15 +242,21 @@ function collectGeneratedOutputs() {
           },
         }),
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus': { ...bubblewrapOwnedStatusWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.host': { ...bubblewrapHostWrapped },
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);
-      const granted = [...bubblewrapAuditWrapped.trace.grants.read];
-      // It is listed before the system's own directories, which can include it (a node at /usr/bin/node).
-      granted[granted.indexOf(nodeInstallation)] = '<node-installation>';
-      outputs['confinement.targetSandbox.wrap.bubblewrap.audit'].trace.grants.read = granted;
+      for (const key of [
+        'confinement.targetSandbox.wrap.bubblewrap.audit',
+        'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+      ]) {
+        const granted = [...outputs[key].trace.grants.read];
+        // It is listed before the system's own directories, which can include it (a node at /usr/bin/node).
+        granted[granted.indexOf(nodeInstallation)] = '<node-installation>';
+        outputs[key].trace.grants.read = granted;
+      }
       // The Bubblewrap status file's name carries a random token, its directory is made fresh and the node binary is the host's,
       // so each is named by role.
       const text = JSON.stringify(outputs)
@@ -247,8 +272,13 @@ function collectGeneratedOutputs() {
       const normalized = JSON.parse(text);
       // A path the host resolves through a link is granted under both spellings (`/var` and `/private/var` on macOS) and under one where
       // it is no link, so the grants of the audited call are compared as sets.
-      const audited = normalized['confinement.targetSandbox.wrap.bubblewrap.audit'].trace.grants;
-      for (const name of ['read', 'write']) audited[name] = [...new Set(audited[name])];
+      for (const key of [
+        'confinement.targetSandbox.wrap.bubblewrap.audit',
+        'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+      ]) {
+        const audited = normalized[key].trace.grants;
+        for (const name of ['read', 'write', 'withheld', 'withheldExcept']) audited[name] = [...new Set(audited[name])];
+      }
       return normalized;
     } finally {
       fs.rmSync(statusDirectory, { recursive: true, force: true });

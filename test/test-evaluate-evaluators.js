@@ -1162,20 +1162,105 @@ function checkScratchRemoval() {
     // Every private directory sits beneath the run's one private parent in the user's private root, so what stays is that
     // parent and each trial's working directory in it, and the run's temp directory holds nothing.
     const inside = pinnedParents.length === 1 && fs.existsSync(pinnedParents[0]) ? fs.readdirSync(pinnedParents[0]) : [];
+    const ownerMarker = pinnedParents.length === 1 ? path.join(pinnedParents[0], '.tea-evaluate-private-owner.json') : '';
+    const ownership = fs.existsSync(ownerMarker) ? readJson(ownerMarker) : null;
     check(
       pinnedParents.length === 1 &&
         inPrivateRoot(pinnedParents[0]) &&
-        inside.length === 2 * TRIALS &&
-        inside.every((entry) => entry.startsWith('tea-evaluate-command-')) &&
+        ownership?.kind === 'private-parent' &&
+        fs.realpathSync.native(ownership.directory) === fs.realpathSync.native(pinnedParents[0]) &&
+        ownership.folder === fs.realpathSync.native(pinned.folder) &&
+        inside.length === 2 * TRIALS + 1 &&
+        inside.filter((entry) => entry.startsWith('tea-evaluate-command-')).length === 2 * TRIALS &&
+        inside.filter((entry) => entry === '.tea-evaluate-private-owner.json').length === 1 &&
         fs.readdirSync(pinned.env.TMPDIR).length === 0,
-      `an evaluator leaving an immutable file: the run left ${JSON.stringify(pinnedParents)} holding ${JSON.stringify(inside)} and ${JSON.stringify(fs.readdirSync(pinned.env.TMPDIR))} in its temp directory; expected the private parent holding each trial's working directory alone, every workspace removed`,
+      `an evaluator leaving an immutable file: the run left ${JSON.stringify(pinnedParents)} holding ${JSON.stringify(inside)} and ${JSON.stringify(fs.readdirSync(pinned.env.TMPDIR))} in its temp directory; expected the verified ownership marker and each trial's working directory, every workspace removed`,
     );
+    if (pinnedParents.length === 1 && fs.existsSync(pinnedParents[0])) {
+      const released = spawnSync('chflags', ['-R', 'nouchg', pinnedParents[0]]);
+      check(released.status === 0, `the immutable scratch could not be released for recovery: ${released.stderr}`);
+      const recovered = evaluate(['preflight', '--evaluation', pinned.folder], pinned.env);
+      check(
+        recovered.status === 0 && recovered.output.includes(path.basename(pinnedParents[0])) && !fs.existsSync(pinnedParents[0]),
+        `the next preflight did not reclaim the verified immutable parent after release: ${recovered.output}`,
+      );
+    }
   } finally {
     // The parent is in the shared root, so this case removes what the run could not.
     for (const parent of pinnedParents) {
-      spawnSync('chflags', ['-R', 'nouchg', parent]);
-      fs.rmSync(parent, { recursive: true, force: true });
+      if (fs.existsSync(parent)) {
+        spawnSync('chflags', ['-R', 'nouchg', parent]);
+        fs.rmSync(parent, { recursive: true, force: true });
+      }
     }
+  }
+}
+
+/** A killed run leaves command evaluator scratch for the next preflight to reclaim. */
+async function checkKilledCommandRecovery() {
+  if (process.platform === 'win32') return;
+  const pidsFile = path.join(scratch.make('killed-command-pids'), 'pids.json');
+  const commandLog = path.join(scratch.make('killed-command-log'), 'calls.jsonl');
+  const project = makeProject('killed-command', {
+    edit: ({ folder }) =>
+      useCommandEvaluator(folder, { mode: 'hang', args: ['--pids', pidsFile, '--log', commandLog], timeoutMs: 120_000 }),
+  });
+  const status = git(project.repository, ['status', '--porcelain']);
+  const refs = git(project.repository, ['for-each-ref']);
+  const child = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', project.folder], {
+    cwd: PROJECT_ROOT,
+    env: { ...BASE_ENV, ...project.env },
+    stdio: 'ignore',
+  });
+  const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  let parent;
+  try {
+    for (let waited = 0; waited < 30_000 && !fs.existsSync(pidsFile); waited += 50) await new Promise((resolve) => setTimeout(resolve, 50));
+    check(fs.existsSync(pidsFile), 'the killed run never reached command evaluator scratch');
+    if (!fs.existsSync(pidsFile)) return;
+    [parent] = parentsOfLog(commandLog);
+    check(parent !== undefined && inPrivateRoot(parent), `the command evaluator has no private parent: ${parent}`);
+    const commands =
+      parent && fs.existsSync(parent) ? fs.readdirSync(parent).filter((name) => name.startsWith('tea-evaluate-command-')) : [];
+    check(commands.length > 0, 'the killed run has no active command evaluator scratch');
+    child.kill('SIGKILL');
+    check(
+      (await Promise.race([closed, new Promise((resolve) => setTimeout(() => resolve(null), 5000))]))?.signal === 'SIGKILL',
+      'the command run did not die by SIGKILL',
+    );
+    check(parent && fs.existsSync(parent), 'SIGKILL did not leave the command evaluator parent');
+    const laterTemp = scratch.make('killed-command-later-temp');
+    const recovered = evaluate(['preflight', '--evaluation', project.folder], {
+      ...project.env,
+      TMPDIR: laterTemp,
+      TMP: laterTemp,
+      TEMP: laterTemp,
+    });
+    check(recovered.status === 0, `preflight after killed command run exited ${recovered.status}\n${recovered.output}`);
+    check(
+      recovered.output.includes(`reclaimed private parent from killed run`) && recovered.output.includes(path.basename(parent)),
+      `preflight did not report killed command parent ${parent}`,
+    );
+    check(
+      recovered.output.includes(`reclaimed auxiliary scratch from killed run`) && commands.every((name) => recovered.output.includes(name)),
+      `preflight did not report killed command scratch ${commands}`,
+    );
+    check(!fs.existsSync(parent), `preflight left killed command scratch in ${parent}`);
+    check(git(project.repository, ['status', '--porcelain']) === status, 'command scratch recovery changed adopter status');
+    check(git(project.repository, ['for-each-ref']) === refs, 'command scratch recovery changed adopter refs');
+  } finally {
+    child.kill('SIGKILL');
+    await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 5000))]);
+    if (fs.existsSync(pidsFile)) {
+      for (const pid of Object.values(readJson(pidsFile)).filter(Number.isSafeInteger)) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* The evaluator ended. */
+        }
+      }
+    }
+    if (parent && fs.existsSync(parent)) removeScratchDirectory(parent);
   }
 }
 
@@ -7093,6 +7178,7 @@ const CASES = [
   { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
   { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents' },
   { name: 'the scratch removal', body: checkScratchRemoval, group: 'private' },
+  { name: 'a killed command evaluator run is reclaimed', body: checkKilledCommandRecovery, group: 'private' },
   { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'private' },
   { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
   { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
@@ -7169,6 +7255,10 @@ async function main() {
     // `--layer-only` runs the confined evaluation layer's case alone (Story 1.31's revert checks).
     if (process.argv.includes('--layer-only')) {
       await runCase('the evaluation layer confined', checkLayerWritesRefused);
+      return report();
+    }
+    if (process.argv.includes('--scratch-removal-only')) {
+      await runCase('the scratch removal', checkScratchRemoval);
       return report();
     }
     // `--qualification-only` runs Story 1.34's cases alone (its revert checks).

@@ -863,12 +863,14 @@ Added in Story 1.28's second review. Levels: POSIX process integration and refer
 
 Added in Story 1.28's second review. Levels: killed-process integration and reference assertion.
 
-| AC                                  | Test                                                                                                                        | Level       | P   | Revert check                                      |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- |
-| Dead auxiliary scratch is reclaimed | Kill during command evaluation, change `TMPDIR`, rerun preflight and assert the owned scratch path was reported and removed | Integration | P1  | Disabling auxiliary recovery leaves the path      |
-| Live and unrelated scratch remains  | Keep another owner live and a separate project's scratch present; assert both survive recovery                              | Integration | P1  | Removing ownership validation deletes one of them |
-| Recovery preserves adopter state    | Compare Git status and refs or non-Git tree digest before and after recovery                                                | Integration | P1  | A destructive cleanup changes the snapshot        |
-| Auxiliary recovery is documented    | Read the workspace reference section by heading and assert it names auxiliary scratch                                       | Static      | P2  | Deleting the passage fails the assertion          |
+| AC                                               | Test                                                                                                                                                                                          | Level       | P   | Revert check                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- |
+| Dead auxiliary scratch is reclaimed              | Kill real `preflight` during engine staging and real `run` during command evaluation; change `TMPDIR`, rerun preflight and assert each owned parent and scratch path was reported and removed | Integration | P1  | Disabling auxiliary recovery leaves each parent   |
+| Live, unrelated and unverifiable scratch remains | Keep another owner live and a separate project's scratch present; mismatch a parent marker with its journal; assert all survive recovery                                                      | Integration | P1  | Removing ownership validation deletes one of them |
+| Recovery preserves adopter state                 | Compare Git status and refs or non-Git tree digest before and after recovery                                                                                                                  | Integration | P1  | A destructive cleanup changes the snapshot        |
+| Auxiliary recovery is documented                 | Read the workspace reference section by heading and assert it names auxiliary scratch                                                                                                         | Static      | P2  | Deleting the passage fails the assertion          |
+
+The edge-case check creates a recorded private root under an earlier temp base and drives the Windows recovery branch, while POSIX rejects that alternate root. Empty and prefix-only marker writes are reclaimed only when the parent contains no other entry; a linked recorded root and a partial marker beside another entry remain in place.
 
 ### Story 1.55: Recognize process and answer separation for scalar CLI output
 

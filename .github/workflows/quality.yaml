@@ -83,6 +83,10 @@ jobs:
           TEA_EVALUATE_WINDOWS_ONLY: "1"
         run: npm run test:evaluate-preflight
 
+      - name: Prove Windows auxiliary recovery after TEMP changes
+        timeout-minutes: 3
+        run: node test/test-evaluate-mutation.js --windows-auxiliary-only
+
   prettier:
     runs-on: ubuntu-latest
     steps:

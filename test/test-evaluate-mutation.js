@@ -81,10 +81,19 @@ const { admissionRefusal, armVerdict } = require('../cli/lib/evaluate/preflight'
 const { dispositionOf } = require('../cli/lib/evaluate/evaluator');
 const { QualificationError, countOccurrences, qualifiedProbe, runMutationCycle } = require('../cli/lib/evaluate/mutation');
 const {
+  WorkspaceRefusal,
   cacheOnlyPort,
   cachingPort,
   createWorkspace,
   journalDirectory,
+  makePrivateParent,
+  privateRootBase,
+  privateRootIn,
+  privateRootName,
+  reclaimDeadPrivateParents,
+  retirePrivateParentOwnership,
+  removePrivateParentDirectory,
+  removeScratchDirectory,
   removeWorkspace,
   requestKey,
   treeDigest,
@@ -1239,6 +1248,16 @@ async function checkUnits() {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+function processIsLive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
 /** A failed ps lookup cannot identify a reused PID, so it is uncertain until the kernel says the PID is gone. */
 function commandProcessState(pid, command) {
   const listed = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
@@ -1315,6 +1334,11 @@ async function checkInterrupted() {
     if (state === 'alive') stopMatchedVerdict(target);
   }
   checkUntouched('the interrupted run', fixture, before);
+  const journal = path.join(fixture.folder, 'runs', '.workspace-journal');
+  check(
+    fs.readdirSync(journal).every((name) => !name.startsWith('aux-')),
+    'the SIGTERM cleanup left a private-parent ownership record after removing its parent',
+  );
 }
 
 /** A SIGKILL leaves a journaled workspace which the next preflight reclaims. */
@@ -1550,6 +1574,481 @@ async function checkKilledRun(
   }
 }
 
+/** A real CLI killed while the engine owns staging leaves its parent for the next preflight. */
+async function checkKilledEngineStage() {
+  if (process.platform === 'win32') return;
+  const fixture = makeProject('killed-engine-stage', { git: false });
+  const before = adopterState(fixture.project, false);
+  const ready = path.join(tempDir('engine-stage-ready'), 'pid');
+  const logFile = path.join(tempDir('engine-stage-log'), 'calls.jsonl');
+  const privateRoot = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+  const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', fixture.folder], {
+    cwd: PROJECT_ROOT,
+    env: {
+      ...BASE_ENV,
+      ...fixture.temp.env,
+      [ENGINE_CLI_ENV]: SHIM,
+      TEA_EVALUATE_SHIM_LOG: logFile,
+      TEA_EVALUATE_SHIM_HOLD_STAGE: 'compile',
+      TEA_EVALUATE_SHIM_READY: ready,
+    },
+    stdio: 'ignore',
+  });
+  const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  let parent;
+  let otherChild;
+  let otherClosed;
+  let otherParent;
+  let otherReady;
+  try {
+    for (let waited = 0; waited < 20_000 && !fs.existsSync(ready); waited += 50) await delay(50);
+    check(fs.existsSync(ready), 'the real preflight never reached the held engine compile');
+    if (!fs.existsSync(ready)) return;
+    parent = path.join(privateRoot, fs.readdirSync(privateRoot).find((name) => name.startsWith(`run-${child.pid}-`)) ?? 'missing');
+    check(fs.existsSync(parent), 'the held engine compile has no private parent');
+    const stage = fs.existsSync(parent) ? fs.readdirSync(parent).find((name) => name.startsWith('tea-evaluate-engine-')) : null;
+    check(stage !== null && stage !== undefined, 'the held engine compile has no staging directory');
+    if (stage === null || stage === undefined) return;
+    const livePreflight = evaluate(['preflight', '--evaluation', fixture.folder], fixture.temp.env);
+    check(livePreflight.status === 0, `a second preflight beside a live owner exited ${livePreflight.status}\n${livePreflight.output}`);
+    check(fs.existsSync(parent), 'a second preflight reclaimed a live owner’s private parent');
+    const other = makeProject('killed-engine-unrelated', { git: false });
+    const unrelated = runPreflight(other);
+    check(unrelated.status === 0, `an unrelated evaluation preflight exited ${unrelated.status}\n${unrelated.output}`);
+    check(fs.existsSync(parent), 'another evaluation reclaimed the live parent');
+    otherReady = path.join(tempDir('unrelated-engine-stage-ready'), 'pid');
+    otherChild = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', other.folder], {
+      cwd: PROJECT_ROOT,
+      env: {
+        ...BASE_ENV,
+        ...other.temp.env,
+        [ENGINE_CLI_ENV]: SHIM,
+        TEA_EVALUATE_SHIM_LOG: path.join(tempDir('unrelated-engine-stage-log'), 'calls.jsonl'),
+        TEA_EVALUATE_SHIM_HOLD_STAGE: 'compile',
+        TEA_EVALUATE_SHIM_READY: otherReady,
+      },
+      stdio: 'ignore',
+    });
+    otherClosed = new Promise((resolve) => otherChild.once('close', (code, signal) => resolve({ code, signal })));
+    for (let waited = 0; waited < 20_000 && !fs.existsSync(otherReady); waited += 50) await delay(50);
+    check(fs.existsSync(otherReady), 'the unrelated real preflight never reached its held engine compile');
+    if (!fs.existsSync(otherReady)) return;
+    otherParent = path.join(
+      privateRoot,
+      fs.readdirSync(privateRoot).find((name) => name.startsWith(`run-${otherChild.pid}-`)) ?? 'missing',
+    );
+    const otherStage = fs.existsSync(otherParent)
+      ? fs.readdirSync(otherParent).find((name) => name.startsWith('tea-evaluate-engine-'))
+      : null;
+    check(otherStage !== undefined && otherStage !== null, 'the unrelated held engine compile has no staging directory');
+    const otherStagePath = path.join(otherParent, otherStage ?? 'missing');
+    check(fs.existsSync(otherParent) && fs.existsSync(otherStagePath), 'the unrelated live run has no private parent and engine stage');
+    child.kill('SIGKILL');
+    check((await Promise.race([closed, delay(5000).then(() => null)]))?.signal === 'SIGKILL', 'the held preflight did not die by SIGKILL');
+    check(
+      fs.existsSync(parent) && stage !== undefined && fs.existsSync(path.join(parent, stage)),
+      'SIGKILL did not leave the engine stage',
+    );
+    const unrelatedAfterKill = runPreflight(other);
+    check(
+      unrelatedAfterKill.status === 0,
+      `another evaluation after the kill exited ${unrelatedAfterKill.status}\n${unrelatedAfterKill.output}`,
+    );
+    check(fs.existsSync(parent), 'another evaluation reclaimed the dead parent it does not own');
+    const laterTemp = tempDir('killed-engine-later-temp');
+    const marker = path.join(parent, '.tea-evaluate-private-owner.json');
+    const originalMarker = fs.readFileSync(marker, 'utf8');
+    fs.writeFileSync(marker, `${JSON.stringify({ ...JSON.parse(originalMarker), runId: 'unverifiable' })}\n`);
+    const uncertain = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: laterTemp, TMP: laterTemp, TEMP: laterTemp });
+    check(uncertain.status === 0, `preflight with an unverifiable parent exited ${uncertain.status}\n${uncertain.output}`);
+    check(fs.existsSync(parent), 'preflight removed a parent whose marker disagreed with its journal');
+    fs.writeFileSync(marker, originalMarker);
+    const parked = path.join(privateRoot, `.parked-${crypto.randomUUID()}`);
+    fs.renameSync(parent, parked);
+    fs.symlinkSync(parked, parent);
+    try {
+      const linked = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: laterTemp, TMP: laterTemp, TEMP: laterTemp });
+      check(linked.status === 0, `preflight with a linked parent exited ${linked.status}\n${linked.output}`);
+      check(fs.lstatSync(parent).isSymbolicLink() && fs.existsSync(parked), 'recovery followed a link planted at the private parent');
+    } finally {
+      fs.rmSync(parent);
+      fs.renameSync(parked, parent);
+    }
+    await delay(100);
+    check(
+      otherChild.exitCode === null && otherChild.signalCode === null && processIsLive(otherChild.pid),
+      'the unrelated engine owner ended before same-evaluation recovery',
+    );
+    const recovered = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: laterTemp, TMP: laterTemp, TEMP: laterTemp });
+    const otherLiveAfterRecovery = processIsLive(otherChild.pid);
+    await delay(100);
+    check(recovered.status === 0, `recovery after a killed engine compile exited ${recovered.status}\n${recovered.output}`);
+    check(recovered.output.includes(parent), `recovery did not report the killed parent ${parent}`);
+    check(recovered.output.includes(path.join(parent, stage)), `recovery did not report the killed engine stage ${stage}`);
+    check(!fs.existsSync(parent), `recovery left the killed engine stage parent ${parent}`);
+    check(
+      otherLiveAfterRecovery && otherChild.exitCode === null && otherChild.signalCode === null && processIsLive(otherChild.pid),
+      'the unrelated engine owner ended during same-evaluation recovery',
+    );
+    check(
+      fs.existsSync(otherParent) && fs.existsSync(otherStagePath),
+      'same-evaluation recovery removed the unrelated live engine stage or parent',
+    );
+    const auxiliaryRecords = fs
+      .readdirSync(path.join(fixture.folder, 'runs', '.workspace-journal'))
+      .filter((name) => name.startsWith('aux-'));
+    check(auxiliaryRecords.length === 0, `normal exit or recovery left auxiliary ownership records: ${auxiliaryRecords}`);
+    checkUntouched('killed engine recovery', fixture, before, false, { checkTemp: false });
+  } finally {
+    if (otherChild) {
+      otherChild.kill('SIGKILL');
+      await Promise.race([otherClosed, delay(5000)]);
+      if (otherReady && fs.existsSync(otherReady)) {
+        try {
+          process.kill(Number(fs.readFileSync(otherReady, 'utf8')), 'SIGKILL');
+        } catch {
+          /* The shim ended. */
+        }
+      }
+      if (otherParent && fs.existsSync(otherParent)) removeScratchDirectory(otherParent);
+    }
+    child.kill('SIGKILL');
+    await Promise.race([closed, delay(5000)]);
+    if (fs.existsSync(ready)) {
+      try {
+        process.kill(Number(fs.readFileSync(ready, 'utf8')), 'SIGKILL');
+      } catch {
+        /* The shim ended. */
+      }
+    }
+    if (parent && fs.existsSync(parent)) removeScratchDirectory(parent);
+  }
+}
+
+/** Recovery checks a recorded Windows root and handles a marker interrupted during its exclusive write. */
+function checkAuxiliaryJournalEdges() {
+  const fixture = makeProject('auxiliary-journal-edges', { git: false });
+  const runs = path.join(fixture.folder, 'runs');
+  fs.mkdirSync(runs, { recursive: true });
+  const journal = journalDirectory(runs);
+  const dead = spawnSync(process.execPath, ['-e', '']).pid;
+  const oldBase = tempDir('auxiliary-old-base');
+  const oldRoot = privateRootIn(oldBase);
+  const currentRoot = privateRootIn(privateRootBase());
+  const made = [];
+  const records = [];
+  const log = [];
+  const linked = [];
+  const linkedParent = makePrivateParent(linked, { folder: fixture.folder, root: fixture.project, journal, runId: 'linked-cleanup' });
+  const parkedParent = `${linkedParent}-parked`;
+  const victim = tempDir('private-parent-swap-victim');
+  const survivor = path.join(victim, 'survivor');
+  fs.writeFileSync(survivor, 'keep');
+  fs.renameSync(linkedParent, parkedParent);
+  fs.symlinkSync(victim, linkedParent, 'dir');
+  let refusedLinkedParent = false;
+  try {
+    removePrivateParentDirectory(linkedParent, linked.privateParentIdentity);
+  } catch (error) {
+    refusedLinkedParent = error instanceof WorkspaceRefusal;
+  } finally {
+    fs.rmSync(linkedParent, { force: true });
+    fs.renameSync(parkedParent, linkedParent);
+  }
+  check(refusedLinkedParent && fs.existsSync(survivor), 'private-parent cleanup followed a replaced link into another tree');
+  removePrivateParentDirectory(linkedParent, linked.privateParentIdentity);
+  retirePrivateParentOwnership(linked);
+  const unregistered = [];
+  const unregisteredParent = makePrivateParent(unregistered, {
+    folder: fixture.folder,
+    root: fixture.project,
+    journal,
+    runId: 'unregistered-child',
+  });
+  const unregisteredChild = path.join(unregisteredParent, 'tea-evaluate-unregistered');
+  const unregisteredRecord = path.join(journal.root, unregistered.privateOwnership.name);
+  fs.mkdirSync(unregisteredChild);
+  const originalRemoveUnregistered = fs.rmSync;
+  let refusedUnregistered = false;
+  try {
+    fs.rmSync = (candidate, options) => {
+      if (candidate === unregisteredChild) throw new Error('injected unregistered-child removal failure');
+      return originalRemoveUnregistered(candidate, options);
+    };
+    try {
+      removePrivateParentDirectory(unregisteredParent, unregistered.privateParentIdentity);
+    } catch (error) {
+      refusedUnregistered = error.message === 'injected unregistered-child removal failure';
+    }
+  } finally {
+    fs.rmSync = originalRemoveUnregistered;
+  }
+  try {
+    check(refusedUnregistered, 'private-parent cleanup skipped the unregistered direct child');
+    check(
+      fs.existsSync(unregisteredChild) &&
+        fs.existsSync(path.join(unregisteredParent, '.tea-evaluate-private-owner.json')) &&
+        fs.existsSync(unregisteredRecord),
+      'failed unregistered-child cleanup lost the parent marker or journal',
+    );
+    removePrivateParentDirectory(unregisteredParent, unregistered.privateParentIdentity);
+    retirePrivateParentOwnership(unregistered);
+    check(!fs.existsSync(unregisteredParent) && !fs.existsSync(unregisteredRecord), 'private-parent cleanup retry left scratch or journal');
+  } finally {
+    if (fs.existsSync(unregisteredParent)) removeScratchDirectory(unregisteredParent);
+    retirePrivateParentOwnership(unregistered);
+  }
+  for (const failure of ['write', 'fsync', 'marker']) {
+    const originalWrite = fs.writeFileSync;
+    const originalFsync = fs.fsyncSync;
+    const list = [];
+    let writes = 0;
+    let refused = false;
+    try {
+      fs.writeFileSync = (file, contents, options) => {
+        if (typeof file === 'number' && (failure === 'write' || failure === 'marker')) {
+          writes += 1;
+          if ((failure === 'write' && writes === 1) || (failure === 'marker' && writes === 2)) {
+            fs.writeSync(file, Buffer.from(contents).subarray(0, 12));
+            throw new Error(`injected ${failure} failure`);
+          }
+        }
+        return originalWrite(file, contents, options);
+      };
+      if (failure === 'fsync')
+        fs.fsyncSync = () => {
+          throw new Error('injected fsync failure');
+        };
+      makePrivateParent(list, { folder: fixture.folder, root: fixture.project, journal, runId: `failed-${failure}` });
+    } catch (error) {
+      refused = error.message === `injected ${failure} failure`;
+    } finally {
+      fs.writeFileSync = originalWrite;
+      fs.fsyncSync = originalFsync;
+      if (list.privateParent) removeScratchDirectory(list.privateParent);
+      retirePrivateParentOwnership(list);
+    }
+    check(refused, `private-parent ${failure} failure did not stop creation`);
+    check(
+      fs.readdirSync(journal.root).every((name) => !name.startsWith('aux-')),
+      `private-parent ${failure} failure left a partial auxiliary journal record`,
+    );
+  }
+  const record = (
+    privateRoot,
+    { markerBytes = null, extra = false, actualRoot = privateRoot, parentAbsent = false, markerAbsent = false } = {},
+  ) => {
+    const nonce = crypto.randomUUID();
+    const parent = path.join(privateRoot, `run-${dead}-${nonce}`);
+    const entry = {
+      version: 1,
+      kind: 'private-parent',
+      folder: fs.realpathSync.native(fixture.folder),
+      root: fs.realpathSync.native(fixture.project),
+      runId: `auxiliary-${nonce.replaceAll('-', '')}`,
+      ownerPid: dead,
+      privateRoot,
+      directory: parent,
+    };
+    const name = `aux-${nonce}.json`;
+    const physicalParent = path.join(actualRoot, path.basename(parent));
+    if (!parentAbsent) fs.mkdirSync(physicalParent, { mode: 0o700 });
+    const expected = Buffer.from(`${JSON.stringify(entry)}\n`);
+    if (!parentAbsent && !markerAbsent)
+      fs.writeFileSync(
+        path.join(physicalParent, '.tea-evaluate-private-owner.json'),
+        markerBytes === null ? expected : markerBytes(expected),
+        {
+          mode: 0o600,
+        },
+      );
+    if (!parentAbsent && extra) fs.writeFileSync(path.join(physicalParent, 'unverified'), 'keep');
+    fs.writeFileSync(path.join(journal.root, name), expected, { mode: 0o600 });
+    made.push(physicalParent);
+    records.push(path.join(journal.root, name));
+    return parent;
+  };
+  try {
+    check(
+      oldRoot !== null && currentRoot !== null && path.basename(oldRoot) === privateRootName(),
+      'private roots could not be made for the auxiliary recovery case',
+    );
+    if (oldRoot === null || currentRoot === null) return;
+    const oldParent = record(oldRoot);
+    const oldStage = path.join(oldParent, 'tea-evaluate-engine-old');
+    fs.mkdirSync(oldStage);
+    if (process.platform !== 'win32') {
+      reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+      check(fs.existsSync(oldParent), 'POSIX recovery accepted a root outside its fixed private root');
+    }
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, platform: 'win32', log: (line) => log.push(line) });
+    check(
+      !fs.existsSync(oldParent) && log.some((line) => line.includes(oldStage)),
+      'recovery skipped a verified parent under an earlier Windows temp root',
+    );
+
+    record(currentRoot, { parentAbsent: true });
+    const journalOnly = records.at(-1);
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    check(!fs.existsSync(journalOnly), 'recovery retained a journal entry whose parent was never created');
+    const unmarked = record(currentRoot, { markerAbsent: true });
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    check(!fs.existsSync(unmarked), 'recovery retained an empty parent created before its marker');
+
+    for (const [label, bytes] of [
+      ['empty', () => Buffer.alloc(0)],
+      ['prefix', (expected) => expected.subarray(0, 24)],
+    ]) {
+      const parent = record(currentRoot, { markerBytes: bytes });
+      reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+      check(!fs.existsSync(parent), `recovery retained a ${label} interrupted private-parent marker`);
+    }
+    const interruptedParent = record(currentRoot);
+    const interruptedJournal = records.at(-1);
+    const firstChild = path.join(interruptedParent, 'tea-evaluate-engine-first');
+    const secondChild = path.join(interruptedParent, 'tea-evaluate-engine-second');
+    fs.mkdirSync(firstChild);
+    fs.mkdirSync(secondChild);
+    const originalRemove = fs.rmSync;
+    let interrupted = false;
+    try {
+      fs.rmSync = (candidate, options) => {
+        if (candidate === path.join(path.basename(interruptedParent), path.basename(secondChild))) {
+          interrupted = true;
+          throw new Error('injected child-removal failure');
+        }
+        return originalRemove(candidate, options);
+      };
+      reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    } finally {
+      fs.rmSync = originalRemove;
+    }
+    check(interrupted, 'recovery did not attempt to remove the second auxiliary child');
+    check(!fs.existsSync(firstChild) && fs.existsSync(secondChild), 'interrupted recovery did not stop between auxiliary children');
+    check(
+      fs.existsSync(path.join(interruptedParent, '.tea-evaluate-private-owner.json')) && fs.existsSync(interruptedJournal),
+      'interrupted recovery lost its parent marker or journal record',
+    );
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    check(!fs.existsSync(interruptedParent) && !fs.existsSync(interruptedJournal), 'retry did not reclaim the interrupted parent');
+    check(
+      log.some((line) => line.includes(secondChild)),
+      'retry did not report the remaining auxiliary child',
+    );
+    const occupied = record(currentRoot, { markerBytes: (expected) => expected.subarray(0, 24), extra: true });
+    reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+    check(fs.existsSync(occupied), 'recovery removed a partial-marker parent containing another entry');
+    const linkedBase = tempDir('auxiliary-linked-base');
+    const linkedRoot = path.join(linkedBase, privateRootName());
+    let linkedRootAvailable = true;
+    try {
+      fs.symlinkSync(oldRoot, linkedRoot, 'dir');
+    } catch (error) {
+      if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) throw error;
+      linkedRootAvailable = false;
+    }
+    if (linkedRootAvailable) {
+      const linked = record(linkedRoot, { actualRoot: oldRoot });
+      reclaimDeadPrivateParents({
+        folder: fixture.folder,
+        root: fixture.project,
+        journal,
+        platform: 'win32',
+        log: (line) => log.push(line),
+      });
+      check(fs.existsSync(linked) && fs.lstatSync(linkedRoot).isSymbolicLink(), 'recovery followed a linked recorded private root');
+    }
+    if (process.platform !== 'win32') {
+      for (const kind of ['journal', 'marker']) {
+        const parent = record(currentRoot);
+        const journalFile = records.at(-1);
+        const file = kind === 'journal' ? journalFile : path.join(parent, '.tea-evaluate-private-owner.json');
+        const outside = path.join(tempDir(`auxiliary-${kind}-swap`), 'record.json');
+        fs.copyFileSync(file, outside);
+        const parked = `${file}.parked`;
+        const originalLstat = fs.lstatSync;
+        let swapped = false;
+        fs.lstatSync = (candidate, ...args) => {
+          const inspected = originalLstat(candidate, ...args);
+          if (!swapped && candidate === (kind === 'journal' ? path.basename(file) : file)) {
+            fs.renameSync(file, parked);
+            fs.symlinkSync(outside, file);
+            swapped = true;
+          }
+          return inspected;
+        };
+        try {
+          reclaimDeadPrivateParents({ folder: fixture.folder, root: fixture.project, journal, log: (line) => log.push(line) });
+        } finally {
+          fs.lstatSync = originalLstat;
+          if (swapped) {
+            fs.unlinkSync(file);
+            fs.renameSync(parked, file);
+          }
+        }
+        check(swapped && fs.existsSync(parent), `recovery followed a ${kind} file swapped for a link after inspection`);
+      }
+    }
+  } finally {
+    for (const file of records) fs.rmSync(file, { force: true });
+    for (const parent of made) if (fs.existsSync(parent)) removeScratchDirectory(parent);
+    journal.close();
+  }
+}
+
+/** The Windows CLI reclaims a verified parent from its old TEMP root. */
+function checkWindowsChangedTempCli() {
+  if (process.platform !== 'win32') return;
+  const fixture = makeProject('windows-old-private-root', { git: false, unconfined: true });
+  // A controlled target refusal keeps this recovery check independent of Windows .js launch associations.
+  fs.rmSync(path.join(fixture.project, 'bin', 'verdict.js'));
+  const runs = path.join(fixture.folder, 'runs');
+  fs.mkdirSync(runs, { recursive: true });
+  const journal = journalDirectory(runs);
+  const oldRoot = privateRootIn(tempDir('windows-old-root-base'));
+  const nonce = crypto.randomUUID();
+  const dead = spawnSync(process.execPath, ['-e', '']).pid;
+  const parent = path.join(oldRoot, `run-${dead}-${nonce}`);
+  const entry = {
+    version: 1,
+    kind: 'private-parent',
+    folder: fs.realpathSync.native(fixture.folder),
+    root: fs.realpathSync.native(fixture.project),
+    runId: 'windows-old-temp',
+    ownerPid: dead,
+    privateRoot: oldRoot,
+    directory: parent,
+  };
+  fs.mkdirSync(parent, { mode: 0o700 });
+  fs.mkdirSync(path.join(parent, 'tea-evaluate-engine-old'));
+  fs.writeFileSync(path.join(parent, '.tea-evaluate-private-owner.json'), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+  fs.writeFileSync(path.join(journal.root, `aux-${nonce}.json`), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+  journal.close();
+  try {
+    const laterTemp = tempDir('windows-new-temp');
+    const recovered = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: laterTemp, TMP: laterTemp, TEMP: laterTemp });
+    check(
+      recovered.status === 12 && recovered.output.includes('bin/verdict.js does not exist'),
+      `Windows preflight after TEMP changed did not reach the controlled target refusal: ${recovered.status}\n${recovered.output}`,
+    );
+    check(recovered.output.includes(parent), `Windows preflight did not report the old private parent ${parent}`);
+    check(!fs.existsSync(parent), `Windows preflight left the old private parent ${parent}`);
+  } finally {
+    if (fs.existsSync(parent)) removeScratchDirectory(parent);
+  }
+}
+
+/** A missing launch root still reaches the workspace refusal path. */
+function checkMissingLaunchRoot() {
+  const fixture = makeProject('missing-launch-root', { git: false });
+  editJson(path.join(fixture.folder, 'evaluation.json'), (evaluation) => (evaluation.launch.root = 'missing-launch-root'));
+  const refused = runPreflight(fixture);
+  check(
+    refused.status === 12 && /launch\.root .* is not a directory/.test(refused.output),
+    `preflight with a missing launch.root exited ${refused.status} without the workspace refusal\n${refused.output}`,
+  );
+}
+
 /** A target that swaps runs/ cannot redirect the next workspace journal write into the adopter tree. */
 function checkJournalParentSwap() {
   const fixture = makeProject('journal-parent-swap', { git: false });
@@ -1665,6 +2164,15 @@ function checkRecoveryDocumentation() {
   check(
     /workspace marker/.test(section) && /killed run/.test(section) && /next preflight/.test(section),
     'the workspace reference does not explain the marker and next-preflight recovery of a killed run',
+  );
+  check(
+    /private parent also has an auxiliary ownership record/.test(section) &&
+      /killed preflight can leave engine staging/.test(section) &&
+      /killed `run` can leave command evaluator scratch/.test(section) &&
+      /exact parent path, marker and dead owner/.test(section) &&
+      /original private root/.test(section) &&
+      /marker write interrupted before completion/.test(section),
+    'the workspace reference does not explain verified auxiliary recovery after a killed preflight or run',
   );
 }
 
@@ -1994,30 +2502,44 @@ function checkRound2() {
 
 async function main() {
   try {
-    await checkCycle();
-    await checkUnits();
-    await checkGitTarget();
-    checkUncommittedWork();
-    checkCopyWorkspaces();
-    checkFailures();
-    checkAdopterTreeGuard();
-    checkHookEnvironment();
-    checkRound2();
-    checkSharedRepository();
-    checkLockedLeftovers();
-    checkRepositoryShape();
-    await checkInterrupted();
-    await checkKilledRun('killed-git', { liveOwner: true });
-    await checkKilledRun('killed-git-partial', { partialGit: true });
-    await checkKilledRun('killed-git-missing', { missingDirectory: true });
-    await checkKilledRun('killed-git-unavailable-metadata', { missingDirectory: true, metadataUnavailable: true });
-    await checkKilledRun('killed-copy', { isGit: false, uncertain: true });
-    await checkKilledRun('unmarked-copy', { isGit: false, unmarked: true });
-    await checkKilledRun('partial-marker-copy', { isGit: false, partialMarker: true });
-    await checkKilledRun('partial-teardown-copy', { isGit: false, partialTeardown: true });
-    await checkKilledCheckout();
-    checkJournalParentSwap();
-    checkRecoveryDocumentation();
+    if (process.argv.includes('--windows-auxiliary-only')) {
+      checkWindowsChangedTempCli();
+    } else if (process.argv.includes('--auxiliary-only')) {
+      await checkKilledEngineStage();
+      checkAuxiliaryJournalEdges();
+      checkMissingLaunchRoot();
+      await checkInterrupted();
+      checkRecoveryDocumentation();
+    } else {
+      await checkCycle();
+      await checkUnits();
+      await checkGitTarget();
+      checkUncommittedWork();
+      checkCopyWorkspaces();
+      checkFailures();
+      checkAdopterTreeGuard();
+      checkHookEnvironment();
+      checkRound2();
+      checkSharedRepository();
+      checkLockedLeftovers();
+      checkRepositoryShape();
+      await checkInterrupted();
+      await checkKilledRun('killed-git', { liveOwner: true });
+      await checkKilledRun('killed-git-partial', { partialGit: true });
+      await checkKilledRun('killed-git-missing', { missingDirectory: true });
+      await checkKilledRun('killed-git-unavailable-metadata', { missingDirectory: true, metadataUnavailable: true });
+      await checkKilledRun('killed-copy', { isGit: false, uncertain: true });
+      await checkKilledRun('unmarked-copy', { isGit: false, unmarked: true });
+      await checkKilledRun('partial-marker-copy', { isGit: false, partialMarker: true });
+      await checkKilledRun('partial-teardown-copy', { isGit: false, partialTeardown: true });
+      await checkKilledEngineStage();
+      checkAuxiliaryJournalEdges();
+      checkWindowsChangedTempCli();
+      checkMissingLaunchRoot();
+      await checkKilledCheckout();
+      checkJournalParentSwap();
+      checkRecoveryDocumentation();
+    }
   } finally {
     scratch.removeAll();
   }
