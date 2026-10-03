@@ -4784,7 +4784,8 @@ async function checkAuditMechanism() {
       // The loss comes in windows of a second or two on a loaded host, so the next attempt waits one out.
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
-    check(result.failure === null, result.failure);
+    if (result.lost) checkReport(false, result.failure);
+    else check(result.failure === null, result.failure);
   };
 
   // A shell script's own processes: an ungranted read, and a refused write that the mechanism answers EPERM or EROFS.
@@ -8681,7 +8682,7 @@ const CASES = [
   { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement' },
   { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement' },
   { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement' },
-  { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement' },
+  { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement', lossy: true },
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement', lossy: true },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },

@@ -2,7 +2,7 @@
 title: 'Story 1.50: Send malformed raw HTTP bodies through an API probe'
 type: 'feature'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '984156e7ba0fbc9eb0ebb50ad3a166cd16c10520'
@@ -60,7 +60,7 @@ context:
 - [x] `bmad-eval-quality` schema, `ApiInputBinding.body` compile and selection tests, `ObservedCallInputs.bodyEncoding`, generated schemas, docs and changelog: admit canonical raw bytes and release the breaking schema update.
 - [x] `http-probe-port.mjs` template and fixture copies: decode and send exact bytes, preserve declared headers, enforce the existing byte cap and redirect behavior.
 - [x] `arm.js`, AI feature fixture, replay and tests: route a raw plan request and score a controlled parser defect for three trials.
-- [ ] TeA dependency metadata, changelog, Story 1.42 status and sprint rows: use the published release and record this story.
+- [x] TeA dependency metadata, changelog, Story 1.42 status and sprint rows: use the published release and record this story.
 
 **Acceptance Criteria:**
 
@@ -110,9 +110,11 @@ The predecessor TeA Publish run [37048288122](https://github.com/bmad-code-org/b
 
 Engine `npm run validate` passed on the final feature diff and again on the 6.0.0 release tree: 150 test files, 5,043 tests. Both engine PR gates passed all 22 watched jobs. A separate 6.0.0 CLI route re-verification is recorded in the engine's tool-use implementation artifact.
 
-TeA `test:evaluate-api` passed 4,252 checks; `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-ci`, `test:evaluate-guidance`, and `test:atdd-workflow-guidance` passed after regeneration. The P-014 score evidence reports `caughtCount: 3`, `validCount: 3`, and three `caught` trial votes. Both clean qualification baselines return HTTP 400 with `invalid JSON`; the controlled parser mutation accepts the same bytes and is caught. The second guarded `npm test` passed through Evaluate run and aggregate, then stopped in `test:evaluate-confinement` after three macOS kernel audit attempts missed the same two mount reports under shared load. A focused post-rebase confinement rerun passed all 717 checks after its built-in retry. The remaining test scripts and CI shards are in progress.
+TeA `test:evaluate-api` passed 4,254 checks; `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-ci`, `test:evaluate-guidance`, `test:evaluate-records` (330 checks), and `test:atdd-workflow-guidance` passed after regeneration. The P-014 score evidence reports `caughtCount: 3`, `validCount: 3`, and three `caught` trial votes. Both clean qualification baselines return HTTP 400 with `invalid JSON`; the controlled parser mutation accepts the same bytes and is caught. PR #305's first CI run exposed a reference scorer input without the engine 6.0 `callInputs.bodyEncoding: null` field; the example and 6.0 baselines were updated, and the focused records gate passed. CI run 37074314577 passed on `bc9f9aac` across all jobs.
+
+Two guarded local `npm test` attempts stopped at macOS confinement after the kernel audit channel lost an expected report under shared load. The audit mechanism scenario retried internally, then recorded the missing report as an ordinary assertion, so the outer lossy-report retry did not run. The test now classifies only missing reports for that outer retry. The mechanism test reproduced a loss on its first attempt and passed on its second; a focused confinement run passed all 721 checks, and an independent Codex review found no material issue. The final guarded `npm test` run exited 0; its confinement stage passed all 715 checks, records passed 330, and API passed 4,254. Story 1.42 remains in `review` pending Story 1.103's mutation proof, as recorded in its handoff; this story does not claim that proof.
 
 **Commands:**
 
 - `npm run validate` in eval-quality.
-- `npm run test:evaluate-api`, `npm run test:evaluate-authoring`, `npm run test:atdd-workflow-guidance`, `npm run test:release-metadata`, and `npm test` in TeA.
+- `npm run test:evaluate-api`, `npm run test:evaluate-authoring`, `npm run test:evaluate-records`, `npm run test:evaluate-confinement`, `npm run test:atdd-workflow-guidance`, `npm run test:release-metadata`, and `npm test` in TeA.
