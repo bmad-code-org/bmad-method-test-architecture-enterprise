@@ -11,7 +11,7 @@ name: Quality & Validation
 # The `chain` job runs every script in `npm test`, split eight ways by
 # tools/test-shards.js. The split is deterministic: tools/test-shard-weights.json
 # holds each script's measured seconds under coverage, and the tool packs them
-# heaviest first onto the lightest shard, so each shard carries about eight
+# heaviest first onto the lightest shard, so each shard carries about ten
 # minutes of the chain. Run serially on one runner under c8, the same chain
 # took about 20 minutes. Each shard records raw V8 coverage for its scripts
 # and uploads it; the `coverage` job merges every shard's files with
@@ -267,7 +267,7 @@ jobs:
 
       # Runs before the shard so a plan that drops a script or a matrix that
       # skips a shard fails in seconds, in every shard, before any of them
-      # spends four minutes on a partition nobody can trust.
+      # spends minutes on a partition nobody can trust.
       - name: Hold the shard plan to the npm test chain and this matrix
         run: npm run test:shards
 
