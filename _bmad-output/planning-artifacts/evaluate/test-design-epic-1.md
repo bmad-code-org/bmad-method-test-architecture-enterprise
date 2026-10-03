@@ -1225,7 +1225,8 @@ Added 2026-10-03 in Story 1.75's round 1 review. Levels: contract, static. Files
 
 ### Story 1.78: Prove a sealed-brief accepted-baseline replay through ci starts no agent version probe
 
-Added 2026-10-03 in Story 1.76's round 1 verification review. Levels: integration. Files: `test/test-evaluate-ci.js` (`test:evaluate-ci`) and `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`).
+Added 2026-10-03 in Story 1.76's round 1 verification review. Levels: integration. File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`).
+Amended 2026-10-03 in Story 1.78's build: both rows are one case, `checkSealedBriefCiReplayStartsNoVersionProbe`, which builds the sealed-brief project the evaluators suite already owns, accepts and commits its baseline, copies the repository, replaces the agent command with a tripwire (proved live by one direct call) and runs `tea-evaluate ci --tier pr` on the copy. `test/test-evaluate-ci.js` has no sealed-brief fixture, so the story edits no other test file. Revert checks run by injecting a child process that starts the agent with `--version` into `replayCheck`, `gameabilityCheck` and `oracleAgreementCheck`: each trips the wire.
 
 | AC                                                   | Test                                                                                                                                                                                                                              | Level       | P   | Revert check                                                                       |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ---------------------------------------------------------------------------------- |

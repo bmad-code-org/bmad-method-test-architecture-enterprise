@@ -2711,7 +2711,7 @@ So that an accepted baseline replays on a runner that lacks the agent CLI (CAP-1
 
 **Given** an accepted baseline of a sealed-brief-agent run and an agent command replaced by a tripwire that records any invocation
 **When** `tea-evaluate ci` runs the `pr` tier replay check
-**Then** the `replay` row passes with evidence bytes identical to the baseline's and the tripwire records nothing; adding a version read to the replay path or to `liveRun` turns the row red or trips the wire, a `test:evaluate-ci` case
+**Then** the `replay` row passes with evidence bytes identical to the baseline's and the tripwire records nothing; adding a version read to the replay path or to `liveRun` turns the row red or trips the wire, a `test:evaluate-evaluators` case (amended 2026-10-03 in Story 1.78: the sealed-brief project, its stub agent and its baseline acceptance live in `test/test-evaluate-evaluators.js`, and `test/test-evaluate-ci.js` has no sealed-brief fixture, so the case runs `tea-evaluate ci` from the evaluators suite; its gate list still names both suites)
 **And** the same case holds the other `pr` checks of that evaluation to the same wire, so a check that starts the agent for its version fails it.
 
 **Dependencies:** 1.76.
