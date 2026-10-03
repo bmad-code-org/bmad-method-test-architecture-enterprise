@@ -2,7 +2,7 @@
 title: 'Story 1.53: Bound an agent whose guardian is stopped'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '11d98b2f28c7fce70c585975b7cfbdbd356e42b4'
@@ -51,7 +51,7 @@ context:
 - [x] `test/test-evaluate-preflight.js`: add the stopped-guardian real-runner reproduction with bounded waits and cleanup; observe an agent or child survive before the fix.
 - [x] `cli/lib/agent-supervisor.js`: arm an independent watchdog through a private pipe and readiness handshake before agent launch; handle setup failure and normal teardown.
 - [x] `docs/reference/tea-evaluate-cli.md` and its preflight assertion: document and enforce the mechanism and bound.
-- [ ] `CHANGELOG.md`, sprint status and this outcome record: record the user-facing fix, verification and revert observations.
+- [x] `CHANGELOG.md`, sprint status and this outcome record: record the user-facing fix, verification and revert observations.
 
 **Acceptance Criteria:**
 
@@ -73,6 +73,10 @@ After rebasing onto `c17cfafa87a0a02b77379eb5fac04f3a0fc463e5`, the changelog ke
 
 Review added the 25 s POSIX setup reserve to the shared supervised-agent ceiling, with a further 10 s of runner overhead in the registry authoring rule. The supervisor and ceiling now read the setup constants from one module. The reference names four POSIX supervisor processes and the corrected bound. Tests locate the guardian by its command, measure descendant exits against one deadline independent of runner reporting, delay watchdog readiness to check the agent's full wall clock, and kill an armed watchdog to check group teardown. Focused gates passed after these fixes: preflight 324, authoring check 1,058, evaluators 575.
 
+Final review of PR #309 found that the older dual-kill case still used first-child discovery, the documentation assertion could accept an unrelated `10 s`, and the normal-exit process-group check accepted an empty `ps` result. All three are corrected. The normal-exit fixture now stays alive through PID inspection. The focused preflight gate passed all 324 checks after this correction.
+
+Two fresh Codex reviewers inspected the corrected process lifecycle and test cases. Both passed the focused review without a material finding. [PR #309](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/309). Before merge, confirm its full CI gate, CodeRabbit disposition, current `origin/main`, and the stopped-guardian and normal-exit evidence. Revert observation: removing the watchdog leaves a stopped guardian's agent group alive after the dual kill, as the pre-fix real-runner reproduction demonstrated.
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -88,6 +92,10 @@ Review added the 25 s POSIX setup reserve to the shared supervised-agent ceiling
 | Edge 1: guardian discovery            | medium. Independently confirms Blind 5; identify the guardian by command before sending `SIGSTOP`.                                                              | patch |
 | Verification gap 1: delayed readiness | medium. No POSIX test delays watchdog readiness, so moving the timeout start back before launch would leave normal-startup cases green.                         | patch |
 | Verification gap 2: watchdog death    | medium. No real-runner case kills an armed watchdog and checks transport failure plus guardian-group teardown.                                                  | patch |
+| Final tests 1: older dual kill        | medium. The pre-existing dual-kill case still selects the leader's first child; with the new watchdog, it may signal or clean up the wrong process group.       | patch |
+| Final tests 2: reference deadline     | medium. A generic `10 s` check can pass from POSIX setup or Windows prose after the POSIX descendant-bound sentence is removed.                                 | patch |
+| Final tests 3: group identity         | medium. An empty `ps` result becomes group ID zero; unequal values can pass without proving both live processes are in separate groups.                         | patch |
+| Final compliance: older dual kill     | medium. Independently confirms Final tests 1; find the guardian by command in the older case and use that PID for teardown.                                     | patch |
 
 ## Design Notes
 

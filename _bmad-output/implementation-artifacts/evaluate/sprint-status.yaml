@@ -88,7 +88,7 @@ development_status:
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: done
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
   1-52-stop-agent-descendants-on-windows: done
-  1-53-bound-an-agent-whose-guardian-is-stopped: review
+  1-53-bound-an-agent-whose-guardian-is-stopped: done
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog

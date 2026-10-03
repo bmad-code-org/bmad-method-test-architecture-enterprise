@@ -1053,7 +1053,7 @@ function checkPosixRunnerReference() {
   check(
     section.includes('detached watchdog') &&
       section.includes('leader-only pipe') &&
-      section.includes('10 s') &&
+      section.includes('guardian, agent, and ordinary child to end within 10 s of a simultaneous leader and supervisor kill') &&
       section.includes('before the guardian starts the agent') &&
       section.includes('four processes supervise the agent') &&
       section.includes('25 s startup reserve') &&
@@ -1212,7 +1212,7 @@ setInterval(() => {}, 1000);
   const bothChild = await pidFrom(bothPid);
   const [bothSupervisor] = childrenOf(both.child.pid);
   const [bothLeader] = childrenOf(bothSupervisor ?? 0);
-  const [bothGuardian] = childrenOf(bothLeader ?? 0);
+  const bothGuardian = childWithArgument(bothLeader, '--agent-guardian');
   const [bothAgent] = childrenOf(bothGuardian ?? 0);
   try {
     check(
@@ -1485,7 +1485,7 @@ setInterval(() => {}, 1000);
   }
 
   const ownerExitPid = path.join(tempDir('watchdog-normal-exit'), 'pid');
-  const ownerExit = startRunner(['--timeout-ms', '10000'], `Say alpha. STUB-LEAVE ${ownerExitPid} STUB-SLEEP 2000`);
+  const ownerExit = startRunner(['--timeout-ms', '20000'], `Say alpha. STUB-LEAVE ${ownerExitPid} STUB-SLEEP 10000`);
   const ownerExitChild = await pidFrom(ownerExitPid);
   const [ownerExitSupervisor] = childrenOf(ownerExit.child.pid);
   const [ownerExitLeader] = childrenOf(ownerExitSupervisor ?? 0);
@@ -1502,10 +1502,22 @@ setInterval(() => {}, 1000);
       'the normal-exit case did not record its guardian, watchdog and child',
     );
     if (ownerExitGuardian !== undefined && ownerExitWatchdog !== undefined) {
-      const groupOf = (pid) => Number(spawnSync('ps', ['-p', String(pid), '-o', 'pgid='], { encoding: 'utf8' }).stdout.trim());
-      check(groupOf(ownerExitGuardian) !== groupOf(ownerExitWatchdog), 'the POSIX watchdog joined the guardian process group');
+      const guardianGroup = spawnSync('ps', ['-p', String(ownerExitGuardian), '-o', 'pgid='], { encoding: 'utf8' });
+      const watchdogGroup = spawnSync('ps', ['-p', String(ownerExitWatchdog), '-o', 'pgid='], { encoding: 'utf8' });
+      const guardianGroupId = Number(guardianGroup.stdout.trim());
+      const watchdogGroupId = Number(watchdogGroup.stdout.trim());
+      check(
+        guardianGroup.status === 0 &&
+          watchdogGroup.status === 0 &&
+          Number.isSafeInteger(guardianGroupId) &&
+          Number.isSafeInteger(watchdogGroupId) &&
+          guardianGroupId > 0 &&
+          watchdogGroupId > 0 &&
+          guardianGroupId !== watchdogGroupId,
+        'the POSIX watchdog and guardian did not have distinct live process groups',
+      );
     }
-    const ownerExitEnding = await Promise.race([ownerExit.closed, delay(10_000).then(() => null)]);
+    const ownerExitEnding = await Promise.race([ownerExit.closed, delay(25_000).then(() => null)]);
     check(
       ownerExitEnding?.code === 0 && ownerExitEnding.stdout.includes('skill: stub-skill'),
       `the normal-exit case did not preserve the runner answer: ${ownerExitEnding?.code ?? 'still running'} ${ownerExitEnding?.stderr ?? ''}`,
