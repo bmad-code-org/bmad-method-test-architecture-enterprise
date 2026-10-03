@@ -2,7 +2,7 @@
 title: 'Story 1.61: Teach file-system confinement in the Evaluate skill'
 type: 'feature'
 created: '2026-10-02'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 1
 baseline_commit: '3401cbfb'

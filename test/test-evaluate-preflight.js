@@ -70,6 +70,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
+const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
+const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -92,6 +94,7 @@ const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(
     ([name]) =>
       name !== ENGINE_CLI_ENV &&
+      name !== 'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE' &&
       !name.startsWith('TEA_EVALUATE_SHIM_') &&
       name !== 'TEA_EVALUATE_WRAP_RUNPREFLIGHT' &&
       name !== 'TEA_STUB_SECRET',
@@ -173,8 +176,9 @@ function ended(child) {
 
 /** Kills a pid a failing case left running, so a regression cannot leak processes past the suite. */
 function reap(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) return;
   try {
-    if (pid !== null) process.kill(pid, 'SIGKILL');
+    process.kill(pid, 'SIGKILL');
   } catch {
     // Already gone.
   }
@@ -183,8 +187,8 @@ function reap(pid) {
 // ---------------------------------------------------------------------------
 // tea-skill-runner
 
-function runRunner(args, { input = 'Say alpha.', cwd = PROJECT_ROOT } = {}) {
-  const result = spawnSync(process.execPath, [RUNNER, ...args], { cwd, input, encoding: 'utf8', env: BASE_ENV });
+function runRunner(args, { input = 'Say alpha.', cwd = PROJECT_ROOT, env = BASE_ENV, timeout } = {}) {
+  const result = spawnSync(process.execPath, [RUNNER, ...args], { cwd, input, encoding: 'utf8', env, timeout });
   if (result.error) throw result.error;
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
 }
@@ -400,8 +404,635 @@ function startRunner(args, input, { detached = false } = {}) {
 
 /** The pids of the children of `pid`. */
 function childrenOf(pid) {
-  const listed = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
-  return listed.stdout.split(/\s+/).filter(Boolean).map(Number);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return [];
+  const listed =
+    process.platform === 'win32'
+      ? spawnSync(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ParentProcessId=${pid}').ProcessId`],
+          {
+            encoding: 'utf8',
+            timeout: 10_000,
+          },
+        )
+      : spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
+  return String(listed.stdout ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(Number);
+}
+
+/** Real-runner Windows cases use node as the agent executable, including on hosts that do not run .js files directly. */
+async function checkWindowsSupervision() {
+  if (process.platform !== 'win32') return;
+  const runnerEntry = readJson(path.join(PREFLIGHT_FIXTURE, 'evaluation.json')).registry[0];
+  const runnerRegistry = createRegistry([runnerEntry], { root: PROJECT_ROOT });
+  const runnerPolicy = runnerRegistry.commandTargetPolicy({ cwd: PROJECT_ROOT, interfaceIds: [runnerEntry.interfaceId] });
+  check(
+    runnerPolicy.authorizations[0].permittedEnvironmentKeys.includes('SystemRoot'),
+    'the Windows tea-skill-runner policy did not permit the host SystemRoot needed by its Job Object helper',
+  );
+  const carried = await hostEnvironmentPort({
+    registry: runnerRegistry,
+    port: { probe: async () => ({ stderr: process.env.SystemRoot }) },
+  }).probe({
+    kind: 'cli',
+    interfaceId: runnerEntry.interfaceId,
+    executable: runnerEntry.executable,
+    channels: { environment: { SystemRoot: String.raw`C:\target-poison`, SYSTEMROOT: String.raw`C:\other-poison` } },
+  });
+  check(
+    carried.request.channels.environment.SystemRoot === process.env.SystemRoot &&
+      Object.keys(carried.request.channels.environment).filter((key) => key.toUpperCase() === 'SYSTEMROOT').length === 1,
+    `the target overrode the host SystemRoot: ${JSON.stringify(carried.request.channels.environment)}`,
+  );
+  check(
+    carried.observation.stderr === process.env.SystemRoot,
+    `the infrastructure-only SystemRoot changed the observed stderr: ${JSON.stringify(carried.observation.stderr)}`,
+  );
+  // Match the guardian's separate Job Object setup bound, with room for
+  // process startup and the supervisor's missing-report backstop.
+  const windowsSetupMs = 90_000;
+  const startupWaitMs = windowsSetupMs + 20_000;
+  const directory = tempDir('windows-job-owner');
+  const agentScript = path.join(directory, 'agent.cjs');
+  const childScript = path.join(directory, 'child.cjs');
+  fs.writeFileSync(
+    childScript,
+    `const fs = require('node:fs');
+const heartbeat = process.argv[2];
+const beat = () => fs.writeFileSync(heartbeat, String(Date.now()));
+beat();
+setInterval(beat, 100);\n`,
+  );
+  fs.writeFileSync(
+    agentScript,
+    `const fs = require('node:fs');
+const { spawn } = require('node:child_process');
+const [file, mode] = process.argv.slice(2);
+fs.writeFileSync(file + '.entry', String(process.pid));
+const heartbeat = file + '.heartbeat';
+const child = spawn(process.execPath, [${JSON.stringify(childScript)}, heartbeat], { detached: true, stdio: 'ignore' });
+child.unref();
+const deadline = Date.now() + 5000;
+const ready = setInterval(() => {
+  if (!fs.existsSync(heartbeat) && Date.now() < deadline) return;
+  clearInterval(ready);
+  fs.writeFileSync(file + '.tmp', JSON.stringify({ agent: process.pid, child: child.pid }));
+  fs.renameSync(file + '.tmp', file);
+  if (mode === 'wait') setInterval(() => {}, 1000);
+  else {
+    fs.writeFileSync(file + '.exit.tmp', String(Date.now()));
+    fs.renameSync(file + '.exit.tmp', file + '.exit');
+    process.stdout.write('windows agent answered\\n');
+  }
+}, 10);\n`,
+  );
+  const progress = (phase) => fs.writeSync(2, `[Windows preflight] ${phase}\n`);
+  const endCase = (phase) => {
+    progress(`${phase}: end (${failures.length} accumulated failure(s))`);
+    for (const failure of failures) fs.writeSync(2, `[Windows preflight] failure: ${failure}\n`);
+  };
+  const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
+  const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const waitForPids = async (file, closed) => {
+    const deadline = Date.now() + startupWaitMs;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    while (!fs.existsSync(file) && !runnerClosed && Date.now() < deadline) await delay(50);
+    return fs.existsSync(file) ? readPids(file) : null;
+  };
+  const observeEndBy = async (pid, deadline) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+    while (Date.now() <= deadline) {
+      try {
+        process.kill(pid, 0);
+      } catch (error) {
+        if (error.code === 'ESRCH') return Date.now();
+      }
+      await delay(Math.min(50, Math.max(1, deadline - Date.now())));
+    }
+    return null;
+  };
+  const observeBothBy = async (pids, deadline) => {
+    const [agentEndedAt, childEndedAt] = await Promise.all([observeEndBy(pids.agent, deadline), observeEndBy(pids.child, deadline)]);
+    return { deadline, agentEndedAt, childEndedAt };
+  };
+  const waitForExitMarker = async (file) => {
+    const deadline = Date.now() + 20_000;
+    while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
+    return fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : null;
+  };
+  const waitForTraceTime = async (file, stage, closed) => {
+    const deadline = Date.now() + 40_000;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    while (Date.now() <= deadline) {
+      const trace = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+      const match = new RegExp(`^(\\d+) node \\d+ ${stage}\\b`, 'm').exec(trace);
+      if (match) return Number(match[1]);
+      if (runnerClosed) return null;
+      await delay(50);
+    }
+    return null;
+  };
+  const observeWindowsPids = (pids, heartbeatFile) => {
+    const observedAt = Date.now();
+    let heartbeatAgeMs = null;
+    try {
+      heartbeatAgeMs = observedAt - fs.statSync(heartbeatFile).mtimeMs;
+    } catch {
+      // The child has not written its first heartbeat.
+    }
+    if (!Number.isSafeInteger(pids?.agent) || !Number.isSafeInteger(pids?.child)) {
+      return { heartbeatAgeMs, error: `invalid recorded PIDs: ${JSON.stringify(pids)}` };
+    }
+    const alive = (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    return {
+      heartbeatAgeMs,
+      agentAlive: alive(pids.agent),
+      childAlive: alive(pids.child),
+      probeMs: Date.now() - observedAt,
+    };
+  };
+
+  progress('normal exit: begin');
+  const normalFile = path.join(directory, 'normal.json');
+  const normalRunner = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', normalFile, '--agent-arg', 'exit'],
+    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let normalStdout = '';
+  let normalStderr = '';
+  normalRunner.stdout.on('data', (chunk) => (normalStdout += chunk));
+  normalRunner.stderr.on('data', (chunk) => (normalStderr += chunk));
+  normalRunner.stdin.end('Say alpha.');
+  const normalClosed = ended(normalRunner);
+  let normal = null;
+  let normalEnding = null;
+  try {
+    const deadline = Date.now() + windowsSetupMs + 30_000;
+    normal = await waitForPids(normalFile, normalClosed);
+    const normalPidCheck =
+      normal === null
+        ? Promise.resolve(null)
+        : (async () => {
+            const exitAt = await waitForExitMarker(`${normalFile}.exit`);
+            return exitAt === null ? null : { exitAt, ...(await observeBothBy(normal, exitAt + 10_000)) };
+          })();
+    const pidFileSeenAt = Date.now();
+    const heartbeatFile = `${normalFile}.heartbeat`;
+    const atPidFile = observeWindowsPids(normal, heartbeatFile);
+    const firstSampleMs = Date.now() - pidFileSeenAt;
+    await delay(Math.max(0, 2000 - firstSampleMs));
+    const afterTwoSeconds = observeWindowsPids(normal, heartbeatFile);
+    const secondSampleMs = Date.now() - pidFileSeenAt;
+    normalEnding = await Promise.race([normalClosed, delay(Math.max(0, deadline - Date.now())).then(() => null)]);
+    const atTimeout = normalEnding === null ? observeWindowsPids(normal, heartbeatFile) : null;
+    if (normalEnding === null) normalRunner.kill('SIGKILL');
+    check(
+      normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
+      `a Windows runner whose agent exited ${normalEnding === null ? `waited over ${(windowsSetupMs + 30_000) / 1000} s` : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; first PID and heartbeat sample (${firstSampleMs} ms after PID file): ${JSON.stringify(atPidFile)}; second sample (${secondSampleMs} ms after PID file): ${JSON.stringify(afterTwoSeconds)}; before runner kill: ${JSON.stringify(atTimeout)}\n${normalStdout}${normalStderr}`,
+    );
+    check(normal !== null, 'the Windows agent that exited recorded no process IDs');
+    const normalPidsEnded = await normalPidCheck;
+    check(
+      Number.isFinite(normalPidsEnded?.agentEndedAt),
+      `Windows agent ${normal?.agent ?? 'unrecorded'} did not finish by 10 s after its exit marker: ${JSON.stringify(normalPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(normalPidsEnded?.childEndedAt),
+      `Windows agent child ${normal?.child ?? 'unrecorded'} did not finish by the same 10 s deadline: ${JSON.stringify(normalPidsEnded)}`,
+    );
+  } finally {
+    if (normalEnding === null) normalRunner.kill('SIGKILL');
+    if (normal === null && fs.existsSync(normalFile)) normal = readPids(normalFile);
+    if (normal !== null) {
+      reap(normal.agent);
+      reap(normal.child);
+    }
+    await Promise.race([normalClosed, delay(5000)]);
+    endCase('normal exit');
+  }
+
+  progress('project-local helper shadow: begin');
+  const shadowDirectory = tempDir('windows-helper-shadow');
+  const shadowMarker = path.join(shadowDirectory, 'fake-helper-ran');
+  const shadowFile = path.join(shadowDirectory, 'agent.json');
+  const shadowHelper = path.join(shadowDirectory, 'powershell.exe');
+  const compileScript = path.join(shadowDirectory, 'compile.ps1');
+  fs.cpSync(path.join(PROJECT_ROOT, STUB_SKILL), path.join(shadowDirectory, 'skill'), { recursive: true });
+  fs.writeFileSync(
+    compileScript,
+    `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+class FakePowerShell {
+  static void Main() {
+    File.WriteAllText(Environment.GetEnvironmentVariable("TEA_FAKE_POWERSHELL_MARKER"), "ran");
+    Console.WriteLine("READY");
+    Console.ReadLine();
+  }
+}
+'@ -OutputAssembly $args[0] -OutputType ConsoleApplication
+`,
+  );
+  const trustedPowerShell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const compiled = spawnSync(
+    trustedPowerShell,
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', compileScript, shadowHelper],
+    { encoding: 'utf8', timeout: windowsSetupMs },
+  );
+  check(
+    compiled.status === 0 && fs.existsSync(shadowHelper),
+    `the project-local fake PowerShell did not compile: ${compiled.error?.message ?? ''}\n${compiled.stdout ?? ''}${compiled.stderr ?? ''}`,
+  );
+  if (fs.existsSync(shadowHelper)) {
+    const shadowEnv = Object.fromEntries(Object.entries(BASE_ENV).filter(([name]) => name.toUpperCase() !== 'PATH'));
+    const shadowRun = spawn(
+      process.execPath,
+      [
+        RUNNER,
+        '--skill-root',
+        'skill',
+        ...options,
+        '--agent-arg',
+        shadowFile,
+        '--agent-arg',
+        'exit',
+        '--env-pass',
+        'TEA_FAKE_POWERSHELL_MARKER',
+      ],
+      {
+        cwd: shadowDirectory,
+        env: {
+          ...shadowEnv,
+          PATH: `${shadowDirectory}${path.delimiter}${process.env.PATH ?? ''}`,
+          TEA_FAKE_POWERSHELL_MARKER: shadowMarker,
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+    let shadowOutput = '';
+    shadowRun.stdout.on('data', (chunk) => (shadowOutput += chunk));
+    shadowRun.stderr.on('data', (chunk) => (shadowOutput += chunk));
+    shadowRun.stdin.end('Say alpha.');
+    const shadowClosed = ended(shadowRun);
+    let shadowPids = null;
+    try {
+      const ending = await Promise.race([shadowClosed, delay(windowsSetupMs + 30_000).then(() => null)]);
+      shadowPids = fs.existsSync(shadowFile) ? readPids(shadowFile) : null;
+      check(
+        ending?.code === 0 && shadowOutput.includes('windows agent answered'),
+        `a Windows runner with a project-local fake PowerShell ${ending === null ? 'timed out' : `returned ${ending.code}`}; expected the real helper to run\n${shadowOutput}`,
+      );
+      check(!fs.existsSync(shadowMarker), 'the guardian executed a project-local fake powershell.exe');
+    } finally {
+      shadowRun.kill('SIGKILL');
+      await Promise.race([shadowClosed, delay(5000)]);
+      if (shadowPids === null && fs.existsSync(shadowFile)) shadowPids = readPids(shadowFile);
+      if (fs.existsSync(`${shadowFile}.entry`)) reap(Number(fs.readFileSync(`${shadowFile}.entry`, 'utf8')));
+      if (shadowPids !== null) {
+        reap(shadowPids.agent);
+        reap(shadowPids.child);
+      }
+      endCase('project-local helper shadow');
+    }
+  }
+
+  progress('dual kill: begin');
+  const dualFile = path.join(directory, 'dual.json');
+  const dual = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', dualFile, '--agent-arg', 'wait', '--timeout-ms', '120000'],
+    {
+      cwd: PROJECT_ROOT,
+      env: BASE_ENV,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  let dualStderr = '';
+  dual.stdout.resume();
+  dual.stderr.on('data', (chunk) => (dualStderr += chunk));
+  dual.stdin.end('Say alpha.');
+  const dualClosed = ended(dual);
+  let dualPids = null;
+  let supervisor = null;
+  let leader = null;
+  try {
+    dualPids = await waitForPids(dualFile, dualClosed);
+    [supervisor] = childrenOf(dual.pid);
+    [leader] = childrenOf(supervisor ?? 0);
+    check(
+      dualPids !== null && supervisor !== undefined && leader !== undefined,
+      'the Windows dual-kill case did not start the supervisor, leader, agent and child',
+    );
+    const killedAt = Date.now();
+    if (leader !== undefined) reap(leader);
+    if (supervisor !== undefined) reap(supervisor);
+    const dualPidCheck = dualPids === null ? Promise.resolve(null) : observeBothBy(dualPids, killedAt + 10_000);
+    const ending = await Promise.race([dualClosed, delay(15_000).then(() => null)]);
+    check(
+      ending !== null && ending.code === EXIT_CODES['environment-transport'],
+      `a Windows runner whose leader and supervisor died ${ending === null ? 'waited over 15 s' : `exited ${ending.code}`}; expected a transport failure\n${dualStderr}`,
+    );
+    const dualPidsEnded = await dualPidCheck;
+    check(
+      Number.isFinite(dualPidsEnded?.agentEndedAt),
+      `Windows agent ${dualPids?.agent ?? 'unrecorded'} survived the dual kill beyond 10 s: ${JSON.stringify(dualPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(dualPidsEnded?.childEndedAt),
+      `Windows agent child ${dualPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(dualPidsEnded)}`,
+    );
+    check(Date.now() - killedAt < 15_000, 'the Windows dual-kill case exceeded its 15 s runner bound');
+  } finally {
+    reap(dual.pid);
+    if (leader !== null && leader !== undefined) reap(leader);
+    if (supervisor !== null && supervisor !== undefined) reap(supervisor);
+    if (dualPids !== null) {
+      reap(dualPids.agent);
+      reap(dualPids.child);
+    }
+    await Promise.race([dualClosed, delay(5000)]);
+    endCase('dual kill');
+  }
+
+  progress('helper death: begin');
+  const ownerFile = path.join(directory, 'owner-death.json');
+  const ownerRun = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', ownerFile, '--agent-arg', 'wait', '--timeout-ms', '120000'],
+    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let ownerStderr = '';
+  ownerRun.stdout.resume();
+  ownerRun.stderr.on('data', (chunk) => (ownerStderr += chunk));
+  ownerRun.stdin.end('Say alpha.');
+  const ownerClosed = ended(ownerRun);
+  let ownerPids = null;
+  let ownerSupervisor = null;
+  let ownerLeader = null;
+  let guardian = null;
+  let helper = null;
+  let ownerAgentVerified = false;
+  let ownerChildVerified = false;
+  try {
+    ownerPids = await waitForPids(ownerFile, ownerClosed);
+    if (ownerPids !== null) {
+      [ownerSupervisor] = childrenOf(ownerRun.pid);
+      [ownerLeader] = childrenOf(ownerSupervisor);
+      [guardian] = childrenOf(ownerLeader);
+      const guardianChildren = childrenOf(guardian);
+      ownerAgentVerified = guardianChildren.includes(ownerPids.agent);
+      ownerChildVerified = ownerAgentVerified && childrenOf(ownerPids.agent).includes(ownerPids.child);
+      const helpers = guardianChildren.filter((pid) => pid !== ownerPids.agent);
+      if (ownerChildVerified && helpers.length === 1) [helper] = helpers;
+    }
+    progress(
+      `helper discovery: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified, stderr: ownerStderr })}`,
+    );
+    check(
+      ownerPids !== null && ownerChildVerified && helper !== null,
+      `the Windows helper-death case did not verify its runner, supervisor, leader, guardian, agent, child and sole Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified })}\n${ownerStderr}`,
+    );
+    const helperKilledAt = Date.now();
+    if (helper !== null) reap(helper);
+    const ownerPidCheck = ownerPids === null || helper === null ? Promise.resolve(null) : observeBothBy(ownerPids, helperKilledAt + 10_000);
+    const ending = await Promise.race([ownerClosed, delay(15_000).then(() => null)]);
+    check(
+      ending?.code === EXIT_CODES['environment-transport'],
+      `a Windows runner whose ready Job Object helper died ${ending === null ? 'waited over 15 s' : `returned ${ending.code}`}; expected transport failure\n${ownerStderr}`,
+    );
+    const ownerPidsEnded = await ownerPidCheck;
+    check(
+      Number.isFinite(ownerPidsEnded?.agentEndedAt),
+      `Windows agent ${ownerPids?.agent ?? 'unrecorded'} survived its Job Object helper's death beyond 10 s: ${JSON.stringify(ownerPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(ownerPidsEnded?.childEndedAt),
+      `Windows agent child ${ownerPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(ownerPidsEnded)}`,
+    );
+  } finally {
+    ownerRun.kill('SIGKILL');
+    for (const pid of [ownerSupervisor, ownerLeader, guardian, helper, ...(ownerPids === null ? [] : [ownerPids.agent, ownerPids.child])]) {
+      if (pid !== null && pid !== undefined) reap(pid);
+    }
+    await Promise.race([ownerClosed, delay(5000)]);
+    endCase('helper death');
+  }
+
+  progress('wall clock timeout: begin');
+  const timeoutFile = path.join(directory, 'timeout.json');
+  const timeoutTrace = path.join(directory, 'timeout.trace');
+  const timeoutRun = spawn(
+    process.execPath,
+    [
+      RUNNER,
+      '--skill-root',
+      STUB_SKILL,
+      ...options,
+      '--agent-arg',
+      timeoutFile,
+      '--agent-arg',
+      'wait',
+      '--timeout-ms',
+      '15000',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_TRACE',
+    ],
+    { cwd: PROJECT_ROOT, env: { ...BASE_ENV, TEA_WINDOWS_JOB_TRACE: timeoutTrace }, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let timeoutStderr = '';
+  timeoutRun.stdout.resume();
+  timeoutRun.stderr.on('data', (chunk) => (timeoutStderr += chunk));
+  timeoutRun.stdin.end('Say alpha.');
+  const timeoutClosed = ended(timeoutRun);
+  let timeoutPids = null;
+  try {
+    timeoutPids = await waitForPids(timeoutFile, timeoutClosed);
+    check(timeoutPids !== null, 'the Windows timeout case recorded no agent and child PIDs');
+    const timedAt = await waitForTraceTime(timeoutTrace, 'leader-wallclock-timeout', timeoutClosed);
+    const timeoutPidCheck = timeoutPids === null || timedAt === null ? Promise.resolve(null) : observeBothBy(timeoutPids, timedAt + 10_000);
+    const ending = await Promise.race([timeoutClosed, delay(40_000).then(() => null)]);
+    check(
+      ending?.code === EXIT_CODES['environment-timeout'],
+      `a Windows runner past its wall clock ${ending === null ? 'waited over 40 s' : `returned ${ending.code}`}; expected timeout\n${timeoutStderr}`,
+    );
+    const timeoutPidsEnded = await timeoutPidCheck;
+    check(Number.isFinite(timedAt), `the Windows runner recorded no wall clock timeout marker\n${timeoutStderr}`);
+    check(
+      Number.isFinite(timeoutPidsEnded?.agentEndedAt),
+      `Windows agent ${timeoutPids?.agent ?? 'unrecorded'} survived its timeout beyond 10 s: ${JSON.stringify(timeoutPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(timeoutPidsEnded?.childEndedAt),
+      `Windows agent child ${timeoutPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(timeoutPidsEnded)}`,
+    );
+  } finally {
+    timeoutRun.kill('SIGKILL');
+    if (timeoutPids === null && fs.existsSync(timeoutFile)) timeoutPids = readPids(timeoutFile);
+    if (timeoutPids !== null) {
+      reap(timeoutPids.agent);
+      reap(timeoutPids.child);
+    }
+    await Promise.race([timeoutClosed, delay(5000)]);
+    endCase('wall clock timeout');
+  }
+
+  for (const [failureMode, failureDetail] of [
+    ['stderr-exit', 'forced helper stderr before readiness'],
+    ['1', 'forced Windows Job Object setup failure'],
+    ['assign', 'AssignProcessToJobObject failed'],
+    ['after-assign', 'forced failure after Job Object assignment'],
+  ]) {
+    progress(`setup failure ${failureMode}: begin`);
+    const failedFile = path.join(directory, `failed-${failureMode}.json`);
+    const failedRunner = spawn(
+      process.execPath,
+      [
+        RUNNER,
+        '--skill-root',
+        STUB_SKILL,
+        ...options,
+        '--agent-arg',
+        failedFile,
+        '--agent-arg',
+        'exit',
+        '--env-pass',
+        'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+      ],
+      {
+        cwd: PROJECT_ROOT,
+        env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: failureMode },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+    let failedStdout = '';
+    let failedStderr = '';
+    failedRunner.stdout.on('data', (chunk) => (failedStdout += chunk));
+    failedRunner.stderr.on('data', (chunk) => (failedStderr += chunk));
+    failedRunner.stdin.end('Say alpha.');
+    const failedClosed = ended(failedRunner);
+    let failedPids = null;
+    let failedEntryPid = null;
+    let failedEnding = null;
+    try {
+      failedEnding = await Promise.race([failedClosed, delay(startupWaitMs + 5000).then(() => null)]);
+      if (failedEnding === null) failedRunner.kill('SIGKILL');
+      failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
+      failedEntryPid = fs.existsSync(`${failedFile}.entry`) ? Number(fs.readFileSync(`${failedFile}.entry`, 'utf8')) : null;
+      check(
+        failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes(failureDetail),
+        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? `waited over ${(startupWaitMs + 5000) / 1000} s` : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent entry PID: ${failedEntryPid ?? 'unrecorded'}; agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+      );
+      check(
+        failedEntryPid === null && failedPids === null,
+        `the Windows agent started after ${failureMode} Job Object setup failed: entry ${failedEntryPid ?? 'unrecorded'}, agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
+      );
+      if (failedPids !== null) {
+        check(await processEnds(failedPids.agent, 10_000), `Windows agent ${failedPids.agent} survived the failed setup beyond 10 s`);
+        check(await processEnds(failedPids.child, 10_000), `Windows agent child ${failedPids.child} survived the failed setup beyond 10 s`);
+      }
+    } finally {
+      if (failedEnding === null) failedRunner.kill('SIGKILL');
+      if (failedPids === null && fs.existsSync(failedFile)) failedPids = readPids(failedFile);
+      if (failedEntryPid === null && fs.existsSync(`${failedFile}.entry`)) {
+        failedEntryPid = Number(fs.readFileSync(`${failedFile}.entry`, 'utf8'));
+      }
+      reap(failedEntryPid);
+      if (failedPids !== null) {
+        reap(failedPids.agent);
+        reap(failedPids.child);
+      }
+      await Promise.race([failedClosed, delay(5000)]);
+      endCase(`setup failure ${failureMode}`);
+    }
+  }
+
+  progress('setup race: begin');
+  const setupRaceFile = path.join(directory, 'setup-race.json');
+  const setupRaceTrace = path.join(directory, 'setup-race.trace');
+  const setupRace = spawn(
+    process.execPath,
+    [
+      RUNNER,
+      '--skill-root',
+      STUB_SKILL,
+      ...options,
+      '--agent-arg',
+      setupRaceFile,
+      '--agent-arg',
+      'wait',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_TRACE',
+      '--timeout-ms',
+      '500',
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: 'ready-delay', TEA_WINDOWS_JOB_TRACE: setupRaceTrace },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  let setupRaceStderr = '';
+  setupRace.stdout.resume();
+  setupRace.stderr.on('data', (chunk) => (setupRaceStderr += chunk));
+  setupRace.stdin.end('Say alpha.');
+  const setupRaceClosed = ended(setupRace);
+  let setupRacePids = null;
+  try {
+    const ending = await Promise.race([setupRaceClosed, delay(windowsSetupMs + 20_000).then(() => null)]);
+    setupRacePids = fs.existsSync(setupRaceFile) ? readPids(setupRaceFile) : null;
+    const setupTrace = fs.existsSync(setupRaceTrace) ? fs.readFileSync(setupRaceTrace, 'utf8') : '';
+    const readyAt = Number(/^(\d+) node \d+ leader-agent-ready\b/m.exec(setupTrace)?.[1]);
+    const timedAt = Number(/^(\d+) node \d+ leader-wallclock-timeout\b/m.exec(setupTrace)?.[1]);
+    check(
+      ending?.code === EXIT_CODES['environment-timeout'],
+      `a Windows runner with delayed Job Object readiness ${ending === null ? `waited over ${(windowsSetupMs + 20_000) / 1000} s` : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}\n${setupTrace}`,
+    );
+    check(
+      setupTrace.includes('guardian-agent-spawned') && Number.isFinite(readyAt) && Number.isFinite(timedAt) && timedAt - readyAt >= 500,
+      `the delayed helper did not let the agent start and run for its 500 ms wall clock: ready=${readyAt}, timed out=${timedAt}, PIDs=${JSON.stringify(setupRacePids)}\n${setupTrace}`,
+    );
+  } finally {
+    setupRace.kill('SIGKILL');
+    if (setupRacePids === null && fs.existsSync(setupRaceFile)) setupRacePids = readPids(setupRaceFile);
+    if (setupRacePids !== null) {
+      reap(setupRacePids.agent);
+      reap(setupRacePids.child);
+    }
+    await Promise.race([setupRaceClosed, delay(5000)]);
+    endCase('setup race');
+  }
+}
+
+function checkWindowsRunnerReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const supervisor = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'agent-supervisor.js'), 'utf8');
+  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  const setupBoundText = /const WINDOWS_SETUP_MS = ([\d_]+);/.exec(supervisor)?.[1] ?? '';
+  const setupBound = Number(setupBoundText.replaceAll('_', ''));
+  check(
+    section.includes('Windows Job Object') &&
+      section.includes('kill-on-close') &&
+      section.includes('10 s') &&
+      setupBound === 90_000 &&
+      section.includes('The guardian allows 90 s for setup') &&
+      section.includes('wall clock starts when the guardian reports the actual agent PID'),
+    'the tea-skill-runner reference and supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+  );
 }
 
 /**
@@ -420,6 +1051,74 @@ function childrenOf(pid) {
 async function checkSupervision() {
   if (process.platform === 'win32') return;
   const long = ['--timeout-ms', '1200000'];
+
+  // A closed guardian PID pipe must kill the entire POSIX group, including a child the agent started.
+  const pidFailureDirectory = tempDir('guardian-pid-report-failure');
+  const pidFailureFile = path.join(pidFailureDirectory, 'pids.json');
+  const pidFailureAgent = path.join(pidFailureDirectory, 'agent.cjs');
+  const pidFailurePreload = path.join(pidFailureDirectory, 'preload.cjs');
+  fs.writeFileSync(
+    pidFailureAgent,
+    `const fs = require('node:fs');
+const child = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+fs.writeFileSync(process.argv[2], JSON.stringify({ agent: process.pid, child: child.pid }));
+setInterval(() => {}, 1000);
+`,
+  );
+  fs.writeFileSync(
+    pidFailurePreload,
+    `if (process.argv[2] === '--agent-guardian') {
+  const fs = require('node:fs');
+  const original = fs.writeSync;
+  fs.writeSync = (fd, ...args) => {
+    if (fd === 5) {
+      const wait = new Int32Array(new SharedArrayBuffer(4));
+      const deadline = Date.now() + 3000;
+      while (!fs.existsSync(process.env.TEA_PID_FAILURE_FILE) && Date.now() < deadline) Atomics.wait(wait, 0, 0, 50);
+    }
+    return original(fd, ...args);
+  };
+}
+`,
+  );
+  const pidFailureGuardian = spawn(process.execPath, [SUPERVISOR, '--agent-guardian', process.execPath, pidFailureAgent, pidFailureFile], {
+    cwd: PROJECT_ROOT,
+    detached: true,
+    env: { ...BASE_ENV, NODE_OPTIONS: `--require=${pidFailurePreload}`, TEA_PID_FAILURE_FILE: pidFailureFile },
+    stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'],
+  });
+  let pidFailureReport = '';
+  pidFailureGuardian.stdio[3].on('data', (chunk) => (pidFailureReport += chunk));
+  const pidFailureClosed = ended(pidFailureGuardian);
+  let pidFailurePids = null;
+  try {
+    const ending = await Promise.race([pidFailureClosed, delay(10_000).then(() => null)]);
+    pidFailurePids = fs.existsSync(pidFailureFile) ? readJson(pidFailureFile) : null;
+    check(
+      ending?.signal === 'SIGKILL' && pidFailureReport.includes('could not report the agent PID'),
+      `a POSIX guardian with closed PID pipe ${ending === null ? 'waited over 10 s' : `ended ${ending.signal ?? ending.code}`}; expected its failure report and group kill: ${pidFailureReport}`,
+    );
+    check(pidFailurePids !== null, 'the POSIX closed-PID-pipe agent did not record its child before the failed report');
+    if (pidFailurePids !== null) {
+      check(await processEnds(pidFailurePids.agent), `POSIX agent ${pidFailurePids.agent} survived a failed PID report`);
+      check(await processEnds(pidFailurePids.child), `POSIX agent child ${pidFailurePids.child} survived a failed PID report`);
+    }
+  } finally {
+    if (pidFailureGuardian.exitCode === null && pidFailureGuardian.signalCode === null && pidFailureGuardian.pid > 0) {
+      try {
+        process.kill(-pidFailureGuardian.pid, 'SIGKILL');
+      } catch {
+        // The guardian group already ended.
+      }
+    }
+    if (pidFailurePids === null && fs.existsSync(pidFailureFile)) pidFailurePids = readJson(pidFailureFile);
+    if (pidFailurePids !== null) {
+      reap(pidFailurePids.agent);
+      reap(pidFailurePids.child);
+    }
+    pidFailureGuardian.stdio[4].destroy();
+    await Promise.race([pidFailureClosed, delay(1000)]);
+  }
 
   // The runner's whole group killed, as a cancelled CI job or `timeout -s KILL` kills it.
   const groupPid = path.join(tempDir('group-kill'), 'pid');
@@ -1645,7 +2344,11 @@ function checkRunnerRules() {
           for (const leg of operation.sensitivityWitness.legs) delete leg.inputs.option['timeout-ms'];
         }),
     ],
-    ['a runner --timeout-ms at the entry ceiling', 'skill-runner', (folder) => addRunnerOption(folder, 'timeout-ms', '60000')],
+    [
+      'a runner --timeout-ms at the entry ceiling',
+      'skill-runner',
+      (folder) => addRunnerOption(folder, 'timeout-ms', String(readJson(path.join(folder, 'evaluation.json')).registry[0].maxElapsedMs)),
+    ],
     [
       'a plan step alone handing the runner another skill root',
       'skill-root',
@@ -1673,9 +2376,17 @@ function checkRunnerRules() {
 
 async function main() {
   try {
+    if (process.env.TEA_EVALUATE_WINDOWS_ONLY === '1') {
+      check(process.platform === 'win32', 'the Windows CI preflight gate ran on a non-Windows host');
+      await checkWindowsSupervision();
+      checkWindowsRunnerReference();
+      return finishChecks();
+    }
     checkRunner();
     await checkRunnerProcesses();
     await checkSupervision();
+    await checkWindowsSupervision();
+    checkWindowsRunnerReference();
     checkPasses();
     checkRemovedEntry();
     checkShim();
@@ -1695,6 +2406,10 @@ async function main() {
   } finally {
     scratch.removeAll();
   }
+  return finishChecks();
+}
+
+function finishChecks() {
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate preflight check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);

@@ -13,8 +13,8 @@
  *   CLI does not accept stdin. That transport can expose the prompt to local
  *   process inspection and must be documented per adapter.
  * - The child receives a minimal environment (PATH, HOME, locale, proxy, and
- *   the selected adapter's vendor variables only) plus names explicitly
- *   allowed with --env-pass.
+ *   the selected adapter's vendor variables) plus names explicitly allowed
+ *   with --env-pass. Windows also keeps TEMP, TMP and SystemRoot for PowerShell.
  * - The agent runs in a guardian-led process group under agent-supervisor.js. A
  *   timeout sends the group SIGTERM and then SIGKILL after a grace
  *   period; the group is also stopped when the runner or the supervisor dies,
@@ -22,8 +22,10 @@
  *   the turn. The agent's stdin, stdout and stderr are pipes the supervisor's
  *   group leader owns and copies, so a process the agent leaves outside its
  *   group (in a new session, say) cannot hold this runner's pipes open. On
- *   Windows, which has no process groups, the timeout and the signals reach
- *   the agent alone.
+ *   Windows, which has no process groups, a kill-on-close Job Object owns the
+ *   guardian, agent and ordinary descendants through the turn. Windows Job
+ *   Object setup has a 90 s bound; --timeout-ms starts after the guardian
+ *   reports the agent's actual PID.
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
@@ -48,6 +50,7 @@ const SUPERVISOR = path.join(__dirname, 'agent-supervisor.js');
 // by convention. Each adapter's own envNames (agent-adapters.js) layer the
 // vendor-specific API-key fallback on top of this shared base.
 const BASE_ENV_NAMES = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'];
+const WINDOWS_SYSTEM_ENV_NAMES = ['TEMP', 'TMP', 'SystemRoot'];
 
 /**
  * Build the minimal child environment: the base names plus any adapter and
@@ -56,14 +59,21 @@ const BASE_ENV_NAMES = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC
  * @param {string[]} envPass - Extra variable names allowed through.
  * @param {object} [sourceEnv] - Environment to read from (tests inject here).
  * @param {string[]} [adapterEnvNames] - Vendor-specific names from the selected adapter.
+ * @param {string} [platform] - Host platform (tests inject here).
  * @returns {object}
  */
-function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames = []) {
+function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames = [], platform = process.platform) {
   const env = {};
-  for (const name of [...BASE_ENV_NAMES, ...adapterEnvNames, ...envPass]) {
+  for (const name of [...BASE_ENV_NAMES, ...(platform === 'win32' ? WINDOWS_SYSTEM_ENV_NAMES : []), ...adapterEnvNames, ...envPass]) {
     if (sourceEnv[name] !== undefined) {
       env[name] = sourceEnv[name];
     }
+  }
+  // The helper executable is selected from the host's SystemRoot. A target's
+  // environment selection cannot redirect that lookup to its working tree.
+  if (platform === 'win32' && process.platform === 'win32') {
+    if (process.env.SystemRoot === undefined) delete env.SystemRoot;
+    else env.SystemRoot = process.env.SystemRoot;
   }
   return env;
 }
@@ -301,7 +311,8 @@ function runAgent(prompt, options = {}) {
   // spawnSync gets no timeout of its own: its timer counts time the runner
   // spends suspended (Ctrl-Z), and on expiry it closes the pipes before reading
   // what they hold, the agent's reply included. The group leader owns the wall
-  // clock, and the supervisor the backstop past it.
+  // clock, and the supervisor the backstop past it. On Windows the guardian's
+  // Job Object setup has a separate 90 s bound before that clock starts.
   const result = spawnSync(process.execPath, invocation.supervisorArgs, {
     cwd: invocation.cwd,
     encoding: 'utf8',

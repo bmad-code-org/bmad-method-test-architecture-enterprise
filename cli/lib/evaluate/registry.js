@@ -413,6 +413,12 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
   const serverEntries = registered.filter(isMcpEntry);
   const apiEntries = registered.filter(isApiEntry);
 
+  /** The Windows runner needs the host system directory to launch its Job Object helper. */
+  const commandEnvironmentKeys = (entry) =>
+    process.platform === 'win32' && entry.executable === 'tea-skill-runner'
+      ? [...entry.environmentKeys, 'SystemRoot']
+      : entry.environmentKeys;
+
   /** An entry's own keys plus the caller's extra names, sorted, with PATH refused. */
   function keysWithExtras(interfaceId, own, extraNames = []) {
     const keys = [...new Set([...own, ...extraNames])].sort();
@@ -516,11 +522,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
   function permittedEnvironmentKeys(interfaceId, extraNames = []) {
     const entries = commandEntries.filter((entry) => entry.interfaceId === interfaceId);
     if (entries.length === 0) throw new Error(`no execution target is registered for interface ${interfaceId}`);
-    return keysWithExtras(
-      interfaceId,
-      entries.flatMap((entry) => entry.environmentKeys),
-      extraNames,
-    );
+    return keysWithExtras(interfaceId, entries.flatMap(commandEnvironmentKeys), extraNames);
   }
 
   /**
@@ -546,7 +548,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
           : `no execution target is registered for interface ${interfaceId} and executable ${executable}`,
       );
     }
-    return readEnvironment(keysWithExtras(interfaceId, chosen[0].environmentKeys, extraNames));
+    return readEnvironment(keysWithExtras(interfaceId, commandEnvironmentKeys(chosen[0]), extraNames));
   }
 
   /**
@@ -630,7 +632,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
           executable: entry.executable,
           target: targetPath(entry, projectRoot),
           permittedSubcommandPaths: entry.subcommandPaths.map((subcommandPath) => [...subcommandPath]),
-          permittedEnvironmentKeys: keysWithExtras(entry.interfaceId, entry.environmentKeys, environmentKeys[entry.interfaceId]),
+          permittedEnvironmentKeys: keysWithExtras(entry.interfaceId, commandEnvironmentKeys(entry), environmentKeys[entry.interfaceId]),
           cwd,
           artifacts: { ...entry.artifacts, ...artifacts[entry.interfaceId] },
           maxElapsedMs: Math.min(entry.maxElapsedMs, budget.maxElapsedMs ?? entry.maxElapsedMs),

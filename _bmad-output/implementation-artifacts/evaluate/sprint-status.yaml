@@ -87,7 +87,7 @@ development_status:
   1-49-prove-test-design-mutation-rollback-before-claiming-it: done
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
-  1-52-stop-agent-descendants-on-windows: backlog
+  1-52-stop-agent-descendants-on-windows: done
   1-53-bound-an-agent-whose-guardian-is-stopped: backlog
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
@@ -96,7 +96,7 @@ development_status:
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
   1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: done
   1-60-observe-every-confined-processs-file-access-beyond-node: done
-  1-61-teach-file-system-confinement-in-the-evaluate-skill: review
+  1-61-teach-file-system-confinement-in-the-evaluate-skill: done
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done
   1-63-give-a-bubblewrap-target-no-route-to-the-hosts-abstract-sockets: done
   1-64-hold-the-release-across-the-witness-legs-and-the-trials: done

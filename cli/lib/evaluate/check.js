@@ -43,9 +43,9 @@
  *   folder has no `policy/evaluator-conditions.json`, or one that declares `modelSnapshot` `none` (NFR8); or
  *   the file declares `modelSnapshot` `none` with a `systemPromptDigest` other than the empty byte string's.
  * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
- *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
- *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
- *   ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12.
+ *   exit codes, or a leg or plan step for it leaves insufficient `maxElapsedMs` beyond its literal
+ *   `timeout-ms`. Windows reserves 120 s for bounded Job Object setup and supervisor completion.
+ *   If the adapter's ceiling fires first, it records a fault and `preflight` exits 12.
  * - `gameability` (Story 1.9): a probe on the `gameability` route is not a `gameability`-class probe
  *   with `expectedClean: false` and no defects (it launches nothing, so nothing can witness a defect),
  *   its `naiveOracle` is an oracle of its own behavior (the naive oracle belongs to another behavior),
@@ -468,7 +468,7 @@ function optionSetsByOperation(contract) {
  * its own infrastructure codes, and time its agent out before the adapter kills
  * the runner's process group.
  */
-function checkSkillRunner(report, evaluation, contract, provision) {
+function checkSkillRunner(report, evaluation, contract, provision, platform = process.platform) {
   const skillRoot = typeof evaluation.launch?.skillRoot === 'string' ? evaluation.launch.skillRoot : undefined;
   if (skillRoot !== undefined) {
     for (const directory of provision) {
@@ -507,11 +507,16 @@ function checkSkillRunner(report, evaluation, contract, provision) {
     }
     const timeout = set.option['timeout-ms']?.literal;
     const milliseconds = typeof timeout === 'string' && /^[0-9]+$/.test(timeout) ? Number(timeout) : Number.NaN;
-    if (!(milliseconds > 0 && milliseconds < entry.maxElapsedMs)) {
+    const allowanceMs = platform === 'win32' ? 120_000 : 0;
+    if (!(milliseconds > 0 && milliseconds + allowanceMs < entry.maxElapsedMs)) {
+      const detail =
+        platform === 'win32'
+          ? `the literal plus 120000 ms reserved for Windows Job Object setup, supervisor completion and runner overhead must be below the entry's maxElapsedMs (${entry.maxElapsedMs})`
+          : `a literal below the entry's maxElapsedMs (${entry.maxElapsedMs}) makes the runner stop its agent before the adapter kills the runner`;
       report.add(
         CONTRACT_NAME,
         'skill-runner',
-        `${set.where} hands ${SKILL_RUNNER_BIN} --timeout-ms ${JSON.stringify(timeout ?? null)}; a literal below the entry's maxElapsedMs (${entry.maxElapsedMs}) makes the runner stop its agent before the adapter kills the runner`,
+        `${set.where} hands ${SKILL_RUNNER_BIN} --timeout-ms ${JSON.stringify(timeout ?? null)}; ${detail}`,
       );
     }
   }
@@ -2011,7 +2016,7 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {string} folder
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder) {
+async function checkEvaluation(folder, { platform = process.platform } = {}) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2049,7 +2054,7 @@ async function checkEvaluation(folder) {
   checkPrincipalMappings(report, evaluation, registry, context.contract);
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
-  checkSkillRunner(report, evaluation, context.contract, provision);
+  checkSkillRunner(report, evaluation, context.contract, provision, platform);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
   checkHeldOut(report, folder, evaluation);
   checkCalibration(report, folder, evaluation, context.contract, context.engine);

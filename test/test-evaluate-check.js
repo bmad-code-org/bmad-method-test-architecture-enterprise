@@ -57,6 +57,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corpus-index');
 const { calibrationObservation, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
+const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
 const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
 const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
@@ -131,6 +132,32 @@ function declareOnSecondInterface(folder, secondPhase = 'process') {
     value.registry.push({ ...structuredClone(value.registry[0]), interfaceId: 'second-interface' });
     value.operationPhases['second-interface'] = { [PHASE_OPERATION]: secondPhase };
   });
+}
+
+async function checkWindowsRunnerBudget() {
+  const source = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate');
+  const original = path.join(source, 'preflight');
+  const expanded = await checkEvaluation(original, { platform: 'win32' });
+  check(
+    !expanded.some((finding) => finding.rule === 'skill-runner'),
+    `the Windows authoring check refused the fixture's 160000 ms ceiling with a 30000 ms agent timeout: ${JSON.stringify(expanded)}`,
+  );
+
+  const project = tempDir('windows-runner-budget');
+  fs.cpSync(path.join(source, 'preflight'), path.join(project, 'preflight'), { recursive: true });
+  fs.cpSync(path.join(source, 'stub-agent'), path.join(project, 'stub-agent'), { recursive: true });
+  const folder = path.join(project, 'preflight');
+  editJson(folder, 'evaluation.json', (evaluation) => (evaluation.registry[0].maxElapsedMs = 60_000));
+  const constrained = await checkEvaluation(folder, { platform: 'win32' });
+  check(
+    constrained.some((finding) => finding.rule === 'skill-runner' && finding.message.includes('120000 ms reserved for Windows')),
+    'the Windows authoring check accepted a runner whose outer 60000 ms ceiling can expire during setup',
+  );
+  const posix = await checkEvaluation(folder, { platform: 'linux' });
+  check(
+    !posix.some((finding) => finding.rule === 'skill-runner'),
+    'the Windows setup allowance changed the POSIX skill-runner authoring rule',
+  );
 }
 
 /** Story 1.42: `operationPhases` classifies each interface-operation pair, and `check` covers exactly the contract's pairs. */
@@ -3954,6 +3981,7 @@ async function main() {
     checkEngineAbsent();
     checkUsage();
     await checkDefectCases();
+    await checkWindowsRunnerBudget();
     checkOperationPhaseCoverage();
     checkReportOperationReusedAcrossInterfaces();
     checkSymlinkRefused();

@@ -17,7 +17,7 @@
       ],
       "artifacts": {},
       "environmentKeys": [],
-      "maxElapsedMs": 60000,
+      "maxElapsedMs": 160000,
       "infrastructureExitCodes": [
         3,
         4,

@@ -59,7 +59,13 @@
  * resumes, however long it stays suspended.
  *
  * Windows has no process groups: the leader stays in the supervisor's
- * console, and signals, the lifeline and the timeout reach the agent alone.
+ * console. Before the guardian starts the agent, a PowerShell helper assigns
+ * the guardian to a kill-on-close Job Object. Ordinary descendants inherit
+ * the job, whose sole handle closes when the guardian's pipe closes. Setup
+ * has its own 90 s bound; the agent's wall clock starts when the guardian
+ * reports the actual agent PID. The supervisor's startup backstop runs 105 s
+ * from its own start, allowing for cold Node startup before the guardian's
+ * setup timer begins.
  *
  * Usage (from `run-agent.js` only):
  *   node agent-supervisor.js <runnerPid> <timeoutMs> <command> [args...]
@@ -71,7 +77,19 @@
 
 const fs = require('node:fs');
 const net = require('node:net');
+const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+
+/** Synchronous, opt-in trace for the Windows guardian startup probe. */
+function trace(stage, detail = '') {
+  if (!process.env.TEA_WINDOWS_JOB_TRACE) return;
+  try {
+    const message = String(detail).replaceAll(/\s+/g, ' ').slice(0, 1000);
+    fs.appendFileSync(process.env.TEA_WINDOWS_JOB_TRACE, `${Date.now()} node ${process.pid} ${stage} ${message}\n`);
+  } catch {
+    // A diagnostic must never affect supervision.
+  }
+}
 
 /** The runner's report pipe, in the supervisor. */
 const RUNNER_REPORT_FD = 3;
@@ -104,6 +122,15 @@ const DRAIN_MS = 2000;
 /** How long past the wall clock the supervisor waits for the leader: its grace period and some slack. */
 const BACKSTOP_MS = 5000;
 
+/** Cold Windows PowerShell startup took 25.8 s in CI; setup has a separate 90 s bound. */
+const WINDOWS_SETUP_MS = 90_000;
+
+/** Allows cold Node startup before the guardian's own setup timer begins. */
+const WINDOWS_STARTUP_SLACK_MS = 15_000;
+
+/** A Windows leader cannot wait indefinitely for its supervisor report pipe to drain. */
+const WINDOWS_REPORT_WRITE_MS = 2000;
+
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
 
@@ -120,20 +147,32 @@ const GUARDIAN_FLAG = '--agent-guardian';
 
 /** The guardian is the agent's group leader. Its lifeline is held only by the leader. */
 function guard([command, ...args]) {
+  trace('guardian-enter');
   const lifeline = new net.Socket({ fd: 4, readable: true, writable: false });
+  trace('guardian-lifeline-ready');
   lifeline.on('error', () => {});
   let stopping = false;
   let finished = false;
+  let agent = null;
+  let job = null;
+  let abandoned = false;
+  let failSetup = null;
+  let pendingStop = null;
   const stop = (signal) => {
     if (stopping || finished) return;
     stopping = true;
+    if (!GROUPS && agent === null) {
+      pendingStop = signal;
+      if (failSetup !== null) failSetup(new Error(`guardian stopped by ${signal} during Windows Job Object setup`));
+      return;
+    }
     if (GROUPS) {
       try {
         process.kill(-process.pid, signal);
       } catch {
         /* The group ended. */
       }
-    } else {
+    } else if (agent !== null) {
       agent.kill(signal);
     }
     setTimeout(() => {
@@ -143,32 +182,175 @@ function guard([command, ...args]) {
         } catch {
           /* The group ended. */
         }
-      } else agent.kill('SIGKILL');
+      } else if (agent !== null) agent.kill('SIGKILL');
     }, GRACE_MS);
   };
   for (const name of STOPPING) process.on(name, () => stop(name));
-  lifeline.once('close', () => stop('SIGTERM'));
-  // Install the lifeline first. A leader killed during startup closes it before the agent can outlive it.
-  const agent = spawn(command, args, { stdio: 'inherit' });
-  if (agent.pid !== undefined) write(5, `${agent.pid}\n`);
-  agent.once('error', (error) => {
-    if (finished) return;
-    finished = true;
-    write(3, JSON.stringify({ spawnError: { code: error.code ?? null, message: error.message } }));
-    process.exit(0);
+  lifeline.once('close', () => {
+    abandoned = true;
+    stop('SIGTERM');
+    if (job !== null && !finished) job.stdin.end();
   });
-  agent.once('exit', (status, signal) => {
-    if (finished) return;
-    finished = true;
-    write(3, JSON.stringify({ status, signal }));
-    if (GROUPS) {
-      try {
-        process.kill(-process.pid, 'SIGKILL');
-      } catch {
-        /* The group ended. */
+
+  const launch = () => {
+    trace('guardian-launch-check', `abandoned=${abandoned} stopping=${stopping} finished=${finished}`);
+    if (abandoned || stopping || finished) return;
+    agent = spawn(command, args, { stdio: 'inherit' });
+    trace('guardian-agent-spawned', `pid=${agent.pid}`);
+    if (agent.pid !== undefined) {
+      trace('guardian-agent-pid-write-start', `pid=${agent.pid}`);
+      const error = write(5, `${agent.pid}\n`);
+      trace('guardian-agent-pid-write-end', error ? `error=${error.message}` : `pid=${agent.pid}`);
+      if (error) {
+        finished = true;
+        write(
+          3,
+          JSON.stringify({
+            spawnError: { code: error.code ?? 'PID_REPORT', message: `the guardian could not report the agent PID: ${error.message}` },
+          }),
+        );
+        trace('guardian-report-written', 'agent PID report failure on fd3');
+        if (GROUPS) {
+          try {
+            process.kill(-process.pid, 'SIGKILL');
+          } catch {
+            agent.kill('SIGKILL');
+            process.exit(0);
+          }
+        } else {
+          agent.kill('SIGKILL');
+          job.stdin.end();
+          process.exit(0);
+        }
       }
-    } else process.exit(0);
+    }
+    if (stopping) agent.kill('SIGTERM');
+    agent.once('error', (error) => {
+      if (finished) return;
+      finished = true;
+      write(3, JSON.stringify({ spawnError: { code: error.code ?? null, message: error.message } }));
+      trace('guardian-report-written', `spawn error ${error.message}`);
+      if (job !== null) job.stdin.end();
+      process.exit(0);
+    });
+    agent.once('exit', (status, signal) => {
+      trace('guardian-agent-exit', `status=${status} signal=${signal}`);
+      if (finished) return;
+      finished = true;
+      write(3, JSON.stringify({ status, signal }));
+      trace('guardian-report-written', `status=${status} signal=${signal}`);
+      if (GROUPS) {
+        try {
+          process.kill(-process.pid, 'SIGKILL');
+        } catch {
+          /* The group ended. */
+        }
+      } else {
+        job.stdin.end();
+        process.exit(0);
+      }
+    });
+  };
+
+  // The guardian joins the kill-on-close job before it can start the agent.
+  if (GROUPS) return launch();
+  const systemRoot = process.env.SystemRoot;
+  const powershell =
+    systemRoot && path.isAbsolute(systemRoot) ? path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') : null;
+  let trustedHelper = false;
+  try {
+    trustedHelper = powershell !== null && fs.statSync(powershell).isFile();
+  } catch {
+    // A missing system helper fails setup before the agent can start.
+  }
+  if (!trustedHelper) {
+    write(
+      3,
+      JSON.stringify({
+        spawnError: { code: 'JOB_OBJECT', message: 'Windows Job Object setup failed: trusted PowerShell executable unavailable' },
+      }),
+    );
+    process.exit(0);
+  }
+  trace('guardian-helper-spawn-start');
+  job = spawn(
+    powershell,
+    [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      path.join(__dirname, 'windows-job-owner.ps1'),
+      '-GuardianPid',
+      String(process.pid),
+    ],
+    {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
+  trace('guardian-helper-spawned', `pid=${job.pid}`);
+  let ready = false;
+  let output = '';
+  let diagnostic = '';
+  trace('guardian-setup-deadline', `${WINDOWS_SETUP_MS}ms`);
+  const setupTimer = setTimeout(() => {
+    trace('guardian-setup-timeout');
+    failSetup(new Error('Windows Job Object setup timed out'));
+  }, WINDOWS_SETUP_MS);
+  failSetup = (error) => {
+    if (ready || finished) return;
+    trace('guardian-setup-fail', error.message);
+    finished = true;
+    clearTimeout(setupTimer);
+    write(
+      3,
+      JSON.stringify({
+        spawnError: {
+          code: error.code ?? 'JOB_OBJECT',
+          message: `Windows Job Object setup failed: ${error.message}${diagnostic ? `: ${diagnostic.trim()}` : ''}`,
+        },
+      }),
+    );
+    trace('guardian-report-written', 'setup failure on fd3');
+    job.stdin.destroy();
+    trace('guardian-helper-kill-requested', `accepted=${job.kill()}`);
+    if (process.env.TEA_WINDOWS_JOB_TRACE) setTimeout(() => process.exit(0), 1000);
+    else process.exit(0);
+  };
+  job.stdin.on('error', () => {});
+  job.stdout.setEncoding('utf8');
+  job.stdout.on('data', (chunk) => {
+    trace('guardian-helper-stdout', chunk);
+    output += chunk;
+    if (output.length > 8192) return failSetup(new Error('Windows Job Object helper sent excessive output'));
+    const newline = output.indexOf('\n');
+    if (newline === -1) return;
+    const line = output.slice(0, newline).trim();
+    if (line.startsWith('ERROR ')) return failSetup(new Error(line.slice('ERROR '.length)));
+    if (line !== 'READY') return failSetup(new Error('Windows Job Object helper sent an invalid readiness report'));
+    ready = true;
+    trace('guardian-helper-ready');
+    clearTimeout(setupTimer);
+    if (abandoned) return job.stdin.end();
+    launch();
   });
+  job.stderr.setEncoding('utf8');
+  job.stderr.on('data', (chunk) => {
+    trace('guardian-helper-stderr', chunk);
+    diagnostic += chunk.slice(0, Math.max(0, 4096 - diagnostic.length));
+  });
+  job.once('error', (error) => {
+    trace('guardian-helper-error', error.message);
+    failSetup(error);
+  });
+  job.once('close', (status, signal) => {
+    trace('guardian-helper-close', `status=${status} signal=${signal}`);
+    failSetup(new Error(`Windows Job Object helper closed with status ${status} and signal ${signal} before readiness`));
+  });
+  if (pendingStop !== null) failSetup(new Error(`guardian stopped by ${pendingStop} during Windows Job Object setup`));
 }
 
 /** Calls `callback` after `ms`, past the 2^31-1 ms one timer can hold. */
@@ -180,8 +362,10 @@ function after(ms, callback) {
 function write(fd, text) {
   try {
     fs.writeSync(fd, text);
-  } catch {
+    return null;
+  } catch (error) {
     // Whoever reads it is gone.
+    return error;
   }
 }
 
@@ -305,40 +489,85 @@ function relay(source, fd) {
  * the lifeline closes, and when the agent exits, and reports to the runner.
  */
 function lead([supervisorArgument, timeoutArgument, command, ...args]) {
+  trace('leader-enter', `timeout=${timeoutArgument}`);
   const supervisorPid = Number(supervisorArgument);
-  const lifeline = new net.Socket({ fd: LIFELINE_FD, readable: true, writable: true });
+  const lifeline = new net.Socket({ fd: LIFELINE_FD, readable: true, writable: GROUPS });
   lifeline.on('error', () => {});
+  const supervisorReport = GROUPS ? null : fs.createWriteStream(null, { fd: 5, autoClose: false });
   // Pipes this process owns: a process the agent leaves behind may hold them,
   // and the runner's, which only this process and the supervisor hold, stay out of its reach.
   const agent = spawn(process.execPath, [__filename, GUARDIAN_FLAG, command, ...args], {
     stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
     detached: GROUPS,
   });
-  if (agent.pid !== undefined) write(LIFELINE_FD, `agent ${agent.pid}\n`);
+  trace('leader-guardian-spawned', `pid=${agent.pid}`);
+  if (GROUPS && agent.pid !== undefined) {
+    trace('leader-guardian-pid-write-start', `pid=${agent.pid}`);
+    const error = write(LIFELINE_FD, `agent ${agent.pid}\n`);
+    trace('leader-guardian-pid-write-end', error ? `error=${error.message}` : `pid=${agent.pid}`);
+  }
+  const failWindowsReport = (stage, error) => {
+    trace('leader-report-write-fail', `${stage}: ${error.message}`);
+    agent.stdio[4].end();
+    agent.kill('SIGKILL');
+    supervisorReport.destroy();
+    lifeline.destroy();
+    process.exit(0);
+  };
+  if (supervisorReport !== null) supervisorReport.on('error', (error) => failWindowsReport('stream', error));
+  const sendWindowsReport = (line, stage, done = () => {}, end = false) => {
+    let completed = false;
+    const timer = setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      failWindowsReport(stage, new Error(`the supervisor report pipe did not drain within ${WINDOWS_REPORT_WRITE_MS}ms`));
+    }, WINDOWS_REPORT_WRITE_MS);
+    const complete = (error) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timer);
+      if (error) return failWindowsReport(stage, error);
+      trace('leader-report-write-done', stage);
+      done();
+    };
+    trace('leader-report-write-start', stage);
+    try {
+      if (end) supervisorReport.end(line, complete);
+      else supervisorReport.write(line, complete);
+    } catch (error) {
+      complete(error);
+    }
+  };
+  if (!GROUPS && agent.pid !== undefined) sendWindowsReport(`agent ${agent.pid}\n`, 'guardian-pid');
   let guardianReport = '';
+  let completeAfterGuardianExit = null;
   let agentPid = null;
   let agentPidLine = '';
   agent.stdio[3].setEncoding('utf8');
-  agent.stdio[3].on('data', (chunk) => (guardianReport += chunk));
+  agent.stdio[3].on('data', (chunk) => {
+    trace('leader-guardian-report-data', chunk);
+    guardianReport += chunk;
+    if (completeAfterGuardianExit !== null) completeAfterGuardianExit();
+  });
+  agent.stdio[3].on('end', () => trace('leader-guardian-report-end'));
   agent.stdio[4].on('error', () => {});
   agent.stdio[5].setEncoding('utf8');
-  agent.stdio[5].on('data', (chunk) => {
-    agentPidLine += chunk;
-    if (!agentPidLine.includes('\n')) return;
-    const pid = Number(agentPidLine.split('\n', 1)[0]);
-    if (Number.isSafeInteger(pid) && pid > 0) agentPid = pid;
-  });
+  agent.stdio[5].on('error', (error) => trace('leader-agent-pid-error', error.message));
+  agent.stdio[5].on('end', () => trace('leader-agent-pid-end'));
 
+  trace('leader-relay-setup-start');
   const input = descriptorStream(0, false);
   input.on('error', () => agent.stdin.destroy());
   // An agent that ends or stops reading leaves the rest of its input unread.
   agent.stdin.on('error', () => input.destroy());
   input.pipe(agent.stdin);
   const outputs = [relay(agent.stdout, 1), relay(agent.stderr, 2)];
+  trace('leader-relay-setup-end');
 
   let timedOut = false;
   let supervisorGone = false;
   let settled = false;
+  let wallClockStarted = false;
   let killTimer = null;
   /** The stopping signal that first made this process stop the group, reported beside how the agent ended. */
   let stoppedBy = null;
@@ -374,6 +603,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   };
   const finish = (outcome) => {
     if (settled) return;
+    trace('leader-finish', JSON.stringify(outcome));
     settled = true;
     clearTimeout(killTimer);
     agent.stdio[4].end();
@@ -381,10 +611,14 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     if (GROUPS && agent.pid !== undefined) signalGroup('SIGKILL');
     input.destroy();
     agent.stdin.destroy();
-    // Straight to the runner, so a supervisor suspended with it cannot hold the report back.
-    write(LEADER_REPORT_FD, JSON.stringify(outcome));
-    write(LIFELINE_FD, REPORTED);
+    const drainOutputs = () => {
+      let open = outputs.length;
+      for (const output of outputs) output.close(() => --open === 0 && process.exit(0));
+    };
     if (GROUPS) {
+      // Straight to the runner, so a supervisor suspended with it cannot hold the report back.
+      write(LEADER_REPORT_FD, JSON.stringify(outcome));
+      write(LIFELINE_FD, REPORTED);
       // The supervisor has nothing left to do, and a stopped one would keep
       // the runner waiting. It is killed only while it is still this
       // process's parent, so a reused pid is never hit.
@@ -393,16 +627,48 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       } catch {
         // The supervisor is already gone.
       }
+      drainOutputs();
+    } else {
+      // Flush the acknowledgement before the FD4 report, so a closing leader
+      // cannot make the supervisor write a second JSON report.
+      sendWindowsReport(
+        REPORTED,
+        'reported',
+        () => {
+          write(LEADER_REPORT_FD, JSON.stringify(outcome));
+          drainOutputs();
+        },
+        true,
+      );
     }
-    let open = outputs.length;
-    for (const output of outputs) output.close(() => --open === 0 && process.exit(0));
   };
+
+  // The agent's wall clock starts after the guardian confirms its real PID.
+  agent.stdio[5].on('data', (chunk) => {
+    trace('leader-agent-pid-data', chunk);
+    agentPidLine += chunk;
+    if (settled || wallClockStarted || !agentPidLine.includes('\n')) return;
+    const pid = Number(agentPidLine.split('\n', 1)[0]);
+    if (!Number.isSafeInteger(pid) || pid <= 0) return;
+    agentPid = pid;
+    wallClockStarted = true;
+    if (GROUPS) return;
+    trace('leader-agent-ready', `pid=${pid} timeout=${timeoutArgument}`);
+    sendWindowsReport('ready\n', 'agent-ready', () => trace('leader-supervisor-ready-written', `pid=${pid}`));
+    after(Number(timeoutArgument), () => {
+      if (settled) return;
+      trace('leader-wallclock-timeout', `agentPid=${agentPid}`);
+      timedOut = true;
+      stop('SIGTERM');
+    });
+  });
 
   // A stopping signal sent to this process alone stops the agent's group, as a forwarded one does.
   for (const name of STOPPING) process.on(name, () => stop(name, { requested: true }));
 
   agent.once('error', (error) => finish({ spawnError: { code: error.code ?? null, message: error.message } }));
   agent.once('exit', (status, signal) => {
+    trace('leader-guardian-exit', `status=${status} signal=${signal} report=${guardianReport}`);
     const complete = () => {
       if (settled) return;
       if (timedOut) return finish({ timedOut: true });
@@ -419,15 +685,33 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       }
       return finish(stoppedBy === null ? outcome : { ...outcome, stoppedBy });
     };
-    if (agent.stdio[3].readableEnded) complete();
-    else agent.stdio[3].once('end', complete);
+    if (GROUPS) {
+      if (agent.stdio[3].readableEnded) complete();
+      else agent.stdio[3].once('end', complete);
+      return;
+    }
+    completeAfterGuardianExit = () => {
+      if (agent.stdio[3].readableEnded) return complete();
+      try {
+        JSON.parse(guardianReport);
+        return complete();
+      } catch {
+        // Wait briefly for a report already in the pipe.
+      }
+    };
+    completeAfterGuardianExit();
+    if (!settled) {
+      agent.stdio[3].once('end', complete);
+      setTimeout(complete, 1000);
+    }
   });
 
-  after(Number(timeoutArgument), () => {
-    if (settled) return;
-    timedOut = true;
-    stop('SIGTERM');
-  });
+  if (GROUPS)
+    after(Number(timeoutArgument), () => {
+      if (settled) return;
+      timedOut = true;
+      stop('SIGTERM');
+    });
 
   let pending = '';
   lifeline.on('data', (chunk) => {
@@ -453,18 +737,26 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
  * reports to the runner itself.
  */
 function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
+  trace('supervisor-enter', `runner=${runnerPidArgument} timeout=${timeoutArgument}`);
   const runnerPid = Number(runnerPidArgument);
   const timeout = Number(timeoutArgument);
   const leader = spawn(process.execPath, [__filename, LEADER_FLAG, String(process.pid), timeoutArgument, command, ...args], {
-    stdio: ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD],
+    stdio: GROUPS
+      ? ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD]
+      : ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD, 'pipe'],
     detached: GROUPS,
   });
+  trace('supervisor-leader-spawned', `pid=${leader.pid}`);
   const lifeline = leader.stdio[LIFELINE_FD];
   lifeline.on('error', () => {});
+  const messages = GROUPS ? lifeline : leader.stdio[5];
+  messages.on('error', () => {});
   let heard = '';
-  lifeline.setEncoding('utf8');
-  lifeline.on('data', (chunk) => (heard += chunk));
+  messages.setEncoding('utf8');
   let overdue = false;
+  let overduePhase = null;
+  let ready = false;
+  let pending = '';
 
   // The group a leader that ended or hung without a report leaves behind.
   const killAgentGroup = () => {
@@ -476,6 +768,7 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     }
   };
   const fail = (failure) => {
+    trace('supervisor-fail', failure);
     write(RUNNER_REPORT_FD, JSON.stringify({ failure }));
     process.exit(0);
   };
@@ -484,16 +777,25 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     if (!heard.includes(REPORTED)) killAgentGroup();
   });
   leader.once('close', (status, signal) => {
+    trace('supervisor-leader-close', `status=${status} signal=${signal} overdue=${overdue}`);
     if (heard.includes(REPORTED)) return process.exit(0);
-    if (overdue) return fail(`the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`);
+    if (overdue) {
+      const failure =
+        overduePhase === 'setup'
+          ? `the agent's group leader gave no report ${WINDOWS_STARTUP_SLACK_MS}ms past the Windows Job Object setup bound`
+          : `the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`;
+      return fail(failure);
+    }
     const ending = signal ? `was killed by signal ${signal}` : `exited with code ${status}`;
     return fail(`the agent's group leader ${ending} without reporting how the agent ended`);
   });
 
-  // A leader that has not ended well past the wall clock cannot stop the
-  // agent's group, so both are killed.
-  after(timeout + BACKSTOP_MS, () => {
+  // Setup and agent execution have separate bounds. The wall clock begins
+  // only after the leader sees the guardian's real agent PID.
+  const backstop = (phase) => {
+    if (overdue || heard.includes(REPORTED)) return;
     overdue = true;
+    overduePhase = phase;
     try {
       if (GROUPS) process.kill(-leader.pid, 'SIGKILL');
       else leader.kill('SIGKILL');
@@ -501,7 +803,25 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
       // The leader is already gone.
     }
     killAgentGroup();
+  };
+  messages.on('data', (chunk) => {
+    trace('supervisor-report-data', chunk);
+    heard += chunk;
+    pending += chunk;
+    const lines = pending.split('\n');
+    pending = lines.pop();
+    for (const line of lines) {
+      if (line !== 'ready' || ready) continue;
+      ready = true;
+      trace('supervisor-agent-ready', `timeout=${timeout}`);
+      after(timeout + BACKSTOP_MS, () => backstop('agent'));
+    }
   });
+  if (GROUPS) after(timeout + BACKSTOP_MS, () => backstop('agent'));
+  else
+    after(WINDOWS_SETUP_MS + WINDOWS_STARTUP_SLACK_MS, () => {
+      if (!ready) backstop('setup');
+    });
 
   for (const name of STOPPING) process.on(name, () => lifeline.write(`${name}\n`));
 

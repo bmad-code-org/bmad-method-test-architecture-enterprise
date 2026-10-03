@@ -53,6 +53,36 @@ name: Quality & Validation
   workflow_dispatch:
 
 jobs:
+  windows-agent-supervision:
+    runs-on: windows-latest
+    # Both probes and the matrix can use about 29 minutes at their individual setup and cleanup bounds.
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Probe Windows guardian and Job Object helper startup
+        run: node test/test-windows-job-owner-probe.js
+
+      - name: Probe complete Windows runner report path
+        run: node test/test-windows-runner-probe.js
+
+      - name: Prove Windows agent descendants end with their guardian
+        env:
+          TEA_EVALUATE_WINDOWS_ONLY: "1"
+        run: npm run test:evaluate-preflight
+
   prettier:
     runs-on: ubuntu-latest
     steps:
