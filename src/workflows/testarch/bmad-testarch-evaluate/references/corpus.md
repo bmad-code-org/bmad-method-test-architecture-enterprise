@@ -23,6 +23,69 @@ The clean negative and malformed controls expect a valid refusal. Each held-out 
 The command examples below assume one JSON object on stdout; eval-quality parses JSON-shaped stdout before following a `/stdout/...` pointer. The HTTP example returns JSON with a JSON content type. Match these shapes to the inspected target before copying a signature.
 The gameability response blocks use one illustrative `decide` step. After Story 1.13 writes the interaction plan, make each `corpus/gameability/<probeId>.json` answer every actual plan step with the same step ID and interface kind.
 
+## Isolate held-out steps from the development plan
+
+A held-out probe that needs a request of its own must not put that request in `contract.json`, because a development run launches the whole plan and records every step's request and response, and the gap loop edits that same file. Declare a `partitionPlan` in `evaluation.json` instead, and keep the held-out request in a sealed plan file beside the corpus. Every step stays one of three kinds: shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) and held-out (only in the plan file). Add no `partition` field to a step. The authoring loop reads neither the plan file nor a held-out baseline under `baseline/`.
+
+<!-- example:partition-plan -->
+
+```json
+{
+  "partitionPlan": {
+    "developmentOnlySteps": ["development-run"],
+    "heldOutPlan": "corpus/held-out/plan.json"
+  }
+}
+```
+
+The plan file lives directly under `corpus/held-out/`, so `corpus-index.json` digests it, and holds the held-out steps, their oracles and the oracles each behavior gains in the held-out view. A step or oracle ID must differ from every ID in `contract.json`. Every behavior keeps at least one oracle in the held-out view, because the engine compiles each behavior against the oracles it names: a behavior whose only oracle reads a development-only step needs an entry under `behaviorOracles`, and a behavior a held-out probe discharges names exactly one oracle there.
+
+<!-- example:held-out-plan -->
+
+```json
+{
+  "schemaVersion": 1,
+  "interactionPlan": [
+    {
+      "stepId": "held-out-run",
+      "interfaceId": "verdict",
+      "operationId": "judge-request",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": { "prompt": { "literal": "Judge the private held-out case." } }
+      }
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-101",
+      "polarity": "expects-hold",
+      "commentary": "The held-out run says verdict: accepted.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The stdout of the held-out call.",
+        "negativeDomain": "A run whose stdout does not say verdict: accepted.",
+        "evidenceTargets": ["/interactions/held-out-run/stdout"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [{ "pointer": "/interactions/held-out-run/stdout" }, { "literal": "verdict: accepted" }]
+      }
+    }
+  ],
+  "behaviorOracles": { "B-002": ["O-101"] }
+}
+```
+
+The two files together make three views. A development run executes `contract.json` as it stands and never opens the plan file; a held-out run executes the shared steps and the held-out ones, without the development-only steps and the oracles that read them; a run with no `--partition` executes everything. Each view is the only contract its run compiles, seals and records, so no run directory, trial record or replay file of one partition holds a request, step ID or oracle meant for the other. Qualify held-out probes with `tea-evaluate preflight --partition held-out`. Probe files are not sealed, so a held-out probe selects with an `any` matcher and witnesses with a non-private input, as [source fixture: P-003.probe.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/partition-plan/evals/verdict/probes/P-003.probe.json) does. The `[held-out]` P-006 examples below keep the private literal, which a folder with no `partitionPlan` allows; under one, replace it that way.
+
+`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, beside a gameability probe, or with a rubric or waiver that reads a development-only step. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
+
 ## Agent
 
 An agent that triages a support request. The worked interface is `cli`.

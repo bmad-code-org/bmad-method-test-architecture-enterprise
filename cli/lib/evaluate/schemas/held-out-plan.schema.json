@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:held-out-plan",
+  "title": "corpus/held-out/<plan>.json",
+  "description": "The held-out partition's own interaction plan steps and oracles (Story 1.51, AD-9, AD-22), which evaluation.json's partitionPlan.heldOutPlan names. The held-out and both views append interactionPlan and oracles to contract.json's and add behaviorOracles to each named behavior; a development run never opens this file. Each step and oracle has the shape eval-quality's contract gives it, and the engine's compile over the held-out view is what judges them; tea-evaluate check validates each against the contract schema in the view and names a path or an ID, never a value. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "interactionPlan", "oracles", "behaviorOracles"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The held-out plan format version.",
+      "const": 1
+    },
+    "interactionPlan": {
+      "description": "Steps only the held-out partition runs, appended after the shared steps. A step's stepId must differ from every stepId of contract.json, and its after clause may name a shared or a held-out step only.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "stepId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" } }
+      }
+    },
+    "oracles": {
+      "description": "Oracles over the held-out steps (or shared ones). Each leaves no trace in the development partition. An oracle's ID must differ from every oracle ID of contract.json.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "id": { "type": "string", "pattern": "^O-[0-9]{3,}$" } }
+      }
+    },
+    "behaviorOracles": {
+      "description": "The oracle IDs each behavior gains in the held-out view, keyed by behaviorId. Every behavior keeps at least one oracle there, because the engine compiles each behavior against the oracles it names; a behavior whose only oracle reads a development-only step needs an entry here.",
+      "type": "object",
+      "propertyNames": { "pattern": "^B-[0-9]{3,}$" },
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "type": "string", "pattern": "^O-[0-9]{3,}$" }
+      }
+    }
+  }
+}

@@ -81,6 +81,7 @@ const { runEngineStage } = require('./engine-cli');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
 const { PLAN_PATH, TIERS, classify, mostSevere, readPlan } = require('./ci-plan');
+const { PartitionPlanError, loadContractView } = require('./partition');
 const { calibrationShortfalls } = require('./calibration');
 const { ensureRunsDirectory, newInvocationId, readJson, runPreflightCommand } = require('./preflight');
 const { createArtifactValidator } = require('./records');
@@ -773,7 +774,30 @@ function staleBaseline(context, baseline) {
     }
     const staging = stagingDirectory(context, 'tea-evaluate-engine-');
     const compiled = path.join(staging, 'eval-contract.json');
-    const stage = runEngineStage('compile', ['--in', path.join(context.folder, CONTRACT_NAME), '--out', compiled], {
+    // The baseline's compiled contract is the one its partition ran (Story 1.51), which under a partition plan is the
+    // folder's contract.json for the development partition and a derived view for the others.
+    let contractFile = path.join(context.folder, CONTRACT_NAME);
+    let viewProblem = null;
+    let evaluation = null;
+    try {
+      evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+    } catch {
+      // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is compiled as before.
+    }
+    if (evaluation?.partitionPlan !== undefined && baseline.manifest.partition !== 'development') {
+      try {
+        const view = loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition });
+        const staged = path.join(staging, CONTRACT_NAME);
+        fs.writeFileSync(staged, view.bytes);
+        // The compile reads the staged view only once it is written.
+        contractFile = staged;
+      } catch (error) {
+        // Every failure to derive the view is a reason, so a baseline is never passed without its digest comparison.
+        viewProblem = error instanceof PartitionPlanError ? error.message : `an unexpected ${error?.name ?? 'error'} while deriving it`;
+      }
+    }
+    if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);
+    const stage = runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
       runDirectory: context.writer.root,
       recordPath: 'baseline-staleness/engine.json',
       writer: context.writer,

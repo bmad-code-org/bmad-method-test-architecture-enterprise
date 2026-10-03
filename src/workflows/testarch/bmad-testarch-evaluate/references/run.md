@@ -23,6 +23,8 @@ npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation
 npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>
 ```
 
+Under a `partitionPlan`, give the `preflight` command `--partition development`. A preflight with no `--partition` builds the both view and launches the held-out request while the gap loop is still open; run `--partition held-out` only after the development review.
+
 Inside TeA, run `node cli/evaluate.js` from the repository root for every `tea-evaluate` subcommand, retaining its arguments. Run compile and seal through `./node_modules/.bin/eval-quality` from that same root. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder>` and `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json` use the repository's one local eval-quality installation. The Stage 6 sequence uses this same branch before the first preflight.
 
 ## Run confined
@@ -50,4 +52,4 @@ Read the run-wide aggregate the development `score` invocation copied to `runs/<
 
 ## Run held-out after development review
 
-After the adopter confirms held-out readiness from the development evidence and recorded gaps, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition held-out`, then score that invocation ID with the command form above. In TeA's own package, use `node cli/evaluate.js` from the repository root. Read held-out outcomes through `gap-view.json` only. Keep held-out probe content closed during the authoring loop; use its ID, class and outcome to identify the class needing new development evidence.
+After the adopter confirms held-out readiness from the development evidence and recorded gaps, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition held-out`, then score that invocation ID with the command form above. In TeA's own package, use `node cli/evaluate.js` from the repository root. Read held-out outcomes through `gap-view.json` only. Keep held-out probe content closed during the authoring loop; use its ID, class and outcome to identify the class needing new development evidence. When `evaluation.json` declares a `partitionPlan`, the held-out run launches only the shared steps and the held-out plan's steps, and `preflight --partition held-out` qualifies the held-out probes over that same view; keep `corpus/held-out/` closed too, and never copy a held-out request into a development file.
