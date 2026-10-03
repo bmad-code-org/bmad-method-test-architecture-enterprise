@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.85, 1.90 to 1.115 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.85, 1.90 to 1.115. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.85, 1.90 to 1.116 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.85, 1.90 to 1.116. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1200,6 +1200,17 @@ Added 2026-10-01 in Story 1.44's final review. Levels: integration over real eva
 | A changed digest under one version is a changed dependency    | Patch one file inside the fixture package, then edit its lockfile entry, between runs; assert a different digest each time; change it before a launch and after a trial; assert exit 12 and no sealed record        | Integration                        | P0  | Comparing versions alone at either recheck lets the patched package judge                   |
 | The shipped probe reports both sources                        | Run `installed-version.mjs` over the fixture package for `lockfile` and `tree`; patch one file and assert the `tree` digest differs with the version fixed                                                          | Integration                        | P1  | A probe that reports the version alone fails the patched-file case                          |
 | The guide teaches when to declare it                          | Assert the evaluator guide's framework-version section names both sources, when to declare `installState` and when the version suffices, by exact section                                                           | Guidance                           | P2  | Removing either teaching or a source fails the assertion                                    |
+
+### Story 1.116: Hold each exit's class against its AD-10 row in the dogfood contract
+
+Added 2026-10-03 from CodeRabbit's review of Story 1.46. Levels: offline replay over real eval-quality, static, and a live rerun.
+
+| AC                                        | Test                                                                                                                                                   | Level                              | P   | Revert check                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ------------------------------------------------------------------ |
+| A swapped class fails the oracle          | Replay a reply whose records swap the classes of `tea-evaluate 11` and `tea-evaluate 12`; assert the new check fails and the committed contract passes | Integration over real eval-quality | P0  | Removing the check lets the swapped reply pass O-003               |
+| Seeded probes stay scoped                 | Qualify M-001 and M-002 against the new contract; assert `seeded-faults-scoped` and `seeded-fault-fired` satisfied for P-002 and P-003                 | Integration over real eval-quality | P0  | A check that moves with M-001 fails `seeded-faults-scoped`         |
+| The table and the contract agree on class | Swap one class in the table of `references/gaps.md` with no contract edit; assert the replay fails                                                     | Integration over real eval-quality | P1  | Testing the class vocabulary alone passes the swapped table        |
+| The live rerun passes                     | Run Stage 6 preflight, development and held-out live; assert nine `PASS` artifacts, clean controls `passed-clean-control`, seeded probes `caught`      | Live                               | P0  | Any artifact that records `CONCERNS` or an uncaught probe fails it |
 
 ### Story 1.76: Require an explicit custom-agent version response
 

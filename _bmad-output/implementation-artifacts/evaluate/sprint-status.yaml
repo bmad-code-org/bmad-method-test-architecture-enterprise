@@ -143,6 +143,7 @@ development_status:
   1-113-run-a-subscription-authenticated-agent-target-confined: backlog
   1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
   1-115-give-the-skill-a-command-that-prints-a-files-digest: backlog
+  1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract: backlog
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: review
@@ -238,6 +239,7 @@ parallel_lanes:
     - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
     - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
     - 1-115-give-the-skill-a-command-that-prints-a-files-digest
+    - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
@@ -264,4 +266,5 @@ owner_handoff:
       - 1-113-run-a-subscription-authenticated-agent-target-confined
       - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
       - 1-115-give-the-skill-a-command-that-prints-a-files-digest
+      - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

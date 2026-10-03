@@ -124,6 +124,8 @@ Round 2 (coordinator's Opus review of head `b733df61`; every finding verified ag
 | A2: `requirements.md` false about dirty runs and the confirmation          | Valid     | Reworded; B-003 and B-004 await the owner at H.1; digests restamped (`sha256:79298cd4…`), `check`, `compile` and `seal` pass, and the proof notes that the live evidence predates the restamp. `corpusDigest` is unchanged.                             |
 | A4: `inspection.md` calls its table AD-4's while AD-4's row differs        | Valid     | A dated amendment in `ARCHITECTURE-SPINE.md` AD-4.                                                                                                                                                                                                      |
 
+CodeRabbit finding (PR #319, `contract.json` O-003): a complete reply that swaps the classes of `tea-evaluate 11` and `tea-evaluate 12` passes O-003. Valid. A reference set holds one key, so the fix needs a new check shape, and any change to `contract.json` supersedes the recorded clean live PASS (contract digest `1592b16f…`). Story 1.116 owns it, with the swapped-class replay case and its own live recapture.
+
 ## Design Notes
 
 The coverage rules read the contract alone, so a deterministic reader of the guides is enough to hold every repair in CI, and the live run measures what the reader cannot: the model's reading of the guides. The reader takes the first statement of a rule it finds and does not follow `SKILL.md` to a stage, so stage routing and a contradicting second statement belong to the live run and to the guidance test.
