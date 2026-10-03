@@ -1632,6 +1632,118 @@ async function checkAgentVersionUpgrade() {
   }
 }
 
+/** The `pr` tier of the committed verdict CI plan, its commands naming this project's evaluation folder. */
+function writePrCiPlan(folder) {
+  const plan = readJson(path.join(FIXTURE, 'evals', 'verdict-ci', 'ci', 'evaluation-ci-plan.json'));
+  const fixtureFolder = 'test/fixtures/evaluate/mutation/evals/verdict-ci';
+  plan.checks = plan.checks
+    .filter((entry) => entry.placement.tier === 'pr')
+    .map((entry) => ({
+      ...entry,
+      command: entry.command.map((word) => (word === fixtureFolder ? EVALUATION.split(path.sep).join('/') : word)),
+    }));
+  check(
+    JSON.stringify(plan.checks.map((entry) => entry.id)) ===
+      JSON.stringify(['check', 'compile', 'seal', 'gameability', 'oracle-agreement', 'replay']),
+    `the verdict plan's pr tier holds ${JSON.stringify(plan.checks.map((entry) => entry.id))}`,
+  );
+  check(
+    plan.checks.every((entry) => entry.command.includes(EVALUATION.split(path.sep).join('/')) || entry.command[0] !== 'tea-evaluate'),
+    'a pr entry of the plan still names the fixture folder',
+  );
+  fs.mkdirSync(path.join(folder, 'ci'), { recursive: true });
+  writeJson(path.join(folder, 'ci', 'evaluation-ci-plan.json'), plan);
+  return plan.checks.map((entry) => entry.id);
+}
+
+/** Story 1.78: `tea-evaluate ci` at the `pr` tier replays a sealed-brief baseline on a runner that lacks the agent CLI. */
+async function checkSealedBriefCiReplayStartsNoVersionProbe() {
+  const capture = path.join(scratch.make('sealed-ci-capture'), 'calls.jsonl');
+  const versionFile = path.join(scratch.make('sealed-ci-version-file'), 'version.txt');
+  const agentScript = path.join(scratch.make('sealed-ci-executable'), 'stub-evaluator-agent.js');
+  fs.copyFileSync(STUB_AGENT, agentScript);
+  fs.writeFileSync(versionFile, '1.0.0\n');
+  let prIds = [];
+  const project = makeProject('sealed-brief-ci-replay', {
+    edit: ({ folder }) => {
+      useSealedBriefAgent(folder, { capture, versionFile, agentScript });
+      prIds = writePrCiPlan(folder);
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `sealed-brief run exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  check(runDirectory !== null, 'the sealed-brief run left no run directory');
+  if (ran.status !== 0 || runDirectory === null) return;
+  const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(runDirectory)], project.env);
+  check(scored.status === 0, `sealed-brief run did not score: ${scored.output}`);
+  const accepted = evaluate(['compare', '--accept', '--evaluation', project.folder, '--run', path.basename(runDirectory)], project.env);
+  check(accepted.status === 0, `sealed-brief baseline was not accepted: ${accepted.output}`);
+  if (scored.status !== 0 || accepted.status !== 0) return;
+  baselines.commitAll(project.repository, 'accept the sealed-brief baseline');
+  // The runner lacks the agent CLI: the command becomes a tripwire that records any invocation, a version read included.
+  const tripwire = path.join(path.dirname(agentScript), 'invoked.log');
+  fs.writeFileSync(
+    agentScript,
+    `require('node:fs').appendFileSync(${JSON.stringify(tripwire)}, process.argv.slice(2).join(' ') + '\\n'); process.stderr.write('the removed agent CLI was invoked: ' + process.argv.slice(2).join(' ') + '\\n'); process.exit(1);\n`,
+  );
+  // The wire is live: one direct call is recorded, then cleared, so an empty log below means no call and not a dead wire.
+  const probed = spawnSync(process.execPath, [agentScript, '--version'], { encoding: 'utf8' });
+  check(probed.status === 1 && fs.readFileSync(tripwire, 'utf8') === '--version\n', 'the agent tripwire did not record a direct call');
+  fs.rmSync(tripwire, { force: true });
+  const copies = [];
+  try {
+    const copiedFolder = baselines.copyOf(project, copies);
+    const replayed = evaluate(['ci', '--evaluation', copiedFolder, '--tier', 'pr'], project.env);
+    check(replayed.status === 0, `the pr tier over a sealed-brief baseline exited ${replayed.status}: ${replayed.output}`);
+    const runs = path.join(copiedFolder, 'runs');
+    const invocation = fs
+      .readdirSync(runs)
+      .filter((name) => fs.existsSync(path.join(runs, name, 'ci.json')))
+      .sort()
+      .at(-1);
+    check(invocation !== undefined, 'the pr tier wrote no ci.json');
+    if (invocation !== undefined) {
+      const ci = readJson(path.join(runs, invocation, 'ci.json'));
+      check(
+        JSON.stringify(ci.checks.map((row) => row.id)) === JSON.stringify(prIds),
+        `the pr tier ran ${JSON.stringify(ci.checks.map((row) => row.id))}; the plan names ${JSON.stringify(prIds)}`,
+      );
+      const replay = ci.checks.find((row) => row.id === 'replay');
+      check(replay?.exit === 0 && replay.class === 'pass', `the replay row was ${JSON.stringify(replay)}`);
+      // The replay carries eval-quality's CONCERNS as warnings, as the ci suite's fixture does; every other row passes plain.
+      for (const row of ci.checks)
+        check(
+          row.exit === 0 && row.action === (row.id === 'replay' ? 'warn' : 'pass'),
+          `the ${row.id} row was exit ${row.exit}, action ${row.action} over a sealed-brief baseline`,
+        );
+      check(
+        (replay?.warnings ?? []).every((line) => /CONCERNS/.test(line)),
+        `the replay warned beyond CONCERNS: ${JSON.stringify(replay?.warnings)}`,
+      );
+      const baselineScores = path.join(
+        copiedFolder,
+        'baseline',
+        'scores',
+        readJson(path.join(copiedFolder, 'baseline', 'baseline.json')).scoreInvocationId,
+      );
+      const replayScores = path.join(runs, invocation, 'replay', 'scores');
+      // The evidence the replay writes: each probe's evidence artifact and the strength aggregate and floors.
+      const compared = ['P-001/evidence-artifact.json', 'P-002/evidence-artifact.json', 'strength-aggregate.json', 'strength-floors.json'];
+      for (const relative of compared) {
+        const replayed = path.join(replayScores, relative);
+        check(
+          fs.existsSync(replayed) && fs.readFileSync(replayed).equals(fs.readFileSync(path.join(baselineScores, relative))),
+          `the replay did not reproduce ${relative} byte for byte`,
+        );
+      }
+    }
+    check(!fs.existsSync(tripwire), `the pr tier invoked the removed agent CLI, a version read included: ${tripwire}`);
+  } finally {
+    for (const copy of copies) fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
 async function checkAgentVersionFaults() {
   const refusedShapes = ['plain-dependency', 'dependency-only', 'bad-json', 'multi-line', 'invalid-version', 'stderr-only'];
   for (const mode of ['missing', 'fail', 'malformed', 'hang', ...refusedShapes]) {
@@ -7257,6 +7369,11 @@ const CASES = [
   { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
   { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators' },
   { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators' },
+  {
+    name: 'a sealed-brief baseline replays through ci without an agent version probe',
+    body: checkSealedBriefCiReplayStartsNoVersionProbe,
+    group: 'evaluators',
+  },
   { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults, group: 'evaluators' },
   {
     name: 'an agent version probe receives only declared environment keys and refuses a delimiter',
@@ -7348,6 +7465,10 @@ async function main() {
       for (const { name, body } of [
         { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary },
         { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade },
+        {
+          name: 'a sealed-brief baseline replays through ci without an agent version probe',
+          body: checkSealedBriefCiReplayStartsNoVersionProbe,
+        },
         { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults },
         {
           name: 'an agent version probe receives only declared environment keys and refuses a delimiter',

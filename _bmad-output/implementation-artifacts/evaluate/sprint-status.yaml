@@ -139,9 +139,10 @@ development_status:
   1-109-partition-gameability-degenerate-responses: backlog
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
-  1-76-require-an-explicit-custom-agent-version-response: review
-  1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: review
-  1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: backlog
+  1-76-require-an-explicit-custom-agent-version-response: done
+  1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
+  1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: review
+  1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -182,6 +183,7 @@ parallel_lanes:
     - 1-107-partition-evaluator-mappings-in-a-partition-plan
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
+    - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -239,6 +241,7 @@ owner_handoff:
       - 1-76-require-an-explicit-custom-agent-version-response
       - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
       - 1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe
+      - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
       - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
       - 1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it
       - 1-104-count-only-behavior-linked-oracles-for-success-separation
