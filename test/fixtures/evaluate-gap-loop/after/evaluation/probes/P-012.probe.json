@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-003",
   "expectedClean": false,
-  "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match test.",
+  "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match assertion and reports a disabled test as also lacking an assertion.",
   "defects": [
     {
       "defectId": "D-012",
@@ -55,6 +55,48 @@
           ]
         }
       }
+    },
+    {
+      "defectId": "D-015",
+      "behaviorId": "B-002",
+      "summary": "A universal assertion matcher reports a disabled test as also lacking an assertion.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-012-disabled",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "deep-equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-p-012-disabled/stdout"
+            },
+            {
+              "literal": {
+                "file": "cases/disabled-test.test.js",
+                "status": "findings",
+                "findings": [
+                  "missing-assertion",
+                  "disabled-test"
+                ]
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "defectSignature": {
@@ -75,20 +117,75 @@
               "literal": "review"
             },
             "file": {
-              "literal": "cases/clean-assert-match.test.js"
+              "matcher": "any"
             }
           },
           "arguments": null
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "any",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/status"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/clean-assert-match.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              }
+            ]
           },
           {
-            "literal": "findings"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/disabled-test.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/disabled-test.test.js",
+                      "status": "findings",
+                      "findings": [
+                        "missing-assertion",
+                        "disabled-test"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

@@ -1,0 +1,1225 @@
+{
+  "schemaVersion": 7,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "test-review-json-stdin-v1",
+  "sourceSpecDigest": "sha256:de391b0a728e38c617617b5512b0f4dfb96f8f4e14d289fc8d5b22d2cfad58eb",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Tests without a recognized active assertion receive missing-assertion.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The missing and dangling assertion fixtures return exactly missing-assertion with status findings.",
+      "requirementLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "test-review-b-001"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "missed-finding"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "Disabled tests receive disabled-test.",
+      "severity": "material",
+      "observableSuccessCriterion": "Both test.skip and it.skip return exactly disabled-test with status findings.",
+      "requirementLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "test-review-b-002"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "missed-disabled-test"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    },
+    {
+      "id": "B-003",
+      "description": "Active tests with recognized assertions remain clean.",
+      "severity": "material",
+      "observableSuccessCriterion": "strictEqual, match, and toBe examples return empty findings with status clean.",
+      "requirementLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "test-review-b-003"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "false-positive"
+        }
+      ],
+      "oracles": [
+        "O-003"
+      ]
+    },
+    {
+      "id": "B-004",
+      "description": "Malformed requests and unreadable files return a structured error with exit zero.",
+      "severity": "material",
+      "observableSuccessCriterion": "Each invalid stdin case returns its specified error JSON and exit zero.",
+      "requirementLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "test-review-b-004"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "confirmed-intake",
+          "id": "invalid-input-acceptance"
+        }
+      ],
+      "oracles": [
+        "O-004"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "An assertion-free test and a dangling expect receive exactly missing-assertion.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Parsed JSON stdout and exit code for missing, dangling, unrecognized.",
+        "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
+        "evidenceTargets": [
+          "/interactions/missing/exit-code",
+          "/interactions/missing/stdout/file",
+          "/interactions/missing/stdout/status",
+          "/interactions/missing/stdout/findings",
+          "/interactions/dangling/exit-code",
+          "/interactions/dangling/stdout/file",
+          "/interactions/dangling/stdout/status",
+          "/interactions/dangling/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing/stdout/file"
+                  },
+                  {
+                    "literal": "cases/missing-assertion.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing/stdout/findings"
+                  },
+                  {
+                    "literal": [
+                      "missing-assertion"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/dangling/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/dangling/stdout/file"
+                  },
+                  {
+                    "literal": "cases/dangling-expect.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/dangling/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/dangling/stdout/findings"
+                  },
+                  {
+                    "literal": [
+                      "missing-assertion"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "Both disabled-test forms receive exactly the disabled-test finding.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Parsed JSON stdout and exit code for disabled, itSkip.",
+        "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
+        "evidenceTargets": [
+          "/interactions/disabled/exit-code",
+          "/interactions/disabled/stdout/file",
+          "/interactions/disabled/stdout/status",
+          "/interactions/disabled/stdout/findings",
+          "/interactions/it-skip/exit-code",
+          "/interactions/it-skip/stdout/file",
+          "/interactions/it-skip/stdout/status",
+          "/interactions/it-skip/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/disabled/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/disabled/stdout/file"
+                  },
+                  {
+                    "literal": "cases/disabled-test.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/disabled/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/disabled/stdout/findings"
+                  },
+                  {
+                    "literal": [
+                      "disabled-test"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/it-skip/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/it-skip/stdout/file"
+                  },
+                  {
+                    "literal": "cases/it-skip.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/it-skip/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/it-skip/stdout/findings"
+                  },
+                  {
+                    "literal": [
+                      "disabled-test"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "Each recognized active assertion form is clean with no findings.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Parsed JSON stdout and exit code for strict, match, toBe.",
+        "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
+        "evidenceTargets": [
+          "/interactions/strict/exit-code",
+          "/interactions/strict/stdout",
+          "/interactions/match/exit-code",
+          "/interactions/match/stdout",
+          "/interactions/to-be/exit-code",
+          "/interactions/to-be/stdout"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/strict/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/strict/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/clean-strict-equal.test.js",
+                      "status": "clean",
+                      "findings": []
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/match/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/match/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/clean-assert-match.test.js",
+                      "status": "clean",
+                      "findings": []
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/to-be/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/to-be/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/expect-to-be.test.js",
+                      "status": "clean",
+                      "findings": []
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "Absent input, invalid JSON, malformed request shapes, and an unreadable file return the documented errors.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Parsed JSON stdout and exit code for empty, invalidJson, wrongFileType, extra, missingAction, wrongAction, missingFile, unreadable.",
+        "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
+        "evidenceTargets": [
+          "/interactions/empty/exit-code",
+          "/interactions/empty/stdout/error",
+          "/interactions/invalid-json/exit-code",
+          "/interactions/invalid-json/stdout/error",
+          "/interactions/wrong-file-type/exit-code",
+          "/interactions/wrong-file-type/stdout/error",
+          "/interactions/extra/exit-code",
+          "/interactions/extra/stdout/error",
+          "/interactions/missing-action/exit-code",
+          "/interactions/missing-action/stdout/error",
+          "/interactions/wrong-action/exit-code",
+          "/interactions/wrong-action/stdout/error",
+          "/interactions/missing-file/exit-code",
+          "/interactions/missing-file/stdout/error",
+          "/interactions/unreadable/exit-code",
+          "/interactions/unreadable/stdout/error",
+          "/interactions/typed-file/exit-code",
+          "/interactions/typed-file/stdout/error"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/empty/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/empty/stdout/error"
+                  },
+                  {
+                    "literal": "invalid JSON"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/invalid-json/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/invalid-json/stdout/error"
+                  },
+                  {
+                    "literal": "invalid JSON"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/wrong-file-type/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/wrong-file-type/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/extra/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/extra/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing-action/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing-action/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/wrong-action/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/wrong-action/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing-file/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/missing-file/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/unreadable/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/unreadable/stdout/error"
+                  },
+                  {
+                    "literal": "cannot read test file"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/typed-file/exit-code"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/typed-file/stdout/error"
+                  },
+                  {
+                    "literal": "provide a JSON object with action review and a file string"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "review-cli",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "review",
+          "invocation": {
+            "executable": "review",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [],
+              "permittedKeys": [
+                "action",
+                "file",
+                "raw",
+                "extra"
+              ],
+              "types": {
+                "action": "string",
+                "file": "string",
+                "raw": "string",
+                "extra": "boolean"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [
+              "file",
+              "status",
+              "findings",
+              "error"
+            ],
+            "types": {
+              "file": "string",
+              "status": "string",
+              "findings": "array",
+              "error": "string"
+            },
+            "successIndicator": "/status",
+            "channelRoles": {
+              "/status": "success-indicator",
+              "/findings": "payload",
+              "/error": "payload"
+            },
+            "collectionLocations": []
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "finding-changes-with-test-source",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-missing",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "json",
+                    "value": {
+                      "action": "review",
+                      "file": "cases/missing-assertion.test.js"
+                    }
+                  }
+                }
+              },
+              {
+                "legId": "witness-clean",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "json",
+                    "value": {
+                      "action": "review",
+                      "file": "cases/expect-to-be.test.js"
+                    }
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-missing/stdout/status"
+                    },
+                    {
+                      "literal": "findings"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-clean/stdout/status"
+                    },
+                    {
+                      "literal": "clean"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "missing",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/missing-assertion.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "disabled",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/disabled-test.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "it-skip",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/it-skip.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "strict",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/clean-strict-equal.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "match",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/clean-assert-match.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "to-be",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/expect-to-be.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "dangling",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/dangling-expect.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "empty",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": ""
+          }
+        }
+      }
+    },
+    {
+      "stepId": "invalid-json",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "wrong-file-type",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{\"action\":\"review\",\"file\":42}"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "extra",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "missing-action",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{\"file\":\"cases/clean-strict-equal.test.js\"}"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "wrong-action",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{\"action\":\"scan\",\"file\":\"cases/clean-strict-equal.test.js\"}"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "missing-file",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "raw": {
+            "literal": "{\"action\":\"review\"}"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "unreadable",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "literal": "cases/no-such-file.test.js"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "typed-file",
+      "interfaceId": "review-cli",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "action": {
+            "literal": "review"
+          },
+          "file": {
+            "matcher": "type-violating"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Copy target/ to a disposable workspace. Run every request with the command working directory at the copy root so cases/ paths resolve.",
+    "cleanup": "The command creates no files. Discard each workspace copy after its trial.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 16,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "Read only the copied fixture files and rules/review.json.",
+    "No network or model call."
+  ],
+  "requiredEvidence": [
+    "Exit code and parsed JSON stdout for every planned step.",
+    "Mutation manifestation and rollback evidence for every seeded probe."
+  ],
+  "probeStepBound": 16,
+  "fixtureReset": null
+}

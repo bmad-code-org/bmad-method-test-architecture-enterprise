@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-011",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[held-out] Case folding regression allows an uppercase restricted term.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "case normalization reversed in adopter grading code",
+    "mutationOperator": "replace-exact: \"const answer = payload.answer.toLowerCase();\" -> \"const answer = payload.answer.toUpperCase();\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "server/grade.mjs",
+      "privateRef": null,
+      "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+    },
+    "expectedObservableFailure": "uppercase restricted term passes in HTTP response body",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:91cee5300f709dcf146188cadb1337e4d071f23916377630a24299d799dded38"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:d4594b54e84f82cf3f7392528e2fac994dec5baeb525122108f69e1ee535c73d"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-005",
+      "behaviorId": "B-001",
+      "summary": "[held-out] Case folding regression allows an uppercase restricted term.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:d4594b54e84f82cf3f7392528e2fac994dec5baeb525122108f69e1ee535c73d"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-011-manifest-decision-pass",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "An UNSAFE message"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-011-manifest-decision-pass/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": "An UNSAFE message"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-011-manifest-decision-pass/call-inputs/query"
+                },
+                {
+                  "literal": {}
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-011-manifest-decision-pass/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "my private note"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

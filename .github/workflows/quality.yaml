@@ -278,6 +278,32 @@ jobs:
       - name: Run this shard of the npm test chain under coverage
         run: node tools/test-shards.js --shard ${{ matrix.shard }}/12 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
 
+      # TeA's own `pr` tier (Story 2.5): each evaluation's chained script,
+      # test:evaluate-pr-<key>, runs `tea-evaluate ci --tier pr` over its
+      # committed folder and leaves runs/<invocationId>/ there. The shard that
+      # ran the script uploads those directories whatever the result, so a red
+      # run leaves its evidence bundle to audit. A shard that ran none of them
+      # has no directory to upload. test:evaluate-ci parses this step and fails
+      # when it, its `if: always()` or the path of any evaluation is missing.
+      - name: Upload the evidence bundles of this shard's evaluation pr checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluate-runs-${{ matrix.shard }}
+          path: |
+            test/evaluations/bmad-testarch-evaluate/runs
+            test/fixtures/evaluate-api/evals/grader/runs
+            test/fixtures/evaluate-authoring/ai-feature/evaluation/runs
+            test/fixtures/evaluate-authoring/test-review/evaluation/runs
+            test/fixtures/evaluate-gap-loop/after/evaluation/runs
+            test/fixtures/evaluate-learn/evaluation/runs
+            test/fixtures/evaluate-mcp/evals/grader/runs
+            test/fixtures/evaluate-promptfoo/evals/summary/runs
+            test/fixtures/evaluate-tool-use-agent/evals/tool-use/runs
+            test/fixtures/evaluate-workflow/evals/records/runs
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload this shard's raw coverage
         if: always()
         uses: actions/upload-artifact@v4

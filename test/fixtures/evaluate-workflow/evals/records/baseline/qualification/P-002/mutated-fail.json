@@ -1,0 +1,107 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "phase": "mutated-fail",
+  "workspace": "qualify-P-002",
+  "targetArtifact": "bin/records.js",
+  "targetArtifactDigest": "sha256:2b0a79edfc66324bb619e89dea8bcd9e4e7e8ecf1fdd8c721b2a307276dd4f82",
+  "verdict": "violated",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-read-back",
+        "mutated-create"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "create",
+      "request": {
+        "probeId": "mutated-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "create"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Ship the workflow"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "id": "rec-a9e39b70-79f5-4b0b-b99c-0ce75b65604e",
+            "title": "Ship the workflow",
+            "path": "store/rec-86eee063-6d45-4565-a5a3-54938aaec723.json"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "read-back",
+      "request": {
+        "probeId": "mutated-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "read"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {
+            "id": "rec-a9e39b70-79f5-4b0b-b99c-0ce75b65604e"
+          },
+          "environment": [],
+          "stdin": {
+            "kind": "absent"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "found": false,
+            "id": "rec-a9e39b70-79f5-4b0b-b99c-0ce75b65604e"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

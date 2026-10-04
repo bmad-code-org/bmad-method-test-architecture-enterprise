@@ -1,0 +1,115 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "targetArtifact": "bin/records.js",
+  "preDigest": "sha256:1883c3ae27382d537a7de114d2f600997a4218bfaf761cf3d7ca05136a77d026",
+  "mutatedDigest": "sha256:2b0a79edfc66324bb619e89dea8bcd9e4e7e8ecf1fdd8c721b2a307276dd4f82",
+  "restoredDigest": "sha256:1883c3ae27382d537a7de114d2f600997a4218bfaf761cf3d7ca05136a77d026",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-001",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-read-back",
+            "re-pass-1-create"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "create",
+          "request": {
+            "probeId": "re-pass-1-create",
+            "interfaceId": "records",
+            "operationId": "create",
+            "kind": "cli",
+            "executable": "records",
+            "subcommandPath": [
+              "create"
+            ],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "Ship the workflow"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-create",
+            "interfaceId": "records",
+            "operationId": "create",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "id": "rec-8278ef4d-9dec-481a-8293-2edeca555298",
+                "title": "Ship the workflow",
+                "path": "store/rec-8278ef4d-9dec-481a-8293-2edeca555298.json"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "read-back",
+          "request": {
+            "probeId": "re-pass-1-read-back",
+            "interfaceId": "records",
+            "operationId": "read-back",
+            "kind": "cli",
+            "executable": "records",
+            "subcommandPath": [
+              "read"
+            ],
+            "channels": {
+              "argument": {},
+              "option": {
+                "id": "rec-8278ef4d-9dec-481a-8293-2edeca555298"
+              },
+              "environment": [],
+              "stdin": {
+                "kind": "absent"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-read-back",
+            "interfaceId": "records",
+            "operationId": "read-back",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "found": true,
+                "id": "rec-8278ef4d-9dec-481a-8293-2edeca555298",
+                "title": "Ship the workflow"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

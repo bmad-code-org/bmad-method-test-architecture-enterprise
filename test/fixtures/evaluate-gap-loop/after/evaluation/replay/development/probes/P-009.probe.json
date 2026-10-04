@@ -15,13 +15,13 @@
     "degenerateResponse": "Flag every valid assertion as missing.",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20261002T210702390Z-217ccccc/qualification/P-009/naive-oracle-satisfied.json",
+      "path": "runs/20261004T192244468Z-be9e03a4/qualification/P-009/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:c22a73dc9f30edb421aa00ca369507c96e0632bd81355f4bd56b236cc60f0579"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20261002T210702390Z-217ccccc/qualification/P-009/disciplined-oracle-rejected.json",
+      "path": "runs/20261004T192244468Z-be9e03a4/qualification/P-009/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:dd62724e5616ff20f7945ab11af2d5028410576366b45c0301d583a782577374"
     }

@@ -1,0 +1,482 @@
+[
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "pantry-summary",
+    "implementationDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "artifactDigest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a",
+    "commitDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "rationale": "[development] Removing pears from the adopter-owned rules JSON makes the complete pantry summary wrong.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Remove pears from the adopter-owned required items rule for B-001.",
+      "mutationOperator": "replace-exact: \"\\\"required\\\": [\\\"apples\\\", \\\"pears\\\"]\" -> \"\\\"required\\\": [\\\"apples\\\"]\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "target/rules/items.json",
+        "privateRef": null,
+        "digest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a"
+      },
+      "expectedObservableFailure": "stdout is Summary for List pantry: apples followed by a newline; the exact summary oracle fails.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:726bcd2da32ad4536615e1e1648d445888dad095bb2052ab0ab449e6e463b162"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:45044f005f4b3376d7882fdd8f4ca370015e14f357672efc4fa067fc34f14094"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-001",
+        "summary": "The required pears item is omitted from stdout.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:45044f005f4b3376d7882fdd8f4ca370015e14f357672efc4fa067fc34f14094"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-missing-pears",
+          "interfaceId": "pantry-cli",
+          "operationId": "summarize",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "List pantry\n"
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-missing-pears/stdout"
+              },
+              {
+                "literal": "Summary for List pantry: apples\n"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "literal": "List pantry\n"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout"
+            },
+            {
+              "literal": "Summary for List pantry: apples\n"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "node",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-003",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "pantry-summary",
+    "implementationDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "artifactDigest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a",
+    "commitDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "rationale": "[held-out] The same controlled rule loss must be detected in a separate qualified partition.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Remove pears from the adopter-owned required items rule for B-001.",
+      "mutationOperator": "replace-exact: \"\\\"required\\\": [\\\"apples\\\", \\\"pears\\\"]\" -> \"\\\"required\\\": [\\\"apples\\\"]\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "target/rules/items.json",
+        "privateRef": null,
+        "digest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a"
+      },
+      "expectedObservableFailure": "stdout is Summary for List pantry: apples followed by a newline; the exact summary oracle fails.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-003/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:2aa052d1521ef98dab9349ee0a80374e03b35b26dbaa8757b108d03c2c4245c2"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-003/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:c5729405221d4bf335ca126575d3dddfabcbf1e016f12a540af0f98fe40a4620"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-003",
+        "behaviorId": "B-001",
+        "summary": "The required pears item is omitted from stdout.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-003/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:c5729405221d4bf335ca126575d3dddfabcbf1e016f12a540af0f98fe40a4620"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-held-out-missing-pears",
+          "interfaceId": "pantry-cli",
+          "operationId": "summarize",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "List pantry\n"
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-held-out-missing-pears/stdout"
+              },
+              {
+                "literal": "Summary for List pantry: apples\n"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "literal": "List pantry\n"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout"
+            },
+            {
+              "literal": "Summary for List pantry: apples\n"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "node",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-005",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "pantry-summary",
+    "implementationDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "artifactDigest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121",
+    "commitDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "rationale": "[development] Bypassing the malformed-request guard accepts a type-violating request.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Bypass the adopter-owned malformed-request guard for B-002.",
+      "mutationOperator": "replace-exact: \"if (!/^List [a-z]+$/.test(request)) {\" -> \"if (false) {\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "target/summarizer.js",
+        "privateRef": null,
+        "digest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121"
+      },
+      "expectedObservableFailure": "The type-violating request prints a pantry summary to stdout and exits 0 without the refusal diagnostic.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-005/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:6d1b0ca7b2f4d9e8ce0fa611a8ea00130f8e4fb07f5410297e7ee3d8d0aa7744"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-005/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:39187e923cfeab3fe5617b9f90359d7dc2116eb72e9e5002e1504acd75abafd5"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-005",
+        "behaviorId": "B-002",
+        "summary": "A malformed request produces a summary without a refusal.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-005/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:39187e923cfeab3fe5617b9f90359d7dc2116eb72e9e5002e1504acd75abafd5"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-accepted-malformed",
+          "interfaceId": "pantry-cli",
+          "operationId": "summarize",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "prompt": 42
+              }
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-accepted-malformed/stdout"
+              },
+              {
+                "literal": "Summary for {\"prompt\":42}: apples, pears\n"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "matcher": "type-violating"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout"
+            },
+            {
+              "literal": "Summary for {\"prompt\":42}: apples, pears\n"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "node",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-006",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "pantry-summary",
+    "implementationDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "artifactDigest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121",
+    "commitDigest": "sha256:5f7bc516ede2d314f38a5cc311701532f59ae8a6937bb0fae27dab7ecda113f2",
+    "rationale": "[held-out] The separate guard-bypass probe must catch the same refusal defect.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Bypass the adopter-owned malformed-request guard for B-002.",
+      "mutationOperator": "replace-exact: \"if (!/^List [a-z]+$/.test(request)) {\" -> \"if (false) {\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "target/summarizer.js",
+        "privateRef": null,
+        "digest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121"
+      },
+      "expectedObservableFailure": "The type-violating request prints a pantry summary to stdout and exits 0 without the refusal diagnostic.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-006/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:85a74709f0d5d15b604ca49612e492e6f4cbc5f85eab2d30f4e27dddc52311ba"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-006/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:998e001de5ea685d021473f81e5a7eb65bb0e2964b77e00f7d429e96a9b0e1d3"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-006",
+        "behaviorId": "B-002",
+        "summary": "A malformed request produces a summary without a refusal.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-006/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:998e001de5ea685d021473f81e5a7eb65bb0e2964b77e00f7d429e96a9b0e1d3"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-held-out-accepted-malformed",
+          "interfaceId": "pantry-cli",
+          "operationId": "summarize",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "prompt": 42
+              }
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-held-out-accepted-malformed/stdout"
+              },
+              {
+                "literal": "Summary for {\"prompt\":42}: apples, pears\n"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "matcher": "type-violating"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout"
+            },
+            {
+              "literal": "Summary for {\"prompt\":42}: apples, pears\n"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "node",
+        "subcommandPath": []
+      }
+    }
+  }
+]

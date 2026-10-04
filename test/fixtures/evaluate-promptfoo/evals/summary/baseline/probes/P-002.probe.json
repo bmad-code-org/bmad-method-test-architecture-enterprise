@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "systemId": "promptfoo-summary",
+  "implementationDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+  "artifactDigest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a",
+  "commitDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+  "rationale": "Seeded defect: the item rules omit required item pears.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "rules/items.json: omit required item pears",
+    "mutationOperator": "replace-exact: \"\\\"required\\\": [\\\"apples\\\", \\\"pears\\\"]\" -> \"\\\"required\\\": [\\\"apples\\\"]\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "rules/items.json",
+      "privateRef": null,
+      "digest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a"
+    },
+    "expectedObservableFailure": "The summary stdout omits pears.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191353878Z-cbee24f1/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:ca52b12e3b8f753d2629c9813e2d563764202887090e27442be0a2be74a4f2e4"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191353878Z-cbee24f1/qualification/P-002/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:191b2404719d780f466de44fbedb0a50f0f73c4faac04b0fcded27b053099466"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-002",
+      "summary": "The summarizer omits required item pears.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261004T191353878Z-cbee24f1/qualification/P-002/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:191b2404719d780f466de44fbedb0a50f0f73c4faac04b0fcded27b053099466"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-omitted-pears",
+        "interfaceId": "summarizer",
+        "operationId": "summarize",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry"
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-omitted-pears/stdout"
+            },
+            {
+              "literal": "Summary for List pantry: apples\n"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "summarizer",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "matcher": "any"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "Summary for List pantry: apples\n"
+          }
+        ]
+      }
+    }
+  }
+}

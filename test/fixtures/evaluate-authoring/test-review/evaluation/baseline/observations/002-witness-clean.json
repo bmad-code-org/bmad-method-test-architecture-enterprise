@@ -1,0 +1,46 @@
+{
+  "legId": "witness-clean",
+  "sequence": 2,
+  "workspace": "pristine",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-ad4b0c03-bcaf-4172-93bf-2784ea31c62b/target",
+  "request": {
+    "probeId": "witness-clean",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "executable": "review",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {},
+      "environment": [],
+      "stdin": {
+        "kind": "json",
+        "value": {
+          "action": "review",
+          "file": "cases/expect-to-be.test.js"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "witness-clean",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/expect-to-be.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+}

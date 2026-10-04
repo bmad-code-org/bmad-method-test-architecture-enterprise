@@ -1,0 +1,1749 @@
+[
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-005",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[negative] Removing private from policy causes a restricted answer to pass.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "restricted term removed from adopter policy",
+      "mutationOperator": "replace-exact: \"[\\\"unsafe\\\", \\\"private\\\"]\" -> \"[\\\"unsafe\\\"]\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "rules/policy.json",
+        "privateRef": null,
+        "digest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e"
+      },
+      "expectedObservableFailure": "private answer passes in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-005/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:21f71f2f068046356b520138bb9cdf107e196a0566a01299df9b4627ec4b3c79"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-005/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:cdd1b4d63d3b67113e6816d1cb21ea093094aaaa46b92f9e6a93334cb9624fb4"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-001",
+        "summary": "[negative] Removing private from policy causes a restricted answer to pass.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-005/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:cdd1b4d63d3b67113e6816d1cb21ea093094aaaa46b92f9e6a93334cb9624fb4"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-005-manifest-decision-pass",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "my private note"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-005-manifest-decision-pass/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "my private note"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-005-manifest-decision-pass/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-005-manifest-decision-pass/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "literal": "my private note"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "pass"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-006",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[negative] Raising the minimum rejects an otherwise valid answer.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "minimum raised in adopter policy",
+      "mutationOperator": "replace-exact: \"\\\"minimumLength\\\": 8\" -> \"\\\"minimumLength\\\": 80\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "rules/policy.json",
+        "privateRef": null,
+        "digest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e"
+      },
+      "expectedObservableFailure": "valid answer receives too-short in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-006/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:50763df12df62ca81a12b3b215a5751c0c2067872bfabb1060e5dc9d47e40420"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-006/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:880be20602916b8adc65c3c1d9c9c31e3e925827043900c30f90b5058b919092"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-002",
+        "behaviorId": "B-002",
+        "summary": "[negative] Raising the minimum rejects an otherwise valid answer.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-006/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:880be20602916b8adc65c3c1d9c9c31e3e925827043900c30f90b5058b919092"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-006-manifest-decision-reject",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "abcdefgh"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-decision-reject/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefgh"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-decision-reject/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-decision-reject/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-decision-reject/response-body/reason"
+                  },
+                  {
+                    "literal": "too-short"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "defectId": "D-009",
+        "behaviorId": "B-004",
+        "summary": "[negative] Raising the minimum also doubles the strict threshold past a valid strict answer.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-006/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:880be20602916b8adc65c3c1d9c9c31e3e925827043900c30f90b5058b919092"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-006-manifest-strict-decision-reject",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {
+              "strict": "1"
+            },
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "abcdefghijklmnop"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-strict-decision-reject/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefghijklmnop"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-strict-decision-reject/call-inputs/query"
+                  },
+                  {
+                    "literal": {
+                      "strict": "1"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-strict-decision-reject/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-006-manifest-strict-decision-reject/response-body/reason"
+                  },
+                  {
+                    "literal": "too-short"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "matcher": "any"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "any",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/body"
+                    },
+                    {
+                      "literal": {
+                        "answer": "abcdefgh"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "absence",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/query/strict"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/decision"
+                    },
+                    {
+                      "literal": "reject"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/reason"
+                    },
+                    {
+                      "literal": "too-short"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/body"
+                    },
+                    {
+                      "literal": {
+                        "answer": "abcdefghijklmnop"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/query"
+                    },
+                    {
+                      "literal": {
+                        "strict": "1"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/decision"
+                    },
+                    {
+                      "literal": "reject"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/reason"
+                    },
+                    {
+                      "literal": "too-short"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-007",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[malformed] Malformed answer receives success status despite error body.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "malformed type error gets success status",
+      "mutationOperator": "replace-exact: \"response.writeHead(400).end(JSON.stringify({ error: 'answer must be a string' }));\" -> \"response.writeHead(200).end(JSON.stringify({ decision: 'reject', reason: 'invalid-type' }));\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:c123a641ac9c63c80e78fa1561baa0d07356859daa2d4c166619d306d78b1ca7"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:a3ef603411675ff12288f4b9a66541d4e6e52b6abe34309e491a2eca3abc414a"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-003",
+        "behaviorId": "B-003",
+        "summary": "[malformed] Malformed answer receives success status despite error body.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:a3ef603411675ff12288f4b9a66541d4e6e52b6abe34309e491a2eca3abc414a"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-007-manifest-decision-reject",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": 42
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": 42
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-007-manifest-decision-reject/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "literal": 42
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "reject"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-008",
+    "probeClass": "defect",
+    "behaviorId": "B-004",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[negative] Strict threshold regression passes an answer one character short.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "strict minimum reduced to normal minimum",
+      "mutationOperator": "replace-exact: \"policy.minimumLength * 2\" -> \"policy.minimumLength\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-008/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:98f65c2e209a8df6a6bc9838d1a2296fba5e2f9d807d6ce28cf2ae9080cb66af"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-008/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:96066eb72c6a37a98d03655d9a226d78bca824ae1c360e40369043bbfb88b48b"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-004",
+        "behaviorId": "B-004",
+        "summary": "[negative] Strict threshold regression passes an answer one character short.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-008/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:96066eb72c6a37a98d03655d9a226d78bca824ae1c360e40369043bbfb88b48b"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-008-manifest-decision-pass",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {
+              "strict": "1"
+            },
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "abcdefghijklmno"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-008-manifest-decision-pass/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefghijklmno"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-008-manifest-decision-pass/call-inputs/query"
+                  },
+                  {
+                    "literal": {
+                      "strict": "1"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-008-manifest-decision-pass/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": {
+              "strict": {
+                "literal": "1"
+              }
+            },
+            "header": null,
+            "body": {
+              "answer": {
+                "literal": "abcdefghijklmno"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "pass"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-010",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "restricted term removed from adopter policy",
+      "mutationOperator": "replace-exact: \"[\\\"unsafe\\\", \\\"private\\\"]\" -> \"[\\\"unsafe\\\"]\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "rules/policy.json",
+        "privateRef": null,
+        "digest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e"
+      },
+      "expectedObservableFailure": "private answer passes in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-010/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:f268802730068da12158c50b38e5dc722f35ceb97454efed491e47769d9eeeb9"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-010/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:6df767beeaa7a5598830e95c20fd39318be138e642993914e6529e26318ea1ce"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-008",
+        "behaviorId": "B-001",
+        "summary": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-010/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:6df767beeaa7a5598830e95c20fd39318be138e642993914e6529e26318ea1ce"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-010-manifest-decision-pass",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "another private answer"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-010-manifest-decision-pass/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "another private answer"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-010-manifest-decision-pass/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-010-manifest-decision-pass/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "literal": "my private note"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "pass"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-011",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[held-out] Case folding regression allows an uppercase restricted term.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "case normalization reversed in adopter grading code",
+      "mutationOperator": "replace-exact: \"const answer = payload.answer.toLowerCase();\" -> \"const answer = payload.answer.toUpperCase();\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "uppercase restricted term passes in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:91cee5300f709dcf146188cadb1337e4d071f23916377630a24299d799dded38"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:d4594b54e84f82cf3f7392528e2fac994dec5baeb525122108f69e1ee535c73d"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-005",
+        "behaviorId": "B-001",
+        "summary": "[held-out] Case folding regression allows an uppercase restricted term.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-011/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:d4594b54e84f82cf3f7392528e2fac994dec5baeb525122108f69e1ee535c73d"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-011-manifest-decision-pass",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "An UNSAFE message"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-011-manifest-decision-pass/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "An UNSAFE message"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-011-manifest-decision-pass/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-011-manifest-decision-pass/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "literal": "my private note"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "pass"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-012",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[held-out] A valid strict answer is rejected by a distinct decision regression.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "accepted grade relabelled as rejection",
+      "mutationOperator": "replace-exact: \"? 'reject' : 'pass';\" -> \"? 'reject' : 'reject';\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "valid answer is rejected in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-012/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:06cfbe629f845cc87eeb5c53c382abb42a2a7c14fd9eda000dbcf353933f4ca9"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-012/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:fa37eb35bc9083a12733f07fa48878ed01eaa7263010a1e7a660ba715376150f"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-006",
+        "behaviorId": "B-002",
+        "summary": "[held-out] A valid answer at the normal minimum is rejected by a distinct decision regression.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-012/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:fa37eb35bc9083a12733f07fa48878ed01eaa7263010a1e7a660ba715376150f"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-012-manifest-decision-reject",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "abcdefgh"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-decision-reject/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefgh"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-decision-reject/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-decision-reject/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-decision-reject/response-body/reason"
+                  },
+                  {
+                    "literal": "accepted"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "defectId": "D-010",
+        "behaviorId": "B-004",
+        "summary": "[held-out] The same regression rejects the answer exactly at the strict threshold.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-012/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:fa37eb35bc9083a12733f07fa48878ed01eaa7263010a1e7a660ba715376150f"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-012-manifest-strict-decision-reject",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {
+              "strict": "1"
+            },
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": "abcdefghijklmnop"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-strict-decision-reject/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefghijklmnop"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-strict-decision-reject/call-inputs/query"
+                  },
+                  {
+                    "literal": {
+                      "strict": "1"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-strict-decision-reject/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-012-manifest-strict-decision-reject/response-body/reason"
+                  },
+                  {
+                    "literal": "accepted"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "matcher": "any"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "any",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/body"
+                    },
+                    {
+                      "literal": {
+                        "answer": "abcdefgh"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "absence",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/query/strict"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/decision"
+                    },
+                    {
+                      "literal": "reject"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/reason"
+                    },
+                    {
+                      "literal": "accepted"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/body"
+                    },
+                    {
+                      "literal": {
+                        "answer": "abcdefghijklmnop"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/query"
+                    },
+                    {
+                      "literal": {
+                        "strict": "1"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/decision"
+                    },
+                    {
+                      "literal": "reject"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/response-body/reason"
+                    },
+                    {
+                      "literal": "accepted"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-013",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[held-out] A malformed array is spuriously accepted.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "malformed array response becomes accepted grade",
+      "mutationOperator": "replace-exact: \"response.writeHead(400).end(JSON.stringify({ error: 'answer must be a string' }));\" -> \"response.writeHead(200).end(JSON.stringify({ decision: 'pass', reason: 'accepted' }));\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "non-string answer gets pass/accepted in HTTP response body",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-013/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:d722f48691713962b7cc26e733b3c5f0863805144df794019868f2d72eccc946"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-013/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:88ec0430909ed7d0d31b843c446357d90c1c23338ede88df467e7878e5881205"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-007",
+        "behaviorId": "B-003",
+        "summary": "[held-out] A malformed array is spuriously accepted.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-013/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:88ec0430909ed7d0d31b843c446357d90c1c23338ede88df467e7878e5881205"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-013-manifest-decision-pass",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "json",
+              "value": {
+                "answer": [
+                  "valid",
+                  "words"
+                ]
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-013-manifest-decision-pass/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": [
+                        "valid",
+                        "words"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-013-manifest-decision-pass/call-inputs/query"
+                  },
+                  {
+                    "literal": {}
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-013-manifest-decision-pass/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "answer": {
+                "matcher": "type-violating"
+              }
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/response-body/decision"
+            },
+            {
+              "literal": "pass"
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  },
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-014",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "answer-grade",
+    "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+    "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "rationale": "[malformed] A malformed raw request is spuriously accepted.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "invalid JSON parser rejection becomes accepted grade",
+      "mutationOperator": "replace-exact: \"response.writeHead(400).end(JSON.stringify({ error: 'invalid JSON' }));\" -> \"response.writeHead(200).end(JSON.stringify({ decision: 'pass', reason: 'accepted' }));\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "server/grade.mjs",
+        "privateRef": null,
+        "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+      },
+      "expectedObservableFailure": "malformed JSON receives HTTP 200 and a passing grade",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-014/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:9e53cc4db5816afaace04deed3e6eb7ae2e6dd90a10af63016b2422bbe4e764c"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-014/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:8c54ea7759ee64eb8c9025882309096d9dcdff85bfdbcf35a7da1b84ba99d513"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-008",
+        "behaviorId": "B-003",
+        "summary": "Malformed JSON is accepted by the parser and graded as a pass.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-014/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:8c54ea7759ee64eb8c9025882309096d9dcdff85bfdbcf35a7da1b84ba99d513"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "p-014-manifest-raw-invalid-json",
+          "interfaceId": "answer-grade",
+          "operationId": "grade-answer",
+          "inputs": {
+            "path": {},
+            "query": {},
+            "header": {},
+            "body": {
+              "kind": "raw",
+              "base64": "eyJhbnN3ZXIiOg==",
+              "contentType": "application/json"
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-014-manifest-raw-invalid-json/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "kind": "raw",
+                      "base64": "eyJhbnN3ZXIiOg==",
+                      "contentType": "application/json"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-status"
+                  },
+                  {
+                    "literal": 200
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-body/decision"
+                  },
+                  {
+                    "literal": "pass"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "api",
+      "observableChannel": "response-body",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": {
+              "kind": "raw",
+              "base64": "eyJhbnN3ZXIiOg==",
+              "contentType": "application/json"
+            },
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/response-status"
+                },
+                {
+                  "literal": 200
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "method": "POST",
+      "pathTemplate": "/grade"
+    }
+  }
+]

@@ -1,0 +1,64 @@
+{
+  "conditionArm": "mutated:M-001",
+  "trialIndex": 3,
+  "workspace": "trial-mutated-M-001-3",
+  "steps": [
+    {
+      "stepId": "call-tool",
+      "request": {
+        "probeId": "trial-3-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "executable": "calling-agent",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Weather in Austin"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-3-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"search_web\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ],
+  "elapsedMs": 748,
+  "evaluator": {
+    "kind": "command",
+    "answer": {
+      "rows": [
+        {
+          "key": "trajectory_strict_match",
+          "outcome": "fail",
+          "observationIds": [
+            "trial-3-call-tool"
+          ],
+          "quote": "\"name\":\"search_web\"",
+          "quoteChannel": "stdout",
+          "confidence": 1,
+          "comment": "AgentEvals strict trajectory match failed: tool search_web."
+        }
+      ]
+    },
+    "streams": "evaluator/mutated-M-001/trial-3",
+    "calls": null
+  }
+}

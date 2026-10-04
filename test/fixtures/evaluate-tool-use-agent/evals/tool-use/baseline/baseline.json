@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "acceptedRun": "20261004T191335891Z-0ce3e7fd",
+  "scoreInvocationId": "20261004T191343779Z-a84c452d",
+  "partition": "both",
+  "evalQualityVersion": "7.1.0",
+  "corpusDigest": "sha256:d0d38e8a1fba8a0972c46aba87757b1afe8ddb359b219558b1c9afe714f0ad1f",
+  "contractDigest": "sha256:d258c646e76d2ec43c089ee2580c42e52e087bab4993fa27d107869a6ec86733",
+  "policyDigest": "sha256:77f68c78cf8349054f95e5fc3f198ba47e8adac649d16a690c15fb437222d0b3",
+  "files": {
+    "contract.json": "sha256:650119cfe5004877b70795119af8e50d1b4478b33fac9399a37c232e2dd20242",
+    "eval-contract.json": "sha256:c2a719f69a3fd8c304f306af3beb9c23b3cca90285f7f532ccde3453f0a04df2",
+    "evaluator-configuration.json": "sha256:f86833ae34b6dd8e5e527eb3f653d7a15124471331f2dcfdf431f456e7438086",
+    "observations.json": "sha256:0946e9af26b55719c0e6e6dd640a5a9acdee39466a6eeea75104a59b0f8d2f22",
+    "observations/001-request-alpha.json": "sha256:6567dd5500f17fc29ef4b996ab5244be7184ecdf6cff211c20a21972167181e2",
+    "observations/002-request-beta.json": "sha256:e996b6d6b4c1127fe8e0a5780c2001604f458739712ed53f8fc96b12e12fe6f6",
+    "observations/003-preflight-control-observe.json": "sha256:421bcac3319869cd6c6743ce57c0f0ca450b3813d4c60f0ebfd135caa9554fc4",
+    "observations/004-preflight-control-observe-2.json": "sha256:205edc0a7cbe1e82d3e5dca8597593629b621c5c11b054fa7f85d6e29aaae446",
+    "observations/005-manifest-wrong-tool.json": "sha256:a9563338ff8204ba4fdbfb32a2100798145b4bdf8d93d96d6c8928b41ed0b856",
+    "operation-phases.json": "sha256:e1a6785f322854caf07f423ef7c764069ed03ddcc230d4b7e2f5ef078eba8cac",
+    "preflight-verdict.json": "sha256:5920deb4fa4b259978e147cc6d1391262d68b18d2782f365e8ab850679d1daf0",
+    "probes.json": "sha256:a4e06e2baec32237154f9d734ff253ec065a496ff8a053165dd04c899a9ae485",
+    "probes/P-001.probe.json": "sha256:02b21a3b400b770e248715631aa3fd6405c69b3008de66c2cbbdf99b7a2905d4",
+    "probes/P-002.probe.json": "sha256:5cda5885105faa867445163e5eb5aff3ef988ecd29329cba52d049e7a34c7693",
+    "qualification/P-001/baseline-pass.json": "sha256:fb8c3acc84bd8d42b59ac0f89cbaf312acef944a61e9aea33220f6bd0ca3fba4",
+    "qualification/P-002/baseline-pass.json": "sha256:fbd08d1fbff02d3cda4a70f85f234ea3c635a7bb5661e66a3fa88c4b6bbb008a",
+    "qualification/P-002/mutated-fail.json": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b",
+    "qualification/P-002/rollback.json": "sha256:89f6c867190c459c30d8fbbf1db9d93a4b62d7b2f826bf513c261b0225c5868a",
+    "run.json": "sha256:b7d92d37fed1d88018bce68c508f5b046e9959d5bcebe2e2f34b3fbe927022f6",
+    "scores/20261004T191343779Z-a84c452d/P-001/evidence-artifact.json": "sha256:a4f72b55c33536b928bd03ed4e2ec655c78de3c9c251f94f0dd0eab769cf9320",
+    "scores/20261004T191343779Z-a84c452d/P-001/score.json": "sha256:fa12daec93b270a1cf4f2317f124d08fa7c1d0bdfe9bf04bb22c203111f03e49",
+    "scores/20261004T191343779Z-a84c452d/P-002/evidence-artifact.json": "sha256:37fe2d5d21ed21c5570d398f00a921c9680944bbbb89f4e6c63ad0ea120087fe",
+    "scores/20261004T191343779Z-a84c452d/P-002/score.json": "sha256:05e6b2c44712ad30df2dde723d317f0f47d2af012927af20ada42db25a97f9ac",
+    "scores/20261004T191343779Z-a84c452d/aggregate-strength.json": "sha256:88d627aebe77dbf8603d8d06d6c99d5a2ea3b76ee3b4fc370b9ef7ea17419bf1",
+    "scores/20261004T191343779Z-a84c452d/score.json": "sha256:b5909c98e08c517b959fd9f80149e16dd6ae62d5a49630737e1e8e84862cf23a",
+    "scores/20261004T191343779Z-a84c452d/strength-aggregate.json": "sha256:c22fb4313872567a181a85652f0ccc25965b5f3f75194bef32a47a90c8d2c369",
+    "scores/20261004T191343779Z-a84c452d/strength-floors.json": "sha256:d73acf92f4a82da6c73c44f8f99504bdf7feeddafca72ada3d503d812b04d728",
+    "scoring-policy.json": "sha256:77f68c78cf8349054f95e5fc3f198ba47e8adac649d16a690c15fb437222d0b3",
+    "sealed-evaluator-brief.json": "sha256:68ae6e9d63a4e26f065b9b180cdc4c36ff7389f2ee3da16c9797cb8c26f885ef",
+    "trial-sets.json": "sha256:ee2455be90f7bce60618e053ef0175f90049346c34c063ad3117eae3375f1349",
+    "trial-sets/P-001/isolation-manifest.json": "sha256:093ee6e40ea4c63e5f7a62d8c6fff6ec064dac7e6ea5a362310027bc9a26b79f",
+    "trial-sets/P-001/record-1.json": "sha256:8087488d0ee3cd849d4241f7063d2819a51a851e2a8f0c7f3d5308ee3eb694ca",
+    "trial-sets/P-001/record-2.json": "sha256:048a5439b9b389210ea17d627346abc1b53430903e7ad18990221e852e8b82c4",
+    "trial-sets/P-001/record-3.json": "sha256:492bfb388f055aafb88e3dfa4c58cdf89df5c880ef509c4144af1df8541a4c60",
+    "trial-sets/P-002/isolation-manifest.json": "sha256:0b44d271b650d31285d20873be9d775a533a9931de426e67e18b0cb14a2f5365",
+    "trial-sets/P-002/record-1.json": "sha256:027069497f188af1ed0042aad8f1ab02372f794cbc2f33f80c5242957d295fd4",
+    "trial-sets/P-002/record-2.json": "sha256:1c373be91229ef68d3f4703176b05cbaa45a5ba284ccb3f4b45d3867ad99f724",
+    "trial-sets/P-002/record-3.json": "sha256:691cbac12c6c4c131f4bd16acc5e06e1180c65d00f90f41f0fa821dfd342c01f",
+    "trials/clean/trial-1.json": "sha256:21943d0c61230db843d683f09e151c64d23ce6eeac76270932b068ab65060d1c",
+    "trials/clean/trial-2.json": "sha256:0efd12ca72386ab704ecb069448485ddbd7fa9812c3062a64e5afb3f18a33e88",
+    "trials/clean/trial-3.json": "sha256:eacc4d15f6ac6a8d0458651a09a4b00445b27a2433deeb6085b7e757d24ae90a",
+    "trials/mutated-M-001/trial-1.json": "sha256:b62af9bf12e06f571f52b8e601abf3ef75f73b8a6a8ee2826746579aa64a5634",
+    "trials/mutated-M-001/trial-2.json": "sha256:ffba9ffe06fb74a94b9618761b70365e09ad19e2a8ce0d82d2b75309ff2c1f8d",
+    "trials/mutated-M-001/trial-3.json": "sha256:9fb924647f0aa8249140f06413fcfb226df4320ad4816885cd21c30ce72d27ad"
+  },
+  "qualification": [
+    {
+      "storage": "public",
+      "path": "baseline/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:fb8c3acc84bd8d42b59ac0f89cbaf312acef944a61e9aea33220f6bd0ca3fba4"
+    },
+    {
+      "storage": "public",
+      "path": "baseline/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:fbd08d1fbff02d3cda4a70f85f234ea3c635a7bb5661e66a3fa88c4b6bbb008a"
+    },
+    {
+      "storage": "public",
+      "path": "baseline/qualification/P-002/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b"
+    },
+    {
+      "storage": "public",
+      "path": "baseline/qualification/P-002/rollback.json",
+      "privateRef": null,
+      "digest": "sha256:89f6c867190c459c30d8fbbf1db9d93a4b62d7b2f826bf513c261b0225c5868a"
+    }
+  ]
+}

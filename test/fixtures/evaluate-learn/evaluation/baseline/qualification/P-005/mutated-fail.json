@@ -1,0 +1,96 @@
+{
+  "probeId": "P-005",
+  "mutationId": "M-002",
+  "phase": "mutated-fail",
+  "workspace": "qualify-P-005",
+  "targetArtifact": "target/summarizer.js",
+  "targetArtifactDigest": "sha256:3eab607af5a4ecf3f44bfb2aab2b39121a2de0d8b6969e48a00bb575a4c4a0d5",
+  "verdict": "violated",
+  "oracles": [
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-reject-malformed"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "mutated-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "request": {
+        "probeId": "mutated-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for {\"prompt\":42}: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

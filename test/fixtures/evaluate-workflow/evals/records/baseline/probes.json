@@ -1,0 +1,141 @@
+[
+  {
+    "schemaVersion": 6,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "records-workflow",
+    "implementationDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+    "artifactDigest": "sha256:1883c3ae27382d537a7de114d2f600997a4218bfaf761cf3d7ca05136a77d026",
+    "commitDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+    "rationale": "Seeded defect: M-001 makes create store the record under another identifier than the one it prints, so the read-back of the printed identifier finds nothing.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "bin/records.js: create stores the record under a second fresh identifier",
+      "mutationOperator": "replace-exact: \"const storedId = id;\" -> \"const storedId = `rec-${crypto.randomUUID()}`;\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "bin/records.js",
+        "privateRef": null,
+        "digest": "sha256:1883c3ae27382d537a7de114d2f600997a4218bfaf761cf3d7ca05136a77d026"
+      },
+      "expectedObservableFailure": "The read-back of the identifier create printed finds no record, so its stdout says found: false.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191316166Z-bc619555/qualification/P-002/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:04ce2c10b0928915ad1bbca250d1fe38ca9cb1b15c674dc09f9fcb874e7a3e2c"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20261004T191316166Z-bc619555/qualification/P-002/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:0cb657a88d57584f2d3c23b9f78198f206ac6f40f3050296ad0570be0fa6c5ec"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-001",
+        "summary": "create stores the record under another identifier than the one it returns, so the record cannot be read back.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T191316166Z-bc619555/qualification/P-002/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:0cb657a88d57584f2d3c23b9f78198f206ac6f40f3050296ad0570be0fa6c5ec"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-shadow",
+          "interfaceId": "records",
+          "operationId": "create",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "Ship the workflow"
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "existence",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-shadow/stdout/id"
+                  }
+                ]
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "containment",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-shadow/stdout/path"
+                      },
+                      {
+                        "pointer": "/interactions/manifest-shadow/stdout/id"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "records",
+        "subcommandPath": [
+          "read"
+        ]
+      },
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "id": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout/found"
+            },
+            {
+              "literal": false
+            }
+          ]
+        }
+      }
+    }
+  }
+]

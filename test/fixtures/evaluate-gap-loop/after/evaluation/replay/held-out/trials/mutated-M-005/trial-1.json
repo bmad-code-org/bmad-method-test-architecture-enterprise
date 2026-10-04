@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-005",
   "trialIndex": 1,
   "workspace": "trial-mutated-M-005-1",
-  "elapsedMs": 1058,
+  "elapsedMs": 1095,
   "oracles": [
     {
       "oracleId": "O-001",

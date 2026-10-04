@@ -1,0 +1,55 @@
+{
+  "probeId": "P-001",
+  "phase": "baseline-pass",
+  "workspace": "qualify-clean",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-summarize"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "baseline-summarize",
+        "interfaceId": "summarizer",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "summarizer",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-summarize",
+        "interfaceId": "summarizer",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

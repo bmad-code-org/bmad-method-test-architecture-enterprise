@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[negative] A restricted term embedded in an answer is rejected.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:3897fe0e7eca0fe56acc4653968e43b6dcbe4b00232108b17872afb19fc64116"
+    },
+    "revisionCommitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "noKnownDefectStatement": "No known defect in the frozen target revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}

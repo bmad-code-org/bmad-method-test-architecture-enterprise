@@ -1,0 +1,110 @@
+{
+  "conditionArm": "mutated:M-002",
+  "trialIndex": 2,
+  "workspace": "trial-mutated-M-002-2",
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "trial-2-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-2-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "request": {
+        "probeId": "trial-2-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-2-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for {\"prompt\":42}: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ],
+  "elapsedMs": 665,
+  "evaluator": {
+    "kind": "command",
+    "answer": {
+      "rows": [
+        {
+          "key": "pantry-exact-summary",
+          "outcome": "pass",
+          "observationIds": [
+            "trial-2-summarize"
+          ],
+          "comment": "Autoevals ExactMatch scored the complete stdout 1 and the CLI exited 0."
+        },
+        {
+          "key": "malformed-request-refusal",
+          "outcome": "fail",
+          "observationIds": [
+            "trial-2-reject-malformed"
+          ],
+          "quote": "0",
+          "quoteChannel": "exit-code",
+          "confidence": 1,
+          "comment": "Autoevals ExactMatch scored the complete stderr 0; CLI exit code 0; stdout \"Summary for {\\\"prompt\\\":42}: apples, pears\\n\"; stderr \"\"."
+        }
+      ]
+    },
+    "streams": "evaluator/mutated-M-002/trial-2",
+    "calls": null
+  }
+}

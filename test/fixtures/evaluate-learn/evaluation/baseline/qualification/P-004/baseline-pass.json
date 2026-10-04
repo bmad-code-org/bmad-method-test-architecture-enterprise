@@ -1,0 +1,93 @@
+{
+  "probeId": "P-004",
+  "phase": "baseline-pass",
+  "workspace": "qualify-clean",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-reject-malformed"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "baseline-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples, pears\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "request": {
+        "probeId": "baseline-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 2,
+        "stdout": {
+          "kind": "text",
+          "value": ""
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "error: invalid list request\n"
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

@@ -10,7 +10,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test.",
+    "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test and reports a disabled test as also lacking an assertion.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-001 rule change",
@@ -24,15 +24,15 @@
       "expectedObservableFailure": "stdout reports the assertion-free test clean because its test call is treated as an assertion",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/baseline-pass.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-010/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:f87fad5bf4802620b2d33b2b5294367ad9b64cc953fe0f67903d7177628d5a47"
+        "digest": "sha256:02c33262f1dc82c350d918ab927e5b3df8b0973ab84debbf4da52c6192f8534f"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/mutated-fail.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-010/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:83530f6e813d8f9b176a260a85b3ffc0cbf653814654b3e75fcb6befb9d26a27"
+        "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
       },
       "rollbackVerified": true
     },
@@ -46,9 +46,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/mutated-fail.json",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-010/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:83530f6e813d8f9b176a260a85b3ffc0cbf653814654b3e75fcb6befb9d26a27"
+            "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
           }
         ],
         "source": "controlled-mutation",
@@ -96,6 +96,56 @@
             ]
           }
         }
+      },
+      {
+        "defectId": "D-014",
+        "behaviorId": "B-002",
+        "summary": "A broadened assertion rule reports a disabled test as also lacking an assertion.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-010/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-010-disabled",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/disabled-test.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "deep-equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-p-010-disabled/stdout"
+              },
+              {
+                "literal": {
+                  "file": "cases/disabled-test.test.js",
+                  "status": "findings",
+                  "findings": [
+                    "missing-assertion",
+                    "disabled-test"
+                  ]
+                }
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -116,20 +166,75 @@
                 "literal": "review"
               },
               "file": {
-                "literal": "cases/missing-assertion.test.js"
+                "matcher": "any"
               }
             },
             "arguments": null
           }
         },
         "predicate": {
-          "op": "equality",
+          "op": "any",
           "operands": [
             {
-              "pointer": "/interactions/observed/stdout/status"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin/file"
+                    },
+                    {
+                      "literal": "cases/missing-assertion.test.js"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/status"
+                    },
+                    {
+                      "literal": "clean"
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "literal": "clean"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin/file"
+                    },
+                    {
+                      "literal": "cases/disabled-test.test.js"
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    },
+                    {
+                      "literal": {
+                        "file": "cases/disabled-test.test.js",
+                        "status": "findings",
+                        "findings": [
+                          "missing-assertion",
+                          "disabled-test"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -165,13 +270,13 @@
       "expectedObservableFailure": "stdout omits disabled-test for test.skip",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-011/baseline-pass.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-011/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:4731a5380b18d612adaa00359e8bd1ac9746b496c08a38a01dfa5e2c9790df13"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-011/mutated-fail.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-011/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:da00f5087e974e45f19cd2da7a259a74ac9b6849e9aa0016df36692c93a42d6c"
       },
@@ -187,7 +292,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-011/mutated-fail.json",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-011/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:da00f5087e974e45f19cd2da7a259a74ac9b6849e9aa0016df36692c93a42d6c"
           }
@@ -292,7 +397,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match test.",
+    "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match assertion and reports a disabled test as also lacking an assertion.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-003 rule change",
@@ -306,15 +411,15 @@
       "expectedObservableFailure": "stdout falsely reports missing-assertion for assert.match",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-012/baseline-pass.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-012/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:a01438ccb5538f363cbbfbe9291c14cfaceaafbb757072aa8c21029fa8ae66c6"
+        "digest": "sha256:b77f26de60a521cf4d3ac35d2c9f6e7e10b004c1207876f05b457c3f614cd5ed"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-012/mutated-fail.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-012/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:b600c4fc890af2c6b46f3cedb81f4b29e81cdb358aa7bf1f5495693016c8572e"
+        "digest": "sha256:40a4f7afad2531b993f22733cff6d8d8c2db524229e31f26bea1ac6bab3831ff"
       },
       "rollbackVerified": true
     },
@@ -328,9 +433,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-012/mutated-fail.json",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-012/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:b600c4fc890af2c6b46f3cedb81f4b29e81cdb358aa7bf1f5495693016c8572e"
+            "digest": "sha256:40a4f7afad2531b993f22733cff6d8d8c2db524229e31f26bea1ac6bab3831ff"
           }
         ],
         "source": "controlled-mutation",
@@ -378,6 +483,56 @@
             ]
           }
         }
+      },
+      {
+        "defectId": "D-015",
+        "behaviorId": "B-002",
+        "summary": "A universal assertion matcher reports a disabled test as also lacking an assertion.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-012/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:40a4f7afad2531b993f22733cff6d8d8c2db524229e31f26bea1ac6bab3831ff"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-012-disabled",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/disabled-test.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "deep-equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-p-012-disabled/stdout"
+              },
+              {
+                "literal": {
+                  "file": "cases/disabled-test.test.js",
+                  "status": "findings",
+                  "findings": [
+                    "missing-assertion",
+                    "disabled-test"
+                  ]
+                }
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -398,20 +553,75 @@
                 "literal": "review"
               },
               "file": {
-                "literal": "cases/clean-assert-match.test.js"
+                "matcher": "any"
               }
             },
             "arguments": null
           }
         },
         "predicate": {
-          "op": "equality",
+          "op": "any",
           "operands": [
             {
-              "pointer": "/interactions/observed/stdout/status"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin/file"
+                    },
+                    {
+                      "literal": "cases/clean-assert-match.test.js"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/status"
+                    },
+                    {
+                      "literal": "findings"
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "literal": "findings"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin/file"
+                    },
+                    {
+                      "literal": "cases/disabled-test.test.js"
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    },
+                    {
+                      "literal": {
+                        "file": "cases/disabled-test.test.js",
+                        "status": "findings",
+                        "findings": [
+                          "missing-assertion",
+                          "disabled-test"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -433,7 +643,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[held-out] An inverted request guard accepts the same extra-field request.",
+    "rationale": "[held-out] An inverted request guard accepts the same extra-field request and refuses every valid request.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-004 rule change",
@@ -447,15 +657,15 @@
       "expectedObservableFailure": "stdout accepts an extra-field request and returns a clean review",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-013/baseline-pass.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:08266d5efb3c6e09e10cf381896ae9702a68301fdfe31adcf62ae4dd1af853a3"
+        "digest": "sha256:8dcb9c42fb86a13f7713f9aaaeeec5497ca9f9f5bd42c0bb90d2028f3dd4da8f"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-013/mutated-fail.json",
+        "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:5172e7ccbe5896f8427ccfacce41a763f057d86eea3659c185f5c36313f85aea"
+        "digest": "sha256:bdd306f5ce224c68a237309fb1d834aa62b33e6c15db3dbf4b399026624b12bc"
       },
       "rollbackVerified": true
     },
@@ -469,9 +679,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-013/mutated-fail.json",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:5172e7ccbe5896f8427ccfacce41a763f057d86eea3659c185f5c36313f85aea"
+            "digest": "sha256:bdd306f5ce224c68a237309fb1d834aa62b33e6c15db3dbf4b399026624b12bc"
           }
         ],
         "source": "controlled-mutation",
@@ -520,6 +730,198 @@
             ]
           }
         }
+      },
+      {
+        "defectId": "D-016",
+        "behaviorId": "B-001",
+        "summary": "An inverted request guard refuses the assertion-free test review request.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:bdd306f5ce224c68a237309fb1d834aa62b33e6c15db3dbf4b399026624b12bc"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-013-missing",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/missing-assertion.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-missing/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/missing-assertion.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-missing/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "defectId": "D-017",
+        "behaviorId": "B-002",
+        "summary": "An inverted request guard refuses the disabled test review request.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:bdd306f5ce224c68a237309fb1d834aa62b33e6c15db3dbf4b399026624b12bc"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-013-disabled",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/disabled-test.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-disabled/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/disabled-test.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-disabled/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "defectId": "D-018",
+        "behaviorId": "B-003",
+        "summary": "An inverted request guard refuses the valid assertion review request.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20261004T192321837Z-8ff2398c/qualification/P-013/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:bdd306f5ce224c68a237309fb1d834aa62b33e6c15db3dbf4b399026624b12bc"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-013-strict",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/clean-strict-equal.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-strict/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/clean-strict-equal.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013-strict/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -535,22 +937,137 @@
             "argument": null,
             "option": null,
             "environment": null,
-            "stdin": {
-              "raw": {
-                "literal": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
-              }
-            },
+            "stdin": null,
             "arguments": null
           }
         },
         "predicate": {
-          "op": "equality",
+          "op": "any",
           "operands": [
             {
-              "pointer": "/interactions/observed/stdout/status"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin"
+                    },
+                    {
+                      "literal": {
+                        "raw": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/status"
+                    },
+                    {
+                      "literal": "clean"
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "literal": "clean"
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin"
+                    },
+                    {
+                      "literal": {
+                        "action": "review",
+                        "file": "cases/missing-assertion.test.js"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    },
+                    {
+                      "literal": {
+                        "error": "provide a JSON object with action review and a file string"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin"
+                    },
+                    {
+                      "literal": {
+                        "action": "review",
+                        "file": "cases/disabled-test.test.js"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    },
+                    {
+                      "literal": {
+                        "error": "provide a JSON object with action review and a file string"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/call-inputs/stdin"
+                    },
+                    {
+                      "literal": {
+                        "action": "review",
+                        "file": "cases/clean-strict-equal.test.js"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    },
+                    {
+                      "literal": {
+                        "error": "provide a JSON object with action review and a file string"
+                      }
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[representative] Unrestricted answer exactly at the inclusive normal boundary.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:b8d5a73ce19907956b82707d6cf52ace37d829e67929c037c107293d6b210b51"
+    },
+    "revisionCommitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "noKnownDefectStatement": "No known defect in the frozen target revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}

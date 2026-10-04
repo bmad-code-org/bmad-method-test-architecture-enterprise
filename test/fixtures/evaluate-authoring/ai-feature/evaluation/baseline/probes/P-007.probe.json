@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[malformed] Malformed answer receives success status despite error body.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "malformed type error gets success status",
+    "mutationOperator": "replace-exact: \"response.writeHead(400).end(JSON.stringify({ error: 'answer must be a string' }));\" -> \"response.writeHead(200).end(JSON.stringify({ decision: 'reject', reason: 'invalid-type' }));\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "server/grade.mjs",
+      "privateRef": null,
+      "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+    },
+    "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:c123a641ac9c63c80e78fa1561baa0d07356859daa2d4c166619d306d78b1ca7"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:a3ef603411675ff12288f4b9a66541d4e6e52b6abe34309e491a2eca3abc414a"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-003",
+      "behaviorId": "B-003",
+      "summary": "[malformed] Malformed answer receives success status despite error body.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261004T191446599Z-3e9d14bf/qualification/P-007/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:a3ef603411675ff12288f4b9a66541d4e6e52b6abe34309e491a2eca3abc414a"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-007-manifest-decision-reject",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": 42
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": 42
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/query"
+                },
+                {
+                  "literal": {}
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/response-body/decision"
+                },
+                {
+                  "literal": "reject"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": 42
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "reject"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}
