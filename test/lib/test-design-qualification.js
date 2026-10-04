@@ -18,6 +18,8 @@
 
 'use strict';
 
+const fs = require('node:fs');
+
 const { QUALIFICATION_EXITS, QualificationError } = require('../../cli/lib/evaluate/mutation');
 const { deriveReplaceExact, qualifyStoredMutation } = require('./mutation-qualification');
 const { projectTestDesignResult } = require('./test-design-result');
@@ -55,13 +57,13 @@ function testDesignOracleHolds(entry, result) {
 }
 
 /**
- * The default arm: the workspace's design, scored the way the replay corpus scores a stored one, and
- * read for the oracle's polarity.
+ * The default arm: the design the workspace file holds in the running phase, scored the way the replay corpus scores a stored one, and
+ * read for the oracle's polarity. The file is the only channel, so each phase scores the bytes that phase holds.
  *
  * @returns {{verdict: 'held'|'violated'|'inconclusive', result: object}}
  */
-function scoreDocument({ text, entry, set, categories }) {
-  const result = projectTestDesignResult(text, set, categories);
+function scoreDocument({ file, entry, set, categories }) {
+  const result = projectTestDesignResult(fs.readFileSync(file, 'utf8'), set, categories);
   const holds = testDesignOracleHolds(entry, result);
   return { verdict: holds === true ? 'held' : holds === false ? 'violated' : 'inconclusive', result };
 }
@@ -77,7 +79,7 @@ function scoreDocument({ text, entry, set, categories }) {
  * @param {object} options.set the fixture set both documents are scored against
  * @param {Set<string>} options.categories the workflow's risk categories
  * @param {{baseline: object, mutated: object}} options.stored the results the stored runs record
- * @param {(arm: {phase: string, file: string, text: string, entry: object, set: object, categories: Set<string>}) => Promise<object>|object} [options.arm]
+ * @param {(arm: {phase: string, file: string, entry: object, set: object, categories: Set<string>}) => Promise<object>|object} [options.arm]
  *   one arm; `scoreDocument` by default
  * @param {(bytes: Uint8Array) => string} [options.digestBytes] eval-quality's own by default
  * @returns {Promise<{mutation: object, evidence: object}>} the cycle's own evidence, `rollbackVerified` included
@@ -101,7 +103,7 @@ async function qualifyTestDesignMutation({
     mutatedPath,
     stored,
     digestBytes,
-    arm: ({ phase, file, text }) => arm({ phase, file, text, entry, set, categories }),
+    arm: ({ phase, file }) => arm({ phase, file, entry, set, categories }),
   });
 }
 

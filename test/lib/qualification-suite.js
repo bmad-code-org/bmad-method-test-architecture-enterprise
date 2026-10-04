@@ -22,7 +22,7 @@
  *   reports a rollback it did not verify. The builder's source states no claim as a literal.
  * - The committed probes. Each one's artifacts carry the digests the probe records, its manifestation witness
  *   has the direction its corpus declares (`plant-reported`: the witness fires on the clean arm's correct run and is
- *   silent on the mutated artifact; `defect-shown`: the other way round), and the oracles that flip between its
+ *   silent on the mutated artifact; `gap-read`: the other way round, the witness reads the element the mutated run gets wrong), and the oracles that flip between its
  *   reference and its twin are the ones the corpus names, every one from held to violated.
  *   `extra` receives the probes the builder emitted, so a corpus holds the twins they cite to their named edit.
  */
@@ -43,17 +43,18 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 /**
- * Ignored paths the guard leaves out: installed packages, and the files the agent harness and Finder keep beside a checkout.
+ * Ignored paths the guard leaves out: installed packages, and the files the agent harness, the build skills and Finder keep beside a
+ * checkout (`.claude/`, `_bmad/`, whose `render/` directories agent sessions write while a suite runs, and `.DS_Store`).
  * Everything else that git ignores (`coverage/`, `*.log`, a build directory) is read, since a cycle that leaks there is invisible
  * to a status that lists only tracked and untracked files.
  */
-const UNWATCHED = /(^|\/)node_modules(\/|$)|^\.claude(\/|$)|(^|\/)\.DS_Store$/;
+const UNWATCHED = /(^|\/)node_modules(\/|$)|^\.claude(\/|$)|^_bmad(\/|$)|(^|\/)\.DS_Store$/;
 
-/** The git state of the whole checkout, ignored files included, so a cycle that wrote anywhere in the adopter's tree shows. */
-function gitStatus() {
+/** The git state of the whole checkout (or of `cwd`), ignored files included, so a cycle that wrote anywhere in the adopter's tree shows. */
+function gitStatus(cwd = PROJECT_ROOT) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
   const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all', '--ignored'], {
-    cwd: PROJECT_ROOT,
+    cwd,
     env,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
@@ -63,6 +64,55 @@ function gitStatus() {
     .split('\n')
     .filter((line) => line !== '' && !UNWATCHED.test(line.slice(3)))
     .join('\n');
+}
+
+/**
+ * The guard over a scratch repository that git ignores some paths of: a write into a path the guard watches changes its status, a write into one
+ * it leaves out does not. Dropping `--ignored` makes the first group pass unseen, and dropping an unwatched entry makes the second one fail, so
+ * each is held by a case and not by the guard's own text.
+ *
+ * @param {{check: (condition: boolean, message: string) => void, scratch: {make: (label: string) => string}}} options
+ */
+function checkStatusGuard({ check, scratch }) {
+  const repository = scratch.make('status-guard');
+  const git = (...args) => {
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+    const done = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.test', ...args], { cwd: repository, env, encoding: 'utf8' });
+    if (done.status !== 0) throw new Error(`git ${args.join(' ')} exited ${done.status}: ${done.stderr}`);
+  };
+  const write = (relative, text = 'x') => {
+    fs.mkdirSync(path.dirname(path.join(repository, relative)), { recursive: true });
+    fs.writeFileSync(path.join(repository, relative), text);
+  };
+  write('tracked.txt');
+  write('.gitignore', 'coverage/\n*.log\n_bmad/render/\nnode_modules/\n.claude/\n');
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-q', '-m', 'seed');
+  const clean = gitStatus(repository);
+  check(clean === '', `a scratch repository that was just committed reads as ${JSON.stringify(clean)}`);
+
+  const moved = (relative, what, shouldMove, text = 'x') => {
+    write(relative, text);
+    check(
+      (gitStatus(repository) !== clean) === shouldMove,
+      `${what} ${shouldMove ? 'leaves the status as it was' : 'moved the status'} (${relative})`,
+    );
+    fs.rmSync(path.join(repository, relative), { force: true });
+    check(gitStatus(repository) === clean, `the status did not return to what it was after ${relative} was removed`);
+  };
+  moved('untracked.txt', 'an untracked file', true);
+  write('tracked.txt', 'changed');
+  check(gitStatus(repository) !== clean, 'a write into a tracked file leaves the status as it was');
+  git('checkout', '--', 'tracked.txt');
+  // Ignored paths the guard reads: a leak beside a stored artifact or into a build directory is invisible without `--ignored`.
+  moved('coverage/leak-x', 'a write into an ignored coverage directory', true);
+  moved('cycle.log', 'an ignored log file written beside a stored reference', true);
+  // Ignored paths the guard leaves out: installed packages, the harness's directory and the build skills' render directories.
+  moved('node_modules/pkg/index.js', 'a write into node_modules', false);
+  moved('.claude/worktrees/x', 'a write into .claude', false);
+  moved('_bmad/render/session-1/out.md', 'a build skill render directory written by another session', false);
+  moved('sub/.DS_Store', 'a Finder file', false);
 }
 
 /**
@@ -102,9 +152,10 @@ function changedJsonPaths(reference, twin, prefix = '') {
  * @param {(options: {qualify: Function}) => Promise<object[]>} options.build the corpus's builder in `tools/generate-probes.js`
  * @param {string} options.probesFile absolute path of the committed probe file
  * @param {{oracleId: string, referencePath: string, mutatedPath: string}} options.sample one real mutation of the corpus, with absolute paths
- * @param {'plant-reported'|'defect-shown'} options.witnessDirection which of the two stored artifacts the probes' manifestation witness fires on:
- *   `plant-reported` fires on the clean arm's correct run and is silent on the mutated artifact (the plant is in the input, the mutation models
- *   a run that misses it); `defect-shown` is silent on the clean arm and fires on the mutated artifact (the defect is in the run's output)
+ * @param {'plant-reported'|'gap-read'} options.witnessDirection which of the two stored artifacts the probes' manifestation witness fires on:
+ *   `plant-reported` fires on the clean arm's correct run and is silent on the mutated artifact (the witness reads the plant in a run that
+ *   reports it, and the mutation models a run that misses it); `gap-read` is silent on the clean arm and fires on the mutated artifact (the
+ *   witness reads the element the mutated run gets wrong, one it misses or adds, which is the reverse by the witness's wording alone)
  * @param {{byProject: boolean, expected?: (probe: object, designated: string) => string[]}} [options.flips] the oracles whose verdict flips between a
  *   probe's reference and its twin: those of the probe's own project (`byProject`, read off each oracle's commentary) or of the whole contract,
  *   and the ones expected to flip (the probe's designated oracle by default)
@@ -691,12 +742,12 @@ async function runQualificationSuite({
           onClean === 'fires' && onMutated === 'silent'
             ? 'plant-reported'
             : onClean === 'silent' && onMutated === 'fires'
-              ? 'defect-shown'
+              ? 'gap-read'
               : `unreadable (witness ${onClean} on the clean arm, ${onMutated} on the mutated artifact)`;
         check(
           direction === witnessDirection,
           `${probe.probeId}: the witness has direction ${direction}, and this corpus declares ${witnessDirection} ` +
-            `(plant-reported fires on the clean arm and is silent on the mutated artifact; defect-shown is the reverse)`,
+            `(plant-reported fires on the clean arm and is silent on the mutated artifact; gap-read is the reverse)`,
         );
       }
 
@@ -719,6 +770,7 @@ async function runQualificationSuite({
   }
 
   try {
+    checkStatusGuard({ check, scratch });
     await checkPerformedSequence();
     await checkFailingSteps();
     await checkGenerator();
@@ -749,4 +801,4 @@ function exitWith(promise, title) {
   );
 }
 
-module.exports = { changedJsonPaths, changedLines, exitWith, gitStatus, runQualificationSuite };
+module.exports = { changedJsonPaths, changedLines, checkStatusGuard, exitWith, gitStatus, runQualificationSuite };

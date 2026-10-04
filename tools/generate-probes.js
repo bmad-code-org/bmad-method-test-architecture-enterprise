@@ -171,8 +171,12 @@ const PROBE_MUTANT_PREFIX = 'test/fixtures/probe-mutants/';
  * replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs. The controlled
  * mutation models the run that misses the plant, so its mutated artifact is the one the witness is silent on and the probe's oracle
  * fails on. `npm run test:test-review-qualification`, `test:trace-qualification` and `test:nfr-qualification` read both directions off
- * the committed probes and hold them to this sentence. The ci probes are the other way round: their defect is in the run's output, so
- * the witness fires on the mutated pipeline.
+ * the committed probes and hold them to this sentence. The ci probes read the other way round by the witness's wording alone: it reads the
+ * element the run gets wrong (the weekly schedule and the `contents: read` grant a run misses, the burn-in job a run adds), so it fires on
+ * the mutated pipeline and is silent on the correct one. Their plant is the request in the project's docs, like the fifteen above, so
+ * their fault leg replays the correct run and finds the witness silent: the three pre-flights have recorded
+ * `failed: seeded-fault-fired, seeded-faults-scoped` since before Story 1.99. Fixing the witnesses moves those outcomes, which that story
+ * keeps; Story 1.121 makes them read the element the run reports.
  */
 const PLANT_REPORTED_NOTE =
   'The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores ' +
@@ -1744,8 +1748,9 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
 
   // Each plant's mutation edits the stored correct pipeline of its project into its stored twin: the
   // requested element withheld, or (for the template probe below) the forbidden burn-in job added. The
-  // oracle each plant answers to accepts the first and rejects the second. The defect of these probes is in
-  // the run's output, so the manifestation witness fires on the twin and is silent on the correct pipeline.
+  // oracle each plant answers to accepts the first and rejects the second. The manifestation witness reads
+  // the element the run gets wrong, so it fires on the twin and is silent on the correct pipeline (Story 1.121
+  // changes that, and with it the pre-flight outcome these three probes record).
   const cycle = (label, oracleId, index, referencePath, mutatedPath) =>
     performedCycle({
       label: `${oracleId} (${label})`,

@@ -1,9 +1,9 @@
 {
   "$comment": [
-    "Constructed mutant of test/replay/test-review/full-recall/verdict.json: the finding for registry row C4 is removed and nothing else changes.",
-    "The ledger fields (the score, the recommendation, the severity counts, gatingQualityScore and gatingViolations) and the report path are carried from that reference,",
-    "so they describe the reference review, which reports every row.",
-    "The eval scorer reads only the findings of this artifact; the rest travels for provenance."
+    "Constructed. This verdict is what cli/lib/parse-report.js derives from the report beside it,",
+    "so the score, the recommendation and the four severity counts are the CLI ledger values rather",
+    "than hand-typed numbers. The eval scorer reads only report, violations, qualityScore and",
+    "recommendation; the rest travels for provenance."
   ],
   "report": "test/replay/test-review/full-recall/report.md",
   "files": [

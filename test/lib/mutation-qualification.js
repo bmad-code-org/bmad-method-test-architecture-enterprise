@@ -131,8 +131,8 @@ function reapDeadWorkspaces() {
  * @param {string} options.targetArtifact the artifact's path inside the workspace, with forward slashes
  * @param {string} options.referencePath absolute path of the stored reference artifact, the one the clean arm accepts
  * @param {string} options.mutatedPath absolute path of the stored mutated artifact the one exact edit yields
- * @param {(arm: {phase: string, file: string, text: string}) => Promise<{verdict: string, result?: object}>|{verdict: string, result?: object}} options.arm
- *   one arm; it reads the workspace file, so each phase scores the bytes that phase holds
+ * @param {(arm: {phase: string, file: string}) => Promise<{verdict: string, result?: object}>|{verdict: string, result?: object}} options.arm
+ *   one arm; it reads the workspace file it is handed, so each phase scores the bytes that phase holds
  * @param {{baseline: object, mutated: object}} [options.stored] the results the stored runs record; each arm's result must equal its own
  * @param {(bytes: Uint8Array) => string} [options.digestBytes] eval-quality's own by default
  * @returns {Promise<{mutation: object, evidence: object}>} the cycle's own evidence, `rollbackVerified` included
@@ -185,10 +185,8 @@ async function qualifyStoredMutation({ mutationId, targetArtifact, referencePath
     const file = path.join(root, ...targetArtifact.split('/'));
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, reference);
-    const runArm = async (phase) => {
-      const text = fs.readFileSync(file, 'utf8');
-      return arm({ phase, file, text });
-    };
+    // The arm is handed the workspace file and nothing else, so it scores the bytes the phase holds and no text can reach it from outside the workspace.
+    const runArm = async (phase) => arm({ phase, file });
     const evidence = await runMutationCycle({ root, mutation, runArm, reExecutionCap: RE_EXECUTION_CAP, digestBytes: digestOf });
     // The evidence a probe cites is the evidence the cycle performed: every arm scored what the stored
     // run records for the document it read.

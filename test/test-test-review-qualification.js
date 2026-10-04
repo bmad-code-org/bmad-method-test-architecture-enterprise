@@ -11,8 +11,8 @@
  * are `test/lib/qualification-suite.js`; this suite adds what is the review's own:
  *
  * - Each twin under `test/fixtures/probe-mutants/test-review/` withholds exactly one row, and the suite reads each twin from
- *   the path the builder's emitted probe cites. It equals the stored review in every field but the findings, which lose the
- *   one finding of the row. Its oracle fails on it and the other twelve oracles of the contract hold, which the shared kit
+ *   the path the builder's emitted probe cites. It is the stored review's own bytes (the `$comment` and every ledger field included)
+ *   with the lines of that row's finding removed and nothing added. Its oracle fails on it and the other twelve oracles of the contract hold, which the shared kit
  *   asserts for every committed probe. The stored review holds all nine row oracles.
  * - The arm reads a verdict that is no object (`null`, a list, text that is not JSON) as no artifact and reaches no
  *   conclusion, and a verdict with no findings member leaves the row oracles abstaining. The exit-code oracle (O-013)
@@ -30,7 +30,7 @@ const path = require('node:path');
 const { buildTestReviewProbes } = require('../tools/generate-probes');
 const { isDeepStrictEqual } = require('node:util');
 
-const { changedJsonPaths, exitWith, runQualificationSuite } = require('./lib/qualification-suite');
+const { changedLines, exitWith, runQualificationSuite } = require('./lib/qualification-suite');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REFERENCE = path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'full-recall', 'verdict.json');
@@ -44,11 +44,6 @@ async function ownRowOnly({ check, contract, corpusArm, probes }) {
   const oracleOf = (row) => `O-${String(PLANTED_ROWS.indexOf(row) + 1).padStart(3, '0')}`;
   const arm = (oracleId) => corpusArm({ corpus: 'test-review', contract, oracleId });
   const reference = fs.readFileSync(REFERENCE, 'utf8');
-  const stripComment = (text) => {
-    const parsed = JSON.parse(text);
-    delete parsed.$comment;
-    return parsed;
-  };
   const findings = (text) => JSON.parse(text).findings.map((finding) => finding.row);
   check(
     probes.length === PLANTED_ROWS.length,
@@ -63,10 +58,24 @@ async function ownRowOnly({ check, contract, corpusArm, probes }) {
       `${probe.probeId} cites ${baselinePassEvidence.path} as its clean arm, not the stored review that reports every plant`,
     );
     const twin = fs.readFileSync(path.join(PROJECT_ROOT, mutatedFailEvidence.path), 'utf8');
-    // The twin is the stored review without that row's finding, field for field: the findings are the only member that moves.
+    // The twin is the stored review's own bytes with one region removed, that row's finding, and nothing added: the `$comment` and every
+    // ledger field are the reference's, so the derived operator is one removal of exactly that finding.
+    const block = JSON.stringify(
+      JSON.parse(reference).findings.find((found) => found.row === row),
+      null,
+      2,
+    )
+      .split('\n')
+      .map((line) => `    ${line}`)
+      .join('\n');
+    const withoutFinding = [`${block},\n`, `,\n${block}`].map((region) => reference.replace(region, '')).find((text) => text !== reference);
+    const difference = changedLines(reference, twin);
     check(
-      JSON.stringify(changedJsonPaths(stripComment(reference), stripComment(twin))) === JSON.stringify(['/findings']),
-      `the twin of ${row} differs from the stored review at ${JSON.stringify(changedJsonPaths(stripComment(reference), stripComment(twin)))}; only /findings may move`,
+      difference.lines === undefined &&
+        difference.added.length === 0 &&
+        difference.removed.length === block.split('\n').length &&
+        withoutFinding === twin,
+      `the twin of ${row} differs from the stored review as ${JSON.stringify({ at: difference.at, removed: difference.removed?.length, added: difference.added?.length, lines: difference.lines?.length })}; expected the lines of the finding of ${row} removed as one region and nothing added`,
     );
     check(
       JSON.stringify(findings(twin)) === JSON.stringify(findings(reference).filter((found) => found !== row)),

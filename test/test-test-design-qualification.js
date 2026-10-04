@@ -53,6 +53,7 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { TARGET_ARTIFACT, deriveReplaceExact, qualifyTestDesignMutation, scoreDocument } = require('./lib/test-design-qualification');
 const { GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, run, writeCorpora } = require('../tools/generate-probes');
 const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
+const { checkStatusGuard, gitStatus } = require('./lib/qualification-suite');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
@@ -75,14 +76,6 @@ function check(condition, message) {
 
 const replayDesign = (id) => path.join(REPLAY_ROOT, id, 'design.md');
 const replayResult = (id) => JSON.parse(fs.readFileSync(path.join(REPLAY_ROOT, id, 'expected.json'), 'utf8')).result;
-
-/** The git state of the whole checkout, so a cycle that wrote anywhere in the adopter's tree shows. */
-function gitStatus() {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
-  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: PROJECT_ROOT, env, encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(`git status exited ${result.status}: ${result.stderr}`);
-  return result.stdout;
-}
 
 /** Every workspace directory an arm ran in, so the suite can show each is outside the checkout and gone. */
 const workspaces = new Set();
@@ -140,9 +133,9 @@ function recordingArm(trace, digestBytes, tamper = {}) {
   return async (input) => {
     track(input);
     const digestBefore = digestBytes(fs.readFileSync(input.file));
-    trace.push({ phase: input.phase, file: input.file, digest: digestBefore, text: input.text });
+    trace.push({ phase: input.phase, file: input.file, digest: digestBefore });
     tamper[input.phase]?.(input);
-    return scoreDocument({ ...input, text: fs.readFileSync(input.file, 'utf8') });
+    return scoreDocument(input);
   };
 }
 
@@ -297,6 +290,29 @@ async function checkFailingSteps(digestBytes) {
   // And a rerun that reads wrong bytes is stopped by the stored evidence it no longer matches.
   const wrongRerun = await wrapped('rerun-bytes', { 're-pass-1': ({ file }) => fs.writeFileSync(file, mutatedBytes()) });
   check(wrongRerun.error?.exitCode === 12 && wrongRerun.qualified === undefined, 'a clean rerun over the mutated bytes still qualified');
+
+  // The shipped arm scores the file the workspace holds in each phase and is handed nothing else, so a phase whose file is tampered with
+  // is scored on the tampered bytes: the clean arm over the mutated design fails (11), the mutated arm over the reference holds (11) and the
+  // clean rerun over the mutated design fails (12). An arm that scored text it was handed would score the untampered bytes and qualify.
+  const viaShippedArm = (label, tamper) =>
+    outcome({
+      ...fixture(label, BROWSER_CASE),
+      arm: async (input) => {
+        tamper[input.phase]?.(input);
+        return trackedScore(input);
+      },
+    });
+  for (const [label, phase, bytes, exitCode, what] of [
+    ['shipped-baseline', 'baseline', mutatedBytes, 11, 'a clean arm over the mutated design'],
+    ['shipped-mutated', 'mutated', referenceBytes, 11, 'a mutated arm over the reference design'],
+    ['shipped-rerun', 're-pass-1', mutatedBytes, 12, 'a clean rerun over the mutated design'],
+  ]) {
+    const tampered = await viaShippedArm(label, { [phase]: ({ file }) => fs.writeFileSync(file, bytes()) });
+    check(
+      tampered.error?.exitCode === exitCode && tampered.qualified === undefined,
+      `the shipped arm, ${what}, stopped with ${tampered.error?.exitCode ?? 'a qualified result'}; expected ${exitCode} and no result`,
+    );
+  }
 
   const drifted = await outcome({
     ...fixture('drift', BROWSER_CASE),
@@ -844,6 +860,7 @@ async function checkSignals() {
 async function main() {
   try {
     const { digestBytes } = await loadEngine();
+    checkStatusGuard({ check, scratch });
     await checkPerformedSequence(digestBytes);
     await checkRealCorpus(digestBytes);
     await checkFailingSteps(digestBytes);

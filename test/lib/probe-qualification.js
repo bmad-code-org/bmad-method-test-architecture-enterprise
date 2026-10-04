@@ -20,7 +20,9 @@
  *                file takes a reviewer, which no deterministic arm is.
  *   trace        the run's summary. The reference is the stored correct summary of the seeded set; the
  *                mutation withholds one coverage gap from its priority breakdown, so the criterion's
- *                priority band reads as covered, and the breakdown oracle fails.
+ *                priority band reads as covered. The breakdown oracle (O-004) fails for the P2 and P3
+ *                gaps (AC-8 and AC-10); the P0 twin (AC-2) also carries the gate its P0 band derives, so
+ *                the gate oracle (O-001) fails for it.
  *   nfr          the run's report. The reference is the stored correct audit of the gapped bundle; the
  *                mutation withholds one domain's finding (a threshold the report invents, a failing
  *                reliability rolled up as CONCERNS, a maintainability section left out), and the oracle

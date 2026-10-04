@@ -8,7 +8,7 @@
     "behaviorId": "B-001",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:a2ffe168beb95ea2242430e9ea3563a773948c2ad57f6e029207f6f87d3a20a0",
+    "artifactDigest": "sha256:e08b22a62a20003557709b117ba10f55f5f6089639bce994d4db290960de08dd",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row H4 was planted in checkout.spec.ts at line 22: module-level mutable state mutated in a test with no reset. O-001 is the oracle that catches it, and B-001 is the behavior it discharges. The mutation withholds the finding for H4 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -32,7 +32,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/h4/verdict.json",
         "privateRef": null,
-        "digest": "sha256:a2ffe168beb95ea2242430e9ea3563a773948c2ad57f6e029207f6f87d3a20a0"
+        "digest": "sha256:e08b22a62a20003557709b117ba10f55f5f6089639bce994d4db290960de08dd"
       },
       "rollbackVerified": true
     },
@@ -167,7 +167,7 @@
     "behaviorId": "B-002",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:67b9ebfe87b01b973f9bccda070834af0f4784289cd16cad8decae5da14d2081",
+    "artifactDigest": "sha256:9bf8a7e4f000a506d5a54b1c45774d3dc6e2b2f17e4c86c72184d1564cd4ee62",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row H1 was planted in checkout.spec.ts at line 16: waitForTimeout used to order steps. O-002 is the oracle that catches it, and B-002 is the behavior it discharges. The mutation withholds the finding for H1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -191,7 +191,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/h1/verdict.json",
         "privateRef": null,
-        "digest": "sha256:67b9ebfe87b01b973f9bccda070834af0f4784289cd16cad8decae5da14d2081"
+        "digest": "sha256:9bf8a7e4f000a506d5a54b1c45774d3dc6e2b2f17e4c86c72184d1564cd4ee62"
       },
       "rollbackVerified": true
     },
@@ -326,7 +326,7 @@
     "behaviorId": "B-003",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:b060a3537cf7cd27dc5944e56c93d14ae45640a5e9e8d875d22950fd15655783",
+    "artifactDigest": "sha256:52046b700c1b63694618629ea55a2fbbbd4d176af416550c11fcea1f37e24a37",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row L1 was planted in checkout.spec.ts at line 19: CSS id locator where a role locator is available. O-003 is the oracle that catches it, and B-003 is the behavior it discharges. The mutation withholds the finding for L1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -350,7 +350,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/l1/verdict.json",
         "privateRef": null,
-        "digest": "sha256:b060a3537cf7cd27dc5944e56c93d14ae45640a5e9e8d875d22950fd15655783"
+        "digest": "sha256:52046b700c1b63694618629ea55a2fbbbd4d176af416550c11fcea1f37e24a37"
       },
       "rollbackVerified": true
     },
@@ -485,7 +485,7 @@
     "behaviorId": "B-004",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:b72c52d89d81f4cdfd762a543977cc8ffe349395a8cc3f02b2b081ebe773650f",
+    "artifactDigest": "sha256:00c622980679f77eedcdf4f077a56f0a371745bd72ad9f8039c8d0b8dc71c726",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row H3 was planted in checkout.spec.ts at line 31: conditional decides whether anything is asserted. O-004 is the oracle that catches it, and B-004 is the behavior it discharges. The mutation withholds the finding for H3 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -509,7 +509,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/h3/verdict.json",
         "privateRef": null,
-        "digest": "sha256:b72c52d89d81f4cdfd762a543977cc8ffe349395a8cc3f02b2b081ebe773650f"
+        "digest": "sha256:00c622980679f77eedcdf4f077a56f0a371745bd72ad9f8039c8d0b8dc71c726"
       },
       "rollbackVerified": true
     },
@@ -644,7 +644,7 @@
     "behaviorId": "B-005",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:c89eef853ffd01f4b3004797ef4ec61d2942f0fdfb50a0cd7ea297366528ccd1",
+    "artifactDigest": "sha256:0e2891567cf45697a0f78fb69a428a72697b28de8d91378c5513afd3825a1aab",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row C1 was planted in checkout.spec.ts at line 38: the tenant-boundary test is skipped with no reason. O-005 is the oracle that catches it, and B-005 is the behavior it discharges. The mutation withholds the finding for C1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -668,7 +668,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/c1/verdict.json",
         "privateRef": null,
-        "digest": "sha256:c89eef853ffd01f4b3004797ef4ec61d2942f0fdfb50a0cd7ea297366528ccd1"
+        "digest": "sha256:0e2891567cf45697a0f78fb69a428a72697b28de8d91378c5513afd3825a1aab"
       },
       "rollbackVerified": true
     },
@@ -803,7 +803,7 @@
     "behaviorId": "B-006",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:78199fb643c98b179e4bbcc655bf79b6c0684a8c9a74bf01d49a623de72151a4",
+    "artifactDigest": "sha256:61b8c481f761c1ef8f0758e382377c384ffd01cf4934d9038f32b3d4b21a95c5",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row C3 was planted in orders.service.spec.ts at line 17: expect(true).toBe(true) can never fail. O-006 is the oracle that catches it, and B-006 is the behavior it discharges. The mutation withholds the finding for C3 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -827,7 +827,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/c3/verdict.json",
         "privateRef": null,
-        "digest": "sha256:78199fb643c98b179e4bbcc655bf79b6c0684a8c9a74bf01d49a623de72151a4"
+        "digest": "sha256:61b8c481f761c1ef8f0758e382377c384ffd01cf4934d9038f32b3d4b21a95c5"
       },
       "rollbackVerified": true
     },
@@ -962,7 +962,7 @@
     "behaviorId": "B-007",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:02e56a78054b68406aca883e84aae4dce10d50c3a2cb602eb264189e06d12523",
+    "artifactDigest": "sha256:b99bbe0ac8fed0629eaa33ff0292ad45e413e8eb8efcc666bab97f08808ff78d",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row C4 was planted in orders.service.spec.ts at line 23: test body has no assertion. O-007 is the oracle that catches it, and B-007 is the behavior it discharges. The mutation withholds the finding for C4 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -986,7 +986,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/c4/verdict.json",
         "privateRef": null,
-        "digest": "sha256:02e56a78054b68406aca883e84aae4dce10d50c3a2cb602eb264189e06d12523"
+        "digest": "sha256:b99bbe0ac8fed0629eaa33ff0292ad45e413e8eb8efcc666bab97f08808ff78d"
       },
       "rollbackVerified": true
     },
@@ -1121,7 +1121,7 @@
     "behaviorId": "B-008",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:67ab1149883d0003cdd30a7d58879110e7509d1b65af7d993e1f941a8729563e",
+    "artifactDigest": "sha256:86ae9b08b99b6047418922c89357e4e4ad9e687926f0f9ba49d8f723c85c92ac",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row C5 was planted in orders.service.spec.ts at line 31: asserts a mock it configured; the service is never called. O-008 is the oracle that catches it, and B-008 is the behavior it discharges. The mutation withholds the finding for C5 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -1145,7 +1145,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/c5/verdict.json",
         "privateRef": null,
-        "digest": "sha256:67ab1149883d0003cdd30a7d58879110e7509d1b65af7d993e1f941a8729563e"
+        "digest": "sha256:86ae9b08b99b6047418922c89357e4e4ad9e687926f0f9ba49d8f723c85c92ac"
       },
       "rollbackVerified": true
     },
@@ -1280,7 +1280,7 @@
     "behaviorId": "B-009",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:6f36070638e17c83476090f23c680ef6dd0bf4edfc27772de98310161debe333",
+    "artifactDigest": "sha256:a6ea05bfb27d1256fd6dccffb7cac2e13cfb4abb15180f6a7b7b1ff259707d1a",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
     "rationale": "Registry row H10 was planted in orders.service.spec.ts at line 39: shape-only assertion: the type of the returned id is constrained and its value is not. O-009 is the oracle that catches it, and B-009 is the behavior it discharges. The mutation withholds the finding for H10 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
@@ -1304,7 +1304,7 @@
         "storage": "public",
         "path": "test/fixtures/probe-mutants/test-review/h10/verdict.json",
         "privateRef": null,
-        "digest": "sha256:6f36070638e17c83476090f23c680ef6dd0bf4edfc27772de98310161debe333"
+        "digest": "sha256:a6ea05bfb27d1256fd6dccffb7cac2e13cfb4abb15180f6a7b7b1ff259707d1a"
       },
       "rollbackVerified": true
     },

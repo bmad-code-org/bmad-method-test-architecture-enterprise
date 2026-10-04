@@ -2288,10 +2288,13 @@ function rollbackLiteralsIn(file) {
 /**
  * The values written to `rollbackVerified` in one file that a cycle's result did not hand over.
  *
- * Outside `cli/` the flag is only ever copied from a result: an identifier (`rollbackVerified`), a member expression
- * (`performed.rollbackVerified`, `results[index]?.rollbackVerified`) or the literal `false`, which claims nothing. Every other value
- * mints a claim in the file that wrote it, whether it is `true`, `!0`, `1`, `'yes'`, a comparison or a call, so the literal walker
- * above (which sees only `true`) is not enough on its own.
+ * Outside `cli/` the flag is only ever copied from a result. A value hands one over when every leaf it can evaluate to is the literal
+ * `false` (which claims nothing), a member expression (`performed.rollbackVerified`, `results[index]?.rollbackVerified`) that does not
+ * read a literal array or object, or an identifier whose declarations and assignments in the same file hand one over (a parameter or an
+ * import has none, so it is handed over). `??` and `?:` hand over when each branch does, so `performed?.rollbackVerified ?? false` and
+ * `ok ? performed.rollbackVerified : false` pass. Every other value mints a claim in the file that wrote it, whether it is `true`, `!0`,
+ * `1`, `'yes'`, a comparison, a call, `[!0][0]` or an alias bound to one of those, so the literal walker above (which sees only `true`) is
+ * not enough on its own. A property, an assignment, a default, a binding and a class field each write the flag.
  *
  * @returns {{line: number, message: string}[]}
  */
@@ -2299,11 +2302,64 @@ function rollbackValueViolationsIn(file) {
   const source = fs.readFileSync(file, 'utf8');
   const ast = parseSource(file, source);
   const found = [];
-  const handedOver = (node) =>
-    node.type === 'Identifier' ||
-    node.type === 'MemberExpression' ||
-    (node.type === 'ChainExpression' && node.expression.type === 'MemberExpression') ||
-    (node.type === 'Literal' && node.value === false);
+
+  // What each name in the file is bound to or assigned, so an alias is read through to the value it carries.
+  const valuesOf = new Map();
+  const note = (name, value) => valuesOf.set(name, [...(valuesOf.get(name) ?? []), value]);
+  walk(ast, (node) => {
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && node.init !== null && node.init !== undefined)
+      note(node.id.name, node.init);
+    if (node.type === 'AssignmentExpression' && node.operator === '=' && node.left.type === 'Identifier') note(node.left.name, node.right);
+  });
+
+  /** The values a literal array or object holds, however deep, since a member read of it can evaluate to any of them. */
+  const leavesOf = (node) =>
+    node.type === 'ArrayExpression'
+      ? node.elements.flatMap((element) =>
+          element === null ? [] : leavesOf(element.type === 'SpreadElement' ? element.argument : element),
+        )
+      : node.type === 'ObjectExpression'
+        ? node.properties.flatMap((property) => (property.type === 'Property' ? leavesOf(property.value) : []))
+        : [node];
+
+  const handedOver = (node, seen = new Set()) => {
+    switch (node.type) {
+      case 'Literal': {
+        return node.value === false;
+      }
+      case 'ChainExpression': {
+        return handedOver(node.expression, seen);
+      }
+      case 'Identifier': {
+        if (seen.has(node.name)) return true;
+        const next = new Set(seen).add(node.name);
+        return (valuesOf.get(node.name) ?? []).every((value) => handedOver(value, next));
+      }
+      case 'MemberExpression': {
+        const object = node.object.type === 'ChainExpression' ? node.object.expression : node.object;
+        if (object.type === 'ArrayExpression' || object.type === 'ObjectExpression')
+          return leavesOf(object).every((leaf) => handedOver(leaf, seen));
+        if (object.type === 'Identifier' && !seen.has(object.name)) {
+          const next = new Set(seen).add(object.name);
+          return (valuesOf.get(object.name) ?? []).every((value) =>
+            value.type === 'ArrayExpression' || value.type === 'ObjectExpression'
+              ? leavesOf(value).every((leaf) => handedOver(leaf, next))
+              : true,
+          );
+        }
+        return true;
+      }
+      case 'LogicalExpression': {
+        return node.operator === '??' && handedOver(node.left, seen) && handedOver(node.right, seen);
+      }
+      case 'ConditionalExpression': {
+        return handedOver(node.consequent, seen) && handedOver(node.alternate, seen);
+      }
+      default: {
+        return false;
+      }
+    }
+  };
   const inspect = (node, value, how) => {
     if (value !== null && value !== undefined && !handedOver(value)) {
       found.push({
@@ -2315,6 +2371,7 @@ function rollbackValueViolationsIn(file) {
   walk(ast, (node, parent) => {
     if (node.type === 'Property' && parent?.type === 'ObjectExpression' && propertyKey(node) === ROLLBACK_FLAG)
       inspect(node, node.value, 'sets');
+    if (node.type === 'PropertyDefinition' && propertyKey(node) === ROLLBACK_FLAG) inspect(node, node.value, 'sets');
     if (
       node.type === 'AssignmentExpression' &&
       ((node.left.type === 'MemberExpression' && memberKey(node.left) === ROLLBACK_FLAG) || isIdentifier(node.left, ROLLBACK_FLAG))
@@ -2336,16 +2393,58 @@ function rollbackValueViolationsIn(file) {
 const ROLLBACK_MODULE = /(?:probe|mutation|test-design)-qualification|oracle-arm|qualification-suite/;
 const ROLLBACK_REQUIRE = new RegExp(String.raw`require\(\s*['"][^'"]*\/(?:${ROLLBACK_MODULE.source})(?:\.js)?['"]\s*\)`);
 
+/** The project files one source file requires by a relative path, resolved to the `.js` file they name. */
+function relativeRequires(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const found = [];
+  walk(parseSource(file, source), (node) => {
+    if (
+      node.type === 'CallExpression' &&
+      isIdentifier(node.callee, 'require') &&
+      node.arguments.length === 1 &&
+      node.arguments[0].type === 'Literal' &&
+      typeof node.arguments[0].value === 'string' &&
+      node.arguments[0].value.startsWith('.')
+    ) {
+      const target = path.resolve(path.dirname(file), node.arguments[0].value);
+      const resolved = [target, `${target}.js`, path.join(target, 'index.js')].find(
+        (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile(),
+      );
+      if (resolved?.endsWith('.js')) found.push(resolved);
+    }
+  });
+  return found;
+}
+
+/**
+ * Every file the generator reaches through relative requires, itself included, outside `cli/` (which its own walker scans) and the
+ * folders that hold data. A builder moved into a helper the generator requires is part of the generator, and builders get the cycle
+ * handed in, so such a helper never has to require a cycle module to state the flag.
+ */
+function requireClosure(entry) {
+  const reached = new Set();
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (reached.has(file) || file.startsWith(CLI_ROOT) || /[\\/]node_modules[\\/]/.test(file)) continue;
+    reached.add(file);
+    queue.push(...relativeRequires(file));
+  }
+  return [...reached];
+}
+
 /**
  * The files outside `cli/` the rollback rules scan: the cycle's modules, every file under `tools/` and `test/` that requires one of
- * them, and the generator. Derived, so a builder moved to a new file (or a new corpus adapter) is scanned the day it requires the cycle.
+ * them, and the whole relative-require closure of the generator. Derived, so a builder moved to a new file (or a new corpus adapter,
+ * or a helper the generator requires) is scanned the day it exists.
  */
 function rollbackCheckedFiles() {
   const skipped = /[\\/](?:fixtures|replay|evaluations|results|eval-artifacts|node_modules)[\\/]/;
   const candidates = ['tools', 'test'].flatMap((directory) => filesUnder(path.join(PROJECT_ROOT, directory)).files);
-  return candidates
+  const direct = candidates
     .filter((file) => file.endsWith('.js') && !skipped.test(file))
-    .filter((file) => ROLLBACK_MODULE.test(path.basename(file)) || ROLLBACK_REQUIRE.test(fs.readFileSync(file, 'utf8')))
+    .filter((file) => ROLLBACK_MODULE.test(path.basename(file)) || ROLLBACK_REQUIRE.test(fs.readFileSync(file, 'utf8')));
+  return [...new Set([...direct, ...requireClosure(path.join(PROJECT_ROOT, 'tools', 'generate-probes.js'))])]
     .map((file) => path.relative(PROJECT_ROOT, file).split(path.sep).join('/'))
     .sort();
 }
@@ -2372,10 +2471,27 @@ function checkRollbackLiteralOutsideCli() {
       ['a binding', 'const rollbackVerified = !0;\nmodule.exports = { rollbackVerified };'],
       ['a default', 'function f({ rollbackVerified = !0 }) {\n  return rollbackVerified;\n}\nmodule.exports = { f };'],
       ['a renamed default', 'function f({ rollbackVerified: verified = 1 }) {\n  return verified;\n}\nmodule.exports = { f };'],
+      ['an alias bound to a minted value', 'const minted = !0;\nmodule.exports = { rollbackVerified: minted };'],
+      ['an alias of an alias', 'const minted = !0;\nconst again = minted;\nmodule.exports = { rollbackVerified: again };'],
+      ['an alias assigned later', 'let minted;\nminted = !0;\nmodule.exports = { rollbackVerified: minted };'],
+      ['a member read of a literal array', 'module.exports = { rollbackVerified: [!0][0] };'],
+      ['a member read of a literal object', 'module.exports = { rollbackVerified: ({ ok: !0 }).ok };'],
+      ['a member read of an alias bound to a literal array', 'const flags = [!0];\nmodule.exports = { rollbackVerified: flags[0] };'],
+      ['a class field', 'class Result {\n  rollbackVerified = !0;\n}\nmodule.exports = { Result };'],
+      ['a static class field', 'class Result {\n  static rollbackVerified = 1;\n}\nmodule.exports = { Result };'],
+      [
+        'a nullish fallback to a minted value',
+        'const performed = {};\nmodule.exports = { rollbackVerified: performed?.rollbackVerified ?? !0 };',
+      ],
+      [
+        'a conditional branch that mints',
+        'const performed = {};\nmodule.exports = { rollbackVerified: performed.ok ? performed.rollbackVerified : !0 };',
+      ],
     ];
     for (const [what, source] of mints) {
       fs.writeFileSync(valued, `${source}\n`);
-      check(rollbackValueViolationsIn(valued).length === 1, `the rollback-value walker missed ${what} outside cli/`);
+      // A shorthand property over a minted binding is two writes (the binding and the property), so a miss is no violation at all.
+      check(rollbackValueViolationsIn(valued).length > 0, `the rollback-value walker missed ${what} outside cli/`);
     }
     const handed = [
       'const performed = { rollbackVerified: false };\nmodule.exports = { rollbackVerified: performed.rollbackVerified };',
@@ -2383,11 +2499,34 @@ function checkRollbackLiteralOutsideCli() {
       'const rollbackVerified = false;\nmodule.exports = { rollbackVerified };',
       'module.exports = { rollbackVerified: false };',
       'function f({ rollbackVerified }) {\n  return rollbackVerified === true;\n}\nmodule.exports = { f };',
+      'const performed = {};\nmodule.exports = { rollbackVerified: performed?.rollbackVerified ?? false };',
+      'const performed = {};\nconst ok = true;\nmodule.exports = { rollbackVerified: ok ? performed.rollbackVerified : false };',
+      'const performed = { rollbackVerified: false };\nconst copied = performed.rollbackVerified;\nmodule.exports = { rollbackVerified: copied };',
+      'class Result {\n  rollbackVerified = false;\n  other;\n}\nmodule.exports = { Result };',
+      'const performed = { rollbackVerified: false };\nclass Result {\n  constructor() {\n    this.rollbackVerified = performed.rollbackVerified;\n  }\n}\nmodule.exports = { Result };',
     ];
     for (const source of handed) {
       fs.writeFileSync(valued, `${source}\n`);
       check(rollbackValueViolationsIn(valued).length === 0, `the rollback-value walker rejected a value a result handed over: ${source}`);
     }
+    // A builder helper the generator requires and the cycle never reaches: builders get the cycle handed in, so the helper requires no
+    // cycle module and only the generator's own require closure leads to it.
+    const generator = path.join(scratchRoot, 'tools', 'generate-probes.js');
+    const helper = path.join(scratchRoot, 'tools', 'lib', 'ci-probe-builder.js');
+    const unrelated = path.join(scratchRoot, 'tools', 'unrelated.js');
+    fs.mkdirSync(path.dirname(helper), { recursive: true });
+    fs.writeFileSync(generator, "const { build } = require('./lib/ci-probe-builder');\nmodule.exports = { build };\n");
+    fs.writeFileSync(helper, 'module.exports = { build: () => ({ qualification: { rollbackVerified: !0 } }) };\n');
+    fs.writeFileSync(unrelated, 'module.exports = {};\n');
+    const reached = requireClosure(generator);
+    check(
+      reached.includes(helper) && !reached.includes(unrelated),
+      'the generator closure missed a helper it requires, or took one it does not',
+    );
+    check(
+      reached.some((file) => rollbackValueViolationsIn(file).length > 0),
+      'a minted claim in a builder helper the generator requires went unseen',
+    );
   } finally {
     fs.rmSync(scratchRoot, { recursive: true, force: true });
   }
