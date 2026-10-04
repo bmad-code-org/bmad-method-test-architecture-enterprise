@@ -134,12 +134,12 @@ development_status:
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
-  1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: review
+  1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: done
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: done
   1-102-refuse-a-duplicate-interface-identifier-at-compile: review
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: done
   1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
-  1-105-partition-rubrics-in-a-partition-plan: backlog
+  1-105-partition-rubrics-in-a-partition-plan: review
   1-106-partition-waivers-in-a-partition-plan: backlog
   1-107-partition-evaluator-mappings-in-a-partition-plan: backlog
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
@@ -167,6 +167,7 @@ development_status:
   2-3-render-evaluation-plans-in-bmad-testarch-ci: done
   2-4-finish-the-evaluation-with-its-ci-stage: done
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
+  2-6-document-evaluate-for-the-people-who-use-it: backlog
   epic-2-retrospective: optional
 parallel_lanes:
   # Run order inside each lane. A story's coordinator hands off to the next
@@ -262,6 +263,8 @@ parallel_lanes:
     - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
     - 1-115-give-the-skill-a-command-that-prints-a-files-digest
     - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
+    # Starts only once every other story has merged.
+    - 2-6-document-evaluate-for-the-people-who-use-it
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
@@ -270,6 +273,7 @@ owner_handoff:
       using the published engine resolved by the final TeA lockfile."
     status: backlog
     depends_on:
+      - 2-6-document-evaluate-for-the-people-who-use-it
       - 1-76-require-an-explicit-custom-agent-version-response
       - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
       - 1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe

@@ -13,9 +13,17 @@
  *  - the held-out run scores after the development run, outside the gap loop, and `compare --accept` and `ci --tier pr`
  *    replay each baseline with no stale warning (compiling `contract.json` for a held-out baseline reads as stale),
  *  - a run of a folder with no `partitionPlan` writes the folder's own `contract.json` bytes in every partition.
+ *
+ * Story 1.105 adds rubrics to the same plan, through the `rubricLayer` over the same fixture: a criterion belongs to the
+ * partition whose steps its evidence reads, so
+ *  - each view holds only the criteria its steps reach (a view that keeps the other partition's criterion fails the pure and the
+ *    run cases), and a development run holds no held-out criterion in any artifact,
+ *  - `check` names a criterion that no view reaches, by criterion ID and never by a byte of the held-out plan,
+ *  - calibration judges the items of the run's own criteria, so an item of the other partition's criterion is never judged there.
  */
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -46,6 +54,29 @@ const HELD_OUT_WITNESS = 'Judge the held-out witness.';
 const KEEP_OUT = {
   development: [CANARY, 'held-out-run', 'O-101', 'judge the held-out case', HELD_OUT_WITNESS],
   'held-out': ['development-run', 'O-002', DEVELOPMENT_REQUEST, DEVELOPMENT_WITNESS],
+};
+
+/** The rubric layer: a development criterion, a shared one in `contract.json`, and a held-out one in the plan (Story 1.105). */
+const STUB_JUDGE = path.join(__dirname, 'fixtures', 'evaluate', 'stub-judge.js');
+const SCALE = [
+  { level: 0, anchor: 'The response does not say accepted.' },
+  { level: 1, anchor: 'The response says accepted.' },
+];
+const rubricOf = (id, criteria) => ({
+  id,
+  scaleLevels: SCALE,
+  failureModePenalties: [{ name: 'silent', description: 'No verdict is stated.' }],
+  maxLength: 100,
+  criteria,
+});
+const criterionOf = (id, text, step) => ({ id, text, evidence: `/interactions/${step}/stdout` });
+const DEVELOPMENT_CRITERION = criterionOf('RC-001', 'Does the development case state its verdict?', 'development-run');
+const SHARED_CRITERION = criterionOf('RC-002', 'Does the shared request state its verdict?', 'shared-run');
+const HELD_OUT_CRITERION = criterionOf('RC-101', `${CANARY}: does the held-out case state its verdict?`, 'held-out-run');
+/** What must stay out of each partition's artifacts once rubrics join the plan: the other partition's own criterion. */
+const RUBRIC_KEEP_OUT = {
+  development: [...KEEP_OUT.development, 'R-101', 'RC-101'],
+  'held-out': [...KEEP_OUT['held-out'], 'RC-001', DEVELOPMENT_CRITERION.text],
 };
 
 const test = suite('tea-evaluate-partition-plans');
@@ -96,13 +127,80 @@ function commit(repository, message) {
   }
 }
 
+/**
+ * The rubric layer over a project's folder (Story 1.105): `contract.json` gains R-001 holding `development` criteria, the held-out
+ * plan gains R-101 holding `heldOut` ones, and the stub judge, its model snapshot and one labelled file with two anchored items
+ * per criterion make every rubric judgeable. The stub scores every criterion at the top level, so each criterion agrees on half
+ * its items and `minimumAgreement` is one half. Stories that partition more of the contract extend a project through this layer.
+ */
+function rubricLayer(
+  { folder, directory },
+  { development = [DEVELOPMENT_CRITERION, SHARED_CRITERION], heldOut = [HELD_OUT_CRITERION] } = {},
+) {
+  const edit = (file, change) => {
+    const value = read(path.join(folder, file));
+    change(value);
+    write(path.join(folder, file), value);
+  };
+  edit('contract.json', (contract) => {
+    contract.rubrics = development.length === 0 ? [] : [rubricOf('R-001', development)];
+  });
+  edit(PLAN_FILE, (plan) => {
+    if (heldOut.length > 0) plan.rubrics = [rubricOf('R-101', heldOut)];
+  });
+  edit('evaluation.json', (evaluation) => {
+    evaluation.judge = {
+      agent: 'custom',
+      agentCommand: process.execPath,
+      agentArgs: [STUB_JUDGE, '--capture', path.join(directory, 'prompts.jsonl')],
+      timeoutMs: 60_000,
+    };
+    evaluation.judgeCalibration = { minimumAgreement: 0.5 };
+  });
+  write(path.join(folder, 'policy/evaluator-conditions.json'), {
+    schemaVersion: 1,
+    modelSnapshot: 'none',
+    systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
+    judge: { modelSnapshot: 'stub-judge-2026-09' },
+  });
+  write(path.join(folder, 'policy/judge-calibration.json'), {
+    items: [...development.map((criterion) => ['R-001', criterion]), ...heldOut.map((criterion) => ['R-101', criterion])].flatMap(
+      ([rubricId, criterion]) =>
+        [0, 1].map((level) => ({
+          rubricId,
+          criterionId: criterion.id,
+          response: `calibration response ${criterion.id} ${level}`,
+          expectedLevel: level,
+        })),
+    ),
+  });
+}
+
+/** The judge's calls since `from`: whether each was a calibration call and the `rubric/criterion` keys it was asked to score. */
+function judgeCalls(project, from = 0) {
+  const file = path.join(project.directory, 'prompts.jsonl');
+  const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean) : [];
+  const heading = 'Rubrics and evidence (JSON):';
+  return lines.slice(from).map((line) => {
+    const prompt = JSON.parse(line);
+    const material = JSON.parse(prompt.slice(prompt.indexOf(heading) + heading.length));
+    return {
+      calibration: prompt.includes('calibration response'),
+      criteria: material.rubrics.flatMap((rubric) => rubric.criteria.map((criterion) => `${rubric.rubricId}/${criterion.criterionId}`)),
+      prompt,
+    };
+  });
+}
+const judgeCallCount = (project) => judgeCalls(project).length;
+
 /** The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository). */
-function planProject(label) {
+function planProject(label, layer = null) {
   return test.project(
     label,
-    ({ folder }) => {
+    ({ folder, directory }) => {
       // A byte-for-byte comparison of the run's contract.json with the folder's can fail only when the folder's layout is one
       // a view would not produce.
+      if (layer !== null) rubricLayer({ folder, directory }, layer);
       relayContract(folder);
       fs.mkdirSync(path.join(folder, 'ci'));
       write(
@@ -249,6 +347,58 @@ try {
     'a literal that spells a pointer dropped a shared oracle from the held-out view',
   );
 
+  // ---- rubrics: a criterion belongs to the partition whose steps its evidence reads (Story 1.105) -------------------------------
+  const lateCriterion = criterionOf('RC-003', 'Does the development case exit cleanly?', 'development-run');
+  const rubricSource = JSON.parse(contractBytes.toString('utf8'));
+  rubricSource.rubrics = [
+    rubricOf('R-001', [DEVELOPMENT_CRITERION, SHARED_CRITERION]),
+    rubricOf('R-002', [lateCriterion]),
+    rubricOf('R-003', []),
+  ];
+  const rubricBytes = Buffer.from(JSON.stringify(rubricSource, null, 4));
+  const rubricPlan = { ...heldOutPlan, rubrics: [rubricOf('R-101', [HELD_OUT_CRITERION])] };
+  const rubricView = (partition, plan = rubricPlan) =>
+    contractView({ contractBytes: rubricBytes, evaluation, heldOutPlan: plan, partition });
+  const criteriaIn = (partition) =>
+    rubricView(partition).contract.rubrics.map((rubric) => [rubric.id, rubric.criteria.map((criterion) => criterion.id)]);
+  // The development view is the source bytes: it carries the development and shared criteria and never the plan's.
+  assert.equal(rubricView('development').bytes, rubricBytes, 'the development view is not the folder bytes');
+  assert.deepEqual(
+    rubricView('development').contract.rubrics.map((rubric) => rubric.id),
+    ['R-001', 'R-002', 'R-003'],
+  );
+  assert.equal(
+    JSON.stringify(rubricView('development').contract).includes('RC-101'),
+    false,
+    'the development view carries the held-out criterion',
+  );
+  // The held-out view drops a criterion that reads a development-only step, drops a rubric left with none, keeps a rubric that
+  // never had one, and appends the plan's rubrics.
+  assert.deepEqual(criteriaIn('held-out'), [
+    ['R-001', ['RC-002']],
+    ['R-003', []],
+    ['R-101', ['RC-101']],
+  ]);
+  assert.deepEqual(criteriaIn('both'), [
+    ['R-001', ['RC-001', 'RC-002']],
+    ['R-002', ['RC-003']],
+    ['R-003', []],
+    ['R-101', ['RC-101']],
+  ]);
+  assert.deepEqual(
+    { ...rubricView('held-out').contract.rubrics[0], criteria: null },
+    { ...rubricSource.rubrics[0], criteria: null },
+    'the held-out view changed more of a rubric than its criteria',
+  );
+  // A plan with no `rubrics` appends nothing, so a plan written before rubrics joined it adds none; the held-out view still drops the
+  // criteria the held-out partition cannot reach.
+  assert.deepEqual(
+    rubricView('held-out', heldOutPlan).contract.rubrics.map((rubric) => rubric.id),
+    ['R-001', 'R-003'],
+  );
+  assert.deepEqual(view('held-out').contract.rubrics, []);
+  assert.deepEqual(view('both').contract.rubrics, []);
+
   // ---- check: one case per rule, naming paths and IDs and never a byte of the plan -------------------------------------------
   const guarded = planProject('plan-check');
   const planFile = path.join(guarded.folder, PLAN_FILE);
@@ -371,20 +521,6 @@ try {
       'a held-out plan with an unexpected field',
       () => change(PLAN_FILE, (value) => (value['canary-top-level'] = 'canary-top-value')),
       /corpus\/held-out\/plan\.json.*\(root\) must NOT have additional properties/,
-    ],
-    [
-      'a rubric reading a development-only step',
-      () =>
-        change('contract.json', (contract) =>
-          contract.rubrics.push({
-            id: 'R-001',
-            scaleLevels: [{ level: 1, anchor: 'The verdict is stated.' }],
-            failureModePenalties: [{ name: 'silent', description: 'No verdict is stated.' }],
-            maxLength: 100,
-            criteria: [{ id: 'RC-001', text: 'The verdict is stated.', evidence: '/interactions/development-run/stdout' }],
-          }),
-        ),
-      /contract\.json.*rubrics read development-only step development-run; a partition plan does not partition rubrics yet/,
     ],
     [
       'a waiver reading a development-only step',
@@ -527,6 +663,354 @@ try {
   assert.equal(staleCheck.status, 10, staleCheck.output);
   assert.match(staleCheck.output, /corpus-index\.json is stale.*corpus\/held-out\/plan\.json changed or added/);
   assert.equal(cli(guarded, 'check').status, 0);
+
+  // ---- check over rubrics: each criterion has a home, and one no view reaches is named by its ID (Story 1.105) ----------------
+  const rubricGuarded = planProject('plan-rubric-check', {});
+  const rubricFiles = ['contract.json', 'evaluation.json', PLAN_FILE, 'policy/judge-calibration.json', 'policy/evaluator-conditions.json'];
+  const rubricOriginals = new Map(rubricFiles.map((file) => [file, fs.readFileSync(path.join(rubricGuarded.folder, file))]));
+  const rubricChange = (file, edit) => {
+    const value = read(path.join(rubricGuarded.folder, file));
+    edit(value);
+    write(path.join(rubricGuarded.folder, file), value);
+  };
+  const rubricChecked = (edit, command = ['check']) => {
+    try {
+      edit();
+      assert.equal(cli(rubricGuarded, 'digest').status, 0);
+      return cli(rubricGuarded, command[0], command.slice(1));
+    } finally {
+      for (const [file, bytes] of rubricOriginals) fs.writeFileSync(path.join(rubricGuarded.folder, file), bytes);
+      assert.equal(cli(rubricGuarded, 'digest').status, 0);
+    }
+  };
+  // A development criterion, a shared one and a held-out one together are a valid plan: the 1.51 refusal of a rubric that reads a
+  // development-only step is replaced by the derivation, so each criterion has a view.
+  const rubricsPristine = cli(rubricGuarded, 'check');
+  assert.equal(rubricsPristine.status, 0, rubricsPristine.output);
+  // Story 1.51's id-only rule holds over the plan's rubrics: a criterion the plan declares is named by its ID when the ID has the
+  // schema's shape and by its index otherwise, and its pointer, channel, member and levels are never printed.
+  const idOnlyCases = [
+    [
+      'a held-out criterion ID of no criterion shape',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].id = 'canary-crit-id')),
+      /corpus\/held-out\/plan\.json.*rubrics\[0\]\/criteria\/0\/id must match pattern/,
+    ],
+    [
+      'a held-out scale level that is no integer',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].scaleLevels[1].level = 'canary-level')),
+      /corpus\/held-out\/plan\.json.*rubrics\[0\]\/scaleLevels\/1\/level must be integer/,
+    ],
+    [
+      'a held-out criterion reading a channel the engine does not know',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/held-out-run/canary-channel')),
+      /corpus\/held-out\/plan\.json.*rubrics\[0\]\/criteria\/0\/evidence must match pattern/,
+    ],
+    [
+      'a held-out criterion reading a member no calibration response holds',
+      () => {
+        rubricChange(
+          PLAN_FILE,
+          (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/held-out-run/response-body/canary-member'),
+        );
+        rubricChange('policy/judge-calibration.json', (labelled) => {
+          for (const item of labelled.items.filter((entry) => entry.rubricId === 'R-101')) item.response = '{"other":1}';
+        });
+      },
+      /policy\/judge-calibration\.json.*items\[4\] response does not reach the evidence of R-101\/RC-101/,
+    ],
+    [
+      'a held-out criterion reading a call input no calibration response names',
+      () =>
+        rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/held-out-run/call-inputs/canary-member')),
+      /corpus\/held-out\/plan\.json.*rubrics\[0\]\/criteria\/0\/evidence must match pattern/,
+    ],
+    [
+      'a held-out rubric ID that a contract rubric has, over a criterion ID of no shape',
+      () =>
+        rubricChange(PLAN_FILE, (plan) => {
+          plan.rubrics[0].id = 'R-001';
+          plan.rubrics[0].criteria[0].id = 'canary-crit-id';
+        }),
+      /corpus\/held-out\/plan\.json.*rubric R-001 has the ID of a rubric contract\.json declares/,
+    ],
+    [
+      'a held-out criterion of no criterion shape reading a development-only step',
+      () =>
+        rubricChange(PLAN_FILE, (plan) => {
+          plan.rubrics[0].criteria[0].id = 'canary-crit-id';
+          plan.rubrics[0].criteria[0].evidence = '/interactions/development-run/stdout';
+        }),
+      /corpus\/held-out\/plan\.json.*criterion criteria\[0\] of rubric R-101 reads step development-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out criterion ID with the criterion shape and a free-text tail, reading a development-only step',
+      () =>
+        rubricChange(PLAN_FILE, (plan) => {
+          plan.rubrics[0].criteria[0].id = 'RC-101-canary-x';
+          plan.rubrics[0].criteria[0].evidence = '/interactions/development-run/stdout';
+        }),
+      /corpus\/held-out\/plan\.json.*criterion criteria\[0\] of rubric R-101 reads step development-run, which the held-out view does not declare/,
+    ],
+  ];
+  for (const [name, edit, pattern] of [
+    [
+      'a contract criterion reading a step the contract does not declare',
+      () => rubricChange('contract.json', (contract) => (contract.rubrics[0].criteria[1].evidence = '/interactions/ghost-run/stdout')),
+      /contract\.json.*criterion RC-002 of rubric R-001 reads step ghost-run, which the development view does not declare/,
+    ],
+    [
+      'a contract criterion reading a held-out step',
+      () => rubricChange('contract.json', (contract) => (contract.rubrics[0].criteria[0].evidence = '/interactions/held-out-run/stdout')),
+      /contract\.json.*criterion RC-001 of rubric R-001 reads step held-out-run, which the development view does not declare/,
+    ],
+    [
+      'a held-out criterion reading a development-only step',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/development-run/stdout')),
+      /corpus\/held-out\/plan\.json.*criterion RC-101 of rubric R-101 reads step development-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out criterion reading a step no view holds',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/ghost-run/stdout')),
+      /corpus\/held-out\/plan\.json.*criterion RC-101 of rubric R-101 reads step ghost-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out rubric ID that a contract rubric has',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].id = 'R-001')),
+      /corpus\/held-out\/plan\.json.*rubric R-001 has the ID of a rubric contract\.json declares/,
+    ],
+    [
+      'a held-out rubric declared twice',
+      () => rubricChange(PLAN_FILE, (plan) => plan.rubrics.push(structuredClone(plan.rubrics[0]))),
+      /corpus\/held-out\/plan\.json.*rubric R-101 is declared more than once/,
+    ],
+    [
+      'a held-out rubric ID of no rubric shape',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].id = 'canary-free text')),
+      /corpus\/held-out\/plan\.json.*\/rubrics\/0\/id must match pattern/,
+    ],
+    [
+      'a held-out criterion whose evidence the engine schema refuses',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = 'canary-not-a-pointer')),
+      /corpus\/held-out\/plan\.json.*rubrics\[0\]\/criteria\/0\/evidence must match pattern/,
+    ],
+    ...idOnlyCases,
+    [
+      'a calibration item for a criterion no view declares',
+      () =>
+        rubricChange('policy/judge-calibration.json', (labelled) =>
+          labelled.items.push({ rubricId: 'R-101', criterionId: 'RC-009', response: 'calibration response', expectedLevel: 0 }),
+        ),
+      /policy\/judge-calibration\.json.*items\[6\] names unknown rubric criterion R-101\/RC-009/,
+    ],
+    [
+      'a held-out criterion with no calibration item at one of its levels',
+      () => rubricChange('policy/judge-calibration.json', (labelled) => labelled.items.splice(5, 1)),
+      /policy\/judge-calibration\.json.*R-101\/RC-101 has no calibration item labelled at one of its anchored levels/,
+    ],
+    [
+      'a judge beside a partition plan that declares no rubric in any view',
+      () => {
+        rubricChange('contract.json', (contract) => (contract.rubrics = []));
+        rubricChange(PLAN_FILE, (plan) => delete plan.rubrics);
+        rubricChange('policy/judge-calibration.json', (labelled) => (labelled.items = []));
+      },
+      /evaluation\.json.*contract\.json declares no rubric, so no judge runs/,
+    ],
+  ]) {
+    const ran = rubricChecked(edit);
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    assert.match(ran.output, pattern, name);
+    assert.equal(ran.output.includes('canary-'), false, `${name}: check quoted a byte of the held-out plan:\n${ran.output}`);
+  }
+  // The rubric rules read the plan only when it is sound: no finding of its own, a held-out view the engine's contract schema accepts,
+  // and a `contract.json` that does too. Beside a plan or a contract with a finding they hold the rubrics `check` can see, so the
+  // finding is the only one and the plan's labelled items are neither validated nor named. Each case below gives the plan criterion an
+  // evidence pointer the labelled items cannot reach, which a both view built over the unsound plan would report.
+  const unreachableMember = () => {
+    rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = '/interactions/held-out-run/response-body/canary-member'));
+    rubricChange('policy/judge-calibration.json', (labelled) => {
+      for (const item of labelled.items.filter((entry) => entry.rubricId === 'R-101')) item.response = '{"other":1}';
+    });
+  };
+  for (const [name, edit, pattern] of [
+    [
+      'a held-out view the engine schema refuses',
+      () => rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = 'canary-not-a-pointer')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] rubrics\[0\]\/criteria\/0\/evidence must match pattern/,
+    ],
+    [
+      'a plan with a finding of its own',
+      () => {
+        unreachableMember();
+        rubricChange(PLAN_FILE, (plan) => (plan.behaviorOracles['B-009'] = ['O-101']));
+      },
+      /behaviorOracles names behavior B-009, which contract\.json does not declare/,
+    ],
+    [
+      'a contract.json that fails its own schema',
+      () => {
+        unreachableMember();
+        rubricChange('contract.json', (contract) => (contract.oracles[0].polarity = 'bogus'));
+      },
+      /contract\.json: \[engine-schema\]/,
+    ],
+  ]) {
+    const ran = rubricChecked(edit);
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    assert.match(ran.output, pattern, name);
+    assert.doesNotMatch(
+      ran.output,
+      /\[judge(-calibration)?\]/,
+      `${name}: check judged the labelled items of a plan it cannot trust:\n${ran.output}`,
+    );
+  }
+  // A criterion of `contract.json` whose ID has no shape is named by its index in the partition-plan finding. The adopter's own
+  // contract.json is not the held-out plan, so the other findings about the file may quote it; this finding is the plan rule's.
+  const freeTextContract = rubricChecked(() =>
+    rubricChange('contract.json', (contract) => {
+      contract.rubrics[0].criteria[1].id = 'canary-contract-crit';
+      contract.rubrics[0].criteria[1].evidence = '/interactions/ghost-run/stdout';
+    }),
+  );
+  assert.equal(freeTextContract.status, 10, freeTextContract.output);
+  const planRule = freeTextContract.output.split('\n').filter((line) => line.includes('[partition-plan]'));
+  assert.equal(planRule.length, 1, freeTextContract.output);
+  assert.match(
+    planRule[0],
+    /^contract\.json: \[partition-plan\] criterion criteria\[1\] of rubric R-001 reads step ghost-run, which the development view does not declare/,
+  );
+  assert.equal(planRule[0].includes('canary-'), false, `the plan rule quoted contract.json's free-text ID: ${planRule[0]}`);
+  // A judge the both view's rubrics need is named against the contract and its held-out plan together: `contract.json` alone may
+  // declare none, and the count is the two files' sum, which neither file holds.
+  const noJudge = rubricChecked(() => {
+    rubricChange('contract.json', (contract) => (contract.rubrics = []));
+    rubricChange(
+      'policy/judge-calibration.json',
+      (labelled) => (labelled.items = labelled.items.filter((item) => item.rubricId === 'R-101')),
+    );
+    rubricChange('evaluation.json', (evaluation) => delete evaluation.judge);
+    rubricChange('policy/evaluator-conditions.json', (conditions) => delete conditions.judge);
+  });
+  assert.equal(noJudge.status, 10, noJudge.output);
+  assert.match(
+    noJudge.output,
+    /evaluation\.json: \[judge\] the contract and its held-out plan declare a rubric, and evaluation\.json declares no judge/,
+  );
+  assert.match(
+    noJudge.output,
+    /policy\/evaluator-conditions\.json: \[judge\] the contract and its held-out plan declare a rubric, and policy\/evaluator-conditions\.json names no judge\.modelSnapshot/,
+  );
+  assert.doesNotMatch(noJudge.output, /rubric\(s\)|contract\.json declares/, 'check counted rubrics over the both view for contract.json');
+  // Beside a contract that fails its own schema the plan is not read, so the rubrics `check` counts are `contract.json`'s own.
+  const unreadJudge = rubricChecked(() => {
+    rubricChange('contract.json', (contract) => (contract.oracles[0].polarity = 'bogus'));
+    rubricChange('evaluation.json', (evaluation) => delete evaluation.judge);
+  });
+  assert.equal(unreadJudge.status, 10, unreadJudge.output);
+  assert.match(
+    unreadJudge.output,
+    /evaluation\.json: \[judge\] contract\.json declares 1 rubric\(s\), and evaluation\.json declares no judge/,
+  );
+  assert.doesNotMatch(unreadJudge.output, /held-out plan declare/, 'check named a plan it did not read');
+  // A plan criterion's schema error is named by its index among the plan's rubrics: the held-out view lists the rubrics `contract.json`
+  // keeps first, and a rubric left with no held-out criterion is not kept, so the plan's rubric is `rubrics[0]` here although
+  // `contract.json` declares one rubric.
+  const dropped = rubricChecked(() => {
+    rubricChange('contract.json', (contract) => (contract.rubrics[0].criteria = [contract.rubrics[0].criteria[0]]));
+    rubricChange(PLAN_FILE, (plan) => (plan.rubrics[0].criteria[0].evidence = 'canary-not-a-pointer'));
+  });
+  assert.equal(dropped.status, 10, dropped.output);
+  assert.match(
+    dropped.output,
+    /corpus\/held-out\/plan\.json: \[partition-plan\] rubrics\[0\]\/criteria\/0\/evidence must match pattern/,
+    'a plan rubric was located by the count of contract.json rubrics',
+  );
+  assert.doesNotMatch(dropped.output, /held-out view \/rubrics|canary-/, dropped.output);
+  // A development criterion is held to its own calibration items as any criterion is.
+  const ownItems = rubricChecked(() => rubricChange('policy/judge-calibration.json', (labelled) => labelled.items.splice(0, 1)));
+  assert.equal(ownItems.status, 10, ownItems.output);
+  assert.match(ownItems.output, /R-001\/RC-001 has no calibration item labelled at anchored level 0/, ownItems.output);
+  // A rubric only the held-out plan declares: `contract.json` holds none, and the judge and the labelled file serve the held-out
+  // partition alone. `check` reads both files, and a development run, which never opens the plan, does not call the judge unused
+  // or the held-out items unknown.
+  const heldOutOnly = rubricChecked(() => {
+    rubricChange('contract.json', (contract) => (contract.rubrics = []));
+    rubricChange(
+      'policy/judge-calibration.json',
+      (labelled) => (labelled.items = labelled.items.filter((item) => item.rubricId === 'R-101')),
+    );
+  });
+  assert.equal(heldOutOnly.status, 0, heldOutOnly.output);
+  // A development run of that layout judges nothing, and a held-out run of it calibrates and judges the plan's rubric alone: the
+  // judge is called in the partition that owns the criterion and in no other.
+  try {
+    rubricChange('contract.json', (contract) => (contract.rubrics = []));
+    rubricChange(
+      'policy/judge-calibration.json',
+      (labelled) => (labelled.items = labelled.items.filter((item) => item.rubricId === 'R-101')),
+    );
+    assert.equal(cli(rubricGuarded, 'digest').status, 0);
+    const before = judgeCallCount(rubricGuarded);
+    const developmentRun = cli(rubricGuarded, 'run', ['--partition', 'development']);
+    assert.equal(developmentRun.status, 0, developmentRun.output);
+    assert.equal(judgeCallCount(rubricGuarded), before, 'a development partition with no rubric called the judge');
+    assert.equal(developmentRun.output.includes('RC-101'), false, 'a development run named the held-out criterion');
+    const heldOutRun = cli(rubricGuarded, 'run', ['--partition', 'held-out']);
+    assert.equal(heldOutRun.status, 0, heldOutRun.output);
+    const heldOutCalls = judgeCalls(rubricGuarded, before);
+    const calibrationCalls = heldOutCalls.filter((call) => call.calibration);
+    assert.equal(calibrationCalls.length, 2, 'the held-out run did not calibrate the plan rubric over its two labelled items');
+    assert.ok(
+      heldOutCalls.some((call) => !call.calibration),
+      'the held-out run judged no trial',
+    );
+    assert.deepEqual(
+      [...new Set(heldOutCalls.map((call) => call.criteria.join(',')))],
+      ['R-101/RC-101'],
+      'the held-out run judged a criterion other than the plan rubric',
+    );
+  } finally {
+    for (const [file, bytes] of rubricOriginals) fs.writeFileSync(path.join(rubricGuarded.folder, file), bytes);
+    assert.equal(cli(rubricGuarded, 'digest').status, 0);
+  }
+  // Every partition's findings stay id-only through preflight too: it runs `check` first, so a held-out or both preflight over a
+  // plan with a criterion of no shape, or with an evidence pointer the labelled items cannot reach, stops with a finding that names
+  // none of the plan's text.
+  for (const [name, edit] of idOnlyCases) {
+    for (const args of [['preflight', '--partition', 'held-out'], ['preflight']]) {
+      const ran = rubricChecked(edit, args);
+      assert.equal(ran.status, 10, `${name} (${args.join(' ')}): ${ran.output}`);
+      assert.equal(ran.output.includes('canary-'), false, `${name} (${args.join(' ')}) quoted a byte of the held-out plan:\n${ran.output}`);
+    }
+  }
+  // A contract.json that fails its own schema cannot make the both view, so `check` holds the rubrics it can see and leaves the rest
+  // to the partition that owns them: the contract error is the only finding, and no rubric, judge or labelled item is called
+  // missing, unused or unknown for want of the plan's rubrics.
+  for (const [name, layout] of [
+    [
+      'a rubric only the held-out plan declares',
+      () => {
+        rubricChange('contract.json', (contract) => (contract.rubrics = []));
+        rubricChange(
+          'policy/judge-calibration.json',
+          (labelled) => (labelled.items = labelled.items.filter((item) => item.rubricId === 'R-101')),
+        );
+      },
+    ],
+    ['rubrics in both files', () => {}],
+  ]) {
+    const ran = rubricChecked(() => {
+      layout();
+      rubricChange('contract.json', (contract) => (contract.oracles[0].polarity = 'bogus'));
+    });
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    assert.match(ran.output, /contract\.json/, `${name}: the contract error is gone`);
+    assert.doesNotMatch(
+      ran.output,
+      /\[judge(-calibration)?\]|no rubric|never used|unknown rubric criterion|calibration item/,
+      `${name}: check blamed the rubrics, the judge or the labelled file for a contract error:\n${ran.output}`,
+    );
+  }
 
   // ---- a development run never opens the held-out plan; a held-out or both run refuses one it cannot read ----------------------
   for (const [name, edit] of [
@@ -802,6 +1286,243 @@ try {
       `a run with no partitionPlan rewrote contract.json (${args.join(' ') || 'both'})`,
     );
   }
+  // ---- rubrics through run and score: each partition judges and calibrates its own criteria (Story 1.105) ---------------------
+  // One labelled file serves every partition. It holds two items per criterion, so the development run is handed items of the
+  // held-out criterion and the held-out run items of the development one, and each must leave them unjudged.
+  const rubricFlow = planProject('plan-rubric-flow', {});
+  const rubricsOf = (run) => read(path.join(run, 'contract.json')).rubrics.map((rubric) => [rubric.id, rubric.criteria.map((c) => c.id)]);
+  const calibratedIn = (run) => read(path.join(run, 'judge-calibration.json')).criteria.map((c) => `${c.rubricId}/${c.criterionId}`);
+  const calibrationCalls = (calls) => calls.filter((call) => call.calibration);
+  const trialCalls = (calls) => calls.filter((call) => !call.calibration);
+  /** Runs a partition and returns its run directory and the judge's calls. */
+  const rubricRun = (args) => {
+    const from = judgeCallCount(rubricFlow);
+    const ran = cli(rubricFlow, 'run', args);
+    assert.equal(ran.status, 0, ran.output);
+    const run = test.latest(rubricFlow.folder);
+    const scored = cli(rubricFlow, 'score', ['--run', path.basename(run)]);
+    assert.equal(scored.status, 0, scored.output);
+    return { run, calls: judgeCalls(rubricFlow, from), output: `${ran.output}${scored.output}` };
+  };
+
+  const rubricDevelopment = rubricRun(['--partition', 'development']);
+  assert.deepEqual(rubricsOf(rubricDevelopment.run), [['R-001', ['RC-001', 'RC-002']]]);
+  assert.deepEqual(calibratedIn(rubricDevelopment.run), ['R-001/RC-001', 'R-001/RC-002']);
+  assert.equal(
+    calibrationCalls(rubricDevelopment.calls).length,
+    4,
+    'the development run did not judge exactly its own four calibration items',
+  );
+  assert.ok(trialCalls(rubricDevelopment.calls).length > 0, 'the development run judged no trial');
+  assert.deepEqual(
+    [...new Set(trialCalls(rubricDevelopment.calls).map((call) => call.criteria.join(',')))],
+    ['R-001/RC-001,R-001/RC-002'],
+    'a development trial was judged on another set of criteria',
+  );
+  assert.equal(
+    rubricDevelopment.calls.some((call) => call.prompt.includes('RC-101') || call.prompt.includes(CANARY)),
+    false,
+    'the judge of a development run was handed the held-out criterion or one of its calibration items',
+  );
+  assert.deepEqual(holding(rubricDevelopment.run, RUBRIC_KEEP_OUT.development), [], 'the development run holds the held-out criterion');
+  assert.equal(rubricDevelopment.output.includes('RC-101'), false);
+
+  const rubricHeldOut = rubricRun(['--partition', 'held-out']);
+  assert.deepEqual(rubricsOf(rubricHeldOut.run), [
+    ['R-001', ['RC-002']],
+    ['R-101', ['RC-101']],
+  ]);
+  assert.deepEqual(calibratedIn(rubricHeldOut.run), ['R-001/RC-002', 'R-101/RC-101']);
+  assert.equal(calibrationCalls(rubricHeldOut.calls).length, 4, 'the held-out run did not judge exactly its own four calibration items');
+  assert.deepEqual(
+    [...new Set(trialCalls(rubricHeldOut.calls).map((call) => call.criteria.join(',')))],
+    ['R-001/RC-002,R-101/RC-101'],
+    'a held-out trial was judged on another set of criteria',
+  );
+  assert.equal(
+    rubricHeldOut.calls.some((call) => call.prompt.includes('RC-001') || call.prompt.includes(DEVELOPMENT_CRITERION.text)),
+    false,
+    'the judge of a held-out run was handed the development criterion or one of its calibration items',
+  );
+  assert.deepEqual(holding(rubricHeldOut.run, RUBRIC_KEEP_OUT['held-out']), [], 'the held-out run holds the development criterion');
+  const rubricHeldOutOutcome = read(path.join(rubricHeldOut.run, 'partitions.json'))['held-out'][0].outcome;
+  assert.equal(rubricHeldOutOutcome.caught, true, JSON.stringify(rubricHeldOutOutcome));
+  const rubricGap = JSON.stringify(read(path.join(rubricHeldOut.run, 'gap-view.json')));
+  assert.equal(rubricGap.includes('RC-101') || rubricGap.includes('R-101'), false, 'the gap view names the held-out criterion');
+
+  // The whole contract judges every criterion once, and a labelled file that names a criterion of no view is refused there.
+  const rubricBoth = rubricRun([]);
+  assert.deepEqual(rubricsOf(rubricBoth.run), [
+    ['R-001', ['RC-001', 'RC-002']],
+    ['R-101', ['RC-101']],
+  ]);
+  assert.equal(calibrationCalls(rubricBoth.calls).length, 6, 'the both run did not judge every calibration item');
+  const labelledFile = path.join(rubricFlow.folder, 'policy/judge-calibration.json');
+  const labelledBytes = fs.readFileSync(labelledFile);
+  try {
+    const labelled = read(labelledFile);
+    labelled.items.push({ rubricId: 'R-101', criterionId: 'RC-009', response: 'calibration response', expectedLevel: 0 });
+    write(labelledFile, labelled);
+    const refused = cli(rubricFlow, 'run');
+    assert.equal(refused.status, 10, refused.output);
+    assert.match(refused.output, /items\[6\] names unknown rubric criterion R-101\/RC-009/);
+  } finally {
+    fs.writeFileSync(labelledFile, labelledBytes);
+  }
+
+  // `ci`'s judge-calibration check calibrates the view of the baseline's partition. A rubric only the held-out plan declares left
+  // `contract.json` with none, so the check used to report "no rubric declared" and skip the calibration it exists to gate.
+  const rubricCi = planProject('plan-rubric-ci', { development: [], heldOut: [HELD_OUT_CRITERION] });
+  /** The CI plan of a project reduced to the scheduled judge-calibration check. */
+  const calibrationOnlyPlan = (project) =>
+    write(path.join(project.folder, 'ci/evaluation-ci-plan.json'), {
+      schemaVersion: 1,
+      checks: [
+        {
+          id: 'judge-calibration',
+          tier: 'scheduled',
+          trigger: ['schedule', 'manual-dispatch'],
+          kind: 'evaluate',
+          command: ['tea-evaluate', 'ci', '--evaluation', '.', '--tier', 'scheduled'],
+          enforcement: 'block',
+          evidence: ['runs/<invocationId>/checks/judge-calibration/stdout'],
+          placement: { tier: 'scheduled', defaultTier: 'scheduled', reason: 'AD-10 default' },
+        },
+      ],
+    });
+  calibrationOnlyPlan(rubricCi);
+  commit(rubricCi.repository, 'scheduled plan');
+  const calibratedByCi = cli(rubricCi, 'ci', ['--tier', 'scheduled']);
+  assert.equal(calibratedByCi.status, 0, calibratedByCi.output);
+  assert.doesNotMatch(
+    calibratedByCi.output,
+    /declares no rubric/,
+    'ci skipped the calibration of a rubric only the held-out plan declares',
+  );
+  assert.equal(
+    judgeCalls(rubricCi).filter((call) => call.calibration).length,
+    2,
+    'ci did not calibrate the held-out criterion over its two labelled items',
+  );
+
+  // The check follows the partition the baseline recorded, not the whole contract. A development baseline sees `contract.json`
+  // alone: its development criterion is calibrated, and the plan's rubric is not, whatever the plan holds.
+  /** Accepts the run of `partition` as the project's baseline and commits it. */
+  const acceptBaseline = (project, partition) => {
+    const ran = cli(project, 'run', ['--partition', partition]);
+    assert.equal(ran.status, 0, ran.output);
+    const run = test.latest(project.folder);
+    assert.equal(cli(project, 'score', ['--run', path.basename(run)]).status, 0);
+    const accepted = cli(project, 'compare', ['--run', path.basename(run), '--accept']);
+    assert.equal(accepted.status, 0, accepted.output);
+    commit(project.repository, `${partition} baseline`);
+  };
+  const developmentBaseline = planProject('plan-rubric-ci-development', { development: [DEVELOPMENT_CRITERION], heldOut: [] });
+  calibrationOnlyPlan(developmentBaseline);
+  commit(developmentBaseline.repository, 'scheduled plan');
+  acceptBaseline(developmentBaseline, 'development');
+  const developmentCalls = judgeCallCount(developmentBaseline);
+  const developmentCalibrated = cli(developmentBaseline, 'ci', ['--tier', 'scheduled']);
+  assert.equal(developmentCalibrated.status, 0, developmentCalibrated.output);
+  assert.doesNotMatch(developmentCalibrated.output, /declares no rubric/, 'ci skipped the calibration of a development baseline');
+  const developmentBaselineCalls = judgeCalls(developmentBaseline, developmentCalls);
+  assert.deepEqual(
+    developmentBaselineCalls.filter((call) => call.calibration).map((call) => call.criteria.join(',')),
+    ['R-001/RC-001', 'R-001/RC-001'],
+    'ci did not calibrate the development criterion over its two labelled items',
+  );
+  // A plan rubric no development view holds is not this baseline's to calibrate, and the plan is not opened to find out: a plan
+  // that cannot be read changes nothing.
+  acceptBaseline(rubricCi, 'development');
+  const planBytes = fs.readFileSync(path.join(rubricCi.folder, PLAN_FILE));
+  const beforeCorrupt = judgeCallCount(rubricCi);
+  try {
+    write(path.join(rubricCi.folder, PLAN_FILE), 'canary-garbage {"interactionPlan": [');
+    const skipped = cli(rubricCi, 'ci', ['--tier', 'scheduled']);
+    assert.equal(skipped.status, 0, skipped.output);
+    const evidence = /evidence is in (runs\/[^ ]+)/.exec(skipped.output)?.[1];
+    assert.ok(evidence, skipped.output);
+    assert.match(
+      fs.readFileSync(path.join(rubricCi.folder, evidence, 'checks/judge-calibration/stdout'), 'utf8'),
+      /the contract declares no rubric/,
+      'ci did not report the development baseline as holding no rubric',
+    );
+    assert.doesNotMatch(
+      skipped.output,
+      /corpus\/held-out\/plan\.json|canary-garbage|\[partition-plan\]/,
+      'the development baseline opened the held-out plan',
+    );
+    assert.equal(judgeCallCount(rubricCi), beforeCorrupt, 'ci judged for a development baseline whose view holds no rubric');
+  } finally {
+    fs.writeFileSync(path.join(rubricCi.folder, PLAN_FILE), planBytes);
+  }
+
+  // A held-out baseline sees the plan's rubric and the criteria of `contract.json` its view reaches (here none, the development
+  // criterion reads a development-only step), so the check calibrates the plan's criterion alone; a plan that cannot be read is then
+  // the check's authoring finding, since this baseline's view cannot be built without it.
+  const heldOutBaseline = planProject('plan-rubric-ci-held-out', { development: [DEVELOPMENT_CRITERION], heldOut: [HELD_OUT_CRITERION] });
+  calibrationOnlyPlan(heldOutBaseline);
+  commit(heldOutBaseline.repository, 'scheduled plan');
+  acceptBaseline(heldOutBaseline, 'held-out');
+  const heldOutCalls = judgeCallCount(heldOutBaseline);
+  const heldOutCalibrated = cli(heldOutBaseline, 'ci', ['--tier', 'scheduled']);
+  assert.equal(heldOutCalibrated.status, 0, heldOutCalibrated.output);
+  assert.doesNotMatch(heldOutCalibrated.output, /declares no rubric/, 'ci skipped the calibration of a held-out baseline');
+  assert.deepEqual(
+    judgeCalls(heldOutBaseline, heldOutCalls)
+      .filter((call) => call.calibration)
+      .map((call) => call.criteria.join(',')),
+    ['R-101/RC-101', 'R-101/RC-101'],
+    'ci did not calibrate the plan criterion over its two labelled items for a held-out baseline',
+  );
+  const heldOutPlanBytes = fs.readFileSync(path.join(heldOutBaseline.folder, PLAN_FILE));
+  const heldOutBeforeCorrupt = judgeCallCount(heldOutBaseline);
+  try {
+    write(path.join(heldOutBaseline.folder, PLAN_FILE), 'canary-garbage {"interactionPlan": [');
+    const refused = cli(heldOutBaseline, 'ci', ['--tier', 'scheduled']);
+    assert.equal(refused.status, 10, refused.output);
+    const refusedEvidence = /evidence is in (runs\/[^ ]+)/.exec(refused.output)?.[1];
+    assert.ok(refusedEvidence, refused.output);
+    const refusedFinding = fs.readFileSync(path.join(heldOutBaseline.folder, refusedEvidence, 'checks/judge-calibration/stdout'), 'utf8');
+    assert.match(refusedFinding, /evaluation\.json: \[partition-plan\]/);
+    assert.doesNotMatch(`${refused.output}${refusedFinding}`, /canary-/, 'the unreadable plan was quoted');
+    assert.equal(judgeCallCount(heldOutBaseline), heldOutBeforeCorrupt, 'ci judged over a plan it could not read');
+  } finally {
+    fs.writeFileSync(path.join(heldOutBaseline.folder, PLAN_FILE), heldOutPlanBytes);
+  }
+
+  // With no baseline the run is the whole contract, so the check reads the both view. A rubric whose only criterion reads a
+  // development-only step is still `contract.json`'s own; a view that dropped it would report "no rubric" and skip the gate.
+  const developmentOnly = planProject('plan-rubric-ci-no-baseline', { development: [DEVELOPMENT_CRITERION], heldOut: [] });
+  calibrationOnlyPlan(developmentOnly);
+  commit(developmentOnly.repository, 'scheduled plan');
+  const noBaselineCalibrated = cli(developmentOnly, 'ci', ['--tier', 'scheduled']);
+  assert.equal(noBaselineCalibrated.status, 0, noBaselineCalibrated.output);
+  assert.doesNotMatch(noBaselineCalibrated.output, /declares no rubric/, 'ci skipped the calibration of a folder with no baseline');
+  assert.deepEqual(
+    judgeCalls(developmentOnly)
+      .filter((call) => call.calibration)
+      .map((call) => call.criteria.join(',')),
+    ['R-001/RC-001', 'R-001/RC-001'],
+    'ci did not calibrate a development-only criterion over its two labelled items when no baseline names a partition',
+  );
+
+  // A plan that cannot be read is the check's authoring finding when no baseline narrows the view to `contract.json`: the folder
+  // would otherwise pass as declaring no rubric.
+  const corruptPlan = planProject('plan-rubric-ci-corrupt-plan', { development: [], heldOut: [HELD_OUT_CRITERION] });
+  calibrationOnlyPlan(corruptPlan);
+  write(path.join(corruptPlan.folder, PLAN_FILE), 'canary-garbage {"interactionPlan": [');
+  commit(corruptPlan.repository, 'scheduled plan and an unreadable plan');
+  const corrupted = cli(corruptPlan, 'ci', ['--tier', 'scheduled']);
+  assert.equal(corrupted.status, 10, corrupted.output);
+  const corruptedEvidence = /evidence is in (runs\/[^ ]+)/.exec(corrupted.output)?.[1];
+  assert.ok(corruptedEvidence, corrupted.output);
+  const corruptedFinding = fs.readFileSync(path.join(corruptPlan.folder, corruptedEvidence, 'checks/judge-calibration/stdout'), 'utf8');
+  assert.match(corruptedFinding, /evaluation\.json: \[partition-plan\]/);
+  assert.doesNotMatch(`${corrupted.output}${corruptedFinding}`, /canary-/, 'the unreadable plan was quoted');
+  assert.doesNotMatch(corruptedFinding, /declares no rubric/);
+  assert.equal(judgeCallCount(corruptPlan), 0, 'ci judged over a plan it could not read');
+
   // An empty held-out set is an authoring defect for preflight, as it is for run.
   const none = test.project('plan-none');
   for (const command of ['preflight', 'run']) {

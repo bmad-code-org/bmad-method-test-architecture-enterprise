@@ -99,10 +99,31 @@ function calibrationStepPair(contract, criterion) {
   return { interfaceId: step?.interfaceId ?? 'calibration', operationId: step?.operationId ?? 'calibration' };
 }
 
-function calibrationProblems(evaluation, contract, calibration, engine) {
+/**
+ * What is wrong with the labelled file for the rubrics `contract` declares.
+ *
+ * Under a partition plan (Story 1.105) `contract` can be one partition's view, and the labelled file is one file for every
+ * partition: with `partial`, an item that names a criterion the view does not hold belongs to another partition, or to none,
+ * and is neither validated nor judged here. `check` reads the whole contract, so it still names an item of no criterion.
+ *
+ * @param {object} evaluation
+ * @param {object} contract
+ * @param {object|undefined} calibration the parsed labelled file
+ * @param {object} engine
+ * @param {object} [options]
+ * @param {boolean} [options.partial] `contract` is one partition's view of the evaluation's contract
+ * @param {(rubric: object, rubricIndex: number, criterion: object, criterionIndex: number) => string|undefined} [options.label]
+ *   the name a finding gives a criterion of the held-out plan, or undefined for one `contract.json` declares. A criterion with a name
+ *   is a sealed one (Story 1.51's id-only rule): its evidence pointer, the channel and member it names and its scale's level values
+ *   never reach a finding, because the findings reach the authoring loop.
+ * @returns {string[]}
+ */
+function calibrationProblems(evaluation, contract, calibration, engine, { partial = false, label } = {}) {
   const problems = [];
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
   if (rubrics.length === 0) {
+    // A view with no rubric has nothing to judge, and the labelled file may serve the partition that has some.
+    if (partial) return problems;
     if (evaluation.judgeCalibration !== undefined || calibration !== undefined)
       problems.push('the contract declares no rubric, so judge calibration has nothing to score');
     return problems;
@@ -135,11 +156,16 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
   }
   const expected = new Map();
   const criteria = new Map();
-  for (const rubric of rubrics)
-    for (const criterion of rubric.criteria ?? []) {
-      expected.set(`${rubric.id}/${criterion.id}`, new Set((rubric.scaleLevels ?? []).map((level) => level.level)));
-      criteria.set(`${rubric.id}/${criterion.id}`, criterion);
+  const sealed = new Map();
+  for (const [rubricIndex, rubric] of rubrics.entries())
+    for (const [criterionIndex, criterion] of (rubric.criteria ?? []).entries()) {
+      const key = `${rubric.id}/${criterion.id}`;
+      expected.set(key, new Set((rubric.scaleLevels ?? []).map((level) => level.level)));
+      criteria.set(key, criterion);
+      const name = label?.(rubric, rubricIndex, criterion, criterionIndex);
+      if (name !== undefined) sealed.set(key, name);
     }
+  const named = (key) => sealed.get(key) ?? key;
   const covered = new Map([...expected].map(([key]) => [key, new Set()]));
   for (const [index, item] of calibration.items.entries()) {
     if (item === null || typeof item !== 'object' || Array.isArray(item)) {
@@ -148,7 +174,7 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
     }
     const key = `${item?.rubricId}/${item?.criterionId}`;
     if (!expected.has(key)) {
-      problems.push(`items[${index}] names unknown rubric criterion ${key}`);
+      if (!partial) problems.push(`items[${index}] names unknown rubric criterion ${key}`);
       continue;
     }
     if (typeof item.response !== 'string' || item.response.length === 0) problems.push(`items[${index}] needs a nonempty response`);
@@ -165,21 +191,27 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
         const stepId = criterion.evidence.split('/')[2];
         const resolve = engine.makeResolveOperand({ [stepId]: observation }, {});
         if (resolve({ pointer: criterion.evidence }, engine.ABSENT, 'calibration') === engine.ABSENT)
-          problems.push(`items[${index}] response does not reach ${criterion.evidence}`);
+          problems.push(
+            `items[${index}] response does not reach ${sealed.has(key) ? `the evidence of ${named(key)}` : criterion.evidence}`,
+          );
       } catch (error) {
-        problems.push(`items[${index}] ${error.message}`);
+        // The engine's own wording names the channel and member the pointer reads, which a sealed criterion keeps to itself.
+        problems.push(`items[${index}] ${sealed.has(key) ? `response cannot be read at the evidence of ${named(key)}` : error.message}`);
       }
     }
     if (expected.get(key).has(item.expectedLevel)) covered.get(key).add(item.expectedLevel);
-    else problems.push(`items[${index}] expectedLevel ${JSON.stringify(item.expectedLevel)} is not an anchored level of ${key}`);
+    else problems.push(`items[${index}] expectedLevel ${JSON.stringify(item.expectedLevel)} is not an anchored level of ${named(key)}`);
     if (Object.keys(item).some((field) => !['rubricId', 'criterionId', 'response', 'responseKind', 'expectedLevel'].includes(field)))
       problems.push(`items[${index}] has an unknown field`);
     if (item.responseKind !== undefined && !['text', 'json'].includes(item.responseKind))
       problems.push(`items[${index}] responseKind must be text or json`);
   }
-  for (const [key, levels] of expected)
-    for (const level of levels)
-      if (!covered.get(key).has(level)) problems.push(`${key} has no calibration item labelled at anchored level ${level}`);
+  for (const [key, levels] of expected) {
+    const missing = [...levels].filter((level) => !covered.get(key).has(level));
+    if (sealed.has(key)) {
+      if (missing.length > 0) problems.push(`${named(key)} has no calibration item labelled at one of its anchored levels`);
+    } else for (const level of missing) problems.push(`${key} has no calibration item labelled at anchored level ${level}`);
+  }
   return problems;
 }
 
@@ -227,10 +259,23 @@ function calibrationShortfalls(report) {
     );
 }
 
+/**
+ * Whether a run's calibration holds only the criteria of its own view (Story 1.105). Under a partition plan one labelled file
+ * serves every partition, so a development or held-out run skips the items of the other partition's criteria; the both run
+ * and a folder with no plan hold every criterion and refuse an item that belongs to none.
+ *
+ * @param {string} partition the run's partition: `development`, `held-out` or `both`
+ * @param {{ partitionPlan?: object }} evaluation
+ * @returns {boolean}
+ */
+function calibrationPartial(partition, evaluation) {
+  return evaluation.partitionPlan !== undefined && partition !== 'both';
+}
+
 /** A report carries the judge's answer beside its label, never into its input. */
-async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem }) {
+async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem, partial = false }) {
   if ((contract.rubrics ?? []).length === 0) return null;
-  const problems = calibrationProblems(evaluation, contract, calibration?.value, engine);
+  const problems = calibrationProblems(evaluation, contract, calibration?.value, engine, { partial });
   if (problems.length > 0)
     throw stop({
       stage: 'trial',
@@ -275,6 +320,7 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
 module.exports = {
   CALIBRATION_PATH,
   calibrationObservation,
+  calibrationPartial,
   calibrationStepPair,
   calibrationProblems,
   calibrationShortfalls,

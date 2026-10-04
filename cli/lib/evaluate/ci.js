@@ -1322,6 +1322,22 @@ async function judgeCalibrationCheck(context) {
   } catch (error) {
     return result(AUTHORING, { stdout: findingLine(CONTRACT_NAME, 'json', `cannot be read as JSON: ${error.message}`) });
   }
+  // The run below is the baseline's partition, which holds that partition's criteria only (Story 1.105): a rubric only the
+  // held-out plan declares is calibrated by a held-out baseline's run, and one only `contract.json` declares by the others'.
+  let evaluation;
+  try {
+    evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+  } catch {
+    // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is read as before.
+  }
+  if (evaluation?.partitionPlan !== undefined) {
+    try {
+      contract = loadContractView({ folder: context.folder, evaluation, partition: twinSettings(context).partition ?? 'both' }).contract;
+    } catch (error) {
+      if (!(error instanceof PartitionPlanError)) throw error;
+      return result(AUTHORING, { stdout: findingLine('evaluation.json', 'partition-plan', error.message) });
+    }
+  }
   if (!Array.isArray(contract?.rubrics) || contract.rubrics.length === 0) {
     return result(OK, { stdout: 'tea-evaluate ci judge-calibration: the contract declares no rubric\n', notes: ['no rubric declared'] });
   }

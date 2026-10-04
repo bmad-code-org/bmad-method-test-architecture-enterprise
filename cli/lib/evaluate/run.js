@@ -90,7 +90,7 @@ const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableReque
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
 const { corpusDigestOf } = require('./corpus-index');
-const { calibrationObservation, calibrationStepPair, readCalibration, runCalibration } = require('./calibration');
+const { calibrationObservation, calibrationPartial, calibrationStepPair, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const {
@@ -1275,7 +1275,18 @@ async function runTrialSets(given) {
       return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
     };
     try {
-      const result = await runCalibration({ calibration: snapshot.calibration, evaluation, contract, engine, writer, stop, judgeItem });
+      // Under a partition plan one labelled file serves every partition, and a partition's run judges the items of its own criteria.
+      const partial = calibrationPartial(snapshot.partition, evaluation);
+      const result = await runCalibration({
+        calibration: snapshot.calibration,
+        evaluation,
+        contract,
+        engine,
+        writer,
+        stop,
+        judgeItem,
+        partial,
+      });
       calibrationDigest = result.digest;
     } catch (error) {
       if (error instanceof JudgeError || error instanceof EvaluatorError) {

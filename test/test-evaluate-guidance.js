@@ -724,6 +724,16 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'selects with an `any` matcher',
     'witnesses with a non-private input',
     'under one, replace it that way',
+    'A rubric criterion follows the step its evidence reads',
+    "goes in the plan file's `rubrics` array under its own rubric ID",
+    'is in the development and both views',
+    'it is in the held-out and both views',
+    'keep an item at every anchored level for every criterion, the held-out ones included',
+    "The items that label a criterion of the plan's `rubrics`",
+    'are closed to the authoring loop like the plan',
+    "the loop reads and edits only the items of `contract.json`'s criteria",
+    '`evaluation.json` declares the judge once',
+    'It names a rubric criterion that no view can reach by its criterion ID',
   ])
     requireText(body, marker, 'corpus.md partition plan', failures);
   const fragments = taggedExamples(body, 'partition-plan');
@@ -766,6 +776,41 @@ function checkPartitionPlanGuidance(corpus, failures) {
   });
   if (collided.length === 0)
     failures.push('the partition plan check accepts an oracle ID that contract.json declares, so the example check proves nothing');
+  // Story 1.105: the tagged rubric example, joined to the plan, is a plan the schema, `check` and the engine's contract schema accept,
+  // and a criterion of it that reads a development-only step is one `check` names.
+  const rubricExamples = taggedExamples(body, 'held-out-rubrics');
+  if (rubricExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-rubrics example; found ${rubricExamples.length}`);
+    return;
+  }
+  const withRubrics = { ...plans[0], ...rubricExamples[0] };
+  if (!validatePlan(withRubrics)) failures.push(`corpus.md held-out rubrics fail the plan schema: ${JSON.stringify(validatePlan.errors)}`);
+  const rubricProblems = partitionPlanProblems({ contract, evaluation, heldOutPlan: withRubrics, heldOutBehaviors: new Set(['B-002']) });
+  if (rubricProblems.length > 0) failures.push(`corpus.md held-out rubrics raise check findings: ${JSON.stringify(rubricProblems)}`);
+  else {
+    const view = contractView({ contractBytes, evaluation, heldOutPlan: withRubrics, partition: 'held-out' }).contract;
+    const contractAjv = new Ajv({ strict: false, allErrors: true });
+    addFormats(contractAjv);
+    const validateContract = contractAjv.compile(JSON.parse(fs.readFileSync(engineSchemaPath('eval-contract.schema.json'), 'utf8')));
+    if (!validateContract(view))
+      failures.push(`corpus.md held-out rubrics make a view the engine schema refuses: ${JSON.stringify(validateContract.errors)}`);
+  }
+  const unreachable = partitionPlanProblems({
+    contract,
+    evaluation,
+    heldOutPlan: {
+      ...withRubrics,
+      rubrics: withRubrics.rubrics.map((rubric) => ({
+        ...rubric,
+        criteria: rubric.criteria.map((criterion) => ({ ...criterion, evidence: '/interactions/development-run/stdout' })),
+      })),
+    },
+    heldOutBehaviors: new Set(['B-002']),
+  });
+  if (!unreachable.some((problem) => /criterion RC-101 of rubric R-101 reads step development-run/.test(problem.message)))
+    failures.push(
+      'the partition plan check accepts a held-out criterion on a development-only step, so the rubric example check proves nothing',
+    );
 }
 
 function taggedExamples(content, tag) {
@@ -3251,7 +3296,8 @@ function checkGapsGuidance(guide, engine, failures) {
         'validCount',
         'caughtCount',
         'development',
-        'a held-out baseline under `baseline/` included',
+        'a held-out baseline under `baseline/`',
+        "the items of `policy/judge-calibration.json` that label a criterion of the plan's `rubrics`",
       ],
     ],
   ])
@@ -3275,6 +3321,13 @@ function checkGapsGuidance(guide, engine, failures) {
     headingBody(guide, '## Map AD-10 exits and classes to repairs'),
     'A request that names no command or no exit, or names an exit this table does not list for that source, has no class: say so, ask for the source, exit and stderr, and never guess a class.',
     'gaps.md AD-10 exit mapping',
+    failures,
+  );
+  // Story 1.105: the repair row that edits `policy/judge-calibration.json` keeps a held-out criterion's items closed.
+  requireText(
+    headingBody(guide, '## Map AD-10 exits and classes to repairs'),
+    'the calibration items of a held-out criterion stay closed',
+    'gaps.md tea-evaluate 11 repair',
     failures,
   );
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
@@ -4114,6 +4167,32 @@ async function main() {
         (text) => text.replace('neither the plan file nor a held-out baseline under `baseline/`', 'no plan file'),
       ],
       [
+        'corpus partition plan calibration item count',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace('keep an item at every anchored level for every criterion', 'keep two items per anchored level for every criterion'),
+      ],
+      [
+        'corpus partition plan development criterion view',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('is in the development and both views', 'stays in the development view only'),
+      ],
+      [
+        'corpus partition plan held-out calibration items open',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('are closed to the authoring loop like the plan', 'are open to the authoring loop'),
+      ],
+      [
+        'corpus partition plan loop reads every item',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace("the loop reads and edits only the items of `contract.json`'s criteria", 'the loop reads and edits every item'),
+      ],
+      [
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
@@ -4202,7 +4281,27 @@ async function main() {
         'gaps closed baseline removal',
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
-        (text) => text.replace(' and a held-out baseline under `baseline/` included', ' included'),
+        (text) => text.replace(', a held-out baseline under `baseline/` and the items', ' and the items'),
+      ],
+      [
+        'gaps closed calibration items removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) =>
+          text.replace(
+            " and the items of `policy/judge-calibration.json` that label a criterion of the plan's `rubrics` included",
+            ' included',
+          ),
+      ],
+      [
+        'gaps repair row reopens the held-out calibration items',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) =>
+          text.replace(
+            'a held-out probe and the calibration items of a held-out criterion stay closed',
+            'a held-out probe stays behind `gap-view.json`',
+          ),
       ],
       [
         'gaps discipline removal',
