@@ -316,7 +316,7 @@ function collectGeneratedOutputs() {
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
       ]) {
         const audited = normalized[key].trace.grants;
-        for (const name of ['read', 'write', 'withheld', 'withheldExcept']) audited[name] = [...new Set(audited[name])];
+        for (const name of ['read', 'write', 'connect', 'withheld', 'withheldExcept']) audited[name] = [...new Set(audited[name])];
       }
       return normalized;
     } finally {

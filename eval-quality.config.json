@@ -1456,6 +1456,14 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "EAGAIN",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "ENOSYS",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
           "token": "EADDRNOTAVAIL",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },

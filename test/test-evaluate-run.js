@@ -187,13 +187,16 @@ const hostPathSockets = (options) => listedHostSockets({ pinned: [], ...options 
 const {
   TRACE_CLONES,
   TRACE_PATH_SYSCALLS,
+  TRACE_SOCKET_CALLS,
   TRACE_SYSCALLS,
   TraceReader,
   decodeString,
   parseReportLine,
   probeReportStream,
   probeTrace,
+  socketAddresses,
   splitArguments,
+  straceCommand,
   traceDecision,
 } = require('../cli/lib/evaluate/confinement-audit');
 const {
@@ -4496,7 +4499,7 @@ async function checkAuditParsers() {
     "strace's arguments and escapes were not split and decoded",
   );
   // The parser acts on a syscall only if strace is told to report it: a name the parser handles that the filter lacks is a blind spot no canned line shows.
-  const handled = [...Object.keys(TRACE_PATH_SYSCALLS), ...TRACE_CLONES, 'chdir', 'fchdir'];
+  const handled = [...Object.keys(TRACE_PATH_SYSCALLS), ...TRACE_CLONES, ...TRACE_SOCKET_CALLS, 'chdir', 'fchdir'];
   const unfiltered = handled.filter((name) => !TRACE_SYSCALLS.includes(name));
   check(unfiltered.length === 0, `strace is not told to report ${unfiltered.join(', ')}, which the trace parser handles`);
 }
@@ -7288,11 +7291,13 @@ function heldGate(temp, label) {
  * trial by default, until `during` has run, which acts on the project or its repository while the command is in flight
  * (Story 1.112); `during` is awaited once the target is holding, then the target is released. A target that never held ends
  * the command with its output.
+ * `act` names another stub act that holds the same way (`hold-connect`, Story 1.86).
+ * `env` adds the variables it reads.
  */
-async function heldRun(project, during, { command = 'run', label = 'trial-clean-1' } = {}) {
+async function heldRun(project, during, { command = 'run', label = 'trial-clean-1', act = 'hold-gate', env = {} } = {}) {
   const child = spawn(process.execPath, [EVALUATE, command, '--evaluation', project.folder], {
     cwd: PROJECT_ROOT,
-    env: { ...BASE_ENV, ...project.env, VERDICT_WHEN: label, VERDICT_DO: 'hold-gate' },
+    env: { ...BASE_ENV, ...project.env, ...env, VERDICT_WHEN: label, VERDICT_DO: act },
     stdio: ['ignore', 'pipe', 'pipe'],
     // Its own process group, so a case that never sees the target hold ends the CLI and every process it started.
     detached: true,
@@ -15104,6 +15109,1506 @@ async function checkPathSocketRoute() {
   }
 }
 
+// ---------------------------------------------------------------- Story 1.86: a connection to a socket file is an observed mount
+
+/** The places a connection is no access in the units below, as the sandbox hands them to the decision. */
+const CONNECTION_GRANTS = Object.freeze({
+  read: ['/work/ws', '/usr', '/etc', '/proc', '/dev'],
+  requested: ['/usr', '/etc'],
+  write: ['/work/ws'],
+  withheld: ['/work/evals'],
+  withheldExcept: [],
+  connect: ['/work/ws', '/work/priv', '/work/priv/call', '/dev', '/run/user', '/dev/egress'],
+});
+
+/** The time a synthetic trace of tens of thousands of link changes and removals may take to read: the measured time is about 0.6 s, and the quadratic replay took 35 s to 178 s. */
+const LINK_TRACE_SECONDS = 15;
+
+/** How many times as long a synthetic trace may take for four times its size: linear growth gives four, and a quadratic replay with a cheap step gives thirteen. */
+const LINK_TRACE_GROWTH = 8;
+
+/** The host's real path of a path: a link in `links` leads where it says, a path in `gone` is no file, every other path is itself. */
+function hostWith({ links = {}, gone = [] } = {}) {
+  return (raw) => {
+    const key = path.resolve(raw);
+    if (gone.includes(key)) return null;
+    return links[key] ?? key;
+  };
+}
+
+/** What the audit lists for the lines of a trace: each line through the reader and the decision, each path once, sorted. */
+function listedConnections(
+  lines,
+  { resolveReal = hostWith(), grants = CONNECTION_GRANTS, marker = null, cwd = '/work/ws', links = null } = {},
+) {
+  const found = [];
+  const reader = new TraceReader({
+    marker,
+    cwd,
+    resolveReal,
+    onAccess: (access) => {
+      const entry = traceDecision(access, grants);
+      if (entry !== null) found.push(entry);
+    },
+  });
+  if (links !== null) reader.links = links;
+  for (const line of lines) reader.push(line);
+  reader.finish();
+  return [...new Set(found)].sort();
+}
+
+/**
+ * The table of links the replay held before the tree: one map from each full name, whose rename scans every entry for the names at or beneath the old and new ones.
+ * It is the reference the tree is compared with over random traces.
+ */
+class ScanLinks extends Map {
+  move(from, to, exchange) {
+    // A name moved into its own subtree, or a subtree into its name, is a call the kernel refuses.
+    if (to === from || to.startsWith(`${from}/`) || from.startsWith(`${to}/`)) return;
+    const under = (root) => [...this].filter(([name]) => name === root || name.startsWith(`${root}/`));
+    const moved = under(from);
+    const replaced = under(to);
+    for (const [name] of [...moved, ...replaced]) this.delete(name);
+    for (const [name, target] of moved) this.set(`${to}${name.slice(from.length)}`, target);
+    if (exchange) for (const [name, target] of replaced) this.set(`${from}${name.slice(to.length)}`, target);
+  }
+}
+
+/** A generator of numbers in [0, 1) that a seed fixes, so a failing trace can be rebuilt. */
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d_2b_79_f5) >>> 0;
+    let mixed = Math.imul(state ^ (state >>> 15), state | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+/**
+ * The audit's connection (Story 1.86) as functions, on any host.
+ * The trace lines `strace` writes for `connect`, `sendto`, `sendmsg`, `sendmmsg`, `bind` and the mount calls run through the reader and the decision, so a decision that lists the wrong socket fails on macOS as well as on Linux.
+ * A socket file the kernel connected to outside the grants is listed by its real path.
+ * A connection the kernel refused (the mounts of Story 1.82 answer `ECONNREFUSED`), one inside a grant, an abstract address, an address of another family and a send with no address list nothing.
+ * A link the trace shows is followed after it is removed, renamed, copied, exchanged or made through another link, and a path the trace removes later that the call did not bind is listed as given.
+ * A stream of calls that name no socket file holds nothing, the trace is told to report the calls and to fail `io_uring_setup`, and the reader acts on a call only after the target's start.
+ */
+async function checkSocketConnectionUnits() {
+  const unix = (name) => `{sa_family=AF_UNIX, sun_path=${name}}`;
+  const connect = (name, result = '0', fd = '3<socket:[4242]>') => `15    connect(${fd}, ${unix(name)}, 110) = ${result}`;
+  const refusal = '-1 ECONNREFUSED (Connection refused)';
+  const message = (name, payload = '"x", iov_len=1') =>
+    `{msg_hdr={msg_name=${name}, msg_namelen=110, msg_iov=[{iov_base=${payload}}], msg_iovlen=1, msg_controllen=0, msg_flags=0}, msg_len=1}`;
+  const scenarios = [
+    ['a connection that succeeded to a socket outside the grants', [connect('"/tmp/late.sock"')], ['/tmp/late.sock']],
+    ['a connection the mounts refused', [connect('"/tmp/hidden.sock"', refusal)], []],
+    [
+      'a connection to a path that does not exist, to a file the process may not open and to a socket of another type',
+      [
+        connect('"/tmp/none.sock"', '-1 ENOENT (No such file or directory)'),
+        connect('"/tmp/mine.sock"', '-1 EACCES (Permission denied)'),
+        connect('"/tmp/other.sock"', '-1 EPROTOTYPE (Protocol wrong type for socket)'),
+        connect('"/tmp/dir/x.sock"', '-1 ENOTDIR (Not a directory)'),
+        connect('"/tmp/loop.sock"', '-1 ELOOP (Too many levels of symbolic links)'),
+      ],
+      [],
+    ],
+    [
+      'a connection that found the listener full, one a signal interrupted and one to be restarted',
+      [
+        connect('"/tmp/full.sock"', '-1 EAGAIN (Resource temporarily unavailable)'),
+        connect('"/tmp/signal.sock"', '-1 EINTR (Interrupted system call)'),
+        connect('"/tmp/restart.sock"', '? ERESTARTSYS (To be restarted if SA_RESTART is set)'),
+      ],
+      ['/tmp/full.sock', '/tmp/restart.sock', '/tmp/signal.sock'],
+    ],
+    [
+      'a socket in the workspace, in a private directory of the call, in the bridge directory, in /dev and in the egress directory',
+      [
+        connect('"/work/ws/own.sock"'),
+        connect('"/work/priv/x.sock"'),
+        connect('"/work/priv/call/bridge.sock"'),
+        connect('"/dev/log"'),
+        connect('"/run/user/1000/bus"'),
+        connect('"/dev/egress/egress.sock"'),
+      ],
+      [],
+    ],
+    [
+      'a socket beside a grant and one in a directory that only starts like it',
+      [connect('"/work/wsx/own.sock"'), connect('"/work/priv-other/x.sock"')],
+      ['/work/priv-other/x.sock', '/work/wsx/own.sock'],
+    ],
+    [
+      'a relative path, resolved against the directory the process changed to',
+      [
+        '15    chdir("/work/ws/sub") = 0',
+        connect('"own.sock"'),
+        '16    chdir("/srv/host") = 0',
+        '16    connect(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="late.sock"}, 110) = 0',
+        '17    connect(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="../up.sock"}, 110) = 0',
+      ],
+      ['/srv/host/late.sock', '/work/up.sock'],
+    ],
+    [
+      'a relative path in the directory the target started in',
+      [connect('"own.sock"'), connect('"../elsewhere.sock"')],
+      ['/work/elsewhere.sock'],
+    ],
+    [
+      'an abstract address, in strace 6 and in the older spelling, one named like a path',
+      [
+        '15    chdir("/srv/host") = 0',
+        connect('@"tea-abstract"'),
+        connect(String.raw`"\0tea-abstract"`),
+        connect('@"/tmp/abstract-like-a-path"'),
+        connect(String.raw`"\0/tmp/abstract-like-a-path"`),
+      ],
+      [],
+    ],
+    [
+      'an address of another family, an unnamed Unix address and a send with none',
+      [
+        '15    connect(3<socket:[1]>, {sa_family=AF_INET, sin_port=htons(8080), sin_addr=inet_addr("127.0.0.1")}, 16) = 0',
+        '15    connect(3<socket:[1]>, {sa_family=AF_INET6, sin6_port=htons(443), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "::1", &sin6_addr), sin6_scope_id=0}, 28) = 0',
+        '15    connect(3<socket:[1]>, {sa_family=AF_NETLINK, nl_pid=0, nl_groups=00000000}, 12) = 0',
+        '15    connect(3<socket:[1]>, {sa_family=AF_UNIX}, 2) = 0',
+        '15    sendto(3<socket:[1]>, "hello", 5, 0, NULL, 0) = 5',
+        '15    sendmsg(3<socket:[1]>, {msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base="x", iov_len=1}], msg_iovlen=1, msg_controllen=0, msg_flags=0}, MSG_NOSIGNAL) = 1',
+      ],
+      [],
+    ],
+    [
+      'a link in the workspace to a socket outside, and a link outside to one inside',
+      [connect('"/work/ws/to-host.sock"'), connect('"/tmp/to-ws.sock"')],
+      ['/tmp/host.sock'],
+      hostWith({ links: { '/work/ws/to-host.sock': '/tmp/host.sock', '/tmp/to-ws.sock': '/work/ws/own.sock' } }),
+    ],
+    [
+      'a link made, connected through and removed, a link to a directory, a link renamed, a relative link and a link made at the working directory',
+      [
+        '15    symlink("/tmp/late.sock", "x.sock") = 0',
+        connect('"x.sock"'),
+        '15    unlink("x.sock") = 0',
+        '15    symlink("/tmp", "d") = 0',
+        connect('"d/dir.sock"'),
+        '15    unlink("d") = 0',
+        '15    symlink("/tmp/moved.sock", "m.sock") = 0',
+        '15    rename("m.sock", "n.sock") = 0',
+        connect('"n.sock"'),
+        '15    unlink("n.sock") = 0',
+        '15    symlink("../up/rel.sock", "r.sock") = 0',
+        connect('"r.sock"'),
+        '15    symlinkat("/tmp/at.sock", AT_FDCWD</work/ws>, "a.sock") = 0',
+        connect('"a.sock"'),
+      ],
+      ['/tmp/at.sock', '/tmp/dir.sock', '/tmp/late.sock', '/tmp/moved.sock', '/work/up/rel.sock'],
+    ],
+    [
+      'a link retargeted into the workspace after the connection, and a link whose creation failed',
+      [
+        '15    symlink("/tmp/late.sock", "x.sock") = 0',
+        connect('"x.sock"'),
+        '15    unlink("x.sock") = 0',
+        '15    symlink("/work/ws/own.sock", "x.sock") = 0',
+        '15    symlink("/tmp/never.sock", "y.sock") = -1 EEXIST (File exists)',
+        connect('"y.sock"'),
+      ],
+      ['/tmp/late.sock'],
+      hostWith({ links: { '/work/ws/x.sock': '/work/ws/own.sock' } }),
+    ],
+    [
+      'a sendmmsg split by another process, whose messages the resumed line prints',
+      [
+        '15    sendmmsg(3<socket:[1]>, <unfinished ...>',
+        '16    getpid() = 4',
+        `15    <... sendmmsg resumed>[${message(unix('"/tmp/split-a.sock"'))}, ${message(unix('"/tmp/split-b.sock"'))}], 2, 0) = 1`,
+      ],
+      ['/tmp/split-a.sock'],
+    ],
+    [
+      'a socket file that has gone by the time the trace is read, which keeps the real path of its directory',
+      [connect('"/lnk/gone.sock"')],
+      ['/real/gone.sock'],
+      hostWith({ links: { '/lnk': '/real' }, gone: ['/lnk/gone.sock'] }),
+    ],
+    ['a path with escaped bytes and a quote', [connect(String.raw`"/tmp/caf\303\251 \"q\".sock"`)], ['/tmp/café "q".sock']],
+    [
+      'a path through a process link, listed as it is',
+      [
+        connect('"/proc/self/root/tmp/x.sock"'),
+        connect('"/proc/self/cwd/ws.sock"'),
+        connect('"/dev/fd/5"'),
+        connect('"/proc/self/fd/7"'),
+        connect('"/dev/../tmp/y.sock"'),
+        connect('"/dev/log"'),
+      ],
+      ['/dev/fd/5', '/proc/self/cwd/ws.sock', '/proc/self/fd/7', '/proc/self/root/tmp/x.sock', '/tmp/y.sock'],
+    ],
+    [
+      'a call split by another process, resumed with its result, and a refused one',
+      [
+        `15    connect(3<socket:[1]>, ${unix('"/tmp/late.sock"')}, 110 <unfinished ...>`,
+        '16    getpid() = 4',
+        '15    <... connect resumed>)             = 0',
+        `17    connect(4<socket:[2]>, ${unix('"/tmp/hidden.sock"')}, 110 <unfinished ...>`,
+        '17    <... connect resumed>)             = -1 ECONNREFUSED (Connection refused)',
+      ],
+      ['/tmp/late.sock'],
+    ],
+    [
+      'a call still waiting when the call ended: split and never resumed, printed with no return value, and resumed with none',
+      [
+        `15    connect(3<socket:[1]>, ${unix('"/tmp/wait.sock"')}, 110 <unfinished ...>`,
+        '15    +++ killed by SIGKILL +++',
+        `16    connect(3<socket:[2]>, ${unix('"/tmp/wait-b.sock"')}, 110) = ?`,
+        '16    +++ killed by SIGKILL +++',
+        `17    connect(3<socket:[3]>, ${unix('"/tmp/wait-c.sock"')}, 110 <unfinished ...>`,
+        '18    getpid() = 4',
+        '17    <... connect resumed>) = ?',
+        '17    +++ killed by SIGKILL +++',
+        `19    connect(3<socket:[4]>, ${unix('"/tmp/restart-d.sock"')}, 110) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)`,
+      ],
+      ['/tmp/restart-d.sock', '/tmp/wait-b.sock', '/tmp/wait-c.sock', '/tmp/wait.sock'],
+    ],
+    [
+      'a datagram sent to a socket (sendto, sendmsg), and the same refused',
+      [
+        `15    sendto(3<socket:[1]>, "hello", 5, 0, ${unix('"/tmp/dgram.sock"')}, 110) = 5`,
+        `15    sendto(3<socket:[1]>, "hello", 5, 0, ${unix('"/tmp/hidden.sock"')}, 110) = ${refusal}`,
+        `15    sendmsg(3<socket:[1]>, {msg_name=${unix('"/tmp/msg.sock"')}, msg_namelen=110, msg_iov=[{iov_base="hi", iov_len=2}], msg_iovlen=1, msg_controllen=0, msg_flags=0}, 0) = 2`,
+        `15    sendmsg(3<socket:[1]>, {msg_name=${unix('"/tmp/hidden2.sock"')}, msg_namelen=110, msg_iov=[{iov_base="hi", iov_len=2}], msg_iovlen=1, msg_controllen=0, msg_flags=0}, 0) = ${refusal}`,
+      ],
+      ['/tmp/dgram.sock', '/tmp/msg.sock'],
+    ],
+    [
+      'a sendmmsg that sent one of its two messages, and one that sent three, the second with no address',
+      [
+        `15    sendmmsg(3<socket:[1]>, [${message(unix('"/tmp/a.sock"'))}, ${message(unix('"/tmp/b.sock"'))}], 2, 0) = 1`,
+        `15    sendmmsg(3<socket:[1]>, [${message(unix('"/tmp/c.sock"'))}, ${message('NULL')}, ${message(unix('"/tmp/d.sock"'))}], 3, 0) = 3`,
+      ],
+      ['/tmp/a.sock', '/tmp/c.sock', '/tmp/d.sock'],
+    ],
+    [
+      'payloads that hold the text of an address, and a descriptor passed under a name with a quote',
+      [
+        String.raw`15    sendto(3<socket:[1]>, "{sa_family=AF_UNIX, sun_path=\"/etc/forged.sock\"}", 52, 0, NULL, 0) = 52`,
+        String.raw`15    sendto(3<socket:[1]>, "x{sa_family=AF_UNIX, sun_path=", 30, 0, NULL, 0) = 30`,
+        String.raw`15    sendmmsg(3<socket:[1]>, [{msg_hdr={msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base="{msg_name={sa_family=AF_UNIX, sun_path=\"/etc/forged2.sock\"}}", iov_len=60}], msg_iovlen=1, msg_control=[{cmsg_len=20, cmsg_level=SOL_SOCKET, cmsg_type=SCM_RIGHTS, cmsg_data=[5</tmp/a\"b>]}], msg_controllen=24, msg_flags=0}, msg_len=60}, ${message(unix('"/tmp/second.sock"'))}], 2, 0) = 2`,
+      ],
+      ['/tmp/second.sock'],
+    ],
+    [
+      'a link in the sandbox own /dev to a late socket, a link there to a directory and a relative link made after a chdir',
+      [
+        '15    symlink("/tmp/late.sock", "/dev/shm/l.sock") = 0',
+        connect('"/dev/shm/l.sock"'),
+        '15    symlink("/tmp", "/dev/d") = 0',
+        connect('"/dev/d/dir.sock"'),
+        '15    chdir("/dev/shm") = 0',
+        '15    symlink("/tmp/rel.sock", "r") = 0',
+        connect('"r"'),
+        '15    symlink("/dev/shm/own.sock", "/dev/s") = 0',
+        connect('"/dev/s"'),
+      ],
+      ['/tmp/dir.sock', '/tmp/late.sock', '/tmp/rel.sock'],
+    ],
+    [
+      'a hard link to a link, by link and by linkat, the first name removed before the connection',
+      [
+        '15    symlink("/tmp/late.sock", "l") = 0',
+        '15    link("l", "l2") = 0',
+        '15    unlink("l") = 0',
+        connect('"l2"'),
+        '15    unlink("l2") = 0',
+        '15    symlink("/tmp/at.sock", "m") = 0',
+        '15    linkat(AT_FDCWD</work/ws>, "m", AT_FDCWD</work/ws>, "m2", 0) = 0',
+        '15    unlink("m") = 0',
+        connect('"m2"'),
+        '15    unlink("m2") = 0',
+      ],
+      ['/tmp/at.sock', '/tmp/late.sock'],
+      hostWith({ gone: ['/work/ws/l', '/work/ws/l2', '/work/ws/m', '/work/ws/m2'] }),
+    ],
+    [
+      'a directory that holds a link, renamed, and a directory above it renamed',
+      [
+        '15    mkdir("d", 0777) = 0',
+        '15    mkdir("d/sub", 0777) = 0',
+        '15    symlink("/tmp/top.sock", "d/x") = 0',
+        '15    symlink("/tmp/deep.sock", "d/sub/x") = 0',
+        '15    rename("d", "e") = 0',
+        connect('"e/x"'),
+        connect('"e/sub/x"'),
+        '15    unlink("e/x") = 0',
+        '15    unlink("e/sub/x") = 0',
+      ],
+      ['/tmp/deep.sock', '/tmp/top.sock'],
+      hostWith({ gone: ['/work/ws/e/x', '/work/ws/e/sub/x'] }),
+    ],
+    [
+      'two names exchanged by renameat2, the link on the name that was a file',
+      [
+        '15    symlink("/tmp/late.sock", "b") = 0',
+        '15    openat(AT_FDCWD</work/ws>, "a", O_WRONLY|O_CREAT, 0644) = 4</work/ws/a>',
+        '15    renameat2(AT_FDCWD</work/ws>, "a", AT_FDCWD</work/ws>, "b", RENAME_EXCHANGE) = 0',
+        connect('"a"'),
+        connect('"b"'),
+        '15    unlink("a") = 0',
+      ],
+      ['/tmp/late.sock'],
+      hostWith({ gone: ['/work/ws/a'] }),
+    ],
+    [
+      'a rename that replaces a link, which leaves the link nothing',
+      [
+        '15    symlink("/tmp/late.sock", "l") = 0',
+        '15    openat(AT_FDCWD</work/ws>, "f", O_WRONLY|O_CREAT, 0644) = 4</work/ws/f>',
+        '15    rename("f", "l") = 0',
+        connect('"l"'),
+      ],
+      [],
+    ],
+    [
+      'a link made through a link to a directory, reached by either name',
+      [
+        '15    mkdir("real", 0777) = 0',
+        '15    symlink("real", "alias") = 0',
+        '15    symlink("/tmp/through.sock", "alias/x") = 0',
+        connect('"real/x"'),
+        connect('"alias/x"'),
+        '15    unlink("real/x") = 0',
+      ],
+      ['/tmp/through.sock'],
+      hostWith({ gone: ['/work/ws/real/x'] }),
+    ],
+    [
+      'a link the project held, removed after the connection, and one whose directory is renamed after it',
+      [connect('"repo-link"'), '15    unlink("repo-link") = 0', connect('"repo-dir/x.sock"'), '15    rename("repo-dir", "moved") = 0'],
+      ['/work/ws/repo-dir/x.sock', '/work/ws/repo-link'],
+      hostWith({ gone: ['/work/ws/repo-link', '/work/ws/repo-dir/x.sock'] }),
+    ],
+    [
+      'a name replaced by a rename after the connection, and one removed through another spelling of its directory',
+      [
+        connect('"old.sock"'),
+        '15    openat(AT_FDCWD</work/ws>, "new.sock", O_WRONLY|O_CREAT, 0644) = 4</work/ws/new.sock>',
+        '15    rename("new.sock", "old.sock") = 0',
+        connect('"real/held.sock"'),
+        '15    unlink("alias/held.sock") = 0',
+      ],
+      ['/work/ws/old.sock', '/work/ws/real/held.sock'],
+      hostWith({ links: { '/work/ws/alias': '/work/ws/real' }, gone: ['/work/ws/real/held.sock'] }),
+    ],
+    [
+      'a socket the call bound itself, removed after the connection (its server closed), by a relative and an absolute name',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="own.sock"}, 110) = 0',
+        '16    chdir("/work/ws/sub") = 0',
+        '16    bind(4<socket:[2]>, {sa_family=AF_UNIX, sun_path="sub.sock"}, 110) = 0',
+        connect('"own.sock"'),
+        '17    connect(5<socket:[3]>, {sa_family=AF_UNIX, sun_path="/work/ws/sub/sub.sock"}, 110) = 0',
+        '15    unlink("own.sock") = 0',
+        '16    unlink("sub.sock") = 0',
+      ],
+      [],
+      hostWith({ gone: ['/work/ws/own.sock', '/work/ws/sub/sub.sock'] }),
+    ],
+    [
+      'a bind that failed does not make the socket the call own',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="not-mine.sock"}, 110) = -1 EADDRINUSE (Address already in use)',
+        connect('"not-mine.sock"'),
+        '15    unlink("not-mine.sock") = 0',
+      ],
+      ['/work/ws/not-mine.sock'],
+      hostWith({ gone: ['/work/ws/not-mine.sock'] }),
+    ],
+    [
+      'a name removed before the connection, and a name beside the one connected to',
+      [
+        connect('"first.sock"'),
+        '15    unlink("before.sock") = 0',
+        connect('"before.sock"'),
+        connect('"sibling.sock"'),
+        '15    unlink("sibling.sock.bak") = 0',
+        '15    unlink("other/sibling.sock") = 0',
+      ],
+      [],
+    ],
+    [
+      'a bind mount of a socket file in a namespace of the target, by mount and by open_tree',
+      [
+        '15    unshare(CLONE_NEWUSER|CLONE_NEWNS) = 0',
+        '15    mount("/tmp/late.sock", "/work/ws/x", NULL, MS_BIND, NULL) = 0',
+        '15    open_tree(AT_FDCWD</work/ws>, "/tmp/tree.sock", OPEN_TREE_CLONE|OPEN_TREE_CLOEXEC) = 4</tmp/tree.sock>',
+        '15    open_tree(5</srv/host>, "rel.sock", OPEN_TREE_CLONE) = 6</srv/host/rel.sock>',
+        '15    move_mount(4</tmp/tree.sock>, "", AT_FDCWD</work/ws>, "/work/ws/y", MOVE_MOUNT_F_EMPTY_PATH) = 0',
+        '15    move_mount(AT_FDCWD</work/ws>, "/tmp/moved", AT_FDCWD</work/ws>, "/work/ws/z", 0) = 0',
+      ],
+      ['/srv/host/rel.sock', '/tmp/late.sock', '/tmp/moved', '/tmp/tree.sock'],
+    ],
+    [
+      'a bind mount of a directory, of a system directory and of a system file, one inside the grants, one that failed, a remount, a mount of a file system and a clone that is no bind',
+      [
+        '15    mount("/tmp", "/work/ws/t", NULL, MS_BIND|MS_REC, NULL) = 0',
+        '15    mount("/usr", "/work/ws/u", NULL, MS_BIND|MS_REC, NULL) = 0',
+        '15    mount("/etc/resolv.conf", "/work/ws/r", NULL, MS_BIND, NULL) = 0',
+        '15    mount("/work/ws/a", "/work/ws/b", NULL, MS_BIND, NULL) = 0',
+        '15    mount("/tmp/denied", "/work/ws/c", NULL, MS_BIND, NULL) = -1 EPERM (Operation not permitted)',
+        '15    mount("/tmp/remount", "/work/ws/d", NULL, MS_REMOUNT|MS_BIND|MS_RDONLY, NULL) = 0',
+        '15    mount(NULL, "/work/ws/e", NULL, MS_BIND, NULL) = 0',
+        '15    mount("tmpfs", "/work/ws/f", "tmpfs", 0, NULL) = 0',
+        '15    open_tree(AT_FDCWD</work/ws>, "/tmp/plain", OPEN_TREE_CLOEXEC) = 4</tmp/plain>',
+        '15    move_mount(4</tmp/plain>, "", AT_FDCWD</work/ws>, "/work/ws/g", MOVE_MOUNT_F_EMPTY_PATH) = 0',
+      ],
+      ['/etc/resolv.conf', '/tmp', '/usr'],
+    ],
+    [
+      'a link the project held, connected through and removed, then bound by the target (the socket removed, and left in place)',
+      [
+        connect('"repo-link"'),
+        '15    unlink("repo-link") = 0',
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="repo-link"}, 110) = 0',
+        connect('"kept-link"'),
+        '15    unlink("kept-link") = 0',
+        '15    bind(4<socket:[2]>, {sa_family=AF_UNIX, sun_path="kept-link"}, 110) = 0',
+        '15    unlink("repo-link") = 0',
+      ],
+      ['/work/ws/kept-link', '/work/ws/repo-link'],
+      hostWith({ gone: ['/work/ws/repo-link'] }),
+    ],
+    [
+      'a socket the call bound, its name removed and a link the project held put there again, then connected through and removed',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="repo-link"}, 110) = 0',
+        '15    unlink("repo-link") = 0',
+        '15    rename("saved", "repo-link") = 0',
+        connect('"repo-link"'),
+        '15    unlink("repo-link") = 0',
+      ],
+      ['/work/ws/repo-link'],
+      hostWith({ gone: ['/work/ws/repo-link'] }),
+    ],
+    [
+      'a socket the call bound, a name beside it removed, and the directory above another renamed and put back by a directory the project held',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="dir/own.sock"}, 110) = 0',
+        '15    unlink("dir/other.sock") = 0',
+        connect('"dir/own.sock"'),
+        '15    unlink("dir/own.sock") = 0',
+        '15    bind(4<socket:[2]>, {sa_family=AF_UNIX, sun_path="moved/own.sock"}, 110) = 0',
+        '15    rename("moved", "gone") = 0',
+        '15    rename("saved", "moved") = 0',
+        connect('"moved/own.sock"'),
+        '15    unlink("moved/own.sock") = 0',
+      ],
+      ['/work/ws/moved/own.sock'],
+      hostWith({ gone: ['/work/ws/dir/own.sock', '/work/ws/moved/own.sock'] }),
+    ],
+    [
+      'a socket the call bound through a link the host holds to its directory, connected to by the other name, then removed',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="alias/own.sock"}, 110) = 0',
+        connect('"real/own.sock"'),
+        '15    unlink("real/own.sock") = 0',
+      ],
+      [],
+      hostWith({ links: { '/work/ws/alias': '/work/ws/real' }, gone: ['/work/ws/real/own.sock'] }),
+    ],
+    [
+      'a socket the call bound through a link the trace made to its directory, connected to by the other name, then removed',
+      [
+        '15    mkdir("real", 0777) = 0',
+        '15    symlink("real", "alias") = 0',
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="alias/own.sock"}, 110) = 0',
+        connect('"real/own.sock"'),
+        '15    unlink("real/own.sock") = 0',
+      ],
+      [],
+      hostWith({ gone: ['/work/ws/real/own.sock'] }),
+    ],
+    [
+      'a bind mount of a link the project held, the link removed after the mount',
+      [
+        '15    mount("/work/ws/plink", "/work/ws/mnt", NULL, MS_BIND, NULL) = 0',
+        '15    unlink("/work/ws/plink") = 0',
+        connect('"/work/ws/mnt"'),
+      ],
+      ['/work/ws/plink'],
+      hostWith({ gone: ['/work/ws/plink'] }),
+    ],
+    [
+      'a bind mount of a workspace directory, a link made in the directory after the mount and connected to through the mount',
+      [
+        '15    mount("/work/ws/dir", "/work/ws/mnt", NULL, MS_BIND, NULL) = 0',
+        '15    symlink("/tmp/late.sock", "/work/ws/dir/l") = 0',
+        connect('"/work/ws/mnt/l"'),
+      ],
+      ['/tmp/late.sock'],
+    ],
+    [
+      'a bind mount of a workspace directory that holds a link the project held, connected to through the mount',
+      ['15    mount("/work/ws/dir", "/work/ws/mnt", NULL, MS_BIND, NULL) = 0', connect('"/work/ws/mnt/plink"')],
+      ['/tmp/late.sock'],
+      hostWith({ links: { '/work/ws/dir/plink': '/tmp/late.sock' } }),
+    ],
+    [
+      'a directory cloned by open_tree and moved by its descriptor into the workspace, a link made in it after, connected to through the move',
+      [
+        '15    open_tree(AT_FDCWD</work/ws>, "dir", OPEN_TREE_CLONE) = 4</work/ws/dir>',
+        '15    move_mount(4</work/ws/dir>, "", AT_FDCWD</work/ws>, "/work/ws/mnt", MOVE_MOUNT_F_EMPTY_PATH) = 0',
+        '15    symlink("/tmp/late.sock", "/work/ws/dir/l") = 0',
+        connect('"/work/ws/mnt/l"'),
+      ],
+      ['/tmp/late.sock'],
+    ],
+    [
+      'a descriptor cloned by open_tree with an empty path',
+      ['15    open_tree(4</tmp/late.sock>, "", OPEN_TREE_CLONE|AT_EMPTY_PATH) = 5</tmp/late.sock>'],
+      ['/tmp/late.sock'],
+    ],
+    [
+      'a link the project holds to a directory, passed by a dot-dot, and a dot-dot after a link the trace made',
+      [connect('"plink/../late.sock"'), '15    symlink("/tmp/sub", "tl") = 0', connect('"tl/../trace.sock"')],
+      ['/srv/host/late.sock', '/tmp/trace.sock'],
+      hostWith({ links: { '/work/ws/plink': '/srv/host/sub' } }),
+    ],
+    [
+      'a dot-dot after a link the project holds, the link then removed',
+      [connect('"plink/../late.sock"'), '15    unlink("plink") = 0'],
+      ['/work/ws/late.sock'],
+      hostWith({ gone: ['/work/ws/plink'] }),
+    ],
+    [
+      'a dot-dot after a link the project holds, the link then renamed',
+      [connect('"plink/../late.sock"'), '15    rename("plink", "moved") = 0'],
+      ['/work/ws/late.sock'],
+      hostWith({ gone: ['/work/ws/plink'] }),
+    ],
+    [
+      'a dot-dot after a link the project holds, the link then replaced by a link to a workspace directory',
+      [connect('"plink/../late.sock"'), '15    unlink("plink") = 0', '15    symlink("/work/ws/dir", "plink") = 0'],
+      ['/work/ws/late.sock'],
+      hostWith({ links: { '/work/ws/plink': '/work/ws/dir' } }),
+    ],
+    [
+      'a dot-dot after a link the project holds that nothing removed',
+      [connect('"plink/../late.sock"'), '15    unlink("other") = 0'],
+      ['/srv/host/late.sock'],
+      hostWith({ links: { '/work/ws/plink': '/srv/host/sub' } }),
+    ],
+    [
+      'a socket the call bound through a link the host holds, replaced through the other name, connected to by the first name, then removed',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="alias/own.sock"}, 110) = 0',
+        '15    rename("hostlink", "real/own.sock") = 0',
+        connect('"alias/own.sock"'),
+        '15    unlink("real/own.sock") = 0',
+      ],
+      ['/work/ws/alias/own.sock'],
+      hostWith({ links: { '/work/ws/alias': '/work/ws/real' }, gone: ['/work/ws/real/own.sock'] }),
+    ],
+    [
+      'a socket the call bound, replaced by the same name, connected to by that name, then removed',
+      [
+        '15    bind(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="real/own.sock"}, 110) = 0',
+        '15    rename("hostlink", "real/own.sock") = 0',
+        connect('"real/own.sock"'),
+        '15    unlink("real/own.sock") = 0',
+      ],
+      ['/work/ws/real/own.sock'],
+      hostWith({ gone: ['/work/ws/real/own.sock'] }),
+    ],
+    [
+      'a bind mount onto a name beneath a directory link the project holds, a link made in the source after, connected to through the other spelling',
+      [
+        '15    mount("/work/ws/dir", "/work/ws/plinkdir/mnt", NULL, MS_BIND, NULL) = 0',
+        '15    symlink("/tmp/late.sock", "/work/ws/dir/l") = 0',
+        connect('"/work/ws/other/mnt/l"'),
+      ],
+      ['/tmp/late.sock'],
+      hostWith({ links: { '/work/ws/plinkdir': '/work/ws/other' } }),
+    ],
+    [
+      'a bind mount onto a name beneath a directory link the project holds, connected to through the link',
+      [
+        '15    mount("/work/ws/dir", "/work/ws/plinkdir/mnt", NULL, MS_BIND, NULL) = 0',
+        '15    symlink("/tmp/late.sock", "/work/ws/dir/l") = 0',
+        connect('"/work/ws/plinkdir/mnt/l"'),
+      ],
+      ['/tmp/late.sock'],
+      hostWith({ links: { '/work/ws/plinkdir': '/work/ws/other' } }),
+    ],
+    [
+      'a directory of links renamed twice, over the name of another directory of links, and a link made through the new name',
+      [
+        '15    symlink("/tmp/a.sock", "d/a") = 0',
+        '15    symlink("/tmp/b.sock", "e/b") = 0',
+        '15    rename("d", "f") = 0',
+        '15    rename("f", "e") = 0',
+        '15    symlink("/tmp/c.sock", "e/c") = 0',
+        connect('"e/a"'),
+        connect('"e/b"'),
+        connect('"e/c"'),
+        connect('"d/a"'),
+      ],
+      ['/tmp/a.sock', '/tmp/c.sock'],
+    ],
+    [
+      'a sendmmsg the end of the call interrupted, which printed none of its messages',
+      ['15    sendmmsg(3<socket:[1]>,  <unfinished ...>) = ?', '15    +++ killed by SIGKILL +++'],
+      [],
+    ],
+    [
+      'a traced io_uring_setup the tracer failed',
+      ['15    io_uring_setup(8, {flags=0, sq_thread_cpu=0}) = -1 ENOSYS (Function not implemented) (INJECTED)'],
+      [],
+    ],
+  ];
+  for (const [name, lines, expected, resolveReal] of scenarios) {
+    const listed = listedConnections(lines, resolveReal === undefined ? {} : { resolveReal });
+    check(
+      JSON.stringify(listed) === JSON.stringify(expected),
+      `the audit of ${name} listed ${JSON.stringify(listed)}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+
+  // Bubblewrap's own setup before the target's start is dropped, the target's connections after it count.
+  const marker = { program: '/usr/local/bin/node', text: 'status-1-abcd.json' };
+  const started = listedConnections(
+    [
+      connect('"/run/early.sock"'),
+      '14    execve("/usr/local/bin/node", ["/usr/local/bin/node", "/lib/confinement-status.cjs", "/tmp/status-1-abcd.json", "/bin/sh"], 0x1 /* 6 vars */) = 0',
+      connect('"/tmp/late.sock"'),
+    ],
+    { marker },
+  );
+  check(
+    JSON.stringify(started) === JSON.stringify(['/tmp/late.sock']),
+    `the audit of a trace with a connection before the target's start listed ${JSON.stringify(started)}; expected the one after it`,
+  );
+
+  // A `..` after a link the trace did not make goes to the parent of the directory the link leads to, on the real file system as well as in the stub.
+  {
+    const base = fs.realpathSync(tempDir('connect-dotdot'));
+    const [workspace, host] = ['ws', 'host'].map((name) => {
+      const directory = path.join(base, name);
+      fs.mkdirSync(path.join(directory, 'sub'), { recursive: true });
+      return directory;
+    });
+    fs.symlinkSync(path.join(host, 'sub'), path.join(workspace, 'plink'));
+    fs.writeFileSync(path.join(host, 'late.sock'), '');
+    const listed = listedConnections([connect('"plink/../late.sock"'), connect('"plink/../../ws/own.sock"')], {
+      resolveReal: (raw) => {
+        try {
+          return fs.realpathSync.native(raw);
+        } catch {
+          return null;
+        }
+      },
+      grants: { ...CONNECTION_GRANTS, connect: [workspace] },
+      cwd: workspace,
+    });
+    check(
+      JSON.stringify(listed) === JSON.stringify([path.join(host, 'late.sock')]),
+      `the audit of a connection through a link to a directory outside the grants and a dot-dot listed ${JSON.stringify(listed)}; expected ${JSON.stringify([path.join(host, 'late.sock')])}`,
+    );
+    // The target removes the link after the connection, so the host reads the trace with the link gone and the dot-dot pops by name into the workspace.
+    fs.unlinkSync(path.join(workspace, 'plink'));
+    const removed = listedConnections([connect('"plink/../late.sock"'), '15    unlink("plink") = 0'], {
+      resolveReal: (raw) => {
+        try {
+          return fs.realpathSync.native(raw);
+        } catch {
+          return null;
+        }
+      },
+      grants: { ...CONNECTION_GRANTS, connect: [workspace] },
+      cwd: workspace,
+    });
+    check(
+      JSON.stringify(removed) === JSON.stringify([path.join(workspace, 'late.sock')]),
+      `the audit of a connection through a link to a directory outside the grants and a dot-dot, the link removed afterwards, listed ${JSON.stringify(removed)}; expected ${JSON.stringify([path.join(workspace, 'late.sock')])}`,
+    );
+  }
+
+  // A trace of tens of thousands of link changes and removals is read in seconds, and the time grows linearly with the trace.
+  // Each shape runs at one quarter of its size and at its full size, the best of three runs each, so a replay that scans anything in proportion to the trace shows at the ratio even when its constant is small.
+  {
+    const bestOf = (lines) => {
+      let seconds = Number.POSITIVE_INFINITY;
+      let listed = null;
+      for (let run = 0; run < 3; run += 1) {
+        const started = process.hrtime.bigint();
+        listed = listedConnections(lines);
+        seconds = Math.min(seconds, Number(process.hrtime.bigint() - started) / 1e9);
+      }
+      return { listed, seconds };
+    };
+    const scaled = (what, size, build, expected) => {
+      const small = bestOf(build(size / 4).lines);
+      const full = bestOf(build(size).lines);
+      const answer = expected(size);
+      check(
+        JSON.stringify(full.listed) === JSON.stringify(answer),
+        `${what} listed ${JSON.stringify(full.listed.slice(0, 5))} (${full.listed.length} paths); expected ${JSON.stringify(answer.slice(0, 5))} (${answer.length} paths)`,
+      );
+      check(full.seconds < LINK_TRACE_SECONDS, `${what} took ${full.seconds.toFixed(2)} s; expected under ${LINK_TRACE_SECONDS} s`);
+      check(
+        full.seconds < LINK_TRACE_GROWTH * small.seconds,
+        `${what} took ${full.seconds.toFixed(2)} s against ${small.seconds.toFixed(2)} s for a quarter of it; expected under ${LINK_TRACE_GROWTH} times as long for four times the trace`,
+      );
+    };
+
+    // Each link is renamed twice or three times over, so every rename moves a link of a table of `size` of them.
+    scaled(
+      'a trace of 20,000 links renamed 50,000 times',
+      20_000,
+      (size) => {
+        const lines = [];
+        for (let index = 0; index < size; index += 1) lines.push(`15    symlink("/tmp/t${index}.sock", "l${index}") = 0`);
+        for (let round = 0, renames = 0; renames < size * 2.5; round += 1) {
+          for (let index = 0; index < size && renames < size * 2.5; index += 1, renames += 1) {
+            const [from, to] = round % 2 === 0 ? ['l', 'm'] : ['m', 'l'];
+            lines.push(`15    rename("${from}${index}", "${to}${index}") = 0`);
+          }
+        }
+        lines.push(connect('"m5"'), connect(`"l${size * 0.75}"`));
+        return { lines };
+      },
+      (size) => [`/tmp/t${size * 0.75}.sock`, '/tmp/t5.sock'].sort(),
+    );
+
+    scaled(
+      'a trace of 10,000 connections and 100,000 removals',
+      10_000,
+      (size) => {
+        const lines = [];
+        for (let index = 0; index < size; index += 1) lines.push(connect(`"c${index}.sock"`));
+        for (let index = 0; index < size * 10; index += 1)
+          lines.push(`15    unlink("${index < size ? `c${index}.sock` : `u${index}`}") = 0`);
+        return { lines };
+      },
+      (size) => Array.from({ length: size }, (_, index) => `/work/ws/c${index}.sock`).sort(),
+    );
+
+    // The directory holds all the links and is renamed back and forth, so a rename that touches each link beneath it makes the trace quadratic.
+    scaled(
+      'a trace of 20,000 links in one directory and 50,000 renames of that directory',
+      20_000,
+      (size) => {
+        const lines = [];
+        for (let index = 0; index < size; index += 1) lines.push(`15    symlink("/tmp/t${index}.sock", "d/l${index}") = 0`);
+        for (let rename = 0; rename < size * 2.5; rename += 1) {
+          const [from, to] = rename % 2 === 0 ? ['d', 'e'] : ['e', 'd'];
+          lines.push(`15    rename("${from}", "${to}") = 0`);
+        }
+        lines.push(connect('"d/l5"'), connect('"e/l7"'));
+        return { lines };
+      },
+      () => ['/tmp/t5.sock'],
+    );
+  }
+
+  // The tree of links gives the answers the table it replaced gave, over random traces of every change to a name.
+  // Each trace makes links and bind mounts, copies, removes, renames and exchanges names beneath a handful of directories, and connects through them, once through the tree and once through the reference that scans every entry.
+  {
+    const names = ['a', 'b', 'c'];
+    let listedTotal = 0;
+    let mismatch = null;
+    for (let seed = 1; seed <= 3000 && mismatch === null; seed += 1) {
+      const random = seededRandom(seed);
+      const pick = (items) => items[Math.floor(random() * items.length)];
+      const name = () => Array.from({ length: 1 + Math.floor(random() * 3) }, () => pick(names)).join('/');
+      const target = () => pick([`/tmp/s${Math.floor(random() * 4)}.sock`, `/work/ws/${name()}`, name(), `../${pick(names)}`, `/tmp/dir`]);
+      const makers = [
+        () => `15    symlink("${target()}", "${name()}") = 0`,
+        () => `15    symlink("${target()}", "${name()}") = 0`,
+        () => `15    symlink("${target()}", "${name()}") = 0`,
+        () => `15    link("${name()}", "${name()}") = 0`,
+        () => `15    unlink("${name()}") = 0`,
+        () => `15    rename("${name()}", "${name()}") = 0`,
+        () => `15    renameat2(AT_FDCWD</work/ws>, "${name()}", AT_FDCWD</work/ws>, "${name()}", RENAME_EXCHANGE) = 0`,
+        () => `15    mount("/work/ws/${name()}", "/work/ws/${name()}", NULL, MS_BIND, NULL) = 0`,
+        () => connect(`"${name()}/${pick(['x.sock', 'a', 'b'])}"`),
+        () => connect(`"${name()}/${pick(['x.sock', 'a', 'b'])}"`),
+      ];
+      const lines = Array.from({ length: 40 }, () => pick(makers)());
+      lines.push(...names.flatMap((first) => names.map((second) => connect(`"${first}/${second}"`))));
+      const tree = listedConnections(lines);
+      const scan = listedConnections(lines, { links: new ScanLinks() });
+      listedTotal += tree.length;
+      if (JSON.stringify(tree) !== JSON.stringify(scan)) mismatch = { seed, tree, scan };
+    }
+    check(
+      mismatch === null,
+      `the tree of links and the table that scans every entry listed different paths for the trace of seed ${mismatch?.seed}: ${JSON.stringify(mismatch?.tree)} against ${JSON.stringify(mismatch?.scan)}`,
+    );
+    check(
+      listedTotal > 3000,
+      `3,000 random traces listed ${listedTotal} paths in all; expected the connections to reach files outside the grants`,
+    );
+  }
+
+  // The decision on its own: an access with the error name it carries.
+  const decided = (access) =>
+    traceDecision({ kind: 'connect', ok: true, errno: null, annotated: false, dotdot: false, ...access }, CONNECTION_GRANTS);
+  for (const [name, access, expected] of [
+    ['a connection that succeeded outside the grants', { path: '/tmp/x.sock', real: '/tmp/x.sock' }, '/tmp/x.sock'],
+    ['a connection that succeeded inside the workspace', { path: '/work/ws/x.sock', real: '/work/ws/x.sock' }, null],
+    ['a link in the workspace that leads outside', { path: '/work/ws/l.sock', real: '/tmp/x.sock' }, '/tmp/x.sock'],
+    ['a link outside that leads into the workspace', { path: '/tmp/l.sock', real: '/work/ws/x.sock' }, null],
+    ['a refused connection', { path: '/tmp/x.sock', real: '/tmp/x.sock', ok: false, errno: 'ECONNREFUSED' }, null],
+    ['a failure with a return value of -1 and no error name', { path: '/tmp/x.sock', real: '/tmp/x.sock', ok: false, errno: null }, null],
+    ['a connection that waited', { path: '/tmp/x.sock', real: '/tmp/x.sock', ok: false, errno: 'UNFINISHED' }, '/tmp/x.sock'],
+    [
+      'a connection through a process link',
+      { path: '/proc/self/root/tmp/x.sock', real: '/proc/self/root/tmp/x.sock', reentry: true },
+      '/proc/self/root/tmp/x.sock',
+    ],
+  ]) {
+    check(
+      decided(access) === expected,
+      `the decision for ${name} is ${JSON.stringify(decided(access))}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+  // A caller that lists no connection grants has none, so a connection anywhere is listed.
+  check(
+    traceDecision(
+      { kind: 'connect', path: '/work/ws/x.sock', real: '/work/ws/x.sock', ok: true, errno: null },
+      { ...CONNECTION_GRANTS, connect: undefined },
+    ) === '/work/ws/x.sock',
+    'a decision over grants with no connection list kept a connection out of the list',
+  );
+
+  // The places the sandbox hands the decision as `connect` (any host, with the Bubblewrap mechanism stood in for).
+  // They are the workspace, the call's private directories (the bridge's among them), its home, the sandbox's own `/dev` (and `/run/user` where the host has it) and the egress proxy's directory, which the status shim connects to.
+  // The home sits beneath the private root as it does in a run, so no private directory of the call holds it and only the home entry of `connect` names it.
+  {
+    const base = fs.realpathSync(tempDir('connect-grants'));
+    const [grantWorkspace, privateDirectory, privateRoot, egressDirectory, status, auditDirectory] = [
+      'workspace',
+      'private',
+      'root',
+      'egress',
+      'status',
+      'audit',
+    ].map((name) => {
+      const directory = path.join(base, name);
+      fs.mkdirSync(directory);
+      return directory;
+    });
+    const home = path.join(privateRoot, 'home');
+    fs.mkdirSync(home);
+    const sandbox = targetSandbox({
+      confinement: {
+        mode: 'bubblewrap',
+        executable: '/usr/bin/bwrap',
+        evaluationFolder: path.join(base, 'evaluation'),
+        observer: { executable: '/usr/bin/strace' },
+      },
+      workspace: grantWorkspace,
+      privateRoot,
+      home,
+      status,
+      audit: { directory: auditDirectory },
+      hostSockets: () => [],
+    });
+    try {
+      const wrapped = sandbox.wrap(process.execPath, ['target.js'], [privateDirectory], [], {
+        bridge: path.join(privateDirectory, 'bridge.sock'),
+        egress: path.join(egressDirectory, 'egress.sock'),
+      });
+      const connectGrants = wrapped.trace?.grants?.connect ?? [];
+      const expectedGrants = [
+        grantWorkspace,
+        privateDirectory,
+        home,
+        egressDirectory,
+        '/dev',
+        ...(fs.existsSync('/run/user') ? ['/run/user'] : []),
+      ];
+      const lacking = expectedGrants.filter((entry) => !connectGrants.includes(entry));
+      check(
+        lacking.length === 0,
+        `the connection grants of an audited Bubblewrap call lack ${JSON.stringify(lacking)}; they are ${JSON.stringify(connectGrants)}`,
+      );
+      const listedNames = ['/tmp', '/run', base].filter((entry) => connectGrants.includes(entry));
+      check(
+        listedNames.length === 0,
+        `the connection grants of an audited Bubblewrap call hold ${JSON.stringify(listedNames)}, places a host service binds in`,
+      );
+    } finally {
+      sandbox.release();
+    }
+  }
+
+  // The addresses of a call, read on their own: abstract or not, per message.
+  const addressed = socketAddresses(
+    String.raw`3<socket:[1]>, [{msg_hdr={msg_name={sa_family=AF_UNIX, sun_path=@"abs"}, msg_namelen=110}}, {msg_hdr={msg_name={sa_family=AF_UNIX, sun_path="/p"}, msg_namelen=110}}], 2, 0`,
+  );
+  check(
+    JSON.stringify(addressed) ===
+      JSON.stringify([
+        { message: 0, abstract: true, name: 'abs' },
+        { message: 1, abstract: false, name: '/p' },
+      ]),
+    `the addresses of a sendmmsg read as ${JSON.stringify(addressed)}`,
+  );
+
+  // The trace is told to report the calls the reader acts on.
+  const told = (straceCommand('strace', '/tmp/out.txt').find((argument) => argument.startsWith('trace=')) ?? '')
+    .slice('trace='.length)
+    .split(',');
+  const unreported = [...TRACE_SOCKET_CALLS].filter((name) => !told.includes(`?${name}`));
+  check(unreported.length === 0, `strace is not told to report ${unreported.join(', ')}, which the connection audit reads`);
+  check(
+    JSON.stringify([...TRACE_SOCKET_CALLS].sort()) === JSON.stringify(['connect', 'sendmmsg', 'sendmsg', 'sendto']),
+    `the calls the audit reads for a socket address are ${JSON.stringify([...TRACE_SOCKET_CALLS])}`,
+  );
+  // The sockets the call bound, the bind mounts that could carry a socket file and the ring are reported as well, and the ring is failed.
+  const unnamed = ['bind', 'mount', 'open_tree', 'move_mount', 'io_uring_setup'].filter((name) => !told.includes(`?${name}`));
+  check(unnamed.length === 0, `strace is not told to report ${unnamed.join(', ')}, which the connection audit reads or denies`);
+  const command = straceCommand('strace', '/tmp/out.txt');
+  check(
+    command.some((argument, index) => command[index - 1] === '-e' && argument === 'inject=?io_uring_setup:error=ENOSYS'),
+    `strace is not told to fail io_uring_setup with ENOSYS: ${JSON.stringify(command)}`,
+  );
+
+  // A stream of calls that name no Unix socket file holds nothing: every send of a datagram client, a TCP connection and an abstract address.
+  {
+    const reader = new TraceReader({ marker: null, cwd: '/work/ws', resolveReal: hostWith(), onAccess: () => {} });
+    const payload = 'x'.repeat(512);
+    const sends = [
+      `15    sendto(3<socket:[1]>, "${payload}", 512, 0, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("127.0.0.53")}, 16) = 512`,
+      `15    sendto(3<socket:[1]>, "${payload}", 512, 0, NULL, 0) = 512`,
+      '15    connect(3<socket:[1]>, {sa_family=AF_INET, sin_port=htons(80), sin_addr=inet_addr("127.0.0.1")}, 16) = 0',
+      '15    connect(3<socket:[1]>, {sa_family=AF_UNIX, sun_path=@"abstract"}, 110) = 0',
+      '15    bind(3<socket:[1]>, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("0.0.0.0")}, 16) = 0',
+    ];
+    for (let sent = 0; sent < 5000; sent += 1) for (const line of sends) reader.push(line);
+    check(
+      reader.timeline.length === 0,
+      `a stream of 25,000 calls that name no socket file left ${reader.timeline.length} entries in the timeline`,
+    );
+    for (const line of [
+      '15    sendto(3<socket:[1]>, "x", 1, 0, {sa_family=AF_UNIX, sun_path="/tmp/kept.sock"}, 110) = 1',
+      '15    sendmmsg(3<socket:[1]>, <unfinished ...>',
+    ]) {
+      reader.push(line);
+    }
+    check(
+      reader.timeline.length === 2,
+      `a call that names a socket file and a split one left ${reader.timeline.length} entries; expected 2`,
+    );
+  }
+
+  // A call split by another process holds nothing when its entry names no socket file, and holds its entry when it names one or is a `sendmmsg`.
+  {
+    const reader = new TraceReader({ marker: null, cwd: '/work/ws', resolveReal: hostWith(), onAccess: () => {} });
+    const inet = '{sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("127.0.0.53")}';
+    for (let sent = 0; sent < 5000; sent += 1) {
+      for (const line of [
+        `15    sendto(3<socket:[1]>, "x", 1, 0, ${inet}, 16 <unfinished ...>`,
+        '16    getpid() = 4',
+        '15    <... sendto resumed>) = 1',
+        `15    connect(3<socket:[1]>, ${inet}, 16 <unfinished ...>`,
+        '15    <... connect resumed>) = 0',
+        '15    sendmsg(3<socket:[1]>, {msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base="x", iov_len=1}], msg_iovlen=1, msg_controllen=0, msg_flags=0} <unfinished ...>',
+        '15    <... sendmsg resumed>, 0) = 1',
+      ]) {
+        reader.push(line);
+      }
+    }
+    check(
+      reader.timeline.length === 0,
+      `a stream of 15,000 split calls that name no socket file left ${reader.timeline.length} entries in the timeline`,
+    );
+    for (const line of [
+      '15    connect(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="/tmp/split.sock"}, 110 <unfinished ...>',
+      '15    <... connect resumed>) = 0',
+      '16    sendmmsg(3<socket:[2]>, <unfinished ...>',
+    ]) {
+      reader.push(line);
+    }
+    check(
+      reader.timeline.length === 2,
+      `a split connect that names a socket file and a split sendmmsg left ${reader.timeline.length} entries; expected 2`,
+    );
+  }
+}
+
+/**
+ * The probe a confined process runs to connect to sockets of its own.
+ * It serves and connects to a socket in the workspace (by a relative path), one in the private directory it is given, an abstract one and a loopback port, and prints each answer.
+ */
+const OWN_SOCKETS_PROBE = `
+const net = require('node:net');
+const path = require('node:path');
+const cases = [
+  ['workspace', { path: 'own-workspace.sock' }],
+  ['private', { path: path.join(process.argv[1], 'own-private.sock') }],
+  ['abstract', { path: '\\0tea-evaluate-own-' + process.pid }],
+  ['tcp', { host: '127.0.0.1', port: 0 }],
+];
+(async () => {
+  const answers = {};
+  for (const [name, where] of cases) {
+    answers[name] = await new Promise((resolve) => {
+      const server = net.createServer((client) => client.end());
+      server.on('error', (error) => resolve('listen ' + error.code));
+      server.listen(where, () => {
+        const client = net.connect(name === 'tcp' ? { host: where.host, port: server.address().port } : where);
+        client.on('connect', () => { client.destroy(); server.close(() => resolve('connected')); });
+        client.on('error', (error) => server.close(() => resolve('refused ' + error.code)));
+      });
+    });
+  }
+  console.log(JSON.stringify(answers));
+})();
+`;
+
+/** The probe a confined process runs once its go file exists: connects to an early socket and, through a link it makes in its workspace, to a late one, and removes the link when it is done. */
+const LINK_PROBE = `
+const net = require('node:net');
+const fs = require('node:fs');
+const [go, early, late] = process.argv.slice(1);
+const connect = (target) => new Promise((resolve) => {
+  const socket = net.connect({ path: target });
+  socket.on('connect', () => { socket.destroy(); resolve('connected'); });
+  socket.on('error', (error) => resolve('refused ' + error.code));
+});
+(async () => {
+  while (!fs.existsSync(go)) await new Promise((resolve) => setTimeout(resolve, 20));
+  fs.symlinkSync(late, 'via.sock');
+  const answers = JSON.stringify({ early: await connect(early), late: await connect('via.sock') });
+  fs.unlinkSync('via.sock');
+  console.log(answers);
+})();
+`;
+
+/** The probe of a link in the sandbox's own `/dev`, a place the sandbox user can write: it links a late socket there, connects through the link and removes it. */
+const DEV_LINK_PROBE = `
+const net = require('node:net');
+const fs = require('node:fs');
+const [go, late] = process.argv.slice(1);
+const connect = (target) => new Promise((resolve) => {
+  const socket = net.connect({ path: target });
+  socket.on('connect', () => { socket.destroy(); resolve('connected'); });
+  socket.on('error', (error) => resolve('refused ' + error.code));
+});
+(async () => {
+  while (!fs.existsSync(go)) await new Promise((resolve) => setTimeout(resolve, 20));
+  fs.symlinkSync(late, '/dev/via-dev.sock');
+  const answers = JSON.stringify({ late: await connect('/dev/via-dev.sock') });
+  fs.unlinkSync('/dev/via-dev.sock');
+  console.log(answers);
+})();
+`;
+
+/** Sends one datagram to the socket the second argument names, once the file the first names exists, and prints how it ended. */
+const DATAGRAM_PROBE = `
+import os, socket, sys, time
+go, target = sys.argv[1:3]
+while not os.path.exists(go):
+    time.sleep(0.02)
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+try:
+    sock.sendto(b'hi', target)
+    print('sent')
+except OSError as error:
+    print('refused', error.errno)
+`;
+
+/** Binds a datagram socket at the path it is given and holds it, printing \`ready\` once it is bound. */
+const DATAGRAM_SERVER = `
+import socket, sys, time
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+sock.bind(sys.argv[1])
+print('ready', flush=True)
+time.sleep(120)
+`;
+
+/**
+ * The audit's connection on a Linux host with Bubblewrap and strace (Story 1.86; the Linux CI job proves it, a macOS host skips it), through the audited sandbox.
+ * The confined process's own audit lists what it connected to.
+ * A socket the runtime binds after the call started is reached (the list was read at the call's start) and listed by its real path, through a link made in the workspace or in `/dev` as well, with the link removed after the connection.
+ * A socket the runtime bound before the call is refused by the mounts and listed nowhere.
+ * A process that serves and connects to a socket in the workspace, in a private directory of the call, an abstract one and a loopback port, and a service reached through the bridge, list nothing.
+ * A datagram sent to a late socket is listed.
+ */
+async function checkSocketConnectionRoute() {
+  const label = 'socket connection route';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('connection-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = fs.realpathSync(tempDir('connection-workspace'));
+  const outsideDirectory = socketDirectory();
+  const callDirectory = socketDirectory();
+  const bridgeDirectory = socketDirectory();
+  const servers = [];
+  const helpers = [];
+  const sandboxes = [];
+  const open = async () => {
+    const directory = fs.realpathSync(tempDir('connection-audit'));
+    const sandbox = targetSandbox({ confinement, workspace, status: tempDir('connection-status'), audit: { directory } });
+    sandboxes.push(sandbox);
+    await sandbox.start();
+    return sandbox;
+  };
+  /** What the audit listed for a call that has ended; the sandbox is released. */
+  const mountsOf = async (sandbox, wrapped) => {
+    try {
+      await sandbox.collect(wrapped, { started: true });
+      return await sandbox.observedMounts();
+    } finally {
+      sandbox.release();
+    }
+  };
+  /** A call waiting for its go file, in which `bind` runs after the call started (so its sockets are not in the list), and what it printed. */
+  let calls = 0;
+  const lateCall = async (sandbox, build, bind) => {
+    const go = path.join(workspace, `go-${(calls += 1)}`);
+    const wrapped = build(go);
+    const child = spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const closed = new Promise((resolve) => child.once('close', resolve));
+    try {
+      await bind();
+      fs.writeFileSync(go, '');
+      let giveUp;
+      await Promise.race([closed, new Promise((resolve) => (giveUp = setTimeout(resolve, 30_000)))]);
+      clearTimeout(giveUp);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+    await closed;
+    return { wrapped, output: output.trim() };
+  };
+  const answersOf = (output) => {
+    try {
+      return JSON.parse(output);
+    } catch {
+      return output;
+    }
+  };
+  try {
+    // A socket bound before the call is hidden by the mounts and refused, so it is listed nowhere; one bound after it is reached and listed.
+    const hidden = path.join(outsideDirectory, 'hidden.sock');
+    servers.push(await listenOnSocket(hidden));
+    const late = path.join(outsideDirectory, 'late.sock');
+    const lateSandbox = await open();
+    const reached = await lateCall(
+      lateSandbox,
+      (go) => lateSandbox.wrap(process.execPath, ['-e', LATE_PROBE, go, hidden, late], [callDirectory]),
+      async () => void servers.push(await listenOnSocket(late)),
+    );
+    check(
+      maskedSockets(reached.wrapped)?.includes(hidden) === true,
+      'the call did not hide the socket bound before it started, so the case proves nothing about a refused connection',
+    );
+    const answers = answersOf(reached.output);
+    check(
+      answers?.early === 'refused ECONNREFUSED' && answers?.late === 'connected',
+      `a process connecting to a socket bound before the call and one bound after it answered ${JSON.stringify(answers)}; expected the first refused and the second reached`,
+    );
+    const lateMounts = await mountsOf(lateSandbox, reached.wrapped);
+    check(
+      JSON.stringify(lateMounts) === JSON.stringify([late]),
+      `the audit of a connection to a socket bound after the call started listed ${JSON.stringify(lateMounts)}; expected ${JSON.stringify([late])}, and nothing for the refused connection`,
+    );
+
+    // A link in the workspace to a late socket leads outside the grants: the real path is listed.
+    const linked = path.join(outsideDirectory, 'linked.sock');
+    const linkSandbox = await open();
+    const throughLink = await lateCall(
+      linkSandbox,
+      (go) => linkSandbox.wrap(process.execPath, ['-e', LINK_PROBE, go, hidden, linked], [callDirectory]),
+      async () => void servers.push(await listenOnSocket(linked)),
+    );
+    const linkAnswers = answersOf(throughLink.output);
+    check(
+      linkAnswers?.late === 'connected',
+      `a process connecting through a link in its workspace to a late socket answered ${JSON.stringify(linkAnswers)}; expected connected`,
+    );
+    const linkMounts = await mountsOf(linkSandbox, throughLink.wrapped);
+    check(
+      JSON.stringify(linkMounts) === JSON.stringify([linked]),
+      `the audit of a connection through a link in the workspace listed ${JSON.stringify(linkMounts)}; expected the real path ${JSON.stringify([linked])}`,
+    );
+    fs.rmSync(path.join(workspace, 'via.sock'), { force: true });
+
+    // A link in the sandbox's own `/dev`, which the connection grants cover, leads to a late socket outside them: the link's target is listed, with the link removed after the connection.
+    const devLinked = path.join(outsideDirectory, 'dev-linked.sock');
+    const devSandbox = await open();
+    const throughDev = await lateCall(
+      devSandbox,
+      (go) => devSandbox.wrap(process.execPath, ['-e', DEV_LINK_PROBE, go, devLinked], [callDirectory]),
+      async () => void servers.push(await listenOnSocket(devLinked)),
+    );
+    const devAnswers = answersOf(throughDev.output);
+    check(
+      devAnswers?.late === 'connected',
+      `a process connecting through a link in /dev to a late socket answered ${JSON.stringify(devAnswers)}; expected connected`,
+    );
+    const devMounts = await mountsOf(devSandbox, throughDev.wrapped);
+    check(
+      JSON.stringify(devMounts) === JSON.stringify([devLinked]),
+      `the audit of a connection through a link in /dev, removed afterwards, listed ${JSON.stringify(devMounts)}; expected ${JSON.stringify([devLinked])}`,
+    );
+
+    // What the call owns: a socket in the workspace and one in a private directory of the call, an abstract socket and a TCP port.
+    const ownSandbox = await open();
+    const own = ownSandbox.wrap(process.execPath, ['-e', OWN_SOCKETS_PROBE, callDirectory], [callDirectory]);
+    const ownRan = await runToEnd(own.target, own.args, { cwd: workspace });
+    const ownAnswers = answersOf(ownRan.stdout.trim());
+    fs.rmSync(path.join(workspace, 'own-workspace.sock'), { force: true });
+    check(
+      ownAnswers?.workspace === 'connected' &&
+        ownAnswers?.private === 'connected' &&
+        ownAnswers?.abstract === 'connected' &&
+        ownAnswers?.tcp === 'connected',
+      `a process connecting to its own sockets answered ${JSON.stringify(ownAnswers)} (exit ${ownRan.status}: ${ownRan.stderr.trim()}); expected connected for each`,
+    );
+    const ownMounts = await mountsOf(ownSandbox, own);
+    check(
+      JSON.stringify(ownMounts) === '[]',
+      `the audit of connections to the call's own sockets, an abstract socket and a TCP port listed ${JSON.stringify(ownMounts)}; expected nothing`,
+    );
+
+    // A service the target starts is reached through the bridge, whose socket lies in a private directory of the call: nothing is listed.
+    const bridge = path.join(bridgeDirectory, 'bridge.sock');
+    const stop = path.join(workspace, 'stop-service');
+    const service = `
+      const http = require('node:http');
+      const net = require('node:net');
+      const fs = require('node:fs');
+      const [bridge, stop] = process.argv.slice(1);
+      const server = http.createServer((request, response) => response.end('through the bridge'));
+      server.listen(0, '127.0.0.1', () => {
+        console.log('LISTENING ' + server.address().port);
+        // The service asks its own bridge about its own port, a connection to a socket of the call's private directory.
+        const asking = net.connect({ path: bridge });
+        asking.on('connect', () => asking.write('127.0.0.1 ' + server.address().port + '\\n'));
+        asking.on('data', () => asking.destroy());
+        asking.on('error', () => {});
+      });
+      setInterval(() => { if (fs.existsSync(stop)) process.exit(0); }, 50);
+    `;
+    const serviceSandbox = await open();
+    const served = serviceSandbox.wrap(process.execPath, ['-e', service, bridge, stop], [bridgeDirectory], [], { bridge });
+    const serviceChild = spawn(served.target, served.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+    let serviceOutput = '';
+    serviceChild.stdout.on('data', (chunk) => (serviceOutput += chunk));
+    serviceChild.stderr.on('data', (chunk) => (serviceOutput += chunk));
+    const serviceClosed = new Promise((resolve) => serviceChild.once('close', resolve));
+    try {
+      const deadline = Date.now() + 20_000;
+      while (!/LISTENING \d+\n/.test(serviceOutput) && Date.now() < deadline && serviceChild.exitCode === null) await sleep(50);
+      const port = /LISTENING (\d+)\n/.exec(serviceOutput)?.[1];
+      check(port !== undefined, `a confined service behind a bridge printed ${JSON.stringify(serviceOutput)}; expected its port`);
+      if (port !== undefined) {
+        const forwarder = await startForwarder({ socketPath: bridge, address: '127.0.0.1', targetPort: Number(port), port: 0 });
+        try {
+          const body = await new Promise((resolve) => {
+            http
+              .get({ host: '127.0.0.1', port: forwarder.port, path: '/' }, (response) => {
+                let text = '';
+                response.on('data', (chunk) => (text += chunk));
+                response.on('end', () => resolve(text));
+              })
+              .on('error', (error) => resolve(`error ${error.code}`));
+          });
+          check(body === 'through the bridge', `a request through the bridge to the confined service got ${JSON.stringify(body)}`);
+        } finally {
+          await forwarder.close();
+        }
+      }
+      fs.writeFileSync(stop, '');
+      await Promise.race([serviceClosed, sleep(20_000)]);
+    } finally {
+      if (serviceChild.exitCode === null && serviceChild.signalCode === null) serviceChild.kill('SIGKILL');
+      await Promise.race([serviceClosed, sleep(10_000)]);
+      fs.rmSync(stop, { force: true });
+    }
+    const serviceMounts = await mountsOf(serviceSandbox, served);
+    check(
+      JSON.stringify(serviceMounts) === '[]',
+      `the audit of a service reached through the bridge listed ${JSON.stringify(serviceMounts)}; expected nothing`,
+    );
+
+    // A datagram sent to a socket bound after the call started is listed as a connection is.
+    const python = '/usr/bin/python3';
+    if (fs.existsSync(python)) {
+      const datagram = path.join(outsideDirectory, 'datagram.sock');
+      const datagramSandbox = await open();
+      const sent = await lateCall(
+        datagramSandbox,
+        (go) => datagramSandbox.wrap(python, ['-B', '-S', '-c', DATAGRAM_PROBE, go, datagram], [callDirectory]),
+        async () => {
+          const server = spawn(python, ['-B', '-S', '-c', DATAGRAM_SERVER, datagram], { stdio: ['ignore', 'pipe', 'inherit'] });
+          helpers.push(server);
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, 20_000);
+            server.stdout.on('data', (chunk) => {
+              if (String(chunk).includes('ready')) {
+                clearTimeout(timer);
+                resolve();
+              }
+            });
+          });
+        },
+      );
+      check(sent.output === 'sent', `a process sending a datagram to a late socket printed ${JSON.stringify(sent.output)}; expected sent`);
+      const datagramMounts = await mountsOf(datagramSandbox, sent.wrapped);
+      check(
+        JSON.stringify(datagramMounts) === JSON.stringify([datagram]),
+        `the audit of a datagram sent to a socket bound after the call started listed ${JSON.stringify(datagramMounts)}; expected ${JSON.stringify([datagram])}`,
+      );
+    } else {
+      skipCase(`${label} (datagram)`, `${python} is not on this host; the Linux CI job has it`);
+    }
+  } finally {
+    for (const sandbox of sandboxes) sandbox.release();
+    for (const helper of helpers) helper.kill('SIGKILL');
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/**
+ * The audit's connection through the real CLI (Story 1.86), on a Linux host with Bubblewrap and strace only.
+ * A confined `run` whose target holds while the case binds sockets, then connects to a socket bound before the call (refused by the mounts), to two bound after it (one through a link in the workspace) and to sockets of its own (the home's among them).
+ * Only the two late sockets are in the trial set's observed mounts, and `score` exits 3 with eval-quality's isolation violation naming each.
+ */
+async function checkSocketConnectionRun() {
+  const label = 'socket connection run';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const project = makeProject('connection-run');
+  const hidden = path.join(socketDirectory(), 'hidden.sock');
+  const late = path.join(socketDirectory(), 'late.sock');
+  const viaLink = path.join(socketDirectory(), 'via-link.sock');
+  const servers = [await listenOnSocket(hidden)];
+  try {
+    const held = await heldRun(
+      project,
+      async () => {
+        servers.push(await listenOnSocket(late), await listenOnSocket(viaLink));
+      },
+      { act: 'hold-connect', env: { VERDICT_TOUCH: [hidden, late, `link:${viaLink}`].join(',') } },
+    );
+    check(
+      held.held && held.status === 0,
+      `a confined run whose target connected to late sockets exited ${held.status}; expected 0\n${held.output}`,
+    );
+    const out = trialStdout(held.runDirectory, 'clean', 1);
+    for (const [name, expected] of [
+      [`outside ${hidden}`, 'refused ECONNREFUSED'],
+      [`outside ${late}`, 'connected'],
+      [`outside link:${viaLink}`, 'connected'],
+      ['own workspace', 'connected'],
+      ['own temp', 'connected'],
+      ['own home', 'connected'],
+      ['own abstract', 'connected'],
+      ['own tcp', 'connected'],
+    ]) {
+      const got = out
+        .split('\n')
+        .find((line) => line.startsWith(`${name}: `))
+        ?.slice(name.length + 2);
+      check(
+        got === expected,
+        `the target's connection "${name}" ended ${JSON.stringify(got)}; expected ${JSON.stringify(expected)}\n${out}`,
+      );
+    }
+    const mounts = observedMountsOf(held.runDirectory, 'P-001') ?? [];
+    checkMounts(mounts, [late, viaLink].sort(), "P-001's observed mounts after a target connected to late sockets");
+    const other = observedMountsOf(held.runDirectory, 'P-002');
+    check(
+      JSON.stringify(other) === '[]',
+      `P-002's trials connected to nothing outside the grants, yet its manifest lists ${JSON.stringify(other)}`,
+    );
+    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
+    check(
+      scored.status === 3 &&
+        scored.output.includes(`mount outside allowlist: ${late}`) &&
+        scored.output.includes(`mount outside allowlist: ${viaLink}`) &&
+        !scored.output.includes(`mount outside allowlist: ${hidden}`),
+      `score over a target that connected to late sockets exited ${scored.status}; expected 3 with the isolation violation naming each late socket and not the refused one\n${scored.output}`,
+    );
+  } finally {
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/**
+ * The reference names the audit's connection (Story 1.86).
+ * The audit passage of `### File-system confinement` lists a connection, or a datagram sent, to a Unix socket file as an observed access and says which connections it leaves out.
+ * The sentence on the table's limit (a socket bound after the call started stays reachable) points to it, and the sentence on `--seccomp-bpf` names every socket call the filter stops at.
+ * The section is found by its exact heading, and any of these sentences missing fails the case.
+ */
+function checkSocketConnectionReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### File-system confinement\n';
+  const start = reference.indexOf(heading);
+  check(start !== -1, 'the reference has no "### File-system confinement" section');
+  const section = start === -1 ? '' : reference.slice(start + heading.length).split(/\n#{2,3} /)[0];
+  const sentences = section
+    .split('\n')
+    .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+    .map((sentence) => sentence.replace(/^[-\s]+/, ''));
+  const audit = sentences.find((sentence) =>
+    sentence.startsWith('On Linux the audit also lists a connection, or a datagram sent, to a Unix socket file'),
+  );
+  check(
+    audit !== undefined &&
+      audit.includes("by the socket file's real path") &&
+      audit.includes('`connect`, `sendto`, `sendmsg` and `sendmmsg`') &&
+      audit.includes("the bridge's directory among them"),
+    "the reference's audit passage does not name the connection to a Unix socket file as a listed access, by its real path and outside the grants",
+  );
+  const refused = sentences.find((sentence) => sentence.startsWith('A connection the kernel refused is not listed'));
+  check(
+    refused !== undefined && refused.includes('`ECONNREFUSED`') && refused.includes('a socket the mounts cover'),
+    "the reference's audit passage does not say that a connection the mounts refused is not listed",
+  );
+  const stops = sentences.find((sentence) =>
+    sentence.startsWith('On Linux the runtime runs the Bubblewrap command under `strace -f --seccomp-bpf'),
+  );
+  check(
+    stops !== undefined &&
+      stops.includes('`connect`, `sendto`, `sendmsg` and `sendmmsg` (each with an address or without one)') &&
+      !stops.includes('only at the file syscalls and the calls that name a socket address'),
+    "the reference's sentence on --seccomp-bpf does not name connect, sendto, sendmsg and sendmmsg with or without an address among the calls it stops at",
+  );
+  const limit = sentences.find((sentence) => sentence.startsWith("The runtime reads the kernel's table of bound Unix sockets"));
+  check(
+    limit !== undefined &&
+      limit.includes('a socket a host process binds after the call started stays reachable for that call') &&
+      limit.includes('the audit lists a connection to any of them as an observed mount'),
+    "the reference's sentence on the table's limit does not point to the audit's connection",
+  );
+}
+
 /**
  * The sentences of the reference that speak of the network, namespaces, sockets or the reach of a target, service or process,
  * and are neither a claim of the table nor one of the earlier stories' sentences listed beside it: what a claim no case backs
@@ -15277,8 +16782,60 @@ function checkBridgeReference() {
       ['the path socket route', 'the path socket units', 'the confined pipeline'],
     ],
     [
-      "The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break in a directory the runtime does not walk, one whose file name is no UTF-8, and a second path to the same socket file through a hard link or another mount.",
-      ['the path socket route', 'the path socket units'],
+      "The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break in a directory the runtime does not walk, one whose file name is no UTF-8, and a second path to the same socket file through a hard link or another mount; the audit lists a connection to any of them as an observed mount.",
+      ['the path socket route', 'the path socket units', 'the socket connection route', 'the socket connection reference'],
+    ],
+    [
+      "On Linux the audit also lists a connection, or a datagram sent, to a Unix socket file outside the workspace, the private directories and the home of the call (the bridge's directory among them), the sandbox's own `/dev` and `/run/user` and the egress proxy's directory, by the socket file's real path (`connect`, `sendto`, `sendmsg` and `sendmmsg` are traced for it).",
+      ['the socket connection units', 'the socket connection route', 'the socket connection reference'],
+    ],
+    [
+      'A socket a host process bound after the call started is therefore an observed mount once a target process connects to it, and `score` exits 3.',
+      ['the socket connection route', 'the socket connection run'],
+    ],
+    [
+      "A link the target makes (a symbolic link, a hard link to one, a link in a directory it later renames, one made through a link to a directory, or one in the sandbox's own `/dev`) leads where it led when the connection was made, even after the target removes it.",
+      ['the socket connection units', 'the socket connection route'],
+    ],
+    [
+      'A `..` after a link in the path of a connection goes to the parent of the directory the link leads to, and a link the target removes, renames or replaces afterwards lists the connection by the path as given.',
+      ['the socket connection units'],
+    ],
+    [
+      'A connection through a path the target removes, renames or replaces afterwards, or whose directory it does, is listed by the path as given, since your project may have held a link there that the host can no longer read; a socket the call bound itself is not listed for that while its name has stood since the bind.',
+      ['the socket connection units'],
+    ],
+    [
+      'A bind mount whose source lies outside those places is listed by its source, whatever the source holds (a target that makes a user namespace of its own where the host allows one can mount in it).',
+      ['the socket connection units'],
+    ],
+    [
+      'A target that runs a nested sandbox which bind-mounts system paths, `/usr` or `/etc/resolv.conf` for example, is listed for them and `score` exits 3.',
+      ['the socket connection units', 'the socket connection run'],
+    ],
+    [
+      'A connection through the destination of a bind mount is judged by the source it leads to, and a source the target removes after the mount is listed as given.',
+      ['the socket connection units'],
+    ],
+    [
+      'A `sendmmsg` that the end of the call interrupted while it waited prints none of its messages, so a datagram it had delivered before it waited is not listed.',
+      ['the socket connection units'],
+    ],
+    [
+      "On Linux the tracer fails `io_uring_setup` with `ENOSYS`, the answer of a kernel without `io_uring`, so no target holds a ring through which a file access or a connection could go unseen, and on macOS the audit does not see a process that reads after the trial's last read of the log.",
+      ['the socket connection units'],
+    ],
+    [
+      "The audit lists a connection the kernel did not refuse: one that succeeded, one that found the listener's queue full (`EAGAIN`), one a signal interrupted and one still waiting when the call ended.",
+      ['the socket connection units'],
+    ],
+    [
+      'A connection the kernel refused is not listed: a socket the mounts cover (`ECONNREFUSED`), a path that does not exist, a file that is no socket and a socket file the process may not open.',
+      ['the socket connection units', 'the socket connection route', 'the socket connection run'],
+    ],
+    [
+      'An abstract socket, a TCP or UDP address, any other socket family and the service the runtime reaches through the bridge add nothing.',
+      ['the socket connection units', 'the socket connection route', 'the socket connection run'],
     ],
     [
       "A call hides at most as many sockets as its Bubblewrap command leaves room for, and at most 2,000 in any case, since Bubblewrap takes 9,000 arguments for the command line (the target's own arguments included) and the mounts together, and the runtime reads at most 2,000 directories of each scanned directory.",
@@ -15565,6 +17122,10 @@ const CASES = [
   { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
   { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement' },
   { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement' },
+  { name: 'the socket connection units', body: checkSocketConnectionUnits, group: 'confinement' },
+  { name: 'the socket connection route', body: checkSocketConnectionRoute, group: 'confinement' },
+  { name: 'the socket connection run', body: checkSocketConnectionRun, group: 'confinement' },
+  { name: 'the socket connection reference', body: checkSocketConnectionReference, group: 'confinement' },
   { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
   { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
 ];
