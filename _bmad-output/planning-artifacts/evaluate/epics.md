@@ -3096,8 +3096,9 @@ So that an accepted baseline with a gameability arm replays on a runner that lac
 
 **Given** an accepted baseline of a sealed-brief-agent run that holds a gameability probe, and an agent command replaced by a tripwire that records any invocation
 **When** `tea-evaluate ci` runs the `pr` tier
-**Then** the `gameability` row scores that probe through its scoring branch (its notes omit `no gameability probe`), the row passes and the tripwire records nothing; a version read added after the check's no-probe return trips the wire, a `test:evaluate-evaluators` case
-**And** the case needs the sealed-brief stub agent to judge a gameability arm, so the story extends `test/fixtures/evaluate/evaluators/stub-evaluator-agent.js` for that arm and keeps its other modes byte-stable.
+**Then** the `gameability` row scores that probe through its scoring branch (its notes omit `no gameability probe` and its output reads `P-004: gameability arm scored through eval-quality score, exit 0`), the row passes (exit 0, class `pass`, action `warn` for the one CONCERNS line the fixture's coverage gaps give, as the `replay` row carries) and the tripwire records nothing; a version read added after the check's no-probe return trips the wire, a `test:evaluate-evaluators` case
+**And** the case asserts the accepted baseline holds the probe before the replay (its probe file with the `gameability` route, its trial set and an evidence artifact of `caught` votes), and extends Story 1.78's case, whose baseline now holds the probe
+**And** the case needs the sealed-brief stub agent to judge a gameability arm, so the story extends `test/fixtures/evaluate/evaluators/stub-evaluator-agent.js` with `--quote-observed-verdict` (a failing row quotes the `verdict:` line the call's stdout holds, which the degenerate response prints) and keeps its other modes byte-stable.
 
 **Dependencies:** 1.78.
 **Gate:** `npm run test:evaluate-evaluators`, `npm run test:evaluate-ci`, then `npm test`.

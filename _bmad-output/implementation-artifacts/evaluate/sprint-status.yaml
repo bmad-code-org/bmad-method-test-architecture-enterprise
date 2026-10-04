@@ -154,7 +154,7 @@ development_status:
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
-  1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
+  1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: review
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: backlog
   1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: backlog
   1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: backlog

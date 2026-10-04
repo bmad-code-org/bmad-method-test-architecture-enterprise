@@ -1504,6 +1504,7 @@ function useSealedBriefAgent(
     versionDelayAtRead = null,
     versionDelayMs = null,
     flipVersionOnAgent = null,
+    quoteObservedVerdict = false,
     agentCommand = process.execPath,
     agentScript = STUB_AGENT,
   },
@@ -1531,6 +1532,7 @@ function useSealedBriefAgent(
         ...(versionDelayAtRead === null ? [] : ['--version-delay-at-read', String(versionDelayAtRead)]),
         ...(versionDelayMs === null ? [] : ['--version-delay-ms', String(versionDelayMs)]),
         ...(flipVersionOnAgent === null ? [] : ['--flip-version-on-agent', String(flipVersionOnAgent)]),
+        ...(quoteObservedVerdict ? ['--quote-observed-verdict'] : []),
       ],
       timeoutMs: 60_000,
     };
@@ -1656,7 +1658,11 @@ function writePrCiPlan(folder) {
   return plan.checks.map((entry) => entry.id);
 }
 
-/** Story 1.78: `tea-evaluate ci` at the `pr` tier replays a sealed-brief baseline on a runner that lacks the agent CLI. */
+/**
+ * Story 1.78: `tea-evaluate ci` at the `pr` tier replays a sealed-brief baseline on a runner that lacks the agent CLI.
+ * Story 1.79: the baseline holds a gameability probe, so the `gameability` row takes its scoring branch (`replayScore`,
+ * eval-quality's `score` over the placed baseline) under the same wire.
+ */
 async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   const capture = path.join(scratch.make('sealed-ci-capture'), 'calls.jsonl');
   const versionFile = path.join(scratch.make('sealed-ci-version-file'), 'version.txt');
@@ -1666,7 +1672,8 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   let prIds = [];
   const project = makeProject('sealed-brief-ci-replay', {
     edit: ({ folder }) => {
-      useSealedBriefAgent(folder, { capture, versionFile, agentScript });
+      useSealedBriefAgent(folder, { capture, versionFile, agentScript, quoteObservedVerdict: true });
+      addGameabilityProbe(folder);
       prIds = writePrCiPlan(folder);
     },
   });
@@ -1694,6 +1701,28 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   const copies = [];
   try {
     const copiedFolder = baselines.copyOf(project, copies);
+    // The baseline holds the gameability probe before the replay: its probe file (the one the gameability check lists), its
+    // trial set and its scored evidence, which the agent judged a catch. A baseline without them takes the no-probe return.
+    const baselineDirectory = path.join(copiedFolder, 'baseline');
+    const probeFile = path.join(baselineDirectory, 'probes', 'P-004.probe.json');
+    check(
+      fs.existsSync(probeFile) && readJson(probeFile).qualification?.route === 'gameability',
+      'the accepted baseline holds no gameability probe file for P-004',
+    );
+    const baselineArms = readJson(path.join(baselineDirectory, 'trial-sets.json')).trialSets.map(
+      (set) => `${set.conditionArm}/${set.probeId}`,
+    );
+    check(
+      baselineArms.includes('gameability:P-004/P-004'),
+      `the accepted baseline's trial sets are ${JSON.stringify(baselineArms)}; expected one for the gameability arm`,
+    );
+    const baselineScoreId = readJson(path.join(baselineDirectory, 'baseline.json')).scoreInvocationId;
+    const gameabilityEvidence = path.join(baselineDirectory, 'scores', baselineScoreId, 'P-004', 'evidence-artifact.json');
+    const gameabilityVotes = fs.existsSync(gameabilityEvidence) ? readJson(gameabilityEvidence).reducedProbeOutcomes[0]?.trialVotes : null;
+    check(
+      JSON.stringify(gameabilityVotes?.map((vote) => vote.state)) === JSON.stringify(Array.from({ length: TRIALS }, () => 'caught')),
+      `the accepted baseline's gameability arm votes were ${JSON.stringify(gameabilityVotes)}; the agent must judge each trial a catch`,
+    );
     const replayed = evaluate(['ci', '--evaluation', copiedFolder, '--tier', 'pr'], project.env);
     check(replayed.status === 0, `the pr tier over a sealed-brief baseline exited ${replayed.status}: ${replayed.output}`);
     const runs = path.join(copiedFolder, 'runs');
@@ -1711,12 +1740,31 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
       );
       const replay = ci.checks.find((row) => row.id === 'replay');
       check(replay?.exit === 0 && replay.class === 'pass', `the replay row was ${JSON.stringify(replay)}`);
-      // The replay carries eval-quality's CONCERNS as warnings, as the ci suite's fixture does; every other row passes plain.
+      // The replay and the gameability arm carry eval-quality's CONCERNS (the fixture's coverage gaps) as warnings, as the ci
+      // suite's fixture does; every other row passes plain.
       for (const row of ci.checks)
         check(
-          row.exit === 0 && row.action === (row.id === 'replay' ? 'warn' : 'pass'),
+          row.exit === 0 && row.action === (['replay', 'gameability'].includes(row.id) ? 'warn' : 'pass'),
           `the ${row.id} row was exit ${row.exit}, action ${row.action} over a sealed-brief baseline`,
         );
+      // The gameability row took its scoring branch: its notes omit the no-probe return's note, its output shows the arm scored
+      // through `score`, and its one warning names P-004.
+      const gameabilityRow = ci.checks.find((row) => row.id === 'gameability');
+      check(
+        gameabilityRow?.class === 'pass' && !(gameabilityRow.notes ?? []).includes('no gameability probe'),
+        `the gameability row was ${JSON.stringify(gameabilityRow)}; expected a pass that scored the arm, without the no-probe note`,
+      );
+      check(
+        JSON.stringify(gameabilityRow?.warnings) ===
+          JSON.stringify(['gameability P-004: eval-quality records CONCERNS in its evidence artifact']),
+        `the gameability row warned ${JSON.stringify(gameabilityRow?.warnings)}`,
+      );
+      const gameabilityOutput = fs.readFileSync(path.join(runs, invocation, 'checks', 'gameability', 'stdout'), 'utf8');
+      check(
+        /^P-004: gameability arm scored through eval-quality score, exit 0; /m.test(gameabilityOutput) &&
+          !gameabilityOutput.includes('the baseline holds no gameability probe'),
+        `the gameability check's output was ${JSON.stringify(gameabilityOutput)}`,
+      );
       check(
         (replay?.warnings ?? []).every((line) => /CONCERNS/.test(line)),
         `the replay warned beyond CONCERNS: ${JSON.stringify(replay?.warnings)}`,
@@ -1729,7 +1777,13 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
       );
       const replayScores = path.join(runs, invocation, 'replay', 'scores');
       // The evidence the replay writes: each probe's evidence artifact and the strength aggregate and floors.
-      const compared = ['P-001/evidence-artifact.json', 'P-002/evidence-artifact.json', 'strength-aggregate.json', 'strength-floors.json'];
+      const compared = [
+        'P-001/evidence-artifact.json',
+        'P-002/evidence-artifact.json',
+        'P-004/evidence-artifact.json',
+        'strength-aggregate.json',
+        'strength-floors.json',
+      ];
       for (const relative of compared) {
         const replayed = path.join(replayScores, relative);
         check(
