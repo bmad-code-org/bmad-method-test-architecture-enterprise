@@ -2,7 +2,7 @@
 title: 'Story 1.96: Check the derivable fields of a CI plan'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5c08bc1b'
