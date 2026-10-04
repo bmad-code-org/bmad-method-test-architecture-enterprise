@@ -364,7 +364,7 @@ function checkCorpus(corpus, engine, failures) {
     'which the twin run repeats (the whole corpus for a `both` baseline, the corpus without `heldOutProbes` for a development baseline)',
     'and in the `heldOutProbes` list; otherwise declare `defect` alone',
     'The held-out partition is scored on its own and the twin run repeats the partition `baseline/` recorded',
-    'every class `strengthFloor` declares needs an eligible probe in the development partition (the corpus without `heldOutProbes`) and one in the `heldOutProbes` list',
+    'every class `strengthFloor` declares needs an eligible probe in the partition `baseline/` records (the corpus without `heldOutProbes` for the development baseline the authoring loop records) and one in the `heldOutProbes` list',
     'hold one probe of the class out and keep another in development, or declare no floor for the class',
     'A floor with no eligible probe in a partition it is read on exits `ci --tier release` 2 with `no-eligible-probe`',
     'Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe',
@@ -2548,8 +2548,8 @@ function checkEvaluatorGuidance(guide, failures) {
   for (const marker of [
     'once it holds a gameability probe in each partition, `gameability`',
     'The twin run repeats the partition `baseline/` recorded and the held-out partition is read on its own',
-    'needs an eligible probe in the development partition (the corpus without `heldOutProbes`) and one in `heldOutProbes`',
-    'a `gameability` or `zero-action` floor needs two probes of that class, one held out and one kept in development',
+    'needs an eligible probe in the partition `baseline/` records (the corpus without `heldOutProbes` for a development baseline, the whole corpus for a `both` baseline) and one in `heldOutProbes`',
+    'a `gameability` or `zero-action` floor needs two probes of that class for a development baseline, one held out and one in the recorded partition',
   ])
     requireText(
       headingBody(cliReference, '### The live tiers'),
@@ -5306,7 +5306,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, twelve worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, twelve worked guides, 37 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
   );
 }
 
