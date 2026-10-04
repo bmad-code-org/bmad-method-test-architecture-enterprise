@@ -119,7 +119,8 @@
       ],
       "placement": {
         "tier": "merge",
-        "defaultTier": "merge"
+        "defaultTier": "merge",
+        "reason": "AD-10 default: the target needs no secret, so its live preflight runs on the post-merge event."
       }
     },
     {
@@ -143,7 +144,8 @@
       ],
       "placement": {
         "tier": "scheduled",
-        "defaultTier": "scheduled"
+        "defaultTier": "scheduled",
+        "reason": "AD-10 default: the scheduled tier repeats the clean and mutated arms at the minimum trial count."
       }
     },
     {
@@ -167,7 +169,8 @@
       ],
       "placement": {
         "tier": "scheduled",
-        "defaultTier": "scheduled"
+        "defaultTier": "scheduled",
+        "reason": "AD-10 default: the scheduled tier runs the held-out partition."
       }
     },
     {
@@ -189,7 +192,8 @@
       ],
       "placement": {
         "tier": "release",
-        "defaultTier": "release"
+        "defaultTier": "release",
+        "reason": "AD-10 default: the release tier is the live set as a release gate."
       }
     },
     {
@@ -213,7 +217,8 @@
       ],
       "placement": {
         "tier": "release",
-        "defaultTier": "release"
+        "defaultTier": "release",
+        "reason": "AD-10 default: the release tier runs the held-out partition as a release gate."
       }
     }
   ]

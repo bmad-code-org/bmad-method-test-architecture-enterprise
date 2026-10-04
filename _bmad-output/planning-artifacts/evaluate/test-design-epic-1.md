@@ -1576,6 +1576,9 @@ Added 2026-10-01 in Story 2.4's build. Levels: unit, integration. Files: `cli/li
 | A check with no reason exits 10                                    | A copy empties one default placement's `reason`; `check` and `ci` exit 10 with rule `placement-reason`              | Integration | P1  | Removing the rule passes the plan                   |
 | Committed plans and the template keep passing                      | `test:evaluate-ci` over both repository plans, the three fixture plans and the template                             | Integration | P1  | A rule that rejects a committed plan fails its case |
 
+Amended 2026-10-04 in Story 1.96's build: `test:evaluate-ci` holds the rules in the case `the derivable fields` (each rule, through `check` and `ci`, with the allowed and the refused values), `test:evaluate-guidance` fills the template's reasons and folder before it expects the template to validate and asserts the shipped template fails `placeholder` and `placement-reason`, and the committed `verdict-ci` and `evaluation-tiers` plans carry the reasons, the `preflight-live` default and the `tiers` the rules ask for.
+The rubric row reads the live tiers the plan uses: a release-only live set needs `judge-calibration` on `release` alone.
+
 ### Story 1.97: Gate an existing publish or deploy job on the evaluation job
 
 Added 2026-10-01 in Story 2.4's first review. Levels: static, contract, replay. Files: `cli/lib/evaluate/schemas/evaluation-ci-plan.schema.json`, `cli/lib/evaluate/ci-plan.js`, `src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md`, `test/test-evaluate-ci.js`, `test/test-evaluate-ci-render.js`, `test/eval-ci.js`.

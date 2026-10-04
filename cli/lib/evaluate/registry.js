@@ -116,6 +116,30 @@ function kindOf(entry) {
   return 'cli';
 }
 
+/** The skill runner's bin name and script, which a registry entry's `target` names to launch it (`cli/skill-runner.js`). */
+const SKILL_RUNNER_BIN = 'tea-skill-runner';
+const SKILL_RUNNER_SCRIPT = 'skill-runner.js';
+
+/** Whether a registry entry launches the skill runner, by the logical executable it names, its target's bin name or its script. */
+function isSkillRunnerEntry(entry) {
+  const name = typeof entry?.target === 'string' ? entry.target.split('/').at(-1) : '';
+  return entry?.executable === SKILL_RUNNER_BIN || name === SKILL_RUNNER_BIN || name === SKILL_RUNNER_SCRIPT;
+}
+
+/**
+ * The environment names an entry permits its target: a command's or tool server's `environmentKeys`, and for an HTTP
+ * entry its server's `environmentKeys` plus the key its `auth` reads.
+ *
+ * @param {object} entry
+ * @returns {string[]}
+ */
+function entryEnvironmentKeys(entry) {
+  const names = (value) => (Array.isArray(value) ? value.filter((key) => typeof key === 'string') : []);
+  if (kindOf(entry) !== 'api') return names(entry.environmentKeys);
+  const authKey = entry.auth?.environmentKey;
+  return [...names(entry.server?.environmentKeys), ...(typeof authKey === 'string' ? [authKey] : [])];
+}
+
 /**
  * The validator of one entry definition (`RegistryEntry`,
  * `McpRegistryEntry` or `ApiRegistryEntry`), compiled on first use from the runtime's own
@@ -244,10 +268,7 @@ function principalMappingProblems(mappings, entries) {
       continue;
     }
     const [entry] = matches;
-    const permitted =
-      kindOf(entry) === 'api'
-        ? [...(entry.server?.environmentKeys ?? []), ...(entry.auth === undefined ? [] : [entry.auth.environmentKey])]
-        : (entry.environmentKeys ?? []);
+    const permitted = entryEnvironmentKeys(entry);
     if (!permitted.includes(mapping?.environmentKey)) {
       problems.push(
         `principalMappings.${principal}.environmentKey ${JSON.stringify(mapping?.environmentKey)} is not authorized by registry interface ${JSON.stringify(entry.interfaceId)}`,
@@ -1384,6 +1405,9 @@ module.exports = {
   API_REGISTRY_ENTRY_DEFINITION,
   MAX_OUTPUT_BYTES,
   MCP_REGISTRY_ENTRY_DEFINITION,
+  SKILL_RUNNER_BIN,
+  entryEnvironmentKeys,
+  isSkillRunnerEntry,
   principalMappingProblems,
   REGISTRY_ENTRY_DEFINITION,
   cliObservation,

@@ -169,8 +169,8 @@
       ],
       "placement": {
         "tier": "merge",
-        "defaultTier": "merge",
-        "reason": "The fixture target is a local stub command that needs no secret, so its live preflight runs when a pull request merges."
+        "defaultTier": "scheduled",
+        "reason": "The registry names VERDICT_* environmentKeys, so AD-10 defaults the live preflight to scheduled; the fixture target is a local stub command that holds no real secret and starts in seconds, so its live preflight also runs when a pull request merges."
       }
     },
     {

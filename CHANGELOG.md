@@ -346,6 +346,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
+  Six `ci-plan` findings exit 10.
+  `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).
+  `tiers`: `evaluation.json` `tiers` differ from the set of tiers the plan places a check on.
+  `placeholder`: a `command` or an `evidence` path still holds `<evaluation-folder>`, while `<invocationId>` stays valid.
+  `applicability`: an `api-conformance` check over an evaluation with no HTTP target, or a contract that declares a rubric (in `contract.json` or the held-out plan) while a live tier the plan uses has no `judge-calibration` check.
+  `placement-default` also reads the registry: a `preflight-live` entry defaults to `merge` when the registry names no `environmentKeys` and the target is no skill or agent runner, and to `scheduled` or `release` otherwise.
+  A registry entry that names `tea-skill-runner` as its `executable` counts as the skill runner wherever `check` looks for it, whatever its `target`.
+  `placement-reason` now asks every check for a non-blank `reason`, on its default tier or off it, so the plan template, which ships empty reasons, fails `check` until the ci stage fills them.
+  An `api-conformance` check over an evaluation with no HTTP target exits 10 from the plan; `ci` exited 64 only when it ran the check.
+  `references/ci.md` `## Write the plan` drops the manual `trigger` and `tiers` steps that `check` now owns.
+  `test:evaluate-ci` holds each rule with a case that fails when the rule is removed, `test:evaluate-guidance` fills the template's reasons and folder before it expects the template to validate, and the committed `verdict-ci` and `evaluation-tiers` plans carry the reasons, defaults and `tiers` the rules ask for.
+
 - eval-quality 7.1.0 counts an oracle toward `success-indicator-separation` only when some behavior lists it (Story 1.104, AD-1, AD-20).
   Until 7.1.0 an oracle that checked the success indicator beside the answer satisfied the rule even when no behavior in the contract listed it in `behaviors[].oracles`, so a check that supported no behavior could hide a missing success-separation requirement.
   Such an oracle now leaves the rule unsatisfied, in the scalar-command branch (exit code 0 and exact whole stdout) and in the structured-response branch alike, and `score` records the gap in the evidence artifact's `coverageGaps`.

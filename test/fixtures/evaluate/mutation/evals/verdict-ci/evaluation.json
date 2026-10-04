@@ -49,7 +49,10 @@
   ],
   "trials": 3,
   "tiers": [
-    "pr"
+    "pr",
+    "merge",
+    "scheduled",
+    "release"
   ],
   "strengthFloor": {
     "defect": 1

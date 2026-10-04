@@ -21,7 +21,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md requires the `test` check on every pull request; the check needs no secret and calls no model, so it stays at the AD-10 default."
       }
     },
     {
@@ -46,7 +46,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
+        "reason": "Deterministic, no secret and no model call; .github/workflows/ci.yml runs on pull_request and fork pull requests carry no secret (CONTRIBUTING.md), so it stays on pr."
       }
     },
     {
@@ -71,7 +71,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
+        "reason": "Deterministic, no secret and no model call; fork pull requests run without any secret (CONTRIBUTING.md), so it stays on pr."
       }
     },
     {
@@ -96,7 +96,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "evaluation.json declares an api interface (POST /grade over http on 127.0.0.1), so the conformance check has a target. Needs no secret."
+        "reason": "The registry names an HTTP target (answer-grade, POST /grade on 127.0.0.1) and the check needs no secret, so it stays on pr per CONTRIBUTING.md and .github/workflows/ci.yml."
       }
     },
     {
@@ -121,7 +121,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Probe P-009 takes the gameability route (corpus/gameability/P-009.json). Deterministic, no secret, so it runs on every pull request (CAP-11)."
+        "reason": "Probes P-009 and P-015 take the gameability route and the check needs no secret or model call, so CAP-11 keeps it on every pull request (.github/workflows/ci.yml)."
       }
     },
     {
@@ -146,7 +146,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, no secret, no model call (evaluator.kind is deterministic). Runs on every pull request (CAP-11)."
+        "reason": "Deterministic, no secret and no model call, so CAP-11 keeps it on every pull request (.github/workflows/ci.yml, CONTRIBUTING.md)."
       }
     },
     {
@@ -172,7 +172,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret. CONTRIBUTING.md says pull requests from forks run without any secret, and replay needs none."
+        "reason": "Deterministic replay of the accepted baseline, no secret and no model call, so it stays on every pull request (.github/workflows/ci.yml)."
       }
     },
     {
@@ -195,7 +195,7 @@
       "placement": {
         "tier": "merge",
         "defaultTier": "merge",
-        "reason": "The target needs no secret: evaluation.json registry environmentKeys is empty and app/server/grade.mjs is the deterministic stand-in for the vendor model, so AD-10 defaults the live preflight to merge. The adopter states no run-time or cost cap that moves it. ci.yml has no push trigger today, so bmad-testarch-ci adds a push to main trigger for this tier."
+        "reason": "The target needs no secret (registry environmentKeys is empty and the target is the checked-in app/server/grade.mjs stand-in), so the AD-10 default holds: CONTRIBUTING.md gives no post-merge cap and one live trial set is local HTTP with no model call, so it runs on the push to main that follows each squash merge. .github/workflows/ci.yml lists only pull_request, so bmad-testarch-ci adds the push-to-main event."
       }
     },
     {
@@ -220,7 +220,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger and docs/RELEASING.md says there is no scheduled job, so no scheduled entry exists. The tag push that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). B-001 is critical, releases ship about every six weeks and consumers pin versions, so a defect that ships lives for weeks."
+        "reason": "No workflow has a schedule trigger and docs/RELEASING.md says there is no scheduled job, so no scheduled entry exists and the tag push of v* in .github/workflows/release.yml is the one release event. Contract B-001 is critical, a shipped defect stays in the registry about six weeks and consumers pin versions (docs/RELEASING.md), so a failing twin run blocks the tag."
       }
     },
     {
@@ -245,7 +245,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No schedule trigger exists in the repository, so the held-out partition (P-011, P-012, P-013) runs at the tag in .github/workflows/release.yml, the only release gate (docs/RELEASING.md). B-001 is critical and a shipped defect stays until the next tag."
+        "reason": "No workflow has a schedule trigger and docs/RELEASING.md says there is no scheduled job, so no scheduled entry exists and the tag push of v* in .github/workflows/release.yml is the one release event. Contract B-001 is critical and a defect that ships stays about six weeks (docs/RELEASING.md), so the held-out partition (P-011, P-012, P-013, P-015) blocks the tag."
       }
     },
     {
@@ -270,7 +270,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No schedule trigger exists in the repository, so the strength comparison against baseline/ runs at the tag in .github/workflows/release.yml (docs/RELEASING.md). AD-10 gives it warn on release."
+        "reason": "No workflow has a schedule trigger and docs/RELEASING.md says there is no scheduled job, so no scheduled entry exists and the tag push of v* in .github/workflows/release.yml is the one release event. A strength regression against the accepted baseline is a warning by AD-10; the tag run reports it without blocking."
       }
     }
   ]

@@ -95,8 +95,10 @@
  *
  * - `ci-plan` family (Story 2.2): when `ci/evaluation-ci-plan.json` exists it must parse (`json`), meet the
  *   runtime-owned plan schema, an unknown `evaluate` check id included (`schema`), and keep the placement rules
- *   `tea-evaluate ci` enforces (`tier`, `duplicate`, `command`, `placement-default`, `placement-reason`,
- *   `deterministic-off-pr`, `live-on-pr`; `ci-plan.js`). An absent plan is no defect here; `tea-evaluate ci` exits 64.
+ *   `tea-evaluate ci` enforces (`tier`, `duplicate`, `command`, `trigger`, `placeholder`, `placement-default`,
+ *   `placement-reason`, `deterministic-off-pr`, `live-on-pr`; Story 1.96 added `trigger`, `placeholder`, `tiers`
+ *   and `applicability`, read against `evaluation.json` and `contract.json`; `ci-plan.js`). An absent plan is no defect
+ *   here; `tea-evaluate ci` exits 64.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
@@ -138,8 +140,10 @@ const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
 const { compileRefusals, lineNamesOperation, reportedOperations, reportsProblems } = require('./release-report');
 const {
+  SKILL_RUNNER_BIN,
   apiRegistryProblems,
   egressRegistryProblems,
+  isSkillRunnerEntry,
   kindOf,
   mcpRegistryProblems,
   removedNetworkProblem,
@@ -161,8 +165,6 @@ const { PartitionPlanError, contractView, mappingViewProblems, partitionPlanProb
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
-const SKILL_RUNNER_BIN = 'tea-skill-runner';
-const SKILL_RUNNER_SCRIPT = 'skill-runner.js';
 const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -450,12 +452,6 @@ function checkContract(report, folder, context) {
     'oracle ID',
   );
   return new Map(behaviors.filter((behavior) => typeof behavior?.id === 'string').map((behavior) => [behavior.id, behavior]));
-}
-
-/** Whether a registry entry launches the skill runner, by its bin name or its script. */
-function isSkillRunnerEntry(entry) {
-  const name = typeof entry?.target === 'string' ? entry.target.split('/').at(-1) : '';
-  return name === SKILL_RUNNER_BIN || name === SKILL_RUNNER_SCRIPT;
 }
 
 /**
@@ -2146,8 +2142,8 @@ function checkHttpPort(report, folder, registry) {
 }
 
 /** `ci/evaluation-ci-plan.json`, when the evaluation has one, held to the plan schema and its placement rules (Story 2.2). */
-function checkCiPlan(report, folder) {
-  const read = readPlan(folder);
+function checkCiPlan(report, folder, options) {
+  const read = readPlan(folder, options);
   if (read.absent) return;
   for (const found of read.findings) report.add(found.file, found.rule, found.message);
 }
@@ -2355,7 +2351,10 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkJudge(report, evaluation, rubricContract, conditions, { partial });
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
-  checkCiPlan(report, folder);
+  // The rubric rule reads the contract `check` already derived, so a development run leaves the held-out plan unopened.
+  checkCiPlan(report, folder, {
+    declaresRubric: () => Array.isArray(rubricContract?.rubrics) && rubricContract.rubrics.length > 0,
+  });
 
   try {
     const planFile = evaluation.partitionPlan?.heldOutPlan;

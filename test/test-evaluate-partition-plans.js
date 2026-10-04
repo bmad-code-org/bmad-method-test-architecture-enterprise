@@ -369,6 +369,15 @@ function judgeCalls(project, from = 0) {
 }
 const judgeCallCount = (project) => judgeCalls(project).length;
 
+/** Sets `evaluation.json` `tiers` to the tiers the plan places a check on. */
+function setTiers(folder, plan) {
+  const file = path.join(folder, 'evaluation.json');
+  const evaluation = read(file);
+  const used = new Set(plan.checks.map((item) => item.placement.tier));
+  evaluation.tiers = ['pr', 'merge', 'scheduled', 'release'].filter((tier) => used.has(tier));
+  write(file, evaluation);
+}
+
 /**
  * The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository).
  * `layer` adds the rubric layer, `waivers` the waiver layer and `mappings` the mapping layer, each with the options it takes; null
@@ -385,10 +394,24 @@ function planProject(label, layer = null, waivers = null, mappings = null) {
       if (mappings !== null) mappingLayer({ folder, directory }, mappings);
       relayContract(folder);
       fs.mkdirSync(path.join(folder, 'ci'));
-      write(
-        path.join(folder, 'ci/evaluation-ci-plan.json'),
+      const plan = JSON.parse(
         fs.readFileSync(CI_PLAN, 'utf8').replaceAll('test/fixtures/evaluate/mutation/evals/verdict-ci', 'evals/verdict'),
       );
+      // A contract that declares a rubric needs judge calibration on each live tier its plan uses (rule `applicability`).
+      if (layer !== null || mappings?.rubric === true) {
+        for (const tier of ['scheduled', 'release']) {
+          const twin = plan.checks.find((item) => item.id === 'twin-run' && item.placement.tier === tier);
+          plan.checks.push({
+            ...twin,
+            id: 'judge-calibration',
+            enforcement: 'block',
+            evidence: ['runs/<invocationId>/checks/judge-calibration/stdout'],
+            placement: { ...twin.placement, reason: 'AD-10 default: a rubric is declared, so its judge is calibrated on this tier.' },
+          });
+        }
+      }
+      write(path.join(folder, 'ci/evaluation-ci-plan.json'), plan);
+      setTiers(folder, plan);
     },
     { marker: true, fixture: FIXTURE },
   );
@@ -2610,8 +2633,8 @@ try {
   // `contract.json` with none, so the check used to report "no rubric declared" and skip the calibration it exists to gate.
   const rubricCi = planProject('plan-rubric-ci', { development: [], heldOut: [HELD_OUT_CRITERION] });
   /** The CI plan of a project reduced to the scheduled judge-calibration check. */
-  const calibrationOnlyPlan = (project) =>
-    write(path.join(project.folder, 'ci/evaluation-ci-plan.json'), {
+  const calibrationOnlyPlan = (project) => {
+    const plan = {
       schemaVersion: 1,
       checks: [
         {
@@ -2625,7 +2648,10 @@ try {
           placement: { tier: 'scheduled', defaultTier: 'scheduled', reason: 'AD-10 default' },
         },
       ],
-    });
+    };
+    write(path.join(project.folder, 'ci/evaluation-ci-plan.json'), plan);
+    setTiers(project.folder, plan);
+  };
   calibrationOnlyPlan(rubricCi);
   commit(rubricCi.repository, 'scheduled plan');
   const calibratedByCi = cli(rubricCi, 'ci', ['--tier', 'scheduled']);

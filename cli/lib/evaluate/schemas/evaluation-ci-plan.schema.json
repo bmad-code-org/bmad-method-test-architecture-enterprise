@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:evaluation-ci-plan",
   "title": "ci/evaluation-ci-plan.json",
-  "description": "The platform-neutral CI plan of an evaluation: the only definition of tier membership (AD-10). tea-evaluate ci --tier <tier> runs exactly the checks whose placement.tier is that tier, in the order they are listed. Each check records where it runs, what blocks, which evidence it leaves and why it sits in its tier. The tea-evaluate runtime owns this schema; its placement rules (a tier moved off the default needs a reason, a deterministic check that needs no secret stays on pr, a live check sits off pr, a command led by its tool) are checked by the runtime and by tea-evaluate check.",
+  "description": "The platform-neutral CI plan of an evaluation: the only definition of tier membership (AD-10). tea-evaluate ci --tier <tier> runs exactly the checks whose placement.tier is that tier, in the order they are listed. Each check records where it runs, what blocks, which evidence it leaves and why it sits in its tier. The tea-evaluate runtime owns this schema; its placement rules (every check records a reason, a deterministic check that needs no secret stays on pr, a live check sits off pr, a command led by its tool, a trigger its tier uses, the tiers evaluation.json names, no template placeholder left, a check the evaluation can run) are checked by the runtime and by tea-evaluate check.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "checks"],
@@ -91,7 +91,7 @@
               "$ref": "#/$defs/Tier"
             },
             "reason": {
-              "description": "What the repository inspection found that placed the check here. Required whenever tier differs from defaultTier.",
+              "description": "What the repository inspection found that placed the check here. Required on every check, on its default tier or off it.",
               "type": "string"
             }
           }
