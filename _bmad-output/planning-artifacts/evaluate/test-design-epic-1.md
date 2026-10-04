@@ -1546,12 +1546,12 @@ Amended 2026-10-03 in Story 1.94: the work covers the trace, nfr, test-design an
 
 Added 2026-10-01 in Story 2.3's second review. Levels: static. Files: `test/test-eval-replay.js` (`test:eval-replay`), the `doc-counts` entries of `eval-quality.config.json` (`test:doc-counts`).
 
-| AC                                               | Test                                                                                                                                 | Level  | P   | Revert check                                                                |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | --------------------------------------------------------------------------- |
-| The four replay totals equal the tree            | Count `expected.json` files by origin and by unmeasurable result; compare with `test/README.md` and the header                       | Static | P1  | Adding a replay case without moving the totals fails                        |
-| The story count and range equal the sections     | Count `### Story` headings in `epics.md`; compare with the overview                                                                  | Static | P1  | An overview count off by one fails                                          |
-| All three lanes match `sprint-status.yaml`       | Read the lane 1, lane 2 and lane 3 sequences and `parallel_lanes`; compare order and membership, and that no story sits in two lanes | Static | P2  | Removing one entry from any lane, or moving a story in one file only, fails |
-| Existing `doc-counts` entries keep their meaning | `test:doc-counts` over the unchanged entries                                                                                         | Static | P1  | An entry widened to read a new subject fails its own case                   |
+| AC                                               | Test                                                                                                                                | Level  | P   | Revert check                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------------------------- |
+| The four replay totals equal the tree            | Count `expected.json` files by origin and by unmeasurable result; compare with `test/README.md` and the header                      | Static | P1  | Adding a replay case without moving the totals fails                        |
+| The story count and range equal the sections     | Count `### Story` headings in `epics.md`; compare with the overview                                                                 | Static | P1  | An overview count off by one fails                                          |
+| All five lanes match `sprint-status.yaml`        | Read the five lane sequences (lanes 1 to 5) and `parallel_lanes`; compare order and membership, and that no story sits in two lanes | Static | P2  | Removing one entry from any lane, or moving a story in one file only, fails |
+| Existing `doc-counts` entries keep their meaning | `test:doc-counts` over the unchanged entries                                                                                        | Static | P1  | An entry widened to read a new subject fails its own case                   |
 
 ### Story 1.96: Check the derivable fields of a CI plan
 
