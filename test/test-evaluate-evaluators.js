@@ -3022,6 +3022,13 @@ async function checkQualificationSkipsOtherArms() {
   );
   const trialSets = readJson(path.join(directory, 'trial-sets.json')).trialSets.map((set) => set.conditionArm);
   check(trialSets.includes('gameability:P-004'), `the run sealed ${JSON.stringify(trialSets)}; expected a gameability trial set`);
+  // Story 1.79: without `--quote-observed-verdict` the stub quotes `verdict: rejected`, which a gameability arm's
+  // `verdict: pending` stdout lacks, so `score` refuses the arm; a stub that quoted the observed verdict unflagged would exit 0.
+  const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(directory)], project.env);
+  check(
+    scored.status === 3 && scored.output.includes('P-004: eval-quality score exited 3') && /unwitnessed/i.test(scored.output),
+    `score over the gameability arm judged without --quote-observed-verdict exited ${scored.status}; expected 3 naming P-004 and the unwitnessed quotation\n${scored.output}`,
+  );
 }
 
 /**
