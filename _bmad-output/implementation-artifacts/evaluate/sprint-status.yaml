@@ -143,7 +143,7 @@ development_status:
   1-106-partition-waivers-in-a-partition-plan: done
   1-107-partition-evaluator-mappings-in-a-partition-plan: done
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
-  1-109-partition-gameability-degenerate-responses: backlog
+  1-109-partition-gameability-degenerate-responses: review
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
   1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: done

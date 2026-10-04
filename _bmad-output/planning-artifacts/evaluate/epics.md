@@ -2824,7 +2824,7 @@ So that a held-out plan that cannot compile fails the pull request that wrote it
 
 ### Story 1.109: Partition gameability degenerate responses
 
-Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a gameability probe under a `partitionPlan`. The degenerate response answers every plan step with its step ID, so it cannot name a held-out step in a development file and still keep the held-out ID out of development artifacts.
+Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a gameability probe under a `partitionPlan`. The degenerate response answers every plan step with its step ID, so it cannot name a held-out step in a development file and still keep the held-out ID out of development artifacts. Amended 2026-10-04 in Story 1.109: `corpus/gameability/<probeId>.json` already holds one answer per plan step of `contract.json`, so the story adds the one file kind the held-out steps need, `corpus/held-out/gameability/<probeId>.json`, sealed beside the held-out plan. A development `check` never opens the plan, so it cannot name a held-out step; the check that names a missing held-out answer by step ID is a `check` that opens the plan (`tea-evaluate check`, and a held-out or both `preflight` and `run`).
 
 As an adopter with a gameability probe on a rubric-governed behavior,
 I want the degenerate response to answer only the steps of the partition that runs the probe,
@@ -2832,11 +2832,11 @@ So that a gameability probe works under a partition plan without leaking a held-
 
 **Acceptance Criteria:**
 
-**Given** a gameability probe in each partition and a held-out step
+**Given** a gameability probe in each partition and a held-out plan step
 **When** each partition and the both view run the gameability arm
-**Then** the arm answers each step of its view from a response the folder keeps beside the plan for its partition, `check` names a missing answer by step ID, and no development file or artifact holds a held-out step ID
-**And** `check` no longer refuses a gameability probe beside a `partitionPlan`.
-**And** an arm that answers the whole plan puts a held-out step ID in a development artifact and fails the isolation case, and a missing answer that passes `check` fails its case.
+**Then** the arm answers the steps of its view and no other (the steps of `contract.json` from `corpus/gameability/<probeId>.json` in the development and both views, and the held-out plan's steps from `corpus/held-out/gameability/<probeId>.json` in the held-out and both views), a development run never opens the held-out answers, and no development file, run artifact, `check` output or `preflight` output of a development run holds a held-out step ID
+**And** `check` names a missing answer by probe and step ID, a held-out step by its ID only when the ID has the schema's shape, never quotes the sealed file, and no longer refuses a gameability probe beside a `partitionPlan`.
+**And** an arm that answers the whole plan puts a held-out step ID in a development artifact and fails the isolation case, a development run that opens the held-out answers fails the case that leaves them unreadable, and a missing answer that passes `check` fails its case.
 
 **Dependencies:** 1.51, 1.14.
 **Gate:** `npm run test:evaluate-partition-plans`, `npm run test:evaluate-arms`, `npm test`.

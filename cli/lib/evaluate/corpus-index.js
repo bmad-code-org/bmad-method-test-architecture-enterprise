@@ -56,6 +56,16 @@ function filesUnder(directory, folder) {
   return files;
 }
 
+/** The paths a comparison leaves unread: each file named, and every file below a directory named with a trailing `/`. */
+function unreadPaths(unread) {
+  const entries = [...unread];
+  return {
+    size: entries.length,
+    has: (relative) =>
+      typeof relative === 'string' && entries.some((entry) => (entry.endsWith('/') ? relative.startsWith(entry) : relative === entry)),
+  };
+}
+
 /** Code-unit order, so the sort is the same on every machine and locale. */
 function byPath(left, right) {
   if (left.path < right.path) return -1;
@@ -68,12 +78,13 @@ function byPath(left, right) {
  *
  * @param {string} folder
  * @param {object} [options]
- * @param {Iterable<string>} [options.unread] paths relative to the folder that are left out and never opened (the held-out plan,
- *   for a development run's staleness check); the index `tea-evaluate digest` writes never leaves one out
+ * @param {Iterable<string>} [options.unread] paths relative to the folder that are left out and never opened (the held-out plan and
+ *   the held-out gameability answers, for a development run's staleness check); a path that ends in `/` leaves out every file
+ *   below that directory. The index `tea-evaluate digest` writes never leaves one out
  * @returns {Promise<Array<{ path: string, sha256: string }>>}
  */
 async function buildCorpusIndex(folder, { unread = [] } = {}) {
-  const skipped = new Set(unread);
+  const skipped = unreadPaths(unread);
   const engine = await loadEngine();
   const entries = [];
   for (const root of INDEXED_ROOTS) {
@@ -147,11 +158,13 @@ async function writeCorpusIndex(folder) {
  * @param {string} folder
  * @param {object} [options]
  * @param {Iterable<string>} [options.unread] paths relative to the folder that this comparison neither opens nor compares, so a
- *   development run never reads the held-out plan (Story 1.51); the full comparison is `check`'s and a held-out run's
+ *   development run never reads the held-out plan (Story 1.51) or the held-out gameability answers (Story 1.109); a path that ends
+ *   in `/` stands for every file below that directory. The full comparison is `check`'s and a held-out run's
  * @returns {Promise<string|null>}
  */
 async function corpusIndexProblem(folder, { unread = [] } = {}) {
-  const skipped = new Set(unread);
+  const left = [...unread];
+  const skipped = unreadPaths(left);
   const indexPath = path.join(folder, INDEX_NAME);
   if (!isRegularOrAbsent(indexPath)) return `${INDEX_NAME} is a directory or a symbolic link; remove it and run tea-evaluate digest`;
   let committed;
@@ -162,7 +175,7 @@ async function corpusIndexProblem(folder, { unread = [] } = {}) {
       ? `${INDEX_NAME} is missing; run tea-evaluate digest`
       : `${INDEX_NAME} is not valid JSON (${error.message}); run tea-evaluate digest`;
   }
-  const recomputed = await buildCorpusIndex(folder, { unread: skipped });
+  const recomputed = await buildCorpusIndex(folder, { unread: left });
   if (skipped.size > 0 && Array.isArray(committed)) committed = committed.filter((entry) => !skipped.has(entry?.path));
   let committedDigest;
   try {

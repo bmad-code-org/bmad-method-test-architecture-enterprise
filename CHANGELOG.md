@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `chain` job uploads each evaluation's `runs/<invocationId>/` as the build artifact `evaluate-runs-<shard>` with `if: always()`, so a red run leaves its evidence bundle.
   A `test:evaluate-ci` case parses `quality.yaml` and fails when the upload step, its `always()`, its shard-qualified name or any evaluation's path is missing, when a script leaves the `npm test` chain, and when any of the eight `eval-quality-gates` leaves its job: `test:lockfile-age` and `test:licences` stay in `supply-chain`, `test:direction`, `test:boundary` and `test:lineage` in `layering-boundary-lineage`, and `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the chain.
   The case also carries a revert case for each folder rule, each wiring rule and each result rule.
+- A gameability probe runs under a `partitionPlan`, and its arm answers only the steps of its own view (Story 1.109, AD-9, AD-22).
+  Story 1.51 refused a gameability probe beside a `partitionPlan`, because the degenerate response answered every plan step from one file and could not name a held-out step in a development file.
+  The response now splits where the plan does.
+  `corpus/gameability/<probeId>.json` answers the steps of `contract.json`, the shared and the development-only ones, and `corpus/held-out/gameability/<probeId>.json`, sealed beside the held-out plan, answers the steps of the plan in the same shape, so no development file holds a held-out step ID.
+  `preflight` and `run` answer each arm from the steps its view declares (`answersForView`): the development view reads the first file, the held-out view takes the shared steps from the first and its own from the second, and the both view takes every step from both.
+  Every gameability probe answers every step of the plan, because the both view runs each probe over the whole plan whichever partition the probe belongs to.
+  A development `preflight`, `run` and corpus-index comparison never open `corpus/held-out/gameability/`, so an answers file a development run cannot read stops only a held-out or both run and `check`.
+  The qualification and trial evidence of a held-out or both run records the held-out answers' path and digest beside the response file's, and a development run's record is the response file alone.
+  `check` holds the held-out answers to the rules of the response file over the held-out plan's steps (required when the plan declares a step) and names a missing, misplaced or unreadable answer by probe and step ID, naming a held-out step by its ID only when it has the schema's shape and never quoting the sealed file.
+  A held-out probe's `naiveOracle` that reads a development-only step is a finding, because the held-out view drops it.
+  The `partition-plan` refusal of a gameability probe is gone.
+  Making the arm answer the whole plan puts a held-out step in a development artifact and fails the isolation case, a development run that opens the held-out answers fails the case that makes them unreadable, and a missing answer that passes `check` fails its case.
+  With no `partitionPlan`, every committed fixture, baseline and replay is byte-identical.
 - An evaluator mapping follows the contract view under a `partitionPlan` (Story 1.107, AD-9, AD-21, AD-22).
   Story 1.51 refused a `partitionPlan` beside any evaluator but the deterministic one, because a `command` or `sealed-brief-agent` evaluator binds oracles and rubric criteria through `evaluator/mapping.json` and a `records` evaluator's records name them too.
   A command evaluator, a sealed-brief agent and a records evaluator now run beside a plan, and the refusal is gone.

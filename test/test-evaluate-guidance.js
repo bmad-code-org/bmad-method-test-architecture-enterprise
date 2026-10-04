@@ -369,7 +369,8 @@ function checkCorpus(corpus, engine, failures) {
     'A floor with no eligible probe in a partition it is read on exits `ci --tier release` 2 with `no-eligible-probe`',
     'Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe',
     '`P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then',
-    '`tea-evaluate check` refuses a gameability probe beside a `partitionPlan`, so an evaluation that declares one holds no gameability floor',
+    'Under a `partitionPlan` each gameability probe answers the whole plan from two files (see the partition section)',
+    "under a `partitionPlan` the plan file's steps are answered in a second file (see the partition section)",
     "Each held-out seed changes an adopter-owned rule through its mutation (`P-006` through `M-001`, and the Workflow kind's `P-008` through `M-003`)",
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
@@ -820,7 +821,15 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'names every defect by path and ID without quoting the plan',
     '`tea-evaluate preflight --partition held-out`',
     'neither the plan file nor a held-out baseline under `baseline/`',
-    'beside a gameability probe, or beside a records evaluator and a rubric',
+    'refuses a `partitionPlan` beside a records evaluator and a rubric',
+    "A gameability probe's degenerate response follows the plan too",
+    '`corpus/held-out/gameability/<probeId>.json`, beside the plan, answers the steps of the plan file',
+    "the arm of each view answers only that view's steps",
+    'Give every gameability probe both files, each answering every step its own source declares',
+    "add an oracle on a shared step to `contract.json` for it, or keep that behavior's gameability probe in the development partition",
+    'and a held-out probe whose naive oracle reads a development-only step',
+    "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step",
+    'It names a gameability answer left out, misplaced or unreadable by probe and step ID',
     'has no designated oracle there',
     'selects with an `any` matcher',
     'witnesses with a non-private input',
@@ -993,6 +1002,25 @@ function checkPartitionPlanGuidance(corpus, failures) {
   if (!mappingViewProblems(mappingView(misplacedMapping)).some((problem) => /mappings\[0\] binds oracle O-002/.test(problem)))
     failures.push(
       'the partition plan check accepts a mapping row for a development-only oracle, so the mapping example check proves nothing',
+    );
+  // Story 1.109: the tagged held-out answers example meets the degenerate-response schema and answers exactly the steps of the plan
+  // example, so a file that answers a step of `contract.json` or leaves a plan step out is not the example the guide teaches.
+  const answerExamples = taggedExamples(body, 'held-out-gameability-response');
+  if (answerExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-gameability-response example; found ${answerExamples.length}`);
+    return;
+  }
+  const answersSchema = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'degenerate-response.schema.json')),
+  );
+  const validateAnswers = new Ajv({ strict: false, allErrors: true }).compile(answersSchema);
+  if (!validateAnswers(answerExamples[0]))
+    failures.push(`corpus.md held-out gameability answers fail the degenerate-response schema: ${JSON.stringify(validateAnswers.errors)}`);
+  const answered = Object.keys(answerExamples[0].steps ?? {}).sort();
+  const planned = plans[0].interactionPlan.map((step) => step.stepId).sort();
+  if (JSON.stringify(answered) !== JSON.stringify(planned))
+    failures.push(
+      `corpus.md held-out gameability answers answer ${JSON.stringify(answered)}, not the plan example's steps ${JSON.stringify(planned)}`,
     );
 }
 
@@ -4544,6 +4572,64 @@ async function main() {
         'corpus',
         checkPartitionPlanGuidance,
         (text) => text.replace("A records harness's records name only the oracles, behaviors and criteria of the run's view.", ''),
+      ],
+      [
+        'corpus partition plan gameability answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace("A gameability probe's degenerate response follows the plan too.", ''),
+      ],
+      [
+        'corpus partition plan held-out answers file placed in the development corpus',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            '`corpus/held-out/gameability/<probeId>.json`, beside the plan,',
+            '`corpus/gameability/<probeId>.json`, beside the plan,',
+          ),
+      ],
+      [
+        'corpus partition plan held-out answers example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-gameability-response -->', ''),
+      ],
+      [
+        'corpus partition plan held-out answers example answering a contract step',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"held-out-run": { "stdout": "verdict: pending', '"shared-run": { "stdout": "verdict: pending'),
+      ],
+      [
+        'corpus partition plan every-step answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'Give every gameability probe both files, each answering every step its own source declares (the steps of `contract.json` in the first, the steps of the plan file in the second), because the both view runs each probe over both.',
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan naive oracle sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step, since the held-out view drops the others.",
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan gameability check sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "It names a gameability answer left out, misplaced or unreadable by probe and step ID, and a held-out step by its ID only when the ID has the schema's shape, and a held-out probe whose naive oracle reads a development-only step. ",
+            '',
+          ),
       ],
       [
         'run partition plan preflight removal',
