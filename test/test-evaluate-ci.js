@@ -2596,6 +2596,45 @@ function reverseSchema2Migration(buffer, pairs) {
   return Buffer.from(`${JSON.stringify({ ...value, schemaVersion: 1, operationPhases: flat }, null, 2)}\n`);
 }
 
+/** The held-out gameability probe Story 1.98 added to the AI-feature evaluation. */
+const STORY_98_PROBE = 'P-015';
+
+/**
+ * The bytes a live session wrote before Story 1.98 repaired the AI-feature evaluation behind `evaluation.json`: the
+ * `zero-action` floor back in `strengthFloor` (after `defect`, where the session left it, since no probe of that class can be
+ * eligible) and the held-out gameability probe out of `heldOutProbes`. `null` when the file is not the runtime's serialization of
+ * a file that carries that repair: a floor already there, a held-out list that does not end in the probe, or other bytes.
+ */
+function reverseStory98Migration(buffer) {
+  let value;
+  try {
+    value = JSON.parse(buffer.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (buffer.toString('utf8') !== `${JSON.stringify(value, null, 2)}\n`) return null;
+  const floor = value?.strengthFloor;
+  const held = value?.heldOutProbes;
+  if (floor === null || typeof floor !== 'object' || Array.isArray(floor) || Object.hasOwn(floor, 'zero-action')) return null;
+  if (!Array.isArray(held) || held.at(-1) !== STORY_98_PROBE || held.filter((id) => id === STORY_98_PROBE).length !== 1) return null;
+  const restored = {};
+  for (const [key, level] of Object.entries(floor)) {
+    restored[key] = level;
+    if (key === 'defect') restored['zero-action'] = 1;
+  }
+  if (!Object.hasOwn(restored, 'zero-action')) return null;
+  return Buffer.from(`${JSON.stringify({ ...value, strengthFloor: restored, heldOutProbes: held.slice(0, -1) }, null, 2)}\n`);
+}
+
+/**
+ * The migrations a capture record may declare for `evaluation.json`, newest first: each rebuilds the bytes the file held before
+ * the story moved it, or `null` when the file is not one that story could have produced, and says what the file is then not.
+ */
+const REVERSALS = [
+  ['1.98', (buffer) => reverseStory98Migration(buffer), 'a file that carries the Story 1.98 floor and held-out repair'],
+  ['1.42', (buffer, bytes) => reverseSchema2Migration(buffer, declaredPairs(bytes)), 'a schema 2 file'],
+];
+
 function captureProblems(name, record, bytes) {
   const problems = [];
   if (!(record.model ?? '').startsWith('claude-')) problems.push(`${name}: the capture record names no model`);
@@ -2611,15 +2650,15 @@ function captureProblems(name, record, bytes) {
     else if (sha(fs.readFileSync(path.join(SKILL_ROOT, relative))) !== digest)
       problems.push(`${name}: ${relative} changed since the live session read it; run the session again`);
   }
-  // A file the session wrote and Story 1.42 migrated is held to the session's digest through the declared migration: the
-  // bytes the session wrote are rebuilt by reversing it, so the digest in `wrote` is never retyped and the migration is
-  // the only edit the file may carry.
-  const migrated = new Set();
+  // A file the session wrote and a later story migrated is held to the session's digest through the declared migrations: the
+  // bytes the session wrote are rebuilt by reversing them, newest first, so the digest in `wrote` is never retyped and the
+  // migrations are the only edits the file may carry.
+  const declared = new Set();
   for (const migration of record.migrations ?? []) {
-    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42')
-      problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
-    else if (migrated.has(migration.file)) problems.push(`${name}: the capture record declares the migration of ${migration.file} twice`);
-    migrated.add(migration?.file);
+    const known = migration?.file === EVALUATION_FILE && REVERSALS.some(([story]) => story === migration.story);
+    if (!known) problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
+    else if (declared.has(migration.story)) problems.push(`${name}: the capture record declares the migration of ${migration.file} twice`);
+    else declared.add(migration.story);
     // The rebuilt bytes are the only authority: a digest the entry names (`from`, `to`) is a second claim nothing checks.
     const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.has(key));
     if (claims.length > 0)
@@ -2630,10 +2669,16 @@ function captureProblems(name, record, bytes) {
   for (const relative of WROTE_KEYS) {
     const digest = record.wrote?.[relative];
     let written = bytes.get(relative) ?? Buffer.alloc(0);
-    if (migrated.has(relative)) {
-      const rebuilt = reverseSchema2Migration(written, declaredPairs(bytes));
-      if (rebuilt === null) problems.push(`${name}: ${relative} is not a schema 2 file the declared migration could have produced`);
-      else written = rebuilt;
+    if (relative === EVALUATION_FILE) {
+      for (const [story, reverse, what] of REVERSALS) {
+        if (!declared.has(story)) continue;
+        const rebuilt = reverse(written, bytes);
+        if (rebuilt === null) {
+          problems.push(`${name}: ${relative} is not ${what} the declared migration could have produced`);
+          break;
+        }
+        written = rebuilt;
+      }
     }
     if (!DIGEST.test(digest ?? '')) problems.push(`${name}: wrote holds no digest for ${relative}`);
     else if (sha(written) !== digest) problems.push(`${name}: ${relative} is not the file the live session wrote`);
@@ -2989,17 +3034,27 @@ function checkCaptureRecordGuard() {
     const committed = read(path.join(ROOT, root, 'capture-record.json'));
     const { bytes } = loadRepository(root);
     assert.deepEqual(captureProblems(name, committed, bytes), [], `${name}: the committed record fails its own guard`);
-    // The committed sessions ran on the schema 2 tree, so they wrote schema 2 bytes and declare no migration. The cases below hold the
-    // record a session that ran before Story 1.42 would have left: its `wrote` digest is that of the schema 1 bytes, rebuilt here by
-    // reversing the migration, and its `migrations` entry declares the move.
-    assert.equal(committed.migrations, undefined, `${name}: a session that wrote schema 2 bytes declares a migration it never needed`);
+    // The committed sessions ran on the schema 2 tree before Story 1.98 repaired the evaluation, so they wrote schema 2 bytes with
+    // the zero-action floor and no held-out gameability probe, and declare that one migration. The cases below hold the record a
+    // session that ran before Story 1.42 would have left: its `wrote` digest is that of the schema 1 bytes, rebuilt here by
+    // reversing both migrations, and its `migrations` entries declare both moves.
+    assert.deepEqual(
+      committed.migrations?.map((migration) => [migration.file, migration.story]),
+      [[EVALUATION_FILE, '1.98']],
+      `${name}: the committed record declares the Story 1.98 repair of evaluation.json and nothing else`,
+    );
     const evaluationBytes = bytes.get(EVALUATION_FILE);
-    const sessionBytes = reverseSchema2Migration(evaluationBytes, declaredPairs(bytes));
+    const preRepairBytes = reverseStory98Migration(evaluationBytes);
+    assert.notEqual(preRepairBytes, null, `${name}: the committed evaluation.json does not carry the Story 1.98 repair`);
+    const sessionBytes = reverseSchema2Migration(preRepairBytes, declaredPairs(bytes));
     assert.notEqual(sessionBytes, null, `${name}: the committed evaluation.json is not a schema 2 file with nested phases`);
     const record = {
       ...structuredClone(committed),
       wrote: { ...committed.wrote, [EVALUATION_FILE]: sha(sessionBytes) },
-      migrations: [{ file: EVALUATION_FILE, story: '1.42', change: 'schemaVersion 1 to 2 and operationPhases keyed by interface' }],
+      migrations: [
+        { file: EVALUATION_FILE, story: '1.42', change: 'schemaVersion 1 to 2 and operationPhases keyed by interface' },
+        ...committed.migrations,
+      ],
     };
     assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the migrated record fails its own guard`);
     const wrongDigest = `sha256:${'0'.repeat(64)}`;
@@ -3111,6 +3166,30 @@ function checkCaptureRecordGuard() {
         `declares the migration of ${EVALUATION_FILE} twice`,
       ],
       [
+        'a Story 1.98 migration declared twice',
+        withMigrations([...record.migrations, record.migrations.at(-1)]),
+        bytes,
+        `declares the migration of ${EVALUATION_FILE} twice`,
+      ],
+      [
+        'a Story 1.98 migration over an evaluation.json that never carried the repair',
+        record,
+        new Map([...bytes, [EVALUATION_FILE, preRepairBytes]]),
+        'declared migration could have produced',
+      ],
+      [
+        'an evaluation.json whose floors changed beyond the Story 1.98 repair',
+        record,
+        withEvaluation(serialized({ ...evaluationValue, strengthFloor: { ...evaluationValue.strengthFloor, gameability: 2 } })),
+        'is not the file the live session wrote',
+      ],
+      [
+        'an evaluation.json whose held-out probes changed beyond the Story 1.98 repair',
+        record,
+        withEvaluation(serialized({ ...evaluationValue, heldOutProbes: evaluationValue.heldOutProbes.filter((id) => id !== 'P-011') })),
+        'is not the file the live session wrote',
+      ],
+      [
         'a migration credited to another story',
         withMigrations(record.migrations.map((migration) => ({ ...migration, story: '1.43' }))),
         bytes,
@@ -3154,9 +3233,10 @@ function checkCaptureRecordGuard() {
       );
     const honestPhases = { [interfaceId]: { [operationId]: phase }, 'second-interface': { 'second-operation': 'process' } };
     const movedPhases = { [interfaceId]: { [operationId]: phase, 'second-operation': 'process' }, 'second-interface': {} };
+    const preRepairValue = JSON.parse(preRepairBytes.toString('utf8'));
     const flatBytes = Buffer.from(
       serialized({
-        ...evaluationValue,
+        ...preRepairValue,
         schemaVersion: 1,
         registry: [...evaluationValue.registry, { ...structuredClone(evaluationValue.registry[0]), interfaceId: 'second-interface' }],
         operationPhases: { [operationId]: phase, 'second-operation': 'process' },

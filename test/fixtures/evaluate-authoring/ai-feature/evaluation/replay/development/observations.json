@@ -7,7 +7,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:58 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:13 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -28,7 +28,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:58 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:13 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -49,7 +49,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:14 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -70,7 +70,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:14 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -91,7 +91,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:14 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -111,7 +111,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:14 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -124,6 +124,27 @@
     }
   },
   {
+    "probeId": "p-006-manifest-strict-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "too-short",
+        "mode": "strict"
+      }
+    }
+  },
+  {
     "probeId": "p-007-manifest-decision-reject",
     "interfaceId": "answer-grade",
     "operationId": "grade-answer",
@@ -131,7 +152,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -151,7 +172,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -172,7 +193,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -192,7 +213,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

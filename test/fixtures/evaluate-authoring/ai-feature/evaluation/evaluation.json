@@ -48,13 +48,13 @@
   ],
   "strengthFloor": {
     "defect": 1,
-    "zero-action": 1,
     "gameability": 1
   },
   "heldOutProbes": [
     "P-011",
     "P-012",
-    "P-013"
+    "P-013",
+    "P-015"
   ],
   "requirements": {
     "path": "requirements.md",

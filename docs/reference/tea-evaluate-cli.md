@@ -1405,6 +1405,8 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
 
 The strength floor is read from the floor decisions eval-quality records in the strength aggregate of the twin run and of the held-out run, each on its own. A class that does not meet its floor warns on `scheduled` and exits 2 on `release`.
 
+Declare a floor only for a class that the partition it is read on can hold an eligible probe of. A probe is eligible for the strength vector when it is not a canary and not `expectedClean`, so a clean control, which is also the `zero-action` class, never fills a floor: a `zero-action` floor reads `no-eligible-probe` and does not meet it unless the evaluation holds a `zero-action` defect probe, which a behavior that must take an action (its missing action is the defect) needs. An evaluation whose behaviors all respond to a request declares `defect` and, once it holds a gameability probe, `gameability`, and no `zero-action` floor. The twin run and the held-out partition are read on their own, so a held-out partition needs a probe of every class whose floor the evaluation declares: list a gameability probe in `heldOutProbes` beside the defect probes when the evaluation declares the `gameability` floor.
+
 ### Exits and the evidence
 
 The final exit is the most severe blocking result, in this order: 64, 12, 5, 4, 3, 13, 11, 10, 2, 1, then 0.
@@ -1415,7 +1417,7 @@ A `gate` check runs as a child process in a process group of its own, with the p
 `runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, whatever the exit; the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
 Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result. `bmad-testarch-ci` renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
 
-The baselines TeA's own fixtures commit were recorded by real `compare --accept` runs over clean copy-workspace runs from a temporary directory. They carry the recording machine's paths until a later release re-accepts them with those paths removed: `run.json` (its workspace paths), each probe's `score.json` and `aggregate-strength.json` (the argv of each engine call), and the `cwd` of every file under `observations/`. The replay leaves the call records of `score` out of its comparison for that reason, and compares every other file.
+The baselines TeA's own fixtures commit, the two repositories of the CI stage included, were recorded by real `compare --accept` runs over clean copy-workspace runs from a temporary directory. They carry the recording machine's paths until a later release re-accepts them with those paths removed: `run.json` (its workspace paths), each probe's `score.json` and `aggregate-strength.json` (the argv of each engine call), and the `cwd` of every file under `observations/`. The replay leaves the call records of `score` out of its comparison for that reason, and compares every other file.
 
 ## tea-skill-runner
 

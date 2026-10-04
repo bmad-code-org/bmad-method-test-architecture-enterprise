@@ -1,12 +1,12 @@
 {
-  "scoreInvocationId": "20261002T223510531Z-3c59f405",
+  "scoreInvocationId": "20261004T143850660Z-53197c63",
   "strengthAggregate": {
     "status": "copied",
     "reason": null,
-    "path": "runs/20261002T223329843Z-c1997103/scores/20261002T223510531Z-3c59f405/strength-aggregate.json",
-    "digest": "sha256:88f8034f7386849b7a9b2dd876a7d496e34ae8dae9c13dbbbacf126ec128e1a2",
-    "floors": "runs/20261002T223329843Z-c1997103/scores/20261002T223510531Z-3c59f405/strength-floors.json",
-    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+    "path": "runs/20261004T143742886Z-a7f14729/scores/20261004T143850660Z-53197c63/strength-aggregate.json",
+    "digest": "sha256:7f1a147447ff6601ac3d1fc9c9c441a45a8746424241f9158b08516bc3e42a6c",
+    "floors": "runs/20261004T143742886Z-a7f14729/scores/20261004T143850660Z-53197c63/strength-floors.json",
+    "floorsDigest": "sha256:1a081de0dd462ded6e1b618b4f3f04da41646433d6cf831e193a81e7b9fc1567"
   },
   "development": [
     {

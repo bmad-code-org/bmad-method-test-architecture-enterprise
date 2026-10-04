@@ -1,0 +1,48 @@
+{
+  "legId": "p-013-manifest-decision-pass",
+  "sequence": 14,
+  "workspace": "mutated:M-007",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-50dc34bd-720d-47a3-b9f7-cf5c4674170f/target",
+  "request": {
+    "probeId": "p-013-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {},
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": [
+            "valid",
+            "words"
+          ]
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "p-013-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:43:14 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  }
+}

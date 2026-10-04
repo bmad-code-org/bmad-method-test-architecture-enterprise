@@ -1,0 +1,44 @@
+{
+  "legId": "p-014-manifest-raw-invalid-json",
+  "sequence": 11,
+  "workspace": "mutated:M-008",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-5dbb0c56-a112-4216-ad49-f865d1abc15e/target",
+  "request": {
+    "probeId": "p-014-manifest-raw-invalid-json",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {},
+      "header": {},
+      "body": {
+        "kind": "raw",
+        "base64": "eyJhbnN3ZXIiOg==",
+        "contentType": "application/json"
+      }
+    }
+  },
+  "observation": {
+    "probeId": "p-014-manifest-raw-invalid-json",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:38:15 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "scoreInvocationId": "20261002T223542915Z-8f10f8fc",
+  "scoreInvocationId": "20261004T143928049Z-5b94894e",
   "development": [],
   "held-out": [
     {
@@ -68,6 +68,34 @@
         "exercised": true,
         "invalidatedAttempts": [],
         "probeId": "P-013",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-015",
+      "probeClass": "gameability",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-015",
         "severity": "material",
         "trialVotes": [
           {

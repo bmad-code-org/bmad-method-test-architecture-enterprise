@@ -1,0 +1,48 @@
+{
+  "legId": "witness-normal",
+  "sequence": 1,
+  "workspace": "pristine",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-0b375c2e-cb94-47c0-8a7f-0878ff5c9f3b/target",
+  "request": {
+    "probeId": "witness-normal",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {
+        "strict": "0"
+      },
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": "abcdefgh"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "witness-normal",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:43:11 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "normal"
+      }
+    }
+  }
+}

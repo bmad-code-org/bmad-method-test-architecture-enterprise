@@ -2,7 +2,7 @@
   "legId": "p-012-manifest-decision-reject",
   "sequence": 6,
   "workspace": "mutated:M-006",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-198f6d79-4af9-4df5-9f3a-879ba77489e0/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-b3b93bec-0bfa-4f3e-9b49-ec988d37c6f6/target",
   "request": {
     "probeId": "p-012-manifest-decision-reject",
     "interfaceId": "answer-grade",
@@ -12,14 +12,12 @@
     "pathTemplate": "/grade",
     "channels": {
       "path": {},
-      "query": {
-        "strict": "1"
-      },
+      "query": {},
       "header": {},
       "body": {
         "kind": "json",
         "value": {
-          "answer": "abcdefghijklmnop"
+          "answer": "abcdefgh"
         }
       }
     }
@@ -32,7 +30,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 22:35:28 GMT",
+      "date": "Sun, 04 Oct 2026 14:39:09 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -40,8 +38,7 @@
       "kind": "json",
       "value": {
         "decision": "reject",
-        "reason": "accepted",
-        "mode": "strict"
+        "reason": "accepted"
       }
     }
   }

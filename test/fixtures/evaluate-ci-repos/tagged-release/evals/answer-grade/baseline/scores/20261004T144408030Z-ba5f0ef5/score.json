@@ -1,0 +1,142 @@
+{
+  "invocationId": "20261004T144408030Z-ba5f0ef5",
+  "run": "20261004T144225272Z-a3e01a36",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-001",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-001/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-001/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-002",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-002/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-002/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-003",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-003/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-003/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-004",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-004/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-004/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-005",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-005/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-005/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-010",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-010/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-010/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-006",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-006/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-006/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-007",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-007/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-007/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-008",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-008/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-008/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-011",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-011/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-011/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-012",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-012/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-012/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-013",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-013/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-013/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-014",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-014/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-014/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-009",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-009/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-009/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-015",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-015/score.json",
+      "evidence": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/P-015/evidence-artifact.json"
+    }
+  ],
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "partition": "both",
+    "exitCode": 0,
+    "call": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/aggregate-strength.json",
+    "aggregate": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/strength-aggregate.json",
+    "aggregateDigest": "sha256:5435077a23869cd249a77c1d17cb41117d0e2996b09bb68f9da7d0e5b215ce67",
+    "floors": "runs/20261004T144225272Z-a3e01a36/scores/20261004T144408030Z-ba5f0ef5/strength-floors.json",
+    "floorsDigest": "sha256:1a081de0dd462ded6e1b618b4f3f04da41646433d6cf831e193a81e7b9fc1567",
+    "evidenceDigests": {
+      "P-001": "sha256:e4b55fd66583dcdde809ebb2d9e719de36f4c4354db9e6e065369ede8181bf62",
+      "P-002": "sha256:5e892894eba1ad7cbaebcf452ebb839cb2327a298560735e66e20f8109e1b896",
+      "P-003": "sha256:a34569272de9644ad6dc2bdc78b21a862f783665bcf42165650613aef5802d25",
+      "P-004": "sha256:2250cdb5a9259b86e282184b47d9cf9bd8c065dee35954790b0a31303fc3e830",
+      "P-005": "sha256:53d12f1359405170c21d14a42bdab037895a91e0c19c9770d23dc17fb83039c4",
+      "P-010": "sha256:4c907de7eb9def84caf8b9548d3d80926f63cb9255187a9d8677485aa3e72ca9",
+      "P-006": "sha256:9552153b07dac9c3fd2b4c444a6ba9df44d057fe50ae8d74f7f3242a0f3a178d",
+      "P-007": "sha256:c3243ccbbea98aeff576ff68e727146ccb87bc27c06b25574f46280039ded7bd",
+      "P-008": "sha256:02646a21d8db7e285b5d5164c988a529193ffc5f7aba0b866dac2cbd05a15f35",
+      "P-011": "sha256:06101cea8cc05918a159f21300ebdf2f3e6afb7bdf697d86ecf16f96249c9e37",
+      "P-012": "sha256:fe2caa61ed1220d33db96e881167379d3d6d14234f1078855189afaefd8ed6b4",
+      "P-013": "sha256:c3a3d2623c61f2be2e00e4c0a8095e459a582e3a02794c9ed4a043a045bdab26",
+      "P-014": "sha256:1532301795bafd3916491b8668a2b98665c00b4d60fbb2021b7de450c56744e9",
+      "P-009": "sha256:1b06748550ebe0c2ab438ec08eb034e07e4cb6c8d9eae94db057aa029a8de6d2",
+      "P-015": "sha256:35d2c1560072924f4bb21587f54717566fa1ee7caaaf28e6f5219093ec541736"
+    }
+  },
+  "refused": [],
+  "confinement": "seatbelt"
+}

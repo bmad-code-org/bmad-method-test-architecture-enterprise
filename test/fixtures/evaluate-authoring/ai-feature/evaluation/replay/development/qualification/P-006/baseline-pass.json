@@ -15,6 +15,16 @@
       "observationIds": [
         "baseline-valid-boundary"
       ]
+    },
+    {
+      "oracleId": "O-004",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-strict-boundary",
+        "baseline-strict-short"
+      ]
     }
   ],
   "steps": [
@@ -47,7 +57,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:34 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:48 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -89,7 +99,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:35 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:48 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -131,7 +141,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:35 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:48 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -175,7 +185,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:35 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:48 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -220,7 +230,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:35 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:49 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -263,7 +273,7 @@
         "status": 400,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:35 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:49 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -304,7 +314,7 @@
         "status": 400,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:36 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:49 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -344,7 +354,7 @@
         "status": 400,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 22:33:36 GMT",
+          "date": "Sun, 04 Oct 2026 14:37:49 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },

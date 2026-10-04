@@ -1,0 +1,48 @@
+{
+  "legId": "preflight-control-observe-2",
+  "sequence": 4,
+  "workspace": "pristine",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-f87d3ec2-310c-421b-bd5d-c6d4eda1111f/target",
+  "request": {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {
+        "strict": "0"
+      },
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": "abcdefgh"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:41:09 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "normal"
+      }
+    }
+  }
+}
