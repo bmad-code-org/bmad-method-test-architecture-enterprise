@@ -4,7 +4,7 @@ type: 'bugfix'
 created: '2026-10-04'
 status: 'done'
 route: 'dispatch'
-review_loop_iteration: 1
+review_loop_iteration: 2
 baseline_commit: '0984765d9f99c323103e13fdb4c6ac0ebf36957f'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 1.132; Stories 1.57 and 1.80)'
@@ -195,3 +195,12 @@ Every finding below was reproduced and fixed in the PR.
 | The index-stage shim exited before it read its input, so the other stage was sometimes killed before it logged, and the pack stages case failed 2 of 24 runs under load                                                  | The shim drains standard input before it fails; 8 parallel runs pass 8 of 8                                                                                                                             |
 | The 48 MB heap did not bind a walk held as buffer chunks, which sit outside the V8 heap                                                                                                                                  | The walk stub fails if it finishes before the pack stub has read a line, which a pipe that streams cannot do for an 82 MB walk; the buffer mutant now fails the unit cases                              |
 | The before and after listing checks could not fail, because `objects/pack` was read-only throughout                                                                                                                      | The cross-filesystem case also builds a full repository over a writable `objects/pack`, and the failed-stage builds in the pack stages case run over a writable one; the container run passes 12 checks |
+
+Round 2 (regressions only, one Opus lens).
+It confirmed every round 1 fix on its own evidence (the pack stages case 8 of 8 in parallel, the Buffer mutant failing on the order check, the container run 12 of 12 and 3 of 4 failing on the old path).
+It found two more, both fixed in the PR.
+
+| Finding                                                                                                                                                                                                                 | Fix                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The failed-stage arms ran over a writable `objects/pack`, but their shim failed the stage before the real git ran, so no build path could leave a file there and the listing check still could not fail on the old path | The pack arm's shim runs the real `pack-objects` under `ulimit -f 0` and then fails: a pack printed to a pipe is unaffected, and a temporary file in the adopter's `objects/pack` is left behind; the old path now fails the listing check (`tmp_pack_*`) |
+| Four comments, the epics.md amendment and the test design amendment still said the build only reads the project's repository or that `objects/pack` is read-only throughout                                             | Each names the object store and says which arms run over a read-only `objects/pack` and which over a writable one                                                                                                                                         |

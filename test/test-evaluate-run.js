@@ -9175,7 +9175,7 @@ function otherFilesystemDirectory() {
  * The private repository is packed on its own device (Story 1.132, found in Story 1.85's review round 1).
  * With the project and the temp directory on different filesystems, `pack-objects` run in the adopter's repository wrote its temporary pack into the adopter's
  * `.git/objects/pack` and failed to rename it into the store ("Invalid cross-device link"), leaving `tmp_*` files there.
- * The adopter's `objects/pack` is read-only for the build, and its listing is the same before and after.
+ * The case builds over a read-only `objects/pack` and over a writable one, and the listing is the same before and after.
  */
 async function checkWithheldHistoryAcrossFilesystems() {
   const base = otherFilesystemDirectory();
@@ -9257,11 +9257,12 @@ async function checkWithheldHistoryAcrossFilesystems() {
 
 /**
  * The private repository's pack is printed by `pack-objects --stdout` and indexed by the store's own `index-pack --stdin`
- * (Story 1.132), in a full repository and in a partial clone, so the adopter's repository is only read.
+ * (Story 1.132), in a full repository and in a partial clone, so the adopter's object store is only read.
  * A shim logs both commands, and a build whose pack stage or index stage fails refuses, leaves no workspace behind and
- * leaves the adopter's `objects/pack` as it was, read-only throughout.
+ * leaves the adopter's `objects/pack` as it was: the successful build runs over a read-only one, the failed stages over a writable one.
  */
 async function checkWithheldHistoryPackStages() {
+  const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
   const projects = [['a full repository', makeHistoryRepository('pack-stages-full'), false]];
   if (hostSkipsLazyFetch()) {
     const source = makeHistoryRepository('pack-stages-origin');
@@ -9337,7 +9338,13 @@ async function checkWithheldHistoryPackStages() {
       }
     }
     for (const [stage, script, said] of [
-      ['pack-stages-pack', 'case " $* " in *" pack-objects "*) echo "pack-objects broke" >&2; exit 1 ;; esac', 'pack-objects broke'],
+      // The pack stage runs the real `pack-objects` under a zero file-size limit and then fails: a pack printed to a pipe is
+      // unaffected, and one written to a temporary file in the adopter's `objects/pack` dies there and leaves that file behind.
+      [
+        'pack-stages-pack',
+        `case " $* " in *" pack-objects "*) ( ulimit -f 0; "${realGit}" "$@" ); echo "pack-objects broke" >&2; exit 1 ;; esac`,
+        'pack-objects broke',
+      ],
       [
         'pack-stages-index',
         'case " $* " in *" index-pack "*) cat >/dev/null; echo "index-pack broke" >&2; exit 1 ;; esac',

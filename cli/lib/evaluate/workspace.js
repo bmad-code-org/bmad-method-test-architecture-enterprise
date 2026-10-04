@@ -1425,8 +1425,9 @@ function sparseSettingsOf(workspace) {
  * metadata `commondir` names the store, and the index is rebuilt from the
  * replaced tree, so `git status` and `git diff` see the folder as an empty
  * tree and list no deletions. Nothing is written into the adopter's
- * repository: its objects are only read, and the worktree's metadata
- * directory is the one the worktree add already made.
+ * object store: its objects are only read. The build writes `commondir` and
+ * the index into the worktree's metadata directory, which the worktree add
+ * already made.
  *
  * The tags of the repository whose commits the history reaches are carried with
  * their annotations, and no branch, remote, URL, credential or hook is. A
