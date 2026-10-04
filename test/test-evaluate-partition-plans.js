@@ -46,6 +46,7 @@ const {
 const { EvaluatorLayerError, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { rowsValidator } = require('../cli/lib/evaluate/judgment-rows');
 const { declaredContent, foreignContent } = require('../cli/lib/evaluate/records-evaluator');
+const { RUN_LABELS } = require('../cli/lib/evaluate/records');
 const { MATERIAL_HEADING, evaluatorPrompt } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { suite } = require('./lib/evaluate-story-121');
 
@@ -337,7 +338,7 @@ function mappingLayer(
   evaluation.evaluator = {
     kind: 'command',
     command: 'evaluator/rows.js',
-    args: [...(rubric ? ['--rubric'] : []), '--log', log],
+    args: [...(rubric ? ['--rubric'] : []), '--labels', RUN_LABELS, '--log', log],
     timeoutMs: 60_000,
   };
   write(path.join(folder, 'evaluation.json'), evaluation);
@@ -982,8 +983,8 @@ try {
   // where the record keeps it, and the first and the last of a list alike. The criterion is a pair, so another rubric's criterion of
   // the same name is foreign. A finding that answers no oracle or behavior is no foreign content, and no path names an ID.
   const declaredByDevelopment = declaredContent(view('development', null).contract);
-  const disposition = (oracleId) => ({ oracleId, disposition: 'held', observationIds: [], note: null });
-  const finding = (oracleId, behaviorId) => ({ findingId: 'F-001', oracleId, behaviorId });
+  const disposition = (oracleId, observationIds = []) => ({ oracleId, disposition: 'held', observationIds, note: null });
+  const finding = (oracleId, behaviorId, observationIds = []) => ({ findingId: 'F-001', oracleId, behaviorId, observationIds });
   const judged = (rubricId, criterionId) => ({ rubricId, criterionId, score: 1, note: null });
   const observed = (observationId) => ({ observationId });
   const recordOf = (parts) => ({ observations: [], oracleDispositions: [], findings: [], judgeResults: [], ...parts });
@@ -1023,19 +1024,55 @@ try {
     ),
     ['judgeResults[1]'],
   );
-  // An observation names the plan step it records in its ID (`<label>-<stepId>`), which a development record may not take from the
-  // held-out plan nor a held-out record from `contract.json`'s development-only steps. An ID in the agent's own form
-  // (`<label>-call-<n>`) or in no run's form names no step.
+  // An observation is admitted when its ID is `<run label>-<a step the view declares>` or `<run label>-call-<n>` (a call the agent
+  // chose), and every other ID is refused: a development run never opens the plan, so only an allowlist can refuse a held-out step it
+  // cannot know. The labels are every form TeA writes an arm under (`RUN_LABELS`).
   const heldOutDeclared = declaredContent(heldOutView.contract);
   assert.deepEqual(
     foreignContent(
       recordOf({
-        observations: ['trial-1-shared-run', 'trial-1-development-run', 'trial-2-call-1', 'attempt-1-shared-run', 'odd'].map(observed),
+        observations: [
+          'trial-1-shared-run',
+          'trial-1-development-run',
+          'trial-2-call-1',
+          'attempt-1-shared-run',
+          'baseline-shared-run',
+          'degenerate-development-run',
+          'mutated-shared-run',
+          're-pass-2-development-run',
+          'baseline-call-3',
+        ].map(observed),
       }),
       declaredByDevelopment,
     ),
     [],
   );
+  for (const foreignId of [
+    'odd',
+    'held-out-run',
+    'obs-held-out-run',
+    'baseline-held-out-run',
+    'degenerate-held-out-run',
+    'trial-1-held-out-run',
+    'attempt-1-held-out-run',
+    'trial-held-out-run',
+    'trial-1-shared-run-2',
+    'xtrial-1-shared-run',
+    'trial-1-call-1-extra',
+    'shared-run',
+    'calibration',
+  ]) {
+    assert.deepEqual(
+      foreignContent(recordOf({ observations: [observed('trial-1-shared-run'), observed(foreignId)] }), declaredByDevelopment),
+      ['observations[1]'],
+      `${foreignId} was admitted`,
+    );
+    assert.deepEqual(
+      foreignContent(recordOf({ observations: [observed(foreignId), observed('trial-1-shared-run')] }), declaredByDevelopment),
+      ['observations[0]'],
+      `${foreignId} was admitted when first`,
+    );
+  }
   assert.deepEqual(
     foreignContent(recordOf({ observations: ['trial-1-held-out-run', 'trial-1-shared-run'].map(observed) }), declaredByDevelopment),
     ['observations[0]'],
@@ -1073,6 +1110,30 @@ try {
     false,
     'a path names the held-out oracle',
   );
+  // A citation is admitted when the record holds the observation it names, so a disposition or a finding cannot carry the other
+  // partition's step ID in its citations: each is refused by place, first and last in the list alike, and no path names the ID.
+  const held = ['trial-1-shared-run', 'trial-1-development-run'].map(observed);
+  const citing = (where, ids) =>
+    recordOf({
+      observations: held,
+      ...(where === 'disposition' ? { oracleDispositions: [disposition('O-001', ids)] } : { findings: [finding('O-001', 'B-002', ids)] }),
+    });
+  const placeOf = (where) => (where === 'disposition' ? 'oracleDispositions[0]' : 'findings[0]');
+  for (const where of ['disposition', 'finding']) {
+    assert.deepEqual(foreignContent(citing(where, ['trial-1-shared-run', 'trial-1-development-run']), declaredByDevelopment), []);
+    assert.deepEqual(foreignContent(citing(where, []), declaredByDevelopment), []);
+    assert.deepEqual(foreignContent(citing(where, ['trial-1-shared-run', 'trial-1-held-out-run']), declaredByDevelopment), [
+      `${placeOf(where)}.observationIds[1]`,
+    ]);
+    assert.deepEqual(foreignContent(citing(where, ['trial-1-held-out-run', 'trial-1-shared-run']), declaredByDevelopment), [
+      `${placeOf(where)}.observationIds[0]`,
+    ]);
+    assert.equal(
+      JSON.stringify(foreignContent(citing(where, ['trial-1-held-out-run']), declaredByDevelopment)).includes('held-out'),
+      false,
+      `a ${where} citation path names the held-out step`,
+    );
+  }
 
   // ---- check: one case per rule, naming paths and IDs and never a byte of the plan -------------------------------------------
   const guarded = planProject('plan-check');
@@ -1117,6 +1178,16 @@ try {
       'a held-out step ID declared twice',
       () => change(PLAN_FILE, (value) => value.interactionPlan.push(structuredClone(value.interactionPlan[0]))),
       /step held-out-run is declared more than once/,
+    ],
+    [
+      'a held-out step named like a call the agent chose',
+      () => change(PLAN_FILE, (value) => (value.interactionPlan[0].stepId = 'call-1')),
+      /corpus\/held-out\/plan\.json.*step call-1 has an ID of the form call-<n>, which names a call the agent chose/,
+    ],
+    [
+      'a contract step named like a call the agent chose',
+      () => change('contract.json', (contract) => (contract.interactionPlan[0].stepId = 'call-2')),
+      /contract\.json.*step call-2 has an ID of the form call-<n>, which names a call the agent chose/,
     ],
     [
       'a held-out oracle ID that a contract oracle has',
@@ -2893,10 +2964,12 @@ try {
         .digest('hex')}`,
   };
   const layerFolder = path.join(commandFlow.directory, 'layer-unit');
-  const layerOf = (partition, { mapping = mappingSource, plan = mappingPlan, planned = true } = {}) => {
+  // `indent` is the width the file's JSON is written in: the runtime serializes a view with two, so a file written with another width
+  // shows whether the digest took the view's bytes or the file's.
+  const layerOf = (partition, { mapping = mappingSource, plan = mappingPlan, planned = true, indent = 2 } = {}) => {
     fs.rmSync(layerFolder, { recursive: true, force: true });
     fs.cpSync(EVALUATOR_FIXTURE, path.join(layerFolder, 'evaluator'), { recursive: true });
-    write(path.join(layerFolder, 'evaluator/mapping.json'), mapping);
+    fs.writeFileSync(path.join(layerFolder, 'evaluator/mapping.json'), `${JSON.stringify(mapping, null, indent)}\n`);
     const manifest = {
       evaluator: { kind: 'command', command: 'evaluator/rows.js', args: [], timeoutMs: 1000 },
       ...(planned ? { partitionPlan: evaluation.partitionPlan } : {}),
@@ -2946,9 +3019,11 @@ try {
     schemaVersion: 1,
     keys: { 'accepted:shared-run': SHARED_ROW, 'score:shared-run': criterionRow('R-001', SHARED_CRITERION) },
   };
+  // Both files are written with four-space indentation, so a view that returned the file's bytes for the shared-only file would digest
+  // them as written, and the digest would move.
   assert.equal(
-    heldOutDigest(sharedOnlyMapping, heldOutPlan),
-    heldOutDigest(mappingSource, heldOutPlan),
+    layerOf('held-out', { mapping: sharedOnlyMapping, plan: heldOutPlan, indent: 4 }).treeDigest,
+    layerOf('held-out', { mapping: mappingSource, plan: heldOutPlan, indent: 4 }).treeDigest,
     'the held-out digest moved when the last development-only rows were deleted',
   );
   // The both view digests the mapping it holds: every row of the file, then the plan's, and it moves when a plan row does.
@@ -3080,8 +3155,11 @@ try {
     ['O-002', 'development-run'],
   );
   // A record also holds the plan steps its observations record, each with its call inputs and every response channel, named
-  // `<label>-<stepId>`. The other partition's observation is refused wherever it sits in the array (first and last alike), the refusal
-  // names its place and no ID, and nothing of it reaches the run directory: not the step's ID and not the request that carries the canary.
+  // `<label>-<stepId>`. A development run never opens the plan, so it cannot know a held-out step ID, and only an allowlist (an ID
+  // is `<run label>-<a step the view declares>` or `<run label>-call-<n>`) refuses it under every spelling a harness might give it:
+  // TeA's own `trial-1-` form, the `baseline-` label of the baseline arm, no label at all and a label of the harness's own. The other
+  // partition's observation is refused wherever it sits in the array (first and last alike), the refusal names its place and no ID, and
+  // nothing of it reaches the run directory: not the step's ID and not the request that carries the canary.
   const observationOf = (source, probeId, stepId) => {
     const record = read(path.join(source, probeId, 'record-1.json'));
     const found = record.observations.find((observation) => observation.observationId.endsWith(`-${stepId}`));
@@ -3097,19 +3175,49 @@ try {
   const heldOutObservation = observationOf(heldOutRecords, 'P-003', 'held-out-run');
   assert.ok(JSON.stringify(heldOutObservation).includes(CANARY), 'the held-out observation carries none of the held-out request');
   const developmentObservation = observationOf(developmentRecords, 'P-002', 'development-run');
-  for (const position of ['first', 'last']) {
-    const foreign = withObservation(developmentRecords, 'P-002', heldOutObservation, position);
-    refused(
-      'development',
-      [`observations[${position === 'first' ? 0 : foreign.observations.length - 1}]`, 'the development view does not declare'],
-      [...KEEP_OUT.development, heldOutObservation.observationId],
-    );
-    const other = withObservation(heldOutRecords, 'P-003', developmentObservation, position);
-    refused(
-      'held-out',
-      [`observations[${position === 'first' ? 0 : other.observations.length - 1}]`, 'the held-out view does not declare'],
-      [...KEEP_OUT['held-out'], developmentObservation.observationId],
-    );
+  const respelled = (observation, spelling) => ({ ...observation, observationId: spelling(observation.observationId) });
+  const spellings = [
+    (id) => id,
+    (id) => id.replace(/^trial-1/, 'baseline'),
+    (id) => id.replace(/^trial-1-/, ''),
+    (id) => id.replace(/^trial-1/, 'obs'),
+  ];
+  for (const spelling of spellings) {
+    for (const position of ['first', 'last']) {
+      const foreign = withObservation(developmentRecords, 'P-002', respelled(heldOutObservation, spelling), position);
+      refused(
+        'development',
+        [`observations[${position === 'first' ? 0 : foreign.observations.length - 1}]`, 'the development view does not declare'],
+        [...KEEP_OUT.development, spelling(heldOutObservation.observationId)],
+      );
+      const other = withObservation(heldOutRecords, 'P-003', respelled(developmentObservation, spelling), position);
+      refused(
+        'held-out',
+        [`observations[${position === 'first' ? 0 : other.observations.length - 1}]`, 'the held-out view does not declare'],
+        [...KEEP_OUT['held-out'], spelling(developmentObservation.observationId)],
+      );
+    }
+  }
+  // A citation names an observation the record holds: a development record whose disposition or finding cites the held-out
+  // observation (which it does not hold) is refused wherever the citation sits in the list, and the step ID reaches neither the
+  // output nor the run directory, where `score` would print it.
+  for (const [where, cite] of [
+    ['oracleDispositions[0]', (record) => record.oracleDispositions[0]],
+    ['findings[0]', (record) => record.findings[0]],
+  ]) {
+    for (const position of ['first', 'last']) {
+      const record = patchRecord(developmentRecords, 'P-002', (patched) => {
+        const cited = cite(patched).observationIds;
+        if (position === 'first') cited.unshift(heldOutObservation.observationId);
+        else cited.push(heldOutObservation.observationId);
+      });
+      const cited = cite(record).observationIds;
+      refused(
+        'development',
+        [`${where}.observationIds[${position === 'first' ? 0 : cited.length - 1}]`, 'the development view does not declare'],
+        [...KEEP_OUT.development, heldOutObservation.observationId],
+      );
+    }
   }
 
   // An empty held-out set is an authoring defect for preflight, as it is for run.

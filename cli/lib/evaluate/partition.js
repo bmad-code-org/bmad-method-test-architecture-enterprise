@@ -9,6 +9,7 @@ const path = require('node:path');
 
 const { strengthAggregatePointer } = require('./interpret');
 const { isOracleBinding, mappingContractProblems } = require('./judgment-rows');
+const { CHOSEN_CALL } = require('./records');
 
 const PROBE_FILE = /\.probe\.json$/;
 const PARTITIONS = ['development', 'held-out'];
@@ -493,6 +494,14 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
     if (!sourceSteps.has(id))
       add('evaluation.json', `partitionPlan.developmentOnlySteps names step ${id}, which contract.json does not declare`);
   }
+  // `<label>-call-<n>` is how an observation of a call the agent chose is named, so a step named `call-<n>` would make its own
+  // observation look like an agent's call, and a records harness's observation of it would pass for one (Story 1.107). The ID is
+  // `contract.json`'s own text, so it is named.
+  for (const step of sourcePlan) {
+    if (typeof step.stepId === 'string' && CHOSEN_CALL.test(step.stepId)) {
+      add('contract.json', `step ${step.stepId} has an ID of the form call-<n>, which names a call the agent chose; rename the step`);
+    }
+  }
   // A waiver of contract.json is in the development view, and in the held-out view unless its condition reads a development-only
   // step, so the development view must declare every step the condition reads (Story 1.106). The IDs are named only when they
   // have the schema's shape: a free-text one is the adopter's own text.
@@ -551,6 +560,9 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
   for (const { step, label } of heldSteps) {
     if (sourceSteps.has(step.stepId)) add(file, `step ${label} has the ID of a step contract.json declares`);
     else if (seenSteps.has(step.stepId)) add(file, `step ${label} is declared more than once`);
+    if (typeof step.stepId === 'string' && CHOSEN_CALL.test(step.stepId)) {
+      add(file, `step ${label} has an ID of the form call-<n>, which names a call the agent chose; rename the step`);
+    }
     seenSteps.add(step.stepId);
   }
   const sourceOracles = new Set((Array.isArray(contract.oracles) ? contract.oracles : []).filter(isObject).map((oracle) => oracle.id));

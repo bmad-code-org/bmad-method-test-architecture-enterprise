@@ -141,7 +141,7 @@ development_status:
   1-104-count-only-behavior-linked-oracles-for-success-separation: done
   1-105-partition-rubrics-in-a-partition-plan: done
   1-106-partition-waivers-in-a-partition-plan: done
-  1-107-partition-evaluator-mappings-in-a-partition-plan: review
+  1-107-partition-evaluator-mappings-in-a-partition-plan: done
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
   1-109-partition-gameability-degenerate-responses: backlog
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog

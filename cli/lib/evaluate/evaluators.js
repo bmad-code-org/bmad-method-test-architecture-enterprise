@@ -197,17 +197,6 @@ function evaluatorFiles(folder) {
   return { tracked: tracked !== null, files };
 }
 
-/**
- * The evaluation layer's files as the sorted `{ path, sha256 }` list the tree
- * digest is taken over (`evaluatorFiles`).
- *
- * @returns {Array<{ path: string, sha256: string }>}
- * @throws {EvaluatorLayerError}
- */
-function evaluatorTree(folder, digestBytes) {
-  return evaluatorFiles(folder).files.map((file) => ({ path: file.path, sha256: digestBytes(file.bytes).slice(DIGEST_PREFIX.length) }));
-}
-
 /** How a file the layer needs and does not hold is named: one git tracks, or one the folder holds. */
 function notInLayer(relative, tracked) {
   return `${relative} is not a regular file ${tracked ? 'git tracks under evaluator/ (git add it)' : 'the evaluation folder holds'}`;
@@ -484,7 +473,6 @@ module.exports = {
   evaluatorLayerChange,
   evaluatorOf,
   isKnownEvaluator,
-  evaluatorTree,
   readEvaluatorLayer,
   recordedEvaluatorModel,
 };

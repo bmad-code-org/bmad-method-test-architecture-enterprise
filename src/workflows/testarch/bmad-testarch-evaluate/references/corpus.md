@@ -144,7 +144,11 @@ Give a plan row the `key` and the binding of a row of `evaluator/mapping.json`.
 Its key differs from every other key, and each held-out criterion has a row, because a criterion no key binds scores nothing.
 A command evaluator's files under `evaluator/` are read by the development partition, so it derives a held-out key from its input and never spells one.
 A records harness's records name only the oracles, behaviors and criteria of the run's view.
-An observation names its plan step in its ID (`<label>-<stepId>`), so a record whose observation names a step the view does not declare is refused too.
+Under a partition plan a records harness names each observation `<label>-<stepId>`, or `<label>-call-<n>` for a call the agent chose.
+The label is `trial-<n>`, `attempt-<n>`, `baseline`, `degenerate`, `mutated` or `re-pass-<n>`.
+The import admits an observation only when its ID is `<label>-<a step the run's view declares>` or `<label>-call-<n>`, and refuses every other ID, because a development run never opens the plan and cannot know a held-out step ID.
+A disposition or finding that cites an observation its record does not hold is refused too.
+A step ID of the form `call-<n>` is refused by `check` under a plan, because its observation would look like an agent's chosen call.
 
 <!-- example:held-out-mappings -->
 

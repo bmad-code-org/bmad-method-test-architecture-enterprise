@@ -11,6 +11,10 @@
  * `--rubric` it also scores the criterion bound to `score:<stepId>` at level 1 when the step was accepted and 0 otherwise, and a
  * calibration observation at the level its response names, under the key the response spells (`calibration response <key> <level>`).
  *
+ * `--labels <pattern>` is the run-label pattern an observation's ID starts with (`RUN_LABELS` of `cli/lib/evaluate/records.js`, the one
+ * place those forms are written); the case that runs this file passes it, because the file is copied into an evaluation folder and
+ * cannot require the package.
+ *
  * `--log <file>` appends the stdin it received, as one JSON line `{ "stdin": "<the bytes read>" }`, so a case reads the real stdin of a
  * real run.
  */
@@ -26,7 +30,7 @@ const input = JSON.parse(stdin);
 const log = flag('--log');
 if (log !== null) fs.appendFileSync(log, `${JSON.stringify({ stdin })}\n`);
 
-const RUN_LABELLED = /^(?:(?:trial|attempt)-\d+|baseline)-(.+)$/;
+const RUN_LABELLED = new RegExp(`^${flag('--labels')}-(.+)$`);
 const text = (body) => (body?.kind === 'text' ? body.value : '');
 const rubric = argv.includes('--rubric');
 const rows = [];

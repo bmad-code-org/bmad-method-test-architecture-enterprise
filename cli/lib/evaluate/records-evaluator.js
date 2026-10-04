@@ -27,14 +27,18 @@
  * The records directory must resolve inside the evaluation
  * folder, through no link.
  *
- * Under a `partitionPlan` (Story 1.107) a record names only what the run's view declares. A record carries the oracles it disposes
- * (`oracleDispositions`, a finding's `oracleId`), the behavior a finding names, the rubric criteria it scores (`judgeResults`) and the
- * plan steps its observations record: TeA names an observation `<label>-<stepId>` (`trial-2-shared-run`) or, for a call the agent
- * chose, `<label>-call-<n>`, and an observation carries the step's call inputs and every response channel. eval-quality's `score`
- * ignores an oracle its contract lacks, takes no position on a criterion its rubric lacks and reads an observation for the
- * citations that name it, so a record that carries any of these from the view's other partition would reach the run directory
- * unchallenged. It is refused, exit 10 with nothing copied, naming where in the record the content sits and never what it names:
- * the other partition's ID is that partition's own text.
+ * Under a `partitionPlan` (Story 1.107) a record names only what the view declares. A record carries the oracles it disposes
+ * (`oracleDispositions`, a finding's `oracleId`), the behavior a finding names, the rubric criteria it scores (`judgeResults`), the
+ * plan steps its observations record and the observations its dispositions and findings cite. A harness names an observation
+ * `<label>-<stepId>` or, for a call the agent chose, `<label>-call-<n>`, with `<label>` one of the run labels `records.js` lists
+ * (`trial-<n>`, `attempt-<n>`, `baseline`, `degenerate`, `mutated`, `re-pass-<n>`); an observation carries the step's call inputs and
+ * every response channel. eval-quality's `score` ignores an oracle its contract lacks, takes no position on a criterion its rubric
+ * lacks and reads an observation for the citations that name it, so a record that carries any of these from the view's other
+ * partition would reach the run directory unchallenged. Only an allowlist can hold the line, because a development run never
+ * opens the plan and cannot know a held-out step ID: an observation is admitted when its ID is `<label>-<a step the view declares>`
+ * or `<label>-call-<n>`, and every other ID is refused. A citation is admitted when the record holds the observation it names. A
+ * refused record is exit 10 with nothing copied, naming where in the record the content sits and never what it names: the other
+ * partition's ID is that partition's own text.
  *
  * When the contract declares a rubric, the harness also writes
  * `<records>/calibration-judgments.json`, its scorer's answers over the
@@ -52,12 +56,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { EvaluatorLayerError } = require('./evaluators');
+const { CHOSEN_CALL, RUN_LABELS } = require('./records');
 const { calibrateImported } = require('./records-calibration');
 
 const CONFIGURATION_NAME = 'evaluator-configuration.json';
 const MANIFEST_NAME = 'isolation-manifest.json';
-const RUN_LABELLED = /^(?:trial|attempt)-\d+-(.+)$/;
-const CHOSEN_CALL = /^call-\d+$/;
+const RUN_LABELLED = new RegExp(`^${RUN_LABELS}-(.+)$`);
 const RECORD_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 
 /**
@@ -79,11 +83,12 @@ function declaredContent(contract) {
 }
 
 /**
- * Where a sealed run record carries an oracle, a behavior, a rubric criterion or a plan step that `declared` lacks, as the record's
- * own paths (`oracleDispositions[1]`, `findings[0].oracleId`, `findings[0].behaviorId`, `judgeResults[2]`, `observations[4]`), in the
- * order the record lists them. A path names the place and never the ID, which would hand the other partition's text to this run's
- * output. An observation names a step when its ID is a run label (`trial-<n>` or `attempt-<n>`), a hyphen and a step ID the view
- * does not declare; `<label>-call-<n>` is a call the agent chose, and an ID in no other form names no step.
+ * Where a sealed run record carries an oracle, a behavior, a rubric criterion, a plan step or a citation that `declared` lacks, as the
+ * record's own paths (`oracleDispositions[1]`, `findings[0].oracleId`, `findings[0].behaviorId`, `judgeResults[2]`, `observations[4]`,
+ * `findings[1].observationIds[0]`), in the order the record lists them. A path names the place and never the ID, which would hand the
+ * other partition's text to this run's output. An observation is admitted when its ID is a run label (`records.js`), a hyphen and a
+ * step ID the view declares, or `<label>-call-<n>`, a call the agent chose; every other ID is refused, so a step the run cannot know
+ * is refused whatever label it carries. A citation is admitted when the record holds the observation it names.
  *
  * @param {object} record a record that meets eval-quality's sealed-run-record schema
  * @param {{ oracles: Set<string>, behaviors: Set<string>, criteria: Set<string>, steps: Set<string> }} declared `declaredContent(contract)`
@@ -91,16 +96,22 @@ function declaredContent(contract) {
  */
 function foreignContent(record, declared) {
   const found = [];
+  const held = new Set(record.observations.map((observation) => observation.observationId));
+  const citations = (place, ids) => {
+    for (const [position, id] of ids.entries()) if (!held.has(id)) found.push(`${place}.observationIds[${position}]`);
+  };
   for (const [index, observation] of record.observations.entries()) {
     const step = RUN_LABELLED.exec(observation.observationId)?.[1];
-    if (step !== undefined && !CHOSEN_CALL.test(step) && !declared.steps.has(step)) found.push(`observations[${index}]`);
+    if (step === undefined || !(CHOSEN_CALL.test(step) || declared.steps.has(step))) found.push(`observations[${index}]`);
   }
   for (const [index, disposition] of record.oracleDispositions.entries()) {
     if (!declared.oracles.has(disposition.oracleId)) found.push(`oracleDispositions[${index}]`);
+    citations(`oracleDispositions[${index}]`, disposition.observationIds);
   }
   for (const [index, finding] of record.findings.entries()) {
     if (finding.oracleId !== null && !declared.oracles.has(finding.oracleId)) found.push(`findings[${index}].oracleId`);
     if (finding.behaviorId !== null && !declared.behaviors.has(finding.behaviorId)) found.push(`findings[${index}].behaviorId`);
+    citations(`findings[${index}]`, finding.observationIds);
   }
   for (const [index, result] of record.judgeResults.entries()) {
     if (!declared.criteria.has(`${result.rubricId}/${result.criterionId}`)) found.push(`judgeResults[${index}]`);
@@ -217,7 +228,7 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
       const foreign = declared === null ? [] : foreignContent(record, declared);
       if (foreign.length > 0) {
         throw new EvaluatorLayerError(
-          `${spell(probeId, name)} carries ${foreign.join(', ')}, which name${foreign.length === 1 ? 's' : ''} an oracle, behavior, rubric criterion or plan step the ${view.partition} view does not declare, so the record was not produced for this partition's contract`,
+          `${spell(probeId, name)} carries ${foreign.join(', ')}, which name${foreign.length === 1 ? 's' : ''} an oracle, behavior, rubric criterion, plan step or cited observation the ${view.partition} view does not declare, so the record was not produced for this partition's contract`,
         );
       }
       sealedAgainst(record, spell(probeId, name));
