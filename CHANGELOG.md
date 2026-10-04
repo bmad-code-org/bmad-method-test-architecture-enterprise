@@ -13,8 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `whole-body` is satisfied when one oracle's direction and check both address every required response key of an operation at one step, and the baseline listed it for these four contracts.
   `tools/generate-contracts.js` appends one oracle per plan step after each contract's existing oracles, so every earlier id and behavior id holds: `O-051` to `O-061` for `tea-routing-intents`, `O-028` to `O-035` for `tea-routing-controls`, `O-014` for `test-review` and `O-027` and `O-028` for `trace`.
   Each names every required key pointer in its direction and its check: `action` and `reason` of a routing answer, the 23 keys of a verdict and the 22 keys of a trace summary.
-  The check is a `shape` over the object with one `existence` per required key. A routing answer must also carry an action the skill allows and a non-blank reason, which fails the reply the runner's parser normalizes to a null `reason`.
-  No required key is narrowed, because the runner or workflow always emits each of them, and `test/contracts/README.md` records the evidence for each contract.
+  The test-review and trace checks are a `shape` over the object with one `existence` per required key.
+  The routing check is a `shape`, a `set-membership` of `action` in the actions the runner's parser accepts and a non-blank `reason`, which fails the reply the parser normalizes to a null `reason`.
+  The requirement links name the source of each declaration: `tea-cli-contract/routing-answer-whole-body`, `tea-cli-contract/verdict-whole-body` and the trace workflow's step-05.
+  Step-05's `recommendations` key now falls back to an empty array like `rejected_evidence`, so a missing field cannot drop a required key from the summary.
+  No required key is narrowed, because the runner or workflow always emits each of them, and `test/contracts/README.md` records the evidence for each contract in a table that `test:contract-oracles` holds to the frozen key lists, so a narrowing at the source fails until its row says so.
   `test:test-review-cli` now asserts that each real verdict the CLI writes in its payload runs carries every key `VERDICT_KEYS` declares always.
   `test:contract-oracles` compares each oracle with a scorer twin on stored and planted evidence, and scores the zero-action probe through eval-quality against each contract, against the contract without the oracles, against oracles that read one key, every key but one, or name one key fewer in the direction, and against the one-key oracle widened again.
   A direction that names a key the check does not read is refused at compile, which the suite asserts for every key.

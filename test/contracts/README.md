@@ -284,30 +284,33 @@ No key is narrowed, because each required key is one the runner or workflow alwa
 The routing `reason` is the instructive case.
 The parser normalizes a reply that names an action and forgets to say why to a null `reason`, so the key is always printed and its value can still be null.
 The declaration keeps `reason` required and typed `string`, and the new oracle is the one that reads that null as the defect it is.
-`test:contract-oracles` holds the declarations to their sources and to the stored runs the harness scores: every scored stored verdict, every stored correct trace summary and every stored reply the parser accepts carries every required key.
-That is the evidence available for trace and routing, since every stored run of those two suites and of test-review is constructed (each case's `storedOutput.origin` says so), and the real runs are the four CLI runs above and the parser's own output.
-A key a future change narrows out of a declaration without a documented reason fails that check as soon as one stored run carries it, and this section is where the reason has to be recorded.
+`test:contract-oracles` holds the declarations to their sources and to the stored runs the harness scores: every scored stored verdict, every stored correct trace summary and every stored reply the parser accepts carries every required key (the reply's keys are read before the parser fills the ones it lacks), and the parsed answer is the object the runner prints.
+That is the evidence available for trace and routing, since every stored run of those two suites is constructed (each case's `storedOutput.origin` says so), and every stored verdict of test-review is constructed except two (`approved-with-no-findings` and `unattributed-violations` carry `origin: "real-capture"`, verdicts rebuilt from captured reports).
+The real runs are the four CLI runs above and the parser's own output, and `test:cli` also holds each of those four verdicts to the whole-verdict twin, which reads the type of each key as well as its presence.
+A key that a future change narrows out of a declaration, at its source or in the generator, changes the contract's `requiredKeys`, which differs from the lists frozen in `test/test-contract-oracles.js` (`FROZEN_EMITTED_KEYS`).
+`checkWholeBodyDeclarations` then fails until this table's row states the new required count and lists the key under Narrowed, in the same diff, so the row is where the decision and its evidence have to be recorded.
+A key is not required merely because every real run carries it: `conventionBaseline` and `executionMode` appear in all four real verdicts and stay conditional, because the CLI declares them so.
 
 Each oracle's direction names every required key pointer and its check reads each of them, and no other pointer apart from the root a `shape` operator reads:
 
-- **`tea-routing-*`**: `all` of a `shape` over the answer (the declared keys, `action` and `reason` typed `string`), `set-membership` of `action` in `route`, `clarify` and `decline`, and a non-blank `reason`.
+- **`tea-routing-*`**: `all` of a `shape` over the answer (the declared keys, `action` and `reason` typed `string`), `set-membership` of `action` in `route`, `clarify` and `decline` (the actions `cli/lib/parse-routing.js` accepts, which the suite reads from the parser), and a non-blank `reason`. The set-membership and the regex are what put the two key pointers in the check, so routing carries no per-key `existence`.
 - **`test-review`**: `all` of a `shape` over the verdict (the 23 required keys, the ten conditional ones permitted, every key of its declared type) and one `existence` per required key.
 - **`trace`**: the same two parts over the summary, with the three conditional keys permitted.
 
-The per-key `existence` conjuncts are what put each key pointer in the check beside the `shape`, which reads the object's root, and the rule counts a parent pointer as no key.
+For test-review and trace the per-key `existence` conjuncts are what put each key pointer in the check beside the `shape`, which reads the object's root, and the rule counts a parent pointer as no key.
 The three scorer twins, `routingAnswerIsWhole`, `verdictIsWhole` and `traceSummaryIsWhole` in `tools/generate-contracts.js`, say the same thing in JavaScript and are what the probe records and `test:contract-oracles` compare the oracles with.
-Each check fails for a real defect: a null or blank routing reason, a verdict or summary missing a key the CLI or step-05 always writes (the stored `seeded-rejected-evidence-omitted` summary is one), a key of another type, or a key nobody declared.
+Each check fails for a real defect: a null or blank routing reason, a verdict or summary missing a key the CLI or step-05 always writes (the stored `seeded-rejected-evidence-omitted` summary is one), a key the contract types holding another type (routing types only `action` and `reason`, and 11 of the 22 summary keys are untyped, so a null `repo` is whole), or a key nobody declared.
 The vocabulary has no operator that states a count against another key, so none of the three checks says anything about what the values mean. The existing oracles keep that.
 
 `test:contract-oracles` scores the zero-action probe of each suite through eval-quality against the real contract and against versions of it, as the test-design repair does, and requires the engine's coverage result to follow:
 
 - the real contract satisfies `whole-body`, and the contract without the new oracles and their behaviors leaves it unsatisfied;
 - an oracle that reads one key, one that reads every key but one in both channels, and one whose check reads every key and whose direction omits one each leave it unsatisfied, for every required key of every contract;
-- widening the one-key oracle to every key satisfies it again;
+- widening the one-key oracle to an `existence` check of every key, with no `shape`, satisfies it again, so the rule follows the pointers the oracle names and reads;
 - an oracle whose direction names a key its check does not read is refused at compile as `direction-check-misaligned` (AD-3), so that variant never reaches the rule.
 
 It also plants incoherent answers, verdicts and summaries, one per claim and per key, and compares each oracle with its twin.
-The probe record of each suite derives the new oracles' dispositions from those twins: trace over the stored summary it carries (so a wrong run or a summary with a key dropped violates them), test-review over the stored verdict, and routing over the constructed correct answer, which reads no stored run.
+The probe record of each suite derives the new oracles' dispositions from those twins: trace over the stored summary each set carries (so a wrong run or a summary with a key dropped violates that set's oracle, and a summary the harness refuses to score is still read, since the engine reads it), test-review over the stored verdict, and routing over the constructed correct answer, which reads no stored run.
 `test:probe-corpus` holds each of those derivations to a read that breaks it.
 The new oracles carry no defect probe: no controlled mutation of the skill, the CLI or the workflow makes a run's answer, verdict or summary malformed without being a code change that `test:probe-targets` and the harnesses already catch.
 The routing contracts' `success-indicator-separation` gap closed as a side effect, because the new oracle reads `action`, the success indicator, beside `reason`, a payload key, in both channels.

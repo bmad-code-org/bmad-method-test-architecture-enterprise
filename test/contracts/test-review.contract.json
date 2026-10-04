@@ -237,7 +237,7 @@
       "id": "B-013",
       "description": "The verdict artifact is the object the CLI declares, key for key.",
       "severity": "material",
-      "observableSuccessCriterion": "The verdict carries all 23 keys the CLI always writes, each of its declared type, and no key the CLI does not declare.",
+      "observableSuccessCriterion": "The verdict carries all 23 keys the CLI always writes, each typed key of its declared type, and no key the CLI does not declare.",
       "requirementLinks": [
         {
           "scheme": "tea-cli-contract",
@@ -938,12 +938,12 @@
     {
       "id": "O-014",
       "polarity": "expects-hold",
-      "commentary": "The verdict is the object the CLI declares: all 23 keys it always writes are present, each of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.",
+      "commentary": "The verdict is the object the CLI declares: all 23 keys it always writes are present, each typed key of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "Every one of the 23 keys the verdict always carries, in the verdict artifact of the one review invocation.",
-        "negativeDomain": "A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key of another type than the one it declares.",
+        "negativeDomain": "A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
         "evidenceTargets": [
           "/interactions/review-corpus/artifact/verdict/report",
           "/interactions/review-corpus/artifact/verdict/files",

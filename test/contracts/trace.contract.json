@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
-  "sourceSpecDigest": "sha256:3481916b32e52b9f89693bb25b19a308bdff91bc13e070c271b70fe8a439ce2f",
+  "sourceSpecDigest": "sha256:74fc13be0242c2e288828291956d9135f2fb89a62c660f975c70c8bd874a39eb",
   "behaviors": [
     {
       "id": "B-001",
@@ -501,13 +501,13 @@
     },
     {
       "id": "B-027",
-      "description": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each of the type the contract states, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "description": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
       "severity": "material",
-      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each of the type the contract states, and no key step-05 does not declare.",
+      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "seeded-tenant-data-export/summaryKeys"
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-trace/steps-c/step-05-gate-decision.md"
         }
       ],
       "riskLinks": [
@@ -520,13 +520,13 @@
     },
     {
       "id": "B-028",
-      "description": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each of the type the contract states, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "description": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
       "severity": "material",
-      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each of the type the contract states, and no key step-05 does not declare.",
+      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "clean-api-token-lifecycle/summaryKeys"
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-trace/steps-c/step-05-gate-decision.md"
         }
       ],
       "riskLinks": [
@@ -2500,12 +2500,12 @@
     {
       "id": "O-027",
       "polarity": "expects-hold",
-      "commentary": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each of the type the contract states, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "commentary": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "Every one of the 22 keys the summary always carries, in the summary written for seeded-tenant-data-export.",
-        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key of another type than the contract states.",
+        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
         "evidenceTargets": [
           "/interactions/trace-seeded-tenant-data-export/artifact/summary/schema_version",
           "/interactions/trace-seeded-tenant-data-export/artifact/summary/snapshot_at",
@@ -2804,12 +2804,12 @@
     {
       "id": "O-028",
       "polarity": "expects-hold",
-      "commentary": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each of the type the contract states, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "commentary": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "Every one of the 22 keys the summary always carries, in the summary written for clean-api-token-lifecycle.",
-        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key of another type than the contract states.",
+        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
         "evidenceTargets": [
           "/interactions/trace-clean-api-token-lifecycle/artifact/summary/schema_version",
           "/interactions/trace-clean-api-token-lifecycle/artifact/summary/snapshot_at",

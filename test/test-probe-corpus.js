@@ -288,9 +288,10 @@ const WRONG_RUN_CANNOT_FAIL = [
  * every leg needs one for its oracle to stay pinned.
  */
 const REFUSED_READS = {
+  // The whole-summary oracle reads the summary object, which a refused run still carries, so it keeps measuring.
   trace: [
-    { reads: 'seeded-correct-run', through: 'seeded-summary-schema-0-2', measuresStill: [] },
-    { reads: 'clean-correct-run', through: 'clean-matrix-without-sections', measuresStill: [] },
+    { reads: 'seeded-correct-run', through: 'seeded-summary-schema-0-2', measuresStill: ['whole-summary'] },
+    { reads: 'clean-correct-run', through: 'clean-matrix-without-sections', measuresStill: ['whole-summary'] },
   ],
   nfr: [
     { reads: 'gapped-correct-audit', through: 'gapped-report-without-sections', measuresStill: [] },
@@ -383,12 +384,12 @@ async function wrongRunProblems(suite) {
   }
 
   // What a scorer failed. A refusal answers every oracle of its set without a scorer, so it adds only the oracles
-  // whose scorer answers `true` for every scored run.
+  // whose scorer answers `true` for every scored run, and the whole-summary oracle, which a refusal never answers.
   const failable = new Set();
   const take = (read) => {
     for (const oracleId of read.violated) {
       const spec = specOf.get(oracleId);
-      if (!read.refused.has(spec.setId) || spec.kind === 'run-measured') failable.add(oracleId);
+      if (!read.refused.has(spec.setId) || spec.kind === 'run-measured' || spec.kind === 'whole-summary') failable.add(oracleId);
     }
   };
   take(rotated);
@@ -413,20 +414,38 @@ async function wrongRunProblems(suite) {
   // declaration in turn: the harness still scores the run, and the oracle that reads the whole object is the one that
   // must notice. A drop the harness refuses (schema_version) answers every oracle of the set, so it fails nothing here.
   if (suite.id === 'trace') {
+    const wholeSpecs = specs.filter((candidate) => candidate.kind === 'whole-summary');
     for (const key of suite.contract.permittedInterfaces[0].operations[0].responseDescriptor.requiredKeys) {
-      const read = await readUnder(suite, probe, (caseId) => caseId, {
-        summaryOf: (summary) => {
-          const { [key]: _dropped, ...rest } = summary;
-          return rest;
-        },
-      });
-      take(read);
-      for (const spec of specs.filter((candidate) => candidate.kind === 'whole-summary')) {
-        if (!read.refused.has(spec.setId) && !read.violated.has(spec.id)) {
-          problems.push(
-            `${suite.id}: ${spec.id} (whole-summary on ${spec.setId}) still held when the stored summary lost ${key}, so a constant held would pass the corpus`,
-          );
+      // One set's summary at a time, so an oracle that scores another set's summary, or the first or last one's, fails.
+      for (const leg of legs) {
+        const read = await readUnder(suite, probe, (caseId) => caseId, {
+          summaryOf: (summary, caseId) => {
+            if (caseId !== leg.caseId) return summary;
+            const { [key]: _dropped, ...rest } = summary;
+            return rest;
+          },
+        });
+        take(read);
+        for (const spec of wholeSpecs) {
+          const broken = spec.setId === leg.setId;
+          if (read.violated.has(spec.id) !== broken) {
+            problems.push(
+              `${suite.id}: ${spec.id} (whole-summary on ${spec.setId}) was ${broken ? 'held' : 'violated'} when only the stored summary of ${leg.setId} lost ${key}, so it does not read its own set's summary`,
+            );
+          }
         }
+      }
+    }
+    // The one stored summary that loses a key, read by the seeded leg: its set's oracle is violated and the clean set's is held.
+    const omitted = await readUnder(suite, probe, (caseId) =>
+      caseId === 'seeded-correct-run' ? 'seeded-rejected-evidence-omitted' : caseId,
+    );
+    for (const spec of wholeSpecs) {
+      const broken = spec.setId === legs.find((leg) => leg.caseId === 'seeded-correct-run')?.setId;
+      if (omitted.violated.has(spec.id) !== broken) {
+        problems.push(
+          `${suite.id}: ${spec.id} (whole-summary on ${spec.setId}) was ${broken ? 'held' : 'violated'} when the seeded set read seeded-rejected-evidence-omitted, which lost rejected_evidence`,
+        );
       }
     }
   }
@@ -479,8 +498,8 @@ async function wrongRunProblems(suite) {
         );
       }
     }
-    // The kinds that keep measuring on a refused run read the projection alone. With the projection intact they hold,
-    // and a malformed projection must fail them, so the branch is held in both directions.
+    // The kinds that keep measuring on a refused run read the projection alone (test-design) or the summary object
+    // (trace). With it intact they hold, and a malformed one must fail them, so the branch is held in both directions.
     if (refusal.measuresStill.length > 0) {
       for (const spec of setSpecs.filter((candidate) => refusal.measuresStill.includes(candidate.kind))) {
         if (refused.violated.has(spec.id)) {
@@ -489,11 +508,25 @@ async function wrongRunProblems(suite) {
           );
         }
       }
-      const malformed = await readUnder(suite, probe, through, { projectionOf: ({ design, ...rest }) => rest });
+      // The projection with its `design` key dropped for test-design, the set's summary with a key dropped for trace.
+      const malformed = await readUnder(
+        suite,
+        probe,
+        through,
+        suite.id === 'trace'
+          ? {
+              summaryOf: (summary, caseId) => {
+                if (caseId !== refusal.reads) return summary;
+                const { repo: _dropped, ...rest } = summary;
+                return rest;
+              },
+            }
+          : { projectionOf: ({ design, ...rest }) => rest },
+      );
       for (const spec of setSpecs.filter((candidate) => refusal.measuresStill.includes(candidate.kind))) {
         if (!malformed.violated.has(spec.id)) {
           problems.push(
-            `${suite.id}: ${spec.id} (${spec.kind}) on ${spec.setId} still held when the set read ${refusal.through} with its projection's design dropped, so the refused-run branch does not measure it`,
+            `${suite.id}: ${spec.id} (${spec.kind}) on ${spec.setId} still held when the set read ${refusal.through} with its projection's design (a trace summary's repo) dropped, so the refused-run branch does not measure it`,
           );
         }
       }
@@ -689,7 +722,7 @@ async function routingWholeBodyProblems(suite) {
     { label: 'an action the skill does not allow', answerOf: (answer) => ({ ...answer, action: 'maybe' }) },
     { label: 'a key the runner does not declare', answerOf: (answer) => ({ ...answer, confidence: 1 }) },
   ];
-  for (const stepId of [steps[0], steps.at(-1)]) {
+  for (const stepId of steps) {
     for (const { label, answerOf } of malformed) {
       const read = await violatedUnder(suite, probe, (caseId) => caseId, {
         answerOf: (caseId, answer) => (caseId === stepId ? answerOf(answer) : answer),

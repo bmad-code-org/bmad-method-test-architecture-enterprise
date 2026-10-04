@@ -590,13 +590,13 @@ function buildTestReviewContract() {
       polarity: 'expects-hold',
       commentary:
         `The verdict is the object the CLI declares: all ${Object.keys(VERDICT_KEYS.always).length} keys it always writes are present, ` +
-        'each of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.',
+        'each typed key of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.',
       direction: {
         polarity: 'expects-hold',
         relation: 'all',
         scope: `Every one of the ${Object.keys(VERDICT_KEYS.always).length} keys the verdict always carries, in the verdict artifact of the one review invocation.`,
         negativeDomain:
-          'A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key of another type than the one it declares.',
+          'A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key the contract types as another type.',
         evidenceTargets: verdictWholeBodyTargets(),
       },
       check: verdictWholeBodyExpression(),
@@ -665,7 +665,7 @@ function buildTestReviewContract() {
       id: wholeBodyBehaviorId,
       description: 'The verdict artifact is the object the CLI declares, key for key.',
       severity: 'material',
-      observableSuccessCriterion: `The verdict carries all ${Object.keys(VERDICT_KEYS.always).length} keys the CLI always writes, each of its declared type, and no key the CLI does not declare.`,
+      observableSuccessCriterion: `The verdict carries all ${Object.keys(VERDICT_KEYS.always).length} keys the CLI always writes, each typed key of its declared type, and no key the CLI does not declare.`,
       requirementLinks: [{ scheme: 'tea-cli-contract', id: 'verdict-whole-body' }],
       riskLinks: [{ scheme: 'tea-eval-risk', id: 'malformed-verdict-read-as-a-measurement' }],
       oracles: [wholeBodyOracleId],
@@ -2244,14 +2244,14 @@ function traceOracleSpecs(groundTruth) {
       {
         polarity: 'expects-hold',
         commentary:
-          `${set.id}: the summary is the object step-05 declares. All ${keyCount} keys its literal always carries are present, each of the type the contract states, ` +
+          `${set.id}: the summary is the object step-05 declares. All ${keyCount} keys its literal always carries are present, each typed key of its declared type, ` +
           'and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.',
         direction: {
           polarity: 'expects-hold',
           relation: 'all',
           scope: `Every one of the ${keyCount} keys the summary always carries, in the summary written for ${set.id}.`,
           negativeDomain:
-            'A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key of another type than the contract states.',
+            'A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.',
           evidenceTargets: traceWholeSummaryTargets(set),
         },
         check: traceWholeSummaryExpression(set),
@@ -2356,7 +2356,9 @@ const TRACE_BEHAVIORS = [
     risk: 'malformed-summary-read-as-a-measurement',
     description: 'Each summary is the object step-05 declares, key for key.',
     success:
-      'Both summaries carry every key step-05 always writes, each of the type the contract states, and no key step-05 does not declare.',
+      'Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.',
+    // The summary keys are the workflow's own, so the link names the step that writes them rather than a field of the ground truth.
+    link: { scheme: 'tea-workflow-step', id: path.relative(WORKFLOW_ROOT, TRACE_STEP_05).split(path.sep).join('/') },
     requirement: 'summaryKeys',
   },
 ];
@@ -2434,7 +2436,7 @@ function buildTraceContract() {
         description: oracleById.get(spec.id).commentary,
         severity: authored.severity,
         observableSuccessCriterion: authored.success,
-        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+        requirementLinks: [authored.link ?? { scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
         riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
         oracles: [spec.id],
       });
@@ -3920,6 +3922,8 @@ const ROUTING_ORACLE_KINDS = {
   // Reads both required keys of the answer, so it has no single pointer; `routingWholeBodyTargets` names them.
   'whole-body': {
     field: 'routingAnswer',
+    // The behavior links the runner's declaration of its answer, as test-review's links its CLI's, since the ground truth states no such field.
+    link: { scheme: 'tea-cli-contract', id: 'routing-answer-whole-body' },
     pointer: null,
     severity: 'material',
     risk: 'reply-is-not-a-routing-answer',
@@ -4104,7 +4108,7 @@ function routingOracleSpecs(cases, menu) {
       targets: routingWholeBodyTargets(item.id),
       scope: `The whole routing answer for ${item.id}: its action and its reason.`,
       negativeDomain:
-        'An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.',
+        'An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.',
       success: `The answer for ${item.id} carries an action the skill allows and a stated reason, and no key the runner does not declare.`,
       rationale: `${item.id}: the answer is the object the runner prints. Its keys are the declared ones, its action is one of ${ROUTING_ACTIONS.join(', ')} and its reason is a non-blank string.`,
       scorer: (answer) => routingAnswerIsWhole(answer),
@@ -4291,7 +4295,12 @@ async function buildRoutingContract(spec) {
     description: `${oracleSpec.scope} ${oracleSpec.rationale}`,
     severity: ROUTING_ORACLE_KINDS[oracleSpec.kind].severity,
     observableSuccessCriterion: oracleSpec.success,
-    requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${oracleSpec.caseId}/${ROUTING_ORACLE_KINDS[oracleSpec.kind].field}` }],
+    requirementLinks: [
+      ROUTING_ORACLE_KINDS[oracleSpec.kind].link ?? {
+        scheme: 'tea-eval-ground-truth',
+        id: `${oracleSpec.caseId}/${ROUTING_ORACLE_KINDS[oracleSpec.kind].field}`,
+      },
+    ],
     riskLinks: [{ scheme: 'tea-eval-risk', id: ROUTING_ORACLE_KINDS[oracleSpec.kind].risk }],
     oracles: [oracleSpec.id],
   }));

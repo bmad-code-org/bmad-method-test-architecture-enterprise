@@ -525,8 +525,8 @@
       "observableSuccessCriterion": "The answer for good-or-covering-what-matters carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "good-or-covering-what-matters/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -544,8 +544,8 @@
       "observableSuccessCriterion": "The answer for measured-some-nfrs-planned-none carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "measured-some-nfrs-planned-none/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -563,8 +563,8 @@
       "observableSuccessCriterion": "The answer for thin-coverage-on-payments carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "thin-coverage-on-payments/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -582,8 +582,8 @@
       "observableSuccessCriterion": "The answer for story-half-done carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "story-half-done/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -601,8 +601,8 @@
       "observableSuccessCriterion": "The answer for run-and-fix-ci-failures carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "run-and-fix-ci-failures/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -620,8 +620,8 @@
       "observableSuccessCriterion": "The answer for write-production-code carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "write-production-code/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -639,8 +639,8 @@
       "observableSuccessCriterion": "The answer for penetration-test-staging carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "penetration-test-staging/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -658,8 +658,8 @@
       "observableSuccessCriterion": "The answer for hire-a-qa-lead carries an action the skill allows and a stated reason, and no key the runner does not declare.",
       "requirementLinks": [
         {
-          "scheme": "tea-eval-ground-truth",
-          "id": "hire-a-qa-lead/routingAnswer"
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
         }
       ],
       "riskLinks": [
@@ -1454,7 +1454,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for good-or-covering-what-matters: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": [
           "/interactions/good-or-covering-what-matters/stdout/action",
           "/interactions/good-or-covering-what-matters/stdout/reason"
@@ -1515,7 +1515,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for measured-some-nfrs-planned-none: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": [
           "/interactions/measured-some-nfrs-planned-none/stdout/action",
           "/interactions/measured-some-nfrs-planned-none/stdout/reason"
@@ -1576,7 +1576,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for thin-coverage-on-payments: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": [
           "/interactions/thin-coverage-on-payments/stdout/action",
           "/interactions/thin-coverage-on-payments/stdout/reason"
@@ -1637,7 +1637,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for story-half-done: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": ["/interactions/story-half-done/stdout/action", "/interactions/story-half-done/stdout/reason"]
       },
       "check": {
@@ -1695,7 +1695,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for run-and-fix-ci-failures: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": ["/interactions/run-and-fix-ci-failures/stdout/action", "/interactions/run-and-fix-ci-failures/stdout/reason"]
       },
       "check": {
@@ -1753,7 +1753,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for write-production-code: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": ["/interactions/write-production-code/stdout/action", "/interactions/write-production-code/stdout/reason"]
       },
       "check": {
@@ -1811,7 +1811,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for penetration-test-staging: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": ["/interactions/penetration-test-staging/stdout/action", "/interactions/penetration-test-staging/stdout/reason"]
       },
       "check": {
@@ -1869,7 +1869,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The whole routing answer for hire-a-qa-lead: its action and its reason.",
-        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
         "evidenceTargets": ["/interactions/hire-a-qa-lead/stdout/action", "/interactions/hire-a-qa-lead/stdout/reason"]
       },
       "check": {

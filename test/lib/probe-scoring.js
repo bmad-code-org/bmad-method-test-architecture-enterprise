@@ -505,7 +505,7 @@ async function traceArtifacts(caseId) {
   };
 }
 
-async function traceEvidence(contract, { storedCase = identity, refusedSets = new Set(), summaryOf = identity } = {}) {
+async function traceEvidence(contract, { storedCase = identity, refusedSets = new Set(), summaryOf = (summary) => summary } = {}) {
   const [seededStep, cleanStep] = contract.interactionPlan;
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
 
@@ -606,9 +606,10 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
       const artifactsByCase = new Map();
       for (const caseId of new Set(selected.map((leg) => leg.caseId))) {
         const stored = await traceArtifacts(storedCase(caseId));
-        // `summaryOf` is the stored summary as the record carries it. Only `test/test-probe-corpus.js` passes one, to hand
+        // `summaryOf` is the stored summary as the record carries it, and it is told which leg's case it is reading, so
+        // a check can break one set's summary and leave the other's. Only `test/test-probe-corpus.js` passes one, to hand
         // the whole-summary oracle a summary missing a key the harness would still score, which no stored case is.
-        artifactsByCase.set(caseId, { ...stored, summary: { kind: 'json', value: summaryOf(stored.summary.value) } });
+        artifactsByCase.set(caseId, { ...stored, summary: { kind: 'json', value: summaryOf(stored.summary.value, caseId) } });
       }
       const observations = selected.map((leg, index) =>
         recordObservation({
@@ -636,9 +637,13 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
       // Each oracle reads the stored run of its own set, through the scorer
       // `traceOracleSpecs` pairs with it: the harness's own `scoreRun` over the
       // run's summary and matrix. A run the harness refuses to score answers
-      // `false` for every oracle of its set, since no claim about it holds.
+      // `false` for every oracle of its set, since no claim about it holds, except the whole-summary oracle, which
+      // reads the summary object and answers for it.
       // `undefined` is the harness skipping a waiver oracle whose gate did not
       // match, which has no measurement to contradict.
+      // The summary each set's record carries, as the engine reads it. The whole-summary oracle reads the summary object
+      // whether or not the harness scores the run, so a summary the harness refuses (a stale `schema_version`, a matrix
+      // with no section) is still whole when it is the object step-05 declares.
       const summaryBySet = new Map();
       const scoredBySet = new Map(
         selected.map((leg) => {
@@ -650,7 +655,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
               ? scoreTraceRun(leg.set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance)
               : null;
           if (scored === null) refusedSets.add(leg.set.id);
-          summaryBySet.set(leg.set.id, summary.ok ? summary.summary : null);
+          summaryBySet.set(leg.set.id, artifacts.summary.value);
           return [leg.set.id, scored];
         }),
       );
@@ -665,6 +670,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
           specs,
           (spec) => {
             if (!scoredBySet.has(spec.setId)) return;
+            if (spec.kind === 'whole-summary') return spec.scorer(null, summaryBySet.get(spec.setId));
             const scored = scoredBySet.get(spec.setId);
             return scored === null ? false : spec.scorer(scored, summaryBySet.get(spec.setId));
           },
