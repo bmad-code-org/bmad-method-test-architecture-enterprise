@@ -1800,6 +1800,8 @@ Added 2026-10-03 from Story 1.46's Analyze run. Levels: CLI integration and guid
 | Bad paths exit 64                | Pass a path outside the folder, a link and a directory; assert exit 64 and nothing written                                                                             | CLI integration   | P0  | Accepting a link prints a digest and fails the case |
 | The guides name the command      | Assert `references/intake.md` (in place of its inline script), `references/contract.md` and `assets/README.md` name `digest --file` where they say to stamp the digest | Guidance contract | P1  | Deleting the sentence fails the marker              |
 
+Amended 2026-10-04 in Story 1.115's build: the CLI rows are `checkDigestFile` in `test/test-evaluate-check.js` and the guidance row is `checkDigestFileGuidance` in `test/test-evaluate-guidance.js`. The first holds the printed `digestBytes`, the changed byte, the empty write set, each refused path (a parent segment, an absolute path, a link to a file or a directory, a directory, a missing file, a FIFO) and `--file` with `--calibration-inputs`. The second runs the command as `intake.md` spells it and rejects a guide that drops the sentence or brings the inline script back.
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce

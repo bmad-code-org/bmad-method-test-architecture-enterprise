@@ -4,7 +4,13 @@ Start from `assets/contract.skeleton.json` and fill every placeholder from the c
 
 ## Identity and lineage fields
 
-The five fields are `schemaVersion`, `parentDigest`, `revisionCount`, `contractId`, and `sourceSpecDigest`. Use the installed engine's contract schema version. Start with a null parent and revision zero; on revision carry the prior digest and increment the count. Give the contract a stable ID. Stamp `sourceSpecDigest` with eval-quality's `digestBytes` over the committed `requirements.md` Buffer. Use the exact bytes named by `evaluation.json` `requirements.path` and compare with its `requirements.digest`. Do not trim or normalize the statement before hashing.
+The five fields are `schemaVersion`, `parentDigest`, `revisionCount`, `contractId`, and `sourceSpecDigest`.
+Use the installed engine's contract schema version.
+Start with a null parent and revision zero; on revision carry the prior digest and increment the count.
+Give the contract a stable ID.
+Stamp `sourceSpecDigest` with the output of `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation {tea_evaluations_folder}/<evaluationId> --file requirements.md`, eval-quality's `digestBytes` over the committed `requirements.md` bytes (TeA development runs `node cli/evaluate.js digest` with the same options).
+Use the exact bytes named by `evaluation.json` `requirements.path` and compare with its `requirements.digest`.
+Do not trim or normalize the statement before hashing.
 
 ## Authored fields
 

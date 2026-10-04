@@ -4935,7 +4935,7 @@ function checkCalibrationInputsDocumented() {
     check(page.includes(text), `the reference does not say ${JSON.stringify(text)}`);
   const header = fs.readFileSync(EVALUATE, 'utf8').split("'use strict';")[0];
   check(
-    header.includes('tea-evaluate digest --evaluation <path> [--calibration-inputs]'),
+    header.includes('tea-evaluate digest --evaluation <path> [--calibration-inputs | --file <path>]'),
     "cli/evaluate.js's header does not list the option",
   );
   const help = evaluate(['digest', '--help']);

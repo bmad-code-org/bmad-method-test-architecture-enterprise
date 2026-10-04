@@ -28,4 +28,15 @@ Ask: “Which failures have happened, and which plausible failures would hurt mo
 
 ## Write and confirm the statement
 
-Copy the template to `{test_artifacts}/evaluate/<evaluationId>/requirements-statement.md` and fill that working draft. Read it back to the adopter. **Halt for the adopter's explicit confirmation before corpus design.** After confirmation, copy the exact confirmed bytes into `{tea_evaluations_folder}/<evaluationId>/requirements.md`. Create AD-20's private `{tea_evaluations_folder}/package.json` with `{"private":true,"devDependencies":{"eval-quality":"latest","bmad-method-test-architecture-enterprise":"latest"}}`. Run `npm install --prefix {tea_evaluations_folder}`; this works when the adopter's root repository has no Node manifest. From `{tea_evaluations_folder}/<evaluationId>/`, run `node --input-type=module -e "import { readFileSync } from 'node:fs'; import { digestBytes } from 'eval-quality'; console.log(digestBytes(readFileSync('requirements.md')))"` and put its output in `evaluation.json`'s `requirements.digest`; set `requirements.path` to `requirements.md`. Node resolves the privately installed eval-quality from this directory's parent. This command hashes the committed file bytes with eval-quality's `digestBytes`. `digestArtifact` canonicalizes a JSON value and does not apply to Markdown bytes. The starter `assets/evaluation.json` contains the digest of the unedited statement template; recompute it after any edit. Keep the confirmation name and date in the statement. Compare the command's output with the manifest before continuing; `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation {tea_evaluations_folder}/<evaluationId>` validates the complete evaluation after its remaining artifacts exist.
+Copy the template to `{test_artifacts}/evaluate/<evaluationId>/requirements-statement.md` and fill that working draft.
+Read it back to the adopter.
+**Halt for the adopter's explicit confirmation before corpus design.**
+After confirmation, copy the exact confirmed bytes into `{tea_evaluations_folder}/<evaluationId>/requirements.md`.
+Create AD-20's private `{tea_evaluations_folder}/package.json` with `{"private":true,"devDependencies":{"eval-quality":"latest","bmad-method-test-architecture-enterprise":"latest"}}`.
+Run `npm install --prefix {tea_evaluations_folder}`; this works when the adopter's root repository has no Node manifest.
+Put `assets/evaluation.json` at `{tea_evaluations_folder}/<evaluationId>/evaluation.json` if it is not there yet, then run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation {tea_evaluations_folder}/<evaluationId> --file requirements.md`.
+It prints `sha256:` and 64 hex digits, eval-quality's `digestBytes` over the committed `requirements.md` bytes, and writes nothing; put the output in `evaluation.json`'s `requirements.digest` and set `requirements.path` to `requirements.md`.
+`--file` is relative to the evaluation folder.
+The starter `assets/evaluation.json` contains the digest of the unedited statement template; recompute it after any edit.
+Keep the confirmation name and date in the statement.
+`npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation {tea_evaluations_folder}/<evaluationId>` validates the complete evaluation after its remaining artifacts exist.

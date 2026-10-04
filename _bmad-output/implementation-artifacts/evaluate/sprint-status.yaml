@@ -149,7 +149,7 @@ development_status:
   1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: review
   1-113-run-a-subscription-authenticated-agent-target-confined: backlog
   1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
-  1-115-give-the-skill-a-command-that-prints-a-files-digest: backlog
+  1-115-give-the-skill-a-command-that-prints-a-files-digest: done
   1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract: backlog
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done

@@ -15,6 +15,8 @@
  * - `digest` writes a sorted `{path, sha256}` index over `corpus/`, `probes/`
  *   and `mutations/` and prints eval-quality's `digestArtifact` over it, which
  *   moves when a `corpus/` byte moves;
+ * - `digest --file` prints `digestBytes` over one file the folder holds, writes nothing and exits 64 for a path outside the
+ *   folder, a link, a directory or anything that is not a regular file (Story 1.115);
  * - a packed install (`npm pack`, installed with `--omit=dev` beside the
  *   repository's own engine) runs `tea-evaluate check` to exit 0, which proves
  *   every module the runtime needs ships in TeA's `dependencies`, and runs
@@ -59,7 +61,7 @@ const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corp
 const { calibrationObservation, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
 const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
-const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
+const { readFolderFile, resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
 const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { digest, digestFiles, redactArgs, redactSecrets } = require('../cli/lib/evaluate/digest');
 const { isDateTime } = require('../cli/lib/evaluate/formats');
@@ -1735,6 +1737,21 @@ function checkEngineAbsent() {
       `${subcommand} with the engine absent did not name the declared peer range ${peerRange}\n${result.stderr}`,
     );
   }
+  // A refused path exits 64 whether or not the engine is installed; only a good path needs it (Story 1.115).
+  const hidden = (file) =>
+    spawnSync(process.execPath, ['--require', HIDE_ENGINE, CLI, 'digest', '--evaluation', copyValid(), '--file', file], {
+      encoding: 'utf8',
+    });
+  const refusedHidden = hidden('../outside.md');
+  check(
+    refusedHidden.status === 64 && !refusedHidden.stderr.includes(ENGINE_ABSENT_MESSAGE),
+    `digest --file over a refused path with the engine absent exited ${refusedHidden.status}; expected 64\n${refusedHidden.stdout}${refusedHidden.stderr}`,
+  );
+  const goodHidden = hidden('requirements.md');
+  check(
+    goodHidden.status === 12 && goodHidden.stdout === '' && goodHidden.stderr.includes(ENGINE_ABSENT_MESSAGE),
+    `digest --file over a good path with the engine absent exited ${goodHidden.status}; expected 12 naming the package\n${goodHidden.stdout}${goodHidden.stderr}`,
+  );
   for (const [label, expression] of [
     ['a record builder', "require('./cli/lib/evaluate/records').sealedRunRecord({})"],
     ['the engine version', "require('./cli/lib/evaluate/engine').engineVersion()"],
@@ -4526,6 +4543,213 @@ async function checkDigestIntegration() {
   check(engine.digestArtifact(fixtureIndex, 'corpus-index.json') === expectedDigest, 'the committed fixture corpus-index.json is stale');
 }
 
+/**
+ * Story 1.115: `digest --file` prints eval-quality's `digestBytes` over one file the folder holds, writes nothing, and exits 64
+ * for a path outside the folder, a link at any component, a directory, a missing file or anything that is not a regular file.
+ */
+async function checkDigestFile() {
+  const engine = await loadEngine();
+  /** Every entry under the folder, a link as itself and a file by its bytes' digest. */
+  const treeOf = (directory) =>
+    fs
+      .readdirSync(directory, { withFileTypes: true, recursive: true })
+      .map((entry) => {
+        const full = path.join(entry.parentPath, entry.name);
+        const label = path.relative(directory, full);
+        if (entry.isSymbolicLink()) return `${label}: link`;
+        return entry.isFile()
+          ? `${label}: ${sha256Hex(fs.readFileSync(full))}`
+          : `${label}: ${entry.isDirectory() ? 'directory' : 'other'}`;
+      })
+      .sort();
+  const folder = copyValid();
+  fs.rmSync(path.join(folder, 'corpus-index.json'));
+  const statement = path.join(folder, 'requirements.md');
+  const ask = (file, extra = []) => runCli(['digest', '--evaluation', folder, '--file', file, ...extra]);
+  const before = treeOf(folder);
+
+  const printed = ask('requirements.md');
+  const expected = engine.digestBytes(fs.readFileSync(statement));
+  check(printed.status === 0, `digest --file exited ${printed.status}; expected 0\n${printed.output}`);
+  check(printed.stdout === `${expected}\n`, `digest --file printed ${JSON.stringify(printed.stdout)}; expected ${expected} and a newline`);
+  check(
+    /^sha256:[0-9a-f]{64}\n$/.test(printed.stdout),
+    `digest --file printed ${JSON.stringify(printed.stdout)}; expected sha256: and 64 hex digits`,
+  );
+  check(printed.stderr === '', `digest --file wrote to stderr: ${printed.stderr}`);
+  check(
+    JSON.stringify(treeOf(folder)) === JSON.stringify(before) && !fs.existsSync(path.join(folder, 'corpus-index.json')),
+    'digest --file changed the evaluation folder or wrote corpus-index.json',
+  );
+
+  // The digest is over the bytes: a path spelled differently, a nested file, the manifest named by evaluation.json and an empty file.
+  const named = runCli(['digest', '--evaluation', path.join(folder, 'evaluation.json'), '--file', './requirements.md']);
+  check(
+    named.status === 0 && named.stdout === printed.stdout,
+    `--evaluation naming evaluation.json with ./requirements.md printed ${named.stdout}`,
+  );
+  const nested = ask('corpus/reservations/src/reservations.js');
+  check(
+    nested.status === 0 &&
+      nested.stdout.trim() === engine.digestBytes(fs.readFileSync(path.join(folder, 'corpus', 'reservations', 'src', 'reservations.js'))),
+    `digest --file over a nested file printed ${nested.stdout}${nested.stderr}`,
+  );
+  fs.writeFileSync(path.join(folder, 'empty.md'), '');
+  const empty = ask('empty.md');
+  check(
+    empty.status === 0 && empty.stdout.trim() === EMPTY_DIGEST,
+    `digest --file over an empty file printed ${empty.stdout}; expected ${EMPTY_DIGEST}`,
+  );
+  fs.rmSync(path.join(folder, 'empty.md'));
+
+  // One byte changes the digest, and it is the digest of the new bytes.
+  fs.appendFileSync(statement, ' ');
+  const changed = ask('requirements.md');
+  check(
+    changed.status === 0 && changed.stdout !== printed.stdout && changed.stdout.trim() === engine.digestBytes(fs.readFileSync(statement)),
+    `digest --file after one byte changed printed ${changed.stdout}; expected a new digest of the new bytes`,
+  );
+  fs.writeFileSync(statement, fs.readFileSync(path.join(VALID, 'requirements.md')));
+
+  // Each refusal exits 64, prints nothing on stdout, names the path in one line on stderr and writes nothing.
+  const outside = tempDir('outside');
+  fs.writeFileSync(path.join(outside, 'secret.md'), 'outside the folder\n');
+  fs.mkdirSync(path.join(outside, 'directory'));
+  fs.writeFileSync(path.join(outside, 'directory', 'inner.md'), 'inner\n');
+  fs.symlinkSync(statement, path.join(folder, 'linked-requirements.md'));
+  fs.symlinkSync(path.join(outside, 'secret.md'), path.join(folder, 'linked-outside.md'));
+  fs.symlinkSync(path.join(outside, 'directory'), path.join(folder, 'linked-directory'), 'dir');
+  fs.symlinkSync(path.join(folder, 'corpus'), path.join(folder, 'linked-corpus'), 'dir');
+  const outsideSpelling = path.relative(folder, path.join(outside, 'secret.md')).split(path.sep).join('/');
+  check(
+    outsideSpelling.startsWith('../') && fs.existsSync(path.resolve(folder, outsideSpelling)),
+    `the outside file is spelled ${outsideSpelling}; expected a ../ path to a file that exists`,
+  );
+  const refused = [
+    ['a parent segment', '../outside.md', /leaves the evaluation folder/],
+    ['a parent segment that returns inside', 'corpus/../requirements.md', /leaves the evaluation folder/],
+    ['a parent segment to a file that exists outside the folder', outsideSpelling, /leaves the evaluation folder/],
+    ['an absolute path outside the folder', path.join(outside, 'secret.md'), /absolute/],
+    ['an absolute path inside the folder', statement, /absolute/],
+    ['a link to a file in the folder', 'linked-requirements.md', /symbolic link/],
+    ['a link to a file outside the folder', 'linked-outside.md', /symbolic link/],
+    ['a link to a directory outside the folder', 'linked-directory/inner.md', /symbolic link/],
+    ['a link to a directory in the folder', 'linked-corpus/reservations/src/reservations.js', /symbolic link/],
+    ['a directory', 'corpus', /directory/],
+    ['the folder itself', '.', /directory/],
+    ['a file the folder does not hold', 'absent.md', /does not exist/],
+    ['a file below a file', 'requirements.md/inner.md', /not a directory/],
+    ['an empty path', '', /names no file/],
+  ];
+  const afterLinks = treeOf(folder);
+  for (const [label, file, reason] of refused) {
+    const result = ask(file);
+    check(result.status === 64, `digest --file over ${label} exited ${result.status}; expected 64\n${result.output}`);
+    check(result.stdout === '', `digest --file over ${label} printed on stdout: ${result.stdout}`);
+    check(
+      result.stderr.trimEnd().split('\n').length === 1 && reason.test(result.stderr),
+      `digest --file over ${label} wrote ${JSON.stringify(result.stderr)}; expected one line matching ${reason}`,
+    );
+    check(!fs.existsSync(path.join(folder, 'corpus-index.json')), `digest --file over ${label} wrote corpus-index.json`);
+  }
+  check(JSON.stringify(treeOf(folder)) === JSON.stringify(afterLinks), 'a refused digest --file changed the evaluation folder');
+
+  if (process.platform !== 'win32') {
+    const fifo = path.join(folder, 'pipe.md');
+    const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+    check(made.status === 0, `could not create the FIFO fixture: ${made.stderr}`);
+    if (made.status === 0) {
+      const piped = ask('pipe.md');
+      check(
+        piped.status === 64 && piped.stdout === '' && /regular file/.test(piped.stderr),
+        `digest --file over a FIFO exited ${piped.status}\n${piped.output}`,
+      );
+    }
+  }
+
+  if (process.platform !== 'win32') {
+    // A directory above the file turns into a link after the walk vetted it: the open follows it, so the descriptor must be refused.
+    const swapRoot = tempDir('swap');
+    const swapFolder = path.join(swapRoot, 'folder');
+    fs.mkdirSync(path.join(swapFolder, 'corpus'), { recursive: true });
+    fs.writeFileSync(path.join(swapFolder, 'corpus', 'file.md'), 'inside\n');
+    const elsewhere = path.join(swapRoot, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    fs.writeFileSync(path.join(elsewhere, 'file.md'), 'outside\n');
+    const realLstat = fs.lstatSync;
+    let swapped = false;
+    fs.lstatSync = (target, ...rest) => {
+      const stats = realLstat(target, ...rest);
+      if (!swapped && String(target) === path.join(swapFolder, 'corpus', 'file.md')) {
+        swapped = true;
+        fs.renameSync(path.join(swapFolder, 'corpus'), path.join(swapRoot, 'corpus-moved'));
+        fs.symlinkSync(elsewhere, path.join(swapFolder, 'corpus'), 'dir');
+      }
+      return stats;
+    };
+    let raced;
+    try {
+      raced = readFolderFile(swapFolder, 'corpus/file.md');
+    } finally {
+      fs.lstatSync = realLstat;
+    }
+    check(swapped, 'the swap fixture never ran: readFolderFile did not lstat the file');
+    check(
+      raced?.ok === false && /changed while it was read/.test(raced.reason),
+      `a directory swapped for a link after the walk read ${JSON.stringify(raced)}; expected a refusal`,
+    );
+    check(
+      readFolderFile(path.join(swapRoot, 'corpus-moved', '..', 'folder'), 'corpus').ok === false,
+      'a link to a directory was read as a file',
+    );
+  }
+
+  // A file below an unreadable directory is refused as unreadable, with its lstat code.
+  if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+    const locked = path.join(folder, 'locked');
+    fs.mkdirSync(locked);
+    fs.writeFileSync(path.join(locked, 'a.md'), 'locked\n');
+    fs.chmodSync(locked, 0o000);
+    try {
+      const refusedLocked = ask('locked/a.md');
+      check(
+        refusedLocked.status === 64 &&
+          /cannot be read \(EACCES\)/.test(refusedLocked.stderr) &&
+          !/does not exist/.test(refusedLocked.stderr),
+        `digest --file below an unreadable directory exited ${refusedLocked.status}: ${refusedLocked.stderr}`,
+      );
+    } finally {
+      fs.chmodSync(locked, 0o755);
+    }
+  }
+
+  // The two options exclude each other, and the option needs a path and an evaluation.
+  const both = ask('requirements.md', ['--calibration-inputs']);
+  check(
+    both.status === 64 && both.stdout === '' && /cannot be combined/.test(both.stderr),
+    `--file with --calibration-inputs exited ${both.status}\n${both.output}`,
+  );
+  const bare = runCli(['digest', '--evaluation', folder, '--file']);
+  check(bare.status === 64 && bare.stdout === '', `--file with no path exited ${bare.status}; expected 64\n${bare.output}`);
+  const unnamed = runCli(['digest', '--file', 'requirements.md']);
+  check(
+    unnamed.status === 64 && unnamed.stdout === '',
+    `--file with no --evaluation exited ${unnamed.status}; expected 64\n${unnamed.output}`,
+  );
+
+  // The option is listed in the command's help, its header and the reference.
+  const help = runCli(['digest', '--help']);
+  check(help.status === 0 && help.stdout.includes('--file <path>'), `digest --help does not list --file\n${help.output}`);
+  const header = fs.readFileSync(CLI, 'utf8').split("'use strict';")[0];
+  check(
+    header.includes('tea-evaluate digest --evaluation <path> [--calibration-inputs | --file <path>]'),
+    "cli/evaluate.js's header does not list --file",
+  );
+  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  for (const text of ['tea-evaluate digest --evaluation evals/my-evaluation --file requirements.md', '`digestBytes`', 'exits 64'])
+    check(page.includes(text), `the reference does not say ${JSON.stringify(text)}`);
+}
+
 function checkEngineCliPath() {
   const shim = path.join(os.tmpdir(), 'tea-evaluate-engine-shim.js');
   check(engineCliPath({ [ENGINE_CLI_ENV]: shim }) === shim, `${ENGINE_CLI_ENV} does not substitute the engine CLI path`);
@@ -4675,6 +4899,7 @@ async function main() {
     await checkRuntimeUnits();
     await checkDigestUnit();
     await checkDigestIntegration();
+    await checkDigestFile();
     checkEngineCliPath();
     checkRegistryClassification();
     checkPackedInstall();
