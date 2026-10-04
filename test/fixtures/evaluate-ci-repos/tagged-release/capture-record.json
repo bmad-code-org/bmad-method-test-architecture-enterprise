@@ -1,6 +1,6 @@
 {
   "comment": "A live maintainer session through the local Claude Code CLI wrote ci/evaluation-ci-plan.json and the tiers of evaluation.json in this repository. Both files are committed as the session left them.",
-  "command": "claude -p <prompt> --allowedTools Read Write Edit Glob Grep Bash --permission-mode acceptEdits",
+  "command": "claude -p <prompt> --model claude-sonnet-5-5 --allowedTools Read Write Edit Glob Grep Bash --permission-mode acceptEdits --output-format json",
   "claudeCodeVersion": "2.1.288 (Claude Code)",
   "model": "claude-sonnet-5-5",
   "turns": 18,
