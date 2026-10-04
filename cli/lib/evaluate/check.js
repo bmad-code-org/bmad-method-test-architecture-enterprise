@@ -157,7 +157,7 @@ const { answeredKind, degenerateResponsePath } = require('./gameability');
 /** How a finding names a call of each interface kind. */
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
-const { PartitionPlanError, contractView, partitionPlanProblems, readHeldOutPlan } = require('./partition');
+const { PartitionPlanError, contractView, partitionPlanProblems, planCriterionName, readHeldOutPlan } = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -1683,6 +1683,10 @@ function plainSchemaFindings(report, file, validate, locate = (instancePath) => 
  * view it makes keeps every behavior an oracle. Every finding names a path or an ID and none quotes held-out plan bytes, so the
  * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
  * run here (`check` compiles nothing); a compile defect surfaces at a held-out or both preflight.
+ *
+ * Returns the held-out plan only when it is sound: it has no finding of its own and the held-out view it makes passes the engine's
+ * contract schema. Whatever else reads the plan (the both view the rubric rules run over) then runs over a plan that is known to fit,
+ * and a plan with a finding stays with that finding.
  */
 function checkPartitionPlan(report, folder, evaluation, context, { openPlan = true } = {}) {
   const plan = evaluation.partitionPlan;
@@ -1735,7 +1739,7 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   }
   const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehaviors });
   for (const problem of problems) report.add(problem.file, problem.rule, problem.message);
-  if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return heldOutPlan;
+  if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return;
   const sourceBytes = Buffer.from(JSON.stringify(contract));
   const { contract: view } = contractView({ contractBytes: sourceBytes, evaluation, heldOutPlan, partition: 'held-out' });
   if (context.validate.contract(view)) return heldOutPlan;
@@ -1753,10 +1757,9 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
       : `held-out view ${instancePath || '(root)'}`;
   };
   plainSchemaFindings(report, plan.heldOutPlan, context.validate.contract, locate);
-  return heldOutPlan;
 }
 
-function checkCalibration(report, folder, evaluation, contract, engine, { partial = false } = {}) {
+function checkCalibration(report, folder, evaluation, contract, engine, { partial = false, label } = {}) {
   let calibration;
   try {
     calibration = readCalibration(folder);
@@ -1764,7 +1767,7 @@ function checkCalibration(report, folder, evaluation, contract, engine, { partia
     report.add(CALIBRATION_PATH, 'judge-calibration', error.message);
     return;
   }
-  for (const problem of calibrationProblems(evaluation, contract, calibration?.value, engine, { partial }))
+  for (const problem of calibrationProblems(evaluation, contract, calibration?.value, engine, { partial, label }))
     report.add(CALIBRATION_PATH, 'judge-calibration', problem);
 }
 
@@ -2256,15 +2259,20 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
-  // The rubrics the evaluation judges are those of every partition (Story 1.105): `contract.json`'s and the held-out plan's. When
-  // the plan is not known (a development run does not open it, or it is unreadable) `check` holds the rubrics it can see and
-  // leaves the rest to the partition that owns them.
-  const planKnown = evaluation.partitionPlan === undefined || heldOutPlan !== undefined;
+  // The rubrics the evaluation judges are those of every partition (Story 1.105): `contract.json`'s and the held-out plan's. The
+  // plan is known only when `checkPartitionPlan` returned it (a development run does not open it, and one that is unreadable or
+  // has a finding is not returned), and then the both view is built over it. Without it `check` holds the rubrics it can see
+  // and leaves the rest to the partition that owns them, which is also what a contract that fails its own schema gets.
   const rubricContract =
-    heldOutPlan === undefined || context.contract === undefined || !context.validate.contract(context.contract)
+    heldOutPlan === undefined
       ? context.contract
       : contractView({ contractBytes: Buffer.from(JSON.stringify(context.contract)), evaluation, heldOutPlan, partition: 'both' }).contract;
-  checkCalibration(report, folder, evaluation, rubricContract, context.engine, { partial: !planKnown });
+  const partial = evaluation.partitionPlan !== undefined && rubricContract === context.contract;
+  // The both view lists `contract.json`'s rubrics first, so a rubric past them is the plan's, and the plan's text stays out of a finding.
+  const sourceRubrics = Array.isArray(context.contract?.rubrics) ? context.contract.rubrics.length : 0;
+  const label = (rubric, rubricIndex, criterion, criterionIndex) =>
+    rubricIndex < sourceRubrics ? undefined : planCriterionName(rubric, rubricIndex - sourceRubrics, criterion, criterionIndex);
+  checkCalibration(report, folder, evaluation, rubricContract, context.engine, { partial, label });
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);
@@ -2274,7 +2282,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   } catch {
     conditions = undefined;
   }
-  checkJudge(report, evaluation, rubricContract, conditions, { partial: !planKnown });
+  checkJudge(report, evaluation, rubricContract, conditions, { partial });
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
   checkCiPlan(report, folder);

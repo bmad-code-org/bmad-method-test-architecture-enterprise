@@ -71,13 +71,14 @@ One pure view over those files, `contractView` in `cli/lib/evaluate/partition.js
 | none (`both`) | every step                        | every oracle, and each behavior gains the oracles the plan lists for it                            | every criterion of `contract.json`, and the plan's rubrics                                                              |
 
 A rubric criterion belongs to the partition whose steps its evidence pointer reads.
-A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step is in the development view only.
-A criterion in the held-out plan's `rubrics` is in the held-out view only, and its evidence names a shared or a held-out step.
+A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step is in the development and both views.
+A criterion in the held-out plan's `rubrics` is in the held-out and both views, and its evidence names a shared or a held-out step.
 A plan rubric's ID differs from every rubric ID of `contract.json`, and a plan rubric carries its own scale, penalties and `maxLength`.
 Each partition's run compiles, calibrates and scores the criteria of its own view, and the judge is handed those criteria only.
 `policy/judge-calibration.json` is one file for every partition: a run judges the items of the criteria its view holds and leaves the rest to the partition that owns them.
 `evaluation.json` declares the judge once, so a contract whose only rubrics sit in the held-out plan still declares it, and a development run over it calls no judge.
 `check` names a criterion that no view can reach by its criterion ID, its rubric ID and the step it reads, and names a calibration item of a criterion no view declares.
+A criterion of the plan is named by `rubricId/criterionId` only when both IDs have the schema's shape, and by its position in the plan's `rubrics` otherwise; the plan's evidence pointers, channels and scale levels never reach a finding.
 
 With no `partitionPlan` every view is the folder's own bytes. A development run neither parses the held-out plan nor hashes it for the corpus-index comparison, so a plan the run cannot read stops only a held-out or both run (exit 10) and `check`. The engine's `compile` over the held-out view runs inside `preflight` and `run`, so a compile defect in the plan surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no oracle eval-quality designates for its probes, so run and score the partitions apart; a held-out probe's behavior names exactly one oracle in the held-out view.
 

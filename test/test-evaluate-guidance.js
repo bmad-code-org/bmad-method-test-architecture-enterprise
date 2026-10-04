@@ -726,7 +726,11 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'under one, replace it that way',
     'A rubric criterion follows the step its evidence reads',
     "goes in the plan file's `rubrics` array under its own rubric ID",
-    'keep two items per anchored level for every criterion',
+    'is in the development and both views',
+    'it is in the held-out and both views',
+    'keep an item at every anchored level for every criterion, the held-out ones included',
+    "The items that label a criterion of the plan's `rubrics`",
+    'are closed to the authoring loop like the plan',
     '`evaluation.json` declares the judge once',
     'It names a rubric criterion that no view can reach by its criterion ID',
   ])
@@ -3291,7 +3295,8 @@ function checkGapsGuidance(guide, engine, failures) {
         'validCount',
         'caughtCount',
         'development',
-        'a held-out baseline under `baseline/` included',
+        'a held-out baseline under `baseline/`',
+        "the items of `policy/judge-calibration.json` that label a criterion of the plan's `rubrics`",
       ],
     ],
   ])
@@ -4154,6 +4159,25 @@ async function main() {
         (text) => text.replace('neither the plan file nor a held-out baseline under `baseline/`', 'no plan file'),
       ],
       [
+        'corpus partition plan calibration item count',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace('keep an item at every anchored level for every criterion', 'keep two items per anchored level for every criterion'),
+      ],
+      [
+        'corpus partition plan development criterion view',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('is in the development and both views', 'stays in the development view only'),
+      ],
+      [
+        'corpus partition plan held-out calibration items open',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('are closed to the authoring loop like the plan', 'are open to the authoring loop'),
+      ],
+      [
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
@@ -4242,7 +4266,17 @@ async function main() {
         'gaps closed baseline removal',
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
-        (text) => text.replace(' and a held-out baseline under `baseline/` included', ' included'),
+        (text) => text.replace(', a held-out baseline under `baseline/` and the items', ' and the items'),
+      ],
+      [
+        'gaps closed calibration items removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) =>
+          text.replace(
+            " and the items of `policy/judge-calibration.json` that label a criterion of the plan's `rubrics` included",
+            ' included',
+          ),
       ],
       [
         'gaps discipline removal',

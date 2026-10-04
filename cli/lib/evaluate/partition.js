@@ -132,6 +132,16 @@ function stepsReadBy(value) {
 const named = (value, pattern, fallback) => (typeof value === 'string' && pattern.test(value) ? value : fallback);
 
 /**
+ * What a finding calls a criterion of the held-out plan: `rubricId/criterionId` when both IDs have the schema's shape, otherwise
+ * where the criterion sits in the plan's `rubrics`. A free-text ID is the adopter's own text and never reaches a finding.
+ */
+function planCriterionName(rubric, rubricIndex, criterion, criterionIndex) {
+  const shaped =
+    typeof rubric?.id === 'string' && RUBRIC_ID.test(rubric.id) && typeof criterion?.id === 'string' && CRITERION_ID.test(criterion.id);
+  return shaped ? `${rubric.id}/${criterion.id}` : `rubrics[${rubricIndex}]/criteria[${criterionIndex}]`;
+}
+
+/**
  * The held-out plan file's parsed content: its steps, their oracles and the oracles each behavior gains in the held-out view.
  * Only the held-out and both views read it, so a development run never opens it.
  *
@@ -240,7 +250,7 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
   }
   view.interactionPlan = [...(view.interactionPlan ?? []), ...heldOutPlan.interactionPlan];
   view.oracles = [...(view.oracles ?? []), ...heldOutPlan.oracles];
-  // A plan that declares no rubric leaves `rubrics` exactly as the source has it.
+  // A plan that declares no `rubrics` appends nothing; the held-out view still drops the criteria the held-out partition cannot reach.
   if ((heldOutPlan.rubrics ?? []).length > 0) view.rubrics = [...(view.rubrics ?? []), ...heldOutPlan.rubrics];
   for (const behavior of view.behaviors ?? []) {
     behavior.oracles = [
@@ -329,13 +339,18 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
   }
   // A criterion of contract.json is in the development view, and in the held-out view unless it reads a development-only
   // step, so the development view must declare the step it reads (Story 1.105).
-  for (const rubric of (Array.isArray(contract.rubrics) ? contract.rubrics : []).filter(isObject)) {
-    for (const criterion of (Array.isArray(rubric.criteria) ? rubric.criteria : []).filter(isObject)) {
+  // The IDs are named only when they have the schema's shape: a free-text one is the adopter's own text.
+  for (const [index, rubric] of (Array.isArray(contract.rubrics) ? contract.rubrics : []).entries()) {
+    if (!isObject(rubric)) continue;
+    const rubricLabel = named(rubric.id, RUBRIC_ID, `rubrics[${index}]`);
+    for (const [position, criterion] of (Array.isArray(rubric.criteria) ? rubric.criteria : []).entries()) {
+      if (!isObject(criterion)) continue;
+      const criterionLabel = named(criterion.id, CRITERION_ID, `criteria[${position}]`);
       for (const id of stepsReadBy(criterion)) {
         if (!sourceSteps.has(id)) {
           add(
             'contract.json',
-            `criterion ${criterion.id} of rubric ${rubric.id} reads step ${id}, which the development view does not declare; a criterion that reads a held-out step belongs in the held-out plan's rubrics`,
+            `criterion ${criterionLabel} of rubric ${rubricLabel} reads step ${id}, which the development view does not declare; a criterion that reads a held-out step belongs in the held-out plan's rubrics`,
           );
         }
       }
@@ -452,6 +467,7 @@ module.exports = {
   contractView,
   loadContractView,
   partitionPlanProblems,
+  planCriterionName,
   readHeldOutPlan,
   selectPartition,
   stepsReadBy,

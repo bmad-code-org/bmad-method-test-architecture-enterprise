@@ -85,9 +85,10 @@ The plan file lives directly under `corpus/held-out/`, so `corpus-index.json` di
 The two files together make three views. A development run executes `contract.json` as it stands and never opens the plan file; a held-out run executes the shared steps and the held-out ones, without the development-only steps and the oracles that read them; a run with no `--partition` executes everything. Each view is the only contract its run compiles, seals and records, so no run directory, trial record or replay file of one partition holds a request, step ID or oracle meant for the other. Qualify held-out probes with `tea-evaluate preflight --partition held-out`. Probe files are not sealed, so a held-out probe selects with an `any` matcher and witnesses with a non-private input, as [source fixture: P-003.probe.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/partition-plan/evals/verdict/probes/P-003.probe.json) does. The `[held-out]` P-006 examples below keep the private literal, which a folder with no `partitionPlan` allows; under one, replace it that way.
 
 A rubric criterion follows the step its evidence reads.
-A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step stays in the development view only.
-A criterion only the held-out partition judges goes in the plan file's `rubrics` array under its own rubric ID, which differs from every rubric ID in `contract.json`, and its evidence reads a shared or a held-out step.
-Each run calibrates and judges the criteria of its own view from the one `policy/judge-calibration.json`, so keep two items per anchored level for every criterion, the held-out ones included.
+A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step is in the development and both views.
+A criterion only the held-out partition judges goes in the plan file's `rubrics` array under its own rubric ID, which differs from every rubric ID in `contract.json`; it is in the held-out and both views, and its evidence reads a shared or a held-out step.
+Each run calibrates and judges the criteria of its own view from the one `policy/judge-calibration.json`, so keep an item at every anchored level for every criterion, the held-out ones included.
+The items that label a criterion of the plan's `rubrics` sit in that same file and are closed to the authoring loop like the plan: the loop reads and edits only the items of `contract.json`'s criteria, and the held-out items change in the held-out review.
 `evaluation.json` declares the judge once.
 
 <!-- example:held-out-rubrics -->

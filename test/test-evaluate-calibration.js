@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { calibrationObservation, calibrationProblems, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationProblems, calibrationStepPair, runCalibration } = require('../cli/lib/evaluate/calibration');
+const { planCriterionName } = require('../cli/lib/evaluate/partition');
 const { suite } = require('./lib/evaluate-story-121');
 
 const test = suite('tea-evaluate-calibration');
@@ -12,6 +13,8 @@ const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const write = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 const ROOT = path.join(__dirname, '..');
 const STUB = path.join(ROOT, 'test/fixtures/evaluate/stub-judge.js');
+/** Checks that await, collected so the file's synchronous body reads straight through. */
+const awaited = [];
 
 try {
   const nested = calibrationObservation({
@@ -110,6 +113,116 @@ try {
     calibrationProblems(settings, { rubrics: [] }, { items: own }, engine).join('; '),
     /declares no rubric, so judge calibration has nothing to score/,
   );
+  // A run reaching `runCalibration` strictly (the both run, a folder with no partition plan) stops on an item of no criterion
+  // before it judges anything, with the exit code `run` gives an invalid calibration. `check` refuses the same item first, so only
+  // this call proves the run's own strictness; with `partial` the foreign item is skipped and the view's own items are judged.
+  const stopped = (info) => Object.assign(new Error(info.message), info);
+  const judged = [];
+  const calibrate = (options) =>
+    runCalibration({
+      calibration: { value: { items: [...own, foreign[0]] } },
+      evaluation: settings,
+      contract: view,
+      engine,
+      writer: { writeJson() {} },
+      stop: stopped,
+      judgeItem: async ({ criterion }) => {
+        judged.push(criterion.id);
+        return 0;
+      },
+      ...options,
+    });
+  awaited.push(
+    (async () => {
+      await assert.rejects(
+        calibrate({ partial: false }),
+        (error) => error.exitCode === 12 && /items\[2\] names unknown rubric criterion R-102\/RC-102/.test(error.message),
+        'a strict calibration judged past an item of no criterion',
+      );
+      assert.deepEqual(judged, [], 'a strict calibration judged an item before it stopped');
+      await assert.rejects(calibrate({}), (error) => error.exitCode === 12, 'runCalibration is partial unless told so');
+      const partialRun = await calibrate({ partial: true }).catch((error) => error);
+      assert.equal(partialRun.exitCode, 11, 'a partial calibration judged the foreign item or none: it should reach the agreement gate');
+      assert.deepEqual(judged, ['RC-101', 'RC-101'], 'a partial calibration judged an item of another partition');
+    })(),
+  );
+  // Story 1.51's id-only rule over the held-out plan's rubrics: a criterion the plan declares is named, never quoted. Its evidence
+  // pointer, the channel and member it names and its scale's levels are the plan's own text, and a finding reaches the authoring loop.
+  const sealedRubric = (criterion, levels = [0, 1]) => ({
+    id: 'R-101',
+    criteria: [criterion],
+    scaleLevels: levels.map((level) => ({ level })),
+  });
+  const sealedItems = (criterionId, response, levels = [0, 1]) =>
+    levels.map((expectedLevel) => ({ rubricId: 'R-101', criterionId, response, expectedLevel }));
+  const sealedLabel = (rubric, rubricIndex, criterion, criterionIndex) => planCriterionName(rubric, rubricIndex, criterion, criterionIndex);
+  const sealedFindings = (rubric, items) =>
+    calibrationProblems(settings, { rubrics: [rubric] }, { items }, engine, { label: sealedLabel }).join('; ');
+  for (const [name, rubric, items, expected] of [
+    [
+      'a pointer no item reaches',
+      sealedRubric({ id: 'RC-101', evidence: '/interactions/held-out-run/response-body/canary-member' }),
+      sealedItems('RC-101', '{"other":1}'),
+      /items\[0\] response does not reach the evidence of R-101\/RC-101; items\[1\] response does not reach the evidence of R-101\/RC-101/,
+    ],
+    [
+      'a channel the engine does not read',
+      sealedRubric({ id: 'RC-101', evidence: '/interactions/held-out-run/canary-channel' }),
+      sealedItems('RC-101', 'calibration response'),
+      /items\[0\] response cannot be read at the evidence of R-101\/RC-101/,
+    ],
+    [
+      'a call input member no response names',
+      sealedRubric({ id: 'RC-101', evidence: '/interactions/held-out-run/call-inputs/canary-member' }),
+      sealedItems('RC-101', 'calibration response'),
+      /items\[0\] response cannot be read at the evidence of R-101\/RC-101/,
+    ],
+    [
+      'a level no item is labelled at',
+      sealedRubric({ id: 'RC-101', evidence: '/interactions/held-out-run/stdout' }, [0, 'canary-level']),
+      sealedItems('RC-101', 'calibration response', [0]),
+      /^R-101\/RC-101 has no calibration item labelled at one of its anchored levels$/,
+    ],
+    [
+      'a level an item is labelled at that the scale lacks',
+      sealedRubric({ id: 'RC-101', evidence: '/interactions/held-out-run/stdout' }, [0, 1]),
+      [...sealedItems('RC-101', 'calibration response'), ...sealedItems('RC-101', 'calibration response', [2])],
+      /items\[2\] expectedLevel 2 is not an anchored level of R-101\/RC-101/,
+    ],
+    [
+      'a level an item is labelled at that the scale lacks, for a criterion of no shape',
+      sealedRubric({ id: 'canary-crit-id', evidence: '/interactions/held-out-run/stdout' }),
+      [...sealedItems('canary-crit-id', 'calibration response'), ...sealedItems('canary-crit-id', 'calibration response', [2])],
+      /items\[2\] expectedLevel 2 is not an anchored level of rubrics\[0\]\/criteria\[0\]/,
+    ],
+    [
+      'a criterion ID of no criterion shape',
+      sealedRubric({ id: 'canary-crit-id', evidence: '/interactions/held-out-run/canary-channel' }, [0, 'canary-level']),
+      sealedItems('canary-crit-id', 'calibration response', [0]),
+      /items\[0\] response cannot be read at the evidence of rubrics\[0\]\/criteria\[0\]; rubrics\[0\]\/criteria\[0\] has no calibration item labelled at one of its anchored levels/,
+    ],
+  ]) {
+    const found = sealedFindings(rubric, items);
+    assert.match(found, expected, name);
+    assert.equal(found.includes('canary-'), false, `${name}: a finding quoted the held-out plan: ${found}`);
+  }
+  // The same rubric in `contract.json` is the adopter's own text, and its findings keep the pointer and the level.
+  assert.match(
+    calibrationProblems(
+      settings,
+      { rubrics: [sealedRubric({ id: 'RC-101', evidence: '/interactions/judge-run/response-body/ghost' })] },
+      { items: sealedItems('RC-101', '{"other":1}', [0, 1]) },
+      engine,
+    ).join('; '),
+    /items\[0\] response does not reach \/interactions\/judge-run\/response-body\/ghost/,
+  );
+  // A rubric ID of no shape names the position as well.
+  assert.equal(
+    planCriterionName({ id: 'canary-rubric' }, 2, { id: 'RC-101' }, 3),
+    'rubrics[2]/criteria[3]',
+    'a free-text rubric ID reached a finding',
+  );
+  assert.equal(planCriterionName({ id: 'R-101' }, 2, { id: 'RC-101' }, 3), 'R-101/RC-101');
   // Story 1.103: a criterion's step gives its own interface and operation, also where two interfaces share the operation ID.
   const shared = {
     interactionPlan: [
@@ -346,7 +459,13 @@ try {
     );
   }
   assert.equal(fs.existsSync(planted), false, `a confined run's judge planted ${planted}`);
-  process.stdout.write('Evaluate rubric calibration and scoring version checks passed.\n');
+  Promise.all(awaited).then(
+    () => process.stdout.write('Evaluate rubric calibration and scoring version checks passed.\n'),
+    (error) => {
+      process.stderr.write(`${error.stack ?? error}\n`);
+      process.exitCode = 1;
+    },
+  );
 } finally {
   test.cleanup();
 }

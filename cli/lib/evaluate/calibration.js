@@ -112,9 +112,13 @@ function calibrationStepPair(contract, criterion) {
  * @param {object} engine
  * @param {object} [options]
  * @param {boolean} [options.partial] `contract` is one partition's view of the evaluation's contract
+ * @param {(rubric: object, rubricIndex: number, criterion: object, criterionIndex: number) => string|undefined} [options.label]
+ *   the name a finding gives a criterion of the held-out plan, or undefined for one `contract.json` declares. A criterion with a name
+ *   is a sealed one (Story 1.51's id-only rule): its evidence pointer, the channel and member it names and its scale's level values
+ *   never reach a finding, because the findings reach the authoring loop.
  * @returns {string[]}
  */
-function calibrationProblems(evaluation, contract, calibration, engine, { partial = false } = {}) {
+function calibrationProblems(evaluation, contract, calibration, engine, { partial = false, label } = {}) {
   const problems = [];
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
   if (rubrics.length === 0) {
@@ -152,11 +156,16 @@ function calibrationProblems(evaluation, contract, calibration, engine, { partia
   }
   const expected = new Map();
   const criteria = new Map();
-  for (const rubric of rubrics)
-    for (const criterion of rubric.criteria ?? []) {
-      expected.set(`${rubric.id}/${criterion.id}`, new Set((rubric.scaleLevels ?? []).map((level) => level.level)));
-      criteria.set(`${rubric.id}/${criterion.id}`, criterion);
+  const sealed = new Map();
+  for (const [rubricIndex, rubric] of rubrics.entries())
+    for (const [criterionIndex, criterion] of (rubric.criteria ?? []).entries()) {
+      const key = `${rubric.id}/${criterion.id}`;
+      expected.set(key, new Set((rubric.scaleLevels ?? []).map((level) => level.level)));
+      criteria.set(key, criterion);
+      const name = label?.(rubric, rubricIndex, criterion, criterionIndex);
+      if (name !== undefined) sealed.set(key, name);
     }
+  const named = (key) => sealed.get(key) ?? key;
   const covered = new Map([...expected].map(([key]) => [key, new Set()]));
   for (const [index, item] of calibration.items.entries()) {
     if (item === null || typeof item !== 'object' || Array.isArray(item)) {
@@ -182,21 +191,27 @@ function calibrationProblems(evaluation, contract, calibration, engine, { partia
         const stepId = criterion.evidence.split('/')[2];
         const resolve = engine.makeResolveOperand({ [stepId]: observation }, {});
         if (resolve({ pointer: criterion.evidence }, engine.ABSENT, 'calibration') === engine.ABSENT)
-          problems.push(`items[${index}] response does not reach ${criterion.evidence}`);
+          problems.push(
+            `items[${index}] response does not reach ${sealed.has(key) ? `the evidence of ${named(key)}` : criterion.evidence}`,
+          );
       } catch (error) {
-        problems.push(`items[${index}] ${error.message}`);
+        // The engine's own wording names the channel and member the pointer reads, which a sealed criterion keeps to itself.
+        problems.push(`items[${index}] ${sealed.has(key) ? `response cannot be read at the evidence of ${named(key)}` : error.message}`);
       }
     }
     if (expected.get(key).has(item.expectedLevel)) covered.get(key).add(item.expectedLevel);
-    else problems.push(`items[${index}] expectedLevel ${JSON.stringify(item.expectedLevel)} is not an anchored level of ${key}`);
+    else problems.push(`items[${index}] expectedLevel ${JSON.stringify(item.expectedLevel)} is not an anchored level of ${named(key)}`);
     if (Object.keys(item).some((field) => !['rubricId', 'criterionId', 'response', 'responseKind', 'expectedLevel'].includes(field)))
       problems.push(`items[${index}] has an unknown field`);
     if (item.responseKind !== undefined && !['text', 'json'].includes(item.responseKind))
       problems.push(`items[${index}] responseKind must be text or json`);
   }
-  for (const [key, levels] of expected)
-    for (const level of levels)
-      if (!covered.get(key).has(level)) problems.push(`${key} has no calibration item labelled at anchored level ${level}`);
+  for (const [key, levels] of expected) {
+    const missing = [...levels].filter((level) => !covered.get(key).has(level));
+    if (sealed.has(key)) {
+      if (missing.length > 0) problems.push(`${named(key)} has no calibration item labelled at one of its anchored levels`);
+    } else for (const level of missing) problems.push(`${key} has no calibration item labelled at anchored level ${level}`);
+  }
   return problems;
 }
 
