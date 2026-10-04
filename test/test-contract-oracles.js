@@ -151,6 +151,7 @@ const {
   traceWholeSummaryExpression,
   traceWholeSummaryTargets,
   summaryKeysFromStep05,
+  summaryKeysFromText,
   routingOracleSpecs,
   routingAnswerIsWhole,
   routingWholeBodyExpression,
@@ -814,6 +815,11 @@ async function checkTraceOracles(evaluator) {
       );
     }
     planted.push(['a summary carrying an undeclared key that is null', { ...base, extra_key: null }, false]);
+    // `gate_status` and `gate_criteria` are written only when the gate was eligible, so a summary without them is whole.
+    for (const dropped of [['gate_status'], ['gate_criteria'], ['gate_status', 'gate_criteria']]) {
+      const rest = Object.fromEntries(Object.entries(base).filter(([key]) => !dropped.includes(key)));
+      planted.push([`a summary of an ineligible gate without ${dropped.join(' and ')}`, rest, true]);
+    }
     for (const [name, summary, whole] of planted) {
       const results = evaluateOracles(evaluator, contract, {
         [traceStepId(set)]: observation({
@@ -960,6 +966,9 @@ function plantedRoutingAnswers(correct) {
     { label: 'an answer whose action is none of the three', answer: { ...correct, action: 'maybe' }, whole: false },
     { label: 'an answer whose action is a number', answer: { ...correct, action: 7 }, whole: false },
     { label: 'an answer whose action is null', answer: { ...correct, action: null }, whole: false },
+    { label: 'an answer of the two required keys alone', answer: { action: correct.action, reason: correct.reason }, whole: true },
+    { label: 'an answer whose action is a case variant of an allowed one', answer: { ...correct, action: 'Route' }, whole: false },
+    { label: 'an answer whose reason is only a zero-width space', answer: { ...correct, reason: '\u200B' }, whole: true },
     { label: 'an answer whose untyped menuCode is null', answer: { ...correct, menuCode: null }, whole: true },
     { label: 'an answer whose untyped scope is null', answer: { ...correct, scope: null }, whole: true },
     { label: 'an answer carrying a key the runner does not declare', answer: { ...correct, confidence: 1 }, whole: false },
@@ -2299,6 +2308,18 @@ async function checkWholeBodyCoverage() {
         : suiteId === 'trace'
           ? { scheme: 'tea-workflow-step', id: 'bmad-testarch-trace/steps-c/step-05-gate-decision.md' }
           : { scheme: 'tea-cli-contract', id: 'routing-answer-whole-body' };
+    // The `shape` inside each oracle is the contract's own response descriptor, read from the file on disk: a shape that
+    // required a key the descriptor does not (the conditional gate keys of a trace summary, the five optional keys of a routing
+    // answer) would refuse an answer the runner or workflow legitimately writes.
+    const descriptor = contract.permittedInterfaces[0].operations[0].responseDescriptor;
+    for (const oracleId of oracleAt.keys()) {
+      const shape = contract.oracles.find((oracle) => oracle.id === oracleId).check.operands.find((operand) => operand.op === 'shape');
+      assert(
+        JSON.stringify(shape?.descriptor) ===
+          JSON.stringify({ requiredKeys: descriptor.requiredKeys, permittedKeys: descriptor.permittedKeys, types: descriptor.types }),
+        `${suiteId}: the shape of ${oracleId} is the contract's own response descriptor`,
+      );
+    }
     for (const oracleId of oracleAt.keys()) {
       const behaviors = contract.behaviors.filter((behavior) => behavior.oracles.includes(oracleId));
       assert(
@@ -2420,93 +2441,79 @@ async function checkWholeBodyCoverage() {
   }
 }
 
+/** The stored routing replies named as the correct answer, which the runner's parser must read as the object it prints. */
+const STORED_CORRECT_REPLIES = ['correct-route', 'clarification-correct', 'decline-correct', 'fenced-json'];
+
 /**
- * Story 1.100: a required key is one the runner or workflow always emits.
- *
- * The three declarations are derived from what each command or workflow states about itself, so this reads them from
- * the contracts on disk and holds them to that source and to the stored runs the harness scores. `test/contracts/README.md`
- * records, beside the section that names each contract, that no key is narrowed and why. A key narrowed out of a
- * declaration is a key the runner always emits whenever this fails, because each stored correct run carries it.
- */
-/**
- * The keys each runner or workflow always emitted when Story 1.100 declared them required, frozen here.
+ * The keys each runner or workflow always emitted when Story 1.100 declared them required, each with the type the contract
+ * states for it (`null` for a key whose type is not the claim), frozen here.
  *
  * Narrowing a key means moving it out of a contract's `requiredKeys`, and a contract derives those from the CLI's
  * `VERDICT_KEYS.always`, the literal of step-05 and the routing runner's declaration, so a narrowing made at the source
  * regenerates every contract to agree with it. These lists do not move with the source: a key missing from the contract
  * against them is a narrowing, and `checkWholeBodyDeclarations` fails until the README table row of that contract states the
- * new count and lists the key under `Narrowed`, in the same diff as the change that narrowed it.
+ * new count and lists the key under `Narrowed`, in the same diff as the change that narrowed it. A type removed or changed at the
+ * source differs from the frozen one the same way, and fails until this list and the README change together.
  */
 const FROZEN_EMITTED_KEYS = {
-  'tea-routing-intents.contract.json': ['action', 'reason'],
-  'tea-routing-controls.contract.json': ['action', 'reason'],
-  'test-review.contract.json': [
-    'report',
-    'files',
-    'agent',
-    'model',
-    'gateOn',
-    'gatingQualityScore',
-    'gatingViolations',
-    'reviewProvenance',
-    'recommendation',
-    'rawQualityScore',
-    'qualityScore',
-    'scoreCap',
-    'scoreOverrideRule',
-    'verdictRule',
-    'violations',
-    'findings',
-    'reviewedFiles',
-    'contextBasis',
-    'contextFiles',
-    'contextWaiversApplied',
-    'keyStrengths',
-    'keyWeaknesses',
-    'advisoryObservations',
-  ],
-  'trace.contract.json': [
-    'schema_version',
-    'snapshot_at',
-    'repo',
-    'collection_mode',
-    'collection_status',
-    'inventory_basis',
-    'gate_basis',
-    'source_sha',
-    'target',
-    'decision_mode',
-    'evaluator',
-    'confidence',
-    'oracle',
-    'coverage',
-    'tests',
-    'risk_summary',
-    'heuristics',
-    'live_evidence',
-    'blockers',
-    'rejected_evidence',
-    'recommendations',
-    'links',
-  ],
+  'tea-routing-intents.contract.json': {
+    action: 'string',
+    reason: 'string',
+  },
+  'tea-routing-controls.contract.json': {
+    action: 'string',
+    reason: 'string',
+  },
+  'test-review.contract.json': {
+    report: 'string',
+    files: 'array',
+    agent: 'string',
+    model: null,
+    gateOn: 'string',
+    gatingQualityScore: 'number',
+    gatingViolations: 'object',
+    reviewProvenance: 'object',
+    recommendation: 'string',
+    rawQualityScore: 'number',
+    qualityScore: 'number',
+    scoreCap: 'number',
+    scoreOverrideRule: 'string',
+    verdictRule: 'string',
+    violations: 'object',
+    findings: 'array',
+    reviewedFiles: 'array',
+    contextBasis: 'string',
+    contextFiles: 'array',
+    contextWaiversApplied: 'number',
+    keyStrengths: 'array',
+    keyWeaknesses: 'array',
+    advisoryObservations: 'array',
+  },
+  'trace.contract.json': {
+    schema_version: 'string',
+    snapshot_at: null,
+    repo: null,
+    collection_mode: 'string',
+    collection_status: 'string',
+    inventory_basis: 'string',
+    gate_basis: 'string',
+    source_sha: null,
+    target: null,
+    decision_mode: null,
+    evaluator: null,
+    confidence: null,
+    oracle: 'object',
+    coverage: 'object',
+    tests: null,
+    risk_summary: 'object',
+    heuristics: null,
+    live_evidence: 'object',
+    blockers: 'array',
+    rejected_evidence: 'array',
+    recommendations: null,
+    links: null,
+  },
 };
-
-/** The object a stored routing reply carries before the parser fills the keys it lacks, or null when it carries none. */
-function rawRoutingReply(stdout) {
-  const candidates = [...stdout.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((match) => match[1]);
-  const braced = /\{[\s\S]*"action"[\s\S]*\}/.exec(stdout);
-  if (braced) candidates.push(braced[0]);
-  candidates.push(stdout);
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate.trim());
-      if (parsed !== null && typeof parsed === 'object' && Object.hasOwn(parsed, 'action')) return parsed;
-    } catch {
-      // Not JSON, the next candidate is tried.
-    }
-  }
-  return null;
-}
 
 /**
  * Story 1.100: a required key is one the runner or workflow always emits.
@@ -2543,8 +2550,17 @@ async function checkWholeBodyDeclarations() {
   const section = readme.split('\n## ').find((part) => part.startsWith('Whole-body coverage')) ?? '';
   for (const [relativePath, frozen] of Object.entries(FROZEN_EMITTED_KEYS)) {
     const required = requiredOf(relativePath);
-    const narrowed = frozen.filter((key) => !required.includes(key));
-    const added = required.filter((key) => !frozen.includes(key));
+    const frozenKeys = Object.keys(frozen);
+    const narrowed = frozenKeys.filter((key) => !required.includes(key));
+    const added = required.filter((key) => !frozenKeys.includes(key));
+    const declaredTypes = readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0]
+      .responseDescriptor.types;
+    const retyped = frozenKeys.filter((key) => required.includes(key) && (declaredTypes[key] ?? null) !== frozen[key]);
+    assert(
+      retyped.length === 0,
+      `${relativePath}: every required key has the type frozen in this test`,
+      retyped.map((key) => `${key}: frozen ${frozen[key]}, declared ${declaredTypes[key] ?? null}`).join('; '),
+    );
     const row = section.split('\n').find((line) => line.startsWith(`| \`${relativePath}\``));
     assert(row !== undefined, `test/contracts/README.md records the whole-body required-key decision for ${relativePath}`);
     if (row === undefined) continue;
@@ -2571,7 +2587,8 @@ async function checkWholeBodyDeclarations() {
   // and the harness refuses to score one that does not, so a key the contract narrowed away would still be here.
   const reviewGroundTruth = readJson(GROUND_TRUTH, 'the test-review ground truth');
   for (const item of findCases().filter((entry) => entry.suite === 'test-review')) {
-    const verdict = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
+    // The stored file carries a `$comment` the CLI never writes, so the verdict is the file without it.
+    const { $comment: _comment, ...verdict } = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
     if (scoreVerdict(verdict, reviewGroundTruth) === null) continue;
     const missing = Object.keys(VERDICT_KEYS.always).filter((key) => !Object.hasOwn(verdict, key));
     assert(
@@ -2592,21 +2609,69 @@ async function checkWholeBodyDeclarations() {
     );
   }
   assert(traceGroundTruth.fixtureSets.length > 0, 'the trace ground truth declares fixture sets');
-  // The runner's parser fills every key it lacks, so the keys of the stored reply are read before it parses, and the parsed
-  // answer is held to the whole-body twin.
-  for (const item of findCases().filter((entry) => entry.suite === 'bmad-tea-routing')) {
-    const stdout = fs.readFileSync(path.join(item.directory, 'stdout.txt'), 'utf8');
-    const answer = parseRouting(stdout);
-    if (answer === null) continue;
-    const raw = rawRoutingReply(stdout);
-    const missing =
-      raw === null ? ROUTING_RESPONSE_KEYS.required : ROUTING_RESPONSE_KEYS.required.filter((key) => !Object.hasOwn(raw, key));
+  // The runner's parser fills every key it lacks, so a stored reply says nothing about which keys a runner prints. What the
+  // parser can say is that the replies named as the correct answer parse to the object the runner prints.
+  const stored = findCases().filter((entry) => entry.suite === 'bmad-tea-routing');
+  for (const name of STORED_CORRECT_REPLIES) {
+    const item = stored.find((entry) => entry.id.endsWith(`/${name}`));
+    assert(item !== undefined, `the stored routing reply ${name} still exists`);
+    if (item === undefined) continue;
+    const answer = parseRouting(fs.readFileSync(path.join(item.directory, 'stdout.txt'), 'utf8'));
     assert(
-      missing.length === 0,
-      `${item.id}: a stored reply the runner's parser accepts carries every required key before it is parsed`,
-      `missing ${missing.join(', ')}`,
+      answer !== null && routingAnswerIsWhole(answer),
+      `${item.id}: the answer parsed from a stored correct reply is the object the runner prints`,
     );
-    assert(routingAnswerIsWhole(answer), `${item.id}: the answer parsed from a stored reply is the object the runner prints`);
+  }
+
+  // `JSON.stringify` drops a key whose value is `undefined`, so a key of step-05's literal is always written only when its
+  // line cannot read as `undefined`. The read refuses a line that reads the coverage matrix or an optional chain with no
+  // fallback, and a fallback to `undefined`, which is shown on the step's own text with each fallback removed in turn.
+  const step05Path = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
+  const step05 = fs.readFileSync(step05Path, 'utf8');
+  const withoutFallback = [
+    [
+      'recommendations',
+      step05.replaceAll('recommendations: coverageMatrix.recommendations || [],', 'recommendations: coverageMatrix.recommendations,'),
+    ],
+    [
+      'rejected_evidence',
+      step05.replaceAll(
+        'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence || [],',
+        'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence,',
+      ),
+    ],
+    [
+      'target',
+      step05.replaceAll(
+        "target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },",
+        'target: coverageMatrix.trace_target,',
+      ),
+    ],
+    ['source_sha', step05.replaceAll("source_sha: sourceSha || '',", 'source_sha: sourceSha || undefined,')],
+  ];
+  assert(
+    (() => {
+      try {
+        return summaryKeysFromText(step05).always.length === 22;
+      } catch {
+        return false;
+      }
+    })(),
+    "step-05's summary literal gives each of its 22 keys a value that cannot be undefined",
+  );
+  for (const [key, text] of withoutFallback) {
+    assert(text !== step05, `the copy of step-05 without the fallback of ${key} differs from the step`);
+    let refused = null;
+    try {
+      summaryKeysFromText(text);
+    } catch (error) {
+      refused = error;
+    }
+    assert(
+      refused !== null && refused.message.includes(`"${key}"`) && refused.message.includes('can be undefined'),
+      `the key read refuses step-05 when ${key} loses its fallback`,
+      refused === null ? 'it was accepted' : refused.message,
+    );
   }
 }
 

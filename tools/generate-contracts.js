@@ -1590,7 +1590,21 @@ function allOf(operands) {
  * which is the rule the verdict descriptor already follows for tea-test-review.
  */
 function summaryKeysFromStep05() {
-  const text = fs.readFileSync(TRACE_STEP_05, 'utf8');
+  return summaryKeysFromText(fs.readFileSync(TRACE_STEP_05, 'utf8'));
+}
+
+/**
+ * The same read over the step's text, so a test can hand it an edited copy without touching the file.
+ *
+ * A key of the literal is "always" only when the workflow always gives it a value. `JSON.stringify` drops a key whose
+ * value is `undefined`, so a line that reads a field of the coverage matrix, or an optional chain, with no `||` or `??`
+ * fallback can leave the key out of the written summary, and a fallback to the literal `undefined` is the same defect.
+ * The read refuses such a line, so removing a fallback fails `--check` instead of narrowing the contract's keys silently.
+ * A value that opens a nested object on its own line is read by its key alone.
+ *
+ * @param {string} text The text of step-05.
+ */
+function summaryKeysFromText(text) {
   const start = text.indexOf('const e2eTraceSummary = {');
   assert(start !== -1, 'step-05 no longer declares `const e2eTraceSummary = {`, so the summary key set cannot be read');
   const end = text.indexOf('\n};', start);
@@ -1598,7 +1612,18 @@ function summaryKeysFromStep05() {
   const always = [];
   for (const line of text.slice(start, end).split('\n')) {
     const key = /^ {2}([a-z_]+):/.exec(line);
-    if (key) always.push(key[1]);
+    if (!key) continue;
+    always.push(key[1]);
+    const value = line
+      .slice(key[0].length)
+      .replace(/\/\/.*$/, '')
+      .trim();
+    if (value.endsWith('{')) continue;
+    const mayBeUndefined = /(\|\||\?\?)\s*undefined\b/.test(value) || (/coverageMatrix\.|\?\./.test(value) && !/\|\||\?\?/.test(value));
+    assert(
+      !mayBeUndefined,
+      `step-05's summary literal gives "${key[1]}" a value that can be undefined (${value}), and JSON.stringify drops such a key, so it is not always written; give it a fallback`,
+    );
   }
   const conditional = [...new Set([...text.matchAll(/^\s*e2eTraceSummary\.([a-z_]+) = /gm)].map((match) => match[1]))];
   assert(always.length > 0, "no top-level key was read off step-05's summary literal");
@@ -5085,6 +5110,7 @@ module.exports = {
   traceOracleSpecs,
   traceStepId,
   summaryKeysFromStep05,
+  summaryKeysFromText,
   traceSummaryIsWhole,
   traceWholeSummaryExpression,
   traceWholeSummaryTargets,

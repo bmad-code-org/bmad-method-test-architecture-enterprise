@@ -412,7 +412,8 @@ async function wrongRunProblems(suite) {
   // The whole-summary oracles read the summary's own keys. The only stored summary that drops a key belongs to the
   // seeded set (rejected_evidence), so the clean set's oracle is failed by a read that drops each key of the contract's
   // declaration in turn: the harness still scores the run, and the oracle that reads the whole object is the one that
-  // must notice. A drop the harness refuses (schema_version) answers every oracle of the set, so it fails nothing here.
+  // must notice. A drop of `schema_version` makes the harness refuse the run, and the set's whole-summary oracle is still
+  // violated, because it reads the summary object ahead of the refusal rather than taking the refusal's answer.
   if (suite.id === 'trace') {
     const wholeSpecs = specs.filter((candidate) => candidate.kind === 'whole-summary');
     for (const key of suite.contract.permittedInterfaces[0].operations[0].responseDescriptor.requiredKeys) {
@@ -602,14 +603,20 @@ async function testReviewVerdictProblems(suite) {
       .map(([key, type]) => ({
         label: `a ${key} that is not ${type}`,
         verdictOf: (verdict) => (Object.hasOwn(verdict, key) ? { ...verdict, [key]: wrongValueOf(type) } : verdict),
-        // A key the stored verdict does not carry stays absent, and the verdict is whole.
-        skipWhenAbsent: key,
       })),
   ];
-  const storedVerdict = JSON.parse(fs.readFileSync(path.join(__dirname, 'replay', 'test-review', 'full-recall', 'verdict.json'), 'utf8'));
-  for (const { label, verdictOf, skipWhenAbsent } of wholeBodyReads) {
-    if (skipWhenAbsent !== undefined && !Object.hasOwn(storedVerdict, skipWhenAbsent)) continue;
-    const read = await violatedUnder(suite, probe, (caseId) => caseId, { verdictOf });
+  for (const { label, verdictOf } of wholeBodyReads) {
+    // The read is handed the verdict the record carries, which is the stored one without its `$comment`. A read of a key that
+    // verdict does not carry hands the verdict back unchanged, which is whole, so there is nothing to violate.
+    let changed = false;
+    const read = await violatedUnder(suite, probe, (caseId) => caseId, {
+      verdictOf: (verdict) => {
+        const next = verdictOf(verdict);
+        changed = next !== verdict;
+        return next;
+      },
+    });
+    if (!changed) continue;
     if (!read.has(wholeBodyOracleId)) {
       problems.push(`test-review: ${wholeBodyOracleId} still held when the stored verdict carried ${label}`);
     }
