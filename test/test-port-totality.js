@@ -209,7 +209,7 @@ const PACKAGE_VOCABULARIES = {
     heldBy: ['test/test-contracts.js', 'test/lib/probe-targets.js'],
     note: 'The compile-time registry. test/test-contracts.js recovers a code from whatever the compiler refuses; test/lib/probe-targets.js recovers one off a StructuralFailure the probe port throws. Both record a recovered value rather than branch on a list, so the check is over recovered values in either file.',
     members: {
-      'unreachable-check-evidence': {
+      'duplicate-interface-identifier': {
         file: 'test/test-contracts.js',
         note: 'the one code TEA names in advance: the seeded duplicated interface declaration must be refused with it',
       },

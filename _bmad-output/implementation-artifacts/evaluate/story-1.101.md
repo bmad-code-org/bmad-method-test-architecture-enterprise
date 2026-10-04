@@ -2,7 +2,7 @@
 title: 'Story 1.101: Name a stale stamp on every artifact `score` reads'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 baseline_commit: '247a56bb1b48cfd827e02f7c71e3b9cee0990cea'
 route: 'dispatch'
 review_loop_iteration: 0

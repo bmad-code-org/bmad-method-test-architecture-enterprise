@@ -136,7 +136,7 @@ const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { lineNamesOperation, reportedOperations, reportsProblems, signatureCollisionLine } = require('./release-report');
+const { compileRefusals, lineNamesOperation, reportedOperations, reportsProblems } = require('./release-report');
 const {
   apiRegistryProblems,
   egressRegistryProblems,
@@ -1553,8 +1553,7 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
  * template), so a collision between other operations, of any shape, stays the CI plan's `compile` check and `run`'s,
  * as does every other outcome of compile.
  */
-function checkReportCollision(report, folder, reportingProbes, env) {
-  const line = signatureCollisionLine(path.join(folder, CONTRACT_NAME), env);
+function checkReportCollision(report, line, reportingProbes) {
   if (line === null) return;
   // The finding sits on the first probe whose own report the line names. A collision the line shows between operations no
   // report names is not this rule's: it stays the CI plan's `compile` check and `run`'s.
@@ -1567,8 +1566,24 @@ function checkReportCollision(report, folder, reportingProbes, env) {
   );
 }
 
+/**
+ * Story 1.102: two interfaces of the contract share a `logicalId`. An operation is the pair of its interface and its
+ * operation ID, so a repeat merges two interfaces' operations into one namespace, and eval-quality's compile refuses the
+ * contract with `duplicate-interface-identifier`, which `seal` and `run` would otherwise meet later. The refusal covers the
+ * whole contract and needs no probe: the one finding quotes the engine's own line, which names the identifier and both
+ * interface positions. TeA compares no identifier (AD-1).
+ */
+function checkInterfaceRepeat(report, line) {
+  if (line === null) return;
+  report.add(
+    CONTRACT_NAME,
+    'interface-identifier',
+    `two interfaces of the contract share an identifier, and eval-quality's compile refuses the contract (${line}); give each entry of permittedInterfaces its own logicalId`,
+  );
+}
+
 /** Checks every committed probe; returns the qualification routes they take. */
-function checkProbes(report, folder, context, behaviors, mutations, registry, env) {
+function checkProbes(report, folder, context, behaviors, mutations, registry, compiled) {
   const routes = new Set();
   const reportingProbes = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
@@ -1596,7 +1611,7 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, en
     }
   }
   // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe whose report the engine's line names.
-  if (reportingProbes.length > 0) checkReportCollision(report, folder, reportingProbes, env);
+  if (reportingProbes.length > 0) checkReportCollision(report, compiled().signatureCollision, reportingProbes);
   return routes;
 }
 
@@ -2255,6 +2270,12 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
 
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
+  // One compile serves both refusals `check` quotes: a repeated interface identifier (Story 1.102) and a report operation's collision (Stories 1.75, 1.77). It runs only when a refusal is possible and at most once: a contract of two or more interfaces can repeat an identifier, and a probe that names a report can collide.
+  let refusals;
+  const compiled = () => (refusals ??= compileRefusals(path.join(folder, CONTRACT_NAME), env));
+  if (Array.isArray(context.contract?.permittedInterfaces) && context.contract.permittedInterfaces.length >= 2) {
+    checkInterfaceRepeat(report, compiled().interfaceRepeat);
+  }
   checkRequirements(report, folder, evaluation, context.contract, context.engine);
   checkOperationPhases(report, evaluation, context.contract);
   checkRegistryKinds(report, evaluation, registry, context.contract);
@@ -2262,7 +2283,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
-  const routes = checkProbes(report, folder, context, behaviors, mutations, registry, env);
+  const routes = checkProbes(report, folder, context, behaviors, mutations, registry, compiled);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });

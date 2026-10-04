@@ -873,6 +873,107 @@ function plantCollidingOrdinaryInterface(folder, operationId) {
 }
 
 /**
+ * Story 1.102: a contract whose `permittedInterfaces` repeat one `logicalId` is refused by eval-quality's compile with
+ * `duplicate-interface-identifier`, and `check` quotes the engine's line as one `interface-identifier` finding on
+ * `contract.json`, so the repeat exits 10 at `check` and not at `seal` or the run's compile. TeA compares no identifier
+ * (AD-1): a contract of two or more interfaces is the only thing it asks the engine about, and the finding carries the
+ * engine's own line.
+ */
+function checkInterfaceIdentifierRepeat() {
+  const label = 'two interfaces sharing a logicalId';
+  const privateTemp = tempDir('check-temp');
+  const environment = { TMPDIR: privateTemp, TEMP: privateTemp, TMP: privateTemp };
+  const repeatedFindingsOf = (stdout) => findingsOf(stdout).filter((line) => line.startsWith('contract.json: [interface-identifier] '));
+
+  // A repeat: exit 10, one finding quoting the engine's line, which names the identifier and both positions.
+  const repeated = copyValid();
+  editJson(repeated, 'contract.json', (value) => {
+    value.permittedInterfaces.push(structuredClone(value.permittedInterfaces[0]));
+  });
+  const before = snapshotOf(repeated);
+  const result = runCli(['check', '--evaluation', repeated], { env: environment });
+  check(result.status === 10, `${label}: check exited ${result.status}; expected 10\n${result.output}`);
+  const found = repeatedFindingsOf(result.stdout);
+  check(found.length === 1, `${label}: expected one interface-identifier finding, got ${found.length}\n${result.output}`);
+  const [finding = ''] = found;
+  for (const needle of ['duplicate-interface-identifier', `"${PHASE_INTERFACE}"`, 'permittedInterfaces[0]', 'permittedInterfaces[1]']) {
+    check(finding.includes(needle), `${label}: the finding does not name ${needle}\n${finding}`);
+  }
+  const direct = spawnSync(
+    process.execPath,
+    [engineCliPath({}), 'compile', '--in', path.join(repeated, 'contract.json'), '--out', path.join(tempDir('direct'), 'out.json')],
+    { encoding: 'utf8' },
+  );
+  const engineLine = direct.stderr.split('\n').find((line) => line.includes('duplicate-interface-identifier'));
+  check(
+    direct.status === 4 && engineLine !== undefined && finding.includes(engineLine.trim()),
+    `${label}: the finding does not quote the engine's own refusal line (${engineLine})\n${finding}`,
+  );
+  check(JSON.stringify(snapshotOf(repeated)) === JSON.stringify(before), `${label}: check changed the evaluation folder`);
+  check(
+    fs.readdirSync(privateTemp).length === 0,
+    `${label}: check left ${JSON.stringify(fs.readdirSync(privateTemp))} in its temporary directory`,
+  );
+
+  // `preflight` stops at the check stage with the same finding.
+  const stopped = runCli(['preflight', '--evaluation', repeated], { env: environment });
+  check(
+    stopped.status === 10 && repeatedFindingsOf(stopped.stdout).length === 1,
+    `${label}: preflight did not stop at the check stage with the finding (exit ${stopped.status})\n${stopped.output}`,
+  );
+
+  // Distinct identifiers: no finding.
+  const distinct = copyValid();
+  declareOnSecondInterface(distinct);
+  const distinctRun = runCli(['check', '--evaluation', distinct], { env: environment });
+  check(
+    repeatedFindingsOf(distinctRun.stdout).length === 0,
+    `${label}: two interfaces with distinct identifiers drew an interface-identifier finding\n${distinctRun.output}`,
+  );
+
+  // The stand-in refuses compile with the line it is given and logs each call.
+  const shim = engineShim();
+  const refusalLine =
+    'eval-quality: duplicate-interface-identifier: EvalContract.permittedInterfaces[1].logicalId: "tea-atdd-runner" is already the identifier of permittedInterfaces[0]; an interface\'s identifier is unique across the contract, so permittedInterfaces[0] and permittedInterfaces[1] cannot both carry it (AD-19)';
+  const shimmed = (folder, line, { exit = 4, stream = 'stderr' } = {}) => {
+    const log = path.join(tempDir('shim-log'), 'calls.log');
+    const run = runCli(['check', '--evaluation', folder], {
+      env: { ...environment, [ENGINE_CLI_ENV]: shim, SHIM_LOG: log, SHIM_LINE: line, SHIM_EXIT: String(exit), SHIM_STREAM: stream },
+    });
+    return { run, calls: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [] };
+  };
+  // The line is quoted as printed, from one compile call, which shows the rule runs the engine stage and computes nothing.
+  const quoted = shimmed(distinct, refusalLine);
+  check(
+    quoted.run.status === 10 &&
+      repeatedFindingsOf(quoted.run.stdout).length === 1 &&
+      quoted.run.stdout.includes(refusalLine) &&
+      quoted.calls.length === 1 &&
+      quoted.calls[0].startsWith('compile --in '),
+    `${label}: a refusal line the engine printed was not quoted from one compile call\n${quoted.run.output}\n${quoted.calls}`,
+  );
+  // A compile fault (5), a usage exit (64), an undocumented exit and a refusal with no such line draw no finding.
+  for (const [name, options] of [
+    ['exit 5', { exit: 5 }],
+    ['exit 64', { exit: 64 }],
+    ['exit 3, which no compile documents', { exit: 3 }],
+    ['exit 4 with no duplicate-interface-identifier line', { exit: 4, stream: 'none' }],
+  ]) {
+    const quiet = shimmed(distinct, refusalLine, options);
+    check(
+      repeatedFindingsOf(quiet.run.stdout).length === 0 && quiet.calls.length === 1,
+      `${label}: a compile that ended at ${name} drew a finding (calls ${quiet.calls.length})\n${quiet.run.output}`,
+    );
+  }
+  // A contract of one interface cannot repeat an identifier, so `check` runs no compile for it.
+  const single = shimmed(copyValid(), refusalLine);
+  check(
+    repeatedFindingsOf(single.run.stdout).length === 0 && single.calls.length === 0,
+    `${label}: a contract of one interface ran ${single.calls.length} compile call(s) or drew a finding\n${single.run.output}`,
+  );
+}
+
+/**
  * Story 1.77: eval-quality's compile refuses a duplicate operation signature across the whole contract, so the rule runs
  * for any probe that names a report operation, whichever operation the report collides with, and it reads the reports of
  * every `historical` probe together. The finding is worded around the operations the engine's line names.
@@ -1062,9 +1163,11 @@ async function checkReportCollidingWithAnyOperation() {
       SHIM_EXIT: '4',
     },
   });
+  // The contract declares two interfaces, so `check` asks the engine once about a repeated identifier (Story 1.102); the stand-in's signature line is not this rule's to quote, since no probe names a report.
+  const ordinaryCalls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [];
   check(
-    signature(ordinaryRun.stdout).length === 0 && !fs.existsSync(log),
-    `${label}: a collision between ordinary operations with no probe naming a report drew a finding or a compile call (calls ${fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : 'none'})\n${ordinaryRun.output}`,
+    signature(ordinaryRun.stdout).length === 0 && ordinaryCalls.length === 1,
+    `${label}: a collision between ordinary operations with no probe naming a report drew a finding or did not run the one compile call for the identifier rule (calls ${ordinaryCalls.length === 0 ? 'none' : JSON.stringify(ordinaryCalls)})\n${ordinaryRun.output}`,
   );
   const ordinaryEngine = spawnSync(
     process.execPath,
@@ -4565,6 +4668,7 @@ async function main() {
     checkOperationPhaseCoverage();
     checkReportOperationReusedAcrossInterfaces();
     await checkReportSignatureCollision();
+    checkInterfaceIdentifierRepeat();
     await checkReportCollidingWithAnyOperation();
     checkSymlinkRefused();
     checkForgedFindingLine();

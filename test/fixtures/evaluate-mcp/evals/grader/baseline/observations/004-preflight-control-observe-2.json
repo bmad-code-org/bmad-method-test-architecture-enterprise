@@ -2,7 +2,7 @@
   "legId": "preflight-control-observe-2",
   "sequence": 4,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-559becd7-a176-47dc-9bc5-0b6d81d6429b/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-2580de0a-a669-4ffe-adfd-13eecfa1a311/target",
   "request": {
     "probeId": "preflight-control-observe-2",
     "interfaceId": "grader",

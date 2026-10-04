@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-evaluate check` quotes eval-quality's refusal of a contract whose interfaces share an identifier (Story 1.102, CAP-4, AD-1, AD-5). An interface's `logicalId` is half of an operation's identity, and eval-quality 7.0.1 refuses two interfaces with one identifier at `compile` and `preflight` under the new `duplicate-interface-identifier` code, naming the identifier and both interface positions. Before it, `compile` accepted the contract and `seal` faulted on it as an anonymous `schema-parse-failure`. For a contract of two or more interfaces `check` asks the engine's compile once, shared with the report-collision rule, and prints the engine's line as one `interface-identifier` finding on `contract.json`, so the repeat exits 10 before `seal` or the run's compile. TeA compares no identifier. The peer floor, `tools/guard-publish.js`, `test/test-release-metadata.js`, the lockfile and the AD-5 record move to `>=7.0.1`, and the accepted baselines of the mutation, MCP and API fixtures are re-recorded on it.
 - A rubric criterion belongs to one partition under a `partitionPlan` (Story 1.105, AD-9, AD-22).
   Story 1.51 refused a `partitionPlan` beside a rubric that reads a development-only step, because the criterion's evidence pointer left with its step in the held-out view.
   A criterion now belongs to the partition whose steps its `evidence` pointer reads.
