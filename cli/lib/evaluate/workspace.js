@@ -1000,7 +1000,8 @@ function runCommand(command, args, { label, timeoutMs, supervised, input, extra 
  */
 function runGitLines(job, { timeoutMs = GIT_HISTORY_TIMEOUT_MS, env = {} } = {}) {
   // A job that pipes two commands names both, so a failure reads as the stage that failed.
-  const label = job.git === undefined ? `git ${job.list.join(' ')} | git ${(job.pack ?? job.ask).join(' ')}` : `git ${job.git.join(' ')}`;
+  const stages = job.stages ?? (job.git === undefined ? [job.list, job.ask] : [job.git]);
+  const label = stages.map((stage) => `git ${stage.join(' ')}`).join(' | ');
   const result = runCommand(process.execPath, [GIT_LINES], {
     label,
     timeoutMs,
@@ -1424,8 +1425,9 @@ function sparseSettingsOf(workspace) {
  * metadata `commondir` names the store, and the index is rebuilt from the
  * replaced tree, so `git status` and `git diff` see the folder as an empty
  * tree and list no deletions. Nothing is written into the adopter's
- * repository: its objects are only read, and the worktree's metadata
- * directory is the one the worktree add already made.
+ * object store: its objects are only read. The build writes `commondir` and
+ * the index into the worktree's metadata directory, which the worktree add
+ * already made.
  *
  * The tags of the repository whose commits the history reaches are carried with
  * their annotations, and no branch, remote, URL, credential or hook is. A
@@ -1456,35 +1458,29 @@ function buildWithheldRepository(workspace, withheld) {
   if (workspace.metadata === null) throw refuse('the worktree has no metadata directory in the repository');
   const relatives = withheld.map((entry) => posix(path.relative(top, entry)));
   const facts = adopterFacts(workspace.repository, workspace.gitDirectory);
-  // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
-  const inAdopter = (args, options) =>
-    runGit(['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`, ...args], {
-      ...options,
-      env: NO_LAZY_FETCH,
-    });
   const inStore = (args, options) => runGit([`--git-dir=${store}`, '-c', `core.hooksPath=${hooks}`, ...args], options);
   // A partial clone does not hold every object the walk reaches: what is missing is left out, as the project leaves it out.
   // `pack-objects --revs` stops at a tree the project does not hold, so a partial clone's objects are walked by `rev-list`
   // and piped into `pack-objects`, which `git-lines.js` runs without holding them.
   const partial = facts.partial !== null;
+  // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
   const readAdopter = ['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`];
-  const packFile = path.join(store, 'objects', 'pack', 'pack');
+  // The store packs on its own device: the adopter's object store is only read.
+  // `pack-objects` run there with a file as its output writes its temporary pack into the adopter's `objects/pack` and renames it
+  // into the store, which fails across filesystems and writes into the adopter's repository for a moment.
+  // So it prints the pack (`--stdout`) into the store's `index-pack`.
+  const intoStore = [`--git-dir=${store}`, 'index-pack', '--stdin'];
   const packInto = (revs) => {
-    if (!partial) {
-      must(
-        inAdopter(['pack-objects', '--quiet', '--revs', packFile], {
-          timeoutMs: GIT_HISTORY_TIMEOUT_MS,
-          supervised: true,
-          input: `${revs.join('\n')}\n`,
-        }),
-      );
-      return;
-    }
     const packed = runGitLines(
       {
         mode: 'pack',
-        list: [...readAdopter, 'rev-list', '--objects', '--missing=allow-any', '--stdin'],
-        pack: [...readAdopter, 'pack-objects', '--quiet', packFile],
+        stages: partial
+          ? [
+              [...readAdopter, 'rev-list', '--objects', '--missing=allow-any', '--stdin'],
+              [...readAdopter, 'pack-objects', '--quiet', '--stdout'],
+              intoStore,
+            ]
+          : [[...readAdopter, 'pack-objects', '--quiet', '--revs', '--stdout'], intoStore],
         revs,
       },
       { env: NO_LAZY_FETCH },
@@ -1551,7 +1547,8 @@ function buildWithheldRepository(workspace, withheld) {
   initStore();
   const cached = BUILT_REPOSITORIES.get(key);
   let linked = false;
-  if (cached !== undefined && facts.refFormat === 'files' && fs.existsSync(path.join(cached, 'objects'))) {
+  // An unknown ref format is a git before 2.45, which has only the `files` format, so its stores link too.
+  if (cached !== undefined && facts.refFormat !== 'reftable' && fs.existsSync(path.join(cached, 'objects'))) {
     try {
       linkTree(path.join(cached, 'objects'), path.join(store, 'objects'));
       const replacements = path.join(cached, 'refs', 'replace');
