@@ -147,7 +147,7 @@ function trees(job) {
   list.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   ask.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   ask.stdin.on('error', () => {});
-  const state = { list: null, ask: null, answers: false, failure: null };
+  const state = { list: null, ask: null, answers: false, delivered: false, sent: 0, answered: 0, failure: null };
   const finish = () => {
     if (state.list === null || state.ask === null || !state.answers) return;
     if (state.failure !== null) fail(state.failure.status, state.failure.note);
@@ -164,6 +164,7 @@ function trees(job) {
     list.stdout,
     (line) => {
       batch.push(`${line}:${job.path}\n`);
+      state.sent++;
       if (batch.length >= 4096 && !flush()) {
         list.stdout.pause();
         ask.stdin.once('drain', () => list.stdout.resume());
@@ -171,12 +172,14 @@ function trees(job) {
     },
     () => {
       flush();
+      state.delivered = true;
       ask.stdin.end();
     },
   );
   eachLine(
     ask.stdout,
     (line) => {
+      state.answered++;
       // Only a tree's own answer counts: the answer for a path that is missing begins with the path, which can hold a
       // space and the word `tree`.
       const answer = /^([0-9a-f]{40}|[0-9a-f]{64}) tree \d+$/.exec(line);
@@ -197,9 +200,18 @@ function trees(job) {
   });
   ask.on('close', (code, signal) => {
     state.ask = outcome(stageOf(job.ask), code, signal);
+    // A stage that exits cleanly before the whole list was handed to it, or without answering every line it was sent
+    // (`cat-file --batch-check` answers each line it reads, `missing` included), answered for part of the history.
+    if (state.ask.status === 0 && !state.delivered) {
+      state.ask = { status: 1, note: `${stageOf(job.ask)} ended before the commit list was handed to it` };
+    } else if (state.ask.status === 0 && state.answered !== state.sent) {
+      state.ask = { status: 1, note: `${stageOf(job.ask)} answered ${state.answered} of ${state.sent} lines` };
+    }
     if (state.ask.status !== 0) {
       state.failure ??= state.ask;
       list.kill('SIGKILL');
+      // A list that has already exited can still hold its output open through a child, paused for input nobody drains.
+      list.stdout.destroy();
     }
     finish();
   });
@@ -222,8 +234,11 @@ function pack(job) {
     process.exit(0);
   };
   // A stage that ends badly stops the others, which would otherwise wait on a pipe nobody reads or writes.
+  // A stage ends on its `exit`: `close` waits for the stage's standard output to be read to its end, and the pipe into the next
+  // stage stops reading once that stage has exited, so a stage whose last bytes were still unread (or whose child held the
+  // pipe open) never closed, the event loop ran dry and the job exited 0 with the pack never built.
   for (const [index, stage] of stages.entries()) {
-    stage.on('close', (code, signal) => {
+    stage.on('exit', (code, signal) => {
       state.ended[index] = outcome(stageOf(job.stages[index]), code, signal);
       if (state.ended[index].status !== 0) {
         state.failure ??= state.ended[index];

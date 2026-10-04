@@ -554,6 +554,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `agent-supervisor.js` appended its trace lines with one attempt and swallowed every error, so a sharing violation under load dropped a line, and the "setup race" case of `test:evaluate-preflight` failed on the `windows-agent-supervision` job although the agent had started.
   In trace mode the writer now retries `EBUSY`, `EPERM`, `EACCES` and `EMFILE` up to 50 times with a short wait, and still swallows the last error, since a diagnostic never affects supervision.
   A unit case stubs the refusals on every platform.
+
+- A confined run over a partial clone refuses at the pack stage on every run, and the streaming git reader no longer exits 0 after a stage failed (Story 1.120, AD-7, AD-8).
+  The `pack` job counted a stage as ended when its `close` event arrived, and `close` waits until the stage's standard output has been read to its end.
+  The pipe into the next stage stops reading when that stage exits, so a walk whose last bytes were still unread, or whose child held the pipe open, never closed.
+  The reader's event loop then ran dry and the job exited 0 with the pack never built, and the build refused later at `read-tree HEAD` with `failed to unpack tree object HEAD`.
+  Linux CI showed it once.
+  A loop of the case on `128680ad` in a git 2.47 container failed 1 of 40 serial runs and 12 of 60 runs eight at a time, every failure a refusal at `read-tree`.
+  A stage now ends on its `exit`, so the job reports the first failed stage whatever state the pipes are in.
+  The `trees` job had the same defect: a commit list paused for a `cat-file` stage that had already ended never finished, and the job exited 0 with no trees.
+  The job closes the list's output when that stage fails, and a `cat-file` stage that exits 0 before the whole list was handed to it, or having answered fewer lines than it was sent, now fails the job, since it answered for part of the history.
+  `npm run loop:failing-pack` repeats the case (`--runs`, `--parallel`, `--log`) and fails a run that did not exercise it.
+  The `Failing-pack loop` workflow runs it serially and in parallel on Linux for a pull request that touches the pack stage or the loop (20 serial and 60 parallel runs, about 10 minutes) and on demand (200 runs in each loop by default).
+  `test:evaluate-confinement` holds each fix with a walk that has exited while a child still holds its output, and with `cat-file` stages that exit unread, two with status 4 (one over a list whose output a child still holds) and one with status 0.
+
 - Another session's commit in a second worktree does not stop a confined run, and the evaluation layer cannot write the project's git directory or its hooks directory (Story 1.112, AD-8).
   `preflight` and `run` compared every ref and the shared git state of the repository before and after, so a commit, fetch or branch in any other worktree of the same repository while a run was in flight changed the digest and ended the run with exit 12, with no qualified probe written.
   A confined run now compares the working tree, the checkout's own `HEAD` and where the checkout's git commands read their repository from (the git directory the checkout resolves to, the content of its `.git` file and whether the hooks directory `core.hooksPath` names exists), and digests no other part of the git directory.

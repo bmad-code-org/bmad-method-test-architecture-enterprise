@@ -1,0 +1,81 @@
+name: Failing-pack loop
+
+# Repeats the confinement case "a failing pack over a partial clone" on Linux, once serially and once with several runs in
+# flight (Story 1.120).
+# A pull request runs 20 serial and 60 parallel runs, about 10 minutes, so the job does not hold a runner while other pull
+# requests queue; the manual start defaults to 200 runs in each loop, about 55 minutes. Each run must refuse naming `rev-list`, `pack-objects` and the wrapper's message; a run that refuses
+# anywhere else fails the loop. A pull request that touches the pack stage or this loop runs it, and a maintainer can start it
+# from the Actions tab with a different run count.
+
+"on":
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "cli/lib/evaluate/git-lines.js"
+      - "tools/loop-failing-pack.js"
+      - ".github/workflows/failing-pack-loop.yaml"
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Runs in each loop (a pull request runs 20 serial and 60 parallel)"
+        required: true
+        default: "200"
+      parallel:
+        description: "Runs in flight in the parallel loop"
+        required: true
+        default: "8"
+
+permissions:
+  contents: read
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    # 200 serial runs take about 37 minutes on this runner and 200 runs eight at a time about 16; the cap bounds a stalled child.
+    timeout-minutes: 90
+    env:
+      SERIAL_RUNS: ${{ inputs.runs || '20' }}
+      PARALLEL_RUNS: ${{ inputs.runs || '60' }}
+      PARALLEL: ${{ inputs.parallel || '8' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The case builds a withheld repository under bubblewrap and reads the host's git, which must be 2.44 or later for a
+      # partial clone to build without a fetch; the loop fails if the runner's git is older.
+      - name: Install bubblewrap and strace
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
+
+      - name: Allow bubblewrap to create its own network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Show the git under test
+        run: git --version
+
+      - name: Loop the case serially
+        run: npm run loop:failing-pack -- --runs="$SERIAL_RUNS" --parallel=1 --log="$RUNNER_TEMP/loop-serial"
+
+      - name: Loop the case with runs in parallel
+        run: npm run loop:failing-pack -- --runs="$PARALLEL_RUNS" --parallel="$PARALLEL" --log="$RUNNER_TEMP/loop-parallel"
+
+      - name: Upload every run's output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failing-pack-loop-logs
+          path: |
+            ${{ runner.temp }}/loop-serial
+            ${{ runner.temp }}/loop-parallel
+          retention-days: 7
+          if-no-files-found: ignore
