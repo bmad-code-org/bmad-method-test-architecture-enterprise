@@ -43,7 +43,7 @@ What `gameabilityCheck` reads and does:
 
 - It reads `baseline/` through `locateBaseline`, lists `baseline/probes/*.probe.json` and collects the ids whose `qualification.route` is `gameability`. With none it returns OK with the note `no gameability probe` and the output `the baseline holds no gameability probe`.
 - With ids it takes the scoring branch: `replayScore(context, baseline)` (cached per `ci` run in `context.once('replay-score')`, and the plan runs `gameability` before `replay`, so the gameability check is the call that does the scoring), which places the baseline in a scratch run directory and calls `runScoreCommand`, that is `eval-quality score` once per probe. Per id the check writes `P-004: gameability arm scored through eval-quality score, exit <n>; <evidence path>`, takes the probe's exit and passes CONCERNS lines of the evidence as warnings.
-- Nothing in that branch reaches an agent start or a version probe. The one probe site is `observeAgentVersion` in `run.js` (the run, its qualification and its trials); `ci.js` imports `runRunCommand` from `run.js` but the `pr` checks never call it. A version read could be added at the head of the branch, after `replayScore` or in the scored-arm line of the result loop, and each of those is now covered. The case scores P-004 cleanly, so the unscored-arm branch of the result loop and the `scored.outcome.findings` loop run only when `score` fails; `test:evaluate-ci`'s gameability case holds their exits.
+- Nothing in that branch reaches an agent start or a version probe. The one probe site is `observeAgentVersion` in `run.js` (the run, its qualification and its trials); `ci.js` imports `runRunCommand` from `run.js` but the `pr` checks never call it. A version read could be added at the head of the branch, after `replayScore` or in the scored-arm line of the result loop, and each of those is now covered. The case scores P-004 cleanly, so the unscored-arm branch of the result loop runs only when `score` fails; `test:evaluate-ci`'s gameability case holds its exit 12.
 - The row's recorded fields under the scoring branch: `exit 0`, `class pass`, `action warn` (one warning, `gameability P-004: eval-quality records CONCERNS in its evidence artifact`), `notes []`. The no-probe return records `notes ['no gameability probe']` and `action pass`.
 
 What it takes for the stub to judge the arm:
@@ -101,7 +101,7 @@ Each new assertion has a mutant that fails it; a mutant that survives is recorde
 
 ## Verification
 
-- `npm run test:evaluate-evaluators`: 807 checks passed (391 s wall under concurrent mutant runs, below the 491 s weight, so `tools/test-shard-weights.json` stays).
+- `npm run test:evaluate-evaluators`: 807 checks passed (391 s wall in a local run under concurrent mutant runs). CI measures this suite at 628 s and 610 s under coverage, so `tools/test-shard-weights.json` now weights it 628.4 s (see the CI shard split section).
 - `node test/test-evaluate-evaluators.js --agent-version-only --only=sealed-brief`: 30 checks passed (23 before; the case alone runs about 9 s).
 - `npm run test:evaluate-ci`, `test:evaluate-partition-plans` (the other suite that runs the stub), `test:evaluate-agents`, `test:evaluate-held-attempts`, `test:evaluate-private` and `test:evaluate-records` (the groups of the evaluators file the stub serves): all exit 0.
 - `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
@@ -117,9 +117,43 @@ One script cannot be split across shards, so the planner could not spread it.
 
 The suite is now seven scripts, `test:evaluate-ci-repositories:<adopter>-<tier>`, each `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>` and each chained in `test` where the single script was.
 Each run uses a copy of the repository of its own, keeps every assertion of the file (the adopter-level ones run in every tier run), and a selector that selects nothing fails.
+The adopter of `--only` is matched exactly (`name === adopter`), so a part of a name such as `e` or `release` selects nothing and fails.
 `tools/test-shard-weights.json` drops the 530 weight and holds the measured seconds plus 2 for process start and the copy: 12, 98 and 311 for tagged-release, 12, 97, 311 and 310 for nightly-deploy.
 `test:evaluate-ci-repositories` remains as the all-tiers command for a person, is not chained, and is named in `DELIBERATELY_LOCAL` of `tools/validate-ci-coverage.js` with its reason.
 The planner now places the seven scripts on six of the 12 shards, and each of the three scripts of about 310 seconds on a shard of its own.
+
+### Weights refreshed from CI (round 2)
+
+The weights of `tools/test-shard-weights.json` are CI seconds under coverage, and several were far below what CI measures: the evaluators suite 628.4 s and 610.2 s against 491, confinement 861 against 502, partition-plans 647 against 400, learned-framework 108 against 34.6, mutation 262 against 203, check 396 against 340.
+The weights now merge the `timings-*` artifacts of runs 37226760404 and 37226814213 (every `shard-<i>.json`, the higher value per script) over the file, through `jq -S`.
+The seven `test:evaluate-ci-repositories:*` weights stay (they are not in those runs), and so does the weight of each script the runs lack.
+Neither run holds a timings file for shard 3, so each script that the other shards of those runs did not run keeps its earlier weight.
+By the weights the 12-shard plan is: shard 1 860.5 s (`test:evaluate-confinement` alone), shard 2 834.0 s (`test:evaluate-agents` alone) and the other ten between 759.3 and 759.7 s, so no shard is above 1000 s.
+The three scripts of about 310 seconds sit on shards 9 (`nightly-deploy-scheduled`), 10 (`tagged-release-release`) and 11 (`nightly-deploy-release`), each on a shard below 760 s.
+
+### Guards of the split (round 2)
+
+Every invocation of `test/test-evaluate-ci-repositories.js`, before any tier runs, holds two things in milliseconds.
+`checkScripts` reads `package.json` and asserts that the `test:evaluate-ci-repositories:<adopter>-<tier>` scripts are exactly the pairs `select()` returns, that each runs `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>`, that each is in the `npm test` chain exactly once, and that each has a weight.
+`checkSelect` asserts what `select` returns for no selector (the 7 pairs), `<adopter>` and `<adopter>:<tier>`, and that these throw: an unknown adopter, an unknown tier, a tier the adopter lacks (`tagged-release:scheduled`), an empty tier, an empty selector, three parts, an empty adopter, a part of an adopter name, and an extra part after a valid pair.
+`main()` runs under `require.main === module` and the file exports `select`.
+
+Mutants, each in a scratch copy, each run as `node test/test-evaluate-ci-repositories.js --only=nightly-deploy:pr`; every one exits 1 where the unmutated file passes:
+
+| Mutant                                                         | Failing check                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `select` ignores the tier                                      | `--only=tagged-release:pr selects exactly that pair`                           |
+| An unknown tier selects the whole adopter                      | `--only=tagged-release:nope (an unknown tier) must throw`                      |
+| The empty-selection guard dropped                              | `--only=nope (an unknown adopter) must throw`                                  |
+| The shape guard dropped                                        | `--only=tagged-release:pr:merge (an extra part after a valid pair) must throw` |
+| Only the first selected pair returned                          | `--only=tagged-release selects the tiers of that adopter only`                 |
+| Adopter matched by substring again (`name.includes(adopter)`)  | `--only=release (a part of an adopter name) must throw`                        |
+| `tagged-release-merge` rewired to `--only=tagged-release:pr`   | `tagged-release-merge does not run exactly tagged-release:merge`               |
+| `tagged-release-merge`, its chain entry and its weight deleted | the scripts are not exactly the suite adopter x tier pairs                     |
+| `tagged-release-merge` left out of the chain, or chained twice | `is not in the npm test chain exactly once`                                    |
+| `tagged-release-merge` without a weight                        | `has no weight`                                                                |
+
+With the exact adopter match, the first shape-guard mutant tried (`a:b:c`) survived as an equivalent one, because every such selector also selects nothing; the extra part after a valid pair is the case only the shape guard holds, and the check names it.
 
 ## Review Triage Log
 

@@ -15,11 +15,13 @@
  *
  * It lives beside `test-evaluate-ci.js` and not in it because its live tiers are slow, and it runs one adopter x tier per
  * process so the CI shard planner can spread it: `--only=<adopter>:<tier>` runs exactly one tier of one repository, in a copy of
- * its own, and `--only=<adopter>` runs every tier of the adopters whose name contains that text. With no `--only` every tier of
- * both runs, serially. The package scripts `test:evaluate-ci-repositories:<adopter>-<tier>` are one process each, and each is
- * weighted in tools/test-shard-weights.json. A selector that selects nothing fails, so a misspelt one cannot pass. Every run
- * holds the adopter-level assertions (plan findings, manifest and accepted baseline, the tiers the plan places), so a selected
- * tier still fails when the plan places tiers the suite does not list.
+ * its own, and `--only=<adopter>` runs every tier of the adopter named. With no `--only` every tier of both runs, serially.
+ * The package scripts `test:evaluate-ci-repositories:<adopter>-<tier>` are one process each, and each is weighted in
+ * tools/test-shard-weights.json. A selector that selects nothing fails, so a misspelt one cannot pass. Every run holds the
+ * adopter-level assertions (plan findings, manifest and accepted baseline, the tiers the plan places), so a selected tier still
+ * fails when the plan places tiers the suite does not list. Before any tier runs, every invocation also holds `select` to its
+ * contract and holds the seven package scripts to the suite's adopter x tier pairs (each script runs its pair, sits in the
+ * `npm test` chain once and carries a shard weight), so a rewired, dropped or unweighted script fails in each of them.
  */
 
 const assert = require('node:assert/strict');
@@ -179,13 +181,13 @@ function checkTier(name, tier) {
   process.stdout.write(`  ok ${name} ${tier} (${Math.round((Date.now() - started) / 1000)}s)\n`);
 }
 
-/** The adopter x tier pairs a `--only` selector names: `<adopter text>` for every tier of the matching adopters, `<adopter text>:<tier>` for one. */
+/** The adopter x tier pairs a `--only` selector names: `<adopter>` for every tier of the adopter named, `<adopter>:<tier>` for one. */
 function select(only) {
   if (only === undefined) return Object.entries(REPOSITORIES).flatMap(([name, { tiers }]) => tiers.map((tier) => [name, tier]));
   const [adopter, tier, ...extra] = only.split(':');
   assert.ok(adopter && tier !== '' && extra.length === 0, `--only=${only}: expected <adopter> or <adopter>:<tier>`);
   const selected = Object.entries(REPOSITORIES).flatMap(([name, { tiers }]) =>
-    name.includes(adopter) ? tiers.filter((item) => tier === undefined || item === tier).map((item) => [name, item]) : [],
+    name === adopter ? tiers.filter((item) => tier === undefined || item === tier).map((item) => [name, item]) : [],
   );
   assert.ok(
     selected.length > 0,
@@ -196,9 +198,70 @@ function select(only) {
   return selected;
 }
 
+/** `select` held to its contract: the pairs each selector form names, and the selectors that must throw. */
+function checkSelect() {
+  const all = Object.entries(REPOSITORIES).flatMap(([name, { tiers }]) => tiers.map((tier) => [name, tier]));
+  assert.equal(all.length, 7, 'select: the suite runs seven adopter x tier pairs');
+  assert.deepEqual(select(), all, 'select: no selector selects every pair');
+  for (const [name, { tiers }] of Object.entries(REPOSITORIES)) {
+    assert.deepEqual(
+      select(name),
+      tiers.map((tier) => [name, tier]),
+      `select: --only=${name} selects the tiers of that adopter only`,
+    );
+    for (const tier of tiers)
+      assert.deepEqual(select(`${name}:${tier}`), [[name, tier]], `select: --only=${name}:${tier} selects exactly that pair`);
+  }
+  for (const [only, why] of [
+    ['nope', 'an unknown adopter'],
+    ['tagged-release:nope', 'an unknown tier'],
+    ['tagged-release:scheduled', 'a tier the adopter lacks'],
+    ['tagged-release:', 'an empty tier'],
+    ['', 'an empty selector'],
+    ['a:b:c', 'three parts'],
+    ['tagged-release:pr:merge', 'an extra part after a valid pair'],
+    [':pr', 'an empty adopter'],
+    ['release', 'a part of an adopter name'],
+    ['tagged:pr', 'a part of an adopter name with a tier'],
+  ])
+    assert.throws(() => select(only), /--only=/, `select: --only=${only} (${why}) must throw`);
+}
+
+/** The seven `test:evaluate-ci-repositories:<adopter>-<tier>` scripts held to the pairs the suite runs. */
+function checkScripts() {
+  const { scripts } = read(path.join(ROOT, 'package.json'));
+  const weights = read(path.join(ROOT, 'tools', 'test-shard-weights.json'));
+  const prefix = 'test:evaluate-ci-repositories:';
+  const pairs = select();
+  assert.deepEqual(
+    Object.keys(scripts)
+      .filter((name) => name.startsWith(prefix))
+      .sort(),
+    pairs.map(([name, tier]) => `${prefix}${name}-${tier}`).sort(),
+    'package.json: the test:evaluate-ci-repositories:<adopter>-<tier> scripts are not exactly the suite adopter x tier pairs',
+  );
+  const chain = scripts.test.split(' && ');
+  for (const [name, tier] of pairs) {
+    const script = `${prefix}${name}-${tier}`;
+    assert.equal(
+      scripts[script],
+      `node test/test-evaluate-ci-repositories.js --only=${name}:${tier}`,
+      `package.json: ${script} does not run exactly ${name}:${tier}`,
+    );
+    assert.equal(
+      chain.filter((item) => item === `npm run ${script}`).length,
+      1,
+      `package.json: ${script} is not in the npm test chain exactly once`,
+    );
+    assert.equal(typeof weights[script], 'number', `tools/test-shard-weights.json: ${script} has no weight`);
+  }
+}
+
 function main() {
   const only = process.argv.find((argument) => argument.startsWith('--only='))?.slice('--only='.length);
   try {
+    checkSelect();
+    checkScripts();
     const selected = select(only);
     for (const [name, tier] of selected) checkTier(name, tier);
     process.stdout.write('Evaluate repository CI tiers passed.\n');
@@ -207,9 +270,13 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
+module.exports = { select };
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
