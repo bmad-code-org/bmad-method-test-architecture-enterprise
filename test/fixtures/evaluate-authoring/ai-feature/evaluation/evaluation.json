@@ -42,10 +42,7 @@
     "gameability"
   ],
   "trials": 3,
-  "tiers": [
-    "pr",
-    "scheduled"
-  ],
+  "tiers": ["pr"],
   "strengthFloor": {
     "defect": 1,
     "gameability": 1
