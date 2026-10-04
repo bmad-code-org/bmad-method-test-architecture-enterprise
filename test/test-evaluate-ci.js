@@ -3425,8 +3425,8 @@ function checkRepositoryPlans() {
 
 /**
  * The Story 2.4 capture-record guard (Story 1.103). Each `wrote` digest is the one a live session produced. A session that ran before
- * `evaluation.json` moved to schema 2 declares that migration, and the guard rebuilds its bytes by reversing it; the committed sessions
- * of Story 1.84 ran after the move and declare none, so the cases hold the record such an older session leaves, built from the
+ * `evaluation.json` moved to schema 2, or before Story 1.98 repaired it, declares each migration, and the guard rebuilds its bytes by
+ * reversing them; the committed sessions of Story 1.96 ran after both moves and declare none, so the cases hold the record such an older session leaves, built from the
  * committed one. Every case below is a record or a tree that the guard has to refuse by the problem it names; a guard that read the
  * entry's shape alone, or compared nothing, passes the cases it names a mutant of.
  */
@@ -3435,14 +3435,13 @@ function checkCaptureRecordGuard() {
     const committed = read(path.join(ROOT, root, 'capture-record.json'));
     const { bytes } = loadRepository(root);
     assert.deepEqual(captureProblems(name, committed, bytes), [], `${name}: the committed record fails its own guard`);
-    // The committed sessions ran on the schema 2 tree before Story 1.98 repaired the evaluation, so they wrote schema 2 bytes with
-    // the zero-action floor and no held-out gameability probe, and declare that one migration. The cases below hold the record a
-    // session that ran before Story 1.42 would have left: its `wrote` digest is that of the schema 1 bytes, rebuilt here by
-    // reversing both migrations, and its `migrations` entries declare both moves.
-    assert.deepEqual(
-      committed.migrations?.map((migration) => [migration.file, migration.story]),
-      [[EVALUATION_FILE, '1.98']],
-      `${name}: the committed record declares the Story 1.98 repair of evaluation.json and nothing else`,
+    // The committed sessions (Story 1.96) ran on the tree Story 1.98 repaired, so they wrote the file as it stands and declare no
+    // migration. The cases below hold the record a session that ran before Story 1.42 would have left: its `wrote` digest is that
+    // of the schema 1 bytes, rebuilt here by reversing both migrations, and its `migrations` entries declare both moves.
+    assert.equal(
+      committed.migrations,
+      undefined,
+      `${name}: the committed record declares a migration, and its session wrote the file as it stands`,
     );
     const evaluationBytes = bytes.get(EVALUATION_FILE);
     const preRepairBytes = reverseStory98Migration(evaluationBytes);
@@ -3454,7 +3453,11 @@ function checkCaptureRecordGuard() {
       wrote: { ...committed.wrote, [EVALUATION_FILE]: sha(sessionBytes) },
       migrations: [
         { file: EVALUATION_FILE, story: '1.42', change: 'schemaVersion 1 to 2 and operationPhases keyed by interface' },
-        ...committed.migrations,
+        {
+          file: EVALUATION_FILE,
+          story: '1.98',
+          change: 'strengthFloor loses its zero-action floor and heldOutProbes gains the gameability probe P-015',
+        },
       ],
     };
     assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the migrated record fails its own guard`);
@@ -3501,8 +3504,14 @@ function checkCaptureRecordGuard() {
       ],
       ['a record with an empty migrations list', withMigrations([]), bytes, 'is not the file the live session wrote'],
       [
-        'a migration declared by a session that wrote schema 2 bytes',
+        'both migrations declared by a session that wrote the file as it stands',
         { ...structuredClone(committed), migrations: record.migrations },
+        bytes,
+        'is not the file the live session wrote',
+      ],
+      [
+        'the Story 1.98 migration declared by a session that ran after the repair',
+        { ...structuredClone(committed), migrations: [record.migrations[1]] },
         bytes,
         'is not the file the live session wrote',
       ],

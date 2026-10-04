@@ -239,3 +239,24 @@ Fixed here: the shape carries `kind: 'api'`, and the old inline key reader resto
 CodeRabbit round 1 raised two threads.
 `isSkillRunnerEntry` read only the basename of `target`, so a registry entry that names `tea-skill-runner` as its `executable` beside another target read as no secret and let a `merge` default pass: valid, fixed here in the shared helper (it also widens the `check` rules that look for the runner), with a `placement-default` case that fails when the `executable` test is removed.
 The other thread asked for the recapture of both capture records with the guide edit: valid, and it is the last push of this story, after lane 3's Story 1.98 (#340) has merged and main is merged here, since both stories write `evals/answer-grade/` in the same two fixtures.
+
+## Live recapture
+
+The recapture followed Story 1.98's merge (6b6abf49), so both scratch copies held the repaired AI-feature evaluation's files in `evals/answer-grade/`.
+Both sessions ran on this host (macOS) with Claude Code 2.1.289, one at a time, `claude -p "<prompt>" --model claude-sonnet-5-5 --allowedTools Read Write Edit Glob Grep Bash --permission-mode acceptEdits --output-format json` from the scratch repository, with no API key in the environment.
+The prompt is the one the committed records held, byte for byte.
+`permission_denials` is empty in both outputs.
+Each scratch copy held the committed repository without `capture-record.json`, the plan, `runs/` and `baseline/`, the skill copied from the working tree with the `ci.md` edit, `_bmad/tea/config.yaml` with `tea_evaluations_folder: evals`, the CLI and the two packages linked into `evals/node_modules`, `tiers` reset to `["pr", "scheduled"]`, and one scored run (15 trial sets of 3 trials) with no baseline.
+
+| Session          | Model               | Turns | Duration           | Outcome                                                                                                                                                                                                                                                       |
+| ---------------- | ------------------- | ----- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tagged-release` | `claude-sonnet-5-5` | 19    | 301,256 ms (5m01s) | 11 checks: seven on `pr`, `preflight-live` on `merge`, `twin-run` and `held-out` (block) and `strength-comparison` (warn) on `release`; `tiers` `pr`, `merge`, `release`; `tea-evaluate check` clean at the end; tier exits `pr`, `merge` and `release` all 0 |
+| `nightly-deploy` | `claude-sonnet-5-5` | 18    | 564,714 ms (9m25s) | 14 checks: seven on `pr`, `preflight-live` on `merge`, the three live checks on `scheduled` (all `warn`) and again on `release`; `tiers` `pr`, `merge`, `scheduled`, `release`; `tea-evaluate check` clean at the end; tier exits all four 0                  |
+
+Neither session's output names a finding of the new derivable-field rules; both end with `check` clean, so the plans the sessions wrote already hold `trigger`, `tiers`, `placement-default`, `placement-reason` and `applicability` as the guide asks.
+Every `reason` line of both plans is worded anew, and no tier, enforcement, command or evidence changed from the committed plans.
+`evaluation.json` came back from both sessions byte-identical to the committed file (`tiers` at the plan's tiers).
+Each session accepted the latest scored run as the baseline in its scratch copy and wrote an inspection record there; neither is committed.
+The records took `model`, `turns` and `durationMs` from the output JSON, `claudeCodeVersion` from `claude --version`, the digests from the files, and `repositoryRead` from `test/lib/evaluate-ci-repos.js`.
+Both sessions ran after Story 1.98, so the records declare no `migrations` entry and `wrote` digests `evaluation.json` as it stands.
+`checkCaptureRecordGuard` builds the record of a session that ran before Story 1.98 and Story 1.42 from the committed one, with both migrations declared, and runs every guard case over it, plus a case that a record declaring a migration over the file as it stands fails `is not the file the live session wrote`.
