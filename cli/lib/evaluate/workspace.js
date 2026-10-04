@@ -27,8 +27,14 @@
  * planted.
  *
  * A worktree shares the repository it came from: its refs, its configuration
- * and its objects. `adopterTreeState` reads those as well as the working tree,
- * so a run can tell when a target wrote any of them.
+ * and its objects. A run that opted out of confinement has targets that can
+ * write them, so `adopterTreeState` reads them as well as the working tree and
+ * the run can tell when a write changed any of them. Every process of a
+ * confined run is denied a write to the project's git directory and the
+ * checkout's `.git` file, so a confined run reads the working tree, the
+ * checkout's own `HEAD` and where its git commands read their repository from: a commit,
+ * fetch, push or rebase another session makes in any other checkout of the same
+ * repository meanwhile does not stop it.
  *
  * A workspace that cannot be made is a `WorkspaceRefusal` (exit 12), and one
  * that fails part way is removed before the refusal leaves `createWorkspace`.
@@ -50,7 +56,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { killLiveStreams } = require('./confinement-audit');
-const { unlockDirectories } = require('./confinement');
+const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
@@ -1051,9 +1057,10 @@ const GIT_BOOKKEEPING = new Set(['objects', 'logs', 'worktrees', 'index', 'modul
  * A digest over a repository's common git directory, bookkeeping left out:
  * its configuration, hooks, `info/` (`exclude`, `attributes`), `description`,
  * refs and anything else a target running git in a worktree could change on
- * the adopter's behalf.
+ * the adopter's behalf. A hooks directory `core.hooksPath` names outside the
+ * git directory (`hooksDirectory`) is read with it.
  */
-function sharedStateDigest(gitDirectory) {
+function sharedStateDigest(gitDirectory, hooks = null) {
   let entries;
   try {
     entries = fs.readdirSync(gitDirectory, { withFileTypes: true });
@@ -1063,7 +1070,34 @@ function sharedStateDigest(gitDirectory) {
   const exclude = entries
     .filter((entry) => GIT_BOOKKEEPING.has(entry.name) || entry.name.endsWith('.lock'))
     .map((entry) => path.join(gitDirectory, entry.name));
-  return treeDigest(gitDirectory, { exclude });
+  const git = treeDigest(gitDirectory, { exclude });
+  return hooks === null ? git : digest([git, hooks, fs.existsSync(hooks) ? treeDigest(hooks) : '<absent>']);
+}
+
+/**
+ * Where the checkout's git commands read their repository from: the git directory the checkout resolves to (a real path), the
+ * content of the checkout's `.git` file when it is a file (a linked worktree or a submodule; null for a directory), and the
+ * hooks directory `core.hooksPath` names outside the common git directory, with `<absent>` or `<present>` after it. A layer
+ * process that rewrote the gitfile to point into a copy it controls, or created a hooks directory that did not exist when the
+ * run started (a Bubblewrap bind cannot cover an absent path), moves this reading, so the run ends with exit 12 whatever write
+ * path the confinement missed.
+ */
+function repositoryRedirects(repository) {
+  const absolute = runGit(['-C', repository.top, 'rev-parse', '--absolute-git-dir']);
+  if (!absolute.ok) throw new WorkspaceRefusal(`could not read the state of the adopter's tree at ${repository.top}: ${absolute.detail}`);
+  const gitFile = path.join(repository.top, '.git');
+  let content = null;
+  try {
+    if (fs.lstatSync(gitFile).isFile()) content = fs.readFileSync(gitFile, 'utf8');
+  } catch {
+    // A checkout whose `.git` cannot be read is read through git alone.
+  }
+  const hooks = hooksDirectory(repository.top, repository.gitDirectory);
+  return {
+    gitDirectory: fs.realpathSync.native(absolute.stdout.trim()),
+    gitFile: content,
+    hooks: hooks === null ? null : `${hooks} ${fs.existsSync(hooks) ? '<present>' : '<absent>'}`,
+  };
 }
 
 /**
@@ -1072,21 +1106,32 @@ function sharedStateDigest(gitDirectory) {
  *
  * Inside a git repository: `git status` (tracked and untracked paths), a
  * digest over the content of every path it names (one already modified
- * included), every ref (branches, tags, the stash), and the repository's
- * common git directory without its bookkeeping (`sharedStateDigest`:
- * configuration, hooks, `info/`, `description`, refs), since a detached
- * worktree shares all of it with the repository it came from. `--no-optional-locks` keeps
- * `git status` from rewriting the index. Gitignored paths are not read.
+ * included), the commit the checkout's own `HEAD` names (another worktree's
+ * commit cannot move it), and where the checkout's git commands read their
+ * repository from (`repositoryRedirects`: the git directory it resolves to, its
+ * `.git` file and the hooks directory `core.hooksPath` names), which a layer
+ * process that redirects the checkout moves. With `sharedState` (the default) also the
+ * repository's common git directory without its bookkeeping
+ * (`sharedStateDigest`), since a detached worktree shares it with the
+ * repository it came from, the hooks directory `core.hooksPath` names outside
+ * it, and every ref (branches, tags, the stash). Without it, which is how a
+ * confined run reads, the git directory is left to the confinement: every
+ * process of a confined run is denied a write to it, so a digest of it would
+ * fire on other sessions only (a push, a rebase, a worktree add or a gc in
+ * another worktree or the main checkout all write it).
+ * `--no-optional-locks` keeps `git status` from rewriting the index.
+ * Gitignored paths are not read.
  * Outside a repository: the tree digest of `directory`, the paths in
  * `exclude` left out.
  *
  * @param {string} directory `launch.root`
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
+ * @param {boolean} [options.sharedState] whether to read the shared git state (Story 1.112): `true` for a run whose targets can write it, `false` for a confined run, whose processes the layer denial keeps out of it
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer
  */
-function adopterTreeState(directory, { exclude = [] } = {}) {
+function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) {
   const repository = repositoryOf(directory);
   if (repository === null) {
     try {
@@ -1098,10 +1143,21 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
   const failed = (answer) => {
     throw new WorkspaceRefusal(`could not read the state of the adopter's tree at ${repository.top}: ${answer.detail}`);
   };
-  const status = runGit(['--no-optional-locks', '-C', repository.top, 'status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  // The redirects are read first, and `core.fsmonitor` is switched off for the status, since a checkout redirected to a
+  // repository a layer process controls would run that repository's fsmonitor command from the runtime's own unconfined read.
+  const redirects = repositoryRedirects(repository);
+  const status = runGit([
+    '-c',
+    'core.fsmonitor=false',
+    '--no-optional-locks',
+    '-C',
+    repository.top,
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all',
+  ]);
   if (!status.ok) failed(status);
-  const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
-  if (!refs.ok) failed(refs);
   const parts = [];
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
   for (let index = 0; index < records.length; index += 1) {
@@ -1114,12 +1170,20 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
     }
     for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
   }
-  return {
+  const state = {
     repository: repository.top,
+    head: repository.commit,
+    ...redirects,
     status: status.stdout,
     changes: digest(parts),
+  };
+  if (!sharedState) return state;
+  const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
+  if (!refs.ok) failed(refs);
+  return {
+    ...state,
     refs: refs.stdout,
-    shared: sharedStateDigest(repository.gitDirectory),
+    shared: sharedStateDigest(repository.gitDirectory, hooksDirectory(repository.top, repository.gitDirectory)),
   };
 }
 

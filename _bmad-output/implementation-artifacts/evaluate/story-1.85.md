@@ -2,7 +2,7 @@
 title: "Story 1.85: Show a sparse-checkout project to the target's git as the project shows it"
 type: 'bugfix'
 created: '2026-10-04'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1c55d8c48be6a2b741b7d91c9dac9ee106fe9ae2'

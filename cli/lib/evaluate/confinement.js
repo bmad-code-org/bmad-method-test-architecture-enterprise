@@ -45,6 +45,27 @@
  *                covers a parent another run makes later or concurrently.
  *                Reads elsewhere are left to the audit: node, git and a
  *                target's own toolchain read from the system.
+ *   layer        every process of the evaluation layer (the command evaluator,
+ *                the HTTP port, the judge, the sealed-brief agent) keeps the
+ *                host's file system and cannot write the evaluation folder,
+ *                the project's common git directory (its refs, configuration,
+ *                hooks and `info/`), the hooks directory `core.hooksPath`
+ *                names outside it (an absent one included: Seatbelt denies the
+ *                path it will have, and Bubblewrap, which cannot bind an absent
+ *                path, leaves it to the run's reading of whether it exists) or
+ *                the checkout's own `.git` file when the checkout is a linked
+ *                worktree or a submodule (the file sits outside the common
+ *                directory), so none of them plants a hook, changes the
+ *                configuration, moves a ref or points the checkout at another
+ *                repository the adopter's next git command reads (Story 1.112);
+ *                a project in no git repository has no such path. That denial
+ *                is what guards the git directory for a confined run: the
+ *                target's profile withholds it and the layer's denies it, so
+ *                the run's comparison of the adopter's tree reads the working
+ *                tree, the checkout's own `HEAD` and where the checkout's git
+ *                commands read their repository from (the resolved git
+ *                directory, the `.git` file's content, the hooks directory's
+ *                presence), and digests no other part of the git directory.
  *   network      every process the runtime starts for a Bubblewrap target
  *                (`--unshare-net`) runs in a network namespace of its own, a
  *                loopback and nothing else, so the host's abstract Unix sockets
@@ -224,10 +245,112 @@ function refuseUnsafePath(candidate) {
   return new ConfinementError(`the path ${JSON.stringify(candidate)} cannot be carried into a confinement profile`);
 }
 
-/** The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation folder. */
-function seatbeltLayerProfile(evaluationFolder) {
-  const denied = spellings(evaluationFolder).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
-  return ['(version 1)', '(allow default)', `(deny file-write* ${denied.join(' ')})`, ''].join('\n');
+/**
+ * The project's common git directory (its refs, configuration, hooks and `info/`, which every worktree of the repository
+ * shares) by its real path, or null when `root` is in no git repository.
+ */
+function commonGitDirectory(root) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  try {
+    const answer = execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    }).trim();
+    return answer === '' ? null : fs.realpathSync.native(path.resolve(root, answer));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A path by the real path of its nearest existing ancestor plus the components below it, so a path that does not exist yet
+ * resolves to the spelling it will have once something creates it.
+ */
+function realPathOfNearestAncestor(candidate) {
+  const absent = [];
+  let current = candidate;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(current), ...absent.toReversed());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return candidate;
+      absent.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * The directory git runs the project's hooks from when it lies outside the common git directory (`core.hooksPath` names it;
+ * this repository's own is `.husky/_`), by its real path, or null when hooks run from the git directory or `core.hooksPath` is
+ * unset. A directory that does not exist yet (husky's `.husky/_` before `npm install`, a shared path configured and never
+ * created) resolves to the real path of its nearest existing ancestor plus the components below it, since a layer process could
+ * create it and plant a hook the adopter's next commit runs. A path that exists as anything but a directory is null.
+ */
+function hooksDirectory(root, gitDirectory) {
+  if (gitDirectory === null || gitDirectory === undefined) return null;
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  try {
+    const answer = execFileSync('git', ['-C', root, 'rev-parse', '--git-path', 'hooks'], {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    }).trim();
+    if (answer === '') return null;
+    const resolved = realPathOfNearestAncestor(path.resolve(root, answer));
+    if (isInside(gitDirectory, resolved)) return null;
+    const stats = fs.statSync(resolved, { throwIfNoEntry: false });
+    return stats === undefined || stats.isDirectory() ? resolved : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The project checkout's `.git` file by its real path when the checkout is a linked worktree or a submodule (its `.git` is a
+ * file that names the git directory), or null when `.git` is a directory or `root` is in no git repository. The file sits
+ * outside the common git directory, so the denial of that directory does not cover it, and a layer process that rewrote it
+ * would point the adopter's next git command at a copy it controls.
+ */
+function gitFileOf(root) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  try {
+    const top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    }).trim();
+    if (top === '') return null;
+    const file = path.join(fs.realpathSync.native(top), '.git');
+    return fs.lstatSync(file).isFile() ? file : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation
+ * folder, the project's common git directory or the hooks directory `core.hooksPath` names outside it (a `subpath` matches a
+ * path that does not exist yet), or to the checkout's `.git` file, so a layer process cannot plant a hook, change the
+ * configuration, move a ref or redirect the checkout to another git directory.
+ */
+function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirectoryPath = null, gitFile = null) {
+  const present = (entries) => entries.filter((entry) => entry !== null && entry !== undefined);
+  const denied = [...new Set(present([evaluationFolder, gitDirectory, hooksDirectoryPath]).flatMap(spellings))].map(
+    (entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`,
+  );
+  const files = [...new Set(present([gitFile]).flatMap(spellings))].map(
+    (entry) => `(literal "${assertProfileSafePath(entry, refuseUnsafePath)}")`,
+  );
+  return ['(version 1)', '(allow default)', `(deny file-write* ${[...denied, ...files].join(' ')})`, ''].join('\n');
 }
 
 /**
@@ -546,11 +669,17 @@ function bubblewrapTargetArguments({
 }
 
 /**
- * The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder read-only.
+ * The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder, the
+ * project's common git directory, the hooks directory `core.hooksPath` names outside it and the checkout's `.git` file
+ * read-only. A hooks directory that does not exist yet cannot be bound (the run creates no directory in the adopter's tree),
+ * so the adopter-tree reading digests it instead (`workspace.js` `adopterTreeState`).
  * It keeps the host's network, since the evaluation's HTTP port reaches a started server over the host's loopback.
  */
-function bubblewrapLayerArguments({ executable, evaluationFolder }) {
-  const protectedDirectory = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
+function bubblewrapLayerArguments({ executable, evaluationFolder, gitDirectory = null, hooksDirectory: hooks = null, gitFile = null }) {
+  const hooksBound = hooks !== null && hooks !== undefined && fs.existsSync(hooks) ? hooks : null;
+  const protectedPaths = [evaluationFolder, gitDirectory, hooksBound, gitFile]
+    .filter((entry) => entry !== null && entry !== undefined)
+    .map((entry) => assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath));
   return [
     executable,
     '--unshare-user',
@@ -560,9 +689,7 @@ function bubblewrapLayerArguments({ executable, evaluationFolder }) {
     '--dev',
     '/dev',
     ...bubblewrapIsolation(),
-    '--ro-bind',
-    protectedDirectory,
-    protectedDirectory,
+    ...protectedPaths.flatMap((entry) => ['--ro-bind', entry, entry]),
     '--',
   ];
 }
@@ -638,11 +765,13 @@ function probeObserver(mechanism, env) {
  * @param {object} options
  * @param {object} options.evaluation the parsed `evaluation.json`
  * @param {string} options.folder the resolved evaluation folder
+ * @param {string} options.root the project root (`launch.root`), whose repository's common git directory and hooks directory the evaluation layer may not write
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {string} [options.platform]
- * @returns {{ mode: string, executable?: string, evaluationFolder: string } | { refusal: string }}
+ * @returns {{ mode: string, executable?: string, evaluationFolder: string, gitDirectory?: string|null, hooksDirectory?: string|null, gitFile?: string|null } | { refusal: string }}
  */
-function selectConfinement({ evaluation, folder, env = process.env, platform = process.platform }) {
+function selectConfinement({ evaluation, folder, root, env = process.env, platform = process.platform }) {
+  if (typeof root !== 'string' || root === '') throw new TypeError('selectConfinement needs the project root (launch.root)');
   const evaluationFolder = path.resolve(folder);
   if (evaluation?.confinement === false) return { mode: 'opt-out', evaluationFolder };
   const optOut = 'or set "confinement": false in evaluation.json to run the targets unconfined, which run.json records as "opt-out"';
@@ -699,7 +828,25 @@ function selectConfinement({ evaluation, folder, env = process.env, platform = p
     };
   }
   mechanism = { ...mechanism, observer: observed.observer };
-  return { ...mechanism, evaluationFolder };
+  // The project's common git directory, and the hooks directory `core.hooksPath` names outside it, are read-only to the
+  // evaluation layer, so its processes cannot plant a hook, change the configuration or move a ref the adopter's next git
+  // command reads (Story 1.112); null outside a git repository.
+  const gitDirectory = commonGitDirectory(root);
+  const hooks = hooksDirectory(root, gitDirectory);
+  const gitFile = gitFileOf(root);
+  for (const [what, directory] of [
+    ['git directory', gitDirectory],
+    ['hooks directory', hooks],
+    ['git file', gitFile],
+  ]) {
+    const unsafeGit = directory === null ? undefined : spellings(directory).find((entry) => !isProfileSafePath(entry));
+    if (unsafeGit !== undefined) {
+      return {
+        refusal: `the project's ${what} ${JSON.stringify(unsafeGit)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the project, ${optOut}`,
+      };
+    }
+  }
+  return { ...mechanism, evaluationFolder, gitDirectory, hooksDirectory: hooks, gitFile };
 }
 
 /**
@@ -728,7 +875,12 @@ function confines(confinement) {
  */
 function layerPrefix(confinement) {
   if (!confines(confinement)) return [];
-  if (confinement.mode === 'seatbelt') return [confinement.executable, '-p', seatbeltLayerProfile(confinement.evaluationFolder)];
+  if (confinement.mode === 'seatbelt')
+    return [
+      confinement.executable,
+      '-p',
+      seatbeltLayerProfile(confinement.evaluationFolder, confinement.gitDirectory, confinement.hooksDirectory, confinement.gitFile),
+    ];
   return bubblewrapLayerArguments(confinement);
 }
 
@@ -1720,6 +1872,7 @@ module.exports = {
   confinedMcpMechanism,
   confines,
   forbiddenInputNote,
+  hooksDirectory,
   layerPrefix,
   chmodDirectoryNoFollow,
   makeAuditDirectory,

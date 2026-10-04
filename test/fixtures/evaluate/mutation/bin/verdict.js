@@ -113,6 +113,19 @@
  *                           `direct <host:port>: <how>` (Story 1.83)
  *   hold-egress             answer as usual, then wait a minute, so a case can
  *                           end the run while the call is live (Story 1.83)
+ *   hold-gate               answer as usual, then write `gate-started` in the
+ *                           working directory and wait (a minute at most) for a
+ *                           `gate-release` file beside it, so a case can act on the
+ *                           project or its repository while the run is in flight
+ *                           (Story 1.112)
+ *   update-ref              answer as usual, then run `git update-ref
+ *                           refs/heads/written-by-target HEAD` in the working
+ *                           directory, printing `ref write: exit <code>`
+ *   write-config            answer as usual, then run `git config --local
+ *                           tea.written by-target`, printing `config write: exit <code>`
+ *   write-hook              answer as usual, then write an executable `pre-commit`
+ *                           into the directory `git config core.hooksPath` names,
+ *                           printing `hook write: <how>`
  *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
  *                           names, outside the workspace, printing
  *                           `ungranted-read: <how>` after the verdict
@@ -501,6 +514,23 @@ if (act === 'probe-egress') {
   }
 }
 if (act === 'hold-egress') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000);
+if (act === 'hold-gate') {
+  // Write `gate-started` in the working directory, then wait for the case to write `gate-release` beside it (a minute at most).
+  fs.writeFileSync('gate-started', '');
+  for (let waited = 0; waited < 60_000 && !fs.existsSync('gate-release'); waited += 50) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+}
+if (act === 'update-ref' || act === 'write-config') {
+  // The git state a worktree shares with its repository: a ref, or the repository's own configuration.
+  const wrote = spawnSync('git', act === 'update-ref' ? ['update-ref', 'refs/heads/written-by-target', 'HEAD'] : ['config', '--local', 'tea.written', 'by-target'], {
+    encoding: 'utf8',
+  });
+  process.stdout.write(`${act === 'update-ref' ? 'ref write' : 'config write'}: exit ${wrote.status}\n`);
+}
+if (act === 'write-hook') {
+  // The directory the project's hooks run from when `core.hooksPath` moves it outside the git directory.
+  const hooks = spawnSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).stdout.trim();
+  process.stdout.write(`hook write: ${attempt(() => fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 0\n', { mode: 0o755 }))}\n`);
+}
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
   process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);
 }

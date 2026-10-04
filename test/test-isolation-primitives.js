@@ -223,6 +223,7 @@ function checkPaths() {
               confinement.selectConfinement({
                 evaluation: {},
                 folder: candidate,
+                root: candidate,
                 env: { PATH: bin, [confinement.PLATFORM_ENV]: 'linux' },
                 platform: 'linux',
               }),
@@ -254,6 +255,7 @@ function checkPaths() {
         selected = confinement.selectConfinement({
           evaluation: {},
           folder: plain,
+          root: plain,
           env: { PATH: bin, [confinement.PLATFORM_ENV]: 'linux' },
           platform: 'linux',
         });
@@ -481,6 +483,7 @@ function reachedPrimitives() {
       freshConfinement.selectConfinement({
         evaluation: {},
         folder: '/proj/evaluations/demo',
+        root: '/proj/evaluations/demo',
         env: { PATH: bin, [freshConfinement.PLATFORM_ENV]: 'linux' },
         platform: 'linux',
       });
