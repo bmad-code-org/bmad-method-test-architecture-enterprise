@@ -19,7 +19,7 @@ These examples live in this repository's source tree. Copy or adapt them into th
 
 ## Skill runner
 
-Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the skill inside the evaluated project. The runner receives `--skill-root` pointing into the disposable copy and the probe prompt on stdin. The runner calls an agent that reaches its model provider, so on Linux declare `"network": "host"` on its registry entry, as the entries below do: the default, `"network": "isolated"`, gives a confined target a loopback only. The installed starter `assets/evaluation.json` uses the sample name `reservation-review-runner` and the executable target `tea-skill-runner`; replace the sample launch paths with the evaluated project's paths before running it. The working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) uses the executable `tea-skill-runner` and the logical interface `stub-skill`, with the stub agent at [source fixture: agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/stub-agent/agent.js). Its `launch.root` is `../stub-agent` and its `launch.skillRoot` is `skill`.
+Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the skill inside the evaluated project. The runner receives `--skill-root` pointing into the disposable copy and the probe prompt on stdin. The runner calls an agent that reaches its model provider, so on Linux list the provider's host, port and addresses in `egress` on its registry entry, as the entries below do: an entry that lists none gives a confined target a loopback only. The installed starter `assets/evaluation.json` uses the sample name `reservation-review-runner` and the executable target `tea-skill-runner`; replace the sample launch paths with the evaluated project's paths before running it. The working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) uses the executable `tea-skill-runner` and the logical interface `stub-skill`, with the stub agent at [source fixture: agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/stub-agent/agent.js). Its `launch.root` is `../stub-agent` and its `launch.skillRoot` is `skill`.
 
 <!-- example:registry -->
 
@@ -33,13 +33,19 @@ Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the ski
   "environmentKeys": [],
   "maxElapsedMs": 160000,
   "infrastructureExitCodes": [3, 4, 5, 6],
-  "network": "host"
+  "egress": [
+    {
+      "host": "api.anthropic.com",
+      "port": 443,
+      "addresses": ["160.79.104.10", "2607:6bc0::10"]
+    }
+  ]
 }
 ```
 
 ## Agent's own non-interactive command
 
-If the adopter has a command that accepts a prompt without an interactive session, register that exact executable and target. A command that calls a model provider or any outside service declares `"network": "host"` on its entry on Linux, for the same reason. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js) is launched by this entry. When an agent has no own non-interactive command, wrap it with the shipped generic `tea-skill-runner`. If the agent has no skill directory, put its task and instructions in a `SKILL.md` wrapper under the target project. Set `launch.root` to the project subtree containing both the wrapper and the agent implementation. Omit `launch.skillRoot` for `targetKind: "agent"`, so controlled mutations can reach implementation files outside the wrapper. Bind the contract's `--skill-root` option to the wrapper path inside the disposable copy. Use the registry shape in the Skill runner section, with `executable` and `target` both set to `tea-skill-runner`, and pass the agent adapter options and probe prompt through that runner.
+If the adopter has a command that accepts a prompt without an interactive session, register that exact executable and target. A command that calls a model provider or any outside service lists its host in `egress` on its entry on Linux, for the same reason. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js) is launched by this entry. When an agent has no own non-interactive command, wrap it with the shipped generic `tea-skill-runner`. If the agent has no skill directory, put its task and instructions in a `SKILL.md` wrapper under the target project. Set `launch.root` to the project subtree containing both the wrapper and the agent implementation. Omit `launch.skillRoot` for `targetKind: "agent"`, so controlled mutations can reach implementation files outside the wrapper. Bind the contract's `--skill-root` option to the wrapper path inside the disposable copy. Use the registry shape in the Skill runner section, with `executable` and `target` both set to `tea-skill-runner`, and pass the agent adapter options and probe prompt through that runner.
 
 <!-- example:registry -->
 
@@ -56,7 +62,7 @@ If the adopter has a command that accepts a prompt without an interactive sessio
 }
 ```
 
-The fixture command makes no network call; a real agent command that calls its model provider adds `"network": "host"` to this entry on Linux.
+The fixture command makes no network call; a real agent command that calls its model provider adds an `egress` item for it to this entry on Linux.
 
 ## Tool-use calling agent
 
@@ -77,7 +83,7 @@ Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call
 }
 ```
 
-The fixture command makes no network call; a real agent command that calls its model provider adds `"network": "host"` to this entry on Linux.
+The fixture command makes no network call; a real agent command that calls its model provider adds an `egress` item for it to this entry on Linux.
 
 ## Tool server over MCP
 
@@ -194,6 +200,12 @@ Classify its corpus by seeded test smells and clean tests. The source repository
   "environmentKeys": [],
   "maxElapsedMs": 160000,
   "infrastructureExitCodes": [3, 4, 5, 6],
-  "network": "host"
+  "egress": [
+    {
+      "host": "api.anthropic.com",
+      "port": 443,
+      "addresses": ["160.79.104.10", "2607:6bc0::10"]
+    }
+  ]
 }
 ```

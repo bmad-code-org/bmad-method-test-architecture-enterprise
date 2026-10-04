@@ -816,8 +816,9 @@ async function runInWorkspaces({
     workspaces: { pristine: pristine.root },
     // seatbelt, bubblewrap or opt-out (Story 1.31).
     confinement: confinement.mode,
-    // The interface IDs of the entries that declare "network": "host" and keep the host's network under Bubblewrap (Story 1.63).
-    hostNetwork: [...registry.hostNetworkEntries],
+    // The entries that authorize hosts (`egress`) and the `host:port` items each lists; under Bubblewrap those are the only hosts
+    // their processes reach, through the runtime's egress proxy (Story 1.83).
+    egress: registry.egressEntries.map((entry) => ({ interfaceId: entry.interfaceId, hosts: [...entry.hosts] })),
     adopterTree: { repository: before.repository, unchanged: null },
     refused: [],
   };

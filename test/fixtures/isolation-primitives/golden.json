@@ -866,10 +866,11 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.wrap.bubblewrap.host": {
+  "confinement.targetSandbox.wrap.bubblewrap.egress": {
     "target": "/usr/bin/bwrap",
     "args": [
       "--unshare-user",
+      "--unshare-net",
       "--ro-bind",
       "/",
       "/",
@@ -907,6 +908,9 @@
       "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
       "--remount-ro",
       "/private/var/folders/ab/cd/T/tea-evaluate-p501",
+      "--ro-bind",
+      "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-egress-AbCdEf",
+      "/dev/tea-egress-AbCdEf",
       "--tmpfs",
       "/proj/evaluations/demo",
       "--remount-ro",
@@ -914,6 +918,8 @@
       "--",
       "<node>",
       "<confinement-directory>/confinement-status.cjs",
+      "--egress",
+      "/dev/tea-egress-AbCdEf/s",
       "<status>/status-1-<token>.json",
       "/fixture/bin/node",
       "agent.js"

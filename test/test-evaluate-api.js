@@ -4372,9 +4372,77 @@ function checkSealedEvidence() {
  * granted. Under Bubblewrap the server runs in a network namespace of its own
  * and the run reaches it through the bridge (Story 1.63), for a server that
  * reports its port and for one that is told it; the audit lists nothing for
- * the bridge, whose directory is a grant of the call.
+ * the bridge, whose directory is a grant of the call. An entry that lists a
+ * host also gets the egress proxy (Story 1.83), and its server tunnels to the
+ * host once through it as it starts: under Bubblewrap the listed host sees the
+ * connection, and the audit lists no path for it, since the shim's `connect()`
+ * to the proxy's socket opens no path the trace holds (the audit grants the
+ * proxy's directory nothing; removing that grant changes no result).
  */
 async function checkConfinedPipeline() {
+  // The host the egress variant's server tunnels to: a loopback listener of this process that counts its connections.
+  let tunneled = 0;
+  const provider = net.createServer((socket) => {
+    tunneled += 1;
+    socket.on('error', () => {});
+    socket.resume();
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const providerPort = provider.address().port;
+  try {
+    await confinedPipelineVariants(providerPort, () => tunneled);
+  } finally {
+    await new Promise((resolve) => provider.close(resolve));
+  }
+}
+
+/**
+ * The tunnel Story 1.83's pipeline cases add to their own copy of the fixture server, which runs inside the copy (it takes its
+ * own `require`). When `GRADER_TUNNEL` names `<host>:<port>` and `HTTPS_PROXY` is set, it opens one HTTP CONNECT tunnel to the host
+ * through the proxy and closes it, and rejects without a `200`; with either missing it resolves at once.
+ */
+function tunnelThroughProxy() {
+  const net = require('node:net');
+  const target = process.env.GRADER_TUNNEL;
+  const proxy = process.env.HTTPS_PROXY;
+  if (target === undefined || proxy === undefined) return Promise.resolve();
+  const { hostname, port: proxyPort } = new URL(proxy);
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host: hostname, port: Number(proxyPort) });
+    let head = '';
+    socket.on('connect', () => socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`));
+    socket.on('data', (chunk) => {
+      head += chunk;
+      if (!head.includes('\r\n')) return;
+      socket.destroy();
+      if (head.startsWith('HTTP/1.1 200')) resolve();
+      else reject(new Error(head.split('\r\n')[0]));
+    });
+    socket.on('error', reject);
+  });
+}
+
+/**
+ * Makes a project's copy of the fixture server open that tunnel once before it listens and exit 3 without one, and leaves the
+ * committed fixture as it is (its tree digest sits in the fixture's baseline records).
+ */
+function addTunnelToServer(project) {
+  const file = path.join(project.root, 'server', 'grader.js');
+  const source = fs.readFileSync(file, 'utf8');
+  const listening = 'setTimeout(\n  () =>\n    server.listen(';
+  const at = source.indexOf(listening);
+  if (!source.includes(listening) || at !== source.lastIndexOf(listening) || !source.trimEnd().endsWith('startDelayMs,\n);')) {
+    throw new Error("the fixture server's source no longer ends in the listen the tunnel is added before");
+  }
+  const failed =
+    '(error) => { process.stderr.write(`grader: the tunnel to ${process.env.GRADER_TUNNEL} failed: ${error.message}\\n`); process.exit(3); }';
+  fs.writeFileSync(
+    file,
+    `${source.slice(0, at)}const tunnelThroughProxy = ${tunnelThroughProxy.toString()};\ntunnelThroughProxy().then(\n  () => {\n${source.slice(at)}  },\n  ${failed},\n);\n`,
+  );
+}
+
+async function confinedPipelineVariants(providerPort, tunneledCount) {
   // The fixture's server reports the port it bound; the second project drops that key, so the runtime chooses the port and the
   // server is told it (Story 1.63: under Bubblewrap each handoff goes through the bridge, so each is a case of its own).
   for (const [handoff, label, edit] of [
@@ -4387,11 +4455,50 @@ async function checkConfinedPipeline() {
           delete evaluation.registry[0].server.portFileEnvironmentKey;
         }),
     ],
+    // Story 1.83: an entry that lists a host also gets the egress proxy beside the bridge, its server tunnels to the host once as it
+    // starts, and the audit lists nothing for either.
+    [
+      'reports its port, its entry lists a host and it tunnels to it',
+      'confined-egress',
+      (project) => {
+        editJson(path.join(project.folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].egress = [{ host: '127.0.0.1', port: providerPort, addresses: ['127.0.0.1'] }];
+          evaluation.registry[0].server.environmentKeys.push('GRADER_TUNNEL');
+        });
+        addTunnelToServer(project);
+      },
+    ],
+    // A server told its port (Story 1.83 review) binds it in the namespace the egress listener shares, which the shim keeps off it.
+    [
+      'is told its port, its entry lists a host and it tunnels to it',
+      'confined-told-egress',
+      (project) => {
+        editJson(path.join(project.folder, 'evaluation.json'), (evaluation) => {
+          delete evaluation.registry[0].server.portFileEnvironmentKey;
+          evaluation.registry[0].egress = [{ host: '127.0.0.1', port: providerPort, addresses: ['127.0.0.1'] }];
+          evaluation.registry[0].server.environmentKeys.push('GRADER_TUNNEL');
+        });
+        addTunnelToServer(project);
+      },
+    ],
   ]) {
+    const tunnels = label.endsWith('egress');
+    const before = tunneledCount();
     const project = makeProject(label, { log: false, edit });
-    const env = { ...project.env, GRADER_TOKEN: TOKEN };
+    const env = {
+      ...project.env,
+      GRADER_TOKEN: TOKEN,
+      ...(tunnels ? { GRADER_TUNNEL: `127.0.0.1:${providerPort}` } : {}),
+    };
     const ran = evaluate(['run', '--evaluation', project.folder], env);
     check(ran.status === 0, `a confined run over the HTTP fixture whose server ${handoff} exited ${ran.status}; expected 0\n${ran.output}`);
+    if (tunnels && process.platform === 'linux') {
+      // The run is a synchronous child of this process, so the listener sees its connections once the run has returned.
+      check(
+        await eventually(() => tunneledCount() > before),
+        `the server of a confined run whose entry lists a host opened ${tunneledCount() - before} tunnel(s) to it; expected one through the egress proxy`,
+      );
+    }
     const runDirectory = runDirectoryOf(project.folder);
     if (runDirectory === null) {
       check(false, `the confined HTTP run whose server ${handoff} wrote no run directory`);
@@ -5049,7 +5156,6 @@ function readSlowly(port, host, request, size) {
  *   once the call is stopped) and the call answers on it once the server is ready.
  * - A call stopped when the bridge answers, and one stopped while the forwarder starts, end with the abort and leave no
  *   listener.
- * - An entry that declares `network: host` is started directly with no bridge directory.
  * - A temp directory too long for a socket path puts the bridge directory under `/tmp`, and one with no room even there is refused.
  * - `startForwarder` keeps a free number, moves from a held one when it may, refuses it when it may not, closes within a second
  *   with a live connection, carries 4 MiB to a slow half-closing client and listens on `::1` where the host has it; `openBridge`
@@ -5064,8 +5170,15 @@ async function checkBridgedServerStandIn() {
   // A server that reports a port the host has free is reached on that number.
   const reporting = projectWith('standin-report');
   const reportMap = new Map();
-  const reported = bridgedServer(reporting, entry, { mechanism: standInMechanism(nodeCommandMechanism, { map: reportMap }) });
+  const reportRecord = [];
+  const reported = bridgedServer(reporting, entry, {
+    mechanism: standInMechanism(nodeCommandMechanism, { map: reportMap, record: reportRecord }),
+  });
   const keptPort = await reported.start(signal(), '127.0.0.1').catch((error) => error);
+  check(
+    reportRecord.length === 1 && !('listenPort' in reportRecord[0]),
+    `a server that reports its port was started with listenPort ${JSON.stringify(reportRecord.map((call) => call.listenPort))}; expected none, since it binds a port the system gives it`,
+  );
   const inside = listened(reporting)[0]?.port;
   check(
     Number.isInteger(keptPort) && reportMap.has(keptPort) && reportMap.get(keptPort) === inside && keptPort !== inside,
@@ -5088,10 +5201,19 @@ async function checkBridgedServerStandIn() {
   const chosen = projectWith('standin-chosen');
   const chosenResult = await withFreePort(async (port) => {
     const map = new Map();
-    const server = bridgedServer(chosen, chosenEntry, { call: { port }, mechanism: standInMechanism(nodeCommandMechanism, { map }) });
+    const record = [];
+    const server = bridgedServer(chosen, chosenEntry, {
+      call: { port },
+      mechanism: standInMechanism(nodeCommandMechanism, { map, record }),
+    });
     const ready = await server.start(signal(), '127.0.0.1').catch((error) => error);
     const answered = Number.isInteger(ready) ? await getLoopback(ready, '/policy', { authorization: `Bearer ${TOKEN}` }) : null;
     await server.stop();
+    // The call names the port the server was told, which a confined call's egress listener keeps off (Story 1.83 review).
+    check(
+      record.length === 1 && record[0].listenPort === port,
+      `a chosen-port server's call named listenPort ${JSON.stringify(record.map((call) => call.listenPort))}; expected [${port}]`,
+    );
     return {
       taken: String(ready?.message).includes('another process listens'),
       ready,
@@ -5219,41 +5341,6 @@ async function checkBridgedServerStandIn() {
     check(forwarders === (late ? 1 : 0), `a call stopped ${label} started the forwarder ${forwarders} time(s); expected ${late ? 1 : 0}`);
     await echo.close();
   }
-
-  // An entry that declares `network: host` is started directly: no bridge directory and no bridge in the request.
-  const hosted = projectWith('standin-host');
-  const hostedHttpPort = await probeHttpPort(hosted.folder);
-  const hostedTemp = shortDirectory();
-  const hostedScratch = [];
-  const hostedCalls = [];
-  const hostedAnswer = await withEnvironment({ TMPDIR: hostedTemp }, () =>
-    createApiPort({
-      entries: [{ ...entry, network: 'host' }],
-      httpPort: hostedHttpPort,
-      cwd: hosted.root,
-      targetOf: () => serverOf(hosted),
-      readEnvironment: environmentOf(hosted),
-      mechanism: {
-        bridges: true,
-        run: (call, abort) => {
-          hostedCalls.push(call);
-          return nodeCommandMechanism.run(call, abort);
-        },
-      },
-      maxOutputBytes: 1024 * 1024,
-      scratch: hostedScratch,
-    })
-      .probe(request)
-      .catch((error) => error),
-  );
-  check(
-    hostedAnswer?.status === 200 &&
-      hostedCalls.length === 1 &&
-      hostedCalls[0].bridge === undefined &&
-      !fs.readdirSync(hostedTemp).some((name) => name.startsWith('tea-nb-')) &&
-      hostedScratch.length === 0,
-    `a started service whose entry declares network host was answered ${JSON.stringify(hostedAnswer?.status ?? hostedAnswer?.message)} with the bridges ${JSON.stringify(hostedCalls.map((call) => call.bridge))}; expected none and a direct start`,
-  );
 
   // A temp directory too long for a socket path puts the bridge directory under /tmp, and the call works.
   const longTemp = path.join(shortDirectory(), 'y'.repeat(150));

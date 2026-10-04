@@ -892,6 +892,8 @@ function callServer({
           portFile,
           // The Unix socket the server's shim serves behind a bridge, in a directory the confined server's call may write.
           ...(bridge === null ? {} : { bridge }),
+          // The port the server was told to bind, which the call's egress listener in the same namespace must not take.
+          ...(reports ? {} : { listenPort: port }),
           stdin: { kind: 'absent' },
           cwd,
           maxElapsedMs: timerDelay(entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS),
@@ -1172,7 +1174,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       try {
         // A server behind a bridge gets a private directory for the Unix socket its shim serves, which only that call's
         // server may write; it joins the scratch list like the port directory.
-        if (launched !== null && mechanism.bridges === true && launched.network !== 'host') bridgeDirectory = makeBridgeDirectory(scratch);
+        if (launched !== null && mechanism.bridges === true) bridgeDirectory = makeBridgeDirectory(scratch);
         const launchedPort = launched === null || reports ? null : await freePort();
         const configurationAt = (port) =>
           portConfiguration({

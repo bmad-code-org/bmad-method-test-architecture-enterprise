@@ -57,6 +57,15 @@
  *                (`confinement-status.cjs`, `confinement-relay.js`,
  *                `http-target.js`). A command target and a tool server have no
  *                bridge. Seatbelt has no abstract sockets and is unchanged.
+ *                An entry that authorizes hosts (`egress`, Story 1.83) gives each
+ *                of its calls one route out, the mirror of the bridge: the
+ *                runtime serves an HTTP `CONNECT` proxy on a Unix socket in a
+ *                private directory of the call, the shim listens on a loopback
+ *                port and connects each connection to it, and the proxy
+ *                tunnels a request only for a host and port the entry lists,
+ *                decided by eval-quality's `evaluateTarget`
+ *                (`confinement-egress.js`). An entry that authorizes no host
+ *                reaches none.
  *   sockets      a path-based Unix socket is a file, and the read-only view of
  *                `/` does not stop a `connect()` to it, so under Bubblewrap each
  *                call lists the sockets the kernel reports bound on the host
@@ -118,7 +127,9 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { startEgress } = require('./confinement-egress');
 const { signedStatus } = require('./confinement-status.cjs');
+const { loadEngine } = require('./engine');
 const { BUBBLEWRAP_ARGUMENT_LIMIT, isSocketFile, listHostSockets, socketBudget } = require('./host-sockets');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -363,6 +374,15 @@ const BUBBLEWRAP_NETWORK = Object.freeze(['--unshare-net']);
  */
 const SOCKET_MASK_SOURCE = '/dev/null';
 
+/** The most distinct refused egress requests a sandbox keeps. */
+const MAX_EGRESS_REFUSALS = 50;
+
+/** The name of a call's egress proxy socket inside its private directory. */
+const EGRESS_SOCKET_NAME = 's';
+
+/** The longest Unix socket path every platform binds (macOS holds 103 bytes, Linux 107). */
+const EGRESS_SOCKET_PATH_BYTES = 100;
+
 /** The directories the vector replaces with mounts of its own (`--dev /dev`, `--proc /proc`), so a socket in them needs no mount and takes no budget. */
 const SOCKET_REPLACED_DIRECTORIES = Object.freeze(['/dev', '/proc']);
 
@@ -440,15 +460,19 @@ function launchedCommand(socketFile, environment, argv) {
  * read-only, the user's private root directory covered the same way, and the evaluation
  * folder covered by an empty read-only file
  * system, so nothing under it can be read or written. A network namespace of
- * its own (`BUBBLEWRAP_NETWORK`) unless the entry declares `network: 'host'`:
- * a started HTTP server listens in it and the runtime reaches it through the
- * bridge of `confinement-relay.js`. Each of `sockets` (real paths of the host's
+ * its own (`BUBBLEWRAP_NETWORK`) for every call: a started HTTP server listens in
+ * it and the runtime reaches it through the bridge of `confinement-relay.js`, and
+ * a target reaches the hosts its entry authorizes through the egress proxy. Each of `sockets` (real paths of the host's
  * path-based Unix sockets, `host-sockets.js`) is covered by an empty device file
  * (Story 1.82); the mounts come before the binds, so a grant bound over one wins.
  * A socket's path goes into the vector as it is, since an argument carries any
  * character and a socket another user bound must not be able to refuse every call.
  * With `socketsFd`, the mounts are read from that descriptor (`--args`) and not
  * carried inline, so the number of sockets cannot overflow the argument limit.
+ * With `egress` (`{ directory, mount }`), the runtime's egress proxy directory
+ * (Story 1.83) is bound read-only at `mount`, a path beneath the synthetic `/dev`
+ * when the directory sits in the private root the sandbox empties, so the
+ * call's shim reaches the proxy's socket from inside the namespace.
  */
 function bubblewrapTargetArguments({
   executable,
@@ -460,9 +484,9 @@ function bubblewrapTargetArguments({
   rootHome = null,
   statusFile,
   statusMount,
-  network = 'isolated',
   sockets = [],
   socketsFd = null,
+  egress = null,
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
   const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
@@ -499,7 +523,7 @@ function bubblewrapTargetArguments({
   return [
     executable,
     '--unshare-user',
-    ...(network === 'host' ? [] : BUBBLEWRAP_NETWORK),
+    ...BUBBLEWRAP_NETWORK,
     '--ro-bind',
     '/',
     '/',
@@ -511,6 +535,8 @@ function bubblewrapTargetArguments({
     ...gitArguments,
     ...privateArguments,
     ...(statusMount === statusFile ? [] : ['--bind', realOf(statusFile), statusMount]),
+    // The egress proxy's directory is the runtime's: the target sees it read-only, and a `connect()` needs no write.
+    ...(egress === null || egress.mount === egress.directory ? [] : ['--ro-bind', realOf(egress.directory), egress.mount]),
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -803,6 +829,9 @@ function targetSandbox({
   let socketCalls = 0;
   let socketCallsCut = 0;
   let socketsLeftMost = 0;
+  // What the egress proxies of the calls refused (Story 1.83): each distinct request once with its count, and the number past the cap.
+  const egressRefused = new Map();
+  let egressOmitted = 0;
   // What the sandbox may read, besides the system's own directories, for one call: the paths the call may write, its
   // declared system paths, the private home and the worktree's own entry in the git directory and the private repository.
   const readRoots = (granted) =>
@@ -845,8 +874,10 @@ function targetSandbox({
      * alone, a started HTTP server's call) is the Unix socket the shim serves
      * as the runtime's way into the target's network namespace; it lies in a
      * directory `writable` names, which is the call's grant and the audit's.
-     * `network` (Bubblewrap alone) is `isolated`, the default, or `host` for an
-     * entry that declares it: the call keeps the host's network and has no bridge.
+     * `egress` (Bubblewrap alone) is the Unix socket of the runtime's egress proxy for the call (`openEgress`), in a directory of the
+     * runtime's own that the call sees read-only: the shim listens on a loopback port of the namespace, connects each connection to
+     * it and names the port in the target's proxy variables (Story 1.83). A call whose entries authorize no host has none.
+     * `listenPort` is the port a started server was told to bind in the namespace; the shim keeps its egress listener off it.
      * `sockets` (Bubblewrap alone) is the list of host sockets to hide, for a call made again after a socket it hid went away:
      * the call's own earlier list without the vanished ones, so no socket another process creates meanwhile joins it. Without
      * it the call asks `hostSockets` for a list, with room for the mounts its own command leaves (`socketBudget`).
@@ -854,7 +885,13 @@ function targetSandbox({
      * names and the call's end removes. `environment` is the environment the call's process starts with; the launcher gives
      * the target's the variables its shell touches as they were.
      */
-    wrap(target, args, writable = [], readable = [], { bridge = null, network = 'isolated', sockets: own = null, environment = {} } = {}) {
+    wrap(
+      target,
+      args,
+      writable = [],
+      readable = [],
+      { bridge = null, sockets: own = null, environment = {}, egress: egressSocket = null, listenPort = null } = {},
+    ) {
       const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
       if (confinement.mode === 'seatbelt') {
         const profile = seatbeltTargetProfile({
@@ -868,15 +905,35 @@ function targetSandbox({
         });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
-      if (bridge !== null && network === 'host') {
-        throw new ConfinementError('a target that keeps the host network has no bridge: it is reached directly');
-      }
       if (bridge !== null) {
         const granted =
           typeof bridge === 'string' &&
           path.isAbsolute(bridge) &&
           writable.some((held) => spellings(held).some((entry) => spellings(bridge).some((socket) => isInside(entry, socket))));
         if (!granted) throw new ConfinementError('the bridge socket must be a path inside a directory the call may write');
+      }
+      // The egress proxy's directory is the runtime's own and the target sees it read-only: a directory of the private root is
+      // bound at a path beneath the synthetic `/dev`, which keeps it out of the target's otherwise empty private root.
+      let egress = null;
+      if (egressSocket !== null) {
+        if (typeof egressSocket !== 'string' || !path.isAbsolute(egressSocket)) {
+          throw new ConfinementError("the egress socket must be an absolute path in a directory of the runtime's own");
+        }
+        const directory = spellings(path.dirname(egressSocket)).at(-1);
+        if (
+          spellings(directory).some((entry) =>
+            [workspace, ...grants].some((granted) => spellings(granted).some((held) => isInside(held, entry))),
+          )
+        ) {
+          throw new ConfinementError("the egress socket must lie outside the call's own grants, since the target could replace it");
+        }
+        egress = {
+          directory,
+          mount:
+            privateRoot !== null && spellings(privateRoot).some((held) => isInside(held, directory))
+              ? path.join('/dev', path.basename(directory))
+              : directory,
+        };
       }
       calls += 1;
       // A name the target cannot guess, made here and the only status file it may write, so no process can plant the
@@ -899,11 +956,21 @@ function targetSandbox({
           rootHome,
           statusFile,
           statusMount,
-          network,
           sockets: hidden,
           socketsFd,
+          egress,
         });
-      const tail = [process.execPath, STATUS_SHIM, ...(bridge === null ? [] : ['--bridge', bridge]), statusMount, target, ...args];
+      const tail = [
+        process.execPath,
+        STATUS_SHIM,
+        ...(bridge === null ? [] : ['--bridge', bridge]),
+        ...(egress === null ? [] : ['--egress', path.join(egress.mount, path.basename(egressSocket))]),
+        // A server told to bind a port of the namespace's loopback keeps it: the egress listener asks the system for another.
+        ...(egress === null || listenPort === null ? [] : ['--avoid', String(listenPort)]),
+        statusMount,
+        target,
+        ...args,
+      ];
       // Bubblewrap counts the whole command line and what `--args` reads toward one bound, the target's own arguments included, so
       // the room for mounts is what the command leaves: the vector, the shim and the target's arguments, and `--args <descriptor>`.
       const commandLength = targetVector([], null).length + tail.length + 2;
@@ -921,6 +988,7 @@ function targetSandbox({
               ...withheldRoots(),
               ...(fs.existsSync('/run/user') ? ['/run/user'] : []),
               ...SOCKET_REPLACED_DIRECTORIES,
+              ...(egress === null ? [] : [egress.directory]),
             ].flatMap(spellings),
             limit: room,
           });
@@ -984,6 +1052,7 @@ function targetSandbox({
           file,
           marker: { program: process.execPath, text: path.basename(statusFile) },
           grants: {
+            // The egress proxy's directory is no grant: the shim's `connect()` to its socket opens no path the trace holds.
             read: readRoots([...grants, ...readable, statusMount]),
             requested: REQUESTED_ROOTS.flatMap(spellings),
             // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
@@ -1038,6 +1107,24 @@ function targetSandbox({
       return confinement.mode === 'bubblewrap'
         ? { calls: socketCalls, truncatedCalls: socketCallsCut, socketsLeftReachable: socketsLeftMost }
         : null;
+    },
+    /**
+     * Notes a request an egress proxy refused (Story 1.83): `{ interfaceIds, host, port, address, reason, detail }`. Each distinct
+     * request is kept once with its count, at most `MAX_EGRESS_REFUSALS` of them, and the rest are counted.
+     */
+    noteEgressRefusal(refusal) {
+      const key = JSON.stringify([refusal.interfaceIds, refusal.host, refusal.port, refusal.address, refusal.reason]);
+      if (egressRefused.has(key)) egressRefused.get(key).count += 1;
+      else if (egressRefused.size < MAX_EGRESS_REFUSALS) egressRefused.set(key, { ...refusal, count: 1 });
+      else egressOmitted += 1;
+    },
+    /**
+     * What the calls' egress proxies refused: `{ refusals, omitted }`, each refusal naming the host, the port, the registry entries
+     * whose authorization was asked, the denial's reason and detail, the address when the host resolved and how many times the
+     * request was made, and the count of distinct requests past the cap; `null` where there is no proxy (Seatbelt).
+     */
+    egressReport() {
+      return confinement.mode === 'bubblewrap' ? { refusals: [...egressRefused.values()], omitted: egressOmitted } : null;
     },
     /** Ends the audit's observer. */
     release() {
@@ -1361,6 +1448,53 @@ function withTemporary(env, directory, home = null) {
 }
 
 /**
+ * A call's egress proxy (Story 1.83), or `null` when the call gets none: only a Bubblewrap call whose entries authorize at least one
+ * host has a route out. The proxy's socket sits in a private directory of the call beneath the run's private parent (the system's temp
+ * directory when the list has none, or `/tmp` when that leaves no room for a socket path), on the run's scratch list, so a signal that
+ * ends the run removes it with the rest of the scratch and a run killed outright leaves it to the recovery of a dead run's private
+ * parent. The authorization stays in this process's memory and no file carries it.
+ *
+ * @param {object} sandbox the call's `targetSandbox`
+ * @param {string[]} scratch the run's scratch list
+ * @param {object[]} authorizations the call's egress authorizations (`confinement-egress.js` `egressAuthorization`)
+ * @returns {Promise<{ socket: string, close: () => Promise<void> } | null>}
+ */
+async function openEgress(sandbox, scratch, authorizations) {
+  if (sandbox.mode !== 'bubblewrap' || authorizations.length === 0) return null;
+  const { evaluateTarget } = await loadEngine();
+  const fits = (base) => Buffer.byteLength(path.join(base, 'tea-egress-XXXXXX', EGRESS_SOCKET_NAME)) <= EGRESS_SOCKET_PATH_BYTES;
+  const temp = fs.realpathSync.native(os.tmpdir());
+  const base = typeof scratch.privateParent === 'string' ? scratch.privateParent : fits(temp) ? temp : '/tmp';
+  const made = fs.mkdtempSync(path.join(base, 'tea-egress-'));
+  scratch.push(made);
+  const directory = fs.realpathSync.native(made);
+  scratch[scratch.indexOf(made)] = directory;
+  const socket = path.join(directory, EGRESS_SOCKET_NAME);
+  let proxy = null;
+  const release = async () => {
+    await proxy?.close();
+    releaseTemporary(scratch, directory);
+  };
+  try {
+    if (Buffer.byteLength(socket) > EGRESS_SOCKET_PATH_BYTES) {
+      throw new ConfinementError(
+        `the egress socket's path ${JSON.stringify(socket)} is longer than ${EGRESS_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind`,
+      );
+    }
+    proxy = await startEgress({
+      socketPath: socket,
+      authorizations,
+      evaluateTarget,
+      onRefusal: (refusal) => sandbox.noteEgressRefusal(refusal),
+    });
+  } catch (error) {
+    await release();
+    throw error;
+  }
+  return { socket, close: release };
+}
+
+/**
  * eval-quality's command mechanism with every process started confined: the
  * request's target and arguments become the mechanism's command, and a
  * request naming `portFile` (a started HTTP server's) may also write the
@@ -1375,67 +1509,77 @@ function withTemporary(env, directory, home = null) {
  * the call may write) is the only one whose server the runtime can reach, and
  * the server call asks `bridges` before it makes one (`http-target.js`).
  */
-function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
+function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], egressOf = () => []) {
+  /** One call's attempts: the call is made again over its own list of sockets when Bubblewrap could not start over one that went away. */
+  const attempts = async (request, signal, egress) => {
+    const bridge = typeof request.bridge === 'string' ? request.bridge : null;
+    const writable = [
+      ...(typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : []),
+      ...(bridge === null ? [] : [path.dirname(bridge)]),
+    ];
+    // The list of sockets a call is made again over: the first start asks for one, a later start keeps its own.
+    let sockets = null;
+    for (;;) {
+      const temporary = callTemporary(scratch);
+      let wrapped = null;
+      let started = false;
+      let read = false;
+      try {
+        const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
+        wrapped = sandbox.wrap(
+          request.target,
+          [...request.subcommandPath, ...request.argv],
+          [...writable, temporary],
+          systemPathsOf(request.target),
+          { bridge, sockets, environment, egress, listenPort: Number.isInteger(request.listenPort) ? request.listenPort : null },
+        );
+        const result = await base.run(
+          {
+            ...request,
+            target: wrapped.target,
+            subcommandPath: [],
+            argv: wrapped.args,
+            env: environment,
+          },
+          signal,
+        );
+        const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+        read = true;
+        started = status.started;
+        if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
+        if (!status.started) {
+          const again = socketsToRetry(wrapped, signal, status);
+          if (again !== null) {
+            sockets = again;
+            continue;
+          }
+          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
+          const said = stderrTail(result?.stderr?.value ?? result?.stderr);
+          throw new ConfinementError(
+            `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+          );
+        }
+        if (status.valid === true && status.complete !== true)
+          throw new ConfinementError('the confined target status failed integrity verification');
+        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+      } finally {
+        // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
+        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
+        await sandbox.collect?.(wrapped, { started });
+        releaseSocketFile(wrapped);
+        releaseTemporary(scratch, temporary);
+      }
+    }
+  };
   return {
     bridges: sandbox.mode === 'bubblewrap',
     async run(request, signal) {
-      const bridge = typeof request.bridge === 'string' ? request.bridge : null;
-      const writable = [
-        ...(typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : []),
-        ...(bridge === null ? [] : [path.dirname(bridge)]),
-      ];
-      // The list of sockets a call is made again over: the first start asks for one, a later start keeps its own.
-      let sockets = null;
-      for (;;) {
-        const temporary = callTemporary(scratch);
-        let wrapped = null;
-        let started = false;
-        let read = false;
-        try {
-          const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
-          wrapped = sandbox.wrap(
-            request.target,
-            [...request.subcommandPath, ...request.argv],
-            [...writable, temporary],
-            systemPathsOf(request.target),
-            { bridge, network: networkOf(request.target), sockets, environment },
-          );
-          const result = await base.run(
-            {
-              ...request,
-              target: wrapped.target,
-              subcommandPath: [],
-              argv: wrapped.args,
-              env: environment,
-            },
-            signal,
-          );
-          const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-          read = true;
-          started = status.started;
-          if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
-          if (!status.started) {
-            const again = socketsToRetry(wrapped, signal, status);
-            if (again !== null) {
-              sockets = again;
-              continue;
-            }
-            // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
-            const said = stderrTail(result?.stderr?.value ?? result?.stderr);
-            throw new ConfinementError(
-              `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
-            );
-          }
-          if (status.valid === true && status.complete !== true)
-            throw new ConfinementError('the confined target status failed integrity verification');
-          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-        } finally {
-          // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
-          if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
-          await sandbox.collect?.(wrapped, { started });
-          releaseSocketFile(wrapped);
-          releaseTemporary(scratch, temporary);
-        }
+      // The call's route out, if its entries authorize any host: one proxy for every attempt, closed however the call ends.
+      const egress = await openEgress(sandbox, scratch, egressOf(request.target));
+      try {
+        return await attempts(request, signal, egress?.socket ?? null);
+      } finally {
+        await egress?.close();
       }
     },
     readArtifact(absolute, maxOutputBytes) {
@@ -1473,66 +1617,74 @@ function releaseSocketFile(wrapped) {
  * left and recorded as the signal's number negated, as a command's is; an
  * answered call has no exit, and the status a signal left is only removed.
  */
-function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
+function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], egressOf = () => []) {
+  const attempts = async (request, signal, egress) => {
+    let sockets = null;
+    for (;;) {
+      const temporary = callTemporary(scratch);
+      let wrapped = null;
+      let status = null;
+      try {
+        const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
+        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
+          sockets,
+          environment,
+          egress,
+        });
+        let result;
+        try {
+          result = await base.callTool(
+            {
+              ...request,
+              target: wrapped.target,
+              targetArgs: wrapped.args,
+              env: environment,
+            },
+            signal,
+          );
+        } catch (error) {
+          // A server whose Bubblewrap never started ends the session before it answers, which the adapter throws.
+          status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          const again = socketsToRetry(wrapped, signal, status);
+          if (again !== null) {
+            sockets = again;
+            continue;
+          }
+          throw error;
+        }
+        status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+        if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
+        if (typeof result.exitCode !== 'number') return result;
+        if (!status.started) {
+          const again = socketsToRetry(wrapped, signal, status);
+          if (again !== null) {
+            sockets = again;
+            continue;
+          }
+          // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
+          throw new ConfinementError(
+            `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
+          );
+        }
+        if (status.valid === true && status.complete !== true)
+          throw new ConfinementError('the confined tool server status failed integrity verification');
+        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+      } finally {
+        // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
+        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+        await sandbox.collect?.(wrapped, { started: status?.started === true });
+        releaseSocketFile(wrapped);
+        releaseTemporary(scratch, temporary);
+      }
+    }
+  };
   return {
     async callTool(request, signal) {
-      let sockets = null;
-      for (;;) {
-        const temporary = callTemporary(scratch);
-        let wrapped = null;
-        let status = null;
-        try {
-          const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
-          wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
-            network: networkOf(request.target),
-            sockets,
-            environment,
-          });
-          let result;
-          try {
-            result = await base.callTool(
-              {
-                ...request,
-                target: wrapped.target,
-                targetArgs: wrapped.args,
-                env: environment,
-              },
-              signal,
-            );
-          } catch (error) {
-            // A server whose Bubblewrap never started ends the session before it answers, which the adapter throws.
-            status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-            const again = socketsToRetry(wrapped, signal, status);
-            if (again !== null) {
-              sockets = again;
-              continue;
-            }
-            throw error;
-          }
-          status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-          if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
-          if (typeof result.exitCode !== 'number') return result;
-          if (!status.started) {
-            const again = socketsToRetry(wrapped, signal, status);
-            if (again !== null) {
-              sockets = again;
-              continue;
-            }
-            // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
-            throw new ConfinementError(
-              `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
-            );
-          }
-          if (status.valid === true && status.complete !== true)
-            throw new ConfinementError('the confined tool server status failed integrity verification');
-          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-        } finally {
-          // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
-          if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-          await sandbox.collect?.(wrapped, { started: status?.started === true });
-          releaseSocketFile(wrapped);
-          releaseTemporary(scratch, temporary);
-        }
+      const egress = await openEgress(sandbox, scratch, egressOf(request.target));
+      try {
+        return await attempts(request, signal, egress?.socket ?? null);
+      } finally {
+        await egress?.close();
       }
     },
   };
@@ -1544,18 +1696,18 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
  * that opted out, that none did.
  *
  * @param {object|null} confinement
- * @param {string[]} [hostNetwork] the interface IDs of the registry entries that declare `"network": "host"` (Story 1.63)
+ * @param {Array<{ interfaceId: string, hosts: string[] }>} [egress] the registry entries that authorize hosts, with their `host:port` items (Story 1.83)
  * @returns {string}
  */
-function forbiddenInputNote(confinement, hostNetwork = []) {
+function forbiddenInputNote(confinement, egress = []) {
   const handed =
     "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial.";
   if (!confines(confinement)) {
     return `${handed} The evaluation opted out of file-system confinement ("confinement": false), so the runtime does not sandbox the target's file system and a target that searches for the evaluation folder can reach it.`;
   }
   const shared =
-    confinement.mode === 'bubblewrap' && hostNetwork.length > 0
-      ? ` The registry entries ${hostNetwork.map((id) => JSON.stringify(id)).join(', ')} declare "network": "host" and keep the host's network, so their processes keep a route to the host's abstract Unix sockets; every other target runs in a network namespace of its own with a loopback only.`
+    confinement.mode === 'bubblewrap' && egress.length > 0
+      ? ` The registry entries ${egress.map((entry) => `${JSON.stringify(entry.interfaceId)} (${entry.hosts.join(', ')})`).join(', ')} authorize the hosts named, which their processes reach through the runtime's egress proxy and no other way; every target runs in a network namespace of its own with a loopback only, so none has a route to the host's abstract Unix sockets.`
       : '';
   return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.${shared}`;
 }

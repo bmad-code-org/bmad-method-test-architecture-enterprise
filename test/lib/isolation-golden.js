@@ -168,15 +168,17 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
       }).wrap('/fixture/bin/node', ['server.js'], [privateDirectory, bridgeDirectory], [], { bridge: `${bridgeDirectory}/bridge.sock` });
-      // An entry that declares `network: host` keeps the host's network: the same command with no network namespace (Story 1.63).
-      const bubblewrapHostWrapped = sandboxOf({
+      // An entry that authorizes hosts gets the runtime's egress proxy: its directory (beneath the private root, so bound at a synthetic
+      // /dev path, read-only) and the shim's `--egress` socket (Story 1.83).
+      const egressDirectory = `${privateRoot}/run-501-AbCdEf/tea-egress-AbCdEf`;
+      const bubblewrapEgressWrapped = sandboxOf({
         confinement: bubblewrapConfinement,
         workspace,
         git,
         privateRoot,
         home: rootHome,
         status: statusDirectory,
-      }).wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { network: 'host' });
+      }).wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { egress: `${egressDirectory}/s` });
       // The host's path-based Unix sockets the call hides each get an empty device file over their real path (Story 1.82); the
       // mounts reach Bubblewrap through a file the launcher opens, so the golden holds the vector and the file's arguments.
       const bubblewrapSocketsWrapped = sandboxOf({
@@ -278,7 +280,7 @@ function collectGeneratedOutputs() {
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus': { ...bubblewrapOwnedStatusWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
-        'confinement.targetSandbox.wrap.bubblewrap.host': { ...bubblewrapHostWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.egress': { ...bubblewrapEgressWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets': { ...bubblewrapSocketsWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets.arguments': socketArguments,
       };

@@ -105,6 +105,14 @@
  *                           shares), printing `contract-read: <how>` and
  *                           `runs-write: <how>` after the verdict, each
  *                           `allowed` or `refused <code>` (Story 1.31)
+ *   probe-egress            answer as usual, then ask the egress proxy HTTPS_PROXY
+ *                           names for a tunnel to each host:port VERDICT_TOUCH
+ *                           lists (comma separated) and connect to each
+ *                           directly, printing `egress-proxy: named` or
+ *                           `none`, `egress <host:port>: <status>` and
+ *                           `direct <host:port>: <how>` (Story 1.83)
+ *   hold-egress             answer as usual, then wait a minute, so a case can
+ *                           end the run while the call is live (Story 1.83)
  *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
  *                           names, outside the workspace, printing
  *                           `ungranted-read: <how>` after the verdict
@@ -433,6 +441,33 @@ if (act === 'probe-private') {
   }
   process.stdout.write(`${lines.join('\n')}\n`);
 }
+if (act === 'probe-egress') {
+  const proxy = process.env.HTTPS_PROXY ?? '';
+  process.stdout.write(`egress-proxy: ${proxy === '' ? 'none' : 'named'}\n`);
+  // Each attempt is a process of its own, as another process of the target's would be.
+  const through = `
+    const net = require('node:net');
+    const [proxy, target] = process.argv.slice(1);
+    const url = new URL(proxy);
+    const socket = net.connect({ host: url.hostname, port: Number(url.port) });
+    socket.on('connect', () => socket.write('CONNECT ' + target + ' HTTP/1.1\\r\\n\\r\\n'));
+    socket.on('data', (chunk) => { console.log(String(chunk).split(' ')[1]); socket.destroy(); });
+    socket.on('error', (error) => console.log('error ' + error.code));`;
+  const directly = `
+    const net = require('node:net');
+    const [host, port] = process.argv[1].split(':');
+    const socket = net.connect({ host, port: Number(port) });
+    socket.setTimeout(3000, () => { console.log('timeout'); socket.destroy(); });
+    socket.on('connect', () => { console.log('connected'); socket.destroy(); });
+    socket.on('error', (error) => console.log('refused ' + error.code));`;
+  for (const target of (process.env.VERDICT_TOUCH ?? '').split(',').filter(Boolean)) {
+    const tunneled = proxy === '' ? 'no proxy' : spawnSync(process.execPath, ['-e', through, proxy, target], { encoding: 'utf8', timeout: 20_000 }).stdout.trim();
+    process.stdout.write(`egress ${target}: ${tunneled || 'no answer'}\n`);
+    const direct = spawnSync(process.execPath, ['-e', directly, target], { encoding: 'utf8', timeout: 20_000 }).stdout.trim();
+    process.stdout.write(`direct ${target}: ${direct || 'no answer'}\n`);
+  }
+}
+if (act === 'hold-egress') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000);
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
   process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);
 }

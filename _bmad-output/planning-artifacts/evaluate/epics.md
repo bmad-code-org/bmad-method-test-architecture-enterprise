@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred twenty-five stories, including H.1 (Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.130 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred twenty-six stories, including H.1 (Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.130, 1.131 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.130.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.130, 1.131.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -164,133 +164,134 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after every lane drains, including the engine patch and TeA adoption in Story 1.104 and the partition follow-ups of Stories 1.105 to 1.111.
 
-| Order | Story | Depends on                                                                                                                                                                      |
-| ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | 1.1   | none                                                                                                                                                                            |
-| 2     | 1.2   | 1.1                                                                                                                                                                             |
-| 3     | 1.3   | 1.2                                                                                                                                                                             |
-| 4     | 1.4   | 1.3                                                                                                                                                                             |
-| 5     | 1.5   | 1.4                                                                                                                                                                             |
-| 6     | 1.6   | 1.5                                                                                                                                                                             |
-| 7     | 1.7   | 1.6                                                                                                                                                                             |
-| 8     | 1.8   | 1.7                                                                                                                                                                             |
-| 9     | 1.9   | 1.8                                                                                                                                                                             |
-| 10    | 1.17  | 1.9                                                                                                                                                                             |
-| 11    | 1.10  | 1.8, 1.17                                                                                                                                                                       |
-| 12    | 1.11  | 1.1, 1.8, 1.17                                                                                                                                                                  |
-| 13    | 1.32  | 1.9, 1.11                                                                                                                                                                       |
-| 14    | 1.18  | 1.8                                                                                                                                                                             |
-| 15    | 1.19  | 1.17                                                                                                                                                                            |
-| 16    | 1.20  | 1.17                                                                                                                                                                            |
-| 17    | 1.21  | 1.17                                                                                                                                                                            |
-| 18    | 1.22  | 1.17                                                                                                                                                                            |
-| 19    | 1.12  | 1.4, 1.21                                                                                                                                                                       |
-| 20    | 1.13  | 1.10, 1.11, 1.12, 1.18, 1.19                                                                                                                                                    |
-| 21    | 1.23  | 1.13, 1.19, 1.20, 1.21                                                                                                                                                          |
-| 22    | 1.14  | 1.9, 1.13, 1.22, 1.23                                                                                                                                                           |
-| 23    | 1.15  | 1.14                                                                                                                                                                            |
-| 24    | 1.16  | 1.15                                                                                                                                                                            |
-| 25    | 1.24  | 1.16                                                                                                                                                                            |
-| 26    | 1.25  | 1.24                                                                                                                                                                            |
-| 27    | 1.26  | 1.23, 1.25                                                                                                                                                                      |
-| 28    | 1.27  | 1.7                                                                                                                                                                             |
-| 29    | 1.28  | 1.7                                                                                                                                                                             |
-| 30    | 1.29  | 1.8                                                                                                                                                                             |
-| 31    | 1.30  | 1.8                                                                                                                                                                             |
-| 32    | 1.31  | 1.8, 1.17                                                                                                                                                                       |
-| 33    | 1.33  | 1.10, 1.11, 1.17                                                                                                                                                                |
-| 34    | 1.34  | 1.17, 1.21                                                                                                                                                                      |
-| 35    | 1.35  | 1.10                                                                                                                                                                            |
-| 36    | 1.36  | 1.11                                                                                                                                                                            |
-| 37    | 1.37  | 1.11                                                                                                                                                                            |
-| 38    | 1.38  | 1.32                                                                                                                                                                            |
-| 39    | 1.39  | 1.18                                                                                                                                                                            |
-| 40    | 1.40  | 1.17, 1.21                                                                                                                                                                      |
-| 41    | 1.41  | 1.8, 1.21                                                                                                                                                                       |
-| 42    | 1.42  | 1.22                                                                                                                                                                            |
-| 43    | 1.43  | 1.20, 1.23                                                                                                                                                                      |
-| 44    | 1.44  | 1.17, 1.23                                                                                                                                                                      |
-| 45    | 1.45  | 1.8, 1.14, 1.21                                                                                                                                                                 |
-| 46    | 1.46  | 1.16                                                                                                                                                                            |
-| 47    | 1.47  | 1.27                                                                                                                                                                            |
-| 48    | 1.48  | 1.27                                                                                                                                                                            |
-| 49    | 1.49  | 1.27                                                                                                                                                                            |
-| 50    | 1.50  | 1.11, 1.24                                                                                                                                                                      |
-| 51    | 1.51  | 1.21, 1.24                                                                                                                                                                      |
-| 52    | 1.52  | 1.28                                                                                                                                                                            |
-| 53    | 1.53  | 1.28                                                                                                                                                                            |
-| 54    | 1.54  | 1.28                                                                                                                                                                            |
-| 55    | 1.55  | 1.26                                                                                                                                                                            |
-| 56    | 1.56  | 1.26, 1.55                                                                                                                                                                      |
-| 57    | 1.57  | 1.31                                                                                                                                                                            |
-| 58    | 1.58  | 1.31                                                                                                                                                                            |
-| 59    | 1.59  | 1.31                                                                                                                                                                            |
-| 60    | 1.60  | 1.31                                                                                                                                                                            |
-| 61    | 1.61  | 1.31                                                                                                                                                                            |
-| 62    | 1.62  | 1.31                                                                                                                                                                            |
-| 63    | 1.63  | 1.31, 1.60                                                                                                                                                                      |
-| 64    | 1.64  | 1.38, 1.65                                                                                                                                                                      |
-| 65    | 1.65  | 1.38                                                                                                                                                                            |
-| 66    | 1.66  | 1.11, 1.38                                                                                                                                                                      |
-| 67    | 1.67  | 1.40                                                                                                                                                                            |
-| 68    | 1.68  | 1.41                                                                                                                                                                            |
-| 69    | 1.69  | 1.68                                                                                                                                                                            |
-| 70    | 1.70  | 1.43                                                                                                                                                                            |
-| 71    | 1.71  | 1.44                                                                                                                                                                            |
-| 72    | 1.72  | 1.34, 1.44                                                                                                                                                                      |
-| 73    | 1.73  | 1.44, 1.71                                                                                                                                                                      |
-| 74    | 1.74  | 1.66                                                                                                                                                                            |
-| 75    | 1.75  | 1.65                                                                                                                                                                            |
-| 76    | 1.80  | 1.57                                                                                                                                                                            |
-| 77    | 1.81  | 1.60                                                                                                                                                                            |
-| 78    | 1.82  | 1.63                                                                                                                                                                            |
-| 79    | 1.83  | 1.63                                                                                                                                                                            |
-| 80    | 1.84  | 1.61, 1.83                                                                                                                                                                      |
-| 81    | 1.85  | 1.80                                                                                                                                                                            |
-| 82    | 1.86  | 1.60, 1.82                                                                                                                                                                      |
-| 83    | 1.87  | 1.82                                                                                                                                                                            |
-| 84    | 1.88  | 1.82                                                                                                                                                                            |
-| 85    | 1.89  | 1.82                                                                                                                                                                            |
-| 86    | 1.130 | none                                                                                                                                                                            |
-| 87    | 1.90  | 2.1                                                                                                                                                                             |
-| 88    | 1.91  | 2.1                                                                                                                                                                             |
-| 89    | 1.92  | 2.2                                                                                                                                                                             |
-| 90    | 1.93  | 2.3                                                                                                                                                                             |
-| 91    | 1.94  | 2.3                                                                                                                                                                             |
-| 92    | 1.95  | 2.3                                                                                                                                                                             |
-| 93    | 1.96  | 2.4                                                                                                                                                                             |
-| 94    | 1.97  | 2.3, 2.4                                                                                                                                                                        |
-| 95    | 1.98  | 1.24, 2.4                                                                                                                                                                       |
-| 96    | 1.99  | 1.49                                                                                                                                                                            |
-| 97    | 1.100 | 1.48, 1.99                                                                                                                                                                      |
-| 98    | 1.101 | 1.42                                                                                                                                                                            |
-| 99    | 1.102 | 1.42                                                                                                                                                                            |
-| 100   | 1.103 | 1.42                                                                                                                                                                            |
-| 101   | 1.104 | 1.55                                                                                                                                                                            |
-| 102   | 1.105 | 1.51, 1.9                                                                                                                                                                       |
-| 103   | 1.106 | 1.51, 1.105                                                                                                                                                                     |
-| 104   | 1.107 | 1.51, 1.20                                                                                                                                                                      |
-| 105   | 1.108 | 1.51, 2.2                                                                                                                                                                       |
-| 106   | 1.109 | 1.51, 1.14                                                                                                                                                                      |
-| 107   | 1.110 | 1.51                                                                                                                                                                            |
-| 108   | 1.111 | 1.51, 1.84                                                                                                                                                                      |
-| 109   | 1.112 | 1.31                                                                                                                                                                            |
-| 110   | 1.113 | 1.59, 1.46                                                                                                                                                                      |
-| 111   | 1.114 | 1.51, 1.111                                                                                                                                                                     |
-| 112   | 1.115 | 1.12                                                                                                                                                                            |
-| 113   | 1.116 | 1.46                                                                                                                                                                            |
-| 114   | 1.76  | 1.72                                                                                                                                                                            |
-| 115   | 1.77  | 1.75                                                                                                                                                                            |
-| 116   | 1.78  | 1.76                                                                                                                                                                            |
-| 117   | 1.79  | 1.78                                                                                                                                                                            |
-| 118   | 1.120 | 1.80                                                                                                                                                                            |
-| 119   | 1.121 | 1.99                                                                                                                                                                            |
-| 120   | 2.1   | 1.16, 1.26, 1.45                                                                                                                                                                |
-| 121   | 2.2   | 2.1                                                                                                                                                                             |
-| 122   | 2.3   | 2.2                                                                                                                                                                             |
-| 123   | 2.4   | 2.3                                                                                                                                                                             |
-| 124   | 2.5   | 2.4                                                                                                                                                                             |
-| 125   | H.1   | 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.86, 1.87, 1.88, 1.89, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.130, 1.120, 1.121, 2.5 |
+| Order | Story | Depends on                                                                                                                                                                             |
+| ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | 1.1   | none                                                                                                                                                                                   |
+| 2     | 1.2   | 1.1                                                                                                                                                                                    |
+| 3     | 1.3   | 1.2                                                                                                                                                                                    |
+| 4     | 1.4   | 1.3                                                                                                                                                                                    |
+| 5     | 1.5   | 1.4                                                                                                                                                                                    |
+| 6     | 1.6   | 1.5                                                                                                                                                                                    |
+| 7     | 1.7   | 1.6                                                                                                                                                                                    |
+| 8     | 1.8   | 1.7                                                                                                                                                                                    |
+| 9     | 1.9   | 1.8                                                                                                                                                                                    |
+| 10    | 1.17  | 1.9                                                                                                                                                                                    |
+| 11    | 1.10  | 1.8, 1.17                                                                                                                                                                              |
+| 12    | 1.11  | 1.1, 1.8, 1.17                                                                                                                                                                         |
+| 13    | 1.32  | 1.9, 1.11                                                                                                                                                                              |
+| 14    | 1.18  | 1.8                                                                                                                                                                                    |
+| 15    | 1.19  | 1.17                                                                                                                                                                                   |
+| 16    | 1.20  | 1.17                                                                                                                                                                                   |
+| 17    | 1.21  | 1.17                                                                                                                                                                                   |
+| 18    | 1.22  | 1.17                                                                                                                                                                                   |
+| 19    | 1.12  | 1.4, 1.21                                                                                                                                                                              |
+| 20    | 1.13  | 1.10, 1.11, 1.12, 1.18, 1.19                                                                                                                                                           |
+| 21    | 1.23  | 1.13, 1.19, 1.20, 1.21                                                                                                                                                                 |
+| 22    | 1.14  | 1.9, 1.13, 1.22, 1.23                                                                                                                                                                  |
+| 23    | 1.15  | 1.14                                                                                                                                                                                   |
+| 24    | 1.16  | 1.15                                                                                                                                                                                   |
+| 25    | 1.24  | 1.16                                                                                                                                                                                   |
+| 26    | 1.25  | 1.24                                                                                                                                                                                   |
+| 27    | 1.26  | 1.23, 1.25                                                                                                                                                                             |
+| 28    | 1.27  | 1.7                                                                                                                                                                                    |
+| 29    | 1.28  | 1.7                                                                                                                                                                                    |
+| 30    | 1.29  | 1.8                                                                                                                                                                                    |
+| 31    | 1.30  | 1.8                                                                                                                                                                                    |
+| 32    | 1.31  | 1.8, 1.17                                                                                                                                                                              |
+| 33    | 1.33  | 1.10, 1.11, 1.17                                                                                                                                                                       |
+| 34    | 1.34  | 1.17, 1.21                                                                                                                                                                             |
+| 35    | 1.35  | 1.10                                                                                                                                                                                   |
+| 36    | 1.36  | 1.11                                                                                                                                                                                   |
+| 37    | 1.37  | 1.11                                                                                                                                                                                   |
+| 38    | 1.38  | 1.32                                                                                                                                                                                   |
+| 39    | 1.39  | 1.18                                                                                                                                                                                   |
+| 40    | 1.40  | 1.17, 1.21                                                                                                                                                                             |
+| 41    | 1.41  | 1.8, 1.21                                                                                                                                                                              |
+| 42    | 1.42  | 1.22                                                                                                                                                                                   |
+| 43    | 1.43  | 1.20, 1.23                                                                                                                                                                             |
+| 44    | 1.44  | 1.17, 1.23                                                                                                                                                                             |
+| 45    | 1.45  | 1.8, 1.14, 1.21                                                                                                                                                                        |
+| 46    | 1.46  | 1.16                                                                                                                                                                                   |
+| 47    | 1.47  | 1.27                                                                                                                                                                                   |
+| 48    | 1.48  | 1.27                                                                                                                                                                                   |
+| 49    | 1.49  | 1.27                                                                                                                                                                                   |
+| 50    | 1.50  | 1.11, 1.24                                                                                                                                                                             |
+| 51    | 1.51  | 1.21, 1.24                                                                                                                                                                             |
+| 52    | 1.52  | 1.28                                                                                                                                                                                   |
+| 53    | 1.53  | 1.28                                                                                                                                                                                   |
+| 54    | 1.54  | 1.28                                                                                                                                                                                   |
+| 55    | 1.55  | 1.26                                                                                                                                                                                   |
+| 56    | 1.56  | 1.26, 1.55                                                                                                                                                                             |
+| 57    | 1.57  | 1.31                                                                                                                                                                                   |
+| 58    | 1.58  | 1.31                                                                                                                                                                                   |
+| 59    | 1.59  | 1.31                                                                                                                                                                                   |
+| 60    | 1.60  | 1.31                                                                                                                                                                                   |
+| 61    | 1.61  | 1.31                                                                                                                                                                                   |
+| 62    | 1.62  | 1.31                                                                                                                                                                                   |
+| 63    | 1.63  | 1.31, 1.60                                                                                                                                                                             |
+| 64    | 1.64  | 1.38, 1.65                                                                                                                                                                             |
+| 65    | 1.65  | 1.38                                                                                                                                                                                   |
+| 66    | 1.66  | 1.11, 1.38                                                                                                                                                                             |
+| 67    | 1.67  | 1.40                                                                                                                                                                                   |
+| 68    | 1.68  | 1.41                                                                                                                                                                                   |
+| 69    | 1.69  | 1.68                                                                                                                                                                                   |
+| 70    | 1.70  | 1.43                                                                                                                                                                                   |
+| 71    | 1.71  | 1.44                                                                                                                                                                                   |
+| 72    | 1.72  | 1.34, 1.44                                                                                                                                                                             |
+| 73    | 1.73  | 1.44, 1.71                                                                                                                                                                             |
+| 74    | 1.74  | 1.66                                                                                                                                                                                   |
+| 75    | 1.75  | 1.65                                                                                                                                                                                   |
+| 76    | 1.80  | 1.57                                                                                                                                                                                   |
+| 77    | 1.81  | 1.60                                                                                                                                                                                   |
+| 78    | 1.82  | 1.63                                                                                                                                                                                   |
+| 79    | 1.83  | 1.63                                                                                                                                                                                   |
+| 80    | 1.84  | 1.61, 1.83                                                                                                                                                                             |
+| 81    | 1.85  | 1.80                                                                                                                                                                                   |
+| 82    | 1.86  | 1.60, 1.82                                                                                                                                                                             |
+| 83    | 1.87  | 1.82                                                                                                                                                                                   |
+| 84    | 1.88  | 1.82                                                                                                                                                                                   |
+| 85    | 1.89  | 1.82                                                                                                                                                                                   |
+| 86    | 1.130 | none                                                                                                                                                                                   |
+| 87    | 1.131 | 1.54, 1.83                                                                                                                                                                             |
+| 88    | 1.90  | 2.1                                                                                                                                                                                    |
+| 89    | 1.91  | 2.1                                                                                                                                                                                    |
+| 90    | 1.92  | 2.2                                                                                                                                                                                    |
+| 91    | 1.93  | 2.3                                                                                                                                                                                    |
+| 92    | 1.94  | 2.3                                                                                                                                                                                    |
+| 93    | 1.95  | 2.3                                                                                                                                                                                    |
+| 94    | 1.96  | 2.4                                                                                                                                                                                    |
+| 95    | 1.97  | 2.3, 2.4                                                                                                                                                                               |
+| 96    | 1.98  | 1.24, 2.4                                                                                                                                                                              |
+| 97    | 1.99  | 1.49                                                                                                                                                                                   |
+| 98    | 1.100 | 1.48, 1.99                                                                                                                                                                             |
+| 99    | 1.101 | 1.42                                                                                                                                                                                   |
+| 100   | 1.102 | 1.42                                                                                                                                                                                   |
+| 101   | 1.103 | 1.42                                                                                                                                                                                   |
+| 102   | 1.104 | 1.55                                                                                                                                                                                   |
+| 103   | 1.105 | 1.51, 1.9                                                                                                                                                                              |
+| 104   | 1.106 | 1.51, 1.105                                                                                                                                                                            |
+| 105   | 1.107 | 1.51, 1.20                                                                                                                                                                             |
+| 106   | 1.108 | 1.51, 2.2                                                                                                                                                                              |
+| 107   | 1.109 | 1.51, 1.14                                                                                                                                                                             |
+| 108   | 1.110 | 1.51                                                                                                                                                                                   |
+| 109   | 1.111 | 1.51, 1.84                                                                                                                                                                             |
+| 110   | 1.112 | 1.31                                                                                                                                                                                   |
+| 111   | 1.113 | 1.59, 1.46                                                                                                                                                                             |
+| 112   | 1.114 | 1.51, 1.111                                                                                                                                                                            |
+| 113   | 1.115 | 1.12                                                                                                                                                                                   |
+| 114   | 1.116 | 1.46                                                                                                                                                                                   |
+| 115   | 1.76  | 1.72                                                                                                                                                                                   |
+| 116   | 1.77  | 1.75                                                                                                                                                                                   |
+| 117   | 1.78  | 1.76                                                                                                                                                                                   |
+| 118   | 1.79  | 1.78                                                                                                                                                                                   |
+| 119   | 1.120 | 1.80                                                                                                                                                                                   |
+| 120   | 1.121 | 1.99                                                                                                                                                                                   |
+| 121   | 2.1   | 1.16, 1.26, 1.45                                                                                                                                                                       |
+| 122   | 2.2   | 2.1                                                                                                                                                                                    |
+| 123   | 2.3   | 2.2                                                                                                                                                                                    |
+| 124   | 2.4   | 2.3                                                                                                                                                                                    |
+| 125   | 2.5   | 2.4                                                                                                                                                                                    |
+| 126   | H.1   | 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.86, 1.87, 1.88, 1.89, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.130, 1.120, 1.121, 1.131, 2.5 |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -298,7 +299,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75, 1.76, 1.77, 1.78, 1.103, 1.99, 1.94, 1.100, 1.105, 1.106, 1.107, 1.109, 1.110, 1.79, 1.120, 1.121. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end. Story 1.76 was appended from Story 1.72's review; it tightens the custom adapter's version response contract and follows the initial version binding. Story 1.77 was appended from Story 1.75's round 1 review; it widens the collision rule that 1.75 writes in `check.js`, so it needs only 1.75 and joins the end. Story 1.78 was appended from Story 1.76's round 1 verification review; it extends the custom-agent version tests that 1.76 writes and needs only 1.76, so it joins the end. Story 1.79 was appended from Story 1.78's round 1 review; it extends the case 1.78 writes and needs only 1.78, so it joins the end.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84, 1.85, 1.112, 1.113, 1.92, 1.108, 1.96, 1.93, 1.97, 1.95, 1.86, 1.87, 1.88, 1.89, 1.130. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner. Story 1.85 was appended from Story 1.80's build and follows 1.80, whose build it changes. Stories 1.112 and 1.113 come from Story 1.46's build and edit the workspace and confinement files lane 2 owns, so they follow 1.85; 1.113 also waits for Story 1.46's merge. Stories 1.86, 1.87, 1.88 and 1.89 were appended from Story 1.82's build and follow 1.82, whose mounts, launcher and reference sentences they extend; they join the end. Story 1.130 was appended from Story 1.82's merge, after a GitHub outage failed a shard in the actionlint install step; it touches the workflow files only and joins the end.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84, 1.85, 1.112, 1.113, 1.92, 1.108, 1.96, 1.93, 1.97, 1.95, 1.86, 1.87, 1.88, 1.89, 1.130, 1.131. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner. Story 1.85 was appended from Story 1.80's build and follows 1.80, whose build it changes. Stories 1.112 and 1.113 come from Story 1.46's build and edit the workspace and confinement files lane 2 owns, so they follow 1.85; 1.113 also waits for Story 1.46's merge. Stories 1.86, 1.87, 1.88 and 1.89 were appended from Story 1.82's build and follow 1.82, whose mounts, launcher and reference sentences they extend; they join the end. Story 1.130 was appended from Story 1.82's merge, after a GitHub outage failed a shard in the actionlint install step; it touches the workflow files only and joins the end. Story 1.131 was appended from Story 1.83's build, which found that a run killed outright leaves the call's temp, port and bridge directories in the temp directory, and it follows 1.83, whose proxy directory sits beneath the private parent by the mount this story extends; it joins the end.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 1.101, 1.102, 1.104, 1.98, 2.5, 1.90, 1.91, 1.111, 1.114, 1.115, 1.116. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5), so it runs first, and 2.5 waits for every story that changes committed evidence bytes before it baselines the fixtures (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them. Story 1.111 edits `SKILL.md`, whose digest the live capture records pin, so it runs first of the appended stories that follow it and shares the recapture of Story 1.84. Stories 1.114, 1.115 and 1.116 come from Story 1.46's build and follow 1.111 (1.116 waits for Story 1.46's merge, since it changes the contract the clean live run measured): they edit guides and never `SKILL.md`. Stories 1.112 and 1.113, from the same build, run in lane 2.
 
@@ -1803,6 +1804,8 @@ The finding that path-based sockets stay connectable is Story 1.82.)
 Every entry, a command, a tool server or a started HTTP service, takes `network`, `"isolated"` by default or `"host"`; under Bubblewrap a `host` entry runs without `--unshare-net` and without a bridge, and Seatbelt accepts the field and ignores it.
 A skill or agent target on Linux calls its model provider and a started service may call a model, so the isolated default would cut them off, and `"confinement": false` would drop their file-system confinement too; the run records each entry that declares `host` as a route to the host's abstract sockets, which Story 1.83 closes by giving an isolated entry a route to the hosts it authorizes.)
 
+(Amended 2026-10-03 in Story 1.83's build: the per-entry `network` field above is removed and the `host` value with it; an entry lists the hosts it may reach in `egress`, and `run.json` records `egress` and `egressRefusals` in place of `hostNetwork`.)
+
 ### Story 1.64: Hold the release across the witness legs and the trials
 
 Added 2026-09-30 in Story 1.38 from its review. Story 1.38 asks each deployment which release it runs once, before the qualification arms. The manifestation-witness legs and the trials of the arm `historical:<pre-fix release>` reach the pre-fix deployment afterwards (`deploymentRoute`), so a deployment redeployed between the report and those calls is measured under the identifier the probe declares, and the digests a qualified probe records name a release the trials never ran against.
@@ -2192,6 +2195,13 @@ So that an agent runs isolated, with a route to its model provider alone, and `n
 **Dependencies:** 1.63.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
 
+(Amended 2026-10-03 in Story 1.83's build: the authorization is a registry field, `egress`, on a command, tool-server or HTTP entry that starts a process: a list of `{ "host", "port", "addresses" }` items, each becoming an eval-quality `ProbeTargetAuthorization` (scheme `https`, method `GET`, since a tunnel shows the runtime neither) that `check` parses through `parseProbeTargetPolicy`, holds to the URL spelling of the host, refuses twice and refuses on an HTTP entry that names no server; entries that start one target must list the same `egress`.
+The route is the mirror of the bridge: the runtime serves an HTTP `CONNECT` proxy on a Unix socket in a private directory of the call beneath the run's private parent (the temp directory, or `/tmp` when that leaves no room for a socket path, where the list has none), the directory is bound read-only at a path under the synthetic `/dev` after the private root is emptied, and the call's status shim (`--egress`) listens on a loopback port of the namespace, connects each connection to that socket and starts the target with `HTTPS_PROXY`, `https_proxy` and `NODE_USE_ENV_PROXY=1`; the namespace keeps a loopback and nothing else, and a call whose entries list no host has no proxy and no variable.
+The proxy asks `evaluateTarget` with no address first, so a host and port no item lists is refused before the name is resolved, then resolves the host and connects to a resolved address an item names, the next when one cannot be reached, and to no other; every refusal answers `403` naming the reason, the host and the entry, and `run.json`'s `egressRefusals` lists each trial's refusals (at most 50 distinct requests a trial, the rest counted in `omitted`) with the summary naming the trials, beside `egress`, which replaces `hostNetwork`.
+The proxy and its authorization are private to the call: the authorization lives in the runtime's memory and no file carries it, the directory is on the run's scratch list, and the end of the call, its failure, a signal that ends the run and a kill of the run (the next run over the evaluation reclaims the dead run's private parent) remove it.
+`"network"` is removed from the schema: `check` refuses an entry that declares it, naming the entry and pointing at `egress`, and no `network: host` run remains.
+Raw TCP clients and plain `http_proxy` clients have no route, which the reference and the gaps guide state; `ci.md` keeps its entry with no `egress`, and Story 1.84 teaches it there.)
+
 ### Story 1.84: Teach a Linux skill target's network declaration in the CI guide and rerun its live sessions
 
 Added 2026-10-02 in Story 1.61's build, from the `ci.md` part of Story 1.61's earlier amendment.
@@ -2213,6 +2223,8 @@ So that the plan's live checks reach the model provider on a Linux runner (CAP-1
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
 (Lane 2 runs Story 1.83 first. Story 1.83 removes `"network": "host"` from the schema and leaves `ci.md` to this story, so the example teaches the authorization 1.83 introduces, and one rerun of the live sessions covers the edit.)
+
+(Amended 2026-10-03 in Story 1.83's build: the authorization is an `egress` item `{ "host", "port", "addresses" }` on the entry, so the `ci-registry` example lists the model provider's host, port and addresses there, `checkCiGuidance` holds the sentence about it as the marker, and the example's `evaluation.json` form is the one the harness guide's registry fragment shows.)
 
 **Dependencies:** 1.61, 1.83.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
@@ -2338,6 +2350,28 @@ So that a GitHub outage of a few minutes cannot fail a shard, and a corrupt down
 
 **Dependencies:** none.
 **Gate:** `test:ci-coverage`, `actionlint` on both workflow files, `npm test`, and the Linux CI job.
+
+### Story 1.131: Give a killed run's call directories to the recovery of its private parent
+
+Added 2026-10-03 in Story 1.83's build. A run that ends by a signal it handles removes every directory on its scratch list, and the next run over the evaluation reclaims the private parent a run killed outright left (Story 1.54).
+The directories a confined call hands its target are not beneath that parent: the call's temp directory (`tea-evaluate-target-tmp-*`), a started service's port directory (`tea-evaluate-port-*`) and its bridge directory (`tea-nb-*`) sit in the system's temp directory, since the sandbox empties the private root and a grant beneath it would be hidden.
+A run killed by `SIGKILL` leaves each of them behind, and nothing reclaims them.
+Story 1.83 gave the egress proxy's directory the way out: it sits beneath the private parent and is bound at a path under the synthetic `/dev`.
+
+As an adopter whose CI kills a run that overran its budget,
+I want the directories a call hands its target to be reclaimed with the dead run's private parent,
+So that a killed run leaves nothing in the temp directory (AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a Linux run over the verdict fixture whose target holds a call open, killed with `SIGKILL`, and a second run over the same evaluation
+**When** the second run starts
+**Then** the temp directory the first run used holds no `tea-evaluate-target-tmp-*`, `tea-evaluate-port-*` or `tea-nb-*` directory, and the second run's output names the reclaimed private parent; a call directory made in the system's temp directory again fails the case, which is the revert check
+**And** the target still reaches each directory it is handed: its `TMPDIR` is writable, a started service's port file is written and read, and the bridge answers, which the confined pipeline of `test:evaluate-api` runs under Bubblewrap (a call directory bound at a path under the synthetic `/dev` and left out of the audit's observed mounts); binding a directory at a path the sandbox hides fails the pipeline, which is the second revert check
+**And** Story 1.62's byte-identity golden holds the new vectors, a diff the story reads and states, and the reference states where each call directory lives and that a killed run's are reclaimed; a case reading `### File-system confinement` fails while the old sentence remains.
+
+**Dependencies:** 1.54, 1.83.
+**Gate:** `test:evaluate-confinement`, `test:evaluate-run`, `test:evaluate-api`, `test:isolation-primitives`, `npm test`, and the Linux CI job.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 
@@ -3156,7 +3190,7 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` chain script, which the `chain` matrix of `quality.yaml` runs (amended 2026-09-25 in Story 1.9), in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
 4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
-**Dependencies:** 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.120, 1.121, 2.5.
+**Dependencies:** 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.120, 1.121, 1.131, 2.5.
 
 ## Traceability
 

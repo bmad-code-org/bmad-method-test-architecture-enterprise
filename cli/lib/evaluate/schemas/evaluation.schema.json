@@ -428,9 +428,34 @@
         "pattern": "^/[^\"\\\\\\u0000-\\u001f]*$"
       }
     },
-    "Network": {
-      "description": "The network a confined target's processes run in (Story 1.63). isolated, the default: under Linux Bubblewrap the entry's processes run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets do not exist for them, and an HTTP service the runtime starts is reached through a bridge the runtime owns. host: the entry's processes keep the host's network, which a target needs to call a model provider, an outside service or a database on the host's loopback (a Linux skill or agent target does), and which leaves them a route to the host's abstract Unix sockets; the run records each entry that declares it. macOS Seatbelt has no network namespace: it accepts the field and ignores it.",
-      "enum": ["isolated", "host"]
+    "Egress": {
+      "description": "The hosts a confined target's processes may reach (Story 1.83). Under Linux Bubblewrap an entry's processes run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets do not exist for them and neither does the network. An entry that needs a host (a model provider, an outside HTTPS service) lists it here, and each call of the entry gets one route out: a proxy the runtime owns, reached through a Unix socket of the call's own and announced to the target in HTTPS_PROXY and https_proxy, which tunnels an HTTP CONNECT request for a listed host and port and refuses every other. eval-quality's evaluateTarget decides each request as it decides the evaluation's HTTP port's: the host and port must be an item's, and the address the host resolves to must be one the item names. A refusal answers the target 403 and is recorded in run.json under egressRefusals with the host and the entry. A host is a name of letters, digits, \".\", \"-\" and \"_\" of at most 253 bytes or an IPv6 address, and a wildcard is not supported. An entry with no egress reaches no host. The shim announces the proxy in HTTPS_PROXY alone and the proxy reads CONNECT alone, so a client that opens no CONNECT tunnel (a plain http:// request, a database driver) has no route, and an entry whose target needs one sets \"confinement\": false with a recorded reason. A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not. macOS Seatbelt has no network namespace: it accepts the field and ignores it.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host", "port", "addresses"],
+        "properties": {
+          "host": {
+            "description": "The host a client asks the proxy for, written as a URL spells it, letter case aside (an IPv4 address in dotted decimal, an IPv6 address compressed and unbracketed, a name in punycode), which check holds it to, since the proxy hands eval-quality's policy the hostname of the request.",
+            "type": "string",
+            "minLength": 1
+          },
+          "port": {
+            "description": "The port a client asks the proxy for.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "addresses": {
+            "description": "The exact addresses eval-quality allows the host to resolve to, compared after parsing: a loopback, private, link-local or metadata address is allowed only when named here, and so is every public one. The proxy connects to a resolved address the list names, the next when one cannot be reached, and to no other.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
     },
     "RegistryEntry": {
       "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
@@ -525,7 +550,7 @@
           }
         },
         "systemPaths": { "$ref": "#/$defs/SystemPaths" },
-        "network": { "$ref": "#/$defs/Network" }
+        "egress": { "$ref": "#/$defs/Egress" }
       }
     },
     "McpRegistryEntry": {
@@ -591,7 +616,7 @@
           "minimum": 1
         },
         "systemPaths": { "$ref": "#/$defs/SystemPaths" },
-        "network": { "$ref": "#/$defs/Network" }
+        "egress": { "$ref": "#/$defs/Egress" }
       }
     },
     "ApiRegistryEntry": {
@@ -791,7 +816,7 @@
           }
         },
         "systemPaths": { "$ref": "#/$defs/SystemPaths" },
-        "network": { "$ref": "#/$defs/Network" }
+        "egress": { "$ref": "#/$defs/Egress" }
       }
     }
   }

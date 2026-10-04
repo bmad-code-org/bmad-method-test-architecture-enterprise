@@ -2,7 +2,7 @@
 title: "Story 1.81: Record how much of the macOS audit the kernel's log lost"
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f74ae848'

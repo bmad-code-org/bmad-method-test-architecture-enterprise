@@ -24,7 +24,16 @@
         5,
         6
       ],
-      "network": "host"
+      "egress": [
+        {
+          "host": "api.anthropic.com",
+          "port": 443,
+          "addresses": [
+            "160.79.104.10",
+            "2607:6bc0::10"
+          ]
+        }
+      ]
     }
   ],
   "launch": {

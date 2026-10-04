@@ -2,7 +2,7 @@
 title: "Story 1.82: Give a Bubblewrap target no route to the host's path-based Unix sockets"
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 4
 baseline_commit: '7c3b0521'

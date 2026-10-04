@@ -139,8 +139,10 @@ const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target'
 const { lineNamesOperation, reportedOperations, reportsProblems, signatureCollisionLine } = require('./release-report');
 const {
   apiRegistryProblems,
+  egressRegistryProblems,
   kindOf,
   mcpRegistryProblems,
+  removedNetworkProblem,
   principalMappingProblems,
   repeatedPairs,
   sharedInterfaces,
@@ -229,17 +231,36 @@ function readJsonFile(file) {
 }
 
 /** Ajv's errors as one line each, naming the instance location and what it broke. */
-function describeErrors(errors) {
-  return (errors ?? []).map((error) => {
-    const where = error.instancePath === '' ? '(root)' : error.instancePath;
-    const detail =
-      error.params?.additionalProperty === undefined
-        ? error.params?.allowedValues === undefined
-          ? ''
-          : ` (${error.params.allowedValues.map((value) => JSON.stringify(value)).join(', ')})`
-        : ` (${JSON.stringify(error.params.additionalProperty)})`;
-    return `${where} ${error.message}${detail}`;
-  });
+function describeErrors(errors, value) {
+  const retiredEntry = (error) => {
+    const retired = /^\/registry\/(\d+)$/.exec(error.instancePath);
+    return retired !== null && value?.registry?.[retired[1]] !== undefined ? retired[1] : null;
+  };
+  // A registry entry that declares the retired `network` field gets the finding that names the entry and its replacement; the
+  // entry's tool-server and HTTP definitions also report the `if`, `then` and `else` they sit in, which would only repeat it.
+  const retiredEntries = new Set(
+    (errors ?? [])
+      .filter((error) => error.params?.additionalProperty === 'network')
+      .map(retiredEntry)
+      .filter((index) => index !== null),
+  );
+  const repeated = (error) => ['if', 'then', 'else'].includes(error.keyword) && retiredEntries.has(retiredEntry(error));
+  return (errors ?? [])
+    .filter((error) => !repeated(error))
+    .map((error) => {
+      const retired = retiredEntry(error);
+      if (retired !== null && error.params?.additionalProperty === 'network') {
+        return removedNetworkProblem(Number(retired), value.registry[retired]);
+      }
+      const where = error.instancePath === '' ? '(root)' : error.instancePath;
+      const detail =
+        error.params?.additionalProperty === undefined
+          ? error.params?.allowedValues === undefined
+            ? ''
+            : ` (${error.params.allowedValues.map((value) => JSON.stringify(value)).join(', ')})`
+          : ` (${JSON.stringify(error.params.additionalProperty)})`;
+      return `${where} ${error.message}${detail}`;
+    });
 }
 
 /** The first `pattern` found by walking `keys` into a published schema, or a thrown error naming what moved. */
@@ -325,7 +346,7 @@ const SCHEMA_ERROR_LIMIT = 10;
  */
 function validateInto(report, relative, rule, validator, value, prefix = '') {
   if (validator(value)) return true;
-  const lines = [...new Set(describeErrors(validator.errors))];
+  const lines = [...new Set(describeErrors(validator.errors, value))];
   for (const line of lines.slice(0, SCHEMA_ERROR_LIMIT)) report.add(relative, rule, `${prefix}${line}`);
   if (lines.length > SCHEMA_ERROR_LIMIT) {
     report.add(
@@ -2210,6 +2231,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   }
   for (const problem of await mcpRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
   for (const problem of await apiRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
+  for (const problem of await egressRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
   const provision = Array.isArray(evaluation.workspace?.provision)
     ? evaluation.workspace.provision.filter((entry) => typeof entry === 'string' && entry.length > 0)
     : [];

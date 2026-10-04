@@ -61,6 +61,7 @@ const {
   releaseTargetHome,
   targetSandbox,
 } = require('./confinement');
+const { MAX_HOST_BYTES, egressAuthorization, isEgressHost } = require('./confinement-egress');
 const { loadAdapters, loadEngine } = require('./engine');
 const {
   authorizationOf,
@@ -132,6 +133,17 @@ function entryValidator(definition) {
 }
 
 /**
+ * The finding for an entry that still declares `"network"` (Story 1.83 removed the field): the entry named, the field that took its
+ * place and where the reference teaches it. `"network": "host"` gave a target the host's whole network and with it a route to the
+ * host's abstract Unix sockets; a confined Linux target now runs in a network namespace of its own and an entry lists the hosts it
+ * may reach in `egress`.
+ */
+function removedNetworkProblem(index, entry) {
+  const named = typeof entry.interfaceId === 'string' ? ` (the interface ${JSON.stringify(entry.interfaceId)})` : '';
+  return `registry[${index}]${named} declares "network": ${JSON.stringify(entry.network)}, a field Story 1.83 removed; remove it and list the hosts the entry's processes may reach in "egress" (each { "host", "port", "addresses" }), the authorization the runtime's egress proxy holds a confined Linux target to; the reference teaches it under "File-system confinement" (https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)`;
+}
+
+/**
  * Everything wrong with a list of registry entries: each entry against the
  * schema of its kind, every `(interfaceId, executable)` pair that repeats,
  * since eval-quality would try two authorizations for one pair in declaration
@@ -147,8 +159,12 @@ function registryProblems(entries) {
   const problems = [];
   for (const [index, entry] of entries.entries()) {
     const validate = entryValidator(definitionOf(entry));
+    const retired = entry !== null && typeof entry === 'object' && Object.hasOwn(entry, 'network');
+    if (retired) problems.push(removedNetworkProblem(index, entry));
     if (validate(entry)) continue;
     for (const error of validate.errors ?? []) {
+      // The retired field has its own finding, which names the entry and the field that replaces it.
+      if (retired && error.instancePath === '' && error.params?.additionalProperty === 'network') continue;
       const detail = error.params?.missingProperty ?? error.params?.additionalProperty;
       problems.push(
         `registry[${index}]${error.instancePath} ${error.message}${detail === undefined ? '' : ` (${JSON.stringify(detail)})`}`,
@@ -160,7 +176,7 @@ function registryProblems(entries) {
 
 /**
  * Every entry that starts the same target as an earlier one with other
- * `systemPaths` or another `network`, as one line each. A confined run's audit grants a started
+ * `systemPaths` or another `egress`, as one line each. A confined run's audit grants a started
  * process the system paths of the target it runs (`createProbePort`), since
  * the request eval-quality hands the mechanism names the target and not the
  * interface, so two entries over one target must declare the same paths or
@@ -178,18 +194,24 @@ function sharedTargetSystemPaths(entries) {
     if (typeof target !== 'string' || target.length === 0) continue;
     const key = path.posix.normalize(target);
     const paths = JSON.stringify([...new Set(Array.isArray(entry.systemPaths) ? entry.systemPaths : [])].sort());
-    const network = entry.network === 'host' ? 'host' : 'isolated';
+    const egress = JSON.stringify(
+      egressItemsOf(entry).map((item) => [
+        item.host.toLowerCase(),
+        item.port,
+        [...(Array.isArray(item.addresses) ? item.addresses : [])].sort(),
+      ]),
+    );
     const earlier = declared.get(key);
-    if (earlier === undefined) declared.set(key, { index, paths, network });
+    if (earlier === undefined) declared.set(key, { index, paths, egress });
     else {
       if (earlier.paths !== paths) {
         problems.push(
           `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with other systemPaths; a confined run grants a target's system paths to every entry that starts it, so declare the same paths on both`,
         );
       }
-      if (earlier.network !== network) {
+      if (earlier.egress !== egress) {
         problems.push(
-          `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with another network; a confined run gives a target the network of every entry that starts it, so declare the same network on both`,
+          `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with another egress; a confined run gives a target the hosts of every entry that starts it, so declare the same egress on both`,
         );
       }
     }
@@ -759,11 +781,11 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       for (const entry of serverEntries) declare(targetPath(entry, options.projectRoot ?? registryRoot), entry);
       for (const entry of apiEntries) if (entry.server !== undefined) declare(serverTarget(entry), entry);
       const systemPathsOf = (target) => declared.get(target) ?? [];
-      const networkOf = networkResolver(registered, (entry) =>
+      const egressOf = egressResolver(registered, (entry) =>
         isApiEntry(entry) ? serverTarget(entry) : targetPath(entry, options.projectRoot ?? registryRoot),
       );
-      commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch, networkOf);
-      mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch, networkOf);
+      commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch, egressOf);
+      mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch, egressOf);
     }
     const commandAdapter = adapters.createCommandLineAdapter(policy, commandMechanism);
     const mcpAdapter = adapters.createMcpAdapter(mcpPolicy, mcpMechanism);
@@ -815,6 +837,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       auditChannel: () => (sandbox === null ? null : sandbox.auditChannel()),
       // What the calls' lists of host sockets left reachable once their budget ran out; `null` where nothing hides sockets (Story 1.82).
       hostSocketReport: () => (sandbox === null ? null : sandbox.socketReport()),
+      // What the calls' egress proxies refused, `{ refusals, omitted }`; `null` where nothing proxies (Story 1.83).
+      egressReport: () => (sandbox === null ? null : sandbox.egressReport()),
       releaseHome,
       resetHome,
     };
@@ -942,12 +966,12 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     root: registryRoot,
     httpPort,
     confinement,
-    /** The interface IDs of the entries that declare `"network": "host"`, sorted: what a confined run records as keeping the host's network (Story 1.63). */
-    hostNetworkEntries: Object.freeze(
+    /** Each entry that lists `egress`, by interface ID, with its `host:port` items sorted: what a confined run records as authorized to reach (Story 1.83). */
+    egressEntries: Object.freeze(
       registered
-        .filter((entry) => entry?.network === 'host')
-        .map((entry) => entry.interfaceId)
-        .sort(),
+        .filter((entry) => egressItemsOf(entry).length > 0)
+        .map((entry) => ({ interfaceId: entry.interfaceId, hosts: egressItemsOf(entry).map((item) => `${item.host}:${item.port}`) }))
+        .sort((a, b) => (a.interfaceId < b.interfaceId ? -1 : a.interfaceId > b.interfaceId ? 1 : 0)),
     ),
     /** The user's private root directory the run's parent sits beneath (`workspace.js` `makePrivateParent`), or `null` where none was made. */
     get privateRoot() {
@@ -1152,24 +1176,94 @@ function registryFromEvaluation(evaluation, options) {
   return createRegistry(evaluation?.registry, { ...options, principalMappings: evaluation?.principalMappings });
 }
 
+/** The `egress` items an entry lists, `[]` for an entry that lists none or starts no process (an HTTP entry that names no server). */
+function egressItemsOf(entry) {
+  if (entry === null || typeof entry !== 'object' || !Array.isArray(entry.egress)) return [];
+  if (isApiEntry(entry) && entry.server === undefined) return [];
+  const listed = entry.egress.filter(
+    (item) => item !== null && typeof item === 'object' && typeof item.host === 'string' && Number.isInteger(item.port),
+  );
+  return listed.sort((a, b) => (a.host === b.host ? a.port - b.port : a.host < b.host ? -1 : 1));
+}
+
 /**
- * The network each started target's call runs in under Bubblewrap (Story 1.63): `host` for the target of a command entry, a
- * tool-server entry or an HTTP entry's started service that declares `"network": "host"`, `isolated` for every other target.
- * A call finds its entry by its target, as `systemPathsOf` does.
+ * The egress authorizations each started target's calls hold under Bubblewrap (Story 1.83): one for each host and port an entry lists,
+ * for the target of a command entry, a tool-server entry or an HTTP entry's started service, every entry that starts a target
+ * contributing its own. A target no entry authorizes a host for has none, and its calls get no route out. A call finds its entries by
+ * its target, as `systemPathsOf` does.
  *
  * @param {object[]} entries the registry's entries
  * @param {(entry: object) => string} targetOf the target a call of the entry starts (an HTTP entry's server)
- * @returns {(target: string) => 'host' | 'isolated'}
+ * @returns {(target: string) => object[]} the authorizations of `egressAuthorization`
  */
-function networkResolver(entries, targetOf) {
-  const hostNetworked = new Set();
+function egressResolver(entries, targetOf) {
+  const authorized = new Map();
   for (const entry of entries) {
-    if (entry.network !== 'host') continue;
-    // An HTTP entry that names no server starts nothing.
-    if (isApiEntry(entry) && entry.server === undefined) continue;
-    hostNetworked.add(targetOf(entry));
+    const items = egressItemsOf(entry);
+    if (items.length === 0) continue;
+    const target = targetOf(entry);
+    authorized.set(target, [...(authorized.get(target) ?? []), ...items.map((item) => egressAuthorization(entry, item))]);
   }
-  return (target) => (hostNetworked.has(target) ? 'host' : 'isolated');
+  return (target) => authorized.get(target) ?? [];
+}
+
+/**
+ * Every `egress` item that cannot hold as written, as one line each: an item on an HTTP entry that names no server (nothing starts, so
+ * nothing reaches out); a host spelled otherwise than a URL spells it, letter case aside, which eval-quality's policy would deny on
+ * every request; a wildcard host, and a host the proxy's request grammar cannot carry (`isEgressHost`), which no request can match; a
+ * host and port listed twice; and an authorization eval-quality's own `parseProbeTargetPolicy` refuses (an address that is no literal,
+ * say), read over what the item becomes (`egressAuthorization`) and alone, so a finding names the item and carries the parser's reason. Each entry is first held to its schema (`registryProblems`); an entry off it is left to that finding.
+ *
+ * @param {unknown} entries
+ * @returns {Promise<string[]>}
+ */
+async function egressRegistryProblems(entries) {
+  if (!Array.isArray(entries)) return [];
+  const problems = [];
+  let parseProbeTargetPolicy;
+  for (const [index, entry] of entries.entries()) {
+    if (entry === null || typeof entry !== 'object' || !Array.isArray(entry.egress) || entry.egress.length === 0) continue;
+    if (!entryValidator(definitionOf(entry))(entry)) continue;
+    if (isApiEntry(entry) && entry.server === undefined) {
+      problems.push(
+        `registry[${index}] lists egress and names no server, so no process of the entry starts and nothing reaches out; an HTTP entry that names its port is reached as it is, so remove the egress`,
+      );
+      continue;
+    }
+    parseProbeTargetPolicy ??= (await loadAdapters()).parseProbeTargetPolicy;
+    const seen = new Set();
+    for (const [at, item] of entry.egress.entries()) {
+      const where = `registry[${index}].egress[${at}]`;
+      const canonical = canonicalHost(item.host);
+      if (item.host.includes('*')) {
+        problems.push(
+          `${where} names host ${JSON.stringify(item.host)}, a wildcard, which the proxy does not support; list each host the entry reaches, since eval-quality's policy compares the host exactly`,
+        );
+      } else if (canonical === null) {
+        problems.push(`${where} names host ${JSON.stringify(item.host)}, which no URL can name`);
+      } else if (canonical !== item.host.toLowerCase()) {
+        problems.push(
+          `${where} names host ${JSON.stringify(item.host)}, which a URL spells ${JSON.stringify(canonical)}; the proxy hands eval-quality's policy the request's hostname as a URL spells it, so write ${JSON.stringify(canonical)}`,
+        );
+      } else if (!isEgressHost(item.host)) {
+        problems.push(
+          `${where} names host ${JSON.stringify(item.host)}, which the proxy cannot read out of a CONNECT request (a host holds letters, digits, ".", "-" and "_" and at most ${MAX_HOST_BYTES} bytes, or is an IPv6 address), so no request can match it`,
+        );
+      }
+      const key = `${item.host.toLowerCase()}:${item.port}`;
+      if (seen.has(key)) problems.push(`${where} lists ${key} a second time`);
+      seen.add(key);
+      try {
+        parseProbeTargetPolicy({ authorizations: [egressAuthorization(entry, item)] });
+      } catch (error) {
+        if (error?.name !== 'RuntimeFault') throw error;
+        problems.push(
+          `${where} becomes an authorization eval-quality's parseProbeTargetPolicy refuses (read as a policy of that authorization alone, so a pointer starts at /authorizations/0): ${error.message}`,
+        );
+      }
+    }
+  }
+  return problems;
 }
 
 module.exports = {
@@ -1184,7 +1278,8 @@ module.exports = {
   isMcpEntry,
   isRegistry,
   kindOf,
-  networkResolver,
+  egressRegistryProblems,
+  egressResolver,
   apiRegistryProblems,
   mcpRegistryProblems,
   observedText,
@@ -1192,6 +1287,7 @@ module.exports = {
   readEnvironment,
   registryFromEvaluation,
   registryProblems,
+  removedNetworkProblem,
   repeatedPairs,
   sharedInterfaces,
   sharedTargetSystemPaths,
