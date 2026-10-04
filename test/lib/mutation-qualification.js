@@ -178,6 +178,8 @@ async function qualifyStoredMutation({ mutationId, targetArtifact, referencePath
     parent = makePrivateParent(scratch);
     root = makeScratchDirectory(scratch, 'design-qualification-');
   } catch (error) {
+    // A refusal after the private parent exists would otherwise leave it until a later cycle reaps it.
+    if (parent !== undefined) removeScratchDirectory(parent);
     if (!(error instanceof WorkspaceRefusal)) throw error;
     throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${mutationId}: ${error.message}`);
   }
