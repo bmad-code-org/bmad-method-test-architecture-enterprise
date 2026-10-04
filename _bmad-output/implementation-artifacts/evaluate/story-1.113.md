@@ -2,7 +2,7 @@
 title: 'Story 1.113: Run a subscription-authenticated agent target confined'
 type: 'feature'
 created: '2026-10-04'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'e1d5bb7d4c8193eb3c198382a5c3e70b3537fcb2'
