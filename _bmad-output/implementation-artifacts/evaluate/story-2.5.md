@@ -3,7 +3,7 @@ title: 'Story 2.5: TeA runs its `pr` tier'
 type: 'feature'
 created: '2026-10-04'
 baseline_commit: '6b6abf492a38c0e01a51c03808747a496f2bff29'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -21,13 +21,17 @@ context:
 
 ## Intent
 
-**Problem:** Evaluate proves other people's evaluations in CI, and TeA's own pull requests run none of its own. Only the MCP and API fixture adopters (and the two CI repositories, through `test:evaluate-ci-repositories`) have a committed plan and baseline; the workflow, tool-use, promptfoo, learned-framework, AI-feature, test-review and gap-loop evaluations and the Evaluate-authored suite have neither, and no `quality.yaml` step keeps the evidence of a red run.
+**Problem:** Evaluate proves other people's evaluations in CI, and TeA's own pull requests run none of its own.
+Only the MCP and API fixture adopters (and the two CI repositories, through `test:evaluate-ci-repositories`) have a committed plan and baseline; the workflow, tool-use, promptfoo, learned-framework, AI-feature, test-review and gap-loop evaluations and the Evaluate-authored suite have neither, and no `quality.yaml` step keeps the evidence of a red run.
 
-**Approach:** Each evaluation of Stories 1.10, 1.11, 1.16, 1.18, 1.19, 1.20, 1.24, 1.25 (`after`) and 1.26 becomes a script of the `npm test` chain that runs `tea-evaluate ci --tier pr` over its committed folder, with a committed plan and a baseline accepted through `compare --accept` from a clean copy-workspace run. The `chain` job uploads every `runs/` directory with `if: always()`, and a `test:evaluate-ci` case holds the upload, the chain and the eight `eval-quality-gates` jobs to a revert case each.
+**Approach:** Each evaluation of Stories 1.10, 1.11, 1.16, 1.18, 1.19, 1.20, 1.24, 1.25 (`after`) and 1.26 becomes a script of the `npm test` chain that runs `tea-evaluate ci --tier pr` over its committed folder, with a committed plan and a baseline accepted through `compare --accept` from a clean copy-workspace run.
+The `chain` job uploads every `runs/` directory with `if: always()`, and a `test:evaluate-ci` case holds the upload, the chain and the eight `eval-quality-gates` jobs to a revert case each.
 
 ## Boundaries & Constraints
 
-**Always:** Baselines are recorded in disposable copies with a unique directory name. A real defect `ci` finds in an evaluation is repaired at its cause. Documentation criteria belong to Story 2.6.
+**Always:** Baselines are recorded in disposable copies with a unique directory name.
+A real defect `ci` finds in an evaluation is repaired at its cause.
+Documentation criteria belong to Story 2.6.
 
 **Never:** Touch `test:evaluate-ci-repositories` or its shard weight, the eight gates' jobs, the engine, or `references/ci.md` and the plan template of the Evaluate skill.
 
@@ -91,7 +95,8 @@ Every real finding is fixed in this PR.
 
 ## Review round 1
 
-An Opus reviewer reproduced four defects on PR 346. Each is fixed.
+An Opus reviewer reproduced four defects on PR 346.
+Each is fixed.
 
 | Finding                                                                                                                                                                                                                                                  | Verdict | Evidence and fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -100,10 +105,18 @@ An Opus reviewer reproduced four defects on PR 346. Each is fixed.
 | `folderProblems` cites AD-8 and reads only the baseline run, so a `git` workspace in a fixture `evaluation.json` passes                                                                                                                                  | low     | A baseline entry now requires `evaluation.json` `workspace.kind` to equal `copy`, with the revert case "a fixture evaluation that declares a git workspace". It failed with the check removed.                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | The changelog and the driver header claim a baseline "that `compare --accept` recorded", which nothing checks                                                                                                                                            | low     | Both now list what the code checks: the engine release, `dirty`, `completed`, the run's and `evaluation.json`'s `workspace.kind`, `acceptedRun` and `partition`. The antithesis in the gap-loop test header is a plain statement.                                                                                                                                                                                                                                                                                                                                                                                             |
 
+## Review round 2
+
+One Opus reviewer checked the round 1 fixes for regressions.
+It re-ran the ten `test:evaluate-pr-*` scripts, `test:evaluate-gap-loop` and the `test:evaluate-ci` case, and proved each round 1 revert case fails by a real mutation.
+It found no regression and no material defect in code or tests.
+The seven lines of the records that held several sentences were split to one sentence per line.
+
 ## What changed
 
 - **Ten chained scripts.** `test/lib/evaluate-pr-tier.js` lists the evaluations (the MCP and API graders, the Evaluate-authored suite, the workflow, tool-use, promptfoo, AI-feature, test-review, gap-loop `after` and learned-framework evaluations).
-  `test/test-evaluate-pr-tier.js <key>` is each one's script, `test:evaluate-pr-<key>`, chained into `npm test` after `test:evaluate-ci-render`. It runs `tea-evaluate ci --tier pr` through the real CLI and fails on a plan that omits the gameability arm or the port conformance its folder calls for, on a baseline recorded on another engine release, with a dirty or incomplete run or a non-copy workspace, whose manifest names another run or a partition other than both, on an `evaluation.json` that declares a non-copy workspace, and on a non-zero exit, other checks than the plan places or a stale baseline.
+  `test/test-evaluate-pr-tier.js <key>` is each one's script, `test:evaluate-pr-<key>`, chained into `npm test` after `test:evaluate-ci-render`.
+  It runs `tea-evaluate ci --tier pr` through the real CLI and fails on a plan that omits the gameability arm or the port conformance its folder calls for, on a baseline recorded on another engine release, with a dirty or incomplete run or a non-copy workspace, whose manifest names another run or a partition other than both, on an `evaluation.json` that declares a non-copy workspace, and on a non-zero exit, other checks than the plan places or a stale baseline.
   The child environment drops credential-looking variables.
   `tools/test-shard-weights.json` carries a measured weight for each; `test:ci-coverage` (126 chained steps) and `test:shards` pass.
 - **Plans and baselines.** The workflow, tool-use, promptfoo, learn, AI-feature, test-review and gap-loop `after` evaluations commit `ci/evaluation-ci-plan.json` and a `baseline/` accepted with `compare --accept` from a clean run of both partitions in a disposable copy (`dirty: false`, `workspace.kind: copy`).

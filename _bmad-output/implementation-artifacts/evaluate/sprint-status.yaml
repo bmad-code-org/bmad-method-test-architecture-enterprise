@@ -166,7 +166,7 @@ development_status:
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: done
   2-3-render-evaluation-plans-in-bmad-testarch-ci: done
   2-4-finish-the-evaluation-with-its-ci-stage: done
-  2-5-tea-runs-its-pr-tier-and-documents-evaluate: review
+  2-5-tea-runs-its-pr-tier-and-documents-evaluate: done
   2-6-document-evaluate-for-the-people-who-use-it: backlog
   epic-2-retrospective: optional
 parallel_lanes:

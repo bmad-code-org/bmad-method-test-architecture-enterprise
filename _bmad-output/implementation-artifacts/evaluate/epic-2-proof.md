@@ -1,6 +1,7 @@
 # Epic 2 Proof: TeA runs its `pr` tier (Story 2.5, AD-11, AD-15)
 
-Recorded 2026-10-04 on branch `feat/evaluate-2.5`, off `main` at `6b6abf49`. Engine: eval-quality 7.1.0, the release `package.json`'s `latest` devDependency resolves.
+Recorded 2026-10-04 on branch `feat/evaluate-2.5`, off `main` at `6b6abf49`.
+Engine: eval-quality 7.1.0, the release `package.json`'s `latest` devDependency resolves.
 TeA 1.27.2.
 
 ## Result
@@ -85,7 +86,8 @@ The evidence that run replaces is cited from `epic-1-proof.md`:
 
 ## Evidence retention and the gates
 
-The `chain` job uploads `runs/` of every evaluation as `evaluate-runs-<shard>` with `if: always()`. `test:evaluate-ci`'s case "the pr tier of TeA itself" parses `quality.yaml` and fails when the step, its `always()`, its shard-qualified name, its `if-no-files-found: ignore` or any one of the ten paths is missing.
+The `chain` job uploads `runs/` of every evaluation as `evaluate-runs-<shard>` with `if: always()`.
+`test:evaluate-ci`'s case "the pr tier of TeA itself" parses `quality.yaml` and fails when the step, its `always()`, its shard-qualified name, its `if-no-files-found: ignore` or any one of the ten paths is missing.
 It also holds `supply-chain` to `test:lockfile-age`, `test:lockfile-age-cache`, `test:licences` and `test:supply-chain`, `layering-boundary-lineage` to `test:direction`, `test:boundary`, `test:lineage`, `test:guard-publish` and `test:layering-boundary-lineage`, and keeps the doc gates `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the `npm test` chain: the eight `eval-quality-gates` stay where they were.
 
 ## A defect `ci` found
