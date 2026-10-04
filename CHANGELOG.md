@@ -270,7 +270,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - eval-quality 7.1.0 counts an oracle toward `success-indicator-separation` only when some behavior lists it (Story 1.104, AD-1, AD-20).
   Until 7.1.0 an oracle that checked the success indicator beside the answer satisfied the rule even when no behavior in the contract listed it in `behaviors[].oracles`, so a check that supported no behavior could hide a missing success-separation requirement.
-  Such an oracle now leaves the rule unsatisfied, in the scalar-command branch (exit code 0 and exact whole stdout) and in the structured-response branch alike, and the evidence artifact records the gap with `no behavior-linked oracle addresses operation <id>'s success indicator beside another roled pointer at one step, in both channels`.
+  Such an oracle now leaves the rule unsatisfied, in the scalar-command branch (exit code 0 and exact whole stdout) and in the structured-response branch alike, and `score` records the gap in the evidence artifact's `coverageGaps`.
   Linking the oracle to the behavior it supports satisfies the rule again.
   No shipped contract or fixture changes outcome, and the pantry fixture still scores `PASS`.
   The peer floor moves to `>=7.1.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, and the three accepted fixture baselines are re-recorded on 7.1.0.

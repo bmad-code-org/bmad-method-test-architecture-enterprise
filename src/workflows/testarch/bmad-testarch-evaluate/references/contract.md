@@ -30,7 +30,7 @@ The oracle counts only when a behavior lists it in its `oracles`. An oracle no b
     "op": "all",
     "operands": [
       { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/exit-code" }, { "literal": 0 }] },
-      { "op": "containment", "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill" }] }
+      { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill\n" }] }
     ]
   }
 }

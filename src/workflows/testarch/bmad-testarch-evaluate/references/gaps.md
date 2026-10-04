@@ -41,15 +41,15 @@ Use the exact `OUTCOME_STATES` vocabulary from the installed eval-quality packag
 
 The discipline keys come from installed `DISCIPLINE_RULES`. The preflight keys come from the installed `preflight-verdict.schema.json`; a failed check invalidates the run.
 
-| Discipline rule                | Concrete repair                                                                                                                                                  |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `success-indicator-separation` | Add a probe and oracle that read independent success evidence, not the target's success claim alone.                                                             |
-| `whole-body`                   | Add one oracle whose direction and check both name every required response key pointer (a parent pointer does not count) and a mutation outside the keyword.     |
-| `malformed-input`              | For each operation declaring a request key, bind `type-violating` on a step input and address that step with an oracle check; qualify a malformed request probe. |
-| `per-record`                   | Add a multi-record probe and per-record oracle evidence pointers.                                                                                                |
-| `sibling-cross-check`          | Add a probe whose sibling fields disagree and an oracle that compares them.                                                                                      |
-| `omission-and-completeness`    | Add a missing-item probe and an oracle that checks the complete required set.                                                                                    |
-| `state-change-read-back`       | Add a state mutation probe plus a read-back control and oracle.                                                                                                  |
+| Discipline rule                | Concrete repair                                                                                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success-indicator-separation` | Add a probe and oracle that read independent success evidence, not the target's success claim alone, and list that oracle in a behavior's `oracles`; an oracle no behavior lists leaves the gap open. |
+| `whole-body`                   | Add one oracle whose direction and check both name every required response key pointer (a parent pointer does not count) and a mutation outside the keyword.                                          |
+| `malformed-input`              | For each operation declaring a request key, bind `type-violating` on a step input and address that step with an oracle check; qualify a malformed request probe.                                      |
+| `per-record`                   | Add a multi-record probe and per-record oracle evidence pointers.                                                                                                                                     |
+| `sibling-cross-check`          | Add a probe whose sibling fields disagree and an oracle that compares them.                                                                                                                           |
+| `omission-and-completeness`    | Add a missing-item probe and an oracle that checks the complete required set.                                                                                                                         |
+| `state-change-read-back`       | Add a state mutation probe plus a read-back control and oracle.                                                                                                                                       |
 
 The engine reads `malformed-input` coverage from the contract. A caught malformed-input probe alone leaves the rule unsatisfied until the planned input binding and addressed check exist for every relevant operation.
 

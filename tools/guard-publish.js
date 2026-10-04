@@ -56,7 +56,7 @@
  * before its shape is read, and 7.0.1 the first whose `compile` and `preflight` refuse two interfaces that
  * share a `logicalId`, which `tea-evaluate check` quotes, and 7.1.0 the first whose
  * `success-indicator-separation` coverage rule counts only an oracle some behavior lists, which
- * `tea-evaluate check` quotes as a coverage gap. Optional,
+ * `tea-evaluate score` records as a coverage gap. Optional,
  * because npm 7 and later install a
  * required peer automatically and would pull the engine into every project that
  * installs TeA for its other workflows.

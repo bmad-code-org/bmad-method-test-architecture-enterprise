@@ -95,4 +95,4 @@ Engine CI found the website advisory exception rejecting npm's cache-only report
 ## Review Triage Log
 
 - Engine round 1 (Opus adversarial): no material defects; three applied changes listed in the Outcome Record.
-- TeA: the structured orphan test cannot cover the test-review and trace suites because of their builders (see the Outcome Record); the scalar test covers the second branch.
+- TeA round 1 (Opus adversarial, real mutations): found a CHANGELOG line that quoted a reason text the evidence artifact does not carry (its `coverageGaps` hold the rule and predicates only), a `guard-publish.js` comment that said `check` reports the gap (`score` records it), the `contract.md` success-indicator-separation example checking stdout by containment so it never satisfied the scalar branch it teaches (now exact equality, held by the guidance gate), and the `gaps.md` repair row that did not name the behavior link. All fixed in this PR.
