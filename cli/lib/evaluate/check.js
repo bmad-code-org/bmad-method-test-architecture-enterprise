@@ -24,6 +24,11 @@
  * - `oracle-count`: a behavior a defect or gameability probe discharges does not declare exactly one oracle.
  * - `id-pattern`: a probe, defect, behavior, oracle or mutation ID is off its pattern.
  * - `qualification-digest`: a `baseline/qualification/` reference's digest does not match the file.
+ * - `baseline-digest` (Story 1.90, AD-12): a file of `baseline/` digests to something other than the entry of the
+ *   `files` map in `baseline/baseline.json`, a map entry's file is missing or is not a regular file, a file other than
+ *   `baseline.json` has no entry, or the manifest cannot be read, so a baseline edited by hand cannot pass as the one
+ *   `compare --accept` wrote (`baseline-digests.js`, which `compare` calls too). A `baseline/` with neither manifest nor
+ *   `run.json` holds authored qualification evidence and is left alone.
  * - `clean-control`: a clean control is not `zero-action` with `expectedClean: true` and no defects.
  * - `infrastructure-exit-code`: a defect signature holds on an observation that carries only one of the
  *   `infrastructureExitCodes` its executable's registry entry declares, so a target that could not run
@@ -134,6 +139,7 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./calibration');
 const { readConfiguration, recordsDirectory, verifyRecordsCalibration } = require('./records-calibration');
+const { baselineDigestFindings } = require('./baseline-digests');
 const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
@@ -2011,6 +2017,13 @@ function checkQualificationEvidence(report, folder, context) {
   }
 }
 
+/** `baseline/` holds the bytes `baseline/baseline.json` lists (`baseline-digest`). */
+function checkBaselineDigests(report, folder, context) {
+  for (const { file, rule, message } of baselineDigestFindings({ folder, digestBytes: context.engine.digestBytes })) {
+    report.add(file, rule, message);
+  }
+}
+
 /**
  * `evaluation.json`'s `interface` is a kind the contract declares (`reference`),
  * and each registry entry serves its interface as the kind the contract declares
@@ -2351,6 +2364,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkJudge(report, evaluation, rubricContract, conditions, { partial });
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
+  checkBaselineDigests(report, folder, context);
   // The rubric rule reads the contract `check` already derived, so a development run leaves the held-out plan unopened.
   checkCiPlan(report, folder, {
     declaresRubric: () => Array.isArray(rubricContract?.rubrics) && rubricContract.rubrics.length > 0,

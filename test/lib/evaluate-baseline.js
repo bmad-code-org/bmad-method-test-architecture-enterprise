@@ -105,4 +105,18 @@ function placeBaseline(folder, acceptedRun, skip = []) {
   return runDirectory;
 }
 
-module.exports = { commitAll, copyOf, placeBaseline, runAndScore };
+/**
+ * `baseline/baseline.json`'s `files` map rewritten to the bytes `baseline/` holds now: a baseline edited by hand together with
+ * its manifest, which is a sealed and self-consistent baseline that the digest check (Story 1.90) accepts. A case that plants a
+ * defect below that check (another engine's `run.json`, evidence off its schema) reseals, so the defect it names is the one that
+ * refuses. `digestBytes` is eval-quality's.
+ */
+function resealBaseline(folder, { digestBytes }) {
+  const baseline = path.join(folder, 'baseline');
+  const file = path.join(baseline, 'baseline.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const name of Object.keys(manifest.files)) manifest.files[name] = digestBytes(fs.readFileSync(path.join(baseline, name)));
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+module.exports = { commitAll, copyOf, placeBaseline, resealBaseline, runAndScore };
