@@ -2,7 +2,7 @@
 title: "Story 1.115: Give the skill a command that prints a file's digest"
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ecb46cd64c38916a572633bffe2815a97516aa77'
@@ -202,3 +202,5 @@ Round 1 on the open PR (three Opus lenses, read only) found these, each fixed in
 - The three parent-segment rows matched `/\.\./`, which the echoed path always satisfies. They match `leaves the evaluation folder`.
 - The Exit codes table's 64 row now lists the `digest --file` refusals.
 - The Analyze high on `references/corpus.md` is recorded above as a decision.
+
+Round 2 (regressions only, one Opus lens) confirmed every round 1 fix, including a Linux run in a container, and found two low items, both fixed: the command's exit-64 lists in the CLI reference and CHANGELOG now name an unreadable path and a file that changed while it was read, and one test comment lost its contrast phrasing.

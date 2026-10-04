@@ -4704,7 +4704,7 @@ async function checkDigestFile() {
     );
   }
 
-  // An unreadable directory is reported as unreadable, not as a missing file.
+  // A file below an unreadable directory is refused as unreadable, with its lstat code.
   if (process.platform !== 'win32' && process.getuid?.() !== 0) {
     const locked = path.join(folder, 'locked');
     fs.mkdirSync(locked);
