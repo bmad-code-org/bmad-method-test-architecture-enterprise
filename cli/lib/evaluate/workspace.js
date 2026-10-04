@@ -1328,8 +1328,8 @@ function linkTree(from, to) {
  * (and `core.sparseCheckoutCone`, and `index.sparse` when the project keeps a sparse index) sit in the project's
  * configuration or the worktree's own, and the patterns in the worktree's metadata directory. The question is asked of the
  * worktree, so a git that did not copy the cone into it, and a project that is not sparse, both give null and leave the index
- * as `read-tree` builds it; a git without sparse index support never reports `index.sparse`, so the key is set only when the
- * worktree says it is true.
+ * as `read-tree` builds it; `index.sparse` is carried only when the worktree reads it as true, and a git without sparse index
+ * support ignores the key.
  */
 function sparseSettingsOf(workspace) {
   const ask = (key) =>

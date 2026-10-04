@@ -2388,7 +2388,7 @@ Story 1.57's `packInto` in `cli/lib/evaluate/workspace.js` runs `pack-objects --
 `pack-objects` writes its temporary pack into the adopter's own `.git/objects/pack` and renames it into the private store, which sits under `os.tmpdir()`.
 A project and a temp directory on different filesystems are refused with `fatal: unable to rename temporary file ... Invalid cross-device link`, which is the default layout on Linux hosts where `/tmp` is tmpfs.
 A failed run leaves `tmp_idx_*` and `tmp_rev_*` files in the adopter's `objects/pack`, and even a successful run writes there for a moment, which breaks the contract that a confined run writes nothing into the adopter's repository.
-Reproduce in the container with the temp directory on tmpfs and the project under `/home/tester`: `docker run --init --rm --tmpfs /tmp --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined --cap-add SYS_ADMIN --cap-add SYS_PTRACE -u tester -e HOME=/home/tester -v <copy of the tree>:/work -v <worktree>/node_modules:/work/node_modules:ro -w /work tea-bwrap-strace node test/test-evaluate-run.js --group=confinement --only="across filesystems"`.
+Reproduce in the container with the temp directory on tmpfs and the project under `/home/tester`: `docker run --init --rm --tmpfs /tmp --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined --cap-add SYS_ADMIN --cap-add SYS_PTRACE -u tester -e HOME=/home/tester -v <copy of the tree>:/work -v <worktree>/node_modules:/work/node_modules:ro -w /work tea-bwrap-strace node test/test-evaluate-run.js --group=confinement --only="across filesystems"` after applying the `test/test-evaluate-run.js` hunk of the saved patch, since the case does not exist in the tree (the command passes with zero checks while the case is missing).
 The container run needs the owner's permission.
 It was reproduced on macOS with `TMPDIR` on an attached HFS+ disk image: `error: unable to write file ...pack: Cross-device link`.
 Story 1.85's review round 1 began the fix and moved it here: the unfinished work is saved as `/Users/murat/opensource/_wt/evaluate-relay/wip-pack-crossfs.patch` (it applies to `970e67b5`; the unit job in `checkWithheldHistoryUnits` that drives `mode: 'pack'` with the old `list` and `pack` keys is not updated in it).
@@ -3277,7 +3277,7 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` chain script, which the `chain` matrix of `quality.yaml` runs (amended 2026-09-25 in Story 1.9), in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
 4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
-**Dependencies:** 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.120, 1.121, 1.122, 1.123, 1.131, 1.132, 2.5.
+**Dependencies:** 1.76, 1.77, 1.78, 1.79, 1.84, 1.85, 1.86, 1.87, 1.88, 1.89, 1.104, 1.105, 1.106, 1.107, 1.108, 1.109, 1.110, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.120, 1.121, 1.122, 1.123, 1.130, 1.131, 1.132, 2.5.
 
 ## Traceability
 

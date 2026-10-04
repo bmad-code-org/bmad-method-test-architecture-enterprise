@@ -70,7 +70,7 @@ No skill file changes.
 - [x] `workspace.js`: the sparse settings and the index step.
 - [x] `test/test-evaluate-run.js`, `verdict.js`: the cases, each with its revert check below.
 - [x] Reference sentence and its case, `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `ARCHITECTURE-SPINE.md`, `sprint-status.yaml`, this record.
-- [x] One Linux run of the new case in the `tea-bwrap-strace` container.
+- [x] Two Linux runs of the new case in the `tea-bwrap-strace` container, on the 51-check and the 58-check trees of the build round.
 
 **Acceptance Criteria:** as in `epics.md` Story 1.85, with the amendments dated 2026-10-04 there (the shapes the case runs, every line compared with the project's, and the metadata directory's `config.worktree`).
 
@@ -103,7 +103,7 @@ The control (a project that is not sparse) passed, so `git ls-files` and `git st
    The effective `core.sparseCheckout` the new worktree reads (its own configuration over the project's) is what the project's checkout shows, whichever file holds it.
    A git before 2.36 does not copy the cone into a new worktree, so it is a full checkout and the question answers no.
 6. **A failing `read-tree -m -u` refuses the build (exit 12).**
-   The reviewer found no input where it fails after `read-tree HEAD` succeeded (patterns that leave no entry, a missing or empty patterns file, legacy settings in the common configuration, gitlinks, a project that is itself a linked worktree all exit 0 on git 2.39 and 2.55), and a refusal beats a target that sees false deletions.
+   The reviewer found no input where it fails after `read-tree HEAD` succeeded (patterns that leave no entry, a missing or empty patterns file, legacy settings in the common configuration, gitlinks, a project that is itself a linked worktree all exit 0 on git 2.39 and 2.55), so the target is never handed false deletions.
 7. **`config.worktree` leaves the metadata directory (found in review, pre-existing).**
    `git worktree add` copies the project worktree's `config.worktree` into the new metadata directory, which the target may read, with any worktree-scoped remote URL, credential helper or hook.
    A sparse project that used `git sparse-checkout set` has that file, a legacy sparse project (`core.sparseCheckout` in `.git/config`, patterns in `.git/info/sparse-checkout`) has none, and a non-sparse project that uses `extensions.worktreeConfig` has one too.
@@ -136,11 +136,12 @@ The control (a project that is not sparse) passed, so `git ls-files` and `git st
 - The linked-objects shortcut of Story 1.57 needs no change: the settings and the index step run in step (6) for every workspace, linked or built.
 - Not done, by decision: a cone edit by the target (it writes the private repository, which the reference already lists among the git writes a target cannot make).
 - Linux: the new case ran in the container `tea-bwrap-strace` (Debian bookworm, git 2.39.5, bubblewrap 0.8.0, strace 6.1, user `tester`), exactly as `story-1.82.md` records, on a copy of the tree under the scratchpad directory with `.git` left out and the worktree's `node_modules` mounted read-only: `docker run --init --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined --cap-add SYS_ADMIN --cap-add SYS_PTRACE -u tester -e HOME=/home/tester -v <copy>:/work -v <worktree>/node_modules:/work/node_modules:ro -w /work tea-bwrap-strace node test/test-evaluate-run.js --group=confinement --only="sparse checkout"`.
-  51 checks passed on the first change (the `--sparse` clone case skips there, git 2.39 predates 2.44, and prints the skip line); the final tree is in the Gates section.
+  51 checks passed on the first change (the `--sparse` clone case skips there, git 2.39 predates 2.44, and prints the skip line);
+  the final tree is in the Gates section.
 
 ## Revert observations
 
-Each revert was applied once to a scratch copy of the tree under the scratchpad directory (never the working tree), the named case run, the failed-check count recorded and the copy restored.
+Each revert was applied once to a scratch copy of the tree under the scratchpad directory (not the working tree), the named case run, the failed-check count recorded and the copy restored.
 
 | Revert (the one edit)                                                         | Case run                         | Observed                                                                                                                                                                        |
 | ----------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -169,15 +170,19 @@ Build round (local, macOS):
 - Linux: `checkSparseCheckout` in the `tea-bwrap-strace` container, 58 checks green (the `--sparse` clone case skips on git 2.39 and prints the skip line).
 - `test:doc-counts`, `test:doc-claims`, `test:shards` (the confinement weight is 502 seconds: 450.4 plus the case's 34 seconds at the 1.517 CI ratio), `test:ci-coverage`, `test:changelog`: green.
 - `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`: green.
-- Engine check at the start and the end: exit 0. `git diff -- package.json package-lock.json` is empty.
+- Engine check at the start and the end: exit 0.
+  `git diff -- package.json package-lock.json` is empty.
 
 Review round 1 (local, macOS, on the final tree unless noted):
 
-- `test:evaluate-confinement` 1,324 checks green. This run finished before the coordinator's instruction to skip local confinement runs, on the tree whose only later changes are the story record and the sprint and planning documents.
-- `test:evaluate-run` 592 and `test:evaluate-guidance` green. `test:doc-counts`, `test:doc-claims`, `test:bmad-output-gated` 125, `npm run lint`, `npm run lint:md`, `npm run format:check` and `npm run docs:validate-links`: green.
+- `test:evaluate-confinement` 1,324 checks green.
+  This run finished before the coordinator's instruction to skip local confinement runs, on the tree whose only later changes are the story record and the sprint and planning documents.
+- `test:evaluate-run` 592 and `test:evaluate-guidance` green.
+  `test:doc-counts`, `test:doc-claims`, `test:bmad-output-gated` 125, `npm run lint`, `npm run lint:md`, `npm run format:check` and `npm run docs:validate-links`: green.
 - `npm run docs:build`: green, run once on the final tree.
 - The sparse-index and index-step reverts ran on a scratch copy and are in the Revert observations; no other confinement run was made locally after the instruction.
-- No container ran in this round. The owner decides container calls, and the Linux CI job carries the Linux runs, including `checkSparseCheckout` on git 2.39 and later.
+- No container ran in this round.
+  The owner decides container calls, and the Linux CI job carries the Linux runs, including `checkSparseCheckout` on git 2.39 and later.
 - CI runs `test:evaluate-confinement` in its shards for the pushed commit; its result is the confinement record of the round.
 
 ## Build review
@@ -194,7 +199,7 @@ Every finding was checked against code or by experiment before it was acted on.
 | Info (tests): the `--sparse` clone case skips on a git before 2.44                                                                                                                    | valid, accepted         | As Story 1.80's partial-clone cases: they run on macOS here and on CI hosts with git 2.44 or later, and fail under `CI` on an older git                                                 |
 
 The build review left no finding for a new story.
-Bubblewrap ran only in the container, once.
+Bubblewrap ran only in the container, twice in the build round (the 51-check and the 58-check trees); no Linux run covers the round 1 tree, and the Linux CI job carries it.
 
 ### Review round 1
 
