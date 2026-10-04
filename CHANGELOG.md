@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Before the replay the case asserts the accepted baseline holds `probes/P-004.probe.json` with the `gameability` route, a `gameability:P-004` trial set and an evidence artifact whose three trial votes are `caught`.
   After it the case asserts the `gameability` row exits 0 as a pass, carries no `no gameability probe` note, warns with the one CONCERNS line for P-004, prints `P-004: gameability arm scored through eval-quality score, exit 0`, reproduces P-004's evidence byte for byte, and the tripwire log stays empty.
   A version read added at the head of the scoring branch, after `replayScore` or in the scored-arm line of the result loop now fails the case; before, all three passed.
-  The unscored-arm branch of the result loop and the findings loop run only when `score` fails, and `test:evaluate-ci`'s gameability case holds their exits.
+  The unscored-arm branch of the result loop runs only when `score` fails, and `test:evaluate-ci`'s gameability case holds its exit 12.
   The sealed-brief stub agent takes `--quote-observed-verdict`, which makes a failing `verdict-accepted` row quote the `verdict:` line the call's stdout holds.
   A gameability arm's degenerate response prints `verdict: pending`, so the quotation is witnessed there.
   Without the flag the stub quotes `verdict: rejected`, which that stdout lacks, and `score` refuses the arm with exit 3 (unwitnessed quotation), so no baseline can be accepted.
