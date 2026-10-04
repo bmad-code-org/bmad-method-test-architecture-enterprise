@@ -116,7 +116,7 @@ development_status:
   1-82-give-a-bubblewrap-target-no-route-to-the-hosts-path-based-unix-sockets: done
   1-83-give-a-confined-linux-target-a-route-to-the-hosts-its-registry-entry-authorizes: done
   1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions: done
-  1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it: review
+  1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it: done
   1-86-list-a-connection-to-a-hosts-path-based-unix-socket-outside-the-grants-as-an-observed-mount: backlog
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
@@ -146,7 +146,7 @@ development_status:
   1-109-partition-gameability-degenerate-responses: backlog
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
-  1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: backlog
+  1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: review
   1-113-run-a-subscription-authenticated-agent-target-confined: backlog
   1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
   1-115-give-the-skill-a-command-that-prints-a-files-digest: backlog

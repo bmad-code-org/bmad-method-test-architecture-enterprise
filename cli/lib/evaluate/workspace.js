@@ -27,8 +27,12 @@
  * planted.
  *
  * A worktree shares the repository it came from: its refs, its configuration
- * and its objects. `adopterTreeState` reads those as well as the working tree,
- * so a run can tell when a target wrote any of them.
+ * and its objects. `adopterTreeState` reads those as well as the working tree
+ * for a run whose targets can write them (one that opted out of confinement),
+ * so a run can tell when a target wrote any of them. A confined target works in
+ * a private repository and cannot reach the shared state, so a confined run
+ * compares the working tree alone, and a commit or fetch another session makes
+ * in the same repository meanwhile does not stop it.
  *
  * A workspace that cannot be made is a `WorkspaceRefusal` (exit 12), and one
  * that fails part way is removed before the refusal leaves `createWorkspace`.
@@ -1070,23 +1074,25 @@ function sharedStateDigest(gitDirectory) {
  * A reading of the adopter's project that compares equal to an earlier one
  * only when nothing a run could have written changed between them (AD-8).
  *
- * Inside a git repository: `git status` (tracked and untracked paths), a
+ * Inside a git repository: `git status` (tracked and untracked paths) and a
  * digest over the content of every path it names (one already modified
- * included), every ref (branches, tags, the stash), and the repository's
- * common git directory without its bookkeeping (`sharedStateDigest`:
- * configuration, hooks, `info/`, `description`, refs), since a detached
- * worktree shares all of it with the repository it came from. `--no-optional-locks` keeps
- * `git status` from rewriting the index. Gitignored paths are not read.
+ * included), and, with `sharedState`, every ref (branches, tags, the stash)
+ * and the repository's common git directory without its bookkeeping
+ * (`sharedStateDigest`: configuration, hooks, `info/`, `description`, refs),
+ * since a detached worktree shares all of it with the repository it came
+ * from. `--no-optional-locks` keeps `git status` from rewriting the index.
+ * Gitignored paths are not read.
  * Outside a repository: the tree digest of `directory`, the paths in
  * `exclude` left out.
  *
  * @param {string} directory `launch.root`
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
+ * @param {boolean} [options.sharedState] whether to read the refs and the shared git state too (Story 1.112); a run whose targets are confined passes `false`
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer
  */
-function adopterTreeState(directory, { exclude = [] } = {}) {
+function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) {
   const repository = repositoryOf(directory);
   if (repository === null) {
     try {
@@ -1100,8 +1106,6 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
   };
   const status = runGit(['--no-optional-locks', '-C', repository.top, 'status', '--porcelain=v1', '-z', '--untracked-files=all']);
   if (!status.ok) failed(status);
-  const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
-  if (!refs.ok) failed(refs);
   const parts = [];
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
   for (let index = 0; index < records.length; index += 1) {
@@ -1114,13 +1118,11 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
     }
     for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
   }
-  return {
-    repository: repository.top,
-    status: status.stdout,
-    changes: digest(parts),
-    refs: refs.stdout,
-    shared: sharedStateDigest(repository.gitDirectory),
-  };
+  const state = { repository: repository.top, status: status.stdout, changes: digest(parts) };
+  if (!sharedState) return state;
+  const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
+  if (!refs.ok) failed(refs);
+  return { ...state, refs: refs.stdout, shared: sharedStateDigest(repository.gitDirectory) };
 }
 
 /**

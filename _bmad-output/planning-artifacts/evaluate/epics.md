@@ -2866,6 +2866,12 @@ So that a long live run is not stopped by work in another worktree.
 **And** an opted-out run (`"confinement": false`) keeps the comparison of refs and shared state: a target that runs `git update-ref` or writes `.git/config` exits 12, and `docs/reference/tea-evaluate-cli.md` tells a maintainer who shares a repository with other sessions to run an opted-out evaluation from a standalone clone
 **And** restoring the shared-state comparison for a confined run makes the in-flight ref case exit 12 again, and removing it for an opted-out run lets the `git update-ref` target pass and fails the second case.
 
+Amended 2026-10-04 in Story 1.112's build: the case is `checkSharedStateAcrossSessions` (`test:evaluate-confinement`) and its stub acts are `hold-gate`, `update-ref` and `write-config`.
+The in-flight ref is a branch and a commit made in a second worktree of the repository while the first clean trial is held, and the case runs on the host's own mechanism, so the macOS run uses Seatbelt and the ubuntu CI job uses Bubblewrap; no case is skipped on either host.
+A confined target that runs `git update-ref` or `git config --local` leaves the project's refs and configuration as they were, and the run exits 0; the case asserts the target ran each command and reads no outcome of it, since git refuses the write on macOS (exit 128 and 255) and the exit on Linux is CI's.
+The reference sentence is read by `checkWorkspaceReference` under `## The workspace`.
+Both `preflight` and `run` read the project through the one `readTree` of the shared pipeline, and the case holds a confined `preflight` (its mutated arm) in flight as well as a `run`.
+
 **Dependencies:** 1.31.
 **Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-preflight`, `npm run test:evaluate-run`, `npm run docs:validate-links`, `npm test`.
 

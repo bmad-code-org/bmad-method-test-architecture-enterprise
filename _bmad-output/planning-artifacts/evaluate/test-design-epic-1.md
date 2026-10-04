@@ -1735,6 +1735,12 @@ Added 2026-10-03 from Story 1.46's live runs. Levels: CLI integration over a slo
 | An opted-out run keeps the comparison      | Run an opted-out target that runs `git update-ref` and one that writes `.git/config`; assert exit 12 each                                                                | CLI integration | P0  | Removing the opted-out comparison lets both pass                  |
 | The reference names the clone advice       | Read `docs/reference/tea-evaluate-cli.md`; assert it tells an opted-out evaluation over a shared repository to run from a standalone clone                               | Static          | P2  | Deleting the sentence fails the doc assertion                     |
 
+Amended 2026-10-04 in Story 1.112's build: the cases are `checkSharedStateAcrossSessions` and `checkWorkspaceReference` in `test/test-evaluate-run.js` (`test:evaluate-confinement`).
+The target is held by the stub act `hold-gate` (it writes `gate-started` in its working directory and waits for `gate-release`), and the case acts on the project once it holds: a branch and a commit in a second worktree, an appended line in `rules/policy.txt`, a new untracked file.
+A confined target that runs `git update-ref` or `git config --local` (acts `update-ref` and `write-config`) leaves the shared refs and configuration as they were and the run exits 0, which holds the premise that makes the narrowing safe: no confined target write reaches the shared state; the case asserts the target ran each command, and on macOS git refuses both writes (exit 128 and 255).
+The opted-out cases run the same two acts and expect exit 12 with `run.json` recording `opt-out` and `unchanged: false`, and the case asserts the shared ref or the configuration did change, so a stub that never wrote cannot pass it.
+The cases run on the host's mechanism (Seatbelt on macOS, Bubblewrap on the ubuntu CI job) with no skip; the Linux run is the CI job's.
+
 ### Story 1.113: Run a subscription-authenticated agent target confined
 
 Added 2026-10-03 from Story 1.46's live preflight. Levels: CLI integration with a fake login, live confined preflight.

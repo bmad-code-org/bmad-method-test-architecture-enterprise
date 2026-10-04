@@ -351,7 +351,7 @@ In either handoff, an answer the port gives before the call's service is ready, 
 
 Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
 Every process a target starts runs confined to that workspace (see [File-system confinement](#file-system-confinement)), so a write outside it is refused.
-In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run keeps the same checks.
+In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run compares your working tree the same way.
 `evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
 
 - `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
@@ -376,8 +376,12 @@ The private parent also has an auxiliary ownership record in that journal and a 
 
 In a run that opted out of confinement, a worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), and a target running git in the worktree can change it, which the run detects afterwards and exits 12.
 A confined run gives each worktree a private repository instead, and the target can neither read nor write your git directory, apart from the worktree's own entry in it, which it can read (see [File-system confinement](#file-system-confinement)).
-`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref, and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
-A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
+`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths) and the content of every path it names, and for an opted-out run also every ref and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside a repository, the tree digest of `launch.root` without the evaluation's `runs/`.
+A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree fails the run, and so does an opted-out target that commits, tags or reconfigures the repository.
+A confined run compares your working tree alone, tracked and untracked paths in full, since its targets cannot reach your refs or your git directory.
+A commit, fetch or branch that another session makes in another worktree of the same repository while a confined run is in flight does not stop it, and `run.json` records `adopterTree.unchanged: true`.
+An opted-out run compares the refs and the shared git state as well, so any such change ends it with exit 12.
+If you share a repository with other sessions and run an opted-out evaluation, run it from a standalone clone of the repository, which no other session commits to.
 The rollback cycle records the real directory that holds the `targetArtifact` when it plans the mutation, and writes and reads the target only from inside that directory, entered and confirmed to be the one it recorded, so a path swapped for a symbolic link, even by a process the target left running, cannot carry the runtime's own write out of the workspace; a swap or a hard-linked target it sees stops the cycle with exit 12, and the mutation and the restore each write a new file.
 Gitignored paths are not read.
 
