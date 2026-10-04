@@ -20,6 +20,16 @@
             "re-pass-1-missing",
             "re-pass-1-dangling"
           ]
+        },
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-disabled",
+            "re-pass-1-it-skip"
+          ]
         }
       ],
       "steps": [

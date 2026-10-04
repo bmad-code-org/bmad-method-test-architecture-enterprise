@@ -1,12 +1,12 @@
 {
-  "scoreInvocationId": "20261002T210633481Z-8d795f5d",
+  "scoreInvocationId": "20261004T154010060Z-fb9e594a",
   "strengthAggregate": {
     "status": "copied",
     "reason": null,
-    "path": "runs/20261002T210605578Z-4b6898d3/scores/20261002T210633481Z-8d795f5d/strength-aggregate.json",
-    "digest": "sha256:445f65869b892bad2daffcc27535b6b3232efaa4cf29b49287f4858365c568fb",
-    "floors": "runs/20261002T210605578Z-4b6898d3/scores/20261002T210633481Z-8d795f5d/strength-floors.json",
-    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+    "path": "runs/20261004T153935491Z-36dee75e/scores/20261004T154010060Z-fb9e594a/strength-aggregate.json",
+    "digest": "sha256:4063259f4c169dadeaac2fe3844a4b5ee9b2cf98dd733a0fcaaa6bf49e0a0ce4",
+    "floors": "runs/20261004T153935491Z-36dee75e/scores/20261004T154010060Z-fb9e594a/strength-floors.json",
+    "floorsDigest": "sha256:1a081de0dd462ded6e1b618b4f3f04da41646433d6cf831e193a81e7b9fc1567"
   },
   "development": [],
   "held-out": [
@@ -104,6 +104,34 @@
         "exercised": true,
         "invalidatedAttempts": [],
         "probeId": "P-013",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-015",
+      "probeClass": "gameability",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-015",
         "severity": "material",
         "trialVotes": [
           {

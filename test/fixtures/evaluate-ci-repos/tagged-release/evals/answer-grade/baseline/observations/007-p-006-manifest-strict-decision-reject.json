@@ -1,0 +1,48 @@
+{
+  "legId": "p-006-manifest-strict-decision-reject",
+  "sequence": 7,
+  "workspace": "mutated:M-002",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-002-de4558ba-2e39-44e8-ba27-94430314eb24/target",
+  "request": {
+    "probeId": "p-006-manifest-strict-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {
+        "strict": "1"
+      },
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": "abcdefghijklmnop"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "p-006-manifest-strict-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Sun, 04 Oct 2026 14:43:12 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "too-short",
+        "mode": "strict"
+      }
+    }
+  }
+}

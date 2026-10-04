@@ -63,6 +63,95 @@
                   "literal": "reject"
                 }
               ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-006-manifest-decision-reject/response-body/reason"
+                },
+                {
+                  "literal": "too-short"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "defectId": "D-009",
+      "behaviorId": "B-004",
+      "summary": "[negative] Raising the minimum also doubles the strict threshold past a valid strict answer.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-006-manifest-strict-decision-reject",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {
+            "strict": "1"
+          },
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefghijklmnop"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-006-manifest-strict-decision-reject/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": "abcdefghijklmnop"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-006-manifest-strict-decision-reject/call-inputs/query"
+                },
+                {
+                  "literal": {
+                    "strict": "1"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-006-manifest-strict-decision-reject/response-body/decision"
+                },
+                {
+                  "literal": "reject"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-006-manifest-strict-decision-reject/response-body/reason"
+                },
+                {
+                  "literal": "too-short"
+                }
+              ]
             }
           ]
         }
@@ -80,7 +169,7 @@
           "header": null,
           "body": {
             "answer": {
-              "literal": "abcdefgh"
+              "matcher": "any"
             }
           },
           "argument": null,
@@ -91,13 +180,108 @@
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "any",
         "operands": [
           {
-            "pointer": "/interactions/observed/response-body/decision"
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefgh"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "absence",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/query/strict"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/response-body/reason"
+                  },
+                  {
+                    "literal": "too-short"
+                  }
+                ]
+              }
+            ]
           },
           {
-            "literal": "reject"
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/body"
+                  },
+                  {
+                    "literal": {
+                      "answer": "abcdefghijklmnop"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/query"
+                  },
+                  {
+                    "literal": {
+                      "strict": "1"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/response-body/decision"
+                  },
+                  {
+                    "literal": "reject"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/response-body/reason"
+                  },
+                  {
+                    "literal": "too-short"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

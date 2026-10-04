@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-003",
+  "probeClass": "zero-action",
+  "behaviorId": "B-003",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:4fcb16b00de7135ebaa8291b0b838afcbad5fa3edbf0ac1970a6b1acf89ff634",
+  "artifactDigest": "sha256:4fcb16b00de7135ebaa8291b0b838afcbad5fa3edbf0ac1970a6b1acf89ff634",
+  "commitDigest": "sha256:4fcb16b00de7135ebaa8291b0b838afcbad5fa3edbf0ac1970a6b1acf89ff634",
+  "rationale": "[malformed] Missing answer returns 400 and an error.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T144023597Z-67d79329/qualification/P-003/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:4cf6189b78320e059d46f7a1fb3e49ac151fa4a490a01ece5e98bfed0a55b56f"
+    },
+    "revisionCommitDigest": "sha256:4fcb16b00de7135ebaa8291b0b838afcbad5fa3edbf0ac1970a6b1acf89ff634",
+    "noKnownDefectStatement": "No known defect in the frozen target revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}

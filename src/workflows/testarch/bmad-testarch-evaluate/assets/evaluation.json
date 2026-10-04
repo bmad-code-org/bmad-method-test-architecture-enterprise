@@ -28,8 +28,7 @@
   "trials": 3,
   "tiers": ["pr", "scheduled"],
   "strengthFloor": {
-    "defect": 1,
-    "zero-action": 1
+    "defect": 1
   },
   "requirements": {
     "path": "requirements.md",

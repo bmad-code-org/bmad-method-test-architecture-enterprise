@@ -12,6 +12,16 @@
       "verdict": "held",
       "oracles": [
         {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-disabled",
+            "re-pass-1-it-skip"
+          ]
+        },
+        {
           "oracleId": "O-003",
           "polarity": "expects-hold",
           "resolution": "true",

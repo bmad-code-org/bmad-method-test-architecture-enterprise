@@ -12,6 +12,37 @@
       "verdict": "held",
       "oracles": [
         {
+          "oracleId": "O-001",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-missing",
+            "re-pass-1-dangling"
+          ]
+        },
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-disabled",
+            "re-pass-1-it-skip"
+          ]
+        },
+        {
+          "oracleId": "O-003",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-strict",
+            "re-pass-1-match",
+            "re-pass-1-to-be"
+          ]
+        },
+        {
           "oracleId": "O-004",
           "polarity": "expects-hold",
           "resolution": "true",

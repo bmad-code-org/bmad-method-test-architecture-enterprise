@@ -8,6 +8,37 @@
   "verdict": "held",
   "oracles": [
     {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-missing",
+        "baseline-dangling"
+      ]
+    },
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-disabled",
+        "baseline-it-skip"
+      ]
+    },
+    {
+      "oracleId": "O-003",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-strict",
+        "baseline-match",
+        "baseline-to-be"
+      ]
+    },
+    {
       "oracleId": "O-004",
       "polarity": "expects-hold",
       "resolution": "true",

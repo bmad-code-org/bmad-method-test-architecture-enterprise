@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-009",
+  "probeClass": "gameability",
+  "behaviorId": "B-001",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:67c2ef3e17495dd2e2c97ec67be3e1c1461b136a2139d5340eafa3ccdee6beea",
+  "artifactDigest": "sha256:67c2ef3e17495dd2e2c97ec67be3e1c1461b136a2139d5340eafa3ccdee6beea",
+  "commitDigest": "sha256:67c2ef3e17495dd2e2c97ec67be3e1c1461b136a2139d5340eafa3ccdee6beea",
+  "rationale": "[gameability] A restricted answer receives pass with a contradictory restricted-term reason, which fools a decision-label-only acceptance check.",
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "decision pass with restricted-term reason on restricted input",
+    "naiveOracleSatisfiedEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T144225272Z-a3e01a36/qualification/P-009/naive-oracle-satisfied.json",
+      "privateRef": null,
+      "digest": "sha256:7239ae76045cb79b8c15b9f15f5c1edfd670710b2ac368638e5048d07a9c366a"
+    },
+    "disciplinedOracleRejectedEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T144225272Z-a3e01a36/qualification/P-009/disciplined-oracle-rejected.json",
+      "privateRef": null,
+      "digest": "sha256:3fb2d49e031b634f4a53a64369db5d83ebc18a43d6b1ade8589bc0515ea0d77a"
+    }
+  },
+  "expectedClean": false,
+  "defects": [],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "my private note"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "probeId": "P-015",
+  "probeClass": "gameability",
+  "behaviorId": "B-004",
+  "expectedClean": false,
+  "rationale": "[held-out] A strict answer one character under the doubled minimum receives pass with the strict mode reported, which fools an acceptance check that reads only the normal-mode decision.",
+  "defects": [],
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "decision pass with strict mode reported on a strict answer below the doubled minimum",
+    "naiveOracle": "O-002"
+  },
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": {
+            "strict": {
+              "literal": "1"
+            }
+          },
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "abcdefghijklmno"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

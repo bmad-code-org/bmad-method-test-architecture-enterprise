@@ -16,6 +16,16 @@
         "baseline-missing",
         "baseline-dangling"
       ]
+    },
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-disabled",
+        "baseline-it-skip"
+      ]
     }
   ],
   "steps": [

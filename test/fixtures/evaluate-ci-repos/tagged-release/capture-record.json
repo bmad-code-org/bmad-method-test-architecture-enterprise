@@ -1,5 +1,5 @@
 {
-  "comment": "A live maintainer session through the local Claude Code CLI wrote ci/evaluation-ci-plan.json and the tiers of evaluation.json in this repository. Both files are committed as the session left them.",
+  "comment": "A live maintainer session through the local Claude Code CLI wrote ci/evaluation-ci-plan.json and the tiers of evaluation.json in this repository. The plan is committed as the session left it, and evaluation.json with the one later edit that `migrations` declares.",
   "command": "claude -p <prompt> --model claude-sonnet-5-5 --allowedTools Read Write Edit Glob Grep Bash --permission-mode acceptEdits --output-format json",
   "claudeCodeVersion": "2.1.288 (Claude Code)",
   "model": "claude-sonnet-5-5",
@@ -17,5 +17,12 @@
     "evals/answer-grade/ci/evaluation-ci-plan.json": "sha256:51997999ce15a7b316129428efca8980f6378ee9889606cbca04c7b3cf501de3",
     "evals/answer-grade/evaluation.json": "sha256:dd274af8a90d86ff3320912a1c9595ec39d32489f99ad936419594197bb31081"
   },
-  "scratchSetup": "The scratch copy left out this record and any plan, reset the tiers of evaluation.json to the Story 1.24 evaluation's, and held one scored run of the evaluation (tea-evaluate run, then score) and no baseline until the session accepted the latest run at the maintainer's word; neither the run nor the baseline is committed."
+  "scratchSetup": "The scratch copy left out this record and any plan, reset the tiers of evaluation.json to the Story 1.24 evaluation's, and held one scored run of the evaluation (tea-evaluate run, then score) and no baseline until the session accepted the latest run at the maintainer's word; neither the run nor the baseline is committed.",
+  "migrations": [
+    {
+      "file": "evals/answer-grade/evaluation.json",
+      "story": "1.98",
+      "change": "strengthFloor loses its zero-action floor and heldOutProbes gains the gameability probe P-015, the repair of the AI-feature evaluation that Story 1.98 mirrored into this repository"
+    }
+  ]
 }

@@ -1,0 +1,377 @@
+{
+  "probeId": "P-006",
+  "mutationId": "M-002",
+  "targetArtifact": "rules/policy.json",
+  "preDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+  "mutatedDigest": "sha256:7b73f46e7be71330f56daebe3da8028d4037dc98bcb138ac0bf2f1858c45087e",
+  "restoredDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-valid-boundary"
+          ]
+        },
+        {
+          "oracleId": "O-004",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-strict-boundary",
+            "re-pass-1-strict-short"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "valid-boundary",
+          "request": {
+            "probeId": "re-pass-1-valid-boundary",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": "abcdefgh"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-valid-boundary",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:31 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "decision": "pass",
+                "reason": "accepted"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "restricted",
+          "request": {
+            "probeId": "re-pass-1-restricted",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": "my private note"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-restricted",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:31 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "decision": "reject",
+                "reason": "restricted-term"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "short",
+          "request": {
+            "probeId": "re-pass-1-short",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": "abcdefg"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-short",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "decision": "reject",
+                "reason": "too-short"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "strict-boundary",
+          "request": {
+            "probeId": "re-pass-1-strict-boundary",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {
+                "strict": "1"
+              },
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": "abcdefghijklmnop"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-strict-boundary",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "decision": "pass",
+                "reason": "accepted",
+                "mode": "strict"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "strict-short",
+          "request": {
+            "probeId": "re-pass-1-strict-short",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {
+                "strict": "1"
+              },
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": "abcdefghijklmno"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-strict-short",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "decision": "reject",
+                "reason": "too-short",
+                "mode": "strict"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "missing",
+          "request": {
+            "probeId": "re-pass-1-missing",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "case": "missing-answer"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-missing",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 400,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "error": "answer must be a string"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "nonstring",
+          "request": {
+            "probeId": "re-pass-1-nonstring",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "json",
+                "value": {
+                  "answer": 42
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-nonstring",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 400,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "error": "answer must be a string"
+              }
+            }
+          }
+        },
+        {
+          "stepId": "raw-invalid-json",
+          "request": {
+            "probeId": "re-pass-1-raw-invalid-json",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "POST",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {},
+              "header": {},
+              "body": {
+                "kind": "raw",
+                "base64": "eyJhbnN3ZXIiOg==",
+                "contentType": "application/json"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-raw-invalid-json",
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 400,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Sun, 04 Oct 2026 14:40:33 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "error": "invalid JSON"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

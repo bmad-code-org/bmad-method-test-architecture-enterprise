@@ -20,35 +20,35 @@
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+      "body": "{\"decision\": \"reject\", \"reason\": \"too-short\"}"
     },
     "strict-boundary": {
       "status": 200,
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\", \"mode\": \"strict\"}"
     },
     "strict-short": {
       "status": 200,
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+      "body": "{\"decision\": \"reject\", \"reason\": \"too-short\", \"mode\": \"strict\"}"
     },
     "missing": {
-      "status": 200,
+      "status": 400,
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+      "body": "{\"error\": \"answer must be a string\"}"
     },
     "nonstring": {
-      "status": 200,
+      "status": 400,
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+      "body": "{\"error\": \"answer must be a string\"}"
     },
     "raw-invalid-json": {
       "status": 400,

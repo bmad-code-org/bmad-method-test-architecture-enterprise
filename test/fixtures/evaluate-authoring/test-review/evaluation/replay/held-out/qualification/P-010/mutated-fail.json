@@ -16,6 +16,16 @@
         "mutated-missing",
         "mutated-dangling"
       ]
+    },
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-disabled",
+        "mutated-it-skip"
+      ]
     }
   ],
   "steps": [

@@ -58,6 +58,7 @@
   "test:evaluate-check": 340.5,
   "test:evaluate-ci": 434.1,
   "test:evaluate-ci-render": 0.9,
+  "test:evaluate-ci-repositories": 530,
   "test:evaluate-compare": 96.9,
   "test:evaluate-confinement": 502,
   "test:evaluate-dogfood": 58.7,
