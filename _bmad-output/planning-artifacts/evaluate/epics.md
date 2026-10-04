@@ -2226,6 +2226,10 @@ So that the plan's live checks reach the model provider on a Linux runner (CAP-1
 
 (Amended 2026-10-03 in Story 1.83's build: the authorization is an `egress` item `{ "host", "port", "addresses" }` on the entry, so the `ci-registry` example lists the model provider's host, port and addresses there, `checkCiGuidance` holds the sentence about it as the marker, and the example's `evaluation.json` form is the one the harness guide's registry fragment shows.)
 
+(Amended 2026-10-03 in Story 1.84's build: the marker sentence is "On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches", and the guide adds three more that `checkCiGuidance` holds beside it: a confined Linux target runs in a network namespace with a loopback and nothing else, the runtime's proxy carries `CONNECT` tunnels for a listed host and port so a client that opens none has no route, and an entry that lists no `egress` reaches no host while macOS ignores the field.
+The `ci-registry` example lists `api.anthropic.com`, port 443 and the two addresses of the harness guide's registry fragment, and `checkCiGuidance` fails while the example carries no `egress` item with a host, a port and addresses, while it carries the retired `"network"` declaration, and while any of the four sentences is missing.
+Both sessions ran on the schema 2 tree of `evaluation.json`, so each wrote schema 2 bytes and the regenerated records declare no `migrations` entry; the Story 1.103 capture-record guard cases now build the record an older session leaves from the committed one and keep refusing a false, retyped, absent or extra migration.)
+
 **Dependencies:** 1.61, 1.83.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
 

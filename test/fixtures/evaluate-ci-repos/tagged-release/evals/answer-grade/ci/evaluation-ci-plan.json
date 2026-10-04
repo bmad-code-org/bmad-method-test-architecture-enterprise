@@ -21,7 +21,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
       }
     },
     {
@@ -46,7 +46,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
       }
     },
     {
@@ -71,7 +71,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+        "reason": "Deterministic and needs no secret. .github/workflows/ci.yml runs on pull_request, so every pull request gets it (CAP-11)."
       }
     },
     {
@@ -96,7 +96,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. The evaluation declares an HTTP target (POST /grade), so the check applies."
+        "reason": "evaluation.json declares an api interface (POST /grade over http on 127.0.0.1), so the conformance check has a target. Needs no secret."
       }
     },
     {
@@ -121,7 +121,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. Probe P-009 takes the gameability route."
+        "reason": "Probe P-009 takes the gameability route (corpus/gameability/P-009.json). Deterministic, no secret, so it runs on every pull request (CAP-11)."
       }
     },
     {
@@ -146,7 +146,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+        "reason": "Deterministic, no secret, no model call (evaluator.kind is deterministic). Runs on every pull request (CAP-11)."
       }
     },
     {
@@ -172,7 +172,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+        "reason": "Deterministic and needs no secret. CONTRIBUTING.md says pull requests from forks run without any secret, and replay needs none."
       }
     },
     {
@@ -195,7 +195,7 @@
       "placement": {
         "tier": "merge",
         "defaultTier": "merge",
-        "reason": "The target (app/server/grade.mjs) needs no secret: evaluation.json registry environmentKeys is empty. A post-merge event exists in the push to main; CONTRIBUTING.md squash merges and no merge queue do not move it, and no cap on post-merge run time is stated. The preflight runs a local stub in seconds."
+        "reason": "The target needs no secret: evaluation.json registry environmentKeys is empty and app/server/grade.mjs is the deterministic stand-in for the vendor model, so AD-10 defaults the live preflight to merge. The adopter states no run-time or cost cap that moves it. ci.yml has no push trigger today, so bmad-testarch-ci adds a push to main trigger for this tier."
       }
     },
     {
@@ -220,7 +220,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). The target is a local stub, so a live run makes no model call and costs no credits (evaluation.json registry, app/DESCRIPTION.md)."
+        "reason": "No workflow has a schedule trigger and docs/RELEASING.md says there is no scheduled job, so no scheduled entry exists. The tag push that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). B-001 is critical, releases ship about every six weeks and consumers pin versions, so a defect that ships lives for weeks."
       }
     },
     {
@@ -245,7 +245,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Contract declares a critical behavior (B-001), so a blocking release gate is justified; consumers pin versions and a shipped defect stays about six weeks (docs/RELEASING.md)."
+        "reason": "No schedule trigger exists in the repository, so the held-out partition (P-011, P-012, P-013) runs at the tag in .github/workflows/release.yml, the only release gate (docs/RELEASING.md). B-001 is critical and a shipped defect stays until the next tag."
       }
     },
     {
@@ -270,7 +270,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Strength regression against the baseline is a warning class (AD-10)."
+        "reason": "No schedule trigger exists in the repository, so the strength comparison against baseline/ runs at the tag in .github/workflows/release.yml (docs/RELEASING.md). AD-10 gives it warn on release."
       }
     }
   ]

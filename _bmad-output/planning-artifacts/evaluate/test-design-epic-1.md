@@ -1366,6 +1366,9 @@ Added 2026-10-02 in Story 1.61's build; depends on 1.61 and 1.83, and teaches th
 | The capture records pin the edited guide          | Each `capture-record.json` holds the digests of the edited `ci.md`, `SKILL.md` and plan template, regenerated from its session's output                                              | Integration | P0  | Keeping the old records beside the edited guide fails `test:evaluate-ci` with the stale digest |
 | The record states each session                    | Read the story's record for each session's prompt, model, tools and outcome                                                                                                          | Static      | P2  | A record without them fails the coordinator's review                                           |
 
+Amended 2026-10-03 in Story 1.84's build: `checkCiGuidance` holds four sentences of the live-check passage and the `egress` item of the example, and its negative cases delete the example's authorization, the marker sentence and the `CONNECT` sentence and restore the retired `"network"` declaration; each fails `test:evaluate-guidance`, and so do cases that empty the example's `egress` list and delete the namespace sentence, the provider clause and the macOS sentence.
+The regenerated records carry no `migrations` entry (the sessions ran on the schema 2 tree), so `the capture-record guard` of Story 1.103 builds the record of an older session from the committed one and adds a case that refuses a migration a schema 2 session never needed.
+
 ### Story 1.85: Show a sparse-checkout project to the target's git as the project shows it
 
 Added 2026-10-03 in Story 1.80's build; depends on 1.80. Levels: integration, static. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`).

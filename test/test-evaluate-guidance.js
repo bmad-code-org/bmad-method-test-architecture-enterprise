@@ -3592,9 +3592,16 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     'registry `environmentKeys`',
     'Keys carry names alone.',
     'the same names as the CI secrets to add',
+    // Story 1.84: on Linux the live checks need the entry's `egress` authorization, which the proxy serves as `CONNECT` tunnels.
+    "On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches",
+    'A confined Linux target runs in a network namespace with a loopback and nothing else',
+    "add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows",
+    "The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route",
+    'An entry that lists no `egress` reaches no host, and macOS ignores the field',
     "Keep the template's `enforcement` values",
   ])
     requireText(live, marker, 'ci.md live placement', failures);
+  checkRetiredNetwork(guide, failures, 'ci.md');
   const gates = headingBody(guide, '## Offer eval-quality-gates');
   for (const marker of [
     'is opt-in',
@@ -3823,6 +3830,17 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
       failures.push(`ci.md registry example fails the runtime schema: ${JSON.stringify(validate.errors)}`);
     if (registries[0].environmentKeys.some((key) => !/^[A-Z][A-Z0-9_]*$/.test(key)))
       failures.push('ci.md registry example names a value or a non-key');
+    // Story 1.84: the skill target's entry authorizes the model provider in the `egress` form Story 1.83 introduced, which `check` reads.
+    const egress = registries[0].egress;
+    if (
+      !Array.isArray(egress) ||
+      egress.length === 0 ||
+      egress.some(
+        (item) =>
+          typeof item?.host !== 'string' || !Number.isInteger(item.port) || !Array.isArray(item.addresses) || item.addresses.length === 0,
+      )
+    )
+      failures.push('ci.md registry example authorizes no host, port and addresses of the model provider in `egress`');
   }
 
   // The gate example: a gate the installed binary lists, a section added beside untouched ones, a check led by the binary.
@@ -4484,6 +4502,67 @@ async function main() {
             '"tier": "release",\n        "defaultTier": "release",\n        "reason": ".github/workflows/deploy.yml',
             '"tier": "release",\n        "defaultTier": "scheduled",\n        "reason": ".github/workflows/deploy.yml',
           ),
+      ],
+      [
+        'ci registry example without its egress authorization',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/,\n {2}"egress": \[[\s\S]*?\n {2}\]/, ''),
+      ],
+      [
+        'ci registry example with an empty egress list',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/"egress": \[[\s\S]*?\n {2}\]/, '"egress": []'),
+      ],
+      [
+        'ci namespace sentence removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('A confined Linux target runs in a network namespace with a loopback and nothing else, so read', 'Read'),
+      ],
+      [
+        'ci provider clause removal',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            " and add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows",
+            '',
+          ),
+      ],
+      [
+        'ci macOS sentence removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('An entry that lists no `egress` reaches no host, and macOS ignores the field.', ''),
+      ],
+      [
+        'ci egress sentence removal',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            "On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches.",
+            '',
+          ),
+      ],
+      [
+        'ci CONNECT sentence removal',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            "The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route.",
+            '',
+          ),
+      ],
+      [
+        'ci retired network declaration restored',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace('and macOS ignores the field.', 'and macOS ignores the field. The older declaration was `"network": "host"`.'),
       ],
       [
         'ci registry key casing',

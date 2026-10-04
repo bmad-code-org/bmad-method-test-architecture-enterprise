@@ -48,6 +48,11 @@ Put the live checks where the inspection found a secret and an event: a live `pr
 
 Declare the runner's credential keys as `permittedEnvironmentKeys` through the target's registry `environmentKeys`, which Stage 6 scaffolds and the runtime compiles into the authorization: read them, and add a key name only when a live check needs a credential the registry omits. Keys carry names alone. The plan carries no credential and `bmad-testarch-ci` wires none, so give the adopter the same names as the CI secrets to add for the live tiers.
 
+On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches.
+A confined Linux target runs in a network namespace with a loopback and nothing else, so read the entry's `egress` and add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows.
+The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route.
+An entry that lists no `egress` reaches no host, and macOS ignores the field.
+
 <!-- example:ci-registry -->
 
 ```json
@@ -59,7 +64,14 @@ Declare the runner's credential keys as `permittedEnvironmentKeys` through the t
   "artifacts": {},
   "environmentKeys": ["RESERVATION_MODEL_KEY"],
   "maxElapsedMs": 60000,
-  "infrastructureExitCodes": [3, 4, 5, 6]
+  "infrastructureExitCodes": [3, 4, 5, 6],
+  "egress": [
+    {
+      "host": "api.anthropic.com",
+      "port": 443,
+      "addresses": ["160.79.104.10", "2607:6bc0::10"]
+    }
+  ]
 }
 ```
 
