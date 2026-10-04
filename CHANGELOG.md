@@ -369,6 +369,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The dogfood suite's O-003 holds each exit's class against its row of the AD-10 table (Story 1.116, CAP-10, AD-15).
+  The oracle reconciled the `/exits` records against the reference set by id and tested each class against the table's vocabulary, so a complete listing that swapped the classes of `tea-evaluate 11` and `tea-evaluate 12` passed.
+  Its `for-all` predicate is now an `any` of one `all` pair of `@/id` and `@/class` per table row.
+  The two rows M-001 and M-002 edit compare their class with the answer the `classify-exits` step gave for the same exit, which O-001 holds to the table, so each seeded probe still violates one oracle and every oracle outcome reads `agrees`.
+  `test:evaluate-dogfood` holds the predicate equal to the table, replays a listing that swaps the two classes and a class changed in `references/gaps.md` with no contract edit, and a class vocabulary test alone passes both, so the cases fail it.
+  The contract digest changes, so the recorded live PASS of Story 1.46 is superseded.
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).

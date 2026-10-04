@@ -3,7 +3,7 @@
   "probeClass": "zero-action",
   "behaviorId": "B-003",
   "expectedClean": true,
-  "rationale": "[representative] Clean control: the committed exit table holds thirteen rows, and Stage 11 lists every one with a class the table uses.",
+  "rationale": "[representative] Clean control: the committed exit table holds thirteen rows, and Stage 11 lists every one with the class its row gives.",
   "defects": [],
   "qualification": {
     "route": "clean-control",
