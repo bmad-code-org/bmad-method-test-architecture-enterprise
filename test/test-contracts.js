@@ -510,7 +510,7 @@ const SEEDED_FAULTS = [
       contract.permittedInterfaces.push(structuredClone(contract.permittedInterfaces[0]));
       return contract;
     },
-    expect: { code: 'unreachable-check-evidence', issueShapes: [] },
+    expect: { code: 'duplicate-interface-identifier', issueShapes: [] },
   },
 ];
 

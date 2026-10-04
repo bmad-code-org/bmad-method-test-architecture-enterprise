@@ -1166,8 +1166,8 @@ async function checkReportCollidingWithAnyOperation() {
   // The contract declares two interfaces, so `check` asks the engine once about a repeated identifier (Story 1.102); the stand-in's signature line is not this rule's to quote, since no probe names a report.
   const ordinaryCalls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [];
   check(
-    signature(ordinaryRun.stdout).length === 0 && ordinaryCalls.length <= 1,
-    `${label}: a collision between ordinary operations with no probe naming a report drew a finding or more than the one compile call for the identifier rule (calls ${ordinaryCalls.length === 0 ? 'none' : JSON.stringify(ordinaryCalls)})\n${ordinaryRun.output}`,
+    signature(ordinaryRun.stdout).length === 0 && ordinaryCalls.length === 1,
+    `${label}: a collision between ordinary operations with no probe naming a report drew a finding or did not run the one compile call for the identifier rule (calls ${ordinaryCalls.length === 0 ? 'none' : JSON.stringify(ordinaryCalls)})\n${ordinaryRun.output}`,
   );
   const ordinaryEngine = spawnSync(
     process.execPath,
