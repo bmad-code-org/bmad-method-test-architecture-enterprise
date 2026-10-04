@@ -2740,17 +2740,17 @@ So that a held-out run compiles, calibrates and scores its own criteria without 
 
 ### Story 1.106: Partition waivers in a partition plan
 
-Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a waiver that reads a development-only step. A waiver names the oracle or behavior it excuses, so it must follow that oracle into the one view that holds it.
+Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a waiver that reads a development-only step. eval-quality's `Waiver` holds `id`, `rule`, `rationale`, `condition`, `approval` and `expiresAt`: it names a discipline rule and no oracle or behavior, and its `condition` is the one field that reads a step. A waiver therefore belongs to the partition whose steps its `condition` reads (amended 2026-10-04 in Story 1.106: the story text said a waiver names the oracle it excuses, which the contract does not carry).
 
-As an adopter who waives a known gap on a held-out oracle,
-I want a waiver to belong to the partition of the oracle it excuses,
-So that the engine compiles each view without a waiver for an oracle the view does not hold.
+As an adopter who waives a known gap on a held-out request,
+I want a waiver to belong to the partition whose steps its condition reads,
+So that the engine compiles each view without a waiver that reads the other partition's step.
 
 **Acceptance Criteria:**
 
-**Given** a waiver for a development-only oracle and one for a held-out oracle
-**When** the held-out and development views are derived
-**Then** each view carries only the waivers whose oracles it holds, a view never names the other partition's oracle ID, and `check` names a waiver that matches no view
+**Given** a waiver whose condition reads a development-only step, one whose condition reads a shared step or no step, and one in the held-out plan
+**When** the development, held-out and both views are derived
+**Then** each view carries only the waivers its steps can reach, a view never names the other partition's step through a waiver, and `check` names a waiver that no view can reach by its waiver ID
 **And** a view that kept the other partition's waiver fails the isolation fixture.
 
 **Dependencies:** 1.51, 1.105.

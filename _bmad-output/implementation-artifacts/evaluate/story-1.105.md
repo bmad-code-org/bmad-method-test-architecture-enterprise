@@ -2,7 +2,7 @@
 title: 'Story 1.105: Partition rubrics in a partition plan'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '807410f5'
 route: 'dispatch'
 review_loop_iteration: 0

@@ -404,14 +404,30 @@ function startRunner(args, input, { detached = false, env = {} } = {}) {
   return { child, closed };
 }
 
-/** The pids of the children of `pid`. */
+/**
+ * The pids of the children of `pid`.
+ *
+ * Windows records a parent only as a number and never clears it, and it
+ * reuses PIDs quickly. A process whose parent died long ago keeps naming that
+ * dead parent's PID, so once a later process receives the same PID, a plain
+ * ParentProcessId query lists the stranger as its child. On a hosted runner
+ * that made the helper-death case see an extra guardian child, fail to single
+ * out the Job Object helper, and never kill it. A real child always starts
+ * after its parent, so the query keeps only processes created no earlier than
+ * the current holder of `pid`.
+ */
 function childrenOf(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return [];
   const listed =
     process.platform === 'win32'
       ? spawnSync(
           'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ParentProcessId=${pid}').ProcessId`],
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$parent = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; if ($parent) { (Get-CimInstance Win32_Process -Filter 'ParentProcessId=${pid}' | Where-Object { $_.CreationDate -ge $parent.CreationDate }).ProcessId }`,
+          ],
           {
             encoding: 'utf8',
             timeout: 10_000,
@@ -797,6 +813,7 @@ class FakePowerShell {
   let ownerSupervisor = null;
   let ownerLeader = null;
   let guardian = null;
+  let guardianChildren = [];
   let helper = null;
   let ownerAgentVerified = false;
   let ownerChildVerified = false;
@@ -806,18 +823,18 @@ class FakePowerShell {
       [ownerSupervisor] = childrenOf(ownerRun.pid);
       [ownerLeader] = childrenOf(ownerSupervisor);
       [guardian] = childrenOf(ownerLeader);
-      const guardianChildren = childrenOf(guardian);
+      guardianChildren = childrenOf(guardian);
       ownerAgentVerified = guardianChildren.includes(ownerPids.agent);
       ownerChildVerified = ownerAgentVerified && childrenOf(ownerPids.agent).includes(ownerPids.child);
       const helpers = guardianChildren.filter((pid) => pid !== ownerPids.agent);
       if (ownerChildVerified && helpers.length === 1) [helper] = helpers;
     }
     progress(
-      `helper discovery: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified, stderr: ownerStderr })}`,
+      `helper discovery: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, guardianChildren, helper, ownerAgentVerified, ownerChildVerified, stderr: ownerStderr })}`,
     );
     check(
       ownerPids !== null && ownerChildVerified && helper !== null,
-      `the Windows helper-death case did not verify its runner, supervisor, leader, guardian, agent, child and sole Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified })}\n${ownerStderr}`,
+      `the Windows helper-death case did not verify its runner, supervisor, leader, guardian, agent, child and sole Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, guardianChildren, helper, ownerAgentVerified, ownerChildVerified })}\n${ownerStderr}`,
     );
     const helperKilledAt = Date.now();
     if (helper !== null) reap(helper);

@@ -20,6 +20,12 @@
  *    run cases), and a development run holds no held-out criterion in any artifact,
  *  - `check` names a criterion that no view reaches, by criterion ID and never by a byte of the held-out plan,
  *  - calibration judges the items of the run's own criteria, so an item of the other partition's criterion is never judged there.
+ *
+ * Story 1.106 adds waivers, through the `waiverLayer` over the same fixture. A waiver names a discipline rule and no oracle, so its
+ * `condition`, the one field that reads a step, places it:
+ *  - each view holds only the waivers its steps reach (a view that keeps the other partition's waiver fails the pure case, the
+ *    isolation scan of the held-out run, and the engine's compile of a held-out view that holds an incomplete development waiver),
+ *  - `check` names a waiver that no view reaches by waiver ID and never by a byte of the held-out plan.
  */
 
 const assert = require('node:assert/strict');
@@ -28,7 +34,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { PartitionPlanError, contractView, loadContractView, selectPartition, stepsReadBy } = require('../cli/lib/evaluate/partition');
+const {
+  PartitionPlanError,
+  contractView,
+  loadContractView,
+  partitionPlanProblems,
+  selectPartition,
+  stepsReadBy,
+} = require('../cli/lib/evaluate/partition');
 const { suite } = require('./lib/evaluate-story-121');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'evaluate', 'partition-plan');
@@ -77,6 +90,34 @@ const HELD_OUT_CRITERION = criterionOf('RC-101', `${CANARY}: does the held-out c
 const RUBRIC_KEEP_OUT = {
   development: [...KEEP_OUT.development, 'R-101', 'RC-101'],
   'held-out': [...KEEP_OUT['held-out'], 'RC-001', DEVELOPMENT_CRITERION.text],
+};
+
+/**
+ * The waiver layer: waivers of `contract.json` that read a development-only step and a shared one, and a held-out waiver in the plan
+ * (Story 1.106). A waiver is complete (a rule, a rationale, an approval and an expiry), because the engine's compile refuses one that
+ * is not (`waiver-incomplete`).
+ */
+const waiverOf = (id, rationale, condition) => ({
+  id,
+  rule: 'omission-and-completeness',
+  rationale,
+  condition,
+  approval: 'gate-c-reviewer',
+  expiresAt: '2099-01-01T00:00:00Z',
+});
+const DEVELOPMENT_WAIVER = waiverOf('W-001', 'The development case is flaky.', '/interactions/development-run/exit-code is absent');
+const SHARED_WAIVER = waiverOf('W-002', 'The shared request has no seed here.', '/interactions/shared-run/exit-code is absent');
+const HELD_OUT_WAIVER = waiverOf('W-101', `${CANARY}: the held-out case is flaky.`, '/interactions/held-out-run/exit-code is absent');
+/** A plan waiver that reads a shared step: both of the plan's partitions may honour it, so the held-out and both views keep it. */
+const HELD_OUT_SHARED_WAIVER = waiverOf(
+  'W-103',
+  'The shared request has no exit code here.',
+  '/interactions/shared-run/exit-code is absent',
+);
+/** What must stay out of each partition's artifacts once waivers join the plan: the other partition's own waivers. */
+const WAIVER_KEEP_OUT = {
+  development: [...KEEP_OUT.development, 'W-101', 'W-103', HELD_OUT_SHARED_WAIVER.rationale],
+  'held-out': [...KEEP_OUT['held-out'], 'W-001', DEVELOPMENT_WAIVER.rationale],
 };
 
 const test = suite('tea-evaluate-partition-plans');
@@ -176,6 +217,27 @@ function rubricLayer(
   });
 }
 
+/**
+ * The waiver layer over a project's folder (Story 1.106): `contract.json` gains the `development` waivers and the held-out plan the
+ * `heldOut` ones. Stories that partition more of the contract extend a project through this layer and `rubricLayer`.
+ */
+function waiverLayer(
+  { folder },
+  { development = [DEVELOPMENT_WAIVER, SHARED_WAIVER], heldOut = [HELD_OUT_WAIVER, HELD_OUT_SHARED_WAIVER] } = {},
+) {
+  const edit = (file, change) => {
+    const value = read(path.join(folder, file));
+    change(value);
+    write(path.join(folder, file), value);
+  };
+  edit('contract.json', (contract) => {
+    contract.waivers = development;
+  });
+  edit(PLAN_FILE, (plan) => {
+    if (heldOut.length > 0) plan.waivers = heldOut;
+  });
+}
+
 /** The judge's calls since `from`: whether each was a calibration call and the `rubric/criterion` keys it was asked to score. */
 function judgeCalls(project, from = 0) {
   const file = path.join(project.directory, 'prompts.jsonl');
@@ -193,14 +255,18 @@ function judgeCalls(project, from = 0) {
 }
 const judgeCallCount = (project) => judgeCalls(project).length;
 
-/** The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository). */
-function planProject(label, layer = null) {
+/**
+ * The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository).
+ * `layer` adds the rubric layer and `waivers` the waiver layer, each with the options it takes; null leaves the fixture as it is.
+ */
+function planProject(label, layer = null, waivers = null) {
   return test.project(
     label,
     ({ folder, directory }) => {
       // A byte-for-byte comparison of the run's contract.json with the folder's can fail only when the folder's layout is one
       // a view would not produce.
       if (layer !== null) rubricLayer({ folder, directory }, layer);
+      if (waivers !== null) waiverLayer({ folder, directory }, waivers);
       relayContract(folder);
       fs.mkdirSync(path.join(folder, 'ci'));
       write(
@@ -328,6 +394,30 @@ try {
     }).sort(),
     ['after-step', 'captured-step', 'condition-step', 'evidence-step', 'pointer-step', 'target-step'],
   );
+  // A waiver's condition is a sentence: every `/interactions/<stepId>` in it names a step, wherever it sits and with or without a path
+  // after the step, while a string that is no whole step ID names none. The other fields read a pointer that starts the string.
+  for (const [condition, steps] of [
+    ['the exit code at /interactions/held-out-run/exit-code is absent', ['held-out-run']],
+    ['when /interactions/development-run/exit-code is absent', ['development-run']],
+    ['/interactions/shared-run/exit-code is 0 and /interactions/development-run/exit-code is absent', ['shared-run', 'development-run']],
+    ['/interactions/held-out-run is absent', ['held-out-run']],
+    ['absent: (/interactions/held-out-run), then /interactions/shared-run.', ['held-out-run', 'shared-run']],
+    ['the log at /var/interactions/held-out-run/stdout is absent', ['held-out-run']],
+    ['/interactions/interactions/held-out-run', ['interactions', 'held-out-run']],
+    ['the target is flaky on Tuesdays', []],
+    ['/interactions/Held-out-run/exit-code /interactions/held_out/exit-code /interactions/held-Out/stdout /interaction/held-out-run/x', []],
+  ])
+    assert.deepEqual(stepsReadBy({ condition }), steps, `a waiver condition ${JSON.stringify(condition)} read the wrong steps`);
+  assert.deepEqual(stepsReadBy({ condition: null }), []);
+  // Only a string is a sentence: a number, an object that holds a pointer and an array of pointers read no step and never throw.
+  for (const condition of [7, { pointer: '/interactions/development-run/x' }, ['/interactions/development-run/x']])
+    assert.deepEqual(stepsReadBy({ condition }), [], `a non-string condition ${JSON.stringify(condition)} read a step`);
+  for (const field of ['pointer', 'captured', 'evidence'])
+    assert.deepEqual(
+      stepsReadBy({ [field]: 'see /interactions/held-out-run/stdout' }),
+      [],
+      `a ${field} that does not start with the pointer read a step`,
+    );
   // A shared oracle whose literal, commentary or scope spells a development-only pointer stays in the held-out view.
   const spelledSource = JSON.parse(contractBytes.toString('utf8'));
   spelledSource.oracles[0].check.operands.push({
@@ -398,6 +488,188 @@ try {
   );
   assert.deepEqual(view('held-out').contract.rubrics, []);
   assert.deepEqual(view('both').contract.rubrics, []);
+
+  // ---- waivers: a waiver belongs to the partition whose steps its condition reads (Story 1.106) -------------------------------
+  const freeTextWaiver = waiverOf('W-004', 'The target is flaky on Tuesdays.', 'the target is flaky on Tuesdays');
+  const waiverSource = JSON.parse(contractBytes.toString('utf8'));
+  // A condition is a sentence, so a pointer sits anywhere in it and a second one counts: a waiver that reads a development-only step
+  // beside a shared one (W-005), after leading text (W-006) or with no path after the step (W-007) leaves the held-out view, and one
+  // that reads a shared step mid-text (W-008) stays. W-009 names the development-only step first and a shared step last, so a read of
+  // the last step alone keeps it in the held-out view.
+  const proseWaivers = [
+    waiverOf(
+      'W-005',
+      'The development case shares a seed.',
+      'the exit code is 0 at /interactions/shared-run/exit-code and absent at /interactions/development-run/exit-code',
+    ),
+    waiverOf('W-006', 'The development case is flaky in prose.', 'when /interactions/development-run/exit-code is absent'),
+    waiverOf('W-007', 'The development case has no run.', 'the run /interactions/development-run is absent.'),
+    waiverOf('W-008', 'The shared request has no exit code.', 'the exit code at /interactions/shared-run/exit-code is absent'),
+    waiverOf(
+      'W-009',
+      'The development case outranks the shared one.',
+      '/interactions/development-run/exit-code is absent unless /interactions/shared-run/exit-code is 0',
+    ),
+  ];
+  waiverSource.waivers = [
+    DEVELOPMENT_WAIVER,
+    SHARED_WAIVER,
+    waiverOf('W-003', 'No condition applies.', null),
+    freeTextWaiver,
+    ...proseWaivers,
+  ];
+  const waiverBytes = Buffer.from(JSON.stringify(waiverSource, null, 4));
+  const waiverPlan = {
+    ...heldOutPlan,
+    waivers: [HELD_OUT_WAIVER, waiverOf('W-102', 'The held-out partition has no seed here.', null), HELD_OUT_SHARED_WAIVER],
+  };
+  const waiverView = (partition, plan = waiverPlan) =>
+    contractView({ contractBytes: waiverBytes, evaluation, heldOutPlan: plan, partition });
+  const waiversIn = (partition, plan) => waiverView(partition, plan).contract.waivers.map((waiver) => waiver.id);
+  // The development view is the source bytes: it carries the waivers that read a development-only or a shared step, the ones that
+  // read none, and never the plan's.
+  assert.equal(waiverView('development').bytes, waiverBytes, 'the development view is not the folder bytes');
+  assert.deepEqual(waiversIn('development'), ['W-001', 'W-002', 'W-003', 'W-004', 'W-005', 'W-006', 'W-007', 'W-008', 'W-009']);
+  assert.equal(
+    JSON.stringify(waiverView('development').contract).includes('W-101'),
+    false,
+    'the development view carries the held-out waiver',
+  );
+  // The held-out view drops the waiver whose condition reads a development-only step, keeps the shared ones and those whose condition
+  // reads no step, and appends the plan's waivers.
+  assert.deepEqual(waiversIn('held-out'), ['W-002', 'W-003', 'W-004', 'W-008', 'W-101', 'W-102', 'W-103']);
+  assert.deepEqual(waiversIn('both'), [
+    'W-001',
+    'W-002',
+    'W-003',
+    'W-004',
+    'W-005',
+    'W-006',
+    'W-007',
+    'W-008',
+    'W-009',
+    'W-101',
+    'W-102',
+    'W-103',
+  ]);
+  for (const partition of ['held-out', 'both']) {
+    assert.deepEqual(
+      waiverView(partition)
+        .contract.waivers.slice(0, 4)
+        .filter((waiver) => waiver.id === 'W-004'),
+      [freeTextWaiver],
+      `the ${partition} view changed a waiver`,
+    );
+  }
+  assert.equal(
+    JSON.stringify(waiverView('held-out').contract).includes('development-run'),
+    false,
+    'the held-out view names the development-only step through a waiver',
+  );
+  assert.deepEqual(
+    { ...waiverView('held-out').contract, waivers: null, interactionPlan: null, oracles: null, behaviors: null },
+    { ...waiverSource, waivers: null, interactionPlan: null, oracles: null, behaviors: null },
+    'the held-out view changed more than the plan and its waivers',
+  );
+  // A plan waiver the schema never reached is named by its position, whatever its ID and condition say: `check` runs the plan's schema
+  // first, so this rule sees only IDs of the schema's shape through the CLI, and the label is held here.
+  const unnamed = partitionPlanProblems({
+    contract: JSON.parse(waiverBytes.toString('utf8')),
+    evaluation,
+    heldOutPlan: {
+      ...heldOutPlan,
+      waivers: [waiverOf('canary-free text', 'canary-rationale', '/interactions/development-run/exit-code canary-condition')],
+    },
+    heldOutBehaviors: new Set(['B-002']),
+  });
+  assert.deepEqual(
+    unnamed.map((problem) => problem.message),
+    ['waiver waivers[0] reads development-only step development-run, which the held-out view does not declare'],
+  );
+  assert.equal(JSON.stringify(unnamed).includes('canary-'), false, 'a plan waiver finding quoted a free-text ID, rationale or condition');
+  // A plan waiver is read whole: a development-only pointer that is the second one, or sits after leading text, is named, and a
+  // ghost step read mid-text is flagged without its name.
+  const planWaiverFindings = (condition) =>
+    partitionPlanProblems({
+      contract: JSON.parse(waiverBytes.toString('utf8')),
+      evaluation,
+      heldOutPlan: { ...heldOutPlan, waivers: [waiverOf('W-101', 'canary-rationale', condition)] },
+      heldOutBehaviors: new Set(['B-002']),
+    }).map((problem) => problem.message);
+  assert.deepEqual(
+    planWaiverFindings('the exit code is 0 at /interactions/shared-run/exit-code and absent at /interactions/development-run/exit-code'),
+    ['waiver W-101 reads development-only step development-run, which the held-out view does not declare'],
+  );
+  assert.deepEqual(planWaiverFindings('/interactions/development-run/exit-code is absent unless /interactions/shared-run/exit-code is 0'), [
+    'waiver W-101 reads development-only step development-run, which the held-out view does not declare',
+  ]);
+  assert.deepEqual(planWaiverFindings('when /interactions/development-run is absent'), [
+    'waiver W-101 reads development-only step development-run, which the held-out view does not declare',
+  ]);
+  assert.deepEqual(planWaiverFindings('the log at /interactions/canary-ghost/stdout is absent'), [
+    'waiver W-101 reads a step the held-out view does not declare',
+  ]);
+  assert.deepEqual(planWaiverFindings('the exit code at /interactions/shared-run/exit-code or /interactions/held-out-run is absent'), []);
+  // A `contract.json` waiver is read whole too: a held-out step named mid-text is one the development view lacks.
+  assert.deepEqual(
+    partitionPlanProblems({
+      contract: {
+        ...JSON.parse(waiverBytes.toString('utf8')),
+        waivers: [waiverOf('W-001', 'r', 'the exit code at /interactions/held-out-run/exit-code is absent')],
+      },
+      evaluation,
+      heldOutPlan,
+      heldOutBehaviors: new Set(['B-002']),
+    }).map((problem) => problem.message),
+    [
+      "waiver W-001 reads step held-out-run, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers",
+    ],
+  );
+  // The held-out pointer comes first and a shared one last, so a read of the last step alone finds nothing to name.
+  assert.deepEqual(
+    partitionPlanProblems({
+      contract: {
+        ...JSON.parse(waiverBytes.toString('utf8')),
+        waivers: [waiverOf('W-001', 'r', '/interactions/held-out-run/exit-code is absent unless /interactions/shared-run/exit-code is 0')],
+      },
+      evaluation,
+      heldOutPlan,
+      heldOutBehaviors: new Set(['B-002']),
+    }).map((problem) => problem.message),
+    [
+      "waiver W-001 reads step held-out-run, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers",
+    ],
+  );
+  assert.equal(
+    partitionPlanProblems({
+      contract: JSON.parse(waiverBytes.toString('utf8')),
+      evaluation,
+      heldOutPlan: { ...heldOutPlan, waivers: [waiverOf('W-101-canary-x', 'r', null), waiverOf('W-101-canary-x', 'r', null)] },
+      heldOutBehaviors: new Set(['B-002']),
+    }).some((problem) => /^waiver waivers\[1\] is declared more than once$/.test(problem.message)),
+    true,
+    'a repeated plan waiver ID of no shape was not named by its position',
+  );
+  // A plan with no `waivers` appends nothing, so a plan written before waivers joined it adds none; the held-out view still drops the
+  // waiver the held-out partition cannot reach.
+  assert.deepEqual(waiversIn('held-out', heldOutPlan), ['W-002', 'W-003', 'W-004', 'W-008']);
+  assert.deepEqual(view('held-out').contract.waivers, []);
+  assert.deepEqual(view('both').contract.waivers, []);
+  // A waiver whose rationale, rule and approval spell a pointer is not read: only its condition names a step.
+  const spelledWaiver = {
+    ...SHARED_WAIVER,
+    rationale: '/interactions/development-run/stdout',
+    rule: '/interactions/development-run/stdout',
+    approval: '/interactions/development-run/stdout',
+  };
+  const spelledWaivers = JSON.parse(contractBytes.toString('utf8'));
+  spelledWaivers.waivers = [spelledWaiver];
+  assert.deepEqual(
+    contractView({ contractBytes: Buffer.from(JSON.stringify(spelledWaivers)), evaluation, heldOutPlan, partition: 'held-out' }).contract
+      .waivers,
+    [spelledWaiver],
+    'a rationale, rule or approval that spells a pointer dropped a waiver from the held-out view',
+  );
 
   // ---- check: one case per rule, naming paths and IDs and never a byte of the plan -------------------------------------------
   const guarded = planProject('plan-check');
@@ -521,21 +793,6 @@ try {
       'a held-out plan with an unexpected field',
       () => change(PLAN_FILE, (value) => (value['canary-top-level'] = 'canary-top-value')),
       /corpus\/held-out\/plan\.json.*\(root\) must NOT have additional properties/,
-    ],
-    [
-      'a waiver reading a development-only step',
-      () =>
-        change('contract.json', (contract) =>
-          contract.waivers.push({
-            id: 'W-001',
-            rule: 'AD-20',
-            rationale: 'The development run is flaky.',
-            condition: '/interactions/development-run/exit-code is absent',
-            approval: null,
-            expiresAt: null,
-          }),
-        ),
-      /contract\.json.*waivers read development-only step development-run; a partition plan does not partition waivers yet/,
     ],
     [
       'a held-out oracle declared twice',
@@ -1011,6 +1268,243 @@ try {
       `${name}: check blamed the rubrics, the judge or the labelled file for a contract error:\n${ran.output}`,
     );
   }
+
+  // ---- check over waivers: each waiver has a home, and one no view reaches is named by its ID (Story 1.106) --------------------
+  const waiverGuarded = planProject('plan-waiver-check', null, {});
+  const waiverFiles = ['contract.json', 'evaluation.json', PLAN_FILE];
+  const waiverOriginals = new Map(waiverFiles.map((file) => [file, fs.readFileSync(path.join(waiverGuarded.folder, file))]));
+  const waiverChange = (file, edit) => {
+    const value = read(path.join(waiverGuarded.folder, file));
+    edit(value);
+    write(path.join(waiverGuarded.folder, file), value);
+  };
+  const waiverChecked = (edit, command = ['check']) => {
+    try {
+      edit();
+      assert.equal(cli(waiverGuarded, 'digest').status, 0);
+      return cli(waiverGuarded, command[0], command.slice(1));
+    } finally {
+      for (const [file, bytes] of waiverOriginals) fs.writeFileSync(path.join(waiverGuarded.folder, file), bytes);
+      assert.equal(cli(waiverGuarded, 'digest').status, 0);
+    }
+  };
+  // A waiver that reads a development-only step, one that reads a shared step and a held-out one in the plan are a valid plan: the
+  // 1.51 refusal of a waiver that reads a development-only step is replaced by the derivation, so each waiver has a view.
+  const waiversPristine = cli(waiverGuarded, 'check');
+  assert.equal(waiversPristine.status, 0, waiversPristine.output);
+  assert.equal(waiversPristine.output.includes('canary-'), false, waiversPristine.output);
+  for (const [name, edit, pattern] of [
+    [
+      'a contract waiver reading a held-out step',
+      () => waiverChange('contract.json', (contract) => (contract.waivers[0].condition = '/interactions/held-out-run/exit-code is absent')),
+      /contract\.json: \[partition-plan\] waiver W-001 reads step held-out-run, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers/,
+    ],
+    [
+      'a contract waiver reading a held-out step mid-text',
+      () =>
+        waiverChange(
+          'contract.json',
+          (contract) => (contract.waivers[0].condition = 'the exit code at /interactions/held-out-run/exit-code is absent'),
+        ),
+      /contract\.json: \[partition-plan\] waiver W-001 reads step held-out-run, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers/,
+    ],
+    [
+      'a contract waiver reading a held-out step as its second pointer, with no path after the step',
+      () =>
+        waiverChange(
+          'contract.json',
+          (contract) =>
+            (contract.waivers[1].condition = '/interactions/shared-run/exit-code is 0 and /interactions/held-out-run is absent'),
+        ),
+      /contract\.json: \[partition-plan\] waiver W-002 reads step held-out-run, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers/,
+    ],
+    [
+      'a contract waiver reading a step no view holds',
+      () => waiverChange('contract.json', (contract) => (contract.waivers[1].condition = '/interactions/ghost-run/stdout is absent')),
+      /contract\.json: \[partition-plan\] waiver W-002 reads step ghost-run, which the development view does not declare/,
+    ],
+    [
+      'a held-out waiver reading a development-only step through a condition that holds free text',
+      () =>
+        waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].condition = '/interactions/development-run/exit-code canary-condition-text')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-101 reads development-only step development-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out waiver whose second pointer reads a development-only step',
+      () =>
+        waiverChange(
+          PLAN_FILE,
+          (plan) =>
+            (plan.waivers[0].condition =
+              'canary-prose: /interactions/shared-run/exit-code is 0 and /interactions/development-run/exit-code is absent'),
+        ),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-101 reads development-only step development-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out waiver whose development-only pointer follows leading text',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[1].condition = 'when /interactions/development-run is absent')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-103 reads development-only step development-run, which the held-out view does not declare/,
+    ],
+    [
+      'a held-out waiver whose mid-text pointer reads a step no view holds, spelled as a canary',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].condition = 'the log at /interactions/canary-ghost/stdout is absent')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-101 reads a step the held-out view does not declare/,
+    ],
+    [
+      'a held-out waiver reading a step no view holds, spelled as a canary',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].condition = '/interactions/canary-ghost/stdout is absent')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-101 reads a step the held-out view does not declare/,
+    ],
+    [
+      'a held-out waiver ID that a contract waiver has',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].id = 'W-001')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-001 has the ID of a waiver contract\.json declares/,
+    ],
+    [
+      'a held-out waiver ID that a shared contract waiver has',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].id = 'W-002')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-002 has the ID of a waiver contract\.json declares/,
+    ],
+    [
+      'a held-out waiver declared twice',
+      () => waiverChange(PLAN_FILE, (plan) => plan.waivers.push(structuredClone(plan.waivers[0]))),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waiver W-101 is declared more than once/,
+    ],
+    [
+      'a held-out waiver ID of no waiver shape',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].id = 'canary-free text')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] \/waivers\/0\/id must match pattern/,
+    ],
+    [
+      'a held-out waiver whose field the engine schema refuses, beside contract waivers the view keeps and drops',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].expiresAt = 'canary-not-a-date')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waivers\[0\]\/expiresAt must/,
+    ],
+    [
+      'a held-out waiver with a key the engine schema does not know',
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0]['canary-key'] = 'canary-value')),
+      /corpus\/held-out\/plan\.json: \[partition-plan\] waivers\[0\] must NOT have additional properties/,
+    ],
+  ]) {
+    const ran = waiverChecked(edit);
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    assert.match(ran.output, pattern, name);
+    assert.equal(ran.output.includes('canary-'), false, `${name}: check quoted a byte of the held-out plan:\n${ran.output}`);
+    assert.doesNotMatch(ran.output, /held-out view \/waivers/, `${name}: a plan waiver was located by the view's index`);
+  }
+  // A development run over a `contract.json` waiver that names the held-out step mid-text never reaches the target: the preflight
+  // of the partition stops at `check`, so the development view (the folder's own bytes) never carries `held-out-run`.
+  const midTextLaunches = launchCount(waiverGuarded);
+  const midTextDevelopment = waiverChecked(
+    () =>
+      waiverChange(
+        'contract.json',
+        (contract) => (contract.waivers[0].condition = 'the exit code at /interactions/held-out-run/exit-code is absent'),
+      ),
+    ['preflight', '--partition', 'development'],
+  );
+  assert.equal(midTextDevelopment.status, 10, midTextDevelopment.output);
+  assert.match(midTextDevelopment.output, /waiver W-001 reads step held-out-run, which the development view does not declare/);
+  assert.equal(launchCount(waiverGuarded), midTextLaunches, 'a development preflight launched the target over a held-out step');
+  // A waiver of `contract.json` whose ID has no shape is named by its index in the partition-plan finding. The adopter's own
+  // contract.json is not the held-out plan, so the other findings about the file may quote it; this finding is the plan rule's.
+  const freeTextWaiverCheck = waiverChecked(() =>
+    waiverChange('contract.json', (contract) => {
+      contract.waivers[1].id = 'canary-contract-waiver';
+      contract.waivers[1].condition = '/interactions/ghost-run/stdout is absent';
+    }),
+  );
+  assert.equal(freeTextWaiverCheck.status, 10, freeTextWaiverCheck.output);
+  const waiverRule = freeTextWaiverCheck.output.split('\n').filter((line) => line.includes('[partition-plan]'));
+  assert.equal(waiverRule.length, 1, freeTextWaiverCheck.output);
+  assert.match(
+    waiverRule[0],
+    /^contract\.json: \[partition-plan\] waiver waivers\[1\] reads step ghost-run, which the development view does not declare/,
+  );
+  assert.equal(waiverRule[0].includes('canary-'), false, `the plan rule quoted contract.json's free-text waiver ID: ${waiverRule[0]}`);
+  // The plan's waiver sits past the waivers `contract.json` keeps in the held-out view, and the one it drops is not counted: the plan's
+  // schema error is `waivers[0]` although `contract.json` declares two waivers (checked above), and `waivers[2]` when the plan
+  // declares a third and `contract.json` keeps one of its own.
+  const located = waiverChecked(() => {
+    waiverChange('contract.json', (contract) => (contract.waivers = [contract.waivers[1]]));
+    waiverChange(PLAN_FILE, (plan) => {
+      plan.waivers.push(waiverOf('W-102', 'The held-out partition has no seed here.', null));
+      plan.waivers[2].approval = 7;
+    });
+  });
+  assert.equal(located.status, 10, located.output);
+  assert.match(located.output, /corpus\/held-out\/plan\.json: \[partition-plan\] waivers\[2\]\/approval must/);
+  assert.doesNotMatch(located.output, /held-out view \/waivers|canary-/, located.output);
+  // A contract whose own waivers are malformed is the engine schema's finding alone: the waiver rule skips an entry that is no
+  // object, a condition that is no string and a `waivers` that is no array, so it neither throws nor names a waiver.
+  for (const [name, waivers] of [
+    ['a waivers field that is no array', 'canary-no-array'],
+    ['a waiver entry that is no object', [null, 7, DEVELOPMENT_WAIVER]],
+    ['a waiver condition that is no string', [{ ...DEVELOPMENT_WAIVER, condition: 7 }, SHARED_WAIVER]],
+  ]) {
+    const ran = waiverChecked(() => waiverChange('contract.json', (contract) => (contract.waivers = waivers)));
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    assert.match(ran.output, /contract\.json: \[engine-schema\] \/waivers/, `${name}: the contract error is gone`);
+    assert.doesNotMatch(
+      ran.output,
+      /\[partition-plan\]|TypeError|at .*\.js:/,
+      `${name}: the waiver rule threw or blamed a waiver:\n${ran.output}`,
+    );
+  }
+  // A contract error elsewhere is the only finding, and no waiver is blamed: a bogus oracle polarity beside sound waivers in
+  // `contract.json` and the plan, and beside waivers only the plan carries.
+  for (const [name, layout] of [
+    ['waivers in both files', () => {}],
+    ['waivers only the held-out plan declares', () => waiverChange('contract.json', (contract) => (contract.waivers = []))],
+  ]) {
+    const ran = waiverChecked(() => {
+      layout();
+      waiverChange('contract.json', (contract) => (contract.oracles[0].polarity = 'bogus'));
+    });
+    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
+    const findings = ran.output.split('\n').filter((line) => /^\S+: \[[a-z-]+\] /.test(line));
+    assert.equal(findings.length, 1, `${name}: the contract error is not the only finding:\n${ran.output}`);
+    assert.match(findings[0], /^contract\.json: \[engine-schema\] \/oracles\/0\/polarity /, name);
+    assert.doesNotMatch(
+      ran.output,
+      /\[partition-plan\]|waiver W-|waivers\[|canary-/,
+      `${name}: check blamed a waiver for a contract error:\n${ran.output}`,
+    );
+  }
+  // Every partition's findings stay id-only through preflight too: it runs `check` first, so a held-out or both preflight over a
+  // waiver that reads a step no view holds, spelled as a canary, stops with a finding that names none of the plan's text.
+  for (const args of [['preflight', '--partition', 'held-out'], ['preflight']]) {
+    const ran = waiverChecked(
+      () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].condition = '/interactions/canary-ghost/stdout is absent')),
+      args,
+    );
+    assert.equal(ran.status, 10, `${args.join(' ')}: ${ran.output}`);
+    assert.match(ran.output, /waiver W-101 reads a step the held-out view does not declare/);
+    assert.equal(ran.output.includes('canary-'), false, `${args.join(' ')} quoted a byte of the held-out plan:\n${ran.output}`);
+  }
+  // The engine compiles each view without the waivers of the other partition. A development-only waiver the engine finds incomplete
+  // (no approval) fails the development and both views and leaves the held-out one compiling; a held-out waiver in the same state
+  // fails the held-out and both views and leaves the development one compiling. Compile runs inside preflight.
+  const compiled = (name, edit, failing) => {
+    for (const partition of ['development', 'held-out', 'both']) {
+      const args = partition === 'both' ? ['preflight'] : ['preflight', '--partition', partition];
+      const ran = waiverChecked(edit, args);
+      const expected = failing.includes(partition) ? 4 : 0;
+      assert.equal(ran.status, expected, `${name}, ${partition} preflight: ${ran.output}`);
+      if (expected === 4)
+        assert.match(ran.output, /waiver-incomplete.*waivers\[id=W-\d+\]\.approval/s, `${name}, ${partition}: ${ran.output}`);
+      assert.equal(ran.output.includes('canary-'), false, `${name}, ${partition} quoted a byte of the held-out plan:\n${ran.output}`);
+    }
+  };
+  compiled(
+    'an incomplete development-only waiver',
+    () => waiverChange('contract.json', (contract) => (contract.waivers[0].approval = null)),
+    ['development', 'both'],
+  );
+  compiled('an incomplete held-out waiver', () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].approval = null)), [
+    'held-out',
+    'both',
+  ]);
 
   // ---- a development run never opens the held-out plan; a held-out or both run refuses one it cannot read ----------------------
   for (const [name, edit] of [
@@ -1522,6 +2016,35 @@ try {
   assert.doesNotMatch(`${corrupted.output}${corruptedFinding}`, /canary-/, 'the unreadable plan was quoted');
   assert.doesNotMatch(corruptedFinding, /declares no rubric/);
   assert.equal(judgeCallCount(corruptPlan), 0, 'ci judged over a plan it could not read');
+
+  // ---- waivers through run and score: each partition compiles and records its own waivers (Story 1.106) -----------------------
+  // `contract.json` carries a waiver that reads a development-only step and one that reads a shared step, and the plan carries a
+  // held-out waiver. Each run's contract holds the waivers of its own view, and the engine compiles and scores that view.
+  const waiverFlow = planProject('plan-waiver-flow', null, {});
+  const waiversOf = (run) => read(path.join(run, 'contract.json')).waivers.map((waiver) => waiver.id);
+  const waiverRun = (args) => {
+    const ran = cli(waiverFlow, 'run', args);
+    assert.equal(ran.status, 0, ran.output);
+    const run = test.latest(waiverFlow.folder);
+    const scored = cli(waiverFlow, 'score', ['--run', path.basename(run)]);
+    assert.equal(scored.status, 0, scored.output);
+    return { run, output: `${ran.output}${scored.output}` };
+  };
+  // The run and score output of a partition names none of the other partition's steps, waiver IDs or waiver rationales, by the same
+  // token scan the run directory gets.
+  const heldIn = (text, tokens) => tokens.filter((token) => text.includes(token));
+  const waiverDevelopment = waiverRun(['--partition', 'development']);
+  assert.deepEqual(waiversOf(waiverDevelopment.run), ['W-001', 'W-002']);
+  assert.deepEqual(holding(waiverDevelopment.run, WAIVER_KEEP_OUT.development), [], 'the development run holds the held-out waiver');
+  assert.deepEqual(heldIn(waiverDevelopment.output, WAIVER_KEEP_OUT.development), [], 'a development command named the held-out partition');
+  const waiverHeldOut = waiverRun(['--partition', 'held-out']);
+  assert.deepEqual(waiversOf(waiverHeldOut.run), ['W-002', 'W-101', 'W-103']);
+  assert.deepEqual(holding(waiverHeldOut.run, WAIVER_KEEP_OUT['held-out']), [], 'the held-out run holds the development waiver');
+  assert.deepEqual(heldIn(waiverHeldOut.output, WAIVER_KEEP_OUT['held-out']), [], 'a held-out command named the development partition');
+  const waiverGap = JSON.stringify(read(path.join(waiverHeldOut.run, 'gap-view.json')));
+  assert.equal(waiverGap.includes('W-101'), false, 'the gap view names the held-out waiver');
+  const waiverBoth = waiverRun([]);
+  assert.deepEqual(waiversOf(waiverBoth.run), ['W-001', 'W-002', 'W-101', 'W-103']);
 
   // An empty held-out set is an authoring defect for preflight, as it is for run.
   const none = test.project('plan-none');

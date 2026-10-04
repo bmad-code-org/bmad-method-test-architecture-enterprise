@@ -2,7 +2,7 @@
 title: 'Name a report-operation signature collision at check, before the run'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c041cf9655d93a0f00bcb44412f563e6f44fe7a1'
