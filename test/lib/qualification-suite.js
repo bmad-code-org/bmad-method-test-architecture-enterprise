@@ -85,7 +85,7 @@ function checkStatusGuard({ check, scratch }) {
     fs.writeFileSync(path.join(repository, relative), text);
   };
   write('tracked.txt');
-  write('.gitignore', 'coverage/\n*.log\n_bmad/render/\nnode_modules/\n.claude/\n');
+  write('.gitignore', 'coverage/\n*.log\n_bmad/render/\n_bmad-output/*\nnode_modules/\n.claude/\n');
   git('init', '-q');
   git('add', '.');
   git('commit', '-q', '-m', 'seed');
@@ -108,6 +108,8 @@ function checkStatusGuard({ check, scratch }) {
   // Ignored paths the guard reads: a leak beside a stored artifact or into a build directory is invisible without `--ignored`.
   moved('coverage/leak-x', 'a write into an ignored coverage directory', true);
   moved('cycle.log', 'an ignored log file written beside a stored reference', true);
+  // The planning and test-artifact folder sits beside `_bmad/` and shares its prefix, and it is where a cycle's leak most likely lands.
+  moved('_bmad-output/test-artifacts/leak.md', 'a write into the ignored output folder', true);
   // Ignored paths the guard leaves out: installed packages, the harness's directory and the build skills' render directories.
   moved('node_modules/pkg/index.js', 'a write into node_modules', false);
   moved('.claude/worktrees/x', 'a write into .claude', false);
@@ -192,6 +194,10 @@ async function runQualificationSuite({
   const workspaces = new Set();
   const targetArtifact = path.join(...CORPORA[corpus].targetArtifact.split('/'));
   const track = (input) => {
+    check(
+      JSON.stringify(Object.keys(input).sort()) === JSON.stringify(['file', 'phase']),
+      `the cycle handed the ${input.phase} arm the keys ${JSON.stringify(Object.keys(input))}; exactly phase and file are expected`,
+    );
     const suffix = `${path.sep}${targetArtifact}`;
     const isTarget = input.file.endsWith(suffix);
     check(isTarget, `the ${input.phase} arm ran on ${input.file}, which is not the ${targetArtifact} of a workspace`);
@@ -208,7 +214,8 @@ async function runQualificationSuite({
       track(input);
       trace.push({ phase: input.phase, digest: digestBytes(fs.readFileSync(input.file)) });
       tamper[input.phase]?.(input, options);
-      return base({ file: input.file });
+      // What the cycle handed over, whole, so the shipped arm runs on the cycle's real input and a channel the cycle opens beside `file` is read here.
+      return base(input);
     };
   };
 
