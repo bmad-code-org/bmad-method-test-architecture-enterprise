@@ -53,6 +53,8 @@ const path = require('node:path');
 const AjvModule = require('ajv/dist/2020');
 
 const {
+  LOGIN_ADAPTERS,
+  loginLinksOf,
   confinedCommandMechanism,
   confinedMcpMechanism,
   confines,
@@ -434,12 +436,18 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
   const commandEntries = registered.filter((entry) => kindOf(entry) === 'cli');
   const serverEntries = registered.filter(isMcpEntry);
   const apiEntries = registered.filter(isApiEntry);
+  const loginsGranted = Object.freeze((confinement?.logins ?? []).map((login) => Object.freeze({ ...login })));
 
-  /** The Windows runner needs the host system directory to launch its Job Object helper. */
-  const commandEnvironmentKeys = (entry) =>
-    process.platform === 'win32' && entry.executable === 'tea-skill-runner'
-      ? [...entry.environmentKeys, 'SystemRoot']
-      : entry.environmentKeys;
+  /**
+   * The environment keys a command entry's requests may carry: its own, the host system directory the Windows runner needs to
+   * launch its Job Object helper, and the variable that carries the login its `login` names (Story 1.113), the one variable of
+   * the host's environment a login hands the target.
+   */
+  const commandEnvironmentKeys = (entry) => [
+    ...entry.environmentKeys,
+    ...(process.platform === 'win32' && entry.executable === 'tea-skill-runner' ? ['SystemRoot'] : []),
+    ...(Object.hasOwn(LOGIN_ADAPTERS, entry.login) ? [LOGIN_ADAPTERS[entry.login].variable] : []),
+  ];
 
   /** An entry's own keys plus the caller's extra names, sorted, with PATH refused. */
   function keysWithExtras(interfaceId, own, extraNames = []) {
@@ -480,6 +488,49 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       );
     }
     return `${mapping.prefix ?? ''}${value}`;
+  }
+
+  /**
+   * The strings a granted login hands a target (Story 1.113), which must be scrubbed from target answers and faults as an injected
+   * environment value is: the host's value of each granted login's variable, and every string value of each granted file (or the
+   * whole text of a file that is not JSON) except the values under the keys its adapter declares public, since a plan name or a
+   * scope is no secret and scrubbing it would rewrite an answer's own words before the verdict is computed.
+   * A command target can write the token into the private home that a server target then prints, so the set covers every request kind.
+   */
+  function loginSecrets() {
+    const strings = [];
+    const files = new Map();
+    for (const login of loginsGranted) {
+      const adapter = Object.hasOwn(LOGIN_ADAPTERS, login.login) ? LOGIN_ADAPTERS[login.login] : undefined;
+      if (login.variable !== null && login.variable !== undefined && adapter !== undefined) {
+        const value = process.env[adapter.variable];
+        if (typeof value === 'string' && value !== '') strings.push(value);
+      }
+      if (login.file === null || login.file === undefined) continue;
+      files.set(login.file, new Set([...(files.get(login.file) ?? []), ...(adapter?.publicFields ?? [])]));
+    }
+    for (const [file, publicFields] of files) {
+      const collect = (value) => {
+        if (typeof value === 'string') strings.push(value);
+        else if (value !== null && typeof value === 'object') {
+          for (const [key, inner] of Object.entries(value)) {
+            if (!publicFields.has(key)) collect(inner);
+          }
+        }
+      };
+      let text;
+      try {
+        text = fs.readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      try {
+        collect(JSON.parse(text));
+      } catch {
+        strings.push(text.trim());
+      }
+    }
+    return strings;
   }
 
   /** The mapped host values that must be scrubbed from target answers and faults. */
@@ -570,7 +621,13 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
           : `no execution target is registered for interface ${interfaceId} and executable ${executable}`,
       );
     }
-    return readEnvironment(keysWithExtras(interfaceId, commandEnvironmentKeys(chosen[0]), extraNames));
+    const environment = readEnvironment(keysWithExtras(interfaceId, commandEnvironmentKeys(chosen[0]), extraNames));
+    // An empty login variable is no login (`loginsOf` records none), so the target is not handed one that could outrank the file.
+    const loginVariable = Object.hasOwn(LOGIN_ADAPTERS, chosen[0].login) ? LOGIN_ADAPTERS[chosen[0].login].variable : null;
+    if (loginVariable !== null && environment[loginVariable] === '' && !chosen[0].environmentKeys.includes(loginVariable)) {
+      delete environment[loginVariable];
+    }
+    return environment;
   }
 
   /**
@@ -746,6 +803,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     let mcpMechanism = adapters.nodeStdioMcpMechanism;
     let sandbox = null;
     let home = null;
+    // The login files the run grants (Story 1.113), linked into every private home this port makes.
+    const loginLinks = loginLinksOf(loginsGranted);
     if (confines(confinement)) {
       // An audited port's observer keeps its files in a private directory no target can reach (`makeAuditDirectory`).
       const audit = options.audit === true ? { directory: makeAuditDirectory(scratch) } : null;
@@ -760,8 +819,10 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         workspace: options.workspace,
         git: options.git ?? null,
         privateRoot: options.privateRoot ?? null,
-        // One private home per sandbox, beneath the run's private parent; an opt-out run makes none and keeps the host's environment.
-        home: (home = makeTargetHome(scratch)),
+        // One private home per sandbox, beneath the run's private parent, holding a link to each login file an entry's `login`
+        // grants; an opt-out run makes none and keeps the host's environment.
+        home: (home = makeTargetHome(scratch, loginLinks)),
+        linked: loginLinks.map(({ target }) => target),
         audit,
         status,
       });
@@ -810,7 +871,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       if (home === null || !used) return;
       used = false;
       const previous = home;
-      home = makeTargetHome(scratch);
+      home = makeTargetHome(scratch, loginLinks);
       sandbox.setHome(home);
       releaseTargetHome(scratch, previous);
     };
@@ -973,6 +1034,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         .map((entry) => ({ interfaceId: entry.interfaceId, hosts: egressItemsOf(entry).map((item) => `${item.host}:${item.port}`) }))
         .sort((a, b) => (a.interfaceId < b.interfaceId ? -1 : a.interfaceId > b.interfaceId ? 1 : 0)),
     ),
+    /** What each entry that declares a `login` was given: its interface, executable, adapter, the variable's name and the file's path, with no value (Story 1.113). */
+    logins: loginsGranted,
     /** The user's private root directory the run's parent sits beneath (`workspace.js` `makePrivateParent`), or `null` where none was made. */
     get privateRoot() {
       return scratch.privateRoot ?? null;
@@ -985,6 +1048,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     createProbePort,
     deploymentAccess: deploymentAccessOf,
     hostEnvironment,
+    loginSecrets,
     mcpTargetPolicy,
     permittedEnvironmentKeys,
     principalSecrets,

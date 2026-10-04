@@ -700,10 +700,12 @@ function hostEnvironmentPort({ port, registry }) {
       // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
       const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
       const principalValues = typeof registry.principalSecrets === 'function' ? registry.principalSecrets() : [];
+      // The strings a registry entry's `login` grants (Story 1.113), scrubbed from every request kind since the private home with the linked file is shared by every target the sandbox starts.
+      const loginValues = typeof registry.loginSecrets === 'function' ? registry.loginSecrets() : [];
       const injectedSecrets = Object.entries(injected)
         .filter(([key]) => !windowsRunner || key.toUpperCase() !== 'SYSTEMROOT')
         .map(([, value]) => value);
-      const values = [...injectedSecrets, ...Object.values(server), ...carried, ...principalValues].filter(
+      const values = [...injectedSecrets, ...Object.values(server), ...carried, ...principalValues, ...loginValues].filter(
         (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
       );
       const secrets = formsFor(values);

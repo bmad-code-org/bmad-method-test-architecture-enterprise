@@ -190,6 +190,7 @@ A command entry:
   TeA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
 - `egress`: the hosts a confined target's processes may reach, each `{ "host", "port", "addresses" }`, on a command, tool-server or HTTP entry that starts a process; see [File-system confinement](#file-system-confinement).
   A Linux skill or agent target lists its model provider's host and port.
+- `login`: `"claude"` on a command entry whose target runs Claude Code on your subscription, so a confined target authenticates with the login you hold; see [A subscription login under confinement](#a-subscription-login-under-confinement).
 
 A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
 
@@ -474,8 +475,8 @@ The confinement withholds the user's private root as described above and re-gran
 `HOME` names the home for every confined call, and `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_DATA_HOME` name `.config`, `.cache` and `.local/share` inside it.
 These variables replace any host value, including one a registry entry's `environmentKeys` names, so a confined skill or agent target keeps its state without opting out of confinement.
 The home is the one directory the target may write beyond its workspace and the call's own directories: your real home and the project stay unwritable, the evaluation folder and the user's private root stay closed to reads and writes, and the runtime refuses a home inside the workspace or the evaluation folder.
-Its state lasts across the calls of one trial or arm, so an agent's session continues, and each independent arm or leg starts with an empty home, a new directory that replaces and removes the old one: the next trial, the baseline, mutated and re-pass arms of a qualification, and each leg of a `preflight`.
-Credentials an agent needs reach it through `environmentKeys`, which passes environment values; a login an agent stored under your real home is not found under the private home, so give such an agent its API key variable instead.
+Its state lasts across the calls of one trial or arm, so an agent's session continues, and each independent arm or leg starts with an empty home (one that holds the link to the login file an entry's `login` grants and nothing else), a new directory that replaces and removes the old one: the next trial, the baseline, mutated and re-pass arms of a qualification, and each leg of a `preflight`.
+Credentials an agent needs reach it through `environmentKeys`, which passes environment values, and through the entry's `login`, which grants a subscription login (see [A subscription login under confinement](#a-subscription-login-under-confinement)); a login an agent stored under your real home is not found under the private home unless the entry declares it.
 A run that opts out of confinement keeps the host environment and makes no home.
 `tea-skill-runner` hands its agent `HOME` among a short list of variables, so a skill target sees the private home there and the XDG base directories only through `HOME`'s default locations.
 
@@ -568,6 +569,33 @@ macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `egress` and
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
 `score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
+
+#### A subscription login under confinement
+
+A confined target runs with a private home, so an agent CLI that authenticates with your subscription finds no login there, and every call of `tea-skill-runner --agent claude` exits 4.
+A command entry that declares `"login": "claude"` gives its processes the logins Claude Code documents and nothing else of your home:
+
+- `CLAUDE_CODE_OAUTH_TOKEN` passes when the host sets it, for a token from `claude setup-token`.
+  No other credential variable passes, `ANTHROPIC_API_KEY` included, unless the entry's `environmentKeys` names it.
+- `.credentials.json` in `CLAUDE_CONFIG_DIR`, or in `.claude` under your home when `CLAUDE_CONFIG_DIR` is unset, is where Claude Code on Linux and Windows keeps the login.
+  When the host has the file, each private home holds a link at `.claude/.credentials.json` that names the real file, so the CLI finds it where it looks.
+  The target reads the file and cannot write it, and the audit lists neither the read nor a refused write.
+  The home is shared by every target of the run, so every target the run starts can read the linked file.
+  The link is read-only, so a CLI that refreshes an expired access token during a call cannot save the new one; a run that outlasts the access token uses the token route, whose long-lived token needs no refresh.
+  A second file under your home that a target reads, in `.claude` or beside it, is an observed mount and `score` exits 3.
+
+`run.json` records the grant of each entry under `logins`: the interface, the executable, the adapter, the variable's name and the file's path.
+The isolation manifest names the file read-only in `allowedMounts`, and the note of each forbidden input names the variable and the file.
+The run replaces the variable's value and each string of eight characters or more that the credentials file holds with `[redacted]` wherever any target prints it, a command, a tool server or an HTTP server, so no record holds them.
+The values of the fields Claude Code's file documents as no secret (`scopes`, `subscriptionType` and `rateLimitTier`) stay as written, so a word such as `enterprise` in an answer is not rewritten, and every other field of the file is replaced.
+A confined run on a host that has neither source exits 12 before any target starts, naming the entry, the file it looked for, the token route and the opt-out.
+
+A login held in the macOS Keychain has no grant.
+The keychain answers over a Mach service, which a Seatbelt rule allows or denies as a whole, and no Seatbelt rule scopes the keychain to one item.
+Claude Code also finds the keychain through `HOME`, which a confined target holds privately, and a confined target's read of your keychain files is an observed mount, with the sidecar write a keychain database needs beside it refused.
+A confined target on macOS authenticates through the token route or runs with the opt-out.
+Run `claude setup-token` once and export the token it prints as `CLAUDE_CODE_OAUTH_TOKEN` where `tea-evaluate` runs, or set `"confinement": false` in `evaluation.json`, which keeps your home and your keychain for the target and records `opt-out`.
+An opted-out run passes the variable as well, makes no home and records the variable under `logins`.
 
 ## The interaction plan
 
@@ -1442,6 +1470,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
+A confined `--agent claude` target on a subscription declares `"login": "claude"` on its entry, which gives it the login it finds under the private home (see [A subscription login under confinement](#a-subscription-login-under-confinement)).
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
 On POSIX, the agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.

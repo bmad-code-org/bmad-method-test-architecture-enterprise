@@ -603,6 +603,8 @@ async function runTrial(context) {
       mounts: [
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
+        // The login files a registry entry's `login` grants, read-only (Story 1.113).
+        ...new Set(registry.logins.filter(({ file }) => file !== null).map(({ file }) => `read-only login ${file}`)),
       ],
       // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
       observedMounts,
@@ -1575,7 +1577,7 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
       wallClockSeconds: trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
       costUsd: setUse.costUsd,
     },
-    forbiddenInputNote: forbiddenInputNote(registry.confinement, registry.egressEntries),
+    forbiddenInputNote: forbiddenInputNote(registry.confinement, registry.egressEntries, registry.logins),
   });
   failures('IsolationManifest', await validate('isolation-manifest', manifest));
   const manifestFile = `${directory}/isolation-manifest.json`;

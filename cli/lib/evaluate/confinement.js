@@ -66,6 +66,18 @@
  *                commands read their repository from (the resolved git
  *                directory, the `.git` file's content, the hooks directory's
  *                presence), and digests no other part of the git directory.
+ *   login        a registry entry that declares `"login": "claude"` (Story 1.113) gives its processes the logins the Claude Code CLI
+ *                documents and nothing else of the user's home: the variable `CLAUDE_CODE_OAUTH_TOKEN` when the host sets it (a token
+ *                from `claude setup-token`), and the credentials file `<CLAUDE_CONFIG_DIR or ~/.claude>/.credentials.json` when the
+ *                host has one (Linux and Windows keep the login there), as a link in the private home that names the real file,
+ *                which the target may read, cannot write and the audit does not list.
+ *                A login held in the macOS Keychain has no
+ *                grant: the keychain answers over a mach service, which a Seatbelt rule allows or denies as a whole and no rule
+ *                scopes to one item, and the CLI finds the keychain through `HOME`, which a confined target holds privately.
+ *                A host
+ *                with neither source refuses the run (exit 12), naming the token route and the opt-out.
+ *                Every observation and fault of every request kind has the variable's value and each string of the file replaced by `[redacted]`, since the home is shared by every target the sandbox starts.
+ *                The values under the keys the adapter's `publicFields` names (the scopes, the subscription type, the rate-limit tier) stay as written, since they are no secret and a run that rewrote them would change an answer's own words, and any field the adapter does not name is scrubbed.
  *   network      every process the runtime starts for a Bubblewrap target
  *                (`--unshare-net`) runs in a network namespace of its own, a
  *                loopback and nothing else, so the host's abstract Unix sockets
@@ -187,6 +199,27 @@ const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
+
+/**
+ * The login sources of the agent CLIs a registry entry's `login` names (Story 1.113): the environment variable that carries a
+ * long-lived token, the variable that moves the CLI's configuration directory, that directory's default under the user's home,
+ * and the credentials file inside it.
+ * `homeFile` is where the CLI looks for the file under the private home, which a link names
+ * the real file at.
+ * `publicFields` are the keys of that file whose values are no secret (the plan, the scopes, the rate-limit
+ * tier), which a record keeps as written while it replaces every other string of the file, a field this list does not know included.
+ */
+const LOGIN_ADAPTERS = Object.freeze({
+  claude: Object.freeze({
+    name: 'Claude Code',
+    variable: 'CLAUDE_CODE_OAUTH_TOKEN',
+    directoryVariable: 'CLAUDE_CONFIG_DIR',
+    defaultDirectory: '.claude',
+    file: '.credentials.json',
+    homeFile: path.join('.claude', '.credentials.json'),
+    publicFields: Object.freeze(['scopes', 'subscriptionType', 'rateLimitTier']),
+  }),
+});
 /**
  * The `log` executable the macOS audit streams the kernel's reports through, which a case replaces with a stub that drops
  * reports (Story 1.81). It names an absolute path, and the runtime trusts it as it trusts the `strace` on `PATH`.
@@ -757,6 +790,59 @@ function probeObserver(mechanism, env) {
   return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
 }
 
+/** A string environment value that is not empty. */
+function setValue(value) {
+  return typeof value === 'string' && value !== '';
+}
+
+/**
+ * The credentials file the host holds for `adapter`, by its real path, or null: `<directory>/<file>` where `directory` is the
+ * variable's value when the host sets it and the default beneath the user's home otherwise.
+ * A link is followed; a path that is
+ * not a regular file is no login.
+ */
+function hostLoginFile(adapter, env) {
+  const home = setValue(env.HOME) ? env.HOME : os.homedir();
+  const directory = setValue(env[adapter.directoryVariable])
+    ? path.resolve(env[adapter.directoryVariable])
+    : path.join(home, adapter.defaultDirectory);
+  try {
+    const candidate = path.join(directory, adapter.file);
+    return fs.statSync(candidate).isFile() ? fs.realpathSync.native(candidate) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The logins the registry's entries declare (`"login": "claude"`, Story 1.113), one record per entry that declares one: the
+ * interface and executable, the adapter, the variable's name when the host sets it (its value is read where a request is made and
+ * is in no record) and, for a run that confines, the credentials file's real path.
+ * A run that opted out takes no file, since its
+ * target runs with the host's own home.
+ *
+ * @param {object} evaluation the parsed `evaluation.json`
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ file: boolean }} options whether the credentials file is a source (a confined run)
+ * @returns {Array<{ interfaceId: string, executable: string, login: string, variable: string|null, file: string|null }>}
+ */
+function loginsOf(evaluation, env, { file }) {
+  const entries = Array.isArray(evaluation?.registry) ? evaluation.registry : [];
+  return entries
+    .filter((entry) => entry !== null && typeof entry === 'object' && (entry.kind === undefined || entry.kind === 'cli'))
+    .filter((entry) => Object.hasOwn(LOGIN_ADAPTERS, entry.login))
+    .map((entry) => {
+      const adapter = LOGIN_ADAPTERS[entry.login];
+      return {
+        interfaceId: entry.interfaceId,
+        executable: entry.executable,
+        login: entry.login,
+        variable: setValue(env[adapter.variable]) ? adapter.variable : null,
+        file: file ? hostLoginFile(adapter, env) : null,
+      };
+    });
+}
+
 /**
  * The run's confinement: `{ mode: 'opt-out' }` for an evaluation that opts
  * out, the mechanism this host confines with, or `{ refusal }` saying why
@@ -768,12 +854,12 @@ function probeObserver(mechanism, env) {
  * @param {string} options.root the project root (`launch.root`), whose repository's common git directory and hooks directory the evaluation layer may not write
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {string} [options.platform]
- * @returns {{ mode: string, executable?: string, evaluationFolder: string, gitDirectory?: string|null, hooksDirectory?: string|null, gitFile?: string|null } | { refusal: string }}
+ * @returns {{ mode: string, executable?: string, evaluationFolder: string, gitDirectory?: string|null, hooksDirectory?: string|null, gitFile?: string|null, logins: object[] } | { refusal: string }}
  */
 function selectConfinement({ evaluation, folder, root, env = process.env, platform = process.platform }) {
   if (typeof root !== 'string' || root === '') throw new TypeError('selectConfinement needs the project root (launch.root)');
   const evaluationFolder = path.resolve(folder);
-  if (evaluation?.confinement === false) return { mode: 'opt-out', evaluationFolder };
+  if (evaluation?.confinement === false) return { mode: 'opt-out', evaluationFolder, logins: loginsOf(evaluation, env, { file: false }) };
   const optOut = 'or set "confinement": false in evaluation.json to run the targets unconfined, which run.json records as "opt-out"';
   const named = env[PLATFORM_ENV] || platform;
   let mechanism = null;
@@ -846,7 +932,28 @@ function selectConfinement({ evaluation, folder, root, env = process.env, platfo
       };
     }
   }
-  return { ...mechanism, evaluationFolder, gitDirectory, hooksDirectory: hooks, gitFile };
+  // The logins the entries declare (Story 1.113): an entry with a source the host cannot give a confined target is refused here,
+  // since every call of it would exit 4 and read as the target's own transport failure.
+  const logins = [];
+  for (const found of loginsOf(evaluation, env, { file: true })) {
+    let login = found;
+    const adapter = LOGIN_ADAPTERS[login.login];
+    const unsafeLogin = login.file === null ? undefined : spellings(login.file).find((entry) => !isProfileSafePath(entry));
+    // A file no profile can carry is left out when the token can authenticate, and refuses the run when it cannot.
+    if (unsafeLogin !== undefined && login.variable !== null) login = { ...login, file: null };
+    else if (unsafeLogin !== undefined) {
+      return {
+        refusal: `the ${adapter.name} credentials file ${JSON.stringify(unsafeLogin)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move it, set ${adapter.variable} to a token from "claude setup-token", ${optOut}`,
+      };
+    }
+    if (login.variable === null && login.file === null) {
+      return {
+        refusal: `the registry entry ${JSON.stringify(login.interfaceId)} declares "login": ${JSON.stringify(login.login)} and this host has no ${adapter.name} login a confined target can use: ${adapter.variable} is not set and there is no ${adapter.file} in ${setValue(env[adapter.directoryVariable]) ? `${adapter.directoryVariable} (${env[adapter.directoryVariable]})` : `${path.join(setValue(env.HOME) ? env.HOME : os.homedir(), adapter.defaultDirectory)} (set ${adapter.directoryVariable} to name another directory)`}; a login held in the macOS Keychain cannot reach a confined process, since no Seatbelt rule scopes the keychain to one item; run "claude setup-token" and export the token it prints as ${adapter.variable}, ${optOut}`,
+      };
+    }
+    logins.push(login);
+  }
+  return { ...mechanism, evaluationFolder, gitDirectory, hooksDirectory: hooks, gitFile, logins };
 }
 
 /**
@@ -904,6 +1011,9 @@ function layerPrefix(confinement) {
  *   name (`withTemporary`); beneath `privateRoot` it is the one directory of the root the target reaches (re-allowed after the
  *   root's denial in Seatbelt, bound into the root's empty file system in Bubblewrap, excepted from the audit's withholding),
  *   so no other home is reachable; refused inside the workspace or the evaluation folder; `null` where the run made none
+ * @param {string[]} [options.linked] the real paths of the host's login files that the home links to (`makeTargetHome`'s `links`,
+ *   Story 1.113): files the target may read and the audit does not list, whether it opens them by the real path or by the link in
+ *   its home; each stays unwritable
  * @param {{ directory: string, barrierMs?: number }|null} [options.audit] the runtime-private directory (`makeAuditDirectory`) the audit keeps
  *   its files in, which a target cannot reach; `null` for a port that does not audit. The confinement must carry the
  *   `observer` its selection probed.
@@ -920,6 +1030,7 @@ function targetSandbox({
   git: gitAccess = null,
   privateRoot = null,
   home: initialHome = null,
+  linked = [],
   audit = null,
   status = null,
   hostSockets = listHostSockets,
@@ -992,6 +1103,7 @@ function targetSandbox({
       ...granted,
       ...(home === null ? [] : [home]),
       ...(git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string')),
+      ...linked,
       nodeInstallRoot(process.execPath),
       ...(confinement.mode === 'bubblewrap' ? [STATUS_SHIM] : []),
       ...SYSTEM_ROOTS,
@@ -1053,7 +1165,10 @@ function targetSandbox({
           git,
           privateRoot,
           rootHome,
-          audit: observer === null ? null : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: ownGitEntries() },
+          audit:
+            observer === null
+              ? null
+              : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: [...ownGitEntries(), ...linked] },
         });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
@@ -1211,6 +1326,8 @@ function targetSandbox({
             write: [workspace, ...grants, ...(home === null ? [] : [home]), statusMount, ...ownGitEntries()].flatMap(spellings),
             withheld: withheldRoots(),
             withheldExcept: withheldExcept(),
+            // Only a run with a login grant carries the key, so every other run's grants are what they were.
+            ...(linked.length === 0 ? {} : { linked: linked.flatMap(spellings) }),
           },
         },
       });
@@ -1520,6 +1637,23 @@ function makeHomeLayout(home) {
 }
 
 /**
+ * The links a home carries for the logins a run grants (Story 1.113): one for each distinct login file and the location the agent
+ * looks for it, so two entries that declare one login share one link.
+ *
+ * @param {Array<{ login: string, file: string|null }>} logins `selectConfinement`'s `logins`
+ * @returns {Array<{ relative: string, target: string }>}
+ */
+function loginLinksOf(logins) {
+  const links = new Map();
+  for (const { login, file } of logins) {
+    if (file === null) continue;
+    const relative = LOGIN_ADAPTERS[login].homeFile;
+    links.set(JSON.stringify([relative, file]), { relative, target: file });
+  }
+  return [...links.values()];
+}
+
+/**
  * The private home of one confined sandbox, joined to the run's `scratch` so
  * the run removes it however it ends: an agent CLI keeps its session and
  * settings state under `HOME` and the XDG base directories, which the confined
@@ -1530,11 +1664,18 @@ function makeHomeLayout(home) {
  * from it; a list with no parent keeps the home in the system temp directory.
  * Its real path, so both mechanisms name it one way, with the XDG base
  * directories made inside it.
+ * `links` (`{ relative, target }`) plants a link at `relative` in the home to the host's login file `target`.
  */
-function makeTargetHome(scratch) {
+function makeTargetHome(scratch, links = []) {
   const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-home-')));
   scratch.push(directory);
   makeHomeLayout(directory);
+  // Each login file a registry entry's `login` grants (Story 1.113) is a link in the home that names the host's real file, where
+  // the agent CLI looks for it; the target reads the real file through the link and cannot write it.
+  for (const { relative, target } of links) {
+    fs.mkdirSync(path.dirname(path.join(directory, relative)), { recursive: true });
+    fs.symlinkSync(target, path.join(directory, relative));
+  }
   return directory;
 }
 
@@ -1849,22 +1990,36 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
  *
  * @param {object|null} confinement
  * @param {Array<{ interfaceId: string, hosts: string[] }>} [egress] the registry entries that authorize hosts, with their `host:port` items (Story 1.83)
+ * @param {Array<{ interfaceId: string, login: string, variable: string|null, file: string|null }>} [logins] the entries that declare a login and what each was given, by the variable's name and the file's path (Story 1.113)
  * @returns {string}
  */
-function forbiddenInputNote(confinement, egress = []) {
+function forbiddenInputNote(confinement, egress = [], logins = []) {
   const handed =
     "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial.";
+  // What each entry's `login` hands its processes, named by the variable and the path, with no value (Story 1.113).
+  const given = logins
+    .map((login) => {
+      const sources = [
+        ...(login.variable === null ? [] : [`the environment variable ${login.variable}`]),
+        ...(login.file === null ? [] : [`the file ${login.file}, read-only`]),
+      ];
+      return sources.length === 0
+        ? ''
+        : ` The registry entry ${JSON.stringify(login.interfaceId)} declares "login": ${JSON.stringify(login.login)} and hands its processes ${sources.join(' and ')}; no record holds the variable's value or a string of the file.`;
+    })
+    .join('');
   if (!confines(confinement)) {
-    return `${handed} The evaluation opted out of file-system confinement ("confinement": false), so the runtime does not sandbox the target's file system and a target that searches for the evaluation folder can reach it.`;
+    return `${handed} The evaluation opted out of file-system confinement ("confinement": false), so the runtime does not sandbox the target's file system and a target that searches for the evaluation folder can reach it.${given}`;
   }
   const shared =
     confinement.mode === 'bubblewrap' && egress.length > 0
       ? ` The registry entries ${egress.map((entry) => `${JSON.stringify(entry.interfaceId)} (${entry.hosts.join(', ')})`).join(', ')} authorize the hosts named, which their processes reach through the runtime's egress proxy and no other way; every target runs in a network namespace of its own with a loopback only, so none has a route to the host's abstract Unix sockets.`
       : '';
-  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.${shared}`;
+  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.${shared}${given}`;
 }
 
 module.exports = {
+  LOGIN_ADAPTERS,
   MECHANISM_NAMES,
   LOG_ENV,
   PLATFORM_ENV,
@@ -1874,6 +2029,8 @@ module.exports = {
   forbiddenInputNote,
   hooksDirectory,
   layerPrefix,
+  loginLinksOf,
+  loginsOf,
   chmodDirectoryNoFollow,
   makeAuditDirectory,
   makeTargetHome,

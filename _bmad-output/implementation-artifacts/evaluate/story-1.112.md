@@ -2,7 +2,7 @@
 title: "Story 1.112: Keep other sessions' commits from failing a run's adopter-tree check"
 type: 'bugfix'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3487a9185da6ad67659be37be03e650bc2f5a78e'

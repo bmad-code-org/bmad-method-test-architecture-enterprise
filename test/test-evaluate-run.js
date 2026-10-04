@@ -137,7 +137,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
 
 const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
-const { ArmError, runArm, stoppedFromOutside } = require('../cli/lib/evaluate/arm');
+const { ArmError, hostEnvironmentPort, runArm, stoppedFromOutside } = require('../cli/lib/evaluate/arm');
 const { uncommittedUnder } = require('../cli/lib/evaluate/preflight');
 const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
@@ -197,6 +197,7 @@ const {
   traceDecision,
 } = require('../cli/lib/evaluate/confinement-audit');
 const {
+  LOGIN_ADAPTERS,
   LOG_ENV,
   MECHANISM_NAMES,
   PLATFORM_ENV,
@@ -204,6 +205,8 @@ const {
   forbiddenInputNote,
   confinedMcpMechanism,
   layerPrefix,
+  loginLinksOf,
+  loginsOf,
   makeAuditDirectory,
   makeTargetHome,
   nodeInstallRoot,
@@ -9997,6 +10000,815 @@ async function checkWithheldHistoryReachUnits() {
   }
 }
 
+/** Every regular file under `directory`, as paths, for a sweep of what a run recorded. */
+function filesBelow(directory) {
+  return fs
+    .readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(entry.parentPath, entry.name));
+}
+
+/** The files under `directory` whose bytes hold `needle`. */
+function filesHolding(directory, needle) {
+  return filesBelow(directory).filter((file) => fs.readFileSync(file).includes(needle));
+}
+
+/** A line `<name>: <value>` of what the login stand-in printed. */
+function loginField(stdout, name) {
+  return new RegExp(`^${name}: (.*)$`, 'm').exec(stdout)?.[1];
+}
+
+/**
+ * A subscription login reaches a confined target without the rest of the home (Story 1.113).
+ * The verdict fixture's `claude-login`
+ * act stands in for the Claude Code CLI, which looks for `.claude/.credentials.json` under `HOME` and for the variable
+ * `CLAUDE_CODE_OAUTH_TOKEN`, and exits 4 with neither; the host's login is a fake file and a fake token under a temp home, so no
+ * real login is read.
+ *
+ * - File: the registry entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file
+ *   (under `HOME`, under `CLAUDE_CONFIG_DIR`, and through a link the file itself is), which the target reads and cannot write, which
+ *   `run.json` and the isolation manifest name by path, and which no observed mount lists.
+ * - A second file under the real home, in the configuration directory or beside it, is an observed mount and `score` exits 3.
+ * - Token: the variable passes and no other credential variable does; the value is in no recorded file, echoed or not.
+ * - Without the declaration the call exits 4 and the run 12; a host with only a keychain refuses the run, naming the token route and
+ *   the opt-out; the keychain stand-in's read is an observed mount and its sidecar write is refused.
+ * - An opt-out run passes the variable, makes no home and records the variable by name.
+ */
+async function checkSubscriptionLogin() {
+  const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  const fakeLogin = `fake-subscription-login-${crypto.randomBytes(12).toString('hex')}`;
+  const fakeToken = `sk-ant-oat01-${crypto.randomBytes(24).toString('hex')}`;
+  const fakeRefresh = `sk-ant-ort01-${crypto.randomBytes(24).toString('hex')}`;
+  // The shape Claude Code writes: the two tokens, which are secrets, and the plan fields, which are not.
+  const credentials = JSON.stringify({
+    claudeAiOauth: {
+      accessToken: fakeLogin,
+      refreshToken: fakeRefresh,
+      expiresAt: 1_900_000_000_000,
+      scopes: ['user:inference', 'user:profile'],
+      subscriptionType: 'enterprise',
+      rateLimitTier: 'default_claude_max_20x',
+    },
+  });
+  // A host home that holds a login file, a configuration directory's other file and a file beside it.
+  const makeHost = (label, { withFile = true } = {}) => {
+    const home = fs.realpathSync(tempDir(`login-host-${label}`));
+    fs.mkdirSync(path.join(home, '.claude'));
+    if (withFile) fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), credentials);
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{"note":"a second file in the configuration directory"}\n');
+    fs.writeFileSync(path.join(home, 'notes.txt'), 'a second file beside it\n');
+    return home;
+  };
+  const noLogin = {
+    CLAUDE_CODE_OAUTH_TOKEN: undefined,
+    CLAUDE_CONFIG_DIR: undefined,
+    ANTHROPIC_API_KEY: undefined,
+    OPENAI_API_KEY: undefined,
+  };
+  const loginProject = (label, { login = true, unconfined = false } = {}) =>
+    makeProject(label, {
+      unconfined,
+      edit: ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          const entry = evaluation.registry[0];
+          if (login) entry.login = 'claude';
+          entry.infrastructureExitCodes = [3, 4];
+          entry.environmentKeys.push('VERDICT_SECOND', 'VERDICT_KEYCHAIN');
+        }),
+    });
+  const loginRun = (project, env, act = 'claude-login') => {
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      ...noLogin,
+      VERDICT_WHEN: 'trial-clean-1',
+      VERDICT_DO: act,
+      ...env,
+    });
+    return { ...project, ran, directory: runDirectoryOf(project.folder) };
+  };
+  // The act runs in the first clean trial, which P-001's trial set holds; P-002's trials run the plain verdict stub.
+  const actMounts = (directory) => observedMountsOf(directory, 'P-001');
+  const plainMounts = (directory) => observedMountsOf(directory, 'P-002');
+
+  // File login under HOME: the call authenticates, the grant is the one file, read-only, and the record names it and holds none of it.
+  const home = makeHost('home');
+  const realFile = fs.realpathSync(path.join(home, '.claude', '.credentials.json'));
+  const filed = loginRun(loginProject('login-file'), { HOME: home });
+  check(
+    filed.ran.status === 0,
+    `a confined run whose agent target authenticates through the host's login file exited ${filed.ran.status}; expected 0\n${filed.ran.output}`,
+  );
+  const filedRun = written(path.join(filed.directory, 'run.json'), 'the login-file run');
+  check(filedRun?.confinement === CONFINEMENT, `the login-file run recorded confinement ${filedRun?.confinement}; expected ${CONFINEMENT}`);
+  check(
+    JSON.stringify(filedRun?.logins) ===
+      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: null, file: realFile }]),
+    `the login-file run recorded the logins ${JSON.stringify(filedRun?.logins)}; expected the credentials file by path and no variable`,
+  );
+  const filedOut = trialStdout(filed.directory, 'clean', 1);
+  check(
+    loginField(filedOut, 'login-file') === sha(credentials),
+    `the confined agent read ${loginField(filedOut, 'login-file')} from its login file; expected the host file's digest (the link in the private home)\n${filedOut}`,
+  );
+  check(
+    /^refused (EPERM|EACCES|EROFS)$/.test(loginField(filedOut, 'login-file-write') ?? ''),
+    `the confined agent's write to its login file was ${loginField(filedOut, 'login-file-write')}; expected a refusal, since the grant is read-only`,
+  );
+  const filedEcho = String(loginField(filedOut, 'login-file-echo'));
+  check(
+    filedEcho.includes('"accessToken":"[redacted]"') &&
+      filedEcho.includes('"refreshToken":"[redacted]"') &&
+      !filedOut.includes(fakeLogin) &&
+      !filedOut.includes(fakeRefresh),
+    `the agent's echo of its login file was recorded as ${filedEcho}; expected both tokens [redacted]`,
+  );
+  check(
+    filedEcho.includes('"subscriptionType":"enterprise"') &&
+      filedEcho.includes('"scopes":["user:inference","user:profile"]') &&
+      filedEcho.includes('"rateLimitTier":"default_claude_max_20x"'),
+    `the agent's echo of its login file was recorded as ${filedEcho}; expected the plan fields the file declares public as written (enterprise, user:inference)`,
+  );
+  check(loginField(filedOut, 'login-token') === 'unset', `a host with no token handed the agent ${loginField(filedOut, 'login-token')}`);
+  check(
+    /^refused (EPERM|EACCES|EROFS|EXDEV)$/.test(loginField(filedOut, 'login-file-hardlink') ?? ''),
+    `the confined agent's second name for its login file was ${loginField(filedOut, 'login-file-hardlink')}; expected a refusal`,
+  );
+  check(
+    fs.readFileSync(path.join(home, '.claude', '.credentials.json'), 'utf8') === credentials,
+    "the confined agent changed the host's login file",
+  );
+  checkMounts(actMounts(filed.directory), [], "the login file's audit (nothing outside the grant)");
+  checkMounts(plainMounts(filed.directory), [], "the login file's audit of the plain trials");
+  const filedManifest = written(path.join(filed.directory, 'trial-sets', 'P-001', 'isolation-manifest.json'), 'the login-file manifest');
+  check(
+    filedManifest?.allowedMounts?.includes(`read-only login ${realFile}`),
+    `the isolation manifest's allowed mounts ${JSON.stringify(filedManifest?.allowedMounts)} do not name the login file read-only`,
+  );
+  const filedNote = Object.values(filedManifest?.forbiddenInputAccounting ?? {})[0]?.note ?? '';
+  check(
+    filedNote.includes(`the file ${realFile}, read-only`) && !filedNote.includes('the environment variable'),
+    `the isolation manifest's note does not name the granted file alone: ${filedNote}`,
+  );
+  check(
+    filesHolding(filed.folder, fakeLogin).length === 0 && filesHolding(filed.folder, fakeRefresh).length === 0,
+    `a recorded file holds a string of the login file: ${[...filesHolding(filed.folder, fakeLogin), ...filesHolding(filed.folder, fakeRefresh)]}`,
+  );
+  const filedScore = evaluate(['score', '--evaluation', filed.folder], { ...filed.env, ...noLogin });
+  check(
+    filedScore.status < 3,
+    `score over the run that read only its login file exited ${filedScore.status}; expected a verdict below 3 (an isolation violation exits 3)\n${filedScore.output}`,
+  );
+  // The sweep again over what score wrote.
+  check(
+    filesHolding(filed.folder, fakeLogin).length === 0 && filesHolding(filed.folder, fakeRefresh).length === 0,
+    `a file score wrote holds a string of the login file: ${[...filesHolding(filed.folder, fakeLogin), ...filesHolding(filed.folder, fakeRefresh)]}`,
+  );
+
+  // A second file under the real home is an observed mount whether it sits in the configuration directory or beside it.
+  for (const [what, second] of [
+    ['in the configuration directory', path.join(home, '.claude', 'settings.json')],
+    ['beside it', path.join(home, 'notes.txt')],
+  ]) {
+    const widened = loginRun(loginProject(`login-second-${what.replaceAll(' ', '-')}`), { HOME: home, VERDICT_SECOND: second });
+    check(
+      widened.ran.status === 0,
+      `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
+    );
+    const realSecond = fs.realpathSync(second);
+    checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
+    checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
+    const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
+    checkReport(
+      scored.status === 3 && scored.output.includes(`mount outside allowlist: ${realSecond}`),
+      `score over a target that read a second file ${what} exited ${scored.status}; expected 3 with eval-quality's isolation violation\n${scored.output}`,
+    );
+  }
+
+  // File login under CLAUDE_CONFIG_DIR, the file itself a link to where a dotfile manager keeps it.
+  const configHome = fs.realpathSync(tempDir('login-host-config-home'));
+  const configDirectory = path.join(tempDir('login-host-config'), 'claude-config');
+  const kept = path.join(tempDir('login-host-kept'), 'credentials-kept.json');
+  fs.mkdirSync(configDirectory);
+  fs.writeFileSync(kept, credentials);
+  fs.symlinkSync(kept, path.join(configDirectory, '.credentials.json'));
+  const configured = loginRun(loginProject('login-config-directory'), { HOME: configHome, CLAUDE_CONFIG_DIR: configDirectory });
+  check(
+    configured.ran.status === 0,
+    `a confined run whose login sits under CLAUDE_CONFIG_DIR, as a link, exited ${configured.ran.status}\n${configured.ran.output}`,
+  );
+  const configuredRun = written(path.join(configured.directory, 'run.json'), 'the CLAUDE_CONFIG_DIR run');
+  check(
+    configuredRun?.logins?.[0]?.file === fs.realpathSync(kept),
+    `the CLAUDE_CONFIG_DIR run recorded ${configuredRun?.logins?.[0]?.file}; expected the real path of the file the link names, ${fs.realpathSync(kept)}`,
+  );
+  check(
+    loginField(trialStdout(configured.directory, 'clean', 1), 'login-file') === sha(credentials),
+    'the confined agent did not read the login the CLAUDE_CONFIG_DIR file holds',
+  );
+  checkMounts(actMounts(configured.directory), [], "the CLAUDE_CONFIG_DIR login's audit");
+
+  // Token: the variable alone passes, its value is in no recorded file, and an echo of it is scrubbed.
+  const tokenHome = fs.realpathSync(tempDir('login-host-token'));
+  const tokened = loginRun(loginProject('login-token'), {
+    HOME: tokenHome,
+    CLAUDE_CODE_OAUTH_TOKEN: fakeToken,
+    ANTHROPIC_API_KEY: `sk-ant-api03-${crypto.randomBytes(24).toString('hex')}`,
+    OPENAI_API_KEY: `sk-${crypto.randomBytes(24).toString('hex')}`,
+  });
+  check(
+    tokened.ran.status === 0,
+    `a confined run whose agent authenticates through the token variable exited ${tokened.ran.status}\n${tokened.ran.output}`,
+  );
+  const tokenOut = trialStdout(tokened.directory, 'clean', 1);
+  check(
+    loginField(tokenOut, 'login-token') === sha(fakeToken),
+    `the confined agent saw the token as ${loginField(tokenOut, 'login-token')}; expected its digest`,
+  );
+  check(
+    loginField(tokenOut, 'login-file') === 'refused ENOENT',
+    `a host with no login file gave the agent ${loginField(tokenOut, 'login-file')}`,
+  );
+  check(
+    loginField(tokenOut, 'credential-environment') === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN']),
+    `the confined agent held the credential variables ${loginField(tokenOut, 'credential-environment')}; expected the token alone`,
+  );
+  check(
+    loginField(tokenOut, 'login-token-echo') === '[redacted]',
+    `the agent's echo of the token was recorded as ${loginField(tokenOut, 'login-token-echo')}; expected it scrubbed`,
+  );
+  const tokenRun = written(path.join(tokened.directory, 'run.json'), 'the token run');
+  check(
+    JSON.stringify(tokenRun?.logins) ===
+      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file: null }]),
+    `the token run recorded the logins ${JSON.stringify(tokenRun?.logins)}; expected the variable by name and no file`,
+  );
+  const tokenNote = Object.values(
+    written(path.join(tokened.directory, 'trial-sets', 'P-001', 'isolation-manifest.json'), 'the token manifest')
+      ?.forbiddenInputAccounting ?? {},
+  )[0]?.note;
+  check(
+    String(tokenNote).includes('the environment variable CLAUDE_CODE_OAUTH_TOKEN') && !String(tokenNote).includes('read-only'),
+    `the isolation manifest's note does not name the variable alone: ${tokenNote}`,
+  );
+  const tokenScore = evaluate(['score', '--evaluation', tokened.folder], {
+    ...tokened.env,
+    ...noLogin,
+    CLAUDE_CODE_OAUTH_TOKEN: fakeToken,
+  });
+  check(tokenScore.status < 3, `score over the token run exited ${tokenScore.status}; expected a verdict below 3\n${tokenScore.output}`);
+  const swept = filesHolding(tokened.folder, fakeToken);
+  check(swept.length === 0, `the token's value is in recorded files: ${swept.map((file) => path.relative(tokened.folder, file))}`);
+  check(
+    !`${tokened.ran.output}${tokenScore.output}`.includes(fakeToken) &&
+      !`${tokened.ran.output}${tokenScore.output}`.includes(sha(fakeToken)),
+    "the token's value is in the output of run or score",
+  );
+
+  // Without the declaration the call finds no login, exits 4, and the run exits 12; the grant is what the declaration adds.
+  const ungranted = loginRun(loginProject('login-ungranted', { login: false }), { HOME: home });
+  check(
+    ungranted.ran.status === 12,
+    `a confined run with a login on the host and no "login" declared exited ${ungranted.ran.status}; expected 12\n${ungranted.ran.output}`,
+  );
+  check(
+    /exit(?:ed)? 4|exit code 4|exitCode.{0,4}4/.test(ungranted.ran.output),
+    `the refusal of a call that found no login does not name the target's exit 4\n${ungranted.ran.output}`,
+  );
+
+  // A host whose login is only a keychain has nothing to grant: the run is refused before any target starts, naming both ways out.
+  const keychainHome = makeHost('keychain', { withFile: false });
+  fs.mkdirSync(path.join(keychainHome, 'Library', 'Keychains'), { recursive: true });
+  const keychain = path.join(keychainHome, 'Library', 'Keychains', 'login.keychain-db');
+  fs.writeFileSync(keychain, 'a fake login keychain\n');
+  const keyed = loginProject('login-keychain-only');
+  const refusedRun = evaluate(['run', '--evaluation', keyed.folder], { ...keyed.env, ...noLogin, HOME: keychainHome });
+  check(
+    refusedRun.status === 12,
+    `a confined run on a host with a keychain and no file or token exited ${refusedRun.status}; expected 12\n${refusedRun.output}`,
+  );
+  for (const part of [
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'claude setup-token',
+    'macOS Keychain',
+    '"confinement": false',
+    `${path.join(keychainHome, '.claude')}`,
+  ]) {
+    check(
+      refusedRun.output.includes(part),
+      `the refusal of a host with no login a target can use does not name ${JSON.stringify(part)}\n${refusedRun.output}`,
+    );
+  }
+  check(
+    !fs.existsSync(path.join(keyed.folder, 'runs')) || runDirectoryOf(keyed.folder, 0) === null,
+    'a refused login left a run directory',
+  );
+  const refusedPreflight = evaluate(['preflight', '--evaluation', keyed.folder], { ...keyed.env, ...noLogin, HOME: keychainHome });
+  check(
+    refusedPreflight.status === 12 && refusedPreflight.output.includes('claude setup-token'),
+    `preflight on a host with no login a target can use exited ${refusedPreflight.status}\n${refusedPreflight.output}`,
+  );
+
+  // The keychain stand-in, started on a host that gives it the token: its read of the host's keychain is an observed mount and
+  // the sidecar write a keychain database needs is refused, so a confined target has no keychain that is not an isolation violation.
+  const stood = loginRun(
+    loginProject('login-keychain-stand-in'),
+    { HOME: keychainHome, CLAUDE_CODE_OAUTH_TOKEN: fakeToken, VERDICT_KEYCHAIN: keychain },
+    'claude-keychain',
+  );
+  check(stood.ran.status === 0, `a confined run whose agent read the host's keychain exited ${stood.ran.status}\n${stood.ran.output}`);
+  const stoodOut = trialStdout(stood.directory, 'clean', 1);
+  check(
+    loginField(stoodOut, 'keychain-home') !== undefined && !String(loginField(stoodOut, 'keychain-home')).includes('login.keychain-db'),
+    `the private home held a keychain: ${loginField(stoodOut, 'keychain-home')}`,
+  );
+  check(
+    /^refused (EPERM|EACCES|EROFS)$/.test(loginField(stoodOut, 'keychain-sidecar-write') ?? ''),
+    `the keychain's sidecar write was ${loginField(stoodOut, 'keychain-sidecar-write')}; expected a refusal`,
+  );
+  checkMounts(
+    actMounts(stood.directory),
+    [fs.realpathSync(keychain), `${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`],
+    "a confined target's keychain read and sidecar write",
+  );
+  const stoodScore = evaluate(['score', '--evaluation', stood.folder], { ...stood.env, ...noLogin });
+  checkReport(
+    stoodScore.status === 3 && stoodScore.output.includes(`mount outside allowlist: ${fs.realpathSync(keychain)}`),
+    `score over a target that read the host's keychain exited ${stoodScore.status}; expected 3\n${stoodScore.output}`,
+  );
+
+  // An opt-out run passes the variable, makes no home, and names the variable in its record.
+  const open = loginRun(loginProject('login-opt-out', { unconfined: true }), { HOME: home, CLAUDE_CODE_OAUTH_TOKEN: fakeToken });
+  check(
+    open.ran.status === 0,
+    `an opted-out run whose agent authenticates through the token variable exited ${open.ran.status}\n${open.ran.output}`,
+  );
+  const openRun = written(path.join(open.directory, 'run.json'), 'the opt-out login run');
+  check(openRun?.confinement === 'opt-out', `the opt-out login run recorded confinement ${openRun?.confinement}`);
+  check(
+    JSON.stringify(openRun?.logins) ===
+      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file: null }]),
+    `the opt-out login run recorded the logins ${JSON.stringify(openRun?.logins)}; expected the variable by name and no file`,
+  );
+  const openOut = trialStdout(open.directory, 'clean', 1);
+  check(loginField(openOut, 'login-token') === sha(fakeToken), 'the opted-out agent did not receive the token variable');
+  check(filesHolding(open.folder, fakeToken).length === 0, "the opted-out run's records hold the token's value");
+}
+
+/**
+ * A login's strings are scrubbed from the observation and the fault of every request kind (Story 1.113 review round 1).
+ * The private
+ * home with the linked file is shared by every target a sandbox starts, so a tool server or an HTTP server that prints the file, or
+ * the token a command target wrote into the home, leaves them in a record as a command target would.
+ * A registry that grants a
+ * login to a command entry also holds a tool server and an HTTP server; each request's answer and fault hold a string of the
+ * file and the token, and the fields the adapter declares public stay as written.
+ */
+async function checkLoginScrubbedFromEveryKind(entry, folder, { file, variable }) {
+  const fileString = 'access-token-value';
+  const token = process.env[variable];
+  const server = {
+    kind: 'mcp',
+    interfaceId: 'tools',
+    target: 'bin/tools.js',
+    targetArgs: [],
+    tools: ['t'],
+    environmentKeys: [],
+    maxElapsedMs: 1000,
+  };
+  const service = {
+    kind: 'api',
+    interfaceId: 'service',
+    scheme: 'http',
+    host: '127.0.0.1',
+    addresses: ['127.0.0.1'],
+    methods: ['GET'],
+    safeMethods: [],
+    maxRedirects: 0,
+    maxElapsedMs: 1000,
+    maxRequestBytes: 1,
+    maxResponseBytes: 1,
+    server: { target: 'server/s.js', targetArgs: [], environmentKeys: [], portEnvironmentKey: 'PORT', readyTimeoutMs: 1000 },
+  };
+  const registry = createRegistry([{ ...entry, login: 'claude' }, server, service], {
+    root: folder,
+    confinement: {
+      mode: 'opt-out',
+      evaluationFolder: folder,
+      logins: [{ interfaceId: 'agent', executable: 'runner', login: 'claude', variable, file }],
+    },
+  });
+  const printed = `the file said ${fileString} and the token ${token} on a plan of ENTERPRISE with user:inference`;
+  const port = {
+    async probe(request) {
+      if (request.failing) {
+        throw Object.assign(new Error(`the target failed: ${printed}`), {
+          captured: printed,
+          cause: new Error(`the cause: ${printed}`),
+        });
+      }
+      return { stdout: printed, stderr: '', body: { kind: 'text', value: printed } };
+    },
+  };
+  const wrapped = hostEnvironmentPort({ port, registry });
+  const requests = [
+    ['a command', { kind: 'cli', interfaceId: 'agent', executable: 'runner', channels: {} }],
+    ['a tool call', { kind: 'mcp', interfaceId: 'tools', toolName: 't', channels: {} }],
+    ['an HTTP call', { kind: 'api', interfaceId: 'service', method: 'GET', channels: {} }],
+  ];
+  for (const [label, request] of requests) {
+    const { observation } = await wrapped.probe(request);
+    const recorded = JSON.stringify(observation);
+    check(
+      !recorded.includes(fileString) && !recorded.includes(token) && recorded.includes('[redacted]'),
+      `the observation of ${label} that printed a string of the login file and the token was recorded as ${recorded}; expected both [redacted]`,
+    );
+    check(
+      /enterprise/i.test(recorded) && recorded.includes('user:inference'),
+      `the observation of ${label} lost words the file declares public: ${recorded}`,
+    );
+    let fault;
+    try {
+      await wrapped.probe({ ...request, failing: true });
+    } catch (error) {
+      fault = error;
+    }
+    const faulted = `${fault?.message}${fault?.scrubbedCause}`;
+    check(
+      fault !== undefined && !faulted.includes(fileString) && !faulted.includes(token) && faulted.includes('[redacted]'),
+      `the fault of ${label} that printed a string of the login file and the token read ${faulted}; expected both [redacted]`,
+    );
+  }
+}
+
+/**
+ * The login units: `loginsOf` and `selectConfinement` over a host's environment (the file by its real path, the variable by its
+ * name, a refusal naming both ways out for a host with neither, an unsafe path refused, a run that opted out taking no file), the
+ * schema and the registry's refusals, the private home's link (planted for each home, removed with the home and leaving the host's
+ * file), the manifest's note, and the Linux audit's decision over a link in the home, which reads on any host.
+ */
+async function checkSubscriptionLoginUnits() {
+  const host = fs.realpathSync(tempDir('login-units'));
+  fs.mkdirSync(path.join(host, '.claude'));
+  const file = path.join(host, '.claude', '.credentials.json');
+  fs.writeFileSync(file, 'a fake login\n');
+  const folder = tempDir('login-units-folder');
+  const evaluation = (extra = {}) => ({
+    registry: [
+      { interfaceId: 'agent', executable: 'runner', login: 'claude' },
+      { interfaceId: 'plain', executable: 'plain' },
+    ],
+    ...extra,
+  });
+  const select = (env, options = {}) =>
+    selectConfinement({ evaluation: options.evaluation ?? evaluation(), folder, root: folder, env: { PATH: process.env.PATH, ...env } });
+
+  // The sources of a host, by the variable's name and the file's real path.
+  const both = loginsOf(evaluation(), { HOME: host, CLAUDE_CODE_OAUTH_TOKEN: 'a-token-value' }, { file: true });
+  check(
+    JSON.stringify(both) ===
+      JSON.stringify([{ interfaceId: 'agent', executable: 'runner', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file }]),
+    `loginsOf named ${JSON.stringify(both)}; expected the one entry that declares a login, with the variable and the file`,
+  );
+  check(!JSON.stringify(both).includes('a-token-value'), "loginsOf carries the token's value");
+  const empty = loginsOf(evaluation(), { HOME: host, CLAUDE_CODE_OAUTH_TOKEN: '' }, { file: false });
+  check(
+    empty[0].variable === null && empty[0].file === null,
+    `an empty token and a run that opted out gave ${JSON.stringify(empty)}; expected neither source`,
+  );
+  const directory = fs.realpathSync(tempDir('login-units-config'));
+  check(
+    loginsOf(evaluation(), { HOME: host, CLAUDE_CONFIG_DIR: directory }, { file: true })[0].file === null,
+    "CLAUDE_CONFIG_DIR naming a directory with no file still gave the home's file",
+  );
+  fs.mkdirSync(path.join(directory, '.credentials.json'));
+  check(
+    loginsOf(evaluation(), { HOME: host, CLAUDE_CONFIG_DIR: directory }, { file: true })[0].file === null,
+    'a directory named .credentials.json was taken for a login file',
+  );
+  check(
+    loginsOf({ registry: [{ interfaceId: 'agent', executable: 'runner', login: 'unknown' }] }, {}, { file: true }).length === 0,
+    'an unknown adapter name was taken for a login',
+  );
+
+  // selectConfinement: the logins ride the confinement, a host with neither source is refused with both ways out named, and a run
+  // that opted out takes the variable and no file.
+  const selected = select({ HOME: host });
+  if (selected.refusal !== undefined) throw new Error(selected.refusal);
+  check(
+    selected.logins?.[0]?.file === file && selected.logins[0].variable === null,
+    `selectConfinement carried ${JSON.stringify(selected.logins)}; expected the file and no variable`,
+  );
+  const bare = select({ HOME: fs.realpathSync(tempDir('login-units-bare')) });
+  check(
+    typeof bare.refusal === 'string' &&
+      ['CLAUDE_CODE_OAUTH_TOKEN', 'claude setup-token', 'macOS Keychain', '"confinement": false', '.credentials.json', '"agent"'].every(
+        (part) => bare.refusal.includes(part),
+      ),
+    `a host with no login a target can use was answered ${JSON.stringify(bare.refusal ?? bare)}; expected a refusal naming the entry, the file, the token route and the opt-out`,
+  );
+  const named = select({ HOME: host, CLAUDE_CONFIG_DIR: directory });
+  check(
+    named.refusal?.includes(`CLAUDE_CONFIG_DIR (${directory})`) === true,
+    `a host whose CLAUDE_CONFIG_DIR holds no file was answered ${JSON.stringify(named.refusal ?? named)}; expected a refusal naming that directory`,
+  );
+  const open = selectConfinement({
+    evaluation: evaluation({ confinement: false }),
+    folder,
+    root: folder,
+    env: { HOME: host, CLAUDE_CODE_OAUTH_TOKEN: 'a-token-value' },
+  });
+  check(
+    open.mode === 'opt-out' && open.logins[0].variable === 'CLAUDE_CODE_OAUTH_TOKEN' && open.logins[0].file === null,
+    `an opted-out selection carried ${JSON.stringify(open)}; expected the variable and no file`,
+  );
+  const unsafeHome = path.join(tempDir('login-units-unsafe'), 'quo"te');
+  fs.mkdirSync(path.join(unsafeHome, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(unsafeHome, '.claude', '.credentials.json'), 'x\n');
+  const unsafe = select({ HOME: unsafeHome });
+  check(
+    unsafe.refusal?.includes('which no confinement profile can carry') === true,
+    `a credentials file whose path holds a quote was answered ${JSON.stringify(unsafe.refusal ?? unsafe)}; expected a refusal`,
+  );
+
+  // The schema and the registry: `claude` is the one adapter, a command entry alone declares it, and the entry's variable is permitted.
+  const entry = {
+    interfaceId: 'agent',
+    executable: 'runner',
+    target: 'runner',
+    subcommandPaths: [[]],
+    artifacts: {},
+    environmentKeys: [],
+    maxElapsedMs: 1000,
+    infrastructureExitCodes: [3],
+  };
+  check(
+    registryProblems([{ ...entry, login: 'claude' }]).length === 0,
+    `an entry with "login": "claude" was refused: ${registryProblems([{ ...entry, login: 'claude' }])}`,
+  );
+  check(registryProblems([{ ...entry, login: 'codex' }]).length > 0, 'an entry with an adapter no login source is known for was accepted');
+  check(registryProblems([{ ...entry, login: true }]).length > 0, 'an entry with a login that names no adapter was accepted');
+  const permitted = createRegistry([{ ...entry, login: 'claude' }], { root: folder }).permittedEnvironmentKeys('agent');
+  check(
+    JSON.stringify(permitted) === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN']),
+    `an entry that declares "login": "claude" permits ${JSON.stringify(permitted)}; expected the token variable alone`,
+  );
+  const plain = createRegistry([entry], { root: folder }).permittedEnvironmentKeys('agent');
+  check(plain.length === 0, `an entry with no login permits ${JSON.stringify(plain)}`);
+
+  // The private home carries one link per login file, in every home the port makes; releasing a home removes the link and leaves the host's file.
+  const scratchList = [];
+  const links = [{ relative: LOGIN_ADAPTERS.claude.homeFile, target: file }];
+  const made = makeTargetHome(scratchList, links);
+  try {
+    const linked = path.join(made, LOGIN_ADAPTERS.claude.homeFile);
+    check(
+      fs.lstatSync(linked).isSymbolicLink() && fs.realpathSync(linked) === file,
+      `the private home's login is ${fs.existsSync(linked) ? 'not a link to the host file' : 'absent'}`,
+    );
+    check(fs.readFileSync(linked, 'utf8') === 'a fake login\n', 'the link in the private home does not read the host file');
+    check(
+      !fs.existsSync(path.join(makeTargetHome(scratchList), LOGIN_ADAPTERS.claude.homeFile)),
+      'a home made with no links holds a login',
+    );
+  } finally {
+    const homesMade = [...scratchList];
+    for (const directoryMade of homesMade) releaseTargetHome(scratchList, directoryMade);
+  }
+  check(
+    !fs.existsSync(made) && fs.readFileSync(file, 'utf8') === 'a fake login\n',
+    "releasing a private home removed the host's login file or left the home",
+  );
+
+  // Two entries that declare one login share one link, one trial mount and one grant; the links are the distinct files.
+  const twice = [
+    { login: 'claude', file },
+    { login: 'claude', file },
+    { login: 'claude', file: null },
+  ];
+  check(
+    JSON.stringify(loginLinksOf(twice)) === JSON.stringify([{ relative: LOGIN_ADAPTERS.claude.homeFile, target: file }]),
+    `two entries over one login gave the links ${JSON.stringify(loginLinksOf(twice))}; expected one`,
+  );
+  const twiceScratch = [];
+  const twiceHome = makeTargetHome(twiceScratch, loginLinksOf(twice));
+  check(
+    fs.readFileSync(path.join(twiceHome, LOGIN_ADAPTERS.claude.homeFile), 'utf8') === 'a fake login\n',
+    'a home made for two entries over one login holds no link',
+  );
+  releaseTargetHome(twiceScratch, twiceHome);
+
+  // The strings of a granted file are what a record scrubs: every string of a JSON file, the whole text of any other.
+  const jsonFile = path.join(host, 'secrets.json');
+  const plainFile = path.join(host, 'secrets.txt');
+  fs.writeFileSync(
+    jsonFile,
+    JSON.stringify({
+      claudeAiOauth: {
+        accessToken: 'access-token-value',
+        refreshToken: 'refresh-token-value',
+        expiresAt: 1_900_000_000_000,
+        scopes: ['user:inference', 'user:profile'],
+        subscriptionType: 'enterprise',
+        rateLimitTier: 'default_claude_max_20x',
+        anUnknownField: 'an-unknown-field-value',
+      },
+      count: 3,
+    }),
+  );
+  fs.writeFileSync(plainFile, 'a plain text login\n');
+  const secretsOf = (granted) =>
+    createRegistry([{ ...entry, login: 'claude' }], {
+      root: folder,
+      confinement: { mode: 'opt-out', evaluationFolder: folder, logins: granted },
+    }).loginSecrets();
+  const granted = (login) => ({ interfaceId: 'agent', executable: 'runner', login: 'claude', variable: null, file: login });
+  check(
+    JSON.stringify(secretsOf([granted(jsonFile)])) ===
+      JSON.stringify(['access-token-value', 'refresh-token-value', 'an-unknown-field-value']),
+    `the secrets of a JSON login file are ${JSON.stringify(secretsOf([granted(jsonFile)]))}; expected each string it holds except the values of the fields the adapter declares public (scopes, subscriptionType, rateLimitTier), an unknown field included`,
+  );
+  check(
+    JSON.stringify(LOGIN_ADAPTERS.claude.publicFields) === JSON.stringify(['scopes', 'subscriptionType', 'rateLimitTier']),
+    `the claude adapter declares the public fields ${JSON.stringify(LOGIN_ADAPTERS.claude.publicFields)}`,
+  );
+  check(
+    JSON.stringify(secretsOf([granted(plainFile)])) === JSON.stringify(['a plain text login']),
+    'the secret of a plain login file is not its text',
+  );
+  check(secretsOf([granted(null)]).length === 0 && secretsOf([]).length === 0, 'an entry with no login file has secrets');
+
+  // The host's value of a granted login's variable is a secret too, since a command target can write it into the shared home for a server target to print.
+  const withVariable = { ...granted(plainFile), variable: 'CLAUDE_CODE_OAUTH_TOKEN' };
+  const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = 'a-host-token-value';
+  try {
+    check(
+      JSON.stringify(secretsOf([withVariable])) === JSON.stringify(['a-host-token-value', 'a plain text login']),
+      `the secrets of a login with a variable and a file are ${JSON.stringify(secretsOf([withVariable]))}; expected the variable's value and the file's text`,
+    );
+    check(
+      JSON.stringify(secretsOf([{ ...withVariable, file: null }])) === JSON.stringify(['a-host-token-value']),
+      'the secrets of a login with a variable and no file are not the variable value alone',
+    );
+    check(
+      JSON.stringify(secretsOf([{ ...withVariable, variable: null }])) === JSON.stringify(['a plain text login']),
+      "the host's token was a secret of a login that granted no variable",
+    );
+    await checkLoginScrubbedFromEveryKind(entry, folder, { file: jsonFile, variable: withVariable.variable });
+  } finally {
+    if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
+  }
+
+  // An empty login variable is no login: the target is not handed it, and a variable the entry's own keys name still passes.
+  const hostEnvironmentOf = (keys, value) => {
+    const saved = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = value;
+    try {
+      return createRegistry([{ ...entry, login: 'claude', environmentKeys: keys }], { root: folder }).hostEnvironment(
+        'agent',
+        [],
+        'runner',
+      );
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      else process.env.CLAUDE_CODE_OAUTH_TOKEN = saved;
+    }
+  };
+  check(!Object.hasOwn(hostEnvironmentOf([], ''), 'CLAUDE_CODE_OAUTH_TOKEN'), 'an empty login variable was handed to the target');
+  check(
+    hostEnvironmentOf([], 'a-token-value').CLAUDE_CODE_OAUTH_TOKEN === 'a-token-value',
+    'a set login variable was not handed to the target',
+  );
+  check(
+    hostEnvironmentOf(['CLAUDE_CODE_OAUTH_TOKEN'], '').CLAUDE_CODE_OAUTH_TOKEN === '',
+    "an entry's own environment key was dropped when empty",
+  );
+
+  // A credentials file no profile can carry is left out when the token authenticates, and refuses the run when nothing else does.
+  const withToken = select({ HOME: unsafeHome, CLAUDE_CODE_OAUTH_TOKEN: 'a-token-value' });
+  check(
+    withToken.refusal === undefined && withToken.logins[0].file === null && withToken.logins[0].variable === 'CLAUDE_CODE_OAUTH_TOKEN',
+    `a host with an unsafe credentials path and a token was answered ${JSON.stringify(withToken.refusal ?? withToken.logins)}; expected the token alone`,
+  );
+
+  // The sandbox carries a linked file into its grants on both mechanisms, and its Seatbelt profile exempts it from the report and quiets its refused write.
+  const sandboxFor = (mode, linked) => {
+    const stub = path.join(tempDir(`login-units-${mode}`), mode === 'seatbelt' ? 'sandbox-exec' : 'bwrap');
+    return targetSandbox({
+      confinement: { mode, executable: stub, evaluationFolder: path.resolve(folder), observer: { executable: stub } },
+      workspace: tempDir(`login-units-${mode}-workspace`),
+      status: mode === 'bubblewrap' ? tempDir(`login-units-${mode}-status`) : null,
+      audit: { directory: fs.realpathSync(tempDir(`login-units-${mode}-audit`)) },
+      linked,
+    });
+  };
+  const traced = sandboxFor('bubblewrap', [file]).wrap(process.execPath, ['-e', '']).trace.grants;
+  check(
+    traced.linked?.includes(file) && traced.read.includes(file),
+    'a Bubblewrap sandbox with a linked file does not list it in its trace grants as read and linked',
+  );
+  const plainGrants = sandboxFor('bubblewrap', []).wrap(process.execPath, ['-e', '']).trace.grants;
+  check(
+    !Object.hasOwn(plainGrants, 'linked') && !plainGrants.read.includes(file),
+    'a Bubblewrap sandbox with no linked file carries the key or the file',
+  );
+  const profile = sandboxFor('seatbelt', [file]).wrap(process.execPath, ['-e', '']).args[1];
+  check(
+    profile.includes(`(require-not (subpath "${file}"))`),
+    "a Seatbelt profile with a linked file does not exempt it from the audit's report",
+  );
+  check(
+    profile.includes(`(deny file-write*\n  (subpath "${file}"))`),
+    'a Seatbelt profile with a linked file does not quiet the audit of a refused write to it',
+  );
+  const plainProfile = sandboxFor('seatbelt', []).wrap(process.execPath, ['-e', '']).args[1];
+  check(!plainProfile.includes(file), 'a Seatbelt profile with no linked file names one');
+
+  // The manifest's note names the variable and the path and holds no value.
+  const noteOf = (logins) => forbiddenInputNote({ mode: CONFINEMENT }, [], logins);
+  const given = noteOf([{ interfaceId: 'agent', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file }]);
+  check(
+    given.includes('The registry entry "agent" declares "login": "claude"') &&
+      given.includes('the environment variable CLAUDE_CODE_OAUTH_TOKEN and the file') &&
+      given.includes(`${file}, read-only`) &&
+      given.includes("no record holds the variable's value or a string of the file"),
+    `the note for a granted login reads ${given}`,
+  );
+  check(
+    !noteOf([{ interfaceId: 'agent', login: 'claude', variable: null, file: null }]).includes('declares "login"'),
+    'a login with no source was named in the note',
+  );
+  check(noteOf([]) === forbiddenInputNote({ mode: CONFINEMENT }), 'an empty list of logins changed the note');
+  check(
+    forbiddenInputNote(
+      { mode: 'opt-out' },
+      [],
+      [{ interfaceId: 'agent', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file: null }],
+    ).includes('the environment variable CLAUDE_CODE_OAUTH_TOKEN'),
+    "an opted-out run's note does not name the variable",
+  );
+
+  // The Linux audit: a read through the link in the home resolves to the host's file, which the grant lists as read and as linked.
+  const privateHome = '/tmp/tea-evaluate-pX/run-1-a/tea-evaluate-target-home-b';
+  const grants = (linked) => ({
+    read: [file, privateHome],
+    write: [privateHome],
+    withheld: ['/tmp/tea-evaluate-pX'],
+    withheldExcept: [privateHome],
+    linked,
+  });
+  const access = { kind: 'read', path: path.join(privateHome, '.claude', '.credentials.json'), real: file, ok: true, errno: null };
+  check(
+    traceDecision(access, grants([file])) === null,
+    'the trace listed a read of the login file through the link in the home, which the grant covers',
+  );
+  check(
+    traceDecision(access, grants([])) === file,
+    'the trace did not list a read through a link in the home that leads to a file no grant names',
+  );
+  check(
+    traceDecision({ ...access, real: path.join(host, 'notes.txt') }, grants([file])) === path.join(host, 'notes.txt'),
+    'the trace did not list a read through a link in the home that leads to a second file',
+  );
+}
+
+/**
+ * The reference, read under its exact heading, documents the subscription login of a confined target: the `login` declaration, each
+ * platform's source, the keychain's absence and why, the token route and the opt-out (Story 1.113).
+ */
+function checkSubscriptionLoginReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '#### A subscription login under confinement\n';
+  const start = reference.indexOf(heading);
+  const end = start === -1 ? -1 : reference.slice(start + heading.length).search(/\n#{1,4} /);
+  const section = start === -1 ? '' : reference.slice(start + heading.length, end === -1 ? undefined : start + heading.length + end);
+  check(start !== -1, `the reference has no "${heading.trim()}" section`);
+  for (const part of [
+    '"login": "claude"',
+    '`CLAUDE_CODE_OAUTH_TOKEN`',
+    '`claude setup-token`',
+    '`CLAUDE_CONFIG_DIR`',
+    '`.credentials.json`',
+    'macOS Keychain',
+    '"confinement": false',
+    '`logins`',
+    'exits 12',
+  ]) {
+    check(section.includes(part), `the subscription login section does not name ${part}`);
+  }
+  check(
+    section.includes('A login held in the macOS Keychain has no grant.') &&
+      section.includes('no Seatbelt rule scopes the keychain to one item') &&
+      section.includes('A confined target on macOS authenticates through the token route or runs with the opt-out'),
+    'the subscription login section does not say that a Keychain login has no grant, why, and that a macOS target takes the token route or the opt-out',
+  );
+  check(
+    !/give such an agent its API key variable instead/.test(reference),
+    'the reference still tells a confined operator to give an agent its API key variable',
+  );
+}
+
 /** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
 function checkConfinementReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -14346,6 +15158,18 @@ function checkBridgeReference() {
       "On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).",
       ['the egress field'],
     ],
+    [
+      'A confined run on a host that has neither source exits 12 before any target starts, naming the entry, the file it looked for, the token route and the opt-out.',
+      ["a confined target's subscription login", "the subscription login's units"],
+    ],
+    [
+      'The keychain answers over a Mach service, which a Seatbelt rule allows or denies as a whole, and no Seatbelt rule scopes the keychain to one item.',
+      ["a confined target's subscription login"],
+    ],
+    [
+      'A confined target on macOS authenticates through the token route or runs with the opt-out.',
+      ["a confined target's subscription login"],
+    ],
   ];
   // The cases of this suite, and of the HTTP suite, whose runner lists each as `await runCase('<name>', ...)` on a line of its own.
   const apiSource = fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'test-evaluate-api.js'), 'utf8');
@@ -14513,6 +15337,8 @@ const CASES = [
   { name: "a confined target's temp directory", body: checkTargetTemp, group: 'confinement' },
   { name: "a confined target's private home", body: checkTargetHome, group: 'confinement' },
   { name: "the private home's units", body: checkTargetHomeUnits, group: 'confinement' },
+  { name: "a confined target's subscription login", body: checkSubscriptionLogin, group: 'confinement', lossy: true },
+  { name: "the subscription login's units", body: checkSubscriptionLoginUnits, group: 'confinement' },
   { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement' },
   { name: 'the shell target audit', body: checkShellTargetAudit, group: 'confinement', lossy: true },
   { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement' },
@@ -14537,6 +15363,7 @@ const CASES = [
   { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
   { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },
   { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
+  { name: 'the subscription login reference', body: checkSubscriptionLoginReference, group: 'confinement' },
   { name: 'the workspace reference', body: checkWorkspaceReference, group: 'confinement' },
   { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
   { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },
