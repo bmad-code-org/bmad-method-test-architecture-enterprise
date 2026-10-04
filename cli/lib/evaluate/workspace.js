@@ -1571,6 +1571,10 @@ function buildWithheldRepository(workspace, withheld) {
   // project's cone) is asked while its common directory is still the adopter's, since the settings that make it sparse are
   // the ones that repository and the worktree's own configuration give it.
   const sparse = sparseSettingsOf(workspace);
+  // `git worktree add` copies the project worktree's `config.worktree` into the new metadata directory, with any remote, URL,
+  // credential helper or hook the project set for its worktree. The private repository never reads it (it has no
+  // `extensions.worktreeConfig`), and the target may read the metadata directory, so it is removed once its sparse settings are read.
+  fs.rmSync(path.join(workspace.metadata, 'config.worktree'), { force: true });
   fs.writeFileSync(path.join(workspace.metadata, 'commondir'), `${store}\n`);
   const view = ['--git-dir', workspace.metadata, '--work-tree', workspace.top, '-c', `core.hooksPath=${hooks}`];
   must(runGit([...view, 'read-tree', 'HEAD'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS }));

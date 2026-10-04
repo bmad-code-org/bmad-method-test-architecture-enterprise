@@ -148,7 +148,9 @@
  *                           standard output (or `exit <code>` when git failed),
  *                           `sparse-config` (`core.sparseCheckout` and
  *                           `core.sparseCheckoutCone`) and `files-on-disk`
- *                           (the tracked files the checkout holds)
+ *                           (the tracked files the checkout holds) and `worktree-config`
+ *                           (whether the worktree's metadata directory holds a
+ *                           `config.worktree`)
  *   probe-private           answer as usual, then look for what the run keeps
  *                           from a target, in the call the sealed-brief agent
  *                           stub makes (its request, `Judge a request of my
@@ -448,6 +450,7 @@ if (act === 'probe-sparse') {
     `sparse-list: ${answer(ask('sparse-checkout', 'list'))}`,
     `sparse-config: ${configured('core.sparseCheckout')}/${configured('core.sparseCheckoutCone')}`,
     `files-on-disk: ${JSON.stringify(onDisk)}`,
+    `worktree-config: ${fs.existsSync(path.join(ask('rev-parse', '--absolute-git-dir').stdout.trim(), 'config.worktree')) ? 'present' : 'absent'}`,
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }

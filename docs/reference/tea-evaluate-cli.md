@@ -427,6 +427,7 @@ Each target runs confined, and so does every process it starts, one still runnin
   A project that uses sparse checkout (`git sparse-checkout set` in cone mode or with a pattern list, a sparse index, and a clone made with `--sparse`) shows the target the project's status: the worktree keeps the cone it inherited from your project, the private repository carries `core.sparseCheckout` and `core.sparseCheckoutCone`, and the index marks every tracked file outside the cone as skip-worktree.
   The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.
   A project that is not sparse keeps the index it has, and the target cannot change the cone, since that writes the private repository.
+  The runtime removes the `config.worktree` that `git worktree add` copies into the worktree's metadata directory, since it can hold the worktree-scoped remotes, URLs and credential helpers of your project, and the private repository never reads it.
   Two limits apply.
   The withheld path is the evaluation folder's current path, so a folder that moved stays readable in the history at its old path.
   A directory outside the folder whose tree is identical to a tree of the folder reads as empty.

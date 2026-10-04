@@ -7057,6 +7057,9 @@ function sparseProject(label, { cone = true, sparse = true, index = false } = {}
           ? ['sparse-checkout', 'set', ...(index ? ['--sparse-index'] : []), ...SPARSE_CONE]
           : ['sparse-checkout', 'set', '--no-cone', ...SPARSE_PATTERNS],
       );
+      // Settings of the project's own worktree, which `git worktree add` copies into the new worktree's metadata directory.
+      git(repository, ['config', '--worktree', 'remote.leak.url', 'https://user:secret@example.test/leak.git']);
+      git(repository, ['config', '--worktree', 'credential.helper', 'store']);
     },
   });
 }
@@ -7070,7 +7073,7 @@ function sparseView(directory) {
     const value = ask('config', '--get', key);
     return value.status === 0 ? value.stdout.trim() : 'unset';
   };
-  const outsideFolder = (line) => !/^(. )?evals\/verdict\//.test(line);
+  const outsideFolder = (line) => !/^(.. |. )?evals\/verdict\//.test(line);
   // The stub's lines end with the newline of the last entry; a listing that filters lines keeps that newline.
   const listing = (result) =>
     result.status === 0 ? JSON.stringify(result.stdout.split('\n').filter(outsideFolder).join('\n')) : `exit ${result.status}`;
@@ -7090,7 +7093,7 @@ function sparseView(directory) {
 /** The stub's `probe-sparse` lines for the clean arm's first trial, with the evaluation folder's paths left out of the listings. */
 function sparseLines(project, { env = {} } = {}) {
   const { ran, out, seen } = historyLines(project, { env, act: 'probe-sparse' });
-  const outsideFolder = (line) => !/^(. )?evals\/verdict\//.test(line);
+  const outsideFolder = (line) => !/^(.. |. )?evals\/verdict\//.test(line);
   for (const name of ['ls-files', 'ls-files-t']) {
     if (typeof seen[name] === 'string' && seen[name].startsWith('"')) {
       seen[name] = JSON.stringify(JSON.parse(seen[name]).split('\n').filter(outsideFolder).join('\n'));
@@ -7111,6 +7114,9 @@ function checkSparseLines({ what, project, seen, out, sparse }) {
       `a confined target's ${name} over ${what} printed ${seen[name]}; the project's prints ${expected[name]}`,
     );
   }
+  // The target may read its worktree's metadata directory, and the project's worktree-scoped remote, URL and credential
+  // helper must not be in it.
+  check(seen['worktree-config'] === 'absent', `a confined target's worktree metadata holds a config.worktree over ${what}\n${out}`);
   if (sparse) {
     check(expected.status === '""', `the ${what} project's own status is not clean: ${expected.status}`);
     check(
@@ -7144,6 +7150,10 @@ async function checkSparseCheckout() {
     ['cone with a sparse index', true, true],
   ]) {
     const project = sparseProject(`sparse-${label.replaceAll(' ', '-')}`, { cone, index });
+    check(
+      fs.readFileSync(path.join(project.repository, '.git', 'config.worktree'), 'utf8').includes('remote "leak"'),
+      "the project's own config.worktree holds no worktree-scoped remote, so the case proves nothing about the metadata copy",
+    );
     if (index) {
       check(
         git(project.repository, ['ls-files', '--sparse'])
@@ -8854,7 +8864,8 @@ function checkConfinementReference() {
       section.includes(
         "The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.",
       ) &&
-      section.includes('A project that is not sparse keeps the index it has'),
+      section.includes('A project that is not sparse keeps the index it has') &&
+      section.includes('The runtime removes the `config.worktree` that `git worktree add` copies into the worktree'),
     "the reference's confinement section does not say a sparse-checkout project shows the target the project's status (no deletion, the files outside the cone listed, the cone's patterns) and that a project that is not sparse keeps its index",
   );
   // Story 1.59: the one private home a confined trial may write, and the variables that name it.
