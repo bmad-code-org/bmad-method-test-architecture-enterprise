@@ -888,6 +888,10 @@
           "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
         },
         {
+          "token": "CONNECT",
+          "reason": "the HTTP method an HTTPS client asks a proxy for a tunnel with, which the egress proxy serves and no source declares"
+        },
+        {
           "token": "OLDPWD",
           "reason": "a shell variable the socket launcher restores"
         },

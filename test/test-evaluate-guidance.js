@@ -1457,12 +1457,12 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       "contract's `--skill-root` option",
       'disposable copy',
       'registry shape in the Skill runner section',
-      'declares `"network": "host"` on its entry on Linux',
+      'lists its host in `egress` on its entry on Linux',
     ])
       requireText(agentFallback, marker, 'adapters.md Agent fallback', failures);
     requireText(
       headingBody(adapterGuide, '## Skill runner'),
-      'on Linux declare `"network": "host"` on its registry entry',
+      "on Linux list the provider's host, port and addresses in `egress` on its registry entry",
       'adapters.md Skill runner',
       failures,
     );
@@ -2747,8 +2747,8 @@ function checkSystemPathsFragment(guide, failures) {
     failures.push(
       'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose names',
     );
-  if (fragment.confinement === false || fragment.registry?.[0]?.network === 'host')
-    failures.push('harness.md systemPaths fragment must keep the default confinement and network');
+  if (fragment.confinement === false || fragment.registry?.[0]?.egress !== undefined)
+    failures.push('harness.md systemPaths fragment must keep the default confinement and list no egress');
   const relative = structuredClone(fragment);
   if (Array.isArray(relative.registry?.[0]?.systemPaths)) relative.registry[0].systemPaths = ['opt/relative'];
   if (validate({ ...starter, ...relative }))
@@ -2774,7 +2774,18 @@ function checkConfinedSkillExample(guide, failures) {
     failures.push('harness.md confined skill registry differs from its working confined fixture');
 }
 
+/**
+ * Story 1.83 removed the registry field `network`: no guide teaches the declaration or the record (`hostNetwork`) that went with it, and
+ * none waits for the story that replaced it.
+ */
+function checkRetiredNetwork(guide, failures, where) {
+  for (const stale of ['"network": "host"', '"network": "isolated"', '`network` value', 'hostNetwork', 'until Story 1.83']) {
+    if (guide.includes(stale)) failures.push(`${where} still teaches ${JSON.stringify(stale)}, which Story 1.83 removed`);
+  }
+}
+
 function checkHarnessGuidance(guide, failures) {
+  checkRetiredNetwork(guide, failures, 'harness.md');
   for (const heading of [
     '## Choose risk and trials',
     '## Record evaluator conditions',
@@ -2823,18 +2834,24 @@ function checkHarnessGuidance(guide, failures) {
     'No other home is reachable from it',
   ])
     requireText(guide, marker, 'harness.md', failures);
-  // Story 1.61 names the `network` declaration in the criterion: its passage is held under its own heading.
+  // Story 1.83: the harness guide teaches the authorization in `egress` in place of `"network": "host"`; its passage is held under its own heading.
   const confinedTarget = headingBody(guide, '## Run a skill or agent target confined');
   for (const marker of [
     'On Linux a confined target also runs in a network namespace of its own with a loopback and nothing else, which cuts an agent off from its model provider.',
-    'Declare `"network": "host"` on the registry entry of a skill or agent target',
-    ', and of any target that calls a model, an outside service or a database on the host,',
-    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
-    '`run.json` records under `hostNetwork`',
-    '; every other entry keeps the default, `"network": "isolated"`',
+    'List the hosts the entry\'s processes may reach in its `egress`, one `{ "host", "port", "addresses" }` item for each',
+    'on the registry entry of a skill or agent target and of any target that calls a model or an outside service',
+    'a proxy that tunnels an HTTPS `CONNECT` request for a listed host and port and refuses every other',
+    "the host's abstract Unix sockets stay out of its reach",
+    "Name each host's `addresses` as the host resolves now, since the proxy connects to an address the item names and to no other",
+    'The target reads the proxy from `HTTPS_PROXY`, so a client that opens raw sockets has no route',
+    'An entry that lists no `egress` reaches no host',
+    "`run.json` records each entry's hosts under `egress` and each request the proxy refused under `egressRefusals`",
     'macOS Seatbelt ignores the field',
   ])
     requireText(confinedTarget, marker, 'harness.md ## Run a skill or agent target confined', failures);
+  for (const stale of ['"network"', 'hostNetwork', 'until Story 1.83']) {
+    if (guide.includes(stale)) failures.push(`harness.md still teaches ${JSON.stringify(stale)}, which Story 1.83 removed`);
+  }
   checkConfinedSkillExample(guide, failures);
   // Story 1.61: what a confined target reads outside its workspace, the audit's list of the rest, and the one fragment that declares it.
   const reads = headingBody(guide, '## Declare what a confined target reads');
@@ -2852,13 +2869,13 @@ function checkHarnessGuidance(guide, failures) {
     'The list grants reads only',
     'a confined target writes nothing outside its workspace and its private directories',
     "the audit lists every access to the evaluation folder, the project's git directory or the user's private root even under a declared path",
-    'Two entries that start the same target declare the same `systemPaths` and the same `network`, or `check` exits 10',
+    'Two entries that start the same target declare the same `systemPaths` and the same `egress`, or `check` exits 10',
     "the workspace, the call's temp directory, the private home, the Node installation",
     'each free of double quotes, backslashes and control characters',
     'such as a language installation, a rules directory or a cache',
     'This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system',
     "Merge its `registry` entry into the evaluation's registry",
-    'It keeps the default network and runs confined',
+    'It lists no `egress` and runs confined',
     'then run `check` and rerun development',
   ])
     requireText(reads, marker, 'harness.md ## Declare what a confined target reads', failures);
@@ -2908,6 +2925,7 @@ function checkHarnessGuidance(guide, failures) {
 }
 
 function checkRunGuidance(guide, failures) {
+  checkRetiredNetwork(guide, failures, 'run.md');
   for (const heading of [
     '## Install the private latest-spec runtime',
     '## Check, compile, seal and preflight',
@@ -2971,10 +2989,15 @@ function checkRunGuidance(guide, failures) {
     'or an evaluation folder or temp directory whose path holds a double quote, a backslash or a control character',
     'the run observes no file-system access',
     "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, and record the adopter's reason in the evaluation notes",
-    'On Linux an entry that keeps the default `"network": "isolated"`',
+    'On Linux an entry runs its processes in a network namespace of their own with a loopback and nothing else',
     '`run.json` records what the targets ran under',
-    "tell the adopter which entries keep the host's network",
-    "Only a `bubblewrap` run isolates the entries `hostNetwork` leaves out; under `seatbelt` and `opt-out` every entry keeps the host's network",
+    'tell the adopter which hosts each entry may reach',
+    "Only a `bubblewrap` run holds an entry to its `egress`; under `seatbelt` and `opt-out` every entry keeps the host's network",
+    '`egress` lists each entry that lists hosts with its `host:port` items and is `[]` when none does',
+    '`egressRefusals` lists each trial whose proxy refused a request, with the host, the port and the entry, and is `[]` when none did',
+    'when a trial is listed, say so before reading its verdict, since a target refused its provider fails for that reason',
+    'An entry that lists hosts in `egress` also gets, for each call, a proxy the runtime owns that tunnels a request for a listed host and port and refuses every other',
+    "no entry reaches the host's abstract Unix sockets",
     'The runtime first confines a trivial process and confirms the observer',
     'A host with neither mechanism',
     'a container that forbids a network namespace',
@@ -2990,13 +3013,11 @@ function checkRunGuidance(guide, failures) {
     "record the adopter's reason in the evaluation notes",
     'a network namespace of their own with a loopback and nothing else',
     'an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns, provided the service listens on `127.0.0.1` or `::1`, since any other address stops the call',
-    'An entry that declares `"network": "host"` keeps the host\'s network and with it a route to the host\'s abstract Unix sockets',
     'macOS Seatbelt ignores the field',
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
-    '`hostNetwork` lists the interface ID of every entry that declares `"network": "host"` and is `[]` when none does',
     'Read both before reading a verdict',
     // Story 1.82: a socket file of the host is closed to a Bubblewrap target under either network value, and run.json records the cut.
-    'A Bubblewrap target cannot connect to a socket file of the host under either value, so a target that needs a host service through one opts out with `"confinement": false`',
+    'A Bubblewrap target cannot connect to a socket file of the host, so a target that needs a host service through one opts out with `"confinement": false`',
     '`hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the host held more Unix sockets than a call can hide, and is `[]` when no call was cut',
     "when an entry is listed, say so before reading that trial's verdict",
   ])
@@ -3079,11 +3100,12 @@ function checkIsolationViolationGuidance(guide, failures) {
     "On macOS `run.json`'s `observedMountsChannel` records each audited trial as `complete` (the log delivered every canary read the audit sent) or `lossy` with `canariesSent` and `canariesDelivered`",
     'the summary line of `run` names each lossy trial, so read an empty list from a lossy trial as unconfirmed and rerun it on a quiet host',
     'a `complete` trial can still have dropped a single report between two canaries',
-    "A Linux target whose call to a model provider, an outside service or a database on the host's loopback fails to connect runs in a network namespace with a loopback and nothing else",
-    'Declare `"network": "host"` on its entry, confirm `run.json` lists the entry under `hostNetwork`, and rerun',
-    "the entry then keeps a route to the host's abstract Unix sockets until Story 1.83",
+    'A Linux target whose call to a model provider or an outside HTTPS service fails to connect runs in a network namespace with a loopback and nothing else',
+    'List the host in `egress` on its entry with the addresses it resolves to, confirm `run.json` lists the entry under `egress`, read `egressRefusals` for the host and port the proxy refused, and rerun',
+    'The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route, and such a target opts out with `"confinement": false` and the adopter\'s recorded reason',
+    "A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels reaches a plain-HTTP gateway on the host's loopback that its entry lists",
     // Story 1.82: a host service behind a socket file is out of a Bubblewrap target's reach under either `network`, and the escape is the opt-out.
-    'A Bubblewrap target cannot reach a host service through a socket file under either `network` value',
+    'A Bubblewrap target cannot reach a host service through a socket file:',
     "a connection to the Docker socket (testcontainers) or to a database's Unix socket such as `/var/run/postgresql/.s.PGSQL.5432` answers `ECONNREFUSED`",
     "since the runtime mounts an empty device file over every socket file outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
@@ -3093,6 +3115,17 @@ function checkIsolationViolationGuidance(guide, failures) {
     requireText(body, marker, `gaps.md ${heading}`, failures);
   for (const stale of ['too large to pack', 'a partial clone']) {
     if (body.includes(stale)) failures.push(`gaps.md ${heading} still names ${JSON.stringify(stale)}, a cause Story 1.80 removed`);
+  }
+  // Story 1.83: the proxy reads `CONNECT` alone and carries any bytes, so the paragraph no longer sends a database on the host's loopback to `egress`, and no longer calls the proxy HTTPS only.
+  if (body.includes("a database on the host's loopback fails to connect")) {
+    failures.push(
+      `gaps.md ${heading} still sends a database on the host's loopback to \`egress\`, which a client opening no tunnel cannot reach`,
+    );
+  }
+  if (body.includes('tunnels HTTPS `CONNECT` requests only')) {
+    failures.push(
+      `gaps.md ${heading} still says the proxy tunnels HTTPS only, while it carries the bytes of any client that opens a \`CONNECT\` tunnel`,
+    );
   }
   const rows = tableRows(guide, heading, ['Observed path', 'Cause', 'Concrete repair'], failures);
   // Each row: the observed path it starts with, its exact cause, and the phrases its repair holds.
@@ -3135,6 +3168,7 @@ function checkIsolationViolationGuidance(guide, failures) {
 }
 
 function checkGapsGuidance(guide, engine, failures) {
+  checkRetiredNetwork(guide, failures, 'gaps.md');
   for (const heading of [
     '## Read the strength vector',
     '## Read a loose oracle',
@@ -3952,6 +3986,7 @@ async function main() {
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
   checkCorpus(corpus, engine, failures);
+  checkRetiredNetwork(fs.readFileSync(REFERENCE('adapters'), 'utf8'), failures, 'adapters.md');
   try {
     checkContractGuidance(
       skillContent,
@@ -4102,6 +4137,24 @@ async function main() {
         'run',
         checkRunGuidance,
         (text) => text.replace('--run <invocationId>', '--run <trial-run-id>'),
+      ],
+      [
+        'harness retired network declaration',
+        'harness',
+        checkHarnessGuidance,
+        (text) => `${text}\nDeclare \`"network": "host"\` on the entry.\n`,
+      ],
+      [
+        'run retired network record',
+        'run',
+        checkRunGuidance,
+        (text) => `${text}\n\`hostNetwork\` lists the entries that keep the host's network.\n`,
+      ],
+      [
+        'gaps retired network declaration',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => `${text}\nThe entry keeps its route until Story 1.83.\n`,
       ],
       [
         'run local engine removal',

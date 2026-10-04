@@ -178,9 +178,9 @@ function evaluatorConfiguration({
  * the reports were (macOS's log loses some on a saturated host), so `run.json`
  * records that per trial as `observedMountsChannel` (Story 1.81).
  * The runtime observes no network
- * access (a Bubblewrap target with the default has a loopback only, and an
- * entry that declares `"network": "host"` and a macOS target keep the host's
- * network), so `networkAllowlist` and
+ * access (a Bubblewrap target has a loopback and the hosts its entry authorizes
+ * through the egress proxy, whose refusals `run.json` records as `egressRefusals`
+ * (Story 1.83), and a macOS target keeps the host's network), so `networkAllowlist` and
  * `observedNetworkTargets` are empty: the published schema's only honest shape
  * for "nothing observed", since a list of the grants would claim an
  * observation never made. `toolAllowlist` and `observedToolCalls` are the

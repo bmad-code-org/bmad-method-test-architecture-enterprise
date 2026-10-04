@@ -14,7 +14,7 @@
  * judged as the target's behavior where the runtime reads a target that could
  * not run. Seatbelt runs the command in place and needs none of this.
  *
- *   confinement-status.cjs [--bridge <socket path>] <status file> <target> [argument ...]
+ *   confinement-status.cjs [--bridge <socket path>] [--egress <socket path>] [--avoid <port>] <status file> <target> [argument ...]
  *
  * A signal this process receives is passed to the target. A target that
  * cannot start ends this process with 127 (not found) or 126 (not runnable),
@@ -36,6 +36,22 @@
  * already spliced drains what the target wrote before it ended, for at most
  * `BRIDGE_DRAIN_MS`. A connection the target itself makes to the socket
  * reaches this namespace's own loopback alone.
+ *
+ * Story 1.83: with `--egress`, the same namespace has one route out, a proxy
+ * the runtime owns. Before it starts the target this process listens on a
+ * loopback port the system gives it (`127.0.0.1`, inside the namespace) and
+ * connects each connection to the Unix socket path the runtime named, a socket
+ * of the runtime's own in a private directory of the call, which the runtime
+ * serves as an HTTP `CONNECT` proxy limited to the hosts the registry entry
+ * authorizes (`confinement-egress.js`). The target starts with `HTTPS_PROXY` and
+ * `https_proxy` naming that port and `NODE_USE_ENV_PROXY=1`, so a client that
+ * honors the proxy variables tunnels through the runtime and a client that
+ * does not has no route, since the namespace holds a loopback and nothing else.
+ * This process decides nothing: the runtime's proxy is the one place a request
+ * is authorized, and a target that connects to the socket itself reaches the
+ * same proxy. A server the runtime started on a port it chose for the call
+ * (`--avoid <port>`) binds that port inside this namespace too, so the egress
+ * listener takes another port when the system gives it that one.
  *
  * The file is also a module for the runtime's tests: required, it starts
  * nothing. It requires nothing of the repository, since a target's sandbox is
@@ -227,26 +243,95 @@ function serveBridge(
   });
 }
 
+/** How many times the egress listener asks for a port when the system keeps giving it one to avoid. */
+const EGRESS_BIND_ATTEMPTS = 16;
+
 /**
- * The arguments of a shim call: the optional `--bridge <socket path>`, the
+ * Listens on `127.0.0.1` at a port the system gives and connects each connection to the Unix socket `socketPath`, copying bytes
+ * both ways: the namespace's one route to the runtime's egress proxy. The server is unreferenced, as the bridge's is, and
+ * `close()` stops it and cuts every connection that is open. A port in `avoid` (the one a started server will bind in this
+ * namespace) is given back and another asked for, up to `EGRESS_BIND_ATTEMPTS` times.
+ *
+ * @param {string} socketPath the runtime's proxy socket
+ * @param {number[]} [avoid] ports the listener must not take
+ * @returns {Promise<{ server: net.Server, port: number, close: () => void, closed: Promise<void> }>} resolves once it listens; rejects
+ *   with the listen error; `closed` settles once `close()` has released the port
+ */
+async function serveEgress(socketPath, avoid = []) {
+  for (let attempt = 1; ; attempt += 1) {
+    const served = await listenEgress(socketPath);
+    if (!avoid.includes(served.port)) return served;
+    served.close();
+    await served.closed;
+    if (attempt >= EGRESS_BIND_ATTEMPTS) {
+      throw new Error(`the system gave only ports the target's server binds (${avoid.join(', ')}) in ${EGRESS_BIND_ATTEMPTS} attempts`);
+    }
+  }
+}
+
+/** One listener of `serveEgress`, on a port the system gives. */
+function listenEgress(socketPath) {
+  const connections = new Set();
+  const server = net.createServer({ allowHalfOpen: true }, (client) => {
+    connections.add(client);
+    client.once('close', () => connections.delete(client));
+    client.on('error', () => client.destroy());
+    const upstream = net.connect({ path: socketPath, allowHalfOpen: true });
+    connections.add(upstream);
+    upstream.once('close', () => connections.delete(upstream));
+    splice(client, upstream);
+  });
+  server.unref();
+  const closed = new Promise((resolve) => server.once('close', resolve));
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen({ host: '127.0.0.1', port: 0 }, () => {
+      server.off('error', reject);
+      server.on('error', () => {});
+      resolve({
+        server,
+        closed,
+        port: server.address().port,
+        close() {
+          server.close();
+          for (const connection of connections) connection.destroy();
+        },
+      });
+    });
+  });
+}
+
+/** The variables that point a client at the egress proxy on `port`: both spellings of the HTTPS proxy and Node's switch for reading them. */
+function egressEnvironment(port) {
+  const proxy = `http://127.0.0.1:${port}`;
+  return { HTTPS_PROXY: proxy, https_proxy: proxy, NODE_USE_ENV_PROXY: '1' };
+}
+
+/**
+ * The arguments of a shim call: the optional `--bridge <socket path>`, `--egress <socket path>` and `--avoid <port>`, the
  * status file, the target and its own arguments.
  *
  * @param {string[]} argv the arguments after the script's path
- * @returns {{ bridge: string|null, statusFile: string, target: string, args: string[] }}
+ * @returns {{ bridge: string|null, egress: string|null, avoid: number[], statusFile: string, target: string, args: string[] }}
  */
 function parseArguments(argv) {
   const rest = [...argv];
   let bridge = null;
-  if (rest[0] === '--bridge') {
-    bridge = rest[1] ?? null;
+  let egress = null;
+  const avoid = [];
+  while (rest[0] === '--bridge' || rest[0] === '--egress' || rest[0] === '--avoid') {
+    const value = rest[1] ?? null;
+    if (rest[0] === '--bridge') bridge = value;
+    else if (rest[0] === '--egress') egress = value;
+    else if (/^[1-9][0-9]{0,4}$/.test(value ?? '') && Number(value) <= 65_535) avoid.push(Number(value));
     rest.splice(0, 2);
   }
   const [statusFile, target, ...args] = rest;
-  return { bridge, statusFile, target, args };
+  return { bridge, egress, avoid, statusFile, target, args };
 }
 
 function main() {
-  const { bridge, statusFile, target, args } = parseArguments(process.argv.slice(2));
+  const { bridge, egress, avoid, statusFile, target, args } = parseArguments(process.argv.slice(2));
   const FORWARDED = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT', 'SIGUSR1', 'SIGUSR2'];
   let secret = null;
   try {
@@ -281,8 +366,8 @@ function main() {
     }
   }
   let closeBridge = null;
-  const run = () => {
-    const child = spawn(target, args, { stdio: 'inherit' });
+  const run = (environment = {}) => {
+    const child = spawn(target, args, { stdio: 'inherit', env: { ...process.env, ...environment } });
     for (const name of FORWARDED) process.on(name, () => child.kill(name));
     child.once('error', (error) => {
       closeBridge?.();
@@ -318,28 +403,46 @@ function main() {
       process.kill(process.pid, signal);
     });
   };
-  if (bridge === null) {
+  if (bridge === null && egress === null) {
     run();
     return;
   }
-  // The target starts once the bridge listens, so a server that binds at once is never ahead of its bridge. A bridge that
-  // cannot listen ends this process before the target runs, its reason on standard error: the runtime reads a started
-  // call that exited, with the reason among what the call printed.
-  serveBridge(bridge).then(
-    (served) => {
-      closeBridge = served.close;
-      run();
-    },
-    (error) => {
-      try {
-        writeStatus({ started: true, complete: true });
-      } catch {
-        // The host rejects an incomplete signed status.
-      }
-      process.stderr.write(`bridge ${bridge}: ${error.message}\n`);
-      process.exitCode = 126;
-    },
-  );
+  // The target starts once each listener is up, so a server that binds at once is never ahead of its bridge and a client that
+  // reads the proxy variables at once finds the proxy. A listener that cannot start ends this process before the target runs,
+  // its reason on standard error: the runtime reads a started call that exited, with the reason among what the call printed.
+  const closers = [];
+  closeBridge = () => {
+    for (const close of closers) close();
+  };
+  const failed = (what, name, error) => {
+    closeBridge();
+    try {
+      writeStatus({ started: true, complete: true });
+    } catch {
+      // The host rejects an incomplete signed status.
+    }
+    process.stderr.write(`${what} ${name}: ${error.message}\n`);
+    process.exitCode = 126;
+  };
+  const bridged =
+    bridge === null
+      ? Promise.resolve(null)
+      : serveBridge(bridge).then(
+          (served) => (closers.push(served.close), served),
+          (error) => ({ error }),
+        );
+  const routed =
+    egress === null
+      ? Promise.resolve(null)
+      : serveEgress(egress, avoid).then(
+          (served) => (closers.push(served.close), served),
+          (error) => ({ error }),
+        );
+  Promise.all([bridged, routed]).then(([bridgeResult, egressResult]) => {
+    if (bridgeResult?.error) failed('bridge', bridge, bridgeResult.error);
+    else if (egressResult?.error) failed('egress', egress, egressResult.error);
+    else run(egressResult ? egressEnvironment(egressResult.port) : {});
+  });
 }
 
 if (require.main === module) main();
@@ -352,7 +455,9 @@ module.exports = {
   BRIDGE_LINE_MS,
   parseArguments,
   parseBridgeLine,
+  egressEnvironment,
   serveBridge,
+  serveEgress,
   signedStatus,
   splice,
 };

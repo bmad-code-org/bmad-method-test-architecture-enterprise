@@ -168,8 +168,8 @@ A command entry:
 - `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
   TeA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
-- `network`: `"isolated"` (the default) or `"host"`, on a command, tool-server or HTTP entry; see [File-system confinement](#file-system-confinement).
-  A Linux skill or agent target declares `"host"`.
+- `egress`: the hosts a confined target's processes may reach, each `{ "host", "port", "addresses" }`, on a command, tool-server or HTTP entry that starts a process; see [File-system confinement](#file-system-confinement).
+  A Linux skill or agent target lists its model provider's host and port.
 
 A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
 
@@ -318,7 +318,7 @@ No other process can answer on a port the service holds.
 A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
 The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
 The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
-Under Bubblewrap an entry that keeps the default network runs its service in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
+Under Bubblewrap a started service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
 
 Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
 It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
@@ -385,6 +385,7 @@ Gitignored paths are not read.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
 A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the matcher `seed`, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator (a command evaluator's observed `frameworks` or a sealed-brief agent's installed `version` included) and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, how complete each audited trial's reports were (`observedMountsChannel`, see [File-system confinement](#file-system-confinement); a `records` run has none), and `completed: true`.
 A completed `run` that ran trials also records `hostSocketTruncation`, the trials whose calls left sockets of other users reachable because the room for mounts ran out (`[]` when no call was cut; see [File-system confinement](#file-system-confinement)).
+A completed `run` also records `egress`, each entry that lists hosts with its `host:port` items, and, once it ran trials, `egressRefusals`, the trials whose egress proxy refused a request (`[]` when none did; see [File-system confinement](#file-system-confinement)).
 
 ### File-system confinement
 
@@ -490,19 +491,28 @@ A registry entry names what its target legitimately reads outside the workspace 
 A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
 The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
 A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
-A Bubblewrap target whose entry keeps the default network, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
+A Bubblewrap target, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
 A host that cannot create the network namespace is refused at selection (exit 12), as one that cannot start Bubblewrap is.
 An HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns: the confined process serves a Unix socket in a private directory of the call, and the runtime listens on the address and port the call is configured for and forwards each connection through that socket, with no network path between the namespaces.
 A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.
 Under Bubblewrap an isolated started service must listen on `127.0.0.1` or `::1`, and an address the registry authorizes for it that is any other stops the call.
-A command target and a tool server with the default network have a loopback only and no bridge.
-An isolated Bubblewrap target has no network beyond that loopback, so a target that needs the host's network (a database on the host's loopback, an outside service, a model provider) declares `"network": "host"` on its entry.
-Each command, tool-server and HTTP entry takes `network`: `"isolated"` (the default) or `"host"`, and `check` refuses any other value.
-An entry that declares `"network": "host"` keeps the host's network under Bubblewrap, and its started service, if it has one, is reached directly with no bridge.
-A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.
-An entry that declares `"network": "host"` keeps a route to the host's abstract Unix sockets, which Story 1.83 closes, and `run.json` lists each such entry under `hostNetwork` while the isolation manifest's forbidden-input notes name them.
+A command target and a tool server have a loopback only and no bridge.
+A Bubblewrap target has no network beyond that loopback and the proxy its entry's `egress` gives it, so a target that calls a model provider or an outside HTTPS service lists the host in `egress` on its entry.
+Each command, tool-server and HTTP entry that starts a process takes `egress`, one `{ "host", "port", "addresses" }` item for each host and port its processes may reach, and `check` refuses an item eval-quality's `parseProbeTargetPolicy` refuses, a host spelled otherwise than a URL spells it, a host and port listed twice and an HTTP entry that names no server.
+`"network"` is no longer a field: `check` refuses an entry that declares it, naming the entry and pointing at `egress`.
+An entry that lists `egress` gives each of its calls one route out, a proxy the runtime owns: the runtime serves it on a Unix socket in a private directory of the call, the call's status shim listens on a loopback port of the namespace and connects each connection to that socket, and the target starts with the port in `HTTPS_PROXY` and `https_proxy` and with `NODE_USE_ENV_PROXY=1`, which Node reads.
+The proxy tunnels an HTTP `CONNECT` request for a host and port an item lists, decided by eval-quality's `evaluateTarget` as the evaluation's HTTP port's requests are, and answers a request for another host, port or address `403` naming the reason, the host and the entry (a request that is no `CONNECT` gets `405`, a malformed head `400`, a host that does not resolve or cannot be reached `502` and a call past 128 tunnels `503`).
+A host no item names is refused before its name is resolved, and the proxy connects to the resolved addresses an item names, the next when one cannot be reached.
+The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route; a target that needs one sets `"confinement": false` with a recorded reason.
+A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels (`curl -p -x "$HTTPS_PROXY"`) reaches a plain-HTTP gateway on the host's loopback that an item lists.
+A connection from a target to the host's loopback, to an abstract Unix socket or to any host without the proxy finds a loopback and nothing else.
+A host in a request or an item holds letters, digits, `.`, `-` and `_` and at most 253 bytes, or is an IPv6 address; the proxy answers a longer or otherwise spelled host `400`, and `check` refuses such an item and a wildcard such as `*.example.com`, which no request can match.
+An entry that lists no host has no proxy, no proxy variable and no route to any host.
+The proxy and its socket are private to the call: its directory lies beneath the run's private parent, the target sees it read-only, the authorization is held in the runtime's memory with no file, and the end of the call, its failure and a signal that ends the run remove it, while the next run over the evaluation reclaims one a run killed outright left.
+`run.json`'s `egress` lists each entry that lists hosts with its `host:port` items, its `egressRefusals` lists each trial whose proxy refused a request with the host, the port, the entry, the reason, the address when the host resolved and a count (at most 50 distinct requests, the rest counted in `omitted`, each detail cut to 500 characters), and the run's summary names those trials.
+The isolation manifest's forbidden-input notes name the entries that list hosts under Bubblewrap.
 The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.
-A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, whatever the entry's `network`, since the runtime mounts an empty device file over each one when a call starts.
+A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, since the runtime mounts an empty device file over each one when a call starts.
 A socket inside the target's workspace or inside a private directory of the call (the bridge's directory included) stays connectable.
 The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break in a directory the runtime does not walk, one whose file name is no UTF-8, and a second path to the same socket file through a hard link or another mount.
 A call hides at most as many sockets as its Bubblewrap command leaves room for, and at most 2,000 in any case, since Bubblewrap takes 9,000 arguments for the command line (the target's own arguments included) and the mounts together, and the runtime reads at most 2,000 directories of each scanned directory.
@@ -516,7 +526,7 @@ A call is refused (exit 12, naming the count and the room) when the sockets only
 A socket file the runtime cannot reach by its exact path (a directory it cannot search, a file that went away) is left out, since the target cannot reach it either.
 The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.
 macOS Seatbelt hides no host socket apart from the ones under the user's private root, so a macOS target can connect to a path-based socket outside that root.
-macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.
+macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
 `score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
@@ -815,7 +825,7 @@ The isolation manifest records what the trials were granted and what the runtime
 For CLI targets, each issued step can report target use on one stderr line: `TEA_EVALUATE_USAGE_JSON:{"inputTokens":7,"outputTokens":11,"costUsd":"0.00125"}`. Token counts must be nonnegative safe integers and cost must be a nonnegative decimal string. `tea-skill-runner` translates supported agent CLI reports into this line while keeping the agent's answer on stdout. A malformed or repeated report stops the run with a target-report error. The sealed record stores the sum of that trial's issued step reports, and the isolation manifest stores the exact sum of its trials. Qualification and preflight calls do not count.
 When a target gives no complete report, the closed record and manifest schemas still hold zero for missing use. `run.json` lists the affected trial and step in `unreportedResourceUse`. An empty list means every issued target call reported use, including an explicit measured zero. API and MCP calls have no usage report contract and appear as unreported when issued.
 The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access; on macOS the log can lose reports, so read an empty list together with the trial's `observedMountsChannel` entry in `run.json`.
-The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target with the default network has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and an entry that declares `"network": "host"` and a macOS target keep the host's network.
+The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and the hosts its entry lists through the proxy (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.
 Each forbidden input's note says what the runtime hands the target and names the confinement that withheld the rest, or, in a run that opted out, that the runtime does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
 Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
@@ -1382,7 +1392,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 | 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
-On Linux the entry also declares `"network": "host"`, since the agent calls its model provider and the default network of a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
+On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
 On POSIX, the agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.

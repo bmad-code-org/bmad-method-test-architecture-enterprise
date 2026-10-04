@@ -128,6 +128,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
@@ -143,6 +144,7 @@ const { recordObservation, createArtifactValidator } = require('../cli/lib/evalu
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const {
   channelEntry,
+  egressRefusalNote,
   leftSocketsNote,
   lostCanaryNote,
   readObservedMounts,
@@ -150,7 +152,23 @@ const {
   setRecommendation,
   socketTruncationEntry,
 } = require('../cli/lib/evaluate/run');
-const { createRegistry, networkResolver, registryProblems } = require('../cli/lib/evaluate/registry');
+const {
+  createRegistry,
+  egressRegistryProblems,
+  egressResolver,
+  registryProblems,
+  removedNetworkProblem,
+} = require('../cli/lib/evaluate/registry');
+const {
+  MAX_DETAIL_CHARS,
+  MAX_HOST_BYTES,
+  MAX_REFUSALS,
+  MAX_TUNNELS,
+  egressAuthorization,
+  isEgressHost,
+  parseConnectLine,
+  startEgress,
+} = require('../cli/lib/evaluate/confinement-egress');
 const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
 const { executableOnPath } = require('../cli/lib/isolation-primitives');
 const {
@@ -225,6 +243,7 @@ const REPORT_LISTENER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 
 const CONFINEMENT_STATUS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
 const LOSSY_LOG = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'lossy-log.cjs');
 const CUT_SOCKET_REPORT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'cut-socket-report.cjs');
+const REFUSED_EGRESS_REPORT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'refused-egress-report.cjs');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
 /** The confinement this host runs targets under (Story 1.31); the suite runs where one exists, as TeA's CI does. */
@@ -7049,8 +7068,9 @@ function checkPrivateDirectorySources() {
     // The private parent, the scratch fallback for a list without one, and a staged copy.
     'workspace.js': 3,
     // A target's own temp directory per call (granted to it), the sandbox's private home beneath the run's private parent (Story 1.59, granted to
-    // it) and the audit's directory beneath the same parent, which no target can reach (Story 1.60).
-    'confinement.js': 3,
+    // it), the audit's directory beneath the same parent, which no target can reach (Story 1.60), and a call's egress proxy directory
+    // (Story 1.83), beneath the same parent where the run has one, which the target sees read-only at a path under the synthetic /dev.
+    'confinement.js': 4,
     // The two probes that confirm an observer before a run starts: each makes a directory in the system temp directory, runs one trivial process
     // and removes it at once; no target is ever granted either.
     'confinement-audit.js': 2,
@@ -9316,23 +9336,6 @@ async function checkNetworkNamespaceUnits() {
     );
   }
 
-  // An entry that declares `network: host` runs its call without the namespace; a bridge is for the isolated default alone.
-  const hosted = sandbox.wrap('/bin/true', [], [], [], { network: 'host' });
-  check(
-    !hosted.args.includes('--unshare-net') && hosted.args.includes('--unshare-pid') && hosted.args.includes('--die-with-parent'),
-    `a call whose entry declares network host has the vector ${hosted.args.join(' ')}; expected the target's isolation without --unshare-net`,
-  );
-  let hostBridge = null;
-  try {
-    sandbox.wrap('/bin/true', [], [bridgeDirectory], [], { bridge: path.join(bridgeDirectory, 'b'), network: 'host' });
-  } catch (error) {
-    hostBridge = error;
-  }
-  check(
-    hostBridge?.name === 'ConfinementError' && hostBridge.message.includes('no bridge'),
-    `a bridge for a host-network call was not refused: ${hostBridge}`,
-  );
-
   // A call that names a bridge.
   const socket = path.join(bridgeDirectory, 'bridge.sock');
   const bridged = sandbox.wrap('/bin/true', [], [bridgeDirectory], [], { bridge: socket });
@@ -9386,23 +9389,6 @@ async function checkNetworkNamespaceUnits() {
   const mechanism = confinedCommandMechanism(base, fake('bubblewrap'));
   const signal = new AbortController().signal;
   await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {}, bridge: socket }, signal);
-  const networks = [];
-  const hostMechanism = confinedCommandMechanism(
-    base,
-    {
-      ...fake('bubblewrap'),
-      wrap: (target, args, writable, readable, options) => (networks.push(options.network), { target, args, statusFile: null }),
-    },
-    () => [],
-    [],
-    (target) => (target === '/bin/host' ? 'host' : 'isolated'),
-  );
-  await hostMechanism.run({ target: '/bin/host', subcommandPath: [], argv: [], env: {} }, signal);
-  await hostMechanism.run({ target: '/bin/other', subcommandPath: [], argv: [], env: {} }, signal);
-  check(
-    JSON.stringify(networks) === JSON.stringify(['host', 'isolated']),
-    `the mechanism asked for the networks ${JSON.stringify(networks)}; expected host for the declared target and isolated for the other`,
-  );
   await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, signal);
   await confinedMcpMechanism(base, fake('bubblewrap')).callTool({ target: '/bin/true', targetArgs: [], env: {} }, signal);
   check(
@@ -9466,14 +9452,843 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
   check(runDirectoryOf(project.folder, 0) === null, 'a run refused for the network namespace wrote a run directory');
 }
 
+// ---------------------------------------------------------------- Story 1.83: a route to the hosts an entry authorizes
+
+/** Calls `attempt` until it answers true or `ms` pass. */
+async function waitUntil(attempt, ms = 5000) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await attempt()) return true;
+    await sleep(50);
+  }
+  return false;
+}
+
+/** What an egress proxy answers a tunnel it allows with, before the bytes of the tunnel. */
+const TUNNEL_OPENED = 'HTTP/1.1 200 Connection Established\r\n\r\n';
+
+/** The head of a `CONNECT` request for `host:port`. */
+function connectHead(host, port) {
+  return `CONNECT ${host}:${port} HTTP/1.1\r\nHost: ${host}:${port}\r\n\r\n`;
+}
+
+/** The authorization eval-quality's policy holds for one host a registry entry lists (`confinement-egress.js`). */
+function egressItem(interfaceId, host, port, addresses = ['127.0.0.1']) {
+  return egressAuthorization({ interfaceId, maxElapsedMs: 1000 }, { host, port, addresses });
+}
+
 /**
- * The per-entry `network` field (Story 1.63): a command, tool-server and HTTP entry take `isolated` or `host`, any other value
- * is refused by the registry check naming the entry (and by `tea-evaluate check`, exit 10), and two entries that start one
- * target must agree, since a call finds its entry by its target; the isolation manifest's notes name the entries that keep
- * the host's network under Bubblewrap and no other confinement's; `run.json` lists them as `hostNetwork`, and a run whose
- * entry declares `host` still completes confined.
+ * The egress proxy of one call (Story 1.83) over Unix sockets, on every host, with eval-quality's own `evaluateTarget` deciding:
+ * a request for the listed host and port is tunneled to a loopback echo server, a request for another port, another host or an
+ * address no item names is answered 403 naming the reason, the host and the entry and is recorded, and nothing reaches the server;
+ * a host no item names is refused before any name is resolved; the resolved addresses an item names are the ones connected to;
+ * only `CONNECT` is served; an entry that authorizes nothing reaches nothing; the record and the tunnels are bounded; and closing the
+ * proxy cuts its tunnels and leaves no file behind, the authorization having been held in memory alone.
  */
-async function checkNetworkField() {
+async function checkEgressProxyUnits() {
+  const { evaluateTarget } = await loadEngine();
+  const directory = socketDirectory();
+  const provider = await listenEchoing();
+  const other = await listenEchoing();
+  const port = provider.address().port;
+  const otherPort = other.address().port;
+  const opened = [];
+  const open = async (authorizations, options = {}) => {
+    const socketPath = path.join(directory, `p${opened.length}.sock`);
+    const refusals = [];
+    const proxy = await startEgress({
+      socketPath,
+      authorizations,
+      evaluateTarget,
+      onRefusal: (refusal) => refusals.push(refusal),
+      ...options,
+    });
+    opened.push(proxy);
+    return { socketPath, proxy, refusals };
+  };
+  const ask = (call, host, hostPort, after = '') =>
+    exchange(call.socketPath, `${connectHead(host, hostPort)}${after}`, { until: after === '' ? null : `${TUNNEL_OPENED}${after}` });
+  try {
+    for (const [line, expected] of [
+      ['CONNECT api.example.test:443 HTTP/1.1', { host: 'api.example.test', port: 443 }],
+      ['CONNECT API.Example.TEST:443 HTTP/1.0', { host: 'api.example.test', port: 443 }],
+      ['CONNECT 127.0.0.1:8080 HTTP/1.1', { host: '127.0.0.1', port: 8080 }],
+      ['CONNECT [::1]:443 HTTP/1.1', { host: '::1', port: 443 }],
+      ['CONNECT [0:0:0:0:0:0:0:1]:443 HTTP/1.1', { host: '::1', port: 443 }],
+      ['GET / HTTP/1.1', null],
+      ['connect host.test:443 HTTP/1.1', null],
+      ['CONNECT host.test HTTP/1.1', null],
+      ['CONNECT host.test:0 HTTP/1.1', null],
+      ['CONNECT host.test:00443 HTTP/1.1', null],
+      ['CONNECT host.test:+443 HTTP/1.1', null],
+      ['CONNECT host.test:65536 HTTP/1.1', null],
+      ['CONNECT user@host.test:443 HTTP/1.1', null],
+      ['CONNECT http://host.test:443 HTTP/1.1', null],
+      ['CONNECT [host]:443 HTTP/1.1', null],
+      ['CONNECT bücher.test:443 HTTP/1.1', null],
+      ['CONNECT host.test:443 HTTP/2', null],
+      [`CONNECT ${'a'.repeat(MAX_HOST_BYTES)}:443 HTTP/1.1`, { host: 'a'.repeat(MAX_HOST_BYTES), port: 443 }],
+      [`CONNECT ${'a'.repeat(MAX_HOST_BYTES + 1)}:443 HTTP/1.1`, null],
+      [`CONNECT ${'a'.repeat(8100)}:443 HTTP/1.1`, null],
+    ]) {
+      check(
+        JSON.stringify(parseConnectLine(line)) === JSON.stringify(expected),
+        `the proxy read ${JSON.stringify(line.slice(0, 80))} as ${JSON.stringify(parseConnectLine(line))}; expected ${JSON.stringify(expected)}`,
+      );
+    }
+
+    // The listed host and port are tunneled, and the bytes after the head reach the server and come back.
+    const listed = await open([egressItem('assistant', '127.0.0.1', port)]);
+    const tunneled = await ask(listed, '127.0.0.1', port, 'ping');
+    check(
+      tunneled === `${TUNNEL_OPENED}ping` && provider.accepted === 1,
+      `a tunnel to the listed host answered ${JSON.stringify(tunneled)} after ${provider.accepted} connection(s); expected the tunnel's answer and the echo of ping`,
+    );
+
+    // Another port is refused: the answer names the reason, the host and the entry, the record holds it and nothing connects.
+    const wrongPort = await ask(listed, '127.0.0.1', otherPort);
+    check(
+      wrongPort.startsWith('HTTP/1.1 403 Forbidden') &&
+        wrongPort.includes('port-not-authorized') &&
+        wrongPort.includes(`127.0.0.1:${otherPort}`) &&
+        wrongPort.includes('"assistant"') &&
+        other.accepted === 0,
+      `a request for a port no item lists was answered ${JSON.stringify(wrongPort)} after ${other.accepted} connection(s) to it; expected a 403 naming port-not-authorized, the host and "assistant", and no connection`,
+    );
+    check(
+      JSON.stringify(
+        listed.refusals.map(({ interfaceIds, host, port: refusedPort, address, reason }) => ({
+          interfaceIds,
+          host,
+          refusedPort,
+          address,
+          reason,
+        })),
+      ) ===
+        JSON.stringify([
+          { interfaceIds: ['assistant'], host: '127.0.0.1', refusedPort: otherPort, address: null, reason: 'port-not-authorized' },
+        ]),
+      `the refusal was recorded as ${JSON.stringify(listed.refusals)}; expected the entry, the host, the port and the reason, with no address`,
+    );
+    check(
+      listed.proxy.refusals().refusals.length === 1 && listed.proxy.refusals().refusals[0].count === 1,
+      "the proxy's own record does not hold the one refusal with a count of 1",
+    );
+    await ask(listed, '127.0.0.1', otherPort);
+    check(
+      listed.proxy.refusals().refusals[0].count === 2 && listed.proxy.refusals().refusals.length === 1,
+      'a request made twice was not counted twice in one entry',
+    );
+
+    // Only CONNECT is served; a head that is no request, or too long, gets no tunnel.
+    const forwarded = await exchange(listed.socketPath, `GET http://127.0.0.1:${port}/ HTTP/1.1\r\n\r\n`);
+    check(
+      forwarded.startsWith('HTTP/1.1 405') && forwarded.includes('Allow: CONNECT'),
+      `a plain proxy request was answered ${JSON.stringify(forwarded)}; expected 405 naming CONNECT`,
+    );
+    for (const head of ['CONNECT 127.0.0.1:0 HTTP/1.1', 'CONNECT 127.0.0.1 HTTP/1.1', 'hello']) {
+      const answered = await exchange(listed.socketPath, `${head}\r\n\r\n`);
+      check(answered.startsWith('HTTP/1.1 400'), `the head ${JSON.stringify(head)} was answered ${JSON.stringify(answered)}; expected 400`);
+    }
+    const long = await exchange(listed.socketPath, `CONNECT ${'a'.repeat(9000)}`);
+    check(
+      !long.startsWith('HTTP/'),
+      `a head of 9,000 bytes with no end was answered ${JSON.stringify(long.slice(0, 80))}; expected the connection cut with no answer`,
+    );
+    check(provider.accepted === 1 && other.accepted === 0, 'a request that was no CONNECT reached a server');
+
+    // What a refusal records is bounded: a host past 253 bytes is answered 400 and recorded nowhere, so 60 requests with a host of
+    // 8,100 characters leave the record empty; a detail past `MAX_DETAIL_CHARS` is cut, so the record of a call stays small.
+    const oversized = await open([egressItem('assistant', '127.0.0.1', port)]);
+    for (let at = 0; at < MAX_REFUSALS + 10; at += 1) {
+      const answered = await exchange(oversized.socketPath, `CONNECT ${String(at).padStart(8100, 'a')}:443 HTTP/1.1\r\n\r\n`);
+      if (!answered.startsWith('HTTP/1.1 400')) {
+        check(false, `a host of 8,100 characters was answered ${JSON.stringify(answered.slice(0, 60))}; expected 400`);
+        break;
+      }
+    }
+    check(
+      oversized.refusals.length === 0 && oversized.proxy.refusals().refusals.length === 0 && oversized.proxy.refusals().omitted === 0,
+      `60 requests with a host of 8,100 characters left a record of ${JSON.stringify(oversized.proxy.refusals()).length} bytes; expected none, since the proxy reads no such host`,
+    );
+    const verbose = await open([egressItem('assistant', '127.0.0.1', port)], {
+      evaluateTarget: (policy, request) => ({
+        ...evaluateTarget(policy, request),
+        detail: `${'long detail '.repeat(10_000)}`,
+      }),
+    });
+    const longest = `${'b'.repeat(MAX_HOST_BYTES - 5)}.test`;
+    for (let at = 0; at < MAX_REFUSALS + 10; at += 1) await ask(verbose, `${String(at).padStart(MAX_HOST_BYTES - 5, 'b')}.test`, 443);
+    const bounded = verbose.proxy.refusals();
+    const recorded = JSON.stringify(bounded).length;
+    const bound = MAX_REFUSALS * (MAX_DETAIL_CHARS + MAX_HOST_BYTES + 400);
+    check(
+      bounded.refusals.length === MAX_REFUSALS &&
+        bounded.refusals.every((refusal) => refusal.detail.length <= MAX_DETAIL_CHARS + 3 && refusal.host.length <= MAX_HOST_BYTES) &&
+        verbose.refusals.every((refusal) => refusal.detail.length <= MAX_DETAIL_CHARS + 3) &&
+        recorded <= bound,
+      `${MAX_REFUSALS + 10} refusals with a detail of 120,000 characters and a host of ${longest.length} bytes left a record of ${recorded} bytes (${bounded.refusals.length} kept, longest detail ${Math.max(0, ...bounded.refusals.map((refusal) => refusal.detail.length))}); expected at most ${bound} bytes and a detail cut to ${MAX_DETAIL_CHARS} characters`,
+    );
+
+    // A host no item names is refused before any name is resolved; a listed name resolves once and connects to the address decided.
+    let lookups = 0;
+    let answers = [{ address: '127.0.0.1' }];
+    const lookup = async () => {
+      lookups += 1;
+      if (answers instanceof Error) throw answers;
+      return answers;
+    };
+    const named = await open([egressItem('assistant', 'provider.test', port)], { lookup });
+    const stranger = await ask(named, 'stranger.test', port);
+    check(
+      stranger.startsWith('HTTP/1.1 403') && stranger.includes('host-not-authorized') && lookups === 0,
+      `a host no item lists was answered ${JSON.stringify(stranger)} after ${lookups} lookup(s); expected a 403 naming host-not-authorized and no lookup, since a name the entry does not list is never resolved`,
+    );
+    const resolved = await ask(named, 'provider.test', port, 'ping');
+    check(
+      resolved === `${TUNNEL_OPENED}ping` && lookups === 1,
+      `a listed name was answered ${JSON.stringify(resolved)} after ${lookups} lookup(s); expected a tunnel after one lookup`,
+    );
+    answers = [{ address: '192.0.2.7' }];
+    const accepted = provider.accepted;
+    const unnamed = await ask(named, 'provider.test', port);
+    check(
+      unnamed.startsWith('HTTP/1.1 403') && unnamed.includes('address-not-authorized') && provider.accepted === accepted,
+      `a listed name that resolved to an address no item names was answered ${JSON.stringify(unnamed)}; expected a 403 naming address-not-authorized and no connection`,
+    );
+    check(
+      named.refusals.at(-1)?.address === '192.0.2.7',
+      `the refusal of an unlisted address recorded ${JSON.stringify(named.refusals.at(-1))}; expected the address 192.0.2.7`,
+    );
+    answers = ['192.0.2.7', '127.0.0.1'];
+    const second = await ask(named, 'provider.test', port, 'ping');
+    check(
+      second === `${TUNNEL_OPENED}ping`,
+      `a name that resolved to an unlisted address and then a listed one was answered ${JSON.stringify(second)}; expected a tunnel to the listed address`,
+    );
+    answers = Object.assign(new Error('not found'), { code: 'ENOTFOUND' });
+    const refusedBefore = named.refusals.length;
+    const lost = await ask(named, 'provider.test', port);
+    check(
+      lost.startsWith('HTTP/1.1 502') && lost.includes('ENOTFOUND') && named.refusals.length === refusedBefore,
+      `a listed name that does not resolve was answered ${JSON.stringify(lost)}; expected a 502 and no refusal, since the entry authorized it`,
+    );
+
+    // An address that cannot be reached lets the next allowed address try.
+    answers = ['::1', '127.0.0.1'];
+    const fallback = await open([egressItem('assistant', 'provider.test', port, ['::1', '127.0.0.1'])], { lookup });
+    const fellBack = await ask(fallback, 'provider.test', port, 'ping');
+    check(
+      fellBack === `${TUNNEL_OPENED}ping`,
+      `a name whose first allowed address refused the connection was answered ${JSON.stringify(fellBack)}; expected a tunnel through the next allowed address`,
+    );
+
+    // One entry that lists several items reaches each of them: two hosts, and one host on two ports.
+    answers = [{ address: '127.0.0.1' }];
+    const hosts = await open([egressItem('assistant', 'alpha.test', port), egressItem('assistant', 'beta.test', otherPort)], { lookup });
+    check(
+      (await ask(hosts, 'alpha.test', port, 'ping')) === `${TUNNEL_OPENED}ping` &&
+        (await ask(hosts, 'beta.test', otherPort, 'ping')) === `${TUNNEL_OPENED}ping`,
+      'an entry that lists two hosts did not reach both',
+    );
+    const thirdHost = await ask(hosts, 'gamma.test', port);
+    check(
+      thirdHost.startsWith('HTTP/1.1 403') && thirdHost.includes('host-not-authorized'),
+      `a third host was answered ${JSON.stringify(thirdHost)}; expected a 403`,
+    );
+    const ports = await open([egressItem('assistant', '127.0.0.1', otherPort), egressItem('assistant', '127.0.0.1', port)]);
+    check(
+      (await ask(ports, '127.0.0.1', port, 'ping')) === `${TUNNEL_OPENED}ping`,
+      'an entry that lists one host on two ports did not reach its second port',
+    );
+
+    // Two entries that start one target: either one's item allows, and a refusal names both.
+    const both = await open([egressItem('first', '127.0.0.1', otherPort), egressItem('second', '127.0.0.1', port)]);
+    check(
+      (await ask(both, '127.0.0.1', port, 'ping')) === `${TUNNEL_OPENED}ping`,
+      'the second entry of two that start one target did not allow its own host',
+    );
+    const neither = await ask(both, '127.0.0.1', 9);
+    check(
+      neither.includes('"first", "second"') && JSON.stringify(both.refusals.at(-1)?.interfaceIds) === JSON.stringify(['first', 'second']),
+      `a request neither entry lists was answered ${JSON.stringify(neither)} and recorded ${JSON.stringify(both.refusals.at(-1))}; expected both entries named`,
+    );
+
+    // An entry that authorizes nothing reaches nothing.
+    const none = await open([]);
+    const nothing = await ask(none, '127.0.0.1', port);
+    check(
+      nothing.startsWith('HTTP/1.1 403') && nothing.includes('interface-not-authorized'),
+      `a proxy with no authorization answered ${JSON.stringify(nothing)}; expected a 403 naming interface-not-authorized`,
+    );
+
+    // The record keeps the first distinct refusals and counts the rest; the tunnels are capped.
+    const crowded = await open([egressItem('assistant', '127.0.0.1', port)]);
+    for (let at = 0; at < MAX_REFUSALS + 10; at += 1) await ask(crowded, `h${at}.test`, 443);
+    const record = crowded.proxy.refusals();
+    check(
+      record.refusals.length === MAX_REFUSALS && record.omitted === 10,
+      `after ${MAX_REFUSALS + 10} distinct refusals the record holds ${record.refusals.length} and omits ${record.omitted}; expected ${MAX_REFUSALS} and 10`,
+    );
+    const held = await Promise.all(
+      Array.from(
+        { length: MAX_TUNNELS },
+        () =>
+          new Promise((resolve) => {
+            const socket = net.connect({ path: listed.socketPath });
+            socket.on('connect', () => socket.write(connectHead('127.0.0.1', port)));
+            socket.once('data', () => resolve(socket));
+            socket.on('error', () => resolve(socket));
+          }),
+      ),
+    );
+    const full = await ask(listed, '127.0.0.1', port);
+    check(full.startsWith('HTTP/1.1 503'), `the ${MAX_TUNNELS + 1}th tunnel was answered ${JSON.stringify(full)}; expected 503`);
+    for (const socket of held) socket.destroy();
+    await waitUntil(async () => (await ask(listed, '127.0.0.1', port, 'ping')) === `${TUNNEL_OPENED}ping`);
+    check((await ask(listed, '127.0.0.1', port, 'ping')) === `${TUNNEL_OPENED}ping`, 'a tunnel was refused after the held tunnels ended');
+
+    // A connection that never sends its head holds a descriptor too, so the connections are capped as well.
+    // Connected in batches: a burst past the listen backlog of a Unix socket is refused by the kernel before the proxy sees it.
+    const idle = [];
+    while (idle.length < 2 * MAX_TUNNELS) {
+      idle.push(
+        ...(await Promise.all(
+          Array.from(
+            { length: 32 },
+            () =>
+              new Promise((resolve) => {
+                const socket = net.connect({ path: listed.socketPath });
+                socket.on('connect', () => resolve(socket));
+                socket.on('error', () => resolve(socket));
+              }),
+          ),
+        )),
+      );
+      await sleep(20);
+    }
+    await sleep(300);
+    const over = await ask(listed, '127.0.0.1', port);
+    check(
+      !over.startsWith('HTTP/'),
+      `a connection past ${2 * MAX_TUNNELS} open ones was answered ${JSON.stringify(over.slice(0, 60))}; expected it cut`,
+    );
+    for (const socket of idle) socket.destroy();
+    await waitUntil(async () => (await ask(listed, '127.0.0.1', port, 'ping')) === `${TUNNEL_OPENED}ping`);
+
+    // Closing the proxy cuts a tunnel that is open and leaves nothing: no socket and no file of an authorization.
+    const live = await new Promise((resolve) => {
+      const socket = net.connect({ path: listed.socketPath });
+      socket.on('connect', () => socket.write(connectHead('127.0.0.1', port)));
+      socket.once('data', () => resolve(socket));
+    });
+    const cut = new Promise((resolve) => live.once('close', () => resolve('cut')));
+    await Promise.all(opened.map((proxy) => proxy.close()));
+    opened.length = 0;
+    check((await Promise.race([cut, sleep(3000).then(() => 'open')])) === 'cut', 'closing the proxy left a tunnel open');
+    check(
+      fs.readdirSync(directory).length === 0,
+      `closing the proxies left ${JSON.stringify(fs.readdirSync(directory))}; expected no socket and no file`,
+    );
+    check((await exchange(listed.socketPath, connectHead('127.0.0.1', port))).startsWith('<'), 'a closed proxy still answered');
+  } finally {
+    await Promise.all(opened.map((proxy) => proxy.close()));
+    for (const server of [provider, other]) await closeServer(server);
+  }
+}
+
+/**
+ * The egress half of the status shim (Story 1.83), on every host: the arguments in either order, the loopback listener that connects
+ * each connection to the proxy's Unix socket and ends with the shim, and the real shim as a process: it announces the proxy to the
+ * target in `HTTPS_PROXY`, `https_proxy` and `NODE_USE_ENV_PROXY`, the target tunnels through it to a server only the proxy reaches,
+ * a call with no `--egress` carries no proxy variable, and the shim runs a bridge and an egress listener together.
+ */
+async function checkEgressShim() {
+  const shim = require('../cli/lib/evaluate/confinement-status.cjs');
+  const both = shim.parseArguments(['--egress', '/e/s', '--bridge', '/b/b', '/s/status.json', 'target', 'a']);
+  const other = shim.parseArguments(['--bridge', '/b/b', '--egress', '/e/s', '/s/status.json', 'target', 'a']);
+  check(
+    JSON.stringify(both) ===
+      JSON.stringify({ bridge: '/b/b', egress: '/e/s', avoid: [], statusFile: '/s/status.json', target: 'target', args: ['a'] }) &&
+      JSON.stringify(both) === JSON.stringify(other) &&
+      shim.parseArguments(['/s/status.json', 'target']).egress === null,
+    `the shim read its arguments as ${JSON.stringify(both)} and ${JSON.stringify(other)}; expected --bridge and --egress in either order and neither by default`,
+  );
+  const avoiding = shim.parseArguments(['--egress', '/e/s', '--avoid', '34567', '/s/status.json', 'target', '--avoid', '9']);
+  check(
+    JSON.stringify(avoiding.avoid) === '[34567]' && avoiding.egress === '/e/s' && avoiding.args.join(' ') === '--avoid 9',
+    `the shim read ${JSON.stringify(avoiding)}; expected the port after --avoid, and the target's own --avoid left to the target`,
+  );
+  check(
+    shim.parseArguments(['--avoid', '0', '--avoid', 'x', '--avoid', '65536', '/s/status.json', 'target']).avoid.length === 0,
+    'the shim kept an --avoid that is no port',
+  );
+  check(
+    JSON.stringify(shim.egressEnvironment(4321)) ===
+      JSON.stringify({ HTTPS_PROXY: 'http://127.0.0.1:4321', https_proxy: 'http://127.0.0.1:4321', NODE_USE_ENV_PROXY: '1' }),
+    `the shim names the proxy ${JSON.stringify(shim.egressEnvironment(4321))}; expected both spellings of the HTTPS proxy and Node's switch`,
+  );
+
+  const directory = socketDirectory();
+  const standIn = path.join(directory, 'stand-in.sock');
+  const echo = net.createServer((socket) => {
+    echo.sockets.add(socket);
+    socket.once('close', () => echo.sockets.delete(socket));
+    socket.on('error', () => {});
+    socket.pipe(socket);
+  });
+  echo.sockets = new Set();
+  await new Promise((resolve) => echo.listen(standIn, resolve));
+  try {
+    const served = await shim.serveEgress(standIn);
+    check(
+      served.server.address().address === '127.0.0.1',
+      `the egress listener is bound to ${served.server.address().address}; expected the namespace's loopback 127.0.0.1`,
+    );
+    const socket = net.connect({ host: '127.0.0.1', port: served.port });
+    const back = await new Promise((resolve) => {
+      socket.on('connect', () => socket.write('through'));
+      socket.once('data', (chunk) => resolve(String(chunk)));
+      socket.on('error', (error) => resolve(`<${error.code}>`));
+    });
+    check(back === 'through', `bytes through the egress listener came back as ${JSON.stringify(back)}; expected through`);
+    const closed = new Promise((resolve) => socket.once('close', () => resolve('closed')));
+    served.close();
+    check(
+      (await Promise.race([closed, sleep(3000).then(() => 'open')])) === 'closed',
+      'closing the egress listener left a connection open',
+    );
+    const refused = await new Promise((resolve) => {
+      const again = net.connect({ host: '127.0.0.1', port: served.port });
+      again.on('connect', () => (again.destroy(), resolve('connected')));
+      again.on('error', (error) => resolve(error.code));
+    });
+    check(refused === 'ECONNREFUSED', `a closed egress listener answered ${refused}; expected ECONNREFUSED`);
+  } finally {
+    await closeServer(echo);
+  }
+
+  // A started server binds a port of the namespace's loopback that the runtime chose for it, so the egress listener must not take that
+  // port: when the system gives it one (the first listen is made to return it here, as the 1 in 7,000 chance does), it listens again.
+  {
+    const probe = await shim.serveEgress(standIn.replace('stand-in', 'unused'));
+    const reserved = probe.port;
+    probe.close();
+    await sleep(50);
+    const original = net.Server.prototype.listen;
+    let handed = 0;
+    net.Server.prototype.listen = function (options, ...rest) {
+      if (handed === 0 && options?.port === 0) {
+        handed += 1;
+        return original.call(this, { ...options, port: reserved }, ...rest);
+      }
+      return original.call(this, options, ...rest);
+    };
+    let kept;
+    try {
+      kept = await shim.serveEgress(standIn.replace('stand-in', 'unused'), [reserved]);
+    } finally {
+      net.Server.prototype.listen = original;
+    }
+    check(
+      handed === 1 && kept.port !== reserved && kept.server.listening,
+      `an egress listener that was given the port ${reserved} the target's server binds listens on ${kept.port}; expected another port`,
+    );
+    kept.close();
+    const exhausted = await (async () => {
+      net.Server.prototype.listen = function (options, ...rest) {
+        return original.call(this, { ...options, port: reserved }, ...rest);
+      };
+      try {
+        await shim.serveEgress(standIn.replace('stand-in', 'unused'), [reserved]);
+        return 'listened';
+      } catch (error) {
+        return error.message;
+      } finally {
+        net.Server.prototype.listen = original;
+      }
+    })();
+    check(
+      exhausted.includes('the system gave only ports the target') && exhausted.includes(String(reserved)),
+      `an egress listener that was only ever given the reserved port ended with ${JSON.stringify(exhausted)}; expected it to give up naming the port`,
+    );
+  }
+
+  // The real shim: the target reads the proxy variables, tunnels to a server only the proxy reaches, and the listener ends with it.
+  const { evaluateTarget } = await loadEngine();
+  const provider = await listenEchoing();
+  const providerPort = provider.address().port;
+  const proxySocket = path.join(directory, 'proxy.sock');
+  const proxy = await startEgress({
+    socketPath: proxySocket,
+    authorizations: [egressItem('assistant', '127.0.0.1', providerPort)],
+    evaluateTarget,
+  });
+  const clean = { PATH: process.env.PATH };
+  const run = (args, script, extra = {}) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, [CONFINEMENT_STATUS, ...args, process.execPath, '-e', script], {
+        env: { ...clean, ...extra },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let out = '';
+      child.stdout.on('data', (chunk) => (out += chunk));
+      child.stderr.on('data', (chunk) => (out += chunk));
+      child.on('close', (status) => resolve({ status, out: out.trim() }));
+    });
+  const through = `
+    const net = require('node:net');
+    const url = new URL(process.env.HTTPS_PROXY);
+    const socket = net.connect({ host: url.hostname, port: Number(url.port) });
+    let text = '';
+    socket.on('connect', () => socket.write('CONNECT 127.0.0.1:${providerPort} HTTP/1.1\\r\\n\\r\\nping'));
+    socket.on('data', (chunk) => { text += chunk; if (text.endsWith('ping')) socket.destroy(); });
+    socket.on('close', () => console.log(JSON.stringify({ https: process.env.HTTPS_PROXY, lower: process.env.https_proxy, node: process.env.NODE_USE_ENV_PROXY, text })));`;
+  try {
+    const ran = await run(['--egress', proxySocket, path.join(directory, 'status.json')], through);
+    let report = null;
+    try {
+      report = JSON.parse(ran.out);
+    } catch {
+      report = ran.out;
+    }
+    check(
+      ran.status === 0 &&
+        typeof report === 'object' &&
+        /^http:\/\/127\.0\.0\.1:\d+$/.test(report.https) &&
+        report.https === report.lower &&
+        report.node === '1' &&
+        report.text === `${TUNNEL_OPENED}ping`,
+      `a target started by the shim with --egress printed ${JSON.stringify(report)} (exit ${ran.status}); expected the proxy variables and a tunnel to the listed server`,
+    );
+    const refusedAfter = await new Promise((resolve) => {
+      const port = Number(new URL(report?.https ?? 'http://127.0.0.1:1').port);
+      const again = net.connect({ host: '127.0.0.1', port });
+      again.on('connect', () => (again.destroy(), resolve('connected')));
+      again.on('error', (error) => resolve(error.code));
+    });
+    check(
+      refusedAfter === 'ECONNREFUSED',
+      `the egress listener answered ${refusedAfter} after its target ended; expected it closed with the target`,
+    );
+
+    // No `--egress`, no proxy variable; with both options the target starts once each listener is up.
+    const plain = await run(
+      [path.join(directory, 'status-plain.json')],
+      'console.log(JSON.stringify([process.env.HTTPS_PROXY ?? null, process.env.https_proxy ?? null, process.env.NODE_USE_ENV_PROXY ?? null]))',
+    );
+    check(
+      plain.status === 0 && plain.out === '[null,null,null]',
+      `a call with no --egress printed ${JSON.stringify(plain.out)}; expected no proxy variable`,
+    );
+    const bridgeSocket = path.join(directory, 'bridge.sock');
+    const together = await run(
+      ['--bridge', bridgeSocket, '--egress', proxySocket, path.join(directory, 'status-both.json')],
+      "console.log(JSON.stringify([require('node:fs').statSync(process.argv[1]).isSocket(), Boolean(process.env.HTTPS_PROXY)]))".replace(
+        'process.argv[1]',
+        JSON.stringify(bridgeSocket),
+      ),
+    );
+    check(
+      together.status === 0 && together.out === '[true,true]',
+      `a call with a bridge and an egress listener printed ${JSON.stringify(together.out)} (exit ${together.status}); expected both up before the target ran`,
+    );
+    check(!fs.existsSync(bridgeSocket), 'the bridge socket outlived the shim that served it');
+
+    // `main` hands `--avoid` to `serveEgress`: a preload makes the shim's first `listen({ port: 0 })` return the reserved port, as
+    // the 1 in 7,000 chance does, and the target reads the port it was told. With `--avoid` it is another port; without it the
+    // preload's port is the one told, which shows the preload takes effect.
+    const reservation = await shim.serveEgress(path.join(directory, 'unused-reservation'));
+    const reservedPort = reservation.port;
+    reservation.close();
+    await reservation.closed;
+    const preload = path.join(directory, 'give-reserved-port.cjs');
+    fs.writeFileSync(
+      preload,
+      `const net = require('node:net');
+const original = net.Server.prototype.listen;
+let handed = false;
+net.Server.prototype.listen = function (options, ...rest) {
+  if (!handed && options && options.port === 0) {
+    handed = true;
+    return original.call(this, { ...options, port: Number(process.env.TEA_TEST_RESERVED_PORT) }, ...rest);
+  }
+  return original.call(this, options, ...rest);
+};
+`,
+    );
+    const told = (name, avoidArgs) =>
+      new Promise((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [
+            '--require',
+            preload,
+            CONFINEMENT_STATUS,
+            '--egress',
+            proxySocket,
+            ...avoidArgs,
+            path.join(directory, `status-${name}.json`),
+            process.execPath,
+            '-e',
+            'console.log(new URL(process.env.HTTPS_PROXY).port)',
+          ],
+          { env: { ...clean, TEA_TEST_RESERVED_PORT: String(reservedPort) }, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        let out = '';
+        child.stdout.on('data', (chunk) => (out += chunk));
+        child.stderr.on('data', (chunk) => (out += chunk));
+        child.on('close', (status) => resolve({ status, out: out.trim() }));
+      });
+    const unavoided = await told('unavoided', []);
+    check(
+      unavoided.status === 0 && unavoided.out === String(reservedPort),
+      `the shim run with no --avoid under the preload printed ${JSON.stringify(unavoided.out)} (exit ${unavoided.status}); expected the reserved port ${reservedPort}, which shows the preload takes effect`,
+    );
+    const avoided = await told('avoided', ['--avoid', String(reservedPort)]);
+    check(
+      avoided.status === 0 && /^[1-9][0-9]*$/.test(avoided.out) && avoided.out !== String(reservedPort),
+      `the shim run with --avoid ${reservedPort} under the preload printed ${JSON.stringify(avoided.out)} (exit ${avoided.status}); expected the target's HTTPS_PROXY on another port`,
+    );
+  } finally {
+    await proxy.close();
+    await closeServer(provider);
+  }
+}
+
+/**
+ * The vector and the mechanisms of an egress call (Story 1.83) on any host, over a stand-in Bubblewrap: the proxy's directory is bound
+ * read-only at a synthetic `/dev` path after the private root is emptied, and the shim is told that path; a directory outside the
+ * private root is seen as it is; the sockets the call hides leave the directory out; a socket path outside the runtime's own
+ * directories or inside the call's grants is refused; Seatbelt carries no proxy. The command and tool-server mechanisms open one
+ * proxy for each call whose entries list a host, serve it while the call runs, record what it refuses in the sandbox's report
+ * and remove its directory however the call ends; a call with no host gets none.
+ */
+async function checkEgressVectorUnits() {
+  const root = fs.realpathSync(tempDir('egress-units'));
+  const folder = path.join(root, 'evals', 'verdict');
+  const workspace = path.join(root, 'workspace');
+  const status = path.join(root, 'status');
+  const privateRoot = path.join(root, 'private');
+  const parent = path.join(privateRoot, 'run-1-abcdef');
+  const inside = path.join(parent, 'tea-egress-abcdef');
+  const outside = path.join(root, 'elsewhere', 'tea-egress-ghijkl');
+  for (const directory of [folder, workspace, status, inside, outside]) fs.mkdirSync(directory, { recursive: true });
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
+  const asked = [];
+  const sandbox = targetSandbox({
+    confinement: bubblewrap,
+    workspace,
+    status,
+    privateRoot,
+    hostSockets: (options) => (asked.push(options), []),
+  });
+
+  const wrapped = sandbox.wrap('/bin/true', [], [], [], { egress: path.join(inside, 's') });
+  const mount = '/dev/tea-egress-abcdef';
+  const bindAt = wrapped.args.findIndex((argument, at) => argument === '--ro-bind' && wrapped.args[at + 1] === inside);
+  const emptied = wrapped.args.findIndex((argument, at) => argument === '--tmpfs' && wrapped.args[at + 1] === privateRoot);
+  const egressAt = wrapped.args.indexOf('--egress');
+  check(
+    bindAt > emptied &&
+      emptied > 0 &&
+      wrapped.args[bindAt + 2] === mount &&
+      wrapped.args[egressAt + 1] === `${mount}/s` &&
+      wrapped.args[egressAt + 2] === wrapped.statusFile,
+    `an egress call's vector is ${wrapped.args.join(' ')}; expected the directory bound read-only at ${mount} after the private root is emptied and --egress ${mount}/s before the status file`,
+  );
+  check(
+    !wrapped.args.some((argument, at) => argument === '--bind' && wrapped.args[at + 1] === inside),
+    "the proxy's directory was bound writable",
+  );
+  check(
+    (asked.at(-1)?.except ?? []).includes(inside),
+    `the host sockets were asked to leave out ${JSON.stringify(asked.at(-1)?.except)}; expected the proxy's directory`,
+  );
+
+  const seen = sandbox.wrap('/bin/true', [], [], [], { egress: path.join(outside, 's') });
+  check(
+    !seen.args.some((argument, at) => argument === '--ro-bind' && seen.args[at + 1] === outside) &&
+      seen.args[seen.args.indexOf('--egress') + 1] === path.join(outside, 's'),
+    `a proxy directory outside the private root has the vector ${seen.args.join(' ')}; expected no extra bind and its own path`,
+  );
+  check(!sandbox.wrap('/bin/true', []).args.includes('--egress'), 'a call with no proxy carried --egress');
+  // A server told a port of the namespace's loopback keeps it: the shim is told to keep its egress listener off that port.
+  const avoiding = sandbox.wrap('/bin/true', [], [], [], { egress: path.join(inside, 's'), listenPort: 34_567 });
+  const avoidAt = avoiding.args.indexOf('--avoid');
+  check(
+    avoidAt > avoiding.args.indexOf('--egress') &&
+      avoiding.args[avoidAt + 1] === '34567' &&
+      avoiding.args[avoidAt + 2] === avoiding.statusFile,
+    `a call whose server is told port 34567 has the vector ${avoiding.args.join(' ')}; expected --avoid 34567 after --egress and before the status file`,
+  );
+  check(
+    !sandbox.wrap('/bin/true', [], [], [], { egress: path.join(inside, 's') }).args.includes('--avoid') &&
+      !sandbox.wrap('/bin/true', [], [], [], { listenPort: 34_567 }).args.includes('--avoid'),
+    'a call told no port, or a call with no proxy, carried --avoid',
+  );
+  for (const [label, candidate, grants] of [
+    ['a relative socket', 's', []],
+    ['a socket in the workspace', path.join(workspace, 's'), []],
+    ['a socket in a directory the call may write', path.join(outside, 's'), [outside]],
+  ]) {
+    let refused = null;
+    try {
+      sandbox.wrap('/bin/true', [], grants, [], { egress: candidate });
+    } catch (error) {
+      refused = error;
+    }
+    check(refused?.name === 'ConfinementError' && refused.message.includes('egress'), `${label} was not refused: ${refused}`);
+  }
+  const seatbelt = targetSandbox({
+    confinement: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+    workspace,
+  });
+  check(
+    !seatbelt.wrap('/bin/true', [], [], [], { egress: path.join(outside, 's') }).args.includes('--egress'),
+    'a Seatbelt call carried a proxy',
+  );
+  check(
+    seatbelt.egressReport() === null && sandbox.egressReport() !== null,
+    'the egress report is null under Seatbelt and a record under Bubblewrap',
+  );
+
+  // The mechanisms open one proxy for each call whose entries list a host, serve it, record its refusals and remove it.
+  const provider = await listenEchoing();
+  const port = provider.address().port;
+  // A socket path holds about 100 bytes, which the suite's own scratch directories exceed on macOS.
+  const callParent = socketDirectory();
+  const scratchList = [];
+  Object.defineProperty(scratchList, 'privateParent', { value: callParent });
+  const refusals = [];
+  let live = null;
+  let livePort = null;
+  const recording = (mode) => ({
+    mode,
+    wrap: (target, args, writable, readable, options) => (
+      (live = options?.egress ?? null),
+      (livePort = options?.listenPort ?? null),
+      { target, args, statusFile: null }
+    ),
+    collect: async () => {},
+    noteEgressRefusal: (refusal) => refusals.push(refusal),
+  });
+  const signal = new AbortController().signal;
+  const inCall = [];
+  const base = {
+    run: async () => {
+      const during =
+        live === null
+          ? null
+          : {
+              socket: live,
+              listed: scratchList.includes(path.dirname(live)),
+              tunnel: await exchange(live, connectHead('127.0.0.1', port), { until: TUNNEL_OPENED }),
+              refused: await exchange(live, connectHead('127.0.0.1', 9)),
+            };
+      inCall.push(during);
+      return { exitCode: 0, stdout: '', stderr: '' };
+    },
+    callTool: async () => {
+      inCall.push(
+        live === null ? null : { socket: live, tunnel: await exchange(live, connectHead('127.0.0.1', port), { until: TUNNEL_OPENED }) },
+      );
+      return { result: {}, stderr: '' };
+    },
+  };
+  const authorizations = (target) => (target === '/bin/listed' ? [egressItem('assistant', '127.0.0.1', port)] : []);
+  const commands = confinedCommandMechanism(base, recording('bubblewrap'), () => [], scratchList, authorizations);
+  await commands.run({ target: '/bin/listed', subcommandPath: [], argv: [], env: {} }, signal);
+  const first = inCall.at(-1);
+  check(
+    first !== null &&
+      path.dirname(path.dirname(first.socket)) === callParent &&
+      path.basename(path.dirname(first.socket)).startsWith('tea-egress-') &&
+      first.listed &&
+      first.tunnel === TUNNEL_OPENED &&
+      first.refused.startsWith('HTTP/1.1 403') &&
+      !fs.existsSync(path.dirname(first.socket)) &&
+      !scratchList.includes(path.dirname(first.socket)),
+    `a call whose entry lists a host ran with the proxy ${JSON.stringify(first)}; expected a live proxy in a private directory beneath the run's private parent, on the scratch list while the call ran and gone after it`,
+  );
+  check(
+    refusals.length === 1 && refusals[0].host === '127.0.0.1' && refusals[0].port === 9 && refusals[0].interfaceIds[0] === 'assistant',
+    `the sandbox noted ${JSON.stringify(refusals)}; expected the refusal of 127.0.0.1:9 for "assistant"`,
+  );
+  check(livePort === null, `a call whose request named no port was wrapped with listenPort ${livePort}; expected none`);
+  await commands.run({ target: '/bin/listed', subcommandPath: [], argv: [], env: {}, listenPort: 34_567 }, signal);
+  check(
+    livePort === 34_567,
+    `a call whose request named the port 34567 its server binds was wrapped with listenPort ${livePort}; expected 34567`,
+  );
+  await commands.run({ target: '/bin/plain', subcommandPath: [], argv: [], env: {} }, signal);
+  check(inCall.at(-1) === null && fs.readdirSync(callParent).length === 0, 'a call whose entry lists no host got a proxy');
+  await confinedMcpMechanism(base, recording('bubblewrap'), () => [], scratchList, authorizations).callTool(
+    { target: '/bin/listed', targetArgs: [], env: {} },
+    signal,
+  );
+  check(
+    inCall.at(-1)?.tunnel === TUNNEL_OPENED && fs.readdirSync(callParent).length === 0,
+    'a tool server whose entry lists a host did not get a live proxy, or left its directory',
+  );
+  live = null;
+  await confinedCommandMechanism(base, recording('seatbelt'), () => [], scratchList, authorizations).run(
+    { target: '/bin/listed', subcommandPath: [], argv: [], env: {} },
+    signal,
+  );
+  check(inCall.at(-1) === null, 'a Seatbelt call got a proxy');
+  // A call that fails removes its directory too.
+  const failing = confinedCommandMechanism(
+    {
+      run: async () => {
+        throw new Error('the call failed');
+      },
+    },
+    recording('bubblewrap'),
+    () => [],
+    scratchList,
+    authorizations,
+  );
+  let failed = null;
+  try {
+    await failing.run({ target: '/bin/listed', subcommandPath: [], argv: [], env: {} }, signal);
+  } catch (error) {
+    failed = error;
+  }
+  check(
+    failed?.message === 'the call failed' && fs.readdirSync(callParent).length === 0 && scratchList.length === 0,
+    `a call that threw left ${JSON.stringify(fs.readdirSync(callParent))} and ${JSON.stringify(scratchList)}`,
+  );
+  // Without a private parent the directory is made under the temp directory, and under /tmp when that leaves no room for a socket path.
+  const bare = [];
+  const realTemp = process.env.TMPDIR;
+  const long = path.join(root, 'x'.repeat(90));
+  fs.mkdirSync(long);
+  process.env.TMPDIR = long;
+  try {
+    await confinedCommandMechanism(base, recording('bubblewrap'), () => [], bare, authorizations).run(
+      { target: '/bin/listed', subcommandPath: [], argv: [], env: {} },
+      signal,
+    );
+  } finally {
+    if (realTemp === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = realTemp;
+  }
+  check(
+    /^\/(private\/)?tmp\/tea-egress-[A-Za-z0-9]{6}\/s$/.test(inCall.at(-1)?.socket ?? ''),
+    `a long temp directory put the proxy at ${inCall.at(-1)?.socket}; expected a directory under /tmp`,
+  );
+  await closeServer(provider);
+}
+
+/**
+ * The per-entry `egress` field (Story 1.83): the registry holds each entry's hosts, `check` refuses an item that cannot hold as written
+ * and an entry that still declares the retired `network` field, naming the entry and the field that replaced it, entries that start
+ * one target must agree, each started target's calls hold the authorizations of its entries, the isolation manifest's note names the
+ * entries that authorize hosts under Bubblewrap and no other confinement's, and `run.json` records them as `egress` and what the
+ * proxies refused as `egressRefusals`.
+ */
+async function checkEgressField() {
   const verdict = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry[0];
   const server = {
     kind: 'mcp',
@@ -9484,139 +10299,284 @@ async function checkNetworkField() {
     environmentKeys: [],
     maxElapsedMs: 1000,
   };
-  for (const value of ['isolated', 'host']) {
-    for (const entry of [verdict, server]) {
-      const problems = registryProblems([{ ...entry, network: value }]);
-      check(
-        !problems.some((problem) => problem.includes('network')),
-        `an entry with network ${value} was refused: ${JSON.stringify(problems)}`,
-      );
-    }
-  }
-  for (const [label, value] of [
-    ['an unknown value', 'bridged'],
-    ['a boolean', true],
-    ['an empty string', ''],
+  const listed = [{ host: 'api.example.test', port: 443, addresses: ['203.0.113.10', '2001:db8::10'] }];
+  for (const entry of [
+    verdict,
+    server,
+    {
+      kind: 'api',
+      interfaceId: 'service',
+      scheme: 'http',
+      host: '127.0.0.1',
+      addresses: ['127.0.0.1'],
+      methods: ['GET'],
+      safeMethods: [],
+      maxRedirects: 0,
+      maxElapsedMs: 1000,
+      maxRequestBytes: 1,
+      maxResponseBytes: 1,
+      server: { target: 'server/s.js', targetArgs: [], environmentKeys: [], portEnvironmentKey: 'PORT', readyTimeoutMs: 1000 },
+    },
   ]) {
-    const problems = registryProblems([{ ...verdict, network: value }]);
+    const problems = registryProblems([{ ...entry, egress: listed }]);
+    check(problems.length === 0, `an entry of kind ${entry.kind ?? 'cli'} that lists egress was refused: ${JSON.stringify(problems)}`);
+  }
+  for (const [label, egress] of [
+    ['an item with another field', [{ ...listed[0], scheme: 'https' }]],
+    ['a port of 0', [{ ...listed[0], port: 0 }]],
+    ['a port above 65535', [{ ...listed[0], port: 65_536 }]],
+    ['a port written as text', [{ ...listed[0], port: '443' }]],
+    ['no addresses', [{ ...listed[0], addresses: [] }]],
+    ['no host', [{ port: 443, addresses: ['203.0.113.10'] }]],
+  ]) {
+    const problems = registryProblems([{ ...verdict, egress }]);
     check(
-      problems.some((problem) => problem.startsWith('registry[0]/network ')),
-      `${label} for network was not refused naming the entry: ${JSON.stringify(problems)}`,
+      problems.some((problem) => problem.startsWith('registry[0]/egress')),
+      `${label} was not refused naming the entry: ${JSON.stringify(problems)}`,
     );
   }
+
+  // The retired field: any value is refused with the entry named and a pointer to the replacement, and no second generic finding.
+  for (const value of ['host', 'isolated', 'bridged']) {
+    const problems = registryProblems([{ ...verdict, network: value }]);
+    check(
+      problems.length === 1 &&
+        problems[0].startsWith('registry[0] (the interface "verdict") declares "network"') &&
+        problems[0].includes('"egress"') &&
+        problems[0].includes('Story 1.83') &&
+        problems[0].includes('tea-evaluate-cli.md#file-system-confinement'),
+      `an entry declaring "network": ${JSON.stringify(value)} got ${JSON.stringify(problems)}; expected one finding naming the entry, the field that replaced it and the reference`,
+    );
+  }
+  const retiredProblem = removedNetworkProblem(0, { network: 'host' });
+  check(retiredProblem.startsWith('registry[0] declares "network"'), 'an entry with no interface ID was not named by its position');
+
+  // What `check` adds: a host spelled otherwise than a URL spells it, a host listed twice, an address that is no literal, and an HTTP entry that starts nothing.
+  const find = async (entries) => egressRegistryProblems(entries);
+  check(
+    (await find([{ ...verdict, egress: [{ ...listed[0], host: 'API.Example.TEST' }] }])).length === 0,
+    'a host differing from its URL spelling by letter case alone was refused',
+  );
+  const spelled = await find([{ ...verdict, egress: [{ ...listed[0], host: '127.1' }] }]);
+  check(
+    spelled.some((problem) => problem.includes('registry[0].egress[0]') && problem.includes('"127.0.0.1"')),
+    `a host written 127.1 got ${JSON.stringify(spelled)}; expected the URL spelling named`,
+  );
+  // The proxy's request grammar and `check` share one host source: an item no `CONNECT` request can name is refused before a run.
+  for (const [label, host, expected] of [
+    ['a wildcard', '*.example.test', 'wildcard'],
+    ['a name with a tilde', 'a~b.example.test', 'cannot read'],
+    ['a name past 253 bytes', `${'a'.repeat(250)}.test`, 'cannot read'],
+  ]) {
+    const found = await find([{ ...verdict, egress: [{ ...listed[0], host }] }]);
+    check(
+      found.some((problem) => problem.includes('registry[0].egress[0]') && problem.includes(expected)),
+      `${label} (${JSON.stringify(host.slice(0, 40))}) got ${JSON.stringify(found)}; expected a finding naming the item and "${expected}"`,
+    );
+  }
+  for (const host of ['::1', '2001:db8::10', 'a_b.example.test', 'a'.repeat(253), '127.0.0.1']) {
+    check(isEgressHost(host), `the host ${JSON.stringify(host.slice(0, 40))} was not one the proxy can read`);
+  }
+  for (const host of ['*.example.test', 'a~b.example.test', 'a'.repeat(254), '', 'a b']) {
+    check(!isEgressHost(host), `the host ${JSON.stringify(host.slice(0, 40))} was one the proxy can read`);
+  }
+  check(
+    (await find([{ ...verdict, egress: [{ host: '::1', port: 443, addresses: ['::1'] }] }])).length === 0,
+    'an IPv6 host the proxy reads was refused',
+  );
+  const twice = await find([{ ...verdict, egress: [listed[0], { ...listed[0], addresses: ['203.0.113.11'] }] }]);
+  check(
+    twice.some((problem) => problem.includes('registry[0].egress[1]') && problem.includes('a second time')),
+    `a host and port listed twice got ${JSON.stringify(twice)}`,
+  );
+  const unnamed = await find([{ ...verdict, egress: [{ ...listed[0], addresses: ['api.example.test'] }] }]);
+  check(
+    unnamed.some((problem) => problem.includes('registry[0].egress[0]') && problem.includes('parseProbeTargetPolicy')),
+    `an address that is a name got ${JSON.stringify(unnamed)}; expected eval-quality's parser named`,
+  );
+  const deployed = await find([
+    {
+      kind: 'api',
+      interfaceId: 'deployed',
+      scheme: 'https',
+      host: 'a.example.test',
+      port: 443,
+      addresses: ['203.0.113.1'],
+      methods: ['GET'],
+      safeMethods: [],
+      maxRedirects: 0,
+      maxElapsedMs: 1000,
+      maxRequestBytes: 1,
+      maxResponseBytes: 1,
+      egress: listed,
+    },
+  ]);
+  check(
+    deployed.some((problem) => problem.includes('names no server')),
+    `an HTTP entry that names its port and lists egress got ${JSON.stringify(deployed)}`,
+  );
+  // Entries that start one target hold one egress.
   const same = registryProblems([
-    { ...verdict, interfaceId: 'one', network: 'host' },
+    { ...verdict, interfaceId: 'one', egress: listed },
     { ...verdict, interfaceId: 'two', executable: 'other' },
   ]);
   check(
-    same.some((problem) => problem.includes('registry[1]') && problem.includes('another network')),
-    `two entries that start one target with different networks were not refused: ${JSON.stringify(same)}`,
+    same.some((problem) => problem.includes('registry[1]') && problem.includes('another egress')),
+    `two entries that start one target with different egress were not refused: ${JSON.stringify(same)}`,
   );
   const alike = registryProblems([
-    { ...verdict, interfaceId: 'one', network: 'host' },
-    { ...verdict, interfaceId: 'two', executable: 'other', network: 'host' },
+    { ...verdict, interfaceId: 'one', egress: listed },
+    { ...verdict, interfaceId: 'two', executable: 'other', egress: [...listed] },
   ]);
   check(
-    !alike.some((problem) => problem.includes('another network')),
-    `two entries that agree on the network were refused: ${JSON.stringify(alike)}`,
+    !alike.some((problem) => problem.includes('another egress')),
+    `two entries that agree on the egress were refused: ${JSON.stringify(alike)}`,
   );
 
-  // Each kind of entry hands its calls its own network: a tool server and a started HTTP service that declare host, and a
-  // command that keeps the default, over a fake Bubblewrap sandbox that records the network each wrap is asked for.
+  // Each kind of entry hands its calls its own authorizations.
   const kinds = [
-    { kind: 'cli', interfaceId: 'plain', target: 'bin/plain.js' },
-    { kind: 'mcp', interfaceId: 'tools', target: 'bin/tools.js', network: 'host' },
-    { kind: 'api', interfaceId: 'service', server: { target: 'server/service.js' }, network: 'host' },
-    { kind: 'api', interfaceId: 'deployed', port: 80 },
-    { kind: 'api', interfaceId: 'deployed-host', port: 81, network: 'host' },
+    { kind: 'cli', interfaceId: 'plain', target: 'bin/plain.js', maxElapsedMs: 1000 },
+    { kind: 'mcp', interfaceId: 'tools', target: 'bin/tools.js', maxElapsedMs: 1000, egress: listed },
+    {
+      kind: 'api',
+      interfaceId: 'service',
+      server: { target: 'server/service.js' },
+      maxElapsedMs: 1000,
+      egress: [{ host: '127.0.0.1', port: 9, addresses: ['127.0.0.1'] }],
+    },
+    { kind: 'api', interfaceId: 'deployed', port: 80, maxElapsedMs: 1000, egress: listed },
+    { kind: 'cli', interfaceId: 'second', target: 'bin/tools.js', maxElapsedMs: 1000, egress: listed },
   ];
-  const targetOfEntry = (entry) => (entry.kind === 'api' ? entry.server.target : entry.target);
-  const networkOf = networkResolver(kinds, targetOfEntry);
-  const wrapped = [];
-  const recording = {
-    mode: 'bubblewrap',
-    wrap: (target, args, writable, readable, options) => (wrapped.push([target, options?.network]), { target, args, statusFile: null }),
-    collect: async () => {},
-  };
-  const control = new AbortController().signal;
-  const runner = { run: async () => ({ exitCode: 0, stdout: '', stderr: '' }), callTool: async () => ({ result: {}, stderr: '' }) };
-  const commands = confinedCommandMechanism(runner, recording, () => [], [], networkOf);
-  const tools = confinedMcpMechanism(runner, recording, () => [], [], networkOf);
-  for (const target of ['bin/plain.js', 'server/service.js']) {
-    await commands.run({ target, subcommandPath: [], argv: [], env: {} }, control);
-  }
-  await tools.callTool({ target: 'bin/tools.js', targetArgs: [], env: {} }, control);
+  const egressOf = egressResolver(kinds, (entry) => (entry.kind === 'api' ? entry.server?.target : entry.target));
+  const summarize = (authorizations) =>
+    authorizations.map(({ interfaceId, host, port, scheme, methods }) => [interfaceId, host, port, scheme, methods.join(',')]);
   check(
-    JSON.stringify(wrapped) ===
+    JSON.stringify(summarize(egressOf('bin/tools.js'))) ===
       JSON.stringify([
-        ['bin/plain.js', 'isolated'],
-        ['server/service.js', 'host'],
-        ['bin/tools.js', 'host'],
-      ]),
-    `the calls of a default command, a host HTTP service and a host tool server asked for ${JSON.stringify(wrapped)}; expected isolated, host and host`,
+        ['tools', 'api.example.test', 443, 'https', 'GET'],
+        ['second', 'api.example.test', 443, 'https', 'GET'],
+      ]) &&
+      JSON.stringify(summarize(egressOf('server/service.js'))) === JSON.stringify([['service', '127.0.0.1', 9, 'https', 'GET']]) &&
+      egressOf('bin/plain.js').length === 0 &&
+      egressOf('port-80').length === 0 &&
+      egressOf('bin/unknown.js').length === 0,
+    `the authorizations of the targets were ${JSON.stringify(['bin/tools.js', 'server/service.js', 'bin/plain.js', 'port-80'].map((target) => summarize(egressOf(target))))}; expected both entries' items for the shared tool server, the service's own, and none for a command with no egress, an HTTP entry that starts nothing and an unknown target`,
+  );
+  const registry = createRegistry(
+    [verdict, { ...server, egress: listed }, { ...server, interfaceId: 'zeta', target: 'bin/z.js', egress: [listed[0]] }],
+    { root: tempDir('egress-registry') },
   );
   check(
-    networkOf('port-80') === 'isolated' && networkOf('server/other.js') === 'isolated',
-    'a target no entry starts, or an HTTP entry that starts nothing, was given the host network',
+    JSON.stringify(registry.egressEntries) ===
+      JSON.stringify([
+        { interfaceId: 'tools', hosts: ['api.example.test:443'] },
+        { interfaceId: 'zeta', hosts: ['api.example.test:443'] },
+      ]),
+    `the registry lists the entries that authorize hosts as ${JSON.stringify(registry.egressEntries)}; expected tools and zeta by interface ID with their host:port items`,
   );
 
   const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: '/eval' };
   const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: '/eval' };
-  const noted = forbiddenInputNote(bubblewrap, ['assistant', 'grader']);
+  const entries = [{ interfaceId: 'assistant', hosts: ['api.example.test:443'] }];
+  const noted = forbiddenInputNote(bubblewrap, entries);
   check(
-    noted.includes('"assistant", "grader" declare "network": "host"') && noted.includes('abstract Unix sockets'),
-    `the Bubblewrap note names ${JSON.stringify(noted.slice(-320))}; expected the entries that keep the host's network`,
+    noted.includes('"assistant" (api.example.test:443) authorize the hosts named') &&
+      noted.includes('abstract Unix sockets') &&
+      noted.includes('egress proxy'),
+    `the Bubblewrap note ends ${JSON.stringify(noted.slice(-380))}; expected the entries and their hosts named`,
   );
   check(
-    !forbiddenInputNote(bubblewrap, []).includes('network') &&
-      !forbiddenInputNote(seatbelt, ['assistant']).includes('network') &&
-      !forbiddenInputNote({ mode: 'opt-out' }, ['assistant']).includes('network'),
-    'a note named the host network for a run with no such entry, a Seatbelt run or an opted-out run',
+    !forbiddenInputNote(bubblewrap, []).includes('egress') &&
+      !forbiddenInputNote(seatbelt, entries).includes('egress') &&
+      !forbiddenInputNote({ mode: 'opt-out' }, entries).includes('egress'),
+    'a note named egress for a run with no such entry, a Seatbelt run or an opted-out run',
   );
+  check(forbiddenInputNote(bubblewrap, []) === forbiddenInputNote(bubblewrap), 'the note of a run with no egress changed');
 
-  const bogus = makeProject('network-bogus', {
-    edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].network = 'bridged')),
-  });
-  const refused = evaluate(['check', '--evaluation', bogus.folder], bogus.env);
-  check(
-    refused.status === 10 && refused.output.includes('/registry/0/network must be equal to one of the allowed values ("isolated", "host")'),
-    `check over an entry with network "bridged" exited ${refused.status}; expected 10 naming /registry/0/network and the allowed values\n${refused.output}`,
-  );
-
-  const hosted = makeProject('network-host', {
+  // `check` over a project: the retired field is refused naming the entry and the pointer (exit 10), a listed host passes.
+  const retired = makeProject('egress-retired', {
     edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].network = 'host')),
   });
+  const refused = evaluate(['check', '--evaluation', retired.folder], retired.env);
+  check(
+    refused.status === 10 &&
+      refused.output.includes('registry[0] (the interface "verdict") declares "network": "host", a field Story 1.83 removed') &&
+      refused.output.includes('"egress"') &&
+      !refused.output.includes('must NOT have additional properties ("network")'),
+    `check over an entry with network "host" exited ${refused.status}; expected 10 naming the entry, the removed field and "egress"\n${refused.output}`,
+  );
+  // A tool-server or HTTP entry carrying the retired field gets the same one finding: the `if`, `then` and `else` its definition sits in add no raw line.
+  for (const [label, fixture] of [
+    ['a tool-server', path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-mcp', 'evals', 'grader')],
+    ['an HTTP', path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api', 'evals', 'grader')],
+  ]) {
+    const folder = path.join(tempDir('egress-retired-kind'), 'grader');
+    fs.cpSync(fixture, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].network = 'host'));
+    const found = evaluate(['check', '--evaluation', folder]);
+    check(
+      found.status === 10 &&
+        found.output.includes('declares "network": "host", a field Story 1.83 removed') &&
+        found.output.includes('1 authoring defect(s)') &&
+        !/must match "(then|else)" schema/.test(found.output),
+      `check over ${label} entry with network "host" exited ${found.status}; expected 10 and one finding with no raw "then" or "else" line\n${found.output}`,
+    );
+  }
+  const authorized = makeProject('egress-listed', {
+    edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].egress = listed)),
+  });
+  const checked = evaluate(['check', '--evaluation', authorized.folder], authorized.env);
+  check(checked.status === 0, `check over an entry that lists a host exited ${checked.status}; expected 0\n${checked.output}`);
+  const badSpelling = makeProject('egress-spelled', {
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].egress = [{ ...listed[0], host: '127.1' }])),
+  });
+  const badChecked = evaluate(['check', '--evaluation', badSpelling.folder], badSpelling.env);
+  check(
+    badChecked.status === 10 && badChecked.output.includes('registry[0].egress[0]'),
+    `check over a host spelled 127.1 exited ${badChecked.status}; expected 10 naming registry[0].egress[0]\n${badChecked.output}`,
+  );
+
+  // A run records what each entry authorizes and, where nothing authorizes, an empty list; the Bubblewrap note names the entry.
+  const hosted = makeProject('egress-run', {
+    edit: ({ folder }) =>
+      editJson(
+        path.join(folder, 'evaluation.json'),
+        (evaluation) => (evaluation.registry[0].egress = [{ host: '127.0.0.1', port: 9, addresses: ['127.0.0.1'] }]),
+      ),
+  });
   const ran = evaluate(['run', '--evaluation', hosted.folder], hosted.env);
-  check(ran.status === 0, `a run whose entry declares network host exited ${ran.status}; expected 0\n${ran.output}`);
+  check(ran.status === 0, `a run whose entry lists a host exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(hosted.folder);
   const record = runDirectory === null ? {} : readJson(path.join(runDirectory, 'run.json'));
   check(
-    JSON.stringify(record.hostNetwork) === JSON.stringify(['verdict']) && record.confinement === CONFINEMENT,
-    `run.json records hostNetwork ${JSON.stringify(record.hostNetwork)} and confinement ${JSON.stringify(record.confinement)}; expected ["verdict"] and ${CONFINEMENT}`,
+    JSON.stringify(record.egress) === JSON.stringify([{ interfaceId: 'verdict', hosts: ['127.0.0.1:9'] }]) &&
+      JSON.stringify(record.egressRefusals) === '[]' &&
+      record.hostNetwork === undefined &&
+      record.confinement === CONFINEMENT,
+    `run.json records egress ${JSON.stringify(record.egress)}, egressRefusals ${JSON.stringify(record.egressRefusals)} and hostNetwork ${JSON.stringify(record.hostNetwork)}; expected the entry's host, an empty list of refusals and no hostNetwork`,
   );
   const note =
     runDirectory === null
       ? ''
       : Object.values(readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json')).forbiddenInputAccounting)[0].note;
   check(
-    CONFINEMENT === 'bubblewrap' ? note.includes('"verdict" declare "network": "host"') : !note.includes('network'),
-    `the isolation manifest's note is ${JSON.stringify(note.slice(-260))}; expected it to name the entry under Bubblewrap and no network under Seatbelt`,
+    CONFINEMENT === 'bubblewrap' ? note.includes('"verdict" (127.0.0.1:9) authorize the hosts named') : !note.includes('egress'),
+    `the isolation manifest's note is ${JSON.stringify(note.slice(-260))}; expected it to name the entry under Bubblewrap and no egress under Seatbelt`,
   );
-  const plain = makeProject('network-default');
+  const plain = makeProject('egress-default');
   const plainRan = evaluate(['run', '--evaluation', plain.folder], plain.env);
   const plainDirectory = runDirectoryOf(plain.folder);
+  const plainRecord = plainDirectory === null ? {} : readJson(path.join(plainDirectory, 'run.json'));
   check(
-    plainRan.status === 0 &&
-      plainDirectory !== null &&
-      JSON.stringify(readJson(path.join(plainDirectory, 'run.json')).hostNetwork) === '[]',
-    `a run whose entries keep the default recorded hostNetwork ${JSON.stringify(plainDirectory === null ? null : readJson(path.join(plainDirectory, 'run.json')).hostNetwork)}; expected []`,
+    plainRan.status === 0 && JSON.stringify(plainRecord.egress) === '[]' && JSON.stringify(plainRecord.egressRefusals) === '[]',
+    `a run whose entries list no host recorded egress ${JSON.stringify(plainRecord.egress)} and egressRefusals ${JSON.stringify(plainRecord.egressRefusals)}; expected two empty lists`,
   );
 
-  // The registry hands each call its entry's network: a run on a (stood-in) Linux host passes `--unshare-net` to the Bubblewrap
-  // command of every target call whose entry keeps the default and none whose entry declares host. The stub `bwrap` logs the
-  // arguments of each call and runs its command; the stub `strace` confirms its probe and traces nothing, so the run ends at
-  // the first call's audit (exit 12), after the calls the log holds.
-  const stubs = tempDir('network-wiring-stubs');
+  // The registry hands each call its entry's hosts: a run on a (stood-in) Linux host passes `--egress` to the Bubblewrap command of every
+  // target call whose entry lists a host and to none whose entry lists none. The stub `bwrap` logs the arguments of each call and runs
+  // its command; the stub `strace` confirms its probe and traces nothing, so the run ends at the first call's audit (exit 12).
+  const stubs = tempDir('egress-wiring-stubs');
   const log = path.join(stubs, 'bwrap.log');
   const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
   stub('bwrap', `echo "$*" >> ${JSON.stringify(log)}\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"`);
@@ -9641,13 +10601,519 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   const hostedCalls = targetCalls(hosted);
   const plainCalls = targetCalls(plain);
   check(
-    hostedCalls.length > 0 && hostedCalls.every((line) => !line.includes('--unshare-net')),
-    `the target calls of a run whose entry declares network host were ${JSON.stringify(hostedCalls.map((line) => line.slice(0, 60)))}; expected at least one and none with --unshare-net`,
+    hostedCalls.length > 0 &&
+      hostedCalls.every(
+        (line) => line.includes('--egress /dev/tea-egress-') && line.includes('--ro-bind') && line.includes('/dev/tea-egress-'),
+      ),
+    `the target calls of a run whose entry lists a host were ${JSON.stringify(hostedCalls.map((line) => line.slice(-200)))}; expected at least one and each with --egress at a /dev/tea-egress-* path`,
   );
   check(
-    plainCalls.length > 0 && plainCalls.every((line) => line.includes('--unshare-net')),
-    `the target calls of a run whose entry keeps the default were ${JSON.stringify(plainCalls.map((line) => line.slice(0, 60)))}; expected at least one and each with --unshare-net`,
+    plainCalls.length > 0 && plainCalls.every((line) => !line.includes('--egress') && line.includes('--unshare-net')),
+    `the target calls of a run whose entry lists no host were ${JSON.stringify(plainCalls.map((line) => line.slice(0, 60)))}; expected at least one, none with --egress and each with --unshare-net`,
   );
+}
+
+/**
+ * What a run records of the requests an egress proxy refused (Story 1.83), on any host with a mechanism: no real call is refused on a
+ * host with no proxy, so a preload makes each target sandbox report two refusals, and `run.json`'s `egressRefusals` and the summary
+ * name each audited trial with the host, the port and the entry.
+ */
+async function checkEgressRecord() {
+  if (process.platform === 'linux') {
+    const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+    if (absent.length > 0) {
+      skipCase('egress record', `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+      return;
+    }
+  } else if (process.platform !== 'darwin') {
+    skipCase('egress record', `Seatbelt and Bubblewrap exist on macOS and Linux only, and this host is ${process.platform}`);
+    return;
+  }
+  const project = makeProject('egress-record');
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env, ['--require', REFUSED_EGRESS_REPORT]);
+  check(ran.status === 0, `a confined run whose sandboxes report refused requests exited ${ran.status}; expected 0\n${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
+  const refusals = [
+    {
+      interfaceIds: ['verdict'],
+      host: 'api.example.test',
+      port: 443,
+      address: null,
+      reason: 'host-not-authorized',
+      detail: 'host "api.example.test" is not the authorized "127.0.0.1"',
+      count: 3,
+    },
+    {
+      interfaceIds: ['verdict'],
+      host: '127.0.0.1',
+      port: 9,
+      address: '127.0.0.1',
+      reason: 'port-not-authorized',
+      detail: 'port 9 is not the authorized 8',
+      count: 1,
+    },
+  ];
+  const entries = Array.isArray(record.egressRefusals) ? record.egressRefusals : [];
+  check(
+    JSON.stringify(entries) ===
+      JSON.stringify(auditedTrials().map(({ conditionArm, trialIndex }) => ({ conditionArm, trialIndex, refusals, omitted: 4 }))),
+    `run.json records the refused requests ${JSON.stringify(record.egressRefusals)}; expected one entry for each audited trial (${JSON.stringify(auditedTrials())}) with the two refusals and 4 omitted`,
+  );
+  const summary = record.outcome?.message ?? '';
+  check(
+    entries.length > 0 &&
+      summary.includes(egressRefusalNote(entries)) &&
+      entries.every((entry) =>
+        summary.includes(
+          `${entry.conditionArm} trial ${entry.trialIndex} (api.example.test:443 for "verdict", host-not-authorized, and 5 more)`,
+        ),
+      ),
+    `the run's summary does not name each trial whose proxy refused a request with its host, port and entry: ${JSON.stringify(summary)}`,
+  );
+  check(
+    entries.length > 0 && ran.output.includes(egressRefusalNote(entries)),
+    `the command's own output does not carry the summary's note on the refused requests\n${ran.output}`,
+  );
+}
+
+/** Starts a server in a process of its own, which the synchronous CLI cannot starve: its port, and what ends it. */
+async function listenInProcess() {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      "const s=require('node:net').createServer((c)=>{c.on('error',()=>{});c.end('provider')});s.listen(0,'127.0.0.1',()=>console.log(s.address().port))",
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  const port = await new Promise((resolve) => child.stdout.once('data', (chunk) => resolve(Number(String(chunk).trim()))));
+  return { port, stop: () => child.kill('SIGKILL') };
+}
+
+/**
+ * The route a confined Linux target has to the hosts its entry lists, on a Linux host with Bubblewrap and strace only (Story 1.83; the
+ * Linux CI job proves it, a macOS host skips it). A loopback server of the runtime's stands in for a model provider. For an entry that
+ * lists it, a confined process asks the proxy named in `HTTPS_PROXY` for a tunnel and reaches the server, while another port of the
+ * host's loopback, another host and an abstract Unix socket the runtime serves are refused, and a direct connection to the server
+ * fails, the namespace holding a loopback and nothing else; real clients (Node's HTTPS client with `NODE_USE_ENV_PROXY`, `curl`)
+ * tunnel through it, while curl with no proxy or handed it without `-p` opens no tunnel and gets no route; for an entry that lists nothing there is no proxy variable and every connection fails; the refusals reach the
+ * sandbox's report; and a call's directory is gone after it.
+ */
+async function checkEgressRoute() {
+  const label = 'egress route';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('egress-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = fs.realpathSync(tempDir('egress-workspace'));
+  const sandbox = targetSandbox({ confinement, workspace, status: tempDir('egress-status') });
+  const provider = await listenEchoing();
+  const port = provider.address().port;
+  const elsewhere = await listenEchoing();
+  const abstractName = `tea-evaluate-egress-${crypto.randomBytes(6).toString('hex')}`;
+  const abstractServer = net.createServer((socket) => socket.end());
+  await new Promise((resolve, reject) => {
+    abstractServer.once('error', reject);
+    abstractServer.listen({ path: `\0${abstractName}` }, resolve);
+  });
+  const scratchList = [];
+  const base = {
+    run: (request) =>
+      new Promise((resolve) => {
+        const child = spawn(request.target, request.argv, { cwd: workspace, env: request.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        let out = '';
+        child.stdout.on('data', (chunk) => (out += chunk));
+        child.stderr.on('data', (chunk) => (out += chunk));
+        const timer = setTimeout(() => child.kill('SIGKILL'), SPAWN_TIMEOUT_MS);
+        child.on('close', (exitCode) => (clearTimeout(timer), resolve({ exitCode, out: out.trim() })));
+      }),
+  };
+  const listed = (interfaceId) => () => [egressItem(interfaceId, '127.0.0.1', port)];
+  const call = async (egressOf, script, ...args) => {
+    const mechanism = confinedCommandMechanism(base, sandbox, () => [], scratchList, egressOf);
+    const ran = await mechanism.run({
+      target: process.execPath,
+      subcommandPath: [],
+      argv: ['-e', script, ...args],
+      env: { PATH: process.env.PATH },
+    });
+    return ran.exitCode === 0 ? ran.out : `exit ${ran.exitCode}: ${ran.out}`;
+  };
+  const PROBE = `
+    const net = require('node:net');
+    const [kind, a, b] = process.argv.slice(1);
+    const done = (text) => { console.log(text); process.exit(0); };
+    if (kind === 'direct') {
+      const socket = net.connect({ host: '127.0.0.1', port: Number(a) });
+      socket.on('connect', () => done('connected'));
+      socket.on('error', (error) => done('refused ' + error.code));
+    } else if (kind === 'abstract') {
+      const socket = net.connect({ path: '\\0' + a });
+      socket.on('connect', () => done('connected'));
+      socket.on('error', (error) => done('refused ' + error.code));
+    } else {
+      if (!process.env.HTTPS_PROXY) done('no proxy variable');
+      const url = new URL(process.env.HTTPS_PROXY);
+      const socket = net.connect({ host: url.hostname, port: Number(url.port) });
+      let text = '';
+      socket.on('connect', () => socket.write('CONNECT ' + a + ':' + b + ' HTTP/1.1\\r\\n\\r\\nping'));
+      socket.on('data', (chunk) => { text += chunk; if (text.endsWith('ping') || text.includes('\\r\\n\\r\\n') && !text.startsWith('HTTP/1.1 200')) socket.destroy(); });
+      socket.on('close', () => done(text.split('\\r\\n')[0] + (text.endsWith('ping') ? ' ping' : '')));
+      socket.on('error', (error) => done('error ' + error.code));
+    }`;
+  try {
+    const entry = listed('assistant');
+    const reached = await call(entry, PROBE, 'proxy', '127.0.0.1', String(port));
+    check(
+      reached === 'HTTP/1.1 200 Connection Established ping',
+      `an entry that lists the server, tunneling to it through the proxy, got ${JSON.stringify(reached)}; expected the tunnel and the echo of ping`,
+    );
+    check(provider.accepted === 1, `the listed server accepted ${provider.accepted} connection(s) from the proxy; expected 1`);
+    const otherPort = await call(entry, PROBE, 'proxy', '127.0.0.1', String(elsewhere.address().port));
+    check(
+      otherPort.startsWith('HTTP/1.1 403 Forbidden') && elsewhere.accepted === 0,
+      `the same entry asking for another port of the host's loopback got ${JSON.stringify(otherPort)} after ${elsewhere.accepted} connection(s) to it; expected 403 and none`,
+    );
+    const otherHost = await call(entry, PROBE, 'proxy', 'example.org', '443');
+    check(
+      otherHost.startsWith('HTTP/1.1 403 Forbidden'),
+      `the same entry asking for another host got ${JSON.stringify(otherHost)}; expected 403`,
+    );
+    const direct = await call(entry, PROBE, 'direct', String(port));
+    check(
+      direct === 'refused ECONNREFUSED',
+      `the same entry connecting to the listed server without the proxy got ${JSON.stringify(direct)}; expected refused ECONNREFUSED, since the namespace holds a loopback and nothing else`,
+    );
+    const abstract = await call(entry, PROBE, 'abstract', abstractName);
+    check(
+      abstract === 'refused ECONNREFUSED',
+      `the same entry connecting to an abstract Unix socket the runtime serves got ${JSON.stringify(abstract)}; expected refused ECONNREFUSED`,
+    );
+    const report = sandbox.egressReport();
+    check(
+      report.refusals.some(
+        (refusal) =>
+          refusal.host === 'example.org' &&
+          refusal.port === 443 &&
+          refusal.interfaceIds[0] === 'assistant' &&
+          refusal.reason === 'host-not-authorized',
+      ) && report.refusals.some((refusal) => refusal.port === elsewhere.address().port && refusal.reason === 'port-not-authorized'),
+      `the sandbox's report of the refusals is ${JSON.stringify(report)}; expected both requests, with the host, the port and the entry`,
+    );
+
+    // An entry that lists nothing has no proxy variable and reaches nothing.
+    const none = () => [];
+    for (const [what, kind, a, b] of [
+      ['through a proxy', 'proxy', '127.0.0.1', String(port)],
+      ['directly', 'direct', String(port)],
+      ['to an abstract Unix socket', 'abstract', abstractName],
+    ]) {
+      const got = await call(none, PROBE, kind, a, b);
+      check(
+        got === (kind === 'proxy' ? 'no proxy variable' : 'refused ECONNREFUSED'),
+        `an entry that lists no host, connecting ${what}, got ${JSON.stringify(got)}; expected ${kind === 'proxy' ? 'no proxy variable' : 'refused ECONNREFUSED'}`,
+      );
+    }
+    check(
+      provider.accepted === 1,
+      `the listed server accepted ${provider.accepted} connection(s) after the entry that lists nothing tried; expected the one the listed entry made`,
+    );
+
+    // Real clients that read the variable the shim set.
+    const nodeClient = `
+      const https = require('node:https');
+      https.get({ host: '127.0.0.1', port: ${port}, rejectUnauthorized: false, path: '/' }, (response) => { let t = ''; response.on('data', (c) => (t += c)); response.on('end', () => console.log('node ' + t)); }).on('error', (error) => console.log('node error ' + (error.code ?? error.message)));`;
+    const openssl = executableOnPath('openssl', process.env);
+    if (openssl === null) console.log('  skipped the Node HTTPS client leg of the egress route case: openssl is not on PATH');
+    else {
+      const material = tempDir('egress-tls');
+      const made = spawnSync(
+        openssl,
+        [
+          'req',
+          '-x509',
+          '-newkey',
+          'rsa:2048',
+          '-nodes',
+          '-keyout',
+          path.join(material, 'key.pem'),
+          '-out',
+          path.join(material, 'cert.pem'),
+          '-days',
+          '2',
+          '-subj',
+          '/CN=127.0.0.1',
+        ],
+        { stdio: 'ignore' },
+      );
+      if (made.status === 0) {
+        const secured = https.createServer(
+          { key: fs.readFileSync(path.join(material, 'key.pem')), cert: fs.readFileSync(path.join(material, 'cert.pem')) },
+          (request, response) => response.end('tls through the proxy'),
+        );
+        await new Promise((resolve) => secured.listen(0, '127.0.0.1', resolve));
+        try {
+          const tlsPort = secured.address().port;
+          const tlsClient = nodeClient.replace(String(port), String(tlsPort));
+          const got = await call(() => [egressItem('assistant', '127.0.0.1', tlsPort)], tlsClient);
+          check(
+            got === 'node tls through the proxy',
+            `Node's HTTPS client in a confined target got ${JSON.stringify(got)}; expected the server's answer through the proxy named in HTTPS_PROXY`,
+          );
+          const without = await call(() => [], tlsClient);
+          check(
+            without.startsWith('node error '),
+            `Node's HTTPS client in a confined target whose entry lists nothing got ${JSON.stringify(without)}; expected an error`,
+          );
+        } finally {
+          await new Promise((resolve) => secured.close(resolve));
+        }
+      }
+    }
+    if (executableOnPath('curl', process.env) === null) {
+      console.log('  skipped the curl leg of the egress route case: curl is not on PATH');
+    } else {
+      const web = http.createServer((request, response) => response.end('greeting through the proxy'));
+      let webConnections = 0;
+      web.on('connection', () => (webConnections += 1));
+      await new Promise((resolve) => web.listen(0, '127.0.0.1', resolve));
+      try {
+        const webPort = web.address().port;
+        const script = `const { spawnSync } = require('node:child_process'); const r = spawnSync('curl', ['-sS', '-p', '-x', process.env.HTTPS_PROXY, '--max-time', '10', 'http://127.0.0.1:${webPort}/'], { encoding: 'utf8' }); console.log('curl ' + (r.status === 0 ? r.stdout : 'failed ' + r.status));`;
+        const curled = await call(() => [egressItem('assistant', '127.0.0.1', webPort)], script);
+        check(
+          curled === 'curl greeting through the proxy',
+          `curl in a confined target tunneling through HTTPS_PROXY got ${JSON.stringify(curled)}; expected the server's greeting`,
+        );
+        // A client that opens no `CONNECT` tunnel has no route: the shim sets `HTTPS_PROXY` alone, so curl without `-x` dials the
+        // namespace's own loopback, and curl handed the proxy without `-p` sends a plain request the proxy answers `405`.
+        const plainCurl = (proxyArgs) =>
+          `const { spawnSync } = require('node:child_process'); const r = spawnSync('curl', ['-sS', ${proxyArgs}'--max-time', '10', '-o', '/dev/null', '-w', '%{http_code}', 'http://127.0.0.1:${webPort}/'], { encoding: 'utf8' }); console.log('curl ' + (r.status === 0 ? r.stdout : 'failed ' + r.status));`;
+        const served = webConnections;
+        const unproxied = await call(() => [egressItem('assistant', '127.0.0.1', webPort)], plainCurl(''));
+        check(
+          unproxied === 'curl failed 7',
+          `curl in a confined target with no \`-x\` got ${JSON.stringify(unproxied)}; expected failed 7, since the shim sets HTTPS_PROXY alone and the loopback of the namespace holds no server`,
+        );
+        const untunneled = await call(() => [egressItem('assistant', '127.0.0.1', webPort)], plainCurl("'-x', process.env.HTTPS_PROXY, "));
+        check(
+          untunneled === 'curl 405',
+          `curl in a confined target handed the proxy without \`-p\` got ${JSON.stringify(untunneled)}; expected 405, since the proxy reads \`CONNECT\` alone`,
+        );
+        check(
+          webConnections === served,
+          `the server accepted ${webConnections - served} connection(s) from the two requests that opened no tunnel; expected none`,
+        );
+      } finally {
+        await closeServer(web);
+      }
+    }
+    check(scratchList.length === 0, `the calls left ${JSON.stringify(scratchList)} on the scratch list`);
+  } finally {
+    for (const server of [provider, elsewhere]) await closeServer(server);
+    await closeServer(abstractServer);
+  }
+}
+
+/** The egress proxy directories (full paths) beneath the private parents of the run with process id `pid`. */
+function proxyDirectories(privateRoot, pid) {
+  // A parent the run removes between the two reads is gone, so it holds none.
+  const names = (directory) => {
+    try {
+      return fs.readdirSync(directory);
+    } catch {
+      return [];
+    }
+  };
+  return names(privateRoot)
+    .filter((name) => name.startsWith(`run-${pid}-`))
+    .flatMap((parent) =>
+      names(path.join(privateRoot, parent))
+        .filter((name) => name.startsWith('tea-egress-'))
+        .map((name) => path.join(privateRoot, parent, name)),
+    );
+}
+
+/**
+ * The proxy directories (of `list()`) whose proxy answers a tunnel to `port` now, polled until one does, the deadline passes or
+ * `alive()` is false; `[]` then. A call's directory exists from `mkdtempSync` in `openEgress` and the proxy binds its socket
+ * only afterwards (`startEgress`), so a directory alone is no proof that the call under test is live.
+ */
+async function answeringProxies(list, port, alive) {
+  const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+  while (alive() && Date.now() < deadline) {
+    const answering = [];
+    for (const directory of list()) {
+      const answer = await exchange(path.join(directory, 's'), connectHead('127.0.0.1', port), { until: TUNNEL_OPENED });
+      if (answer === TUNNEL_OPENED) answering.push(directory);
+    }
+    if (answering.length > 0) return answering;
+    await sleep(50);
+  }
+  return [];
+}
+
+/**
+ * A real run's egress, on a Linux host with Bubblewrap and strace only (Story 1.83): the verdict target of a run whose entry lists a
+ * loopback server tunnels to it through `HTTPS_PROXY`, is refused another port and another host, and cannot connect to any of them
+ * directly; `run.json` names the two refusals with the host, the port and the entry and the summary says so; a run ended by SIGTERM
+ * while the call is live leaves no proxy directory beneath the private root and nothing in the temp directory.
+ */
+async function checkEgressRun() {
+  const label = 'egress run';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const provider = await listenInProcess();
+  const refusedPort = provider.port === 9 ? 10 : 9;
+  const asked = [`127.0.0.1:${provider.port}`, `127.0.0.1:${refusedPort}`, 'example.org:443'];
+  try {
+    const project = makeProject('egress-linux', {
+      edit: ({ folder }) =>
+        editJson(
+          path.join(folder, 'evaluation.json'),
+          (evaluation) => (evaluation.registry[0].egress = [{ host: '127.0.0.1', port: provider.port, addresses: ['127.0.0.1'] }]),
+        ),
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      VERDICT_WHEN: 'trial-clean-1',
+      VERDICT_DO: 'probe-egress',
+      VERDICT_TOUCH: asked.join(','),
+    });
+    check(ran.status === 0, `a confined run whose target probes its egress exited ${ran.status}; expected 0\n${ran.output}`);
+    const directory = runDirectoryOf(project.folder);
+    const out = trialStdout(directory, 'clean', 1);
+    const expected = [
+      'egress-proxy: named',
+      `egress ${asked[0]}: 200`,
+      `direct ${asked[0]}: refused ECONNREFUSED`,
+      `egress ${asked[1]}: 403`,
+      `direct ${asked[1]}: refused ECONNREFUSED`,
+      `egress ${asked[2]}: 403`,
+      `direct ${asked[2]}: refused`,
+    ];
+    check(
+      expected.every((line) => out.includes(line)),
+      `the target's probe of its egress printed ${JSON.stringify(out)}; expected each of ${JSON.stringify(expected)}`,
+    );
+    const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
+    const entry = (record.egressRefusals ?? []).find((candidate) => candidate.conditionArm === 'clean' && candidate.trialIndex === 1);
+    check(
+      JSON.stringify((entry?.refusals ?? []).map(({ interfaceIds, host, port, reason }) => [interfaceIds, host, port, reason]).sort()) ===
+        JSON.stringify(
+          [
+            [['verdict'], '127.0.0.1', refusedPort, 'port-not-authorized'],
+            [['verdict'], 'example.org', 443, 'host-not-authorized'],
+          ].sort(),
+        ) && entry.omitted === 0,
+      `run.json names the refusals of clean trial 1 as ${JSON.stringify(entry)}; expected 127.0.0.1:${refusedPort} (port-not-authorized) and example.org:443 (host-not-authorized) for "verdict"`,
+    );
+    check(
+      (record.outcome?.message ?? '').includes('the egress proxy refused a host the target asked for in clean trial 1') &&
+        (record.outcome?.message ?? '').includes('for "verdict"'),
+      `the run's summary is ${JSON.stringify(record.outcome?.message)}; expected it to name the refused host and the entry`,
+    );
+    check(
+      fs.readdirSync(project.env.TMPDIR).length === 0,
+      `a finished run left ${JSON.stringify(fs.readdirSync(project.env.TMPDIR))} in its temp directory`,
+    );
+
+    // A run ended by SIGTERM while the call is live removes the proxy's directory with the rest of the run's private directories.
+    const privateRoot = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+    const live = makeProject('egress-signal', {
+      edit: ({ folder }) =>
+        editJson(
+          path.join(folder, 'evaluation.json'),
+          (evaluation) => (evaluation.registry[0].egress = [{ host: '127.0.0.1', port: provider.port, addresses: ['127.0.0.1'] }]),
+        ),
+    });
+    const child = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', live.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...live.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'hold-egress' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+    const proxies = () => proxyDirectories(privateRoot, child.pid);
+    // The held call's directory exists from `mkdtempSync` in `openEgress` and its proxy binds the socket only afterwards, so the
+    // signal goes once the proxy answers a tunnel; a signal sent in that window meets a call that is not live yet.
+    const during = await answeringProxies(proxies, provider.port, () => child.exitCode === null);
+    child.kill('SIGTERM');
+    const { code, name } = await ended;
+    check(
+      name === 'SIGTERM' && during.length === 1,
+      `a run ended by SIGTERM mid-call ended with code ${code} and signal ${name} and held ${JSON.stringify(during)} answering mid-call; expected one live proxy directory beneath its private root\n${output}`,
+    );
+    const left = fs.existsSync(privateRoot)
+      ? fs.readdirSync(privateRoot).filter((entryName) => entryName.startsWith(`run-${child.pid}-`))
+      : [];
+    check(
+      left.length === 0 && proxies().length === 0,
+      `a run ended by SIGTERM mid-call left ${JSON.stringify(left)} beneath the private root`,
+    );
+    check(
+      fs.readdirSync(live.env.TMPDIR).length === 0,
+      `a run ended by SIGTERM mid-call left ${JSON.stringify(fs.readdirSync(live.env.TMPDIR))} in its temp directory`,
+    );
+
+    // A run killed outright (SIGKILL) runs no handler, and the next run over the same evaluation reclaims what it left beneath its
+    // private parent, the proxy's directory included.
+    const killed = makeProject('egress-kill', {
+      edit: ({ folder }) =>
+        editJson(
+          path.join(folder, 'evaluation.json'),
+          (evaluation) => (evaluation.registry[0].egress = [{ host: '127.0.0.1', port: provider.port, addresses: ['127.0.0.1'] }]),
+        ),
+    });
+    const victim = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', killed.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...killed.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'hold-egress' },
+      stdio: 'ignore',
+    });
+    const victimEnded = new Promise((resolve) => victim.on('exit', resolve));
+    const victimProxies = () => proxyDirectories(privateRoot, victim.pid);
+    const heldBefore = (await answeringProxies(victimProxies, provider.port, () => victim.exitCode === null)).length;
+    victim.kill('SIGKILL');
+    await victimEnded;
+    const orphaned = fs.readdirSync(privateRoot).filter((name) => name.startsWith(`run-${victim.pid}-`));
+    check(
+      heldBefore === 1 && orphaned.length === 1,
+      `a run killed mid-call held ${heldBefore} proxy directory(ies) and left ${JSON.stringify(orphaned)}; expected one of each, since no handler runs`,
+    );
+    const next = evaluate(['run', '--evaluation', killed.folder], { ...killed.env });
+    const remaining = fs.readdirSync(privateRoot).filter((name) => name.startsWith(`run-${victim.pid}-`));
+    check(
+      remaining.length === 0 && next.output.includes('reclaimed private parent from killed run'),
+      `the run after a killed one left ${JSON.stringify(remaining)} beneath the private root and printed ${JSON.stringify(next.output.slice(0, 300))}; expected the killed run's private parent, its proxy directory included, reclaimed`,
+    );
+    // What a killed run leaves in the temp directory is the call's own temp directory (Story 1.131 reclaims it).
+    const leftTemp = fs.readdirSync(killed.env.TMPDIR);
+    check(
+      leftTemp.every((name) => name.startsWith('tea-evaluate-target-tmp-')),
+      `a killed run left ${JSON.stringify(leftTemp)} in its temp directory; expected nothing of the egress proxy`,
+    );
+    for (const name of leftTemp) fs.rmSync(path.join(killed.env.TMPDIR, name), { recursive: true, force: true });
+  } finally {
+    provider.stop();
+  }
 }
 
 /** The probe a confined process runs: connects to what `kind` names and prints what happened. */
@@ -9718,8 +11184,8 @@ async function checkAbstractSocketRoute() {
   });
   const tcpServer = net.createServer((socket) => socket.end());
   await new Promise((resolve) => tcpServer.listen(0, '127.0.0.1', resolve));
-  const attempt = async (kind, target, { stripped = false, network = 'isolated' } = {}) => {
-    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target], [], [], { network });
+  const attempt = async (kind, target, { stripped = false } = {}) => {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target]);
     const ran = await launch(stripped ? withoutNetwork(wrapped) : wrapped);
     return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
   };
@@ -9737,12 +11203,6 @@ async function checkAbstractSocketRoute() {
       check(
         control === 'connected',
         `with --unshare-net taken out of the vector, a confined process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
-      );
-      // An entry that declares "network": "host" keeps the host's network, so the same process reaches it.
-      const hosted = await attempt(kind, target, { network: 'host' });
-      check(
-        hosted === 'connected',
-        `a confined process whose entry declares network host, connecting to ${what}, got ${JSON.stringify(hosted)}; expected connected`,
       );
     }
     // A command target runs with a loopback only; its output, exit code and status file are what they were.
@@ -10624,11 +12084,6 @@ async function checkPathSocketUnits() {
       ].every(named),
       `the list was asked to leave out ${JSON.stringify(left)}; expected the workspace, the call's directory, the evaluation folder, the git directory, the private root, /dev, /proc and /run/user where it exists, which the call owns or the sandbox covers or replaces`,
     );
-    const hosted = sandbox.wrap('/bin/true', [], [], [], { network: 'host' });
-    check(
-      !hosted.args.includes('--unshare-net') && maskedSockets(hosted)?.length === 2 && hosted.hiddenSockets.length === 2,
-      `a call whose entry declares network host has the vector ${hosted.args.join(' ')}; expected the sockets hidden as well`,
-    );
     // A socket another user bound under a name no profile could carry cannot refuse every call: the argument carries it as it is.
     const odd = targetSandbox({ confinement: bubblewrap, workspace, status, hostSockets: () => [String.raw`/tmp/a"b\c.sock`] }).wrap(
       '/bin/true',
@@ -11084,7 +12539,7 @@ const connect = (target) => new Promise((resolve) => {
  * proves it, a macOS host skips it). The runtime serves a Unix socket file under the temp directory outside every grant, and the
  * host's own `/run/dbus/system_bus_socket` and `/var/run/docker.sock` are tried where they exist and the runtime's user can
  * connect to them (neither is bound here). A confined process connecting to each is refused (`ECONNREFUSED`), by the file and
- * by a link to it, with the entry's network isolated or host, and the same commands with the empty device files taken out of
+ * by a link to it, and the same commands with the empty device files taken out of
  * the real vector connect to each, which is the revert check. A socket in the workspace and one in a private directory of the
  * call stay connectable. A socket the runtime binds after the call started is reached, which is the limit the reference states.
  */
@@ -11107,8 +12562,8 @@ async function checkPathSocketRoute() {
   const outsideDirectory = socketDirectory();
   const sandbox = targetSandbox({ confinement, workspace, status: tempDir('path-socket-status') });
   const launch = (wrapped) => runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
-  const attempt = async (target, { stripped = false, network = 'isolated' } = {}) => {
-    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', target], [callDirectory], [], { network });
+  const attempt = async (target, { stripped = false } = {}) => {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', target], [callDirectory]);
     const ran = await launch(stripped ? withoutSocketMasks(wrapped, confinement.executable) : wrapped);
     return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
   };
@@ -11169,11 +12624,6 @@ async function checkPathSocketRoute() {
       check(
         refused === 'refused ECONNREFUSED',
         `a confined process connecting to ${what} got ${JSON.stringify(refused)}; expected refused ECONNREFUSED`,
-      );
-      const hosted = await attempt(target, { network: 'host' });
-      check(
-        hosted === 'refused ECONNREFUSED',
-        `a confined process whose entry declares network host, connecting to ${what}, got ${JSON.stringify(hosted)}; expected refused ECONNREFUSED`,
       );
       const control = await attempt(target, { stripped: true });
       check(
@@ -11294,11 +12744,12 @@ function checkBridgeReference() {
   check(reference.includes('### File-system confinement\n'), 'the reference has no "### File-system confinement" section');
   const claims = [
     [
-      '`network`: `"isolated"` (the default) or `"host"`, on a command, tool-server or HTTP entry; see [File-system confinement](#file-system-confinement).',
-      ['the network field'],
+      '`egress`: the hosts a confined target\'s processes may reach, each `{ "host", "port", "addresses" }`, on a command, tool-server or HTTP entry that starts a process; see [File-system confinement](#file-system-confinement).',
+      ['the egress field'],
     ],
+    ["A Linux skill or agent target lists its model provider's host and port.", ['the egress field', 'the egress route']],
     [
-      "Under Bubblewrap an entry that keeps the default network runs its service in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
+      "Under Bubblewrap a started service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
       ['the bridged server', 'the bridged server, stood in'],
     ],
     [
@@ -11310,7 +12761,7 @@ function checkBridgeReference() {
       ['the network namespace units'],
     ],
     [
-      "A Bubblewrap target whose entry keeps the default network, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.",
+      "A Bubblewrap target, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.",
       ['the abstract socket route', 'the network namespace units'],
     ],
     [
@@ -11330,35 +12781,72 @@ function checkBridgeReference() {
       ['the bridged server'],
     ],
     [
-      'A command target and a tool server with the default network have a loopback only and no bridge.',
+      'A command target and a tool server have a loopback only and no bridge.',
       ['the abstract socket route', 'the network namespace units'],
     ],
     [
-      'An isolated Bubblewrap target has no network beyond that loopback, so a target that needs the host\'s network (a database on the host\'s loopback, an outside service, a model provider) declares `"network": "host"` on its entry.',
-      ['the abstract socket route'],
+      "A Bubblewrap target has no network beyond that loopback and the proxy its entry's `egress` gives it, so a target that calls a model provider or an outside HTTPS service lists the host in `egress` on its entry.",
+      ['the egress route', 'the egress run'],
     ],
     [
-      'Each command, tool-server and HTTP entry takes `network`: `"isolated"` (the default) or `"host"`, and `check` refuses any other value.',
-      ['the network field'],
+      'Each command, tool-server and HTTP entry that starts a process takes `egress`, one `{ "host", "port", "addresses" }` item for each host and port its processes may reach, and `check` refuses an item eval-quality\'s `parseProbeTargetPolicy` refuses, a host spelled otherwise than a URL spells it, a host and port listed twice and an HTTP entry that names no server.',
+      ['the egress field'],
     ],
     [
-      'An entry that declares `"network": "host"` keeps the host\'s network under Bubblewrap, and its started service, if it has one, is reached directly with no bridge.',
-      ['the abstract socket route', 'the network namespace units', 'the network field', 'the bridged server, stood in'],
+      '`"network"` is no longer a field: `check` refuses an entry that declares it, naming the entry and pointing at `egress`.',
+      ['the egress field'],
     ],
     [
-      'A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.',
-      ['the network field', 'the abstract socket route'],
+      "An entry that lists `egress` gives each of its calls one route out, a proxy the runtime owns: the runtime serves it on a Unix socket in a private directory of the call, the call's status shim listens on a loopback port of the namespace and connects each connection to that socket, and the target starts with the port in `HTTPS_PROXY` and `https_proxy` and with `NODE_USE_ENV_PROXY=1`, which Node reads.",
+      ['the egress shim', 'the egress vector units', 'the egress route'],
     ],
     [
-      'An entry that declares `"network": "host"` keeps a route to the host\'s abstract Unix sockets, which Story 1.83 closes, and `run.json` lists each such entry under `hostNetwork` while the isolation manifest\'s forbidden-input notes name them.',
-      ['the network field', 'the abstract socket route'],
+      "The proxy tunnels an HTTP `CONNECT` request for a host and port an item lists, decided by eval-quality's `evaluateTarget` as the evaluation's HTTP port's requests are, and answers a request for another host, port or address `403` naming the reason, the host and the entry (a request that is no `CONNECT` gets `405`, a malformed head `400`, a host that does not resolve or cannot be reached `502` and a call past 128 tunnels `503`).",
+      ['the egress proxy units', 'the egress route'],
     ],
+    [
+      'A host no item names is refused before its name is resolved, and the proxy connects to the resolved addresses an item names, the next when one cannot be reached.',
+      ['the egress proxy units'],
+    ],
+    [
+      'The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route; a target that needs one sets `"confinement": false` with a recorded reason.',
+      ['the egress proxy units', 'the egress route'],
+    ],
+    [
+      'A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels (`curl -p -x "$HTTPS_PROXY"`) reaches a plain-HTTP gateway on the host\'s loopback that an item lists.',
+      ['the egress route'],
+    ],
+    [
+      "A connection from a target to the host's loopback, to an abstract Unix socket or to any host without the proxy finds a loopback and nothing else.",
+      ['the egress route', 'the egress run'],
+    ],
+    [
+      'A host in a request or an item holds letters, digits, `.`, `-` and `_` and at most 253 bytes, or is an IPv6 address; the proxy answers a longer or otherwise spelled host `400`, and `check` refuses such an item and a wildcard such as `*.example.com`, which no request can match.',
+      ['the egress proxy units', 'the egress field'],
+    ],
+    [
+      'An entry that lists no host has no proxy, no proxy variable and no route to any host.',
+      ['the egress route', 'the egress vector units'],
+    ],
+    [
+      "The proxy and its socket are private to the call: its directory lies beneath the run's private parent, the target sees it read-only, the authorization is held in the runtime's memory with no file, and the end of the call, its failure and a signal that ends the run remove it, while the next run over the evaluation reclaims one a run killed outright left.",
+      ['the egress proxy units', 'the egress vector units', 'the egress run'],
+    ],
+    [
+      "`run.json`'s `egress` lists each entry that lists hosts with its `host:port` items, its `egressRefusals` lists each trial whose proxy refused a request with the host, the port, the entry, the reason, the address when the host resolved and a count (at most 50 distinct requests, the rest counted in `omitted`, each detail cut to 500 characters), and the run's summary names those trials.",
+      ['the egress field', 'the egress record', 'the egress run', 'the egress proxy units'],
+    ],
+    [
+      'A completed `run` also records `egress`, each entry that lists hosts with its `host:port` items, and, once it ran trials, `egressRefusals`, the trials whose egress proxy refused a request (`[]` when none did; see [File-system confinement](#file-system-confinement)).',
+      ['the egress field', 'the egress record'],
+    ],
+    ["The isolation manifest's forbidden-input notes name the entries that list hosts under Bubblewrap.", ['the egress field']],
     [
       "The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.",
       ['the network namespace units'],
     ],
     [
-      "A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, whatever the entry's `network`, since the runtime mounts an empty device file over each one when a call starts.",
+      'A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, since the runtime mounts an empty device file over each one when a call starts.',
       ['the path socket route', 'the path socket units'],
     ],
     [
@@ -11418,16 +12906,16 @@ function checkBridgeReference() {
       ['the Seatbelt network and Mach services'],
     ],
     [
-      'macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.',
-      ['the Seatbelt network and Mach services', 'the network field'],
+      'macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.',
+      ['the Seatbelt network and Mach services', 'the egress field'],
     ],
     [
-      'The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target with the default network has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and an entry that declares `"network": "host"` and a macOS target keep the host\'s network.',
-      ['the network namespace units', 'the Seatbelt network and Mach services'],
+      "The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and the hosts its entry lists through the proxy (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.",
+      ['the network namespace units', 'the Seatbelt network and Mach services', 'the egress field'],
     ],
     [
-      'On Linux the entry also declares `"network": "host"`, since the agent calls its model provider and the default network of a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).',
-      ['the network field'],
+      "On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).",
+      ['the egress field'],
     ],
   ];
   // The cases of this suite, and of the HTTP suite, whose runner lists each as `await runCase('<name>', ...)` on a line of its own.
@@ -11480,6 +12968,16 @@ function checkBridgeReference() {
       `an unbacked sentence outside the confinement section passed the screen: ${sentence}`,
     );
   }
+  // Story 1.83: the reference teaches the authorization, and the retired declaration appears only in the sentence that says it is gone.
+  const retiredSentence =
+    '`"network"` is no longer a field: `check` refuses an entry that declares it, naming the entry and pointing at `egress`.';
+  const declaring = reference
+    .split('\n')
+    .filter((line) => /"network"|`network`|until Story 1\.83|hostNetwork/.test(line) && line !== retiredSentence);
+  check(
+    declaring.length === 0,
+    `the reference still teaches the retired network declaration: ${JSON.stringify(declaring.map((line) => line.slice(0, 120)))}`,
+  );
   check(
     !/shares the host's network namespace/.test(reference) && !/Story 1\.63 closes that route/.test(reference),
     "the reference still says a Bubblewrap target shares the host's network namespace",
@@ -11612,7 +13110,13 @@ const CASES = [
   { name: 'the bridge shim', body: checkBridgeShim, group: 'confinement' },
   { name: 'the bridge shim streams', body: checkBridgeShimStreams, group: 'confinement' },
   { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement' },
-  { name: 'the network field', body: checkNetworkField, group: 'confinement' },
+  { name: 'the egress proxy units', body: checkEgressProxyUnits, group: 'confinement' },
+  { name: 'the egress shim', body: checkEgressShim, group: 'confinement' },
+  { name: 'the egress vector units', body: checkEgressVectorUnits, group: 'confinement' },
+  { name: 'the egress field', body: checkEgressField, group: 'confinement' },
+  { name: 'the egress record', body: checkEgressRecord, group: 'confinement' },
+  { name: 'the egress route', body: checkEgressRoute, group: 'confinement' },
+  { name: 'the egress run', body: checkEgressRun, group: 'confinement' },
   { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
   { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement' },
   { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement' },

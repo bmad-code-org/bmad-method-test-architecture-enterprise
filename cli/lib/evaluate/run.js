@@ -523,6 +523,7 @@ async function runTrial(context) {
       observedMounts: async () => [],
       auditChannel: () => null,
       hostSocketReport: () => null,
+      egressReport: () => null,
       toolCalls: [],
     });
   }
@@ -566,7 +567,7 @@ async function runTrial(context) {
       // The audit's observer could not start (Story 1.60): a trial no audit watches yields no record.
       throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
     }
-    const { port: adapter, observedMounts, auditChannel, hostSocketReport } = probePort;
+    const { port: adapter, observedMounts, auditChannel, hostSocketReport, egressReport } = probePort;
     releaseHome = probePort.releaseHome;
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
@@ -607,6 +608,7 @@ async function runTrial(context) {
       observedMounts,
       auditChannel,
       hostSocketReport,
+      egressReport,
       // The commands and tool calls the runtime made for the plan, each an observed call.
       toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
@@ -664,6 +666,30 @@ function socketTruncationEntry(arm, trial) {
   };
 }
 
+/**
+ * The `run.json` entry of one trial whose egress proxies refused a request (Story 1.83), or `null`: each distinct refusal names the host
+ * and port asked for, the registry entries whose authorization was asked, eval-quality's reason and detail, the address the host resolved
+ * to when it did and how many times it was made; `omitted` counts the distinct requests past the cap the sandbox keeps.
+ */
+function egressRefusalEntry(arm, trial) {
+  const report = trial.egressReport;
+  if (report === null || report === undefined || report.refusals.length === 0) return null;
+  return { conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, refusals: report.refusals, omitted: report.omitted };
+}
+
+/** The sentence the run's summary adds for trials whose egress proxy refused a request, naming each host, port and entry, `''` when none did. */
+function egressRefusalNote(entries) {
+  if (entries.length === 0) return '';
+  const named = entries
+    .map((entry) => {
+      const [first, ...rest] = entry.refusals;
+      const more = rest.length + entry.omitted;
+      return `${entry.conditionArm} trial ${entry.trialIndex} (${first.host}:${first.port} for ${first.interfaceIds.map((id) => JSON.stringify(id)).join(', ')}, ${first.reason}${more > 0 ? `, and ${more} more` : ''})`;
+    })
+    .join(', ');
+  return `; the egress proxy refused a host the target asked for in ${named}, so the target did not reach it`;
+}
+
 /** The sentence the run's summary adds for trials that left host sockets reachable, naming each with its counts, `''` when none did. */
 function leftSocketsNote(entries) {
   if (entries.length === 0) return '';
@@ -705,7 +731,19 @@ function lostCanaryNote(entries) {
 async function concludeTrial(context, facts) {
   if (convertsRows(context.snapshot.layer.evaluator.kind)) return concludeWithRows(context, facts);
   const { arm, trialIndex, contract, evaluation, policy, writer, stop } = context;
-  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, auditChannel, hostSocketReport, toolCalls } = facts;
+  const {
+    label,
+    evidenceFile,
+    executed,
+    began,
+    evidence,
+    mounts,
+    observedMounts,
+    auditChannel,
+    hostSocketReport,
+    egressReport,
+    toolCalls,
+  } = facts;
   const elapsedMs = Date.now() - began;
   const judgments = {};
   for (const probe of arm.probes) {
@@ -761,6 +799,8 @@ async function concludeTrial(context, facts) {
     auditChannel: auditChannel(),
     // What the calls' lists of host sockets left reachable once their budget ran out (Story 1.82); `null` where nothing hides sockets.
     hostSocketReport: hostSocketReport(),
+    // What the calls' egress proxies refused (Story 1.83); `null` where nothing proxies.
+    egressReport: egressReport(),
     toolCalls,
     resourceUse: executed.resourceUse ?? ZERO,
     unreportedSteps: executed.unreportedSteps ?? [],
@@ -776,7 +816,20 @@ async function concludeTrial(context, facts) {
  */
 async function concludeWithRows(context, facts) {
   const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
-  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, auditChannel, hostSocketReport, toolCalls } = facts;
+  const {
+    label,
+    evidenceFile,
+    executed,
+    began,
+    evidence,
+    port,
+    mounts,
+    observedMounts,
+    auditChannel,
+    hostSocketReport,
+    egressReport,
+    toolCalls,
+  } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
   // before each launch and after each trial, and the frameworks it declares the same way. In a confined run no
@@ -927,6 +980,8 @@ async function concludeWithRows(context, facts) {
     auditChannel: auditChannel(),
     // What the calls' lists of host sockets left reachable once their budget ran out (Story 1.82); `null` where nothing hides sockets.
     hostSocketReport: hostSocketReport(),
+    // What the calls' egress proxies refused (Story 1.83); `null` where nothing proxies.
+    egressReport: egressReport(),
     toolCalls: [...toolCalls, ...bridged],
     resourceUse,
     unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
@@ -1375,11 +1430,14 @@ async function runTrialSets(given) {
   const unreportedResourceUse = [];
   const observedMountsChannel = [];
   const hostSocketTruncation = [];
+  const egressRefusals = [];
   for (const arm of sealable) {
     for (const trial of arm.trials) {
       if (trial.auditChannel !== null) observedMountsChannel.push(channelEntry(arm, trial));
       const truncated = socketTruncationEntry(arm, trial);
       if (truncated !== null) hostSocketTruncation.push(truncated);
+      const refused = egressRefusalEntry(arm, trial);
+      if (refused !== null) egressRefusals.push(refused);
       if (trial.unreportedSteps.length > 0) {
         unreportedResourceUse.push({ conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, stepIds: trial.unreportedSteps });
       }
@@ -1417,6 +1475,7 @@ async function runTrialSets(given) {
     unreportedResourceUse,
     observedMountsChannel,
     hostSocketTruncation,
+    egressRefusals,
     evaluatorRecord: {
       kind,
       identity: configuration.evaluatorIdentity,
@@ -1505,7 +1564,7 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
       wallClockSeconds: trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
       costUsd: setUse.costUsd,
     },
-    forbiddenInputNote: forbiddenInputNote(registry.confinement, registry.hostNetworkEntries),
+    forbiddenInputNote: forbiddenInputNote(registry.confinement, registry.egressEntries),
   });
   failures('IsolationManifest', await validate('isolation-manifest', manifest));
   const manifestFile = `${directory}/isolation-manifest.json`;
@@ -1854,6 +1913,7 @@ async function completeRun(
     unreportedResourceUse,
     observedMountsChannel = [],
     hostSocketTruncation = [],
+    egressRefusals = [],
     evaluatorRecord,
     model,
     judge,
@@ -1908,7 +1968,7 @@ async function completeRun(
     message:
       trialCount === null
         ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}`,
+        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.
@@ -1933,7 +1993,7 @@ async function completeRun(
       arms: trialCount === null ? [...new Set(trialSets.map((set) => set.conditionArm))] : arms.map((arm) => arm.conditionArm),
     },
     trialCount,
-    ...(trialCount === null ? {} : { unreportedResourceUse, observedMountsChannel, hostSocketTruncation }),
+    ...(trialCount === null ? {} : { unreportedResourceUse, observedMountsChannel, hostSocketTruncation, egressRefusals }),
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,
     completed: true,
@@ -1958,6 +2018,8 @@ module.exports = {
   channelEntry,
   socketTruncationEntry,
   leftSocketsNote,
+  egressRefusalEntry,
+  egressRefusalNote,
   lostCanaryNote,
   setRecommendation,
   // An evaluator attempt's score call; its unit drives the hold's refusal directly, which no engine call can race with.
