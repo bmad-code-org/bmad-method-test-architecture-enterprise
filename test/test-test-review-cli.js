@@ -68,6 +68,7 @@ const {
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');
 const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom } = require('../cli/test-review');
+const { verdictIsWhole } = require('../tools/generate-contracts');
 const {
   computeConventionBaseline,
   strideSelect,
@@ -5080,7 +5081,24 @@ async function runTests() {
         { label: 'delta-introduced', jsonPath: introducedJsonPath },
       ]) {
         try {
-          for (const key of Object.keys(JSON.parse(fs.readFileSync(jsonPath, 'utf8')))) emittedKeys.add(key);
+          const verdict = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+          const emitted = Object.keys(verdict);
+          for (const key of emitted) emittedKeys.add(key);
+          // The contract requires every `always` key of a verdict, so each real run has to carry all of them, and a key
+          // that a branch of the CLI leaves out belongs in `conditional` (Story 1.100: test/contracts/README.md records
+          // that no key of the whole-body declaration is narrowed because none is left out of a verdict).
+          const absent = Object.keys(VERDICT_KEYS.always).filter((key) => !emitted.includes(key));
+          assert(
+            absent.length === 0,
+            `the ${label} verdict carries every key VERDICT_KEYS declares always`,
+            `absent ${JSON.stringify(absent)}`,
+          );
+          // The whole-verdict oracle's twin also reads each key's type, which the key list above does not.
+          assert(
+            verdictIsWhole(verdict),
+            `the ${label} verdict is the object the contract's whole-verdict oracle accepts`,
+            JSON.stringify(verdict).slice(0, 300),
+          );
         } catch (error) {
           payloadRunsReadable = false;
           assert(false, `verdict payload runs produce a readable verdict (${label})`, error.message);

@@ -2,7 +2,7 @@
 title: 'Story 1.94: Score each stored workflow in the CI probe leg'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 2
 baseline_commit: '985143f7dfb8af62dc203d57890f59ab83eb9b3a'

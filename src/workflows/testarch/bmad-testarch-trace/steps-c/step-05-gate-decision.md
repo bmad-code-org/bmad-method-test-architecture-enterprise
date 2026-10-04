@@ -455,7 +455,7 @@ const gateReport = {
   // Null when no register was found. Never consulted by the decision logic above.
   waivers: waivers,
 
-  recommendations: coverageMatrix.recommendations,
+  recommendations: coverageMatrix.recommendations || [],
 };
 ```
 
@@ -705,7 +705,7 @@ const e2eTraceSummary = {
   // Tests whose names claim a criterion their assertions do not establish. They carry no coverage and
   // are in no test total; they are here so a consumer can see which claims were read and turned down.
   rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence || [],
-  recommendations: coverageMatrix.recommendations,
+  recommendations: coverageMatrix.recommendations || [],
 
   links: {
     trace_report_path: '{outputFile}',

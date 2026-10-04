@@ -164,7 +164,7 @@ probes in `expected-strength.json`.
 The trace, nfr, test-design and ci records score a stored run as the correct run of its set or project.
 Each oracle's disposition comes from the scorer `tools/generate-contracts.js` pairs with it (the harness's `scoreRun` for trace, nfr and test-design, `workflowMentions` for ci), applied to the stored run the record carries for that oracle's own set.
 The test-review record measures its stored verdict: the registry-row and scope oracles from what the harness measured, the verdict-payload oracle from the fields the verdict carries, and the exit-code oracle from the exit code its recommendation maps to.
-The fragment selection and routing records read no stored run; they construct the answer they score.
+The fragment selection and routing records read no stored run; they construct the answer they score, and the routing record applies the whole-body scorer to the answer it constructed.
 A record that carries no run of a set (a defect probe carries only the project it plants a defect on) leaves that set's oracles at `held`, since there is nothing to read.
 
 `test:probe-corpus` fails with the oracle that no longer holds when a stored run is not the correct one.
@@ -172,10 +172,17 @@ It also holds every set and every oracle to a wrong run, so a disposition that s
 
 - each leg reads the next leg's run in turn, and a set must lose an oracle that holds on its own run;
 - each leg reads every other stored case of its suite, one at a time, and every oracle must be violated by a scorer under at least one wrong read (the three ci `run-measured` oracles, whose scorer reads no workflow, are listed in `WRONG_RUN_CANNOT_FAIL` in `test/test-probe-corpus.js` with the reason; the two test-design projection-coherence oracles fail only through a projection with its `design` key dropped);
-- trace, nfr and test-design read a run the harness refuses to score through every leg, which fails every oracle of the set (test-design's projection-coherence oracle reads the projection alone: it holds with the projection intact and is violated by a projection with its `design` key dropped), and a violation a refusal produced counts only for the `run-measured` oracles, since the refusal answers every other oracle without calling its scorer;
+- trace, nfr and test-design read a run the harness refuses to score through every leg, which fails every oracle of the set (trace's whole-summary oracle reads the summary object, and test-design's projection-coherence oracle reads the projection alone: it holds with the projection intact and is violated by a projection with its `design` key dropped), and a violation a refusal produced counts only for the `run-measured` oracles, since the refusal answers every other oracle without calling its scorer;
 - an evidence builder of those four suites that exposes no `storedRunSpecs` or `storedRunLegs` fails, so a builder reverted to a constant `held` cannot opt out of the checks above;
 - a contract declaring an oracle the generator does not specify throws, for the four builders and for test-review's;
-- test-review reads its verdict with one field dropped at a time (each of the four top-level fields, and each of the four a finding carries on its first and on its last finding) and through a verdict the harness refuses to score.
+- test-review reads its verdict with one field dropped at a time (each of the four top-level fields, and each of the four a finding carries on its first and on its last finding) and through a verdict the harness refuses to score;
+- the whole-body oracles of Story 1.100 follow the same discipline.
+  Trace reads its stored summary with each key of the contract's required declaration dropped in turn, from one set's case at a time, and that set's whole-summary oracle must be violated while the other set's stays held.
+  The refusal rule above does not cover the whole-summary oracle: a run the harness refuses to score (a stale `schema_version`, a matrix with no section) still carries a summary object, the engine reads it, and the oracle holds or is violated by what that object is. `REFUSED_READS` lists it under `measuresStill` for both trace legs, holding it with the summary intact and violating it with a key dropped.
+  The stored `seeded-rejected-evidence-omitted` read violates the seeded set's oracle and holds the clean set's.
+  Test-review reads its stored verdict with each of the 23 required keys dropped, with an undeclared key added and with each typed key of another type, and the whole-verdict oracle must be violated by each.
+  The routing records read no stored run and are not in `STORED_RUN_SUITES`: they derive each case's whole-body disposition from `routingAnswerIsWhole` over the constructed correct answer the record carries, and `routingWholeBodyProblems` reads every case in turn through an answer with a null reason, a missing reason or action, an action the skill does not allow and an undeclared key, requiring that case's oracle to be violated and every other case's held.
+  A contract without the whole-body oracle of a case fails the same check.
 
 The baseline records no oracle disposition, so it cannot say which oracle stopped holding, and it sees a wrong `CI_CORRECT_RUNS` row only where the row changes the run a defect probe carries.
 The clean control P-004 passes pre-flight and scores `CONCERNS` with exit 0, and the per-probe summary the baseline keeps carries only `probeId`, `state`, `severity` and `trialIndex` of each outcome, so a moved disposition or corroboration never reaches `expected-strength.json`.

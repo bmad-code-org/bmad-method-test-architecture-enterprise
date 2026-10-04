@@ -552,7 +552,7 @@
       },
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "success-indicator-separation", "whole-body"],
+    "unsatisfiedCoverageRules": ["malformed-input"],
     "probes": {
       "P-001": {
         "probeClass": "gameability",
@@ -563,11 +563,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "strictPromotable": true,
-        "basis": [
-          "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
-        ],
+        "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
         "qualification": null,
         "strength": {
           "defect": null,
@@ -920,6 +916,72 @@
               "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -933,11 +995,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "strictPromotable": true,
-        "basis": [
-          "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
-        ],
+        "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
         "qualification": null,
         "strength": {
           "defect": null,
@@ -983,6 +1041,72 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
@@ -1301,7 +1425,7 @@
       },
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "success-indicator-separation", "whole-body"],
+    "unsatisfiedCoverageRules": ["malformed-input"],
     "probes": {
       "P-001": {
         "probeClass": "gameability",
@@ -1312,11 +1436,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "strictPromotable": true,
-        "basis": [
-          "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
-        ],
+        "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
         "qualification": null,
         "strength": {
           "defect": null,
@@ -1531,6 +1651,54 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1544,11 +1712,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "strictPromotable": true,
-        "basis": [
-          "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
-        ],
+        "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
         "qualification": null,
         "strength": {
           "defect": null,
@@ -1594,6 +1758,54 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
@@ -1778,7 +1990,7 @@
       },
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back", "whole-body"],
+    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back"],
     "probes": {
       "P-001": {
         "probeClass": "defect",
@@ -1791,8 +2003,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -1924,6 +2135,12 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-001",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1939,8 +2156,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2072,6 +2288,12 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-002",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -2087,8 +2309,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2220,6 +2441,12 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-003",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -2235,8 +2462,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2368,6 +2594,12 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -2383,8 +2615,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2516,6 +2747,12 @@
               "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-005",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2531,8 +2768,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2664,6 +2900,12 @@
               "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-006",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2679,8 +2921,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2812,6 +3053,12 @@
               "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-007",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2827,8 +3074,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -2960,6 +3206,12 @@
               "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-008",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2975,8 +3227,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -3108,6 +3359,12 @@
               "state": "confirmed",
               "severity": "material",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-009",
+              "state": "confirmed",
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -3123,8 +3380,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -3171,6 +3427,12 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-010",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
@@ -3829,7 +4091,7 @@
       "gameability": null,
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back", "success-indicator-separation", "whole-body"],
+    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back", "success-indicator-separation"],
     "probes": {
       "P-001": {
         "probeClass": "defect",
@@ -3885,8 +4147,7 @@
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -3933,6 +4194,18 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",

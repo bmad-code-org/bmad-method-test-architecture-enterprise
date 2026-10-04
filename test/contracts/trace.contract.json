@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
-  "sourceSpecDigest": "sha256:3481916b32e52b9f89693bb25b19a308bdff91bc13e070c271b70fe8a439ce2f",
+  "sourceSpecDigest": "sha256:74fc13be0242c2e288828291956d9135f2fb89a62c660f975c70c8bd874a39eb",
   "behaviors": [
     {
       "id": "B-001",
@@ -498,6 +498,44 @@
         }
       ],
       "oracles": ["O-026"]
+    },
+    {
+      "id": "B-027",
+      "description": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "severity": "material",
+      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-trace/steps-c/step-05-gate-decision.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "malformed-summary-read-as-a-measurement"
+        }
+      ],
+      "oracles": ["O-027"]
+    },
+    {
+      "id": "B-028",
+      "description": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "severity": "material",
+      "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-trace/steps-c/step-05-gate-decision.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "malformed-summary-read-as-a-measurement"
+        }
+      ],
+      "oracles": ["O-028"]
     }
   ],
   "oracles": [
@@ -2453,6 +2491,614 @@
               },
               {
                 "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-027",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Every one of the 22 keys the summary always carries, in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/schema_version",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/snapshot_at",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/repo",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_mode",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_status",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/inventory_basis",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_basis",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/source_sha",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/target",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/decision_mode",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/evaluator",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/confidence",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/tests",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/heuristics",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/rejected_evidence",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/recommendations",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/links"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": [
+                "schema_version",
+                "snapshot_at",
+                "repo",
+                "collection_mode",
+                "collection_status",
+                "inventory_basis",
+                "gate_basis",
+                "source_sha",
+                "target",
+                "decision_mode",
+                "evaluator",
+                "confidence",
+                "oracle",
+                "coverage",
+                "tests",
+                "risk_summary",
+                "heuristics",
+                "live_evidence",
+                "blockers",
+                "rejected_evidence",
+                "recommendations",
+                "links"
+              ],
+              "permittedKeys": [
+                "schema_version",
+                "snapshot_at",
+                "repo",
+                "collection_mode",
+                "collection_status",
+                "inventory_basis",
+                "gate_basis",
+                "source_sha",
+                "target",
+                "decision_mode",
+                "evaluator",
+                "confidence",
+                "oracle",
+                "coverage",
+                "tests",
+                "risk_summary",
+                "heuristics",
+                "live_evidence",
+                "blockers",
+                "rejected_evidence",
+                "recommendations",
+                "links",
+                "waivers",
+                "gate_status",
+                "gate_criteria"
+              ],
+              "types": {
+                "schema_version": "string",
+                "snapshot_at": null,
+                "repo": null,
+                "collection_mode": "string",
+                "collection_status": "string",
+                "inventory_basis": "string",
+                "gate_basis": "string",
+                "source_sha": null,
+                "target": null,
+                "decision_mode": null,
+                "evaluator": null,
+                "confidence": null,
+                "oracle": "object",
+                "coverage": "object",
+                "tests": null,
+                "risk_summary": "object",
+                "heuristics": null,
+                "live_evidence": "object",
+                "blockers": "array",
+                "rejected_evidence": "array",
+                "recommendations": null,
+                "links": null,
+                "waivers": "object",
+                "gate_status": "string",
+                "gate_criteria": "object"
+              }
+            }
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/schema_version"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/snapshot_at"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/repo"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_mode"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_status"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/inventory_basis"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_basis"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/source_sha"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/target"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/decision_mode"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/evaluator"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/confidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/tests"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/heuristics"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/rejected_evidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/recommendations"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/links"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-028",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Every one of the 22 keys the summary always carries, in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/schema_version",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/snapshot_at",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/repo",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_mode",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_status",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/inventory_basis",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_basis",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/source_sha",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/target",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/decision_mode",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/evaluator",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/confidence",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/tests",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/heuristics",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/blockers",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/recommendations",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/links"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": [
+                "schema_version",
+                "snapshot_at",
+                "repo",
+                "collection_mode",
+                "collection_status",
+                "inventory_basis",
+                "gate_basis",
+                "source_sha",
+                "target",
+                "decision_mode",
+                "evaluator",
+                "confidence",
+                "oracle",
+                "coverage",
+                "tests",
+                "risk_summary",
+                "heuristics",
+                "live_evidence",
+                "blockers",
+                "rejected_evidence",
+                "recommendations",
+                "links"
+              ],
+              "permittedKeys": [
+                "schema_version",
+                "snapshot_at",
+                "repo",
+                "collection_mode",
+                "collection_status",
+                "inventory_basis",
+                "gate_basis",
+                "source_sha",
+                "target",
+                "decision_mode",
+                "evaluator",
+                "confidence",
+                "oracle",
+                "coverage",
+                "tests",
+                "risk_summary",
+                "heuristics",
+                "live_evidence",
+                "blockers",
+                "rejected_evidence",
+                "recommendations",
+                "links",
+                "waivers",
+                "gate_status",
+                "gate_criteria"
+              ],
+              "types": {
+                "schema_version": "string",
+                "snapshot_at": null,
+                "repo": null,
+                "collection_mode": "string",
+                "collection_status": "string",
+                "inventory_basis": "string",
+                "gate_basis": "string",
+                "source_sha": null,
+                "target": null,
+                "decision_mode": null,
+                "evaluator": null,
+                "confidence": null,
+                "oracle": "object",
+                "coverage": "object",
+                "tests": null,
+                "risk_summary": "object",
+                "heuristics": null,
+                "live_evidence": "object",
+                "blockers": "array",
+                "rejected_evidence": "array",
+                "recommendations": null,
+                "links": null,
+                "waivers": "object",
+                "gate_status": "string",
+                "gate_criteria": "object"
+              }
+            }
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/schema_version"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/snapshot_at"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/repo"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_mode"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_status"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/inventory_basis"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_basis"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/source_sha"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/target"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/decision_mode"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/evaluator"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/confidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/tests"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/heuristics"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/blockers"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/recommendations"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/links"
               }
             ]
           }

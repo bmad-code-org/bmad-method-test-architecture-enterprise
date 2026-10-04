@@ -128,6 +128,7 @@ const { buildPrompt: buildAtddPrompt, ATDD_INTERFACE, ATDD_OPERATION, ATDD_SCAFF
 // comparing two spellings of nearly the same thing and reporting the difference
 // as a defect in the skill.
 const { ROUTING_REQUEST_KEYS, ROUTING_RESPONSE_KEYS, DEFAULT_AGENT: ROUTING_DEFAULT_AGENT } = require('../cli/routing-runner');
+const { ROUTING_ACTIONS } = require('../cli/lib/parse-routing');
 const {
   buildPrompt: buildRoutingPrompt,
   candidatePatternSource,
@@ -351,6 +352,63 @@ function verdictDescriptor(keys) {
   };
 }
 
+/** The verdict artifact the review step writes, as the interaction-rooted pointer every oracle below addresses a key under. */
+const VERDICT_ROOT = '/interactions/review-corpus/artifact/verdict';
+
+/** The JSON kind a value carries, in the vocabulary of a descriptor's `types` and of the `shape` operator. */
+function jsonKindOf(value) {
+  if (Array.isArray(value)) return 'array';
+  return value === null ? 'null' : typeof value;
+}
+
+/**
+ * Every pointer the verdict whole-body oracle addresses in both its direction and its check: one per key the CLI
+ * always writes. The root that `shape` reads is not among them, because a parent pointer does not address a key.
+ */
+function verdictWholeBodyTargets() {
+  return Object.keys(VERDICT_KEYS.always).map((key) => `${VERDICT_ROOT}/${key}`);
+}
+
+/**
+ * The verdict read whole, as a check over every key the CLI always writes.
+ *
+ * eval-quality's `whole-body` rule asks for one oracle whose direction and check both address every required
+ * response key of an operation at one step, and the verdict operation declares twenty-three. The other oracles
+ * read the findings and four fields beside them. This one states two claims: the verdict is exactly the declared
+ * object (every required key present, no key beyond the declared ones, each key of its declared type), and each
+ * required key resolves, which is what puts every key pointer in the check beside the `shape` that reads the root.
+ * The descriptor is the CLI's own `VERDICT_KEYS`, so a key the CLI gains lands here without an edit.
+ *
+ * The skip payload is a different shape that the contract leaves out (see `verdictDescriptor`), so a skip fails
+ * this oracle as it fails every other one that reads a verdict.
+ */
+function verdictWholeBodyExpression() {
+  const { requiredKeys, permittedKeys, types } = verdictDescriptor(VERDICT_KEYS);
+  return {
+    op: 'all',
+    operands: [
+      { op: 'shape', operands: [{ pointer: VERDICT_ROOT }], descriptor: { requiredKeys, permittedKeys, types } },
+      ...verdictWholeBodyTargets().map((pointer) => ({ op: 'existence', operands: [{ pointer }] })),
+    ],
+  };
+}
+
+/**
+ * The JavaScript twin of `verdictWholeBodyExpression`: whether a verdict is the object the CLI declares.
+ *
+ * @param {unknown} verdict What the review step wrote to the verdict artifact.
+ * @returns {boolean}
+ */
+function verdictIsWhole(verdict) {
+  if (verdict === null || typeof verdict !== 'object' || Array.isArray(verdict)) return false;
+  const types = { ...VERDICT_KEYS.always, ...VERDICT_KEYS.conditional };
+  return (
+    Object.keys(VERDICT_KEYS.always).every((key) => Object.hasOwn(verdict, key)) &&
+    Object.keys(verdict).every((key) => Object.hasOwn(types, key)) &&
+    Object.entries(types).every(([key, type]) => type === null || !Object.hasOwn(verdict, key) || jsonKindOf(verdict[key]) === type)
+  );
+}
+
 /** Every plant in the corpus, flattened, in the order ground-truth.json lists them. */
 function plantsOf(groundTruth) {
   return groundTruth.files.flatMap((entry) =>
@@ -421,7 +479,13 @@ function buildTestReviewContract() {
     return oracle;
   });
   const nextId = (offset) => `O-${String(plants.length + offset).padStart(3, '0')}`;
-  const [cleanOracleId, scopeOracleId, verdictOracleId, exitOracleId] = [nextId(1), nextId(2), nextId(3), nextId(4)];
+  const [cleanOracleId, scopeOracleId, verdictOracleId, exitOracleId, wholeBodyOracleId] = [
+    nextId(1),
+    nextId(2),
+    nextId(3),
+    nextId(4),
+    nextId(5),
+  ];
 
   oracles.push(
     {
@@ -520,6 +584,23 @@ function buildTestReviewContract() {
       },
       check: { op: 'equality', operands: [{ pointer: EXIT_CODE_POINTER }, { literal: 1 }] },
     },
+    {
+      // After every oracle above, so O-001 to O-013 keep their numbers.
+      id: wholeBodyOracleId,
+      polarity: 'expects-hold',
+      commentary:
+        `The verdict is the object the CLI declares: all ${Object.keys(VERDICT_KEYS.always).length} keys it always writes are present, ` +
+        'each typed key of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.',
+      direction: {
+        polarity: 'expects-hold',
+        relation: 'all',
+        scope: `Every one of the ${Object.keys(VERDICT_KEYS.always).length} keys the verdict always carries, in the verdict artifact of the one review invocation.`,
+        negativeDomain:
+          'A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key the contract types as another type.',
+        evidenceTargets: verdictWholeBodyTargets(),
+      },
+      check: verdictWholeBodyExpression(),
+    },
   );
 
   // One behavior per planted row, in corpus order, so B-00n, O-00n and the nth
@@ -544,7 +625,12 @@ function buildTestReviewContract() {
   });
 
   const nextBehaviorId = (offset) => `B-${String(plants.length + offset).padStart(3, '0')}`;
-  const [cleanBehaviorId, scopeBehaviorId, verdictBehaviorId] = [nextBehaviorId(1), nextBehaviorId(2), nextBehaviorId(3)];
+  const [cleanBehaviorId, scopeBehaviorId, verdictBehaviorId, wholeBodyBehaviorId] = [
+    nextBehaviorId(1),
+    nextBehaviorId(2),
+    nextBehaviorId(3),
+    nextBehaviorId(4),
+  ];
   behaviors.push(
     {
       id: cleanBehaviorId,
@@ -574,6 +660,15 @@ function buildTestReviewContract() {
       requirementLinks: [{ scheme: 'tea-cli-contract', id: 'verdict-payload' }],
       riskLinks: [{ scheme: 'tea-eval-risk', id: 'unmeasurable-run-scored-as-a-miss' }],
       oracles: [verdictOracleId, exitOracleId],
+    },
+    {
+      id: wholeBodyBehaviorId,
+      description: 'The verdict artifact is the object the CLI declares, key for key.',
+      severity: 'material',
+      observableSuccessCriterion: `The verdict carries all ${Object.keys(VERDICT_KEYS.always).length} keys the CLI always writes, each typed key of its declared type, and no key the CLI does not declare.`,
+      requirementLinks: [{ scheme: 'tea-cli-contract', id: 'verdict-whole-body' }],
+      riskLinks: [{ scheme: 'tea-eval-risk', id: 'malformed-verdict-read-as-a-measurement' }],
+      oracles: [wholeBodyOracleId],
     },
   );
 
@@ -1495,15 +1590,62 @@ function allOf(operands) {
  * which is the rule the verdict descriptor already follows for tea-test-review.
  */
 function summaryKeysFromStep05() {
-  const text = fs.readFileSync(TRACE_STEP_05, 'utf8');
+  return summaryKeysFromText(fs.readFileSync(TRACE_STEP_05, 'utf8'));
+}
+
+/**
+ * The same read over the step's text, so a test can hand it an edited copy without touching the file.
+ *
+ * Every line of the literal at exactly two spaces of indent is read, and one this read cannot place is refused: a comment, a
+ * blank line and a closer are skipped, and anything else has to be `key: value` with a snake_case key, so a camelCase key, a key
+ * with a digit, a shorthand key or a spread cannot add a summary key the contract never learns of.
+ *
+ * A key of the literal is "always" only when the workflow always gives it a value. `JSON.stringify` drops a key whose value is
+ * `undefined`, so a value that reads the coverage matrix (by dot or by bracket) or an optional chain with no `||`, `??` or
+ * ternary fallback can leave the key out of the written summary, and a fallback to the literal `undefined` is the same defect,
+ * as is an empty value (wrapped onto the next line, where this read cannot see it). A value that is a bare identifier is followed
+ * to its single-line `const` or `let` declaration earlier in the step and held to the same rule. A declaration that spans lines,
+ * or a value reached through a call, is out of this read's scope: the real runs of the trace workflow are the guard there.
+ * A value that opens a nested object or array on its own line is read by its key alone.
+ *
+ * @param {string} text The text of step-05.
+ */
+function summaryKeysFromText(text) {
   const start = text.indexOf('const e2eTraceSummary = {');
   assert(start !== -1, 'step-05 no longer declares `const e2eTraceSummary = {`, so the summary key set cannot be read');
   const end = text.indexOf('\n};', start);
   assert(end !== -1, 'step-05 declares `const e2eTraceSummary = {` and never closes it');
+  const before = text.slice(0, start);
+  const hasFallback = (value) => /\|\||\?\?/.test(value) || (/\s\?\s/.test(value) && /\s:\s/.test(value));
+  const mayBeUndefined = (value) =>
+    /(\|\||\?\?)\s*undefined\b/.test(value) || (/coverageMatrix(\.|\[)|\?\./.test(value) && !hasFallback(value));
   const always = [];
-  for (const line of text.slice(start, end).split('\n')) {
-    const key = /^ {2}([a-z_]+):/.exec(line);
-    if (key) always.push(key[1]);
+  for (const line of text.slice(start, end).split('\n').slice(1)) {
+    if (!/^ {2}\S/.test(line) || /^ {2}(\/\/|[}\]],?\s*(\/\/.*)?$)/.test(line)) continue;
+    const entry = /^ {2}([A-Za-z_$][\w$]*):(.*)$/.exec(line);
+    assert(entry !== null, `step-05's summary literal has a line this read cannot place as \`key: value\` (${line.trim()})`);
+    const key = entry[1];
+    assert(
+      /^[a-z_]+$/.test(key),
+      `step-05's summary literal has the key "${key}", which is not lowercase letters and underscores, so the key read would not see it`,
+    );
+    always.push(key);
+    const value = entry[2]
+      .replace(/\/\/.*$/, '')
+      .trim()
+      .replace(/,$/, '')
+      .trim();
+    assert(value !== '', `step-05's summary literal gives "${key}" an empty value on its line, so this read cannot tell what it holds`);
+    if (/[{[]$/.test(value)) continue;
+    const declared = /^[A-Za-z_$][\w$]*$/.test(value)
+      ? new RegExp(`^\\s*(?:const|let) ${value.replaceAll('$', String.raw`\$`)} = (.*);\\s*$`, 'm').exec(before)
+      : null;
+    for (const candidate of declared === null ? [value] : [value, declared[1]]) {
+      assert(
+        !mayBeUndefined(candidate),
+        `step-05's summary literal gives "${key}" a value that can be undefined (${candidate}), and JSON.stringify drops such a key, so it is not always written; give it a fallback`,
+      );
+    }
   }
   const conditional = [...new Set([...text.matchAll(/^\s*e2eTraceSummary\.([a-z_]+) = /gm)].map((match) => match[1]))];
   assert(always.length > 0, "no top-level key was read off step-05's summary literal");
@@ -1536,11 +1678,18 @@ const TRACE_SUMMARY_TYPES = {
   gate_criteria: 'object',
 };
 
-function traceSummaryDescriptor(keys, cardinalityBound) {
+/** The key sets and types of the summary, in the vocabulary of the descriptor's fields and of the `shape` operator. */
+function traceSummaryShape(keys) {
   return {
-    requiredKeys: keys.always,
+    requiredKeys: [...keys.always],
     permittedKeys: [...keys.always, ...keys.conditional],
     types: Object.fromEntries([...keys.always, ...keys.conditional].map((key) => [key, TRACE_SUMMARY_TYPES[key] ?? null])),
+  };
+}
+
+function traceSummaryDescriptor(keys, cardinalityBound) {
+  return {
+    ...traceSummaryShape(keys),
     successIndicator: '/gate_status',
     channelRoles: {
       '/gate_status': 'success-indicator',
@@ -1563,6 +1712,57 @@ function traceSummaryDescriptor(keys, cardinalityBound) {
   };
 }
 
+/**
+ * Every pointer the summary whole-body oracle of one set addresses in both its direction and its check: one per key
+ * step-05's summary literal always carries. The summary root that `shape` reads is not among them.
+ */
+function traceWholeSummaryTargets(set) {
+  return summaryKeysFromStep05().always.map((key) => traceSummaryPointer(set, `/${key}`));
+}
+
+/**
+ * The summary read whole, as a check over every key step-05 always writes.
+ *
+ * eval-quality's `whole-body` rule asks for one oracle whose direction and check both address every required
+ * response key at one step, and the summary declares twenty-two. The other oracles read the gate, the coverage
+ * arithmetic, the oracle block and the collections. This one states that the summary is the object step-05
+ * declares: every key its literal always carries is present, no key beyond the ones it declares appears (the
+ * conditional `waivers`, `gate_status` and `gate_criteria` are permitted), and each key whose type the contract
+ * states has it. Each required key also resolves as a pointer of its own, which is what puts every key in the check
+ * beside the `shape` that reads the root.
+ *
+ * @param {object} set The fixture set whose step the oracle reads.
+ */
+function traceWholeSummaryExpression(set) {
+  return {
+    op: 'all',
+    operands: [
+      {
+        op: 'shape',
+        operands: [{ pointer: traceSummaryPointer(set, '') }],
+        descriptor: traceSummaryShape(summaryKeysFromStep05()),
+      },
+      ...traceWholeSummaryTargets(set).map((pointer) => ({ op: 'existence', operands: [{ pointer }] })),
+    ],
+  };
+}
+
+/**
+ * The JavaScript twin of `traceWholeSummaryExpression`: whether a summary is the object step-05 declares.
+ *
+ * @param {unknown} summary What the run wrote to the summary artifact.
+ * @returns {boolean}
+ */
+function traceSummaryIsWhole(summary) {
+  if (summary === null || typeof summary !== 'object' || Array.isArray(summary)) return false;
+  const { requiredKeys, permittedKeys, types } = traceSummaryShape(summaryKeysFromStep05());
+  return (
+    requiredKeys.every((key) => Object.hasOwn(summary, key)) &&
+    Object.keys(summary).every((key) => permittedKeys.includes(key)) &&
+    Object.entries(types).every(([key, type]) => type === null || !Object.hasOwn(summary, key) || jsonKindOf(summary[key]) === type)
+  );
+}
+
 /** The lines a citation may land on and still resolve to a recorded span, at the corpus's declared tolerance. */
 function admittedLines(entry, tolerance) {
   const lines = [];
@@ -1583,7 +1783,8 @@ function admittedLines(entry, tolerance) {
  * failed, and undefined where the harness did not score it at all, which is how
  * the waiver oracles behave when the gate did not match: scoreWaivers skips them
  * so that one wrong gate is not scored three times, and the oracle check skips
- * them with it.
+ * them with it. It takes the `scoreRun` result and then the summary the run wrote,
+ * which only the whole-summary oracles read.
  *
  * Every claim is something ground-truth.json states. The one derivation is
  * `gate_basis`, which step-05 sets from the gate eligibility the ground truth
@@ -2079,6 +2280,32 @@ function traceOracleSpecs(groundTruth) {
       () => true,
     );
   }
+
+  // After every oracle above, so the ids above keep their numbers. One oracle per set reads the whole summary,
+  // which is what the `whole-body` coverage rule asks for and no oracle above supplies.
+  for (const set of groundTruth.fixtureSets) {
+    const keyCount = summaryKeysFromStep05().always.length;
+    push(
+      set.id,
+      'whole-summary',
+      {
+        polarity: 'expects-hold',
+        commentary:
+          `${set.id}: the summary is the object step-05 declares. All ${keyCount} keys its literal always carries are present, each typed key of its declared type, ` +
+          'and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.',
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `Every one of the ${keyCount} keys the summary always carries, in the summary written for ${set.id}.`,
+          negativeDomain:
+            'A summary missing a key step-05 always writes, carrying a key it does not declare, or holding a key the contract types as another type.',
+          evidenceTargets: traceWholeSummaryTargets(set),
+        },
+        check: traceWholeSummaryExpression(set),
+      },
+      (_scored, summary) => traceSummaryIsWhole(summary),
+    );
+  }
   return specs;
 }
 
@@ -2168,6 +2395,19 @@ const TRACE_BEHAVIORS = [
       'Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.',
     requirement: 'collection',
   },
+  {
+    id: 'B-007',
+    role: 'both',
+    kinds: ['whole-summary'],
+    severity: 'material',
+    risk: 'malformed-summary-read-as-a-measurement',
+    description: 'Each summary is the object step-05 declares, key for key.',
+    success:
+      'Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.',
+    // The summary keys are the workflow's own, so the link names the step that writes them rather than a field of the ground truth.
+    link: { scheme: 'tea-workflow-step', id: path.relative(WORKFLOW_ROOT, TRACE_STEP_05).split(path.sep).join('/') },
+    requirement: 'summaryKeys',
+  },
 ];
 
 /**
@@ -2243,7 +2483,7 @@ function buildTraceContract() {
         description: oracleById.get(spec.id).commentary,
         severity: authored.severity,
         observableSuccessCriterion: authored.success,
-        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+        requirementLinks: [authored.link ?? { scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
         riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
         oracles: [spec.id],
       });
@@ -3726,7 +3966,70 @@ const ROUTING_ORACLE_KINDS = {
     severity: 'material',
     risk: 'unservable-intent-declined-without-saying-what-is-missing',
   },
+  // Reads both required keys of the answer, so it has no single pointer; `routingWholeBodyTargets` names them.
+  'whole-body': {
+    field: 'routingAnswer',
+    // The behavior links the runner's declaration of its answer, as test-review's links its CLI's, since the ground truth states no such field.
+    link: { scheme: 'tea-cli-contract', id: 'routing-answer-whole-body' },
+    pointer: null,
+    severity: 'material',
+    risk: 'reply-is-not-a-routing-answer',
+  },
 };
+
+/** The two keys every routing answer must carry, as the interaction-rooted pointers one case's step reads them under. */
+function routingWholeBodyTargets(caseId) {
+  return ROUTING_RESPONSE_KEYS.required.map((key) => routingPointer(caseId, key));
+}
+
+/**
+ * One case's answer read whole, as a check over both required keys of the routing answer.
+ *
+ * eval-quality's `whole-body` rule asks for one oracle whose direction and check both address every required
+ * response key of an operation at one step. The operation declares `action` and `reason`, and every other oracle
+ * reads one of them. This one states that the answer is the object the runner prints: its keys are the declared
+ * ones, `action` is one of the three answers Step 8 of the skill allows and `reason` is a string with a
+ * non-blank character. The runner normalizes a reply that names an action and forgets to say why to a null
+ * `reason` rather than rejecting it (`cli/lib/parse-routing.js`), so a null reason is the defect this oracle can see.
+ * A `reason` of whitespace never reaches stdout, since the parser trims it to null, and the pattern is the same
+ * non-blank claim the test-design projection states.
+ *
+ * @param {string} caseId The plan step the answer was read under.
+ */
+function routingWholeBodyExpression(caseId) {
+  const { requiredKeys, permittedKeys, types } = routingDescriptor(ROUTING_RESPONSE_KEYS);
+  return {
+    op: 'all',
+    operands: [
+      {
+        op: 'shape',
+        operands: [{ pointer: `/interactions/${caseId}/stdout` }],
+        descriptor: { requiredKeys, permittedKeys, types },
+      },
+      { op: 'set-membership', operands: [{ pointer: routingPointer(caseId, 'action') }, { literal: [...ROUTING_ACTIONS] }] },
+      { op: 'regex', operands: [{ pointer: routingPointer(caseId, 'reason') }], pattern: NON_BLANK_PATTERN },
+    ],
+  };
+}
+
+/**
+ * The JavaScript twin of `routingWholeBodyExpression`: whether an answer is the object the runner prints.
+ *
+ * @param {unknown} answer What the runner wrote to stdout, or null for no answer.
+ * @returns {boolean}
+ */
+function routingAnswerIsWhole(answer) {
+  if (answer === null || typeof answer !== 'object' || Array.isArray(answer)) return false;
+  const { requiredKeys, permittedKeys } = routingDescriptor(ROUTING_RESPONSE_KEYS);
+  return (
+    requiredKeys.every((key) => Object.hasOwn(answer, key)) &&
+    Object.keys(answer).every((key) => permittedKeys.includes(key)) &&
+    typeof answer.action === 'string' &&
+    ROUTING_ACTIONS.includes(answer.action) &&
+    typeof answer.reason === 'string' &&
+    /\S/.test(answer.reason)
+  );
+}
 
 function routingPointer(caseId, key) {
   return `/interactions/${caseId}/stdout/${key}`;
@@ -3840,6 +4143,23 @@ function routingOracleSpecs(cases, menu) {
         `The decline for ${item.id} names what is missing.`,
       );
     }
+  }
+
+  // After every oracle above, so the ids above keep their numbers however a case is added. One oracle per case
+  // reads the whole answer, which is what the `whole-body` coverage rule asks for and no oracle above supplies.
+  for (const item of cases) {
+    specs.push({
+      caseId: item.id,
+      kind: 'whole-body',
+      check: routingWholeBodyExpression(item.id),
+      targets: routingWholeBodyTargets(item.id),
+      scope: `The whole routing answer for ${item.id}: its action and its reason.`,
+      negativeDomain:
+        'An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.',
+      success: `The answer for ${item.id} carries an action the skill allows and a stated reason, and no key the runner does not declare.`,
+      rationale: `${item.id}: the answer is the object the runner prints. Its keys are the declared ones, its action is one of ${ROUTING_ACTIONS.join(', ')} and its reason is a non-blank string.`,
+      scorer: (answer) => routingAnswerIsWhole(answer),
+    });
   }
   return specs.map((spec, index) => ({ ...spec, id: `O-${String(index + 1).padStart(3, '0')}` }));
 }
@@ -4008,7 +4328,7 @@ async function buildRoutingContract(spec) {
       relation: oracleSpec.check.op,
       scope: oracleSpec.scope,
       negativeDomain: oracleSpec.negativeDomain,
-      evidenceTargets: [routingPointer(oracleSpec.caseId, ROUTING_ORACLE_KINDS[oracleSpec.kind].pointer)],
+      evidenceTargets: oracleSpec.targets ?? [routingPointer(oracleSpec.caseId, ROUTING_ORACLE_KINDS[oracleSpec.kind].pointer)],
     },
     check: oracleSpec.check,
   }));
@@ -4022,7 +4342,12 @@ async function buildRoutingContract(spec) {
     description: `${oracleSpec.scope} ${oracleSpec.rationale}`,
     severity: ROUTING_ORACLE_KINDS[oracleSpec.kind].severity,
     observableSuccessCriterion: oracleSpec.success,
-    requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${oracleSpec.caseId}/${ROUTING_ORACLE_KINDS[oracleSpec.kind].field}` }],
+    requirementLinks: [
+      ROUTING_ORACLE_KINDS[oracleSpec.kind].link ?? {
+        scheme: 'tea-eval-ground-truth',
+        id: `${oracleSpec.caseId}/${ROUTING_ORACLE_KINDS[oracleSpec.kind].field}`,
+      },
+    ],
     riskLinks: [{ scheme: 'tea-eval-risk', id: ROUTING_ORACLE_KINDS[oracleSpec.kind].risk }],
     oracles: [oracleSpec.id],
   }));
@@ -4806,8 +5131,20 @@ module.exports = {
   atddOracleSpecs,
   traceOracleSpecs,
   traceStepId,
+  summaryKeysFromStep05,
+  summaryKeysFromText,
+  traceSummaryIsWhole,
+  traceWholeSummaryExpression,
+  traceWholeSummaryTargets,
+  verdictIsWhole,
+  verdictWholeBodyExpression,
+  verdictWholeBodyTargets,
   render,
   FRAGMENT_SELECTION,
   ROUTING_CONTRACTS,
   routingOracleSpecs,
+  routingAnswerIsWhole,
+  routingWholeBodyExpression,
+  routingWholeBodyTargets,
+  NON_BLANK_PATTERN,
 };

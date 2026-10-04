@@ -127,13 +127,13 @@ development_status:
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
-  1-94-score-each-stored-workflow-in-the-ci-probe-leg: review
+  1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
-  1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
+  1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: review
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: review
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: done

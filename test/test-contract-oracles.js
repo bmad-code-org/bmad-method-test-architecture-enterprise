@@ -128,7 +128,7 @@ const {
 } = require('./eval-nfr');
 const { loadGroundTruth: loadCiGroundTruth, workflowFromArtifact: ciWorkflowFromArtifact, CI_OPERATION } = require('./eval-ci');
 const { loadGroundTruth: loadAtddGroundTruth, ATDD_INTERFACE, ATDD_OPERATION } = require('./eval-atdd');
-const { parseRouting } = require('../cli/lib/parse-routing');
+const { parseRouting, ROUTING_ACTIONS } = require('../cli/lib/parse-routing');
 const {
   correctRoutingAnswer,
   loadCorpus: loadRoutingCorpus,
@@ -147,9 +147,22 @@ const {
   atddOracleSpecs,
   traceOracleSpecs,
   traceStepId,
+  traceSummaryIsWhole,
+  traceWholeSummaryExpression,
+  traceWholeSummaryTargets,
+  summaryKeysFromStep05,
+  summaryKeysFromText,
   routingOracleSpecs,
+  routingAnswerIsWhole,
+  routingWholeBodyExpression,
+  routingWholeBodyTargets,
+  verdictIsWhole,
+  verdictWholeBodyExpression,
+  verdictWholeBodyTargets,
   ROUTING_CONTRACTS,
 } = require('../tools/generate-contracts');
+const { VERDICT_KEYS } = require('../cli/test-review');
+const { ROUTING_RESPONSE_KEYS } = require('../cli/routing-runner');
 // Same rule for test-design: the generator owns the correspondence between each
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
@@ -353,17 +366,20 @@ function checkTestReviewOracles(evaluator, groundTruth) {
   const contract = readJson(path.join(CONTRACT_ROOT, 'test-review.contract.json'), 'the test-review contract');
   const plants = plantsInOrder(groundTruth);
   const oracleId = (index) => `O-${String(index).padStart(3, '0')}`;
-  const [cleanId, scopeId, verdictId, exitId] = [1, 2, 3, 4].map((offset) => oracleId(plants.length + offset));
+  const [cleanId, scopeId, verdictId, exitId, wholeId] = [1, 2, 3, 4, 5].map((offset) => oracleId(plants.length + offset));
   const declared = new Set(contract.oracles.map((oracle) => oracle.id));
   assert(
-    declared.size === plants.length + 4 && [cleanId, scopeId, verdictId, exitId].every((id) => declared.has(id)),
-    'the contract declares one oracle per plant plus the clean, scope, verdict, and exit oracles',
+    declared.size === plants.length + 5 && [cleanId, scopeId, verdictId, exitId, wholeId].every((id) => declared.has(id)),
+    'the contract declares one oracle per plant plus the clean, scope, verdict, exit, and whole-verdict oracles',
     `declared ${[...declared].join(', ')}`,
   );
+  const seenFalse = new Set();
 
   const cases = findCases().filter((item) => item.suite === 'test-review');
   for (const item of cases) {
-    const verdict = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
+    // The stored file carries a `$comment` that says why the case is in the corpus. The CLI never writes one, and the
+    // whole-verdict oracle reads the object whole, so the verdict the observation carries is the file without it.
+    const { $comment: _comment, ...verdict } = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
     // The harness passes no --fail-on, so the CLI's default decides: a Block or a
     // Request Changes exits 1 and anything else exits 0.
     const exitCode = verdictFor(verdict.recommendation, 'request-changes') === 'fail' ? 1 : 0;
@@ -414,8 +430,114 @@ function checkTestReviewOracles(evaluator, groundTruth) {
       `${item.id}: ${exitId} (exit code) matches the exit the CLI would produce`,
       `the CLI would exit ${exitCode} on "${verdict.recommendation}", oracle ${describe(results.get(exitId))}`,
     );
+    // The whole-verdict oracle reads every key the CLI always writes. It is compared with its twin on every stored
+    // verdict, the refused one and the two constructed ones that state a null agent included.
+    const whole = verdictIsWhole(verdict);
+    if (!whole) seenFalse.add(wholeId);
+    assert(
+      agrees(results.get(wholeId), whole),
+      `${item.id}: ${wholeId} (whole verdict) agrees with its twin`,
+      `the twin says ${whole ? 'whole' : 'not whole'}, oracle ${describe(results.get(wholeId))}`,
+    );
   }
+
+  // The stored verdicts are the real ones the CLI wrote and a few constructed ones, and only two of them break the
+  // object the CLI declares, so each key gets a planted verdict that breaks it in each way the check states.
+  const base = (() => {
+    const { $comment: _comment, ...rest } = readJson(
+      path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'full-recall', 'verdict.json'),
+      'the full-recall verdict',
+    );
+    return rest;
+  })();
+  const allKeys = { ...VERDICT_KEYS.always, ...VERDICT_KEYS.conditional };
+  const rightValueOf = (type) => ({ string: 'text', number: 1, boolean: true, object: {}, array: [] })[type];
+  const wrongTypeOf = (type) =>
+    type === 'string' ? 7 : type === 'number' ? 'seven' : type === 'array' ? 'none' : type === 'object' ? [] : 'wrong';
+  const planted = [
+    ['a verdict as the stored one is', base, true],
+    ['a verdict carrying a key the CLI does not declare', { ...base, extraKey: 1 }, false],
+    ['a verdict that is an array', [base], false],
+    ['a verdict that is a string', 'Block', false],
+    ...Object.keys(VERDICT_KEYS.always).map((key) => {
+      const { [key]: _dropped, ...rest } = base;
+      return [`a verdict without ${key}`, rest, false];
+    }),
+    ...Object.entries(allKeys)
+      .filter(([key, type]) => type !== null && Object.hasOwn(base, key))
+      .map(([key, type]) => [`a verdict whose ${key} is not ${type}`, { ...base, [key]: wrongTypeOf(type) }, false]),
+    // A null is a value of the kind `null`: a typed key refuses it, an untyped required key (`model`) accepts it, and a
+    // key nobody declared is refused whatever it holds.
+    ...Object.entries(allKeys)
+      .filter(([key, type]) => type !== null && Object.hasOwn(base, key))
+      .map(([key, type]) => [`a verdict whose ${key} (${type}) is null`, { ...base, [key]: null }, false]),
+    ...Object.entries(allKeys)
+      .filter(([key, type]) => type === null && Object.hasOwn(base, key))
+      .map(([key]) => [`a verdict whose untyped ${key} is null`, { ...base, [key]: null }, true]),
+    ['a verdict carrying an undeclared key that is null', { ...base, extraKey: null }, false],
+    // No stored verdict carries a conditional key, so each one is planted alone: the object the CLI declares permits it
+    // at its declared type and refuses it at another, and a shape that permitted only the required keys would pass
+    // every stored verdict.
+    ...Object.entries(VERDICT_KEYS.conditional).flatMap(([key, type]) => [
+      [`a verdict that also carries the conditional ${key}`, { ...base, [key]: rightValueOf(type) }, true],
+      [`a verdict whose conditional ${key} is not ${type}`, { ...base, [key]: wrongTypeOf(type) }, false],
+    ]),
+  ];
+  for (const [name, plantedVerdict, whole] of planted) {
+    const results = evaluateOracles(evaluator, contract, {
+      'review-corpus': observation({
+        operationId: 'review-test-files',
+        exitCode: 1,
+        artifacts: { verdict: { kind: 'json', value: plantedVerdict } },
+      }),
+    });
+    if (!whole) seenFalse.add(wholeId);
+    assert(verdictIsWhole(plantedVerdict) === whole, `${wholeId}: the twin says ${name} is ${whole ? 'whole' : 'not whole'}`);
+    assert(
+      agrees(results.get(wholeId), whole),
+      `${wholeId}: the oracle says ${name} is ${whole ? 'whole' : 'not whole'}`,
+      describe(results.get(wholeId)),
+    );
+  }
+  const wholeOracle = contract.oracles.find((oracle) => oracle.id === wholeId);
+  assert(
+    JSON.stringify(wholeOracle?.check) === JSON.stringify(verdictWholeBodyExpression()),
+    `${wholeId}: the contract's check is the whole-verdict expression`,
+  );
+  assertDirectionNamesWhatCheckReads(wholeId, wholeOracle, VERDICT_ROOT_POINTER, verdictWholeBodyTargets());
+  assert(seenFalse.has(wholeId), `${wholeId} (whole verdict) was seen resolving false on some verdict`);
   console.log(`  ${colors.dim}${cases.length} stored verdict(s), ${contract.oracles.length} oracle(s) each${colors.reset}`);
+}
+
+/** The verdict artifact the review step writes, the root `shape` reads in the whole-verdict oracle. */
+const VERDICT_ROOT_POINTER = '/interactions/review-corpus/artifact/verdict';
+
+/**
+ * The direction of a whole-body oracle names exactly the pointers its check reads, apart from the root `shape` reads,
+ * and those are the declared keys: dropping a key from either channel leaves the other one standing, so each is pinned.
+ *
+ * @param {string} oracleId
+ * @param {object|undefined} oracle The oracle as the contract on disk states it.
+ * @param {string} root The pointer the `shape` operator reads, which no direction names.
+ * @param {string[]} targets The pointers the oracle must address, one per declared key.
+ */
+function assertDirectionNamesWhatCheckReads(oracleId, oracle, root, targets) {
+  const pointersRead = new Set();
+  JSON.stringify(oracle?.check ?? null, (key, value) => {
+    if (key === 'pointer' && typeof value === 'string' && value !== root) pointersRead.add(value);
+    return value;
+  });
+  const direction = oracle?.direction?.evidenceTargets ?? [];
+  assert(
+    JSON.stringify([...pointersRead].sort()) === JSON.stringify([...direction].sort()),
+    `${oracleId}: the direction names exactly the pointers the check reads`,
+    `direction ${direction.join(', ')}; check ${[...pointersRead].join(', ')}`,
+  );
+  assert(
+    JSON.stringify([...direction].sort()) === JSON.stringify([...targets].sort()),
+    `${oracleId}: the direction names every declared key and nothing else`,
+    `direction ${direction.join(', ')}; keys ${targets.join(', ')}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -562,7 +684,15 @@ function scoreTraceArtifacts(set, artifacts, groundTruth) {
   if (!summary.ok) return { refused: 'summary', reason: summary.reason };
   const matrix = artifacts.matrix.kind === 'text' ? parseMatrix(artifacts.matrix.value, set) : null;
   if (matrix === null) return { refused: 'matrix', reason: 'the matrix declares no section for any criterion the oracle names' };
-  return { scored: scoreTraceRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance) };
+  return {
+    scored: scoreTraceRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance),
+    summary: summary.summary,
+  };
+}
+
+/** The type each summary key carries in the contract on disk, the claim the whole-summary oracle's `shape` states. */
+function traceSummaryDescriptorTypes(contract) {
+  return contract.permittedInterfaces[0].operations[0].responseDescriptor.types;
 }
 
 async function checkTraceOracles(evaluator) {
@@ -595,7 +725,20 @@ async function checkTraceOracles(evaluator) {
       });
       const answer = scoreTraceArtifacts(set, artifacts, groundTruth);
       const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own set' : set.id}`;
-      const own = specs.filter((spec) => spec.setId === set.id);
+      // The whole-summary oracle reads the summary object, which a run the harness refuses to score still carries (a stale
+      // `schema_version`, a matrix with no section), so it is compared with its twin ahead of both refusals.
+      const summaryValue = artifacts.summary.kind === 'json' ? artifacts.summary.value : undefined;
+      for (const spec of specs.filter((entry) => entry.setId === set.id && entry.kind === 'whole-summary')) {
+        const whole = spec.scorer(null, summaryValue);
+        if (!whole) seenFalse.add(spec.id);
+        assert(
+          agrees(results.get(spec.id), whole),
+          `${label}: ${spec.id} (whole-summary) agrees with its twin whether or not the harness scores the run`,
+          `the twin says ${whole ? 'whole' : 'not whole'}, oracle ${describe(results.get(spec.id))}`,
+        );
+        evaluated += 1;
+      }
+      const own = specs.filter((spec) => spec.setId === set.id && spec.kind !== 'whole-summary');
       if (answer.refused === 'matrix') {
         skippedMatrix += own.length;
         continue;
@@ -632,6 +775,83 @@ async function checkTraceOracles(evaluator) {
         evaluated += 1;
       }
     }
+  }
+  // The whole-summary oracle fails on a summary that is not the object step-05 declares. One stored deviation drops a
+  // key and no stored run of the clean set does, so each set also gets planted summaries, one per key and per claim,
+  // each compared with the twin. The base is the set's own correct run.
+  const wholeSummaryTypes = traceSummaryDescriptorTypes(contract);
+  for (const set of groundTruth.fixtureSets) {
+    const spec = specs.find((entry) => entry.setId === set.id && entry.kind === 'whole-summary');
+    assert(spec !== undefined, `${set.id} states one whole-summary oracle`);
+    if (spec === undefined) continue;
+    const correct = cases.find((item) => item.id === `trace/${set.id.startsWith('seeded') ? 'seeded' : 'clean'}-correct-run`);
+    const expected = readJson(path.join(correct.directory, 'expected.json'), `${correct.id} expected result`);
+    const base = traceArtifactsOf(correct.directory, expected).summary.value;
+    const required = summaryKeysFromStep05().always;
+    const planted = [
+      ['the correct summary', base, true],
+      ['a summary carrying a key step-05 does not declare', { ...base, extra_key: 1 }, false],
+      ['a summary that is an array', [base], false],
+      ...required.map((key) => {
+        const { [key]: _dropped, ...rest } = base;
+        return [`a summary without ${key}`, rest, false];
+      }),
+      ...Object.entries(wholeSummaryTypes)
+        .filter(([key, type]) => type !== null && Object.hasOwn(base, key))
+        .map(([key, type]) => [
+          `a summary whose ${key} is not ${type}`,
+          { ...base, [key]: type === 'string' ? 7 : type === 'array' ? 'none' : [] },
+          false,
+        ]),
+    ];
+    // The same three claims about null: typed keys refuse it, the untyped required keys (`repo` among them) accept it, and an
+    // undeclared key is refused whatever it holds.
+    for (const [key, type] of Object.entries(wholeSummaryTypes)) {
+      if (!Object.hasOwn(base, key)) continue;
+      planted.push(
+        type === null
+          ? [`a summary whose untyped ${key} is null`, { ...base, [key]: null }, true]
+          : [`a summary whose ${key} (${type}) is null`, { ...base, [key]: null }, false],
+      );
+    }
+    planted.push(['a summary carrying an undeclared key that is null', { ...base, extra_key: null }, false]);
+    // The conditional keys are typed too, and a wrong type is refused whether or not the set's run carries the key.
+    for (const [key, type] of Object.entries(wholeSummaryTypes)) {
+      if (type !== null && !summaryKeysFromStep05().always.includes(key)) {
+        planted.push([`a summary whose conditional ${key} is not ${type}`, { ...base, [key]: type === 'string' ? 7 : [] }, false]);
+      }
+    }
+    // `gate_status` and `gate_criteria` are written only when the gate was eligible, so a summary without them is whole.
+    for (const dropped of [['gate_status'], ['gate_criteria'], ['gate_status', 'gate_criteria']]) {
+      const rest = Object.fromEntries(Object.entries(base).filter(([key]) => !dropped.includes(key)));
+      planted.push([`a summary of an ineligible gate without ${dropped.join(' and ')}`, rest, true]);
+    }
+    for (const [name, summary, whole] of planted) {
+      const results = evaluateOracles(evaluator, contract, {
+        [traceStepId(set)]: observation({
+          operationId: TRACE_OPERATION,
+          exitCode: 0,
+          artifacts: { summary: { kind: 'json', value: summary }, matrix: { kind: 'absent' } },
+        }),
+      });
+      if (!whole) seenFalse.add(spec.id);
+      assert(traceSummaryIsWhole(summary) === whole, `${spec.id}: the twin says ${name} is ${whole ? 'whole' : 'not whole'}`);
+      assert(
+        agrees(results.get(spec.id), whole),
+        `${spec.id}: the oracle says ${name} is ${whole ? 'whole' : 'not whole'}`,
+        describe(results.get(spec.id)),
+      );
+    }
+    assert(
+      JSON.stringify(contract.oracles.find((oracle) => oracle.id === spec.id)?.check) === JSON.stringify(traceWholeSummaryExpression(set)),
+      `${spec.id}: the contract's check is the whole-summary expression over ${set.id}`,
+    );
+    assertDirectionNamesWhatCheckReads(
+      spec.id,
+      contract.oracles.find((oracle) => oracle.id === spec.id),
+      `/interactions/${traceStepId(set)}/artifact/summary`,
+      traceWholeSummaryTargets(set),
+    );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or
   // this check has only ever confirmed that a correct run passes.
@@ -729,6 +949,41 @@ function constructedRoutingAnswers(expected) {
   return answers;
 }
 
+/**
+ * Planted answers around one correct one, each breaking one claim of the whole-body oracle.
+ *
+ * `correct` is the harness's own correct answer for the case, which carries all seven keys. The three planted limits
+ * at the end are answers the oracle states nothing about, so they hold and the twin agrees.
+ */
+function plantedRoutingAnswers(correct) {
+  const { reason: _reason, ...withoutReason } = correct;
+  const { action: _action, ...withoutAction } = correct;
+  return [
+    { label: 'an answer as the runner prints it', answer: correct, whole: true },
+    {
+      label: 'an answer whose reason is null, which is a reply that named an action and said nothing about why',
+      answer: { ...correct, reason: null },
+      whole: false,
+    },
+    { label: 'an answer whose reason is blank', answer: { ...correct, reason: ' \n\t ' }, whole: false },
+    { label: 'an answer whose reason is a number', answer: { ...correct, reason: 7 }, whole: false },
+    { label: 'an answer with no reason key', answer: withoutReason, whole: false },
+    { label: 'an answer with no action key', answer: withoutAction, whole: false },
+    { label: 'an answer whose action is none of the three', answer: { ...correct, action: 'maybe' }, whole: false },
+    { label: 'an answer whose action is a number', answer: { ...correct, action: 7 }, whole: false },
+    { label: 'an answer whose action is null', answer: { ...correct, action: null }, whole: false },
+    { label: 'an answer of the two required keys alone', answer: { action: correct.action, reason: correct.reason }, whole: true },
+    { label: 'an answer whose action is a case variant of an allowed one', answer: { ...correct, action: 'Route' }, whole: false },
+    { label: 'an answer whose reason is only a zero-width space', answer: { ...correct, reason: '\u200B' }, whole: true },
+    { label: 'an answer whose untyped menuCode is null', answer: { ...correct, menuCode: null }, whole: true },
+    { label: 'an answer whose untyped scope is null', answer: { ...correct, scope: null }, whole: true },
+    { label: 'an answer carrying a key the runner does not declare', answer: { ...correct, confidence: 1 }, whole: false },
+    { label: 'an answer carrying an undeclared key that is null', answer: { ...correct, confidence: null }, whole: false },
+    { label: 'an answer that is an array', answer: [correct], whole: false },
+    { label: 'an answer that is a string', answer: 'route', whole: false },
+  ];
+}
+
 function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expected, menu, intent, answer, label) {
   const score = scoreRoutingCase(expected, answer, menu, intent);
   const stdout = answer === null ? { kind: 'absent' } : { kind: 'json', value: answer };
@@ -737,8 +992,19 @@ function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expect
   });
   let evaluated = 0;
   for (const spec of specsForCase) {
-    const question = ROUTING_SCORER_QUESTION[spec.kind];
     const result = results.get(spec.id);
+    // The whole-body oracle reads the answer's object rather than one question of the scorer, so its own twin answers.
+    if (spec.kind === 'whole-body') {
+      const whole = answer === null ? null : spec.scorer(answer);
+      assert(
+        agrees(result, whole),
+        `${caseId}: ${spec.id} (${spec.kind}) agrees with its twin on ${label}`,
+        `the twin says ${whole}, oracle ${describe(result)}`,
+      );
+      evaluated += 1;
+      continue;
+    }
+    const question = ROUTING_SCORER_QUESTION[spec.kind];
     assert(
       agrees(result, verdictOf(score, question)),
       `${caseId}: ${spec.id} (${spec.kind}) agrees with scoreCase on ${label}`,
@@ -790,6 +1056,48 @@ async function checkRoutingOracles(evaluator) {
           }
         }
       }
+    }
+
+    // The whole-body oracle fails only for an answer the runner's own parser would not print or a reason the agent
+    // left out, and no constructed or stored answer is either, so each case also gets planted malformed answers. Each
+    // breaks one claim the oracle states and is compared with the twin.
+    for (const item of cases) {
+      const wholeSpec = specs.find((spec) => spec.caseId === item.id && spec.kind === 'whole-body');
+      assert(wholeSpec !== undefined, `${contractSpec.relativePath}: ${item.id} states a whole-body oracle`);
+      if (wholeSpec === undefined) continue;
+      for (const planted of plantedRoutingAnswers(correctRoutingAnswer(item.expected))) {
+        const { evaluated: count, results } = checkOneRoutingAnswer(
+          evaluator,
+          contract,
+          [wholeSpec],
+          item.id,
+          item.expected,
+          menu,
+          item.intent,
+          planted.answer,
+          planted.label,
+        );
+        evaluated += count;
+        assert(
+          routingAnswerIsWhole(planted.answer) === planted.whole,
+          `${wholeSpec.id}: the twin says ${planted.label} is ${planted.whole ? 'whole' : 'not whole'}`,
+        );
+        if (!planted.whole && results.get(wholeSpec.id)?.resolution === 'false') seenFalse.add(wholeSpec.id);
+      }
+      const oracle = contract.oracles.find((candidate) => candidate.id === wholeSpec.id);
+      assert(
+        JSON.stringify(oracle?.check) === JSON.stringify(routingWholeBodyExpression(item.id)),
+        `${wholeSpec.id}: the contract's check is the whole-body expression over ${item.id}`,
+      );
+      assertDirectionNamesWhatCheckReads(wholeSpec.id, oracle, `/interactions/${item.id}/stdout`, routingWholeBodyTargets(item.id));
+      // The actions the oracle accepts are the ones the runner's parser accepts, read from the parser rather than from the
+      // generator that wrote the oracle.
+      const membership = oracle?.check?.operands?.find((operand) => operand.op === 'set-membership');
+      assert(
+        JSON.stringify(membership?.operands?.[1]?.literal) === JSON.stringify(ROUTING_ACTIONS),
+        `${wholeSpec.id}: the actions the oracle accepts are the ones cli/lib/parse-routing.js accepts`,
+        JSON.stringify(membership?.operands?.[1]?.literal),
+      );
     }
 
     // The stored replies, through the same parser the runner applies to a live
@@ -1934,6 +2242,540 @@ async function checkTestDesignCoverage() {
   );
 }
 
+/**
+ * The whole-body oracles of the four contracts Story 1.100 repairs, as the generator states them.
+ *
+ * One entry per plan step: the key pointers its oracle must address in both channels, and the expression its check is.
+ * The oracle itself is found in the contract on disk by what its direction names, so a contract that lost it or
+ * changed its direction reads as a missing oracle rather than as a different one.
+ */
+async function wholeBodyTargetsOf(suiteId) {
+  if (suiteId === 'test-review') return [{ pointers: verdictWholeBodyTargets(), expression: verdictWholeBodyExpression() }];
+  if (suiteId === 'trace') {
+    const groundTruth = await loadTraceGroundTruth();
+    return groundTruth.fixtureSets.map((set) => ({
+      pointers: traceWholeSummaryTargets(set),
+      expression: traceWholeSummaryExpression(set),
+    }));
+  }
+  const contractSpec = ROUTING_CONTRACTS.find((entry) => entry.relativePath.replace('.contract.json', '') === suiteId);
+  const corpus = await loadRoutingCorpus();
+  return corpus.cases
+    .filter((item) => contractSpec.actions.includes(item.expected.expectedAction))
+    .map((item) => ({ pointers: routingWholeBodyTargets(item.id), expression: routingWholeBodyExpression(item.id) }));
+}
+
+/**
+ * Story 1.100: whole-body coverage for the routing, test-review and trace contracts.
+ *
+ * eval-quality's `whole-body` rule is satisfied when one oracle's direction and check both address every required
+ * response key of an operation at one step. The routing operation declares two keys, the test-review verdict
+ * twenty-three and the trace summary twenty-two, and each contract states one oracle per plan step that names them
+ * all. Each version below is the same contract with those oracles changed, scored by the published engine over the
+ * zero-action probe of the suite, so the engine's own coverage function is the judge: the real contract and every
+ * reduced one share an artifact and differ in what the oracles read, and they cannot report the same result.
+ *
+ * Every version changes the oracle at every step, since one step that still reads every key satisfies the rule.
+ */
+async function checkWholeBodyCoverage() {
+  console.log('\nrouting, test-review and trace whole-body coverage, scored by eval-quality');
+  assert(
+    require('eval-quality').DISCIPLINE_RULES.includes('whole-body'),
+    'eval-quality publishes the whole-body rule these fixtures are scored on',
+  );
+  const allSuites = await probeSuites();
+  const suiteIds = [...ROUTING_CONTRACTS.map((entry) => entry.relativePath.replace('.contract.json', '')), 'test-review', 'trace'];
+  for (const suiteId of suiteIds) {
+    const suite = allSuites.find((entry) => entry.id === suiteId);
+    if (suite === undefined) unreadable(`the probe corpus holds no ${suiteId} suite`);
+    const probe = suite.probes.find((entry) => entry.probeClass === 'zero-action');
+    if (probe === undefined) unreadable(`the ${suiteId} corpus holds no zero-action probe`);
+    const contract = suite.contract;
+
+    // The oracle at each plan step, found by what its direction names.
+    const steps = await wholeBodyTargetsOf(suiteId);
+    const oracleAt = new Map();
+    for (const step of steps) {
+      const found = contract.oracles.filter(
+        (oracle) => JSON.stringify([...oracle.direction.evidenceTargets].sort()) === JSON.stringify([...step.pointers].sort()),
+      );
+      assert(found.length === 1, `${suiteId}: one oracle names exactly the ${step.pointers.length} key pointers of ${step.pointers[0]}`);
+      if (found.length === 1) oracleAt.set(found[0].id, step);
+    }
+    assert(oracleAt.size === steps.length && steps.length > 0, `${suiteId}: the contract states one whole-body oracle per plan step`);
+    const keyCount = steps[0].pointers.length;
+
+    // Each behavior links the source of the declaration its oracle reads, not a field the ground truth does not carry: the
+    // routing runner's and the CLI's own declarations by the `tea-cli-contract` scheme, and the workflow step that writes the
+    // trace summary by `tea-workflow-step`, whose file has to exist.
+    const expectedLink =
+      suiteId === 'test-review'
+        ? { scheme: 'tea-cli-contract', id: 'verdict-whole-body' }
+        : suiteId === 'trace'
+          ? { scheme: 'tea-workflow-step', id: 'bmad-testarch-trace/steps-c/step-05-gate-decision.md' }
+          : { scheme: 'tea-cli-contract', id: 'routing-answer-whole-body' };
+    // The `shape` inside each oracle is the contract's own response descriptor, read from the file on disk: a shape that
+    // required a key the descriptor does not (the conditional gate keys of a trace summary, the five optional keys of a routing
+    // answer) would refuse an answer the runner or workflow legitimately writes.
+    const descriptor = contract.permittedInterfaces[0].operations[0].responseDescriptor;
+    for (const oracleId of oracleAt.keys()) {
+      const shape = contract.oracles.find((oracle) => oracle.id === oracleId).check.operands.find((operand) => operand.op === 'shape');
+      assert(
+        JSON.stringify(shape?.descriptor) ===
+          JSON.stringify({ requiredKeys: descriptor.requiredKeys, permittedKeys: descriptor.permittedKeys, types: descriptor.types }),
+        `${suiteId}: the shape of ${oracleId} is the contract's own response descriptor`,
+      );
+    }
+    for (const oracleId of oracleAt.keys()) {
+      const behaviors = contract.behaviors.filter((behavior) => behavior.oracles.includes(oracleId));
+      assert(
+        behaviors.length === 1 && JSON.stringify(behaviors[0].requirementLinks) === JSON.stringify([expectedLink]),
+        `${suiteId}: ${oracleId} is discharged by one behavior that links ${expectedLink.scheme}/${expectedLink.id}`,
+        JSON.stringify(behaviors.map((behavior) => behavior.requirementLinks)),
+      );
+    }
+    if (expectedLink.scheme === 'tea-workflow-step') {
+      assert(
+        fs.existsSync(path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', expectedLink.id)),
+        `${suiteId}: the workflow step its behavior links exists`,
+      );
+    }
+
+    /** The contract with the whole-body oracle of each step replaced by what `replace` returns for it. */
+    const withOracles = (replace) => ({
+      ...contract,
+      oracles: contract.oracles.map((oracle) => (oracleAt.has(oracle.id) ? replace(oracle, oracleAt.get(oracle.id)) : oracle)),
+    });
+    // `all` over one operand is not a legal expression, so one key is the bare existence check.
+    const existenceOf = (pointers) =>
+      pointers.length === 1
+        ? { op: 'existence', operands: [{ pointer: pointers[0] }] }
+        : { op: 'all', operands: pointers.map((pointer) => ({ op: 'existence', operands: [{ pointer }] })) };
+    const reading = (oracle, pointers) => ({
+      ...oracle,
+      direction: { ...oracle.direction, relation: existenceOf(pointers).op, evidenceTargets: pointers },
+      check: existenceOf(pointers),
+    });
+    const withoutOracles = {
+      ...contract,
+      oracles: contract.oracles.filter((oracle) => !oracleAt.has(oracle.id)),
+      behaviors: contract.behaviors.filter((behavior) => !behavior.oracles.some((id) => oracleAt.has(id))),
+    };
+
+    assert((await wholeBodySatisfied(suite, contract, probe)) === true, `${suiteId}: the real contract satisfies whole-body`);
+    assert(
+      (await wholeBodySatisfied(suite, withoutOracles, probe)) === false,
+      `${suiteId}: the contract without its whole-body oracles leaves whole-body unsatisfied, which is the gap this story closes`,
+    );
+    // The oracle as it would read if it held one key: one pointer in its direction, one in its check.
+    assert(
+      (await wholeBodySatisfied(
+        suite,
+        withOracles((oracle, step) => reading(oracle, [step.pointers[0]])),
+        probe,
+      )) === false,
+      `${suiteId}: an oracle that reads one key leaves whole-body unsatisfied`,
+    );
+    const widened = (oracle, step) => reading(oracle, step.pointers);
+    for (const [oracleId, step] of oracleAt) {
+      const shipped = contract.oracles.find((oracle) => oracle.id === oracleId);
+      assert(
+        JSON.stringify(widened(shipped, step).check) !== JSON.stringify(shipped.check),
+        `${suiteId}: the widened oracle of ${oracleId} is not the shipped one`,
+      );
+    }
+    assert(
+      (await wholeBodySatisfied(
+        suite,
+        // The one-key oracle widened to every key as existence checks, with no `shape`, so the widened oracle is not the shipped
+        // one: the rule follows the pointers the oracle names and reads, whatever else its check says.
+        withOracles((oracle, step) => widened(reading(oracle, [step.pointers[0]]), step)),
+        probe,
+      )) === true,
+      `${suiteId}: widening the one-key oracle to existence checks of every key, in its direction and its check, satisfies whole-body`,
+    );
+    for (const index of steps[0].pointers.keys()) {
+      const keyOf = (step) => step.pointers[index];
+      assert(
+        (await wholeBodySatisfied(
+          suite,
+          withOracles((oracle, step) =>
+            reading(
+              oracle,
+              step.pointers.filter((pointer) => pointer !== keyOf(step)),
+            ),
+          ),
+          probe,
+        )) === false,
+        `${suiteId}: an oracle that reads every key but #${index + 1} of ${keyCount} leaves whole-body unsatisfied`,
+      );
+      assert(
+        (await wholeBodySatisfied(
+          suite,
+          withOracles((oracle, step) => ({
+            ...oracle,
+            direction: { ...oracle.direction, evidenceTargets: step.pointers.filter((pointer) => pointer !== keyOf(step)) },
+            check: step.expression,
+          })),
+          probe,
+        )) === false,
+        `${suiteId}: an oracle whose check reads every key and whose direction omits #${index + 1} of ${keyCount} leaves whole-body unsatisfied`,
+      );
+      // The converse, a direction that names a key the check does not read, is no coverage either, and the compiler
+      // refuses it before a rule is evaluated (AD-3), so the variant never reaches `whole-body`.
+      let refused = null;
+      try {
+        await wholeBodySatisfied(
+          suite,
+          withOracles((oracle, step) => ({
+            ...oracle,
+            direction: { ...oracle.direction, evidenceTargets: step.pointers },
+            check: existenceOf(step.pointers.filter((pointer) => pointer !== keyOf(step))),
+          })),
+          probe,
+        );
+      } catch (error) {
+        refused = error;
+      }
+      assert(
+        refused !== null && /direction-check-misaligned/.test(refused.message),
+        `${suiteId}: an oracle whose direction names every key and whose check omits #${index + 1} of ${keyCount} is refused at compile as misaligned`,
+        refused === null ? 'it was scored' : refused.message,
+      );
+    }
+    console.log(`  ${colors.dim}${suiteId}: ${steps.length} step(s), ${keyCount} required key(s)${colors.reset}`);
+  }
+}
+
+/** The stored routing replies named as the correct answer, which the runner's parser must read as the object it prints. */
+const STORED_CORRECT_REPLIES = ['correct-route', 'clarification-correct', 'decline-correct', 'fenced-json'];
+
+/**
+ * The keys each runner or workflow always emitted when Story 1.100 declared them required, each with the type the contract
+ * states for it (`null` for a key whose type is not the claim), frozen here.
+ *
+ * Narrowing a key means moving it out of a contract's `requiredKeys`, and a contract derives those from the CLI's
+ * `VERDICT_KEYS.always`, the literal of step-05 and the routing runner's declaration, so a narrowing made at the source
+ * regenerates every contract to agree with it. These lists do not move with the source: a key missing from the contract
+ * against them is a narrowing, and `checkWholeBodyDeclarations` fails until the README table row of that contract states the
+ * new count and lists the key under `Narrowed`, in the same diff as the change that narrowed it. A type removed or changed at the
+ * source differs from the frozen one the same way, and fails until this list and the README change together.
+ */
+/** The conditional keys each contract permits, with the type it states for each, frozen beside the required keys. */
+const FROZEN_CONDITIONAL_TYPES = {
+  'tea-routing-intents.contract.json': { menuCode: null, workflow: null, scope: null, question: null, missing: null },
+  'tea-routing-controls.contract.json': { menuCode: null, workflow: null, scope: null, question: null, missing: null },
+  'test-review.contract.json': {
+    conventionBaseline: 'object',
+    executionMode: 'string',
+    reportedQualityScore: 'number',
+    reportedRecommendation: 'string',
+    unscorableTestArtifacts: 'array',
+    gateFailures: 'array',
+    waived: 'boolean',
+    waiveReason: 'string',
+    waiveUntil: 'string',
+    allFindingsRecommendation: 'string',
+  },
+  'trace.contract.json': { waivers: 'object', gate_status: 'string', gate_criteria: 'object' },
+};
+
+const FROZEN_EMITTED_KEYS = {
+  'tea-routing-intents.contract.json': {
+    action: 'string',
+    reason: 'string',
+  },
+  'tea-routing-controls.contract.json': {
+    action: 'string',
+    reason: 'string',
+  },
+  'test-review.contract.json': {
+    report: 'string',
+    files: 'array',
+    agent: 'string',
+    model: null,
+    gateOn: 'string',
+    gatingQualityScore: 'number',
+    gatingViolations: 'object',
+    reviewProvenance: 'object',
+    recommendation: 'string',
+    rawQualityScore: 'number',
+    qualityScore: 'number',
+    scoreCap: 'number',
+    scoreOverrideRule: 'string',
+    verdictRule: 'string',
+    violations: 'object',
+    findings: 'array',
+    reviewedFiles: 'array',
+    contextBasis: 'string',
+    contextFiles: 'array',
+    contextWaiversApplied: 'number',
+    keyStrengths: 'array',
+    keyWeaknesses: 'array',
+    advisoryObservations: 'array',
+  },
+  'trace.contract.json': {
+    schema_version: 'string',
+    snapshot_at: null,
+    repo: null,
+    collection_mode: 'string',
+    collection_status: 'string',
+    inventory_basis: 'string',
+    gate_basis: 'string',
+    source_sha: null,
+    target: null,
+    decision_mode: null,
+    evaluator: null,
+    confidence: null,
+    oracle: 'object',
+    coverage: 'object',
+    tests: null,
+    risk_summary: 'object',
+    heuristics: null,
+    live_evidence: 'object',
+    blockers: 'array',
+    rejected_evidence: 'array',
+    recommendations: null,
+    links: null,
+  },
+};
+
+/**
+ * Story 1.100: a required key is one the runner or workflow always emits.
+ *
+ * The declarations are read from what each command or workflow states about itself, so they are held to a frozen copy of
+ * those lists and to the README table that records, per contract, how many keys are required and which are narrowed. A
+ * narrowing at the source or in the generator changes the contract's `requiredKeys`, which differs from the frozen list, and
+ * this fails until the table row says so. The stored runs are held to the declarations too: every stored correct run
+ * carries every required key.
+ */
+async function checkWholeBodyDeclarations() {
+  console.log('\nrouting, test-review and trace required keys against what each emits');
+  const requiredOf = (relativePath) =>
+    readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0].responseDescriptor.requiredKeys;
+  const sameKeys = (left, right) => JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+
+  assert(
+    sameKeys(requiredOf('test-review.contract.json'), Object.keys(VERDICT_KEYS.always)),
+    'test-review.contract.json requires exactly the keys the CLI declares it always writes',
+  );
+  assert(
+    sameKeys(requiredOf('trace.contract.json'), summaryKeysFromStep05().always),
+    "trace.contract.json requires exactly the keys step-05's summary literal always carries",
+  );
+  for (const contractSpec of ROUTING_CONTRACTS) {
+    assert(
+      sameKeys(requiredOf(contractSpec.relativePath), ROUTING_RESPONSE_KEYS.required),
+      `${contractSpec.relativePath} requires exactly the keys the routing runner declares required`,
+    );
+  }
+
+  // The README table row of each contract states the required count and the narrowed keys, and both are held to the frozen lists.
+  const readme = fs.readFileSync(path.join(CONTRACT_ROOT, 'README.md'), 'utf8');
+  const section = readme.split('\n## ').find((part) => part.startsWith('Whole-body coverage')) ?? '';
+  for (const [relativePath, frozen] of Object.entries(FROZEN_EMITTED_KEYS)) {
+    const required = requiredOf(relativePath);
+    const frozenKeys = Object.keys(frozen);
+    const narrowed = frozenKeys.filter((key) => !required.includes(key));
+    const added = required.filter((key) => !frozenKeys.includes(key));
+    const declaredTypes = readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0]
+      .responseDescriptor.types;
+    // The permitted keys beyond the required ones are the conditional ones, and their types are frozen beside the required keys'.
+    const allFrozen = { ...frozen, ...FROZEN_CONDITIONAL_TYPES[relativePath] };
+    const descriptor = readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0]
+      .responseDescriptor;
+    assert(
+      sameKeys(descriptor.permittedKeys, Object.keys(allFrozen)),
+      `${relativePath}: the permitted keys are the frozen required and conditional keys`,
+      `declared ${descriptor.permittedKeys.join(', ')}`,
+    );
+    const retyped = Object.keys(allFrozen).filter((key) => (declaredTypes[key] ?? null) !== allFrozen[key]);
+    assert(
+      retyped.length === 0,
+      `${relativePath}: every permitted key has the type frozen in this test`,
+      retyped.map((key) => `${key}: frozen ${allFrozen[key]}, declared ${declaredTypes[key] ?? null}`).join('; '),
+    );
+    const row = section.split('\n').find((line) => line.startsWith(`| \`${relativePath}\``));
+    assert(row !== undefined, `test/contracts/README.md records the whole-body required-key decision for ${relativePath}`);
+    if (row === undefined) continue;
+    const cells = row.split('|').map((cell) => cell.trim());
+    // A `|` inside a code span is a cell delimiter to Prettier and to GFM, so a row has exactly as many cells as the table's header.
+    const header = section.split('\n').find((line) => line.startsWith('| Contract'));
+    assert(
+      header !== undefined && cells.length === header.split('|').length,
+      `${relativePath}: the README row has as many cells as the table header`,
+      `row ${cells.length}, header ${header?.split('|').length}`,
+    );
+    assert(
+      cells[3] === String(required.length),
+      `${relativePath}: the README row states ${required.length} required keys`,
+      `the row says ${cells[3]}`,
+    );
+    const narrowedCell = narrowed.length === 0 ? 'none' : narrowed.map((key) => `\`${key}\``).join(', ');
+    assert(
+      cells[4] === narrowedCell,
+      `${relativePath}: the README row lists the narrowed keys (${narrowedCell})`,
+      `the row says ${cells[4]}`,
+    );
+    assert(
+      added.length === 0,
+      `${relativePath}: every required key is one of the keys frozen in this test`,
+      `new required key(s) ${added.join(', ')}; freeze them here with the story that adds them`,
+    );
+  }
+
+  // Each stored correct run carries every required key. A constructed run follows what its runner or workflow emits,
+  // and the harness refuses to score one that does not, so a key the contract narrowed away would still be here.
+  const reviewGroundTruth = readJson(GROUND_TRUTH, 'the test-review ground truth');
+  for (const item of findCases().filter((entry) => entry.suite === 'test-review')) {
+    // The stored file carries a `$comment` the CLI never writes, so the verdict is the file without it.
+    const { $comment: _comment, ...verdict } = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
+    if (scoreVerdict(verdict, reviewGroundTruth) === null) continue;
+    const missing = Object.keys(VERDICT_KEYS.always).filter((key) => !Object.hasOwn(verdict, key));
+    assert(
+      missing.length === 0,
+      `${item.id}: a stored verdict the harness scores carries every key the CLI always writes`,
+      `missing ${missing.join(', ')}`,
+    );
+  }
+  const traceGroundTruth = await loadTraceGroundTruth();
+  for (const item of findCases().filter((entry) => entry.suite === 'trace' && entry.id.endsWith('-correct-run'))) {
+    const expected = readJson(path.join(item.directory, 'expected.json'), `${item.id} expected result`);
+    const summary = traceArtifactsOf(item.directory, expected).summary.value;
+    const missing = summaryKeysFromStep05().always.filter((key) => !Object.hasOwn(summary, key));
+    assert(
+      missing.length === 0,
+      `${item.id}: a stored correct summary carries every key step-05 always writes`,
+      `missing ${missing.join(', ')}`,
+    );
+  }
+  assert(traceGroundTruth.fixtureSets.length > 0, 'the trace ground truth declares fixture sets');
+  // The runner's parser fills every key it lacks, so a stored reply says nothing about which keys a runner prints. What the
+  // parser can say is that the replies named as the correct answer parse to the object the runner prints.
+  const stored = findCases().filter((entry) => entry.suite === 'bmad-tea-routing');
+  for (const name of STORED_CORRECT_REPLIES) {
+    const item = stored.find((entry) => entry.id.endsWith(`/${name}`));
+    assert(item !== undefined, `the stored routing reply ${name} still exists`);
+    if (item === undefined) continue;
+    const answer = parseRouting(fs.readFileSync(path.join(item.directory, 'stdout.txt'), 'utf8'));
+    assert(
+      answer !== null && routingAnswerIsWhole(answer),
+      `${item.id}: the answer parsed from a stored correct reply is the object the runner prints`,
+    );
+  }
+
+  // `JSON.stringify` drops a key whose value is `undefined`, so a key of step-05's literal is always written only when its
+  // line cannot read as `undefined`. The read refuses a line that reads the coverage matrix or an optional chain with no
+  // fallback, and a fallback to `undefined`, which is shown on the step's own text with each fallback removed in turn.
+  const step05Path = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
+  const step05 = fs.readFileSync(step05Path, 'utf8');
+  assert(
+    (() => {
+      try {
+        return summaryKeysFromText(step05).always.length === 22;
+      } catch {
+        return false;
+      }
+    })(),
+    "step-05's summary literal gives each of its 22 keys a value that cannot be undefined",
+  );
+  // Each case edits a copy of the step's text, and the read has to refuse it with a message that names the key. The first
+  // four remove a fallback, the next three read through an optional chain, a nullish fallback to `undefined` and a bracket,
+  // the empty value is wrapped onto the next line, and `const` declarations ahead of the literal are followed from a bare
+  // identifier. The last three add a 23rd key the lowercase read would not see: camelCase, a digit and a shorthand.
+  const recommendations = 'recommendations: coverageMatrix.recommendations || [],';
+  const cases = [
+    [
+      'recommendations',
+      'recommendations loses its fallback',
+      (text) => text.replaceAll(recommendations, 'recommendations: coverageMatrix.recommendations,'),
+    ],
+    [
+      'rejected_evidence',
+      'rejected_evidence loses its fallback',
+      (text) =>
+        text.replaceAll(
+          'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence || [],',
+          'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence,',
+        ),
+    ],
+    [
+      'target',
+      'target loses its fallback',
+      (text) =>
+        text.replaceAll(
+          "target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },",
+          'target: coverageMatrix.trace_target,',
+        ),
+    ],
+    [
+      'source_sha',
+      'source_sha falls back to undefined',
+      (text) => text.replaceAll("source_sha: sourceSha || '',", 'source_sha: sourceSha || undefined,'),
+    ],
+    [
+      'source_sha',
+      'source_sha reads an optional chain',
+      (text) => text.replaceAll("source_sha: sourceSha || '',", 'source_sha: liveEvidence?.current_source_sha,'),
+    ],
+    ['repo', 'repo reads an optional chain', (text) => text.replaceAll('  repo: repoName,', '  repo: runtime.project?.name,')],
+    [
+      'recommendations',
+      'recommendations falls back to undefined with ??',
+      (text) => text.replaceAll(recommendations, 'recommendations: coverageMatrix.recommendations ?? undefined,'),
+    ],
+    [
+      'recommendations',
+      'recommendations reads the matrix by bracket',
+      (text) => text.replaceAll(recommendations, "recommendations: coverageMatrix['recommendations'],"),
+    ],
+    ['repo', 'repo has its value wrapped onto the next line', (text) => text.replaceAll('  repo: repoName,', '  repo:\n    repoName,')],
+    [
+      'recommendations',
+      'recommendations is a variable declared without a fallback',
+      (text) =>
+        text
+          .replaceAll(recommendations, 'recommendations: recs,')
+          .replace('const e2eTraceSummary = {', 'const recs = coverageMatrix.recommendations;\nconst e2eTraceSummary = {'),
+    ],
+    [
+      'blockers',
+      'blockers is a variable that loses its fallback',
+      (text) =>
+        text.replace(
+          'const blockers = coverageMatrix.blockers || coverageMatrix.test_inventory?.blockers || fallbackInventory.blockers;',
+          'const blockers = coverageMatrix.blockers;',
+        ),
+    ],
+    [
+      'gateDecision',
+      'a camelCase key is added',
+      (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  gateDecision: gateDecision,'),
+    ],
+    [
+      'p0_gate_ok',
+      'a key with a digit is added',
+      (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  p0_gate_ok: gateEligible,'),
+    ],
+    ['gateEligible', 'a shorthand key is added', (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  gateEligible,')],
+  ];
+  for (const [key, name, edit] of cases) {
+    const text = edit(step05);
+    assert(text !== step05, `the copy of step-05 where ${name} differs from the step`);
+    let refused = null;
+    try {
+      summaryKeysFromText(text);
+    } catch (error) {
+      refused = error;
+    }
+    assert(
+      refused !== null && refused.message.includes(key),
+      `the key read refuses step-05 when ${name}`,
+      refused === null ? 'it was accepted' : refused.message,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // nfr
 // ---------------------------------------------------------------------------
@@ -2237,6 +3079,8 @@ async function main() {
   await checkRoutingOracles(evaluator);
   await checkTestDesignOracles(evaluator);
   await checkTestDesignCoverage();
+  await checkWholeBodyCoverage();
+  await checkWholeBodyDeclarations();
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);
   checkNfrUnknownWitness(evaluator);

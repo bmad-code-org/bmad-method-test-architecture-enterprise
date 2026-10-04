@@ -954,6 +954,215 @@
         }
       ],
       "oracles": ["O-050"]
+    },
+    {
+      "id": "B-051",
+      "description": "The whole routing answer for epic-risk-before-tests: its action and its reason. epic-risk-before-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for epic-risk-before-tests carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-051"]
+    },
+    {
+      "id": "B-052",
+      "description": "The whole routing answer for no-framework-yet: its action and its reason. no-framework-yet: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for no-framework-yet carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-052"]
+    },
+    {
+      "id": "B-053",
+      "description": "The whole routing answer for pipeline-quality-gates: its action and its reason. pipeline-quality-gates: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for pipeline-quality-gates carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-053"]
+    },
+    {
+      "id": "B-054",
+      "description": "The whole routing answer for acceptance-tests-before-code: its action and its reason. acceptance-tests-before-code: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for acceptance-tests-before-code carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-054"]
+    },
+    {
+      "id": "B-055",
+      "description": "The whole routing answer for implemented-feature-no-tests: its action and its reason. implemented-feature-no-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for implemented-feature-no-tests carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-055"]
+    },
+    {
+      "id": "B-056",
+      "description": "The whole routing answer for review-existing-tests: its action and its reason. review-existing-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for review-existing-tests carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-056"]
+    },
+    {
+      "id": "B-057",
+      "description": "The whole routing answer for nfr-evidence-on-hand: its action and its reason. nfr-evidence-on-hand: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for nfr-evidence-on-hand carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-057"]
+    },
+    {
+      "id": "B-058",
+      "description": "The whole routing answer for trace-criteria-to-tests: its action and its reason. trace-criteria-to-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for trace-criteria-to-tests carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-058"]
+    },
+    {
+      "id": "B-059",
+      "description": "The whole routing answer for learn-testing-properly: its action and its reason. learn-testing-properly: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for learn-testing-properly carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-059"]
+    },
+    {
+      "id": "B-060",
+      "description": "The whole routing answer for release-gate-sequence: its action and its reason. release-gate-sequence: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for release-gate-sequence carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-060"]
+    },
+    {
+      "id": "B-061",
+      "description": "The whole routing answer for prove-refund-agent-behavior: its action and its reason. prove-refund-agent-behavior: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for prove-refund-agent-behavior carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "routing-answer-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-061"]
     }
   ],
   "oracles": [
@@ -2319,6 +2528,653 @@
               }
             ],
             "pattern": "^[\\s\\S]{0,102}$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-051",
+      "polarity": "expects-hold",
+      "commentary": "epic-risk-before-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for epic-risk-before-tests: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/epic-risk-before-tests/stdout/action", "/interactions/epic-risk-before-tests/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/epic-risk-before-tests/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/epic-risk-before-tests/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/epic-risk-before-tests/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-052",
+      "polarity": "expects-hold",
+      "commentary": "no-framework-yet: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for no-framework-yet: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/no-framework-yet/stdout/action", "/interactions/no-framework-yet/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/no-framework-yet/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/no-framework-yet/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/no-framework-yet/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-053",
+      "polarity": "expects-hold",
+      "commentary": "pipeline-quality-gates: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for pipeline-quality-gates: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/pipeline-quality-gates/stdout/action", "/interactions/pipeline-quality-gates/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/pipeline-quality-gates/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/pipeline-quality-gates/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/pipeline-quality-gates/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-054",
+      "polarity": "expects-hold",
+      "commentary": "acceptance-tests-before-code: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for acceptance-tests-before-code: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": [
+          "/interactions/acceptance-tests-before-code/stdout/action",
+          "/interactions/acceptance-tests-before-code/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/acceptance-tests-before-code/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/acceptance-tests-before-code/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/acceptance-tests-before-code/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-055",
+      "polarity": "expects-hold",
+      "commentary": "implemented-feature-no-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for implemented-feature-no-tests: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": [
+          "/interactions/implemented-feature-no-tests/stdout/action",
+          "/interactions/implemented-feature-no-tests/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/implemented-feature-no-tests/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/implemented-feature-no-tests/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/implemented-feature-no-tests/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-056",
+      "polarity": "expects-hold",
+      "commentary": "review-existing-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for review-existing-tests: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/review-existing-tests/stdout/action", "/interactions/review-existing-tests/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/review-existing-tests/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/review-existing-tests/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/review-existing-tests/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-057",
+      "polarity": "expects-hold",
+      "commentary": "nfr-evidence-on-hand: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for nfr-evidence-on-hand: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/nfr-evidence-on-hand/stdout/action", "/interactions/nfr-evidence-on-hand/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-evidence-on-hand/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-evidence-on-hand/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-evidence-on-hand/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-058",
+      "polarity": "expects-hold",
+      "commentary": "trace-criteria-to-tests: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for trace-criteria-to-tests: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/trace-criteria-to-tests/stdout/action", "/interactions/trace-criteria-to-tests/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-criteria-to-tests/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-criteria-to-tests/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-criteria-to-tests/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-059",
+      "polarity": "expects-hold",
+      "commentary": "learn-testing-properly: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for learn-testing-properly: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/learn-testing-properly/stdout/action", "/interactions/learn-testing-properly/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/learn-testing-properly/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/learn-testing-properly/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/learn-testing-properly/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-060",
+      "polarity": "expects-hold",
+      "commentary": "release-gate-sequence: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for release-gate-sequence: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": ["/interactions/release-gate-sequence/stdout/action", "/interactions/release-gate-sequence/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-061",
+      "polarity": "expects-hold",
+      "commentary": "prove-refund-agent-behavior: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for prove-refund-agent-behavior: its action and its reason.",
+        "negativeDomain": "An answer with a missing or extra key, an action or reason holding another type than a string, an action outside the three the skill allows, or a reason that is blank.",
+        "evidenceTargets": [
+          "/interactions/prove-refund-agent-behavior/stdout/action",
+          "/interactions/prove-refund-agent-behavior/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/prove-refund-agent-behavior/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/prove-refund-agent-behavior/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/prove-refund-agent-behavior/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
           }
         ]
       }
