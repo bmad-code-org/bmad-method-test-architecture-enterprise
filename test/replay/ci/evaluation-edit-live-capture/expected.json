@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the REAL CAPTURE of the edit run over the evaluation-edit project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's edit prompt and staged workspace) over the skill's edit steps and step-03b-render-evaluation-plans.md.",
+    "The project's pipeline held a hand-written test job and an evaluation job under the plan's marker that an earlier run wrote under an id with the plan's folder. The run loaded the pipeline, found the plan, rewrote the marker job under evaluation-pr from the plan, left the test job byte for byte and wrote no checkpoint. The stored checkpoint is the one the run left, which is the file the project came with."
+  ],
+  "id": "evaluation-edit-live-capture",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "real-capture",
+    "workflow": ".github/workflows/test.yml",
+    "sha256": "f5641719f506f850bcb7444d322cd1ae944eec3fb3b4318ca8e119e9d2740a95",
+    "capturedBy": "a live `npm run eval:ci -- --agent claude --runs 2 --set evaluation-tiers-granite-router --set evaluation-edit-ember-ledger` run (one invocation for both adopters) on 2026-10-04 (12 of 12 requested elements, 0 unrequested, stable across both repetitions, every threshold met; Claude Code 2.1.289, model alias sonnet), whose staged workspace and edit prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores (39 seconds); the file is the by-hand run's, byte for byte, and the checkpoint is the one that run left"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and actionlint reports nothing. All twelve elements are present: the pull_request trigger, contents:read, the root install and test, the evaluations folder's install, the tier step named for all four checks, the evaluation-pr job under the one job that carries the marker, limited to pull_request with its 30 minute limit, its upload under always() named evaluation-pr-runs, the test job's bytes as the pipeline held them, and the checkpoint's bytes as the create run left them.",
+    "Zero unrequested elements and zero rule violations."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": true,
+      "preserved-job-test": true,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

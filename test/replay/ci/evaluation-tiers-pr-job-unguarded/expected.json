@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the pr job carries no if on the event. The workflow also runs on push, on a release and on a schedule, so the pull request checks would run on all four, which the step's event guard exists to prevent.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-tiers-pr-job-unguarded",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-tiers-granite-router",
+    "scoringInputsDigest": "sha256:590c5bc9290096452ab5ec4c44fce3c306bf3ca1eeb68e0b8a6dde3165a55dd6"
+  },
+  "derivation": [
+    "The file parses and lints clean. A job with no if runs on every event the workflow names, so the pr job runs on four events where the plan names pull_request, and its job element misses; every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-push-main": true,
+      "trigger-weekly-schedule": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "guard-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-merge": true,
+      "command-evaluation-ci-scheduled": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": false,
+      "job-evaluation-merge": true,
+      "job-evaluation-scheduled": true,
+      "job-evaluation-release": true,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-merge": true,
+      "artifact-evaluation-runs-scheduled": true,
+      "artifact-evaluation-runs-release": true
+    },
+    "elementMisses": [
+      "job-evaluation-pr: job evaluation-pr runs on pull_request, push, release, schedule, expected pull_request"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

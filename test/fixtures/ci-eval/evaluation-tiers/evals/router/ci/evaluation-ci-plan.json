@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "evals/router"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "merge",
+      "trigger": [
+        "merge"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "evals/router"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "merge",
+        "defaultTier": "merge"
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled"
+      }
+    },
+    {
+      "id": "held-out",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/held-out/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled"
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "evals/router"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release"
+      }
+    },
+    {
+      "id": "held-out",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/router",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/held-out/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release"
+      }
+    }
+  ]
+}

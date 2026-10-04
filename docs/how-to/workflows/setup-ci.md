@@ -461,13 +461,13 @@ For each tier the plan places a check on, the pipeline gets one job, `evaluation
 - **The tooling stays in the evaluations folder.** The job installs the private `package.json` Evaluate wrote there with `npm ci --prefix` (`npm install --prefix` when no lockfile is committed), so the repository's own manifest stays untouched and a repository in any language works.
 - **The Node version respects the tooling's floor.** The evaluation job runs the project's `.nvmrc` version only when it is at or above the Node floor TeA and eval-quality declare (22.20.0), and the current LTS otherwise, so a project pinned to an older Node is not blocked.
 - **Tier placement is read from the plan.** The workflow never moves, adds or drops a check.
-- **Evidence is kept whatever the result.** The job uploads `<evaluation folder>/runs/` with `if: always()`, and each invocation writes `runs/<invocationId>/` under that folder.
-- **Triggers follow the plan.** The workflow gains the events the checks name. When an event is new to the workflow, the jobs that existed before get an `if:` that keeps them on the events they already ran on, and the summary names each guard.
+- **Evidence is kept whatever the result.** The job uploads `<evaluation folder>/runs/` with `if: always()` under the artifact name `<job id>-runs`, so no two jobs upload one name, and each invocation writes `runs/<invocationId>/` under that folder.
+- **Triggers follow the plan.** The workflow gains the events the checks name, and each evaluation job gets an `if:` on the event that starts its tier when the workflow carries more events than the tier names. When an event is new to the workflow, the jobs that existed before get an `if:` that keeps them on the events they already ran on, and the summary names each guard.
 - **Timeouts.** The `pr` and `merge` jobs get 30 minutes and the `scheduled` and `release` jobs 120, since their live checks spend model calls.
 - **The plan is validated first.** The workflow runs `tea-evaluate check` and refuses a plan only for findings about `ci/evaluation-ci-plan.json`.
 - **Credentials stay yours.** The plan carries none, so the summary lists what the live tiers need.
 
-The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run replaces them under the current id. See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
+The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run, in create or edit mode, rewrites each of them under the id the current plan gives, renames one whose id differs and leaves every job without the marker as it was, apart from the event guard a new event puts on it. Edit mode never writes the create run's checkpoint. See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
 
 ## What You Get
 

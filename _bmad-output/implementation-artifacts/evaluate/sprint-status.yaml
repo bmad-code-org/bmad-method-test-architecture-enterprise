@@ -127,7 +127,7 @@ development_status:
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
-  1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
+  1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
@@ -198,13 +198,11 @@ parallel_lanes:
     - 1-105-partition-rubrics-in-a-partition-plan
     - 1-106-partition-waivers-in-a-partition-plan
     - 1-107-partition-evaluator-mappings-in-a-partition-plan
+    - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
-    - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
-    - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
-    - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
-    - 1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture
-    - 1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles
+    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
+    - 1-108-compile-and-seal-each-partition-view-in-ci
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -224,19 +222,12 @@ parallel_lanes:
     - 1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it
     - 1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check
     - 1-113-run-a-subscription-authenticated-agent-target-confined
-    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
-    - 1-108-compile-and-seal-each-partition-view-in-ci
-    - 1-96-check-the-derivable-fields-of-a-ci-plan
-    - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
-    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
-    - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
     - 1-86-list-a-connection-to-a-hosts-path-based-unix-socket-outside-the-grants-as-an-observed-mount
     - 1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets
     - 1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets
     - 1-89-pass-the-targets-exact-environment-through-the-socket-launcher
-    - 1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard
     - 1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent
-    - 1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository
+    - 1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
@@ -259,17 +250,28 @@ parallel_lanes:
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
-    - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
-    - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
-    - 1-115-give-the-skill-a-command-that-prints-a-files-digest
     - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
     # Starts only once every other story has merged.
     - 2-6-document-evaluate-for-the-people-who-use-it
+  lane-4-ci-plans-and-the-ci-probe-corpus:
+    - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
+    - 1-96-check-the-derivable-fields-of-a-ci-plan
+    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
+    - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
+    - 1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture
+    - 1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles
+    - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
+  lane-5-withheld-history-intake-and-the-skill-guide:
+    - 1-115-give-the-skill-a-command-that-prints-a-files-digest
+    - 1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository
+    - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
+    - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
+    - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
     note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
-      /bmad-build worker picks it up. Runs on main after all three lanes drain,
+      /bmad-build worker picks it up. Runs on main after all five lanes drain,
       using the published engine resolved by the final TeA lockfile."
     status: backlog
     depends_on:

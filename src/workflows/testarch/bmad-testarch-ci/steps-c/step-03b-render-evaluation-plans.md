@@ -95,7 +95,14 @@ Other platforms get the same structure in their own idiom: a job or stage per ti
 
 ## 4. Re-render Without Duplicating
 
-A run replaces what an earlier run wrote. Find the jobs that carry a `# tea-evaluation-plan:` marker and match each to its plan by the path in the marker, whatever its id. Rewrite each job whose plan still places checks on its tier under the id item 1 gives now, so a renamed or newly shared id never leaves two jobs. Remove a job only when its plan file is gone or the plan no longer places a check on its tier. A job whose plan is refused or unreadable stays as it is and is reported as stale. Leave every job without the marker as it is.
+A run replaces what an earlier run wrote.
+
+- Find the jobs that carry a `# tea-evaluation-plan:` marker and match each to its plan by the path in the marker, whatever its id.
+- For each job whose plan still places checks on its tier, work out the id item 1 gives that plan and tier now. It can differ from the id the job carries: a job written while the repository held several plans carries the plan's folder, and with one plan left item 1 gives `evaluation-<tier>`.
+- Rewrite the job under the id item 1 gives now: rename it, give its artifact the name item 1 derives from the new id, and keep no job under the old id, so a renamed or newly shared id never leaves two jobs.
+- Remove a job only when its plan file is gone or the plan no longer places a check on its tier.
+- A job whose plan is refused or unreadable stays as it is and is reported as stale.
+- Leave every job without the marker as it is.
 
 ---
 

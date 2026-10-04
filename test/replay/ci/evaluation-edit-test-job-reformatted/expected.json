@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the run normalized the quoting of the hand-written test job (`name: 'Unit tests'` became `name: \"Unit tests\"`). The parse is the same and the job runs the same, so only a scorer that compares the job's bytes sees that the edit touched a job it did not write.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-edit-test-job-reformatted",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and lints clean. The test job's source differs from the pipeline's by its quotes, so the preserved job element misses and every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": true,
+      "preserved-job-test": false,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [
+      "preserved-job-test: job test was changed: its bytes are not the ones the pipeline held"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

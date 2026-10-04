@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the run added the evaluation-pr job and left the job the earlier run wrote beside it. Two jobs now carry the plan's marker and run the pr tier, which the re-render rule exists to prevent.",
+    "The new job is the capture's and the stale job is the pipeline's own, so the result is the two elements the stale job breaks."
+  ],
+  "id": "evaluation-edit-stale-job-kept",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and lints clean. Two jobs carry the marker and two jobs run the pr tier's command, so the evaluation-pr job element misses (it expects one job for the tier), and the stale job holds the pr tier step under a name that lists two of the four checks, so the tier step element misses too; every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": false,
+      "job-evaluation-pr": false,
+      "artifact-evaluation-runs": true,
+      "preserved-job-test": true,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [
+      "command-evaluation-ci-pr: the step that runs npm exec --prefix evals -- tea-evaluate ci --evaluation evals/ledger --tier pr is not named for seal, replay",
+      "job-evaluation-pr: 2 job(s) run npm exec --prefix evals -- tea-evaluate ci --evaluation evals/ledger --tier pr (evaluation-pr, evaluation-evals-ledger-pr), expected 1"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

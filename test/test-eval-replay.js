@@ -70,7 +70,9 @@
  * each miss spelled out, every unrequested element, and every workflow rule
  * violation. The lint half spawns actionlint, so this suite needs it on PATH and
  * fails closed with a reason when it is absent: a stored lint result nothing
- * re-derived would be a claim about a tool nobody ran.
+ * re-derived would be a claim about a tool nobody ran. A case of an edit set also
+ * stores each project file the set's checkpoint elements read, at its project path
+ * beside the workflow, byte for byte as the run left it.
  *
  * The trace, nfr and ci cases also pin signatureOf, the string main() compares across
  * repetitions to call a case stable. Its contract is that nothing scored is left
@@ -102,8 +104,8 @@
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly. Almost every case produces a number and
  * almost every one of those is constructed. The cases that carry captured bytes come
- * from the ATDD fixture corpus, from the CLI parser fixtures and from a live eval:ci
- * run over the evaluation-plan project; the corpus counts live in
+ * from the ATDD fixture corpus, from the CLI parser fixtures and from live eval:ci
+ * runs over the evaluation-plan, evaluation-tiers and evaluation-edit projects; the corpus counts live in
  * test/lib/doc-count-sources.js, which counts the cases and their origins. The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
  * reviewer that named nothing. The routing replay corpus also preserves all four
@@ -199,6 +201,7 @@ const {
   lintWorkflow: lintCiWorkflow,
   scoreRun: scoreCiRun,
   signatureOf: ciSignatureOf,
+  checkpointFilesOf: ciCheckpointFilesOf,
 } = require('./eval-ci');
 const { scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
@@ -1042,7 +1045,14 @@ async function replayCiCase(item, set) {
   if (!workflow.ok) return { result: { unmeasurable: workflow.failureClass } };
   const lint = lintCiWorkflow(workflow.text);
   if (!lint.ok) unreadable(`${item.id}: the lint half of a ci case cannot be re-derived: ${lint.reason}`);
-  const scored = scoreCiRun(set, workflow.text, lint);
+  // The project files an edit case must leave alone are stored beside the workflow, byte for byte as the run left them,
+  // and a file the run deleted is a file the case does not hold.
+  const files = {};
+  for (const relative of ciCheckpointFilesOf(set)) {
+    const stored = path.join(item.directory, relative);
+    files[relative] = fs.existsSync(stored) ? fs.readFileSync(stored, 'utf8') : null;
+  }
+  const scored = scoreCiRun(set, workflow.text, lint, { files });
   return { result: projectCiResult(scored), scored };
 }
 

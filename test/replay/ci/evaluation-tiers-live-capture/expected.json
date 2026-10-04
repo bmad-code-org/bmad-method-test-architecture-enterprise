@@ -1,0 +1,62 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the REAL CAPTURE of the evaluation-tiers project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's own prompt and staged workspace) over the skill with step-03b-render-evaluation-plans.md.",
+    "The run found evals/router/ci/evaluation-ci-plan.json without being told where it was, read that the plan places checks on four tiers, and wrote one job per tier under the plan's marker: evaluation-pr, evaluation-merge, evaluation-scheduled and evaluation-release, each limited to the event that starts its tier, each with its own setup, its evaluations folder install and its one tea-evaluate ci step for its tier, the merge job running the pr step ahead of its own, and each job's evals/router/runs/ uploaded under always() as an artifact named for the job."
+  ],
+  "id": "evaluation-tiers-live-capture",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "real-capture",
+    "workflow": ".github/workflows/test.yml",
+    "sha256": "f62a1e77365e5d508e2e1de2f6cf51d8ce79a568fd66c2b300e99d3962036ffd",
+    "capturedBy": "a live `npm run eval:ci -- --agent claude --runs 2 --set evaluation-tiers-granite-router --set evaluation-edit-ember-ledger` run (one invocation for both adopters) on 2026-10-04 (23 of 23 requested elements, 0 unrequested, stable across both repetitions, every threshold met; Claude Code 2.1.289, model alias sonnet), whose staged workspace and prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores (78 seconds); the file is the by-hand run's, byte for byte"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-tiers-granite-router",
+    "scoringInputsDigest": "sha256:590c5bc9290096452ab5ec4c44fce3c306bf3ca1eeb68e0b8a6dde3165a55dd6"
+  },
+  "derivation": [
+    "The file parses and actionlint reports nothing. All twenty-three requested elements are present: the four triggers (pull_request and push scoped to main, release of type published, the weekly cron), contents:read, the Node version from .nvmrc in the test job and the floor-guarded Node version in each evaluation job, the root install and test with the test job limited to pull requests and pushes, the evaluations folder's install, one tier step per tier named for the checks the plan places on it, the four jobs under the marker with their events, the 30, 30, 120 and 120 minute limits and the merge job's pr step ahead of its own, and four uploads under always() with a name of their own each.",
+    "Zero unrequested elements and zero rule violations: the only uploads are the four requested ones, and no evaluation step or job carries continue-on-error."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-push-main": true,
+      "trigger-weekly-schedule": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "guard-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-merge": true,
+      "command-evaluation-ci-scheduled": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": true,
+      "job-evaluation-merge": true,
+      "job-evaluation-scheduled": true,
+      "job-evaluation-release": true,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-merge": true,
+      "artifact-evaluation-runs-scheduled": true,
+      "artifact-evaluation-runs-release": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}
