@@ -76,7 +76,7 @@
  *                The CLI finds the keychain through `HOME`, which a confined target holds privately.
  *                A host with neither source refuses the run (exit 12), naming the token route and the opt-out.
  *                Every observation and fault of every request kind has the variable's value and each string of the file replaced by `[redacted]`, since the home is shared by every target the sandbox starts.
- *                The scrub covers every string the file has held during the run, since the host's own CLI can refresh it during a call, and the strings of a read caught mid-write.
+ *                The scrub covers every string the file has held during the run, since the host's own CLI can refresh it during a call, and the strings of a read caught mid-write, which leave out the values under the public fields.
  *                An opted-out run scrubs the host's file as well, since its target reads the file through its own `HOME`.
  *                The values under the keys the adapter's `publicFields` names (the scopes, the subscription type, the rate-limit tier) stay as written, since they are no secret and a run that rewrote them would change an answer's own words, and any field the adapter does not name is scrubbed.
  *   network      every process the runtime starts for a Bubblewrap target
@@ -202,9 +202,7 @@ const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
 
 /**
- * The login sources of the agent CLIs a registry entry's `login` names (Story 1.113): the environment variable that carries a
- * long-lived token, the variable that moves the CLI's configuration directory, that directory's default under the user's home,
- * and the credentials file inside it.
+ * The login sources of the agent CLIs a registry entry's `login` names (Story 1.113): the environment variable that carries a long-lived token, the variable that moves the CLI's configuration directory, that directory's default under the user's home, and the credentials file inside it.
  * `homeFile` is where the CLI looks for the file under the private home, which a link names the real file at.
  * `publicFields` are the keys of that file whose values are no secret (the plan, the scopes, the rate-limit tier).
  * A record keeps those values as written while it replaces every other string of the file, a field this list does not know included.
@@ -796,8 +794,7 @@ function setValue(value) {
 }
 
 /**
- * The credentials file the host holds for `adapter`, by its real path, or null: `<directory>/<file>` where `directory` is the
- * variable's value when the host sets it and the default beneath the user's home otherwise.
+ * The credentials file the host holds for `adapter`, by its real path, or null: `<directory>/<file>` where `directory` is the variable's value when the host sets it and the default beneath the user's home otherwise.
  * A link is followed, and a path that is not a regular file is no login.
  */
 function hostLoginFile(adapter, env) {
@@ -814,12 +811,9 @@ function hostLoginFile(adapter, env) {
 }
 
 /**
- * The logins the registry's entries declare (`"login": "claude"`, Story 1.113), one record per entry that declares one: the
- * interface and executable, the adapter, the variable's name when the host sets it (its value is read where a request is made and
- * is in no record) and, for a run that confines, the credentials file's real path.
+ * The logins the registry's entries declare (`"login": "claude"`, Story 1.113), one record per entry that declares one: the interface and executable, the adapter, the variable's name when the host sets it (its value is read where a request is made and is in no record) and, for a run that confines, the credentials file's real path.
  * A run that opted out takes no `file`, since its target runs with the host's own home and no link is made.
- * `scrubFile` is the host's credentials file whatever the mode, which the run reads only to scrub its strings from every record,
- * since an opted-out target reads the host's file through its own `HOME`.
+ * `scrubFile` is the host's credentials file whatever the mode, which the run reads only to scrub its strings from every record, since an opted-out target reads the host's file through its own `HOME`.
  *
  * @param {object} evaluation the parsed `evaluation.json`
  * @param {NodeJS.ProcessEnv} env

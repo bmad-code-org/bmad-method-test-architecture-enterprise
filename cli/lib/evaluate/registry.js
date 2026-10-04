@@ -409,19 +409,45 @@ function isBareCommand(target) {
 }
 
 /**
- * The strings a credentials file's text holds when it does not parse as JSON, which is what a read caught in the middle of a write returns:
- * the whole trimmed text, each whitespace-separated token, and each quoted string that is a value (a quoted key is no secret), the last one
- * cut short by the end of the text included.
+ * The strings a credentials file's text holds when it does not parse as JSON, which is what a read caught in the middle of a write returns.
+ * They are the whole trimmed text, each whitespace-separated token, and each quoted string that is a value (a quoted key is no secret), the last one cut short by the end of the text included.
+ * A quoted value belongs to the nearest key before it, and an element of an array belongs to the key before its `[`.
+ * The values under a key in `publicFields` are left out, so a torn read does not scrub a scope or a plan name.
  * A token the file held before the write began survives a torn read this way, whichever part of the text the tear cut.
  *
  * @param {string} text
+ * @param {Set<string>} [publicFields] The keys whose values are no secret.
  * @returns {string[]}
  */
-function tornStrings(text) {
+function tornStrings(text, publicFields = new Set()) {
   const strings = new Set([text.trim(), ...text.split(/\s+/)]);
-  for (const match of text.matchAll(/"((?:[^"\\]|\\.)*)("?)/g)) {
-    const isKey = match[2] === '"' && /^\s*:/.test(text.slice(match.index + match[0].length));
-    if (!isKey) strings.add(match[1]);
+  const frames = [];
+  const publicOf = (frame) =>
+    frame !== undefined && (frame.inherited || (!frame.array && frame.key !== null && publicFields.has(frame.key)));
+  for (const match of text.matchAll(/"((?:[^"\\]|\\.)*)("?)|[[\]{},]/g)) {
+    const [token] = match;
+    const frame = frames.at(-1);
+    switch (token) {
+      case '[':
+      case '{': {
+        frames.push({ array: token === '[', key: null, inherited: publicOf(frame) });
+        break;
+      }
+      case ']':
+      case '}': {
+        frames.pop();
+        break;
+      }
+      case ',': {
+        if (frame !== undefined && !frame.array) frame.key = null;
+        break;
+      }
+      default: {
+        const isKey = match[2] === '"' && /^\s*:/.test(text.slice(match.index + token.length));
+        if (isKey && frame !== undefined && !frame.array) frame.key = match[1];
+        else if (!isKey && !publicOf(frame)) strings.add(match[1]);
+      }
+    }
   }
   strings.delete('');
   return [...strings];
@@ -535,13 +561,10 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       files.set(file, new Set([...(files.get(file) ?? []), ...(adapter?.publicFields ?? [])]));
     }
     for (const [file, publicFields] of files) {
-      const collect = (value) => {
-        if (typeof value === 'string') heldLoginStrings.add(value);
+      const collect = (value, isPublic = false) => {
+        if (typeof value === 'string') (isPublic ? heldPublicStrings : heldLoginStrings).add(value);
         else if (value !== null && typeof value === 'object') {
-          for (const [key, inner] of Object.entries(value)) {
-            if (!publicFields.has(key)) collect(inner);
-            else if (typeof inner === 'string') heldPublicStrings.add(inner);
-          }
+          for (const [key, inner] of Object.entries(value)) collect(inner, isPublic || publicFields.has(key));
         }
       };
       let text;
@@ -553,7 +576,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       try {
         collect(JSON.parse(text));
       } catch {
-        for (const piece of tornStrings(text)) {
+        for (const piece of tornStrings(text, publicFields)) {
           if (!heldPublicStrings.has(piece)) heldLoginStrings.add(piece);
         }
       }
@@ -847,8 +870,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         workspace: options.workspace,
         git: options.git ?? null,
         privateRoot: options.privateRoot ?? null,
-        // One private home per sandbox, beneath the run's private parent, holding a link to each login file an entry's `login`
-        // grants; an opt-out run makes none and keeps the host's environment.
+        // One private home per sandbox, beneath the run's private parent, holding a link to each login file an entry's `login` grants; an opt-out run makes none and keeps the host's environment.
         home: (home = makeTargetHome(scratch, loginLinks)),
         linked: loginLinks.map(({ target }) => target),
         audit,

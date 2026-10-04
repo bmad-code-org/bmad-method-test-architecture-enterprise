@@ -1052,13 +1052,8 @@ class FakePowerShell {
 
 /**
  * The supervisor's trace writer survives concurrent writers.
- * Four processes (the supervisor, the leader, the guardian and the
- * helper) append to one trace file, a Windows sharing violation under load raised `EBUSY`, `EPERM` or `EACCES` from the append,
- * and a writer that swallowed it dropped the line (the "setup race" case then missed `guardian-agent-spawned`).
- * The case stubs
- * `fs.appendFileSync`, so it runs on every platform: the line is written once after a few refusals of each code, a persistent
- * refusal neither throws nor loops past its bound, an error no sharing raises is not retried, and a run with no trace file
- * appends nothing.
+ * Four processes (the supervisor, the leader, the guardian and the helper) append to one trace file, a Windows sharing violation under load raised `EBUSY`, `EPERM` or `EACCES` from the append, and a writer that swallowed it dropped the line (the "setup race" case then missed `guardian-agent-spawned`).
+ * The case stubs `fs.appendFileSync`, so it runs on every platform: the line is written once after a few refusals of each code, a persistent refusal neither throws nor loops past its bound, an error no sharing raises is not retried, and a run with no trace file appends nothing.
  */
 function checkSupervisorTraceRetries() {
   const { trace, TRACE_APPEND_ATTEMPTS } = require('../cli/lib/agent-supervisor');
@@ -2301,14 +2296,9 @@ function checkPrivateHome() {
 }
 
 /**
- * A confined `tea-skill-runner --agent claude` authenticates with the host's subscription login (Story 1.113): the stub CLI
- * `stub-agent/claude.js` looks for CLAUDE_CODE_OAUTH_TOKEN and for `.claude/.credentials.json` under HOME as the real one does on
- * Linux, and exits 1 with neither, which the runner reports as exit 4.
- * The entry's `"login": "claude"` makes the call authenticate
- * through a link in the private home to the host's file, read-only, or through the variable alone; the host's login is a fake file and
- * a fake token, and no record holds either.
- * Without the declaration the same call exits 4 and the preflight fails, and a host with
- * neither source is refused before any call, naming the token route.
+ * A confined `tea-skill-runner --agent claude` authenticates with the host's subscription login (Story 1.113): the stub CLI `stub-agent/claude.js` looks for CLAUDE_CODE_OAUTH_TOKEN and for `.claude/.credentials.json` under HOME as the real one does on Linux, and exits 1 with neither, which the runner reports as exit 4.
+ * The entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file, read-only, or through the variable alone; the host's login is a fake file and a fake token, and no record holds either.
+ * Without the declaration the same call exits 4 and the preflight fails, and a host with neither source is refused before any call, naming the token route.
  */
 function checkSubscriptionLogin() {
   const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');

@@ -97,8 +97,7 @@ const TRACE_RETRY_WAIT_MS = 5;
 const traceWait = new Int32Array(new SharedArrayBuffer(4));
 
 /**
- * Appends one trace line, retrying a bounded number of times on the errors that four processes appending to one file raise under
- * load (the supervisor, the leader, the guardian and the helper), each wait a short synchronous one.
+ * Appends one trace line, retrying a bounded number of times on the errors that four processes appending to one file raise under load (the supervisor, the leader, the guardian and the helper), each wait a short synchronous one.
  * The last error is thrown.
  */
 function appendTraceLine(file, line) {

@@ -10024,13 +10024,10 @@ function loginField(stdout, name) {
  * It looks for `.claude/.credentials.json` under `HOME` and for the variable `CLAUDE_CODE_OAUTH_TOKEN`, and exits 4 with neither.
  * The host's login is a fake file and a fake token under a temp home, so no real login is read.
  *
- * - File: the registry entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file
- *   (under `HOME`, under `CLAUDE_CONFIG_DIR`, and through a link the file itself is), which the target reads and cannot write, which
- *   `run.json` and the isolation manifest name by path, and which no observed mount lists.
+ * - File: the registry entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file (under `HOME`, under `CLAUDE_CONFIG_DIR`, and through a link the file itself is), which the target reads and cannot write, which `run.json` and the isolation manifest name by path, and which no observed mount lists.
  * - A second file under the real home, in the configuration directory or beside it, is an observed mount and `score` exits 3.
  * - Token: the variable passes and no other credential variable does; the value is in no recorded file, echoed or not.
- * - Without the declaration the call exits 4 and the run 12; a host with only a keychain refuses the run, naming the token route and
- *   the opt-out; the keychain stand-in's read is an observed mount and its sidecar write is refused.
+ * - Without the declaration the call exits 4 and the run 12; a host with only a keychain refuses the run, naming the token route and the opt-out; the keychain stand-in's read is an observed mount and its sidecar write is refused.
  * - An opt-out run passes the variable, makes no home and records the variable by name.
  *   A target of that run that reads the host's file through its own `HOME` has the file's strings scrubbed from every record.
  */
@@ -10310,8 +10307,7 @@ async function checkSubscriptionLogin() {
     `preflight on a host with no login a target can use exited ${refusedPreflight.status}\n${refusedPreflight.output}`,
   );
 
-  // The keychain stand-in, started on a host that gives it the token: its read of the host's keychain is an observed mount and
-  // the sidecar write a keychain database needs is refused, so a confined target has no keychain that is not an isolation violation.
+  // The keychain stand-in, started on a host that gives it the token: its read of the host's keychain is an observed mount and the sidecar write a keychain database needs is refused, so a confined target has no keychain that is not an isolation violation.
   const stood = loginRun(
     loginProject('login-keychain-stand-in'),
     { HOME: keychainHome, CLAUDE_CODE_OAUTH_TOKEN: fakeToken, VERDICT_KEYCHAIN: keychain },
@@ -10516,10 +10512,79 @@ async function checkLoginScrubbedAfterRotation(entry, folder) {
 }
 
 /**
- * The login units: `loginsOf` and `selectConfinement` over a host's environment (the file by its real path, the variable by its
- * name, a refusal naming both ways out for a host with neither, an unsafe path refused, a run that opted out taking no file), the
- * schema and the registry's refusals, the private home's link (planted for each home, removed with the home and leaving the host's
- * file), the manifest's note, and the Linux audit's decision over a link in the home, which reads on any host.
+ * A torn read of the credentials file keeps the adapter's public fields readable (Story 1.113 review round 3).
+ * The text is cut after the scopes, or after the rate-limit tier, and the cut read is either the first read of the run or the one a call's rewrite leaves behind.
+ * The scopes and the tier stay as the answer wrote them, and the access and refresh tokens are `[redacted]`, in the observation and in the fault.
+ */
+async function checkLoginTornReadKeepsPublicFields(entry, folder) {
+  const tokens = { access: 'torn-access-token-5555', refresh: 'torn-refresh-token-6666' };
+  const head = `{"claudeAiOauth":{"accessToken":"${tokens.access}","refreshToken":"${tokens.refresh}",`;
+  const cuts = {
+    'after the scopes': `${head}"scopes":["user:inference","user:profile"],`,
+    'after the rate-limit tier': `${head}"scopes":["user:inference","user:profile"],"subscriptionType":"enterprise","rateLimitTier":"default_claude_max_20x",`,
+    // The words sit under a key the adapter does not name, so only the earlier whole read of the file knows they are public.
+    'under a key the adapter does not name': `${head}"grantedScopes":["user:inference","user:profile"],"plan":"default_claude_max_20x",`,
+  };
+  const publicWords = ['user:inference', 'user:profile', 'default_claude_max_20x'];
+  for (const [cut, torn] of Object.entries(cuts)) {
+    for (const when of ['on the first read', 'on the read a call leaves behind']) {
+      if (cut === 'under a key the adapter does not name' && when === 'on the first read') continue;
+      for (const failing of [false, true]) {
+        const label = `a read torn ${cut} ${when}, ${failing ? 'in the fault' : 'in the observation'}`;
+        const file = path.join(tempDir('login-torn-public'), '.credentials.json');
+        const whole = JSON.stringify({
+          claudeAiOauth: {
+            accessToken: tokens.access,
+            refreshToken: tokens.refresh,
+            scopes: ['user:inference', 'user:profile'],
+            subscriptionType: 'enterprise',
+            rateLimitTier: 'default_claude_max_20x',
+          },
+        });
+        fs.writeFileSync(file, when === 'on the first read' ? torn : whole);
+        const registry = createRegistry([{ ...entry, login: 'claude' }], {
+          root: folder,
+          confinement: {
+            mode: 'opt-out',
+            evaluationFolder: folder,
+            logins: [{ interfaceId: 'agent', executable: 'runner', login: 'claude', variable: null, file: null, scrubFile: file }],
+          },
+        });
+        const port = {
+          async probe() {
+            if (when !== 'on the first read') fs.writeFileSync(file, torn);
+            const printed = `my scopes are ${publicWords[0]} and ${publicWords[1]} on ${publicWords[2]} with ${tokens.access} and ${tokens.refresh}`;
+            if (failing) throw Object.assign(new Error(`the target failed: ${printed}`), { captured: printed, cause: new Error(printed) });
+            return { stdout: printed, stderr: '', body: { kind: 'text', value: printed } };
+          },
+        };
+        const wrapped = hostEnvironmentPort({ port, registry });
+        // A second call, since a scrub set that kept a public word after the first torn read rewrites it on every later one.
+        for (const call of ['the call', 'a later call']) {
+          let recorded;
+          try {
+            recorded = JSON.stringify(
+              (await wrapped.probe({ kind: 'cli', interfaceId: 'agent', executable: 'runner', channels: {} })).observation,
+            );
+          } catch (error) {
+            recorded = `${error.message}${error.scrubbedCause}`;
+          }
+          check(
+            publicWords.every((word) => recorded.includes(word)),
+            `${call} after ${label} recorded ${recorded}; expected the scopes and the tier as written`,
+          );
+          check(
+            !recorded.includes(tokens.access) && !recorded.includes(tokens.refresh) && recorded.includes('[redacted]'),
+            `${call} after ${label} recorded ${recorded}; expected both tokens [redacted]`,
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * The login units: `loginsOf` and `selectConfinement` over a host's environment (the file by its real path, the variable by its name, a refusal naming both ways out for a host with neither, an unsafe path refused, a run that opted out taking no file), the schema and the registry's refusals, the private home's link (planted for each home, removed with the home and leaving the host's file), the manifest's note, and the Linux audit's decision over a link in the home, which reads on any host.
  */
 async function checkSubscriptionLoginUnits() {
   const host = fs.realpathSync(tempDir('login-units'));
@@ -10567,8 +10632,7 @@ async function checkSubscriptionLoginUnits() {
     'an unknown adapter name was taken for a login',
   );
 
-  // selectConfinement: the logins ride the confinement, a host with neither source is refused with both ways out named, and a run
-  // that opted out takes the variable and no file.
+  // selectConfinement: the logins ride the confinement, a host with neither source is refused with both ways out named, and a run that opted out takes the variable and no file.
   const selected = select({ HOME: host });
   if (selected.refusal !== undefined) throw new Error(selected.refusal);
   check(
@@ -10743,6 +10807,7 @@ async function checkSubscriptionLoginUnits() {
     );
     await checkLoginScrubbedFromEveryKind(entry, folder, { file: jsonFile, variable: withVariable.variable });
     await checkLoginScrubbedAfterRotation(entry, folder);
+    await checkLoginTornReadKeepsPublicFields(entry, folder);
   } finally {
     if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
     else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
@@ -10862,8 +10927,7 @@ async function checkSubscriptionLoginUnits() {
 }
 
 /**
- * The reference, read under its exact heading, documents the subscription login of a confined target: the `login` declaration, each
- * platform's source, the keychain's absence and why, the token route and the opt-out (Story 1.113).
+ * The reference, read under its exact heading, documents the subscription login of a confined target: the `login` declaration, each platform's source, the keychain's absence and why, the token route and the opt-out (Story 1.113).
  */
 function checkSubscriptionLoginReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');

@@ -2953,6 +2953,9 @@ A read caught mid-write (not valid JSON) contributes its whole text, each whites
 A run that opted out scrubs the host's credentials file as well, since its target reads the file through its own `HOME`; `run.json` still records no file for it and no link is made.
 The token route's statements in the reference are pinned as whole sentences, one assertion each.
 
+Amended 2026-10-04 in Story 1.113's review round 3: a read caught mid-write leaves out the values under the fields the adapter declares public, so a torn read does not rewrite `user:inference`, `user:profile` or a rate-limit tier in an answer.
+A quoted value belongs to the nearest key before it, and an element of an array belongs to the key before its `[`, so a first read that is torn is covered as well.
+
 **Dependencies:** 1.59, 1.46.
 **Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-preflight`, `npm run test:evaluate-agents`, `npm run docs:validate-links`, `npm test`.
 

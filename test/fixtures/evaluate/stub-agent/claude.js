@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 /**
- * A stand-in for the Claude Code CLI behind `tea-skill-runner --agent claude --agent-cmd ./claude.js` (Story 1.113), so the real
- * runner and adapter run end to end under confinement with no account, no network and no model.
+ * A stand-in for the Claude Code CLI behind `tea-skill-runner --agent claude --agent-cmd ./claude.js` (Story 1.113), so the real runner and adapter run end to end under confinement with no account, no network and no model.
  *
- * It finds its login the way the CLI does on Linux: the variable CLAUDE_CODE_OAUTH_TOKEN, then the credentials file at
- * `.claude/.credentials.json` under HOME.
+ * It finds its login the way the CLI does on Linux: the variable CLAUDE_CODE_OAUTH_TOKEN, then the credentials file at `.claude/.credentials.json` under HOME.
  * With neither it prints `Not logged in` to standard error and exits 1, which the runner reports as transport (exit 4).
  * Otherwise it answers in the shape the adapter reads (`--output-format json`).
  * `result` holds the name of the skill the prompt names, the request, and `login: <source> <sha256 of what it read>`.
