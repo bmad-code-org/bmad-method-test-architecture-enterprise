@@ -54,7 +54,10 @@
  *       or an entry that is not a regular file, or a baseline artifact that does not meet its schema; compare
  *       --accept: a run whose run.json says dirty: true, a probe with no evidence artifact, or a member a replay
  *       through score needs that is missing, a link or not a regular file (nothing is written under baseline/)
- *   10  also ci: a plan that fails its schema or its placement rules (a tier moved off the default with no reason, a
+ *   10  also ci: a plan that fails its schema or its placement rules (a check with no non-blank reason, a trigger its
+ *       tier does not use, a <evaluation-folder> left in a command or an evidence path, a preflight-live default that
+ *       disagrees with the registry, evaluation.json tiers that differ from the plan's, an api-conformance check over
+ *       an evaluation with no HTTP target, a rubric with no judge-calibration on a live tier the plan uses, a
  *       deterministic check that needs no secret placed off pr, a live check on pr, a command not led by its tool, a
  *       warn enforcement where AD-10 gives no warn) or that sits in a ci/ directory that is a link; a baseline that
  *       fails its schema, holds anything in scores/ besides the accepted score invocation, or holds a probe or
@@ -90,7 +93,8 @@
  *       produced evidence that differs from the baseline's, or lacks or adds a file (the stage exits themselves pass
  *       through when they are not success or FAIL)
  *   64  also ci: no ci/evaluation-ci-plan.json, an unknown --tier, a check that needs a baseline/ that is absent, an
- *       api-conformance check over an evaluation with no HTTP target, or a gate's own 64 passed through
+ *       api-conformance check over an evaluation whose evaluation.json names no registry, or a gate's own 64 passed
+ *       through
  *   64  also digest --file: a path outside the folder, through a symbolic link, to a directory, to a file the folder
  *       does not hold or to something that is not a regular file, and --file with --calibration-inputs
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or

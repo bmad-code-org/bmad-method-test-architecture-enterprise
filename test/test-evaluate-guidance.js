@@ -3744,6 +3744,15 @@ function ciAssets() {
   };
 }
 
+/** The template as the stage leaves it: the evaluation folder replaced in every command and the reasons written. */
+function filledTemplate(template) {
+  return JSON.parse(
+    JSON.stringify(template)
+      .replaceAll('<evaluation-folder>', 'evals/example')
+      .replaceAll('"reason":""', '"reason":"The inspection read .github/workflows/ci.yml."'),
+  );
+}
+
 /** The ci stage guide (Story 2.4): inspection headings, placement rules, the plan template and the tagged plan examples. */
 function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = []) {
   const plan = require('../cli/lib/evaluate/ci-plan');
@@ -3892,13 +3901,17 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'assets/evaluation-ci-plan.template.json',
     '<evaluation-folder>/ci/evaluation-ci-plan.json',
     'fill every `reason`',
-    'set `evaluation.json` `tiers` to the tiers the plan places a check on',
+    '`evaluation.json` `tiers` that differ from the tiers the plan places a check on',
+    'a `<evaluation-folder>` left in a command or an evidence path',
+    'each with the repair in its message',
+    'so apply the repair its message names',
+    'A contract that declares a rubric keeps `judge-calibration` on every live tier the plan uses.',
     'repair every `ci-plan` finding',
     'leave `<invocationId>` literal',
     'Delete the checks the evaluation cannot run',
     '`judge-calibration` when the contract declares no rubric and `gameability` when no probe takes the gameability route, which pass as no-ops',
     'Keep the one `preflight-live` set that fits',
-    '`api-conformance` for an evaluation that declares no HTTP target, which the runtime exits 64 on',
+    '`api-conformance` for an evaluation that declares no HTTP target, which `check` reports as an `applicability` finding',
     'edit it in place',
     'Show the adopter the placement table with each deviation and its reason before the hand-off.',
     'once they confirm it, accept it with',
@@ -3914,7 +3927,6 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'a strength floor on a class with no eligible probe returns to Stage 3 or Stage 8',
     'Record the exit and that stage in the `## CI` section, tell the adopter, and carry on with the hand-off',
     'Record every tier the plan places a check on, with its exit or the reason it was not run',
-    'derive `tiers` again',
     'or a single entry moved off its default',
     'the `merge` entry when the target needs no secret, the `scheduled` and `release` entries when it does',
   ])
@@ -3973,6 +3985,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
       '## Place each check',
       [
         '`preflight-live` defaults to `merge` when the target needs no secret and to `scheduled` and `release` otherwise.',
+        'a target needs a secret when the registry names `environmentKeys` or the target is a skill or agent runner.',
         '`replay`) needs no secret and calls no model.',
         'needs a live target, a model judge or a run to compare.',
       ],
@@ -3987,8 +4000,9 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     [
       '## Write the plan',
       [
-        'and set `trigger` to match the tier',
-        'a tier that differs from its default with no reason, a deterministic check placed off `pr`, a live check on `pr`, and a command not led by its tool are authoring defects',
+        'it reports a `trigger` its tier does not use',
+        'a `preflight-live` default that disagrees with the registry and a check with no `reason`',
+        'A deterministic check placed off `pr`, a live check on `pr` and a command not led by its tool are authoring defects too.',
         'show the adopter the latest clean scored run and, once they confirm it, accept it',
         '(`pr` always, and each live tier whose target launches here and whose credentials exist)',
       ],
@@ -4140,11 +4154,17 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     for (const problem of planEntryShapeProblems(entry ?? { placement: {} }, 'ci.md gate-check example')) failures.push(problem);
   }
 
-  // The plan template: valid at the defaults, every default present with its shape, the reasons left for the stage.
+  // The plan template: it fails `check` until the stage replaces `<evaluation-folder>` and writes the reasons, and it validates once
+  // they are in; every default is present with its shape.
   const { template, readme } = assets;
-  const templateFindings = plan.planFindings(template);
+  const rawRules = new Set(plan.planFindings(template).map((found) => found.rule));
+  for (const rule of ['placeholder', 'placement-reason'])
+    if (!rawRules.has(rule))
+      failures.push(`assets/evaluation-ci-plan.template.json passes the ${rule} rule as shipped, so check would not ask the stage for it`);
+  const stageFilled = filledTemplate(template);
+  const templateFindings = plan.planFindings(stageFilled);
   if (templateFindings.length > 0)
-    failures.push(`assets/evaluation-ci-plan.template.json fails the runtime: ${JSON.stringify(templateFindings)}`);
+    failures.push(`assets/evaluation-ci-plan.template.json fails the runtime once the stage fills it: ${JSON.stringify(templateFindings)}`);
   const present = new Set(template.checks.map((entry) => `${entry.id}:${entry.placement.tier}`));
   for (const [id, tiers] of Object.entries(plan.DEFAULT_TIERS))
     for (const tier of id === 'preflight-live' ? ['merge', 'scheduled', 'release'] : tiers)
@@ -5196,7 +5216,46 @@ async function main() {
         (text) => text.replace(' Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.', ''),
       ],
       ['ci preflight secret default dropped', 'ci', ciCheck, (text) => text.replace(' and to `scheduled` and `release` otherwise', '')],
-      ['ci trigger match dropped', 'ci', ciCheck, (text) => text.replace(', and set `trigger` to match the tier', '')],
+      [
+        'ci trigger finding dropped',
+        'ci',
+        ciCheck,
+        (text) => text.replace('it reports a `trigger` its tier does not use, ', 'it reports '),
+      ],
+      [
+        'ci tiers finding dropped',
+        'ci',
+        ciCheck,
+        (text) => text.replace('`evaluation.json` `tiers` that differ from the tiers the plan places a check on, ', ''),
+      ],
+      [
+        'ci repair-from-message dropped',
+        'ci',
+        ciCheck,
+        (text) => text.replace('so apply the repair its message names', 'so write it by hand'),
+      ],
+      [
+        'ci applicability finding dropped',
+        'ci',
+        ciCheck,
+        (text) => text.replace('which `check` reports as an `applicability` finding', 'which the runtime exits 64 on'),
+      ],
+      [
+        'ci rubric calibration rule dropped',
+        'ci',
+        ciCheck,
+        (text) => text.replace('A contract that declares a rubric keeps `judge-calibration` on every live tier the plan uses.\n', ''),
+      ],
+      [
+        'ci registry secret rule dropped',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'a target needs a secret when the registry names `environmentKeys` or the target is a skill or agent runner',
+            'a target needs a secret',
+          ),
+      ],
       [
         'ci deterministic set may need a secret',
         'ci',

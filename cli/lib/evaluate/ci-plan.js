@@ -11,14 +11,27 @@
  *   - `duplicate`: two checks with one id on one tier;
  *   - `command`: an `evaluate` command not led by `tea-evaluate`, or a `gate` command not led by
  *     `eval-quality-gates`;
- *   - `placement-default`: a `defaultTier` AD-10's default table does not give the check;
- *   - `placement-reason`: a check placed off its `defaultTier` with no `reason`, so the repository inspection
- *     that moved it is not on record;
+ *   - `trigger`: a check whose `trigger` names an event its tier does not use (`TIER_TRIGGERS`);
+ *   - `placeholder`: a `command` or an `evidence` path that still holds `<evaluation-folder>`, the placeholder of the
+ *     plan template (`<invocationId>` stays, the runtime fills it);
+ *   - `placement-default`: a `defaultTier` AD-10's default table does not give the check, and a `preflight-live`
+ *     `defaultTier` that disagrees with what the evaluation's registry says about secrets (a target that needs none
+ *     defaults to `merge`, a target that needs one does not);
+ *   - `placement-reason`: a check with no non-blank `reason`, on its default tier or off it, so the repository
+ *     inspection that placed it is on record;
  *   - `deterministic-off-pr` (CAP-11): a deterministic check that needs no secret placed off `pr`; every such check
  *     runs on every pull request;
  *   - `live-on-pr` (AD-20): a check that drives a live target placed on `pr`, which needs no secret and calls no model;
  *   - `enforcement`: `enforcement: "warn"` on a check or tier where AD-10 gives no warn (`WARN_ALLOWED`). The
  *     field records AD-10's class and the action comes from AD-10's table, so a plan cannot demote a blocking exit.
+ *
+ * Three more rules read the evaluation the plan sits in, so they run when `evaluation.json` (and, for the rubric,
+ * `contract.json`) can be read and are skipped otherwise, which `check` reports on its own:
+ *
+ *   - `tiers`: `evaluation.json` `tiers` differ from the set of tiers the plan places a check on;
+ *   - `applicability`: an `api-conformance` check over an evaluation with no HTTP target, or a contract that declares a
+ *     rubric whose plan places live checks on `scheduled` or `release` and no `judge-calibration` on that tier;
+ *   - `placement-default` (above): the registry-dependent `preflight-live` default.
  *
  * Which exits belong to which class is AD-10's table, kept here as `ENFORCEMENT_TABLE`, and `classify` reads it.
  * No verdict is computed from evidence here: a class is looked up by the exit a stage already gave.
@@ -31,6 +44,9 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
+const { loadContractView } = require('./partition');
+const { entryEnvironmentKeys, isApiEntry, isSkillRunnerEntry } = require('./registry');
+
 const Ajv = AjvModule.default ?? AjvModule;
 
 const PLAN_PATH = 'ci/evaluation-ci-plan.json';
@@ -39,6 +55,20 @@ const PLAN_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'schemas', '
 const PLAN_SCHEMA_VERSION = PLAN_SCHEMA.properties.schemaVersion.const;
 
 const TIERS = ['pr', 'merge', 'scheduled', 'release'];
+
+/** The events each tier's checks may name as their `trigger`: `pr` runs on pull requests, `merge` on the merge, and a manual dispatch starts either live tier. */
+const TIER_TRIGGERS = Object.freeze({
+  pr: ['pull-request'],
+  merge: ['merge'],
+  scheduled: ['schedule', 'manual-dispatch'],
+  release: ['release', 'manual-dispatch'],
+});
+
+/** The placeholder of the plan template that the stage replaces with the evaluation folder's path. */
+const EVALUATION_FOLDER_PLACEHOLDER = '<evaluation-folder>';
+
+/** The target kinds whose runner always needs the model's credentials (the ci guide, `## Place the live checks`). */
+const MODEL_TARGET_KINDS = new Set(['skill', 'agent']);
 
 /** The deterministic checks that need no secret: AD-10's `pr` members. */
 const DETERMINISTIC_CHECKS = ['check', 'compile', 'seal', 'api-conformance', 'gameability', 'oracle-agreement', 'replay'];
@@ -156,8 +186,23 @@ function finding(rule, message) {
   return { file: PLAN_PATH, rule, message };
 }
 
-/** The placement rules over a plan that already meets the schema. */
-function placementFindings(plan) {
+/** The `preflight-live` `defaultTier` AD-10 gives an adopter by whether the target needs a secret: `merge` for none, `scheduled` or `release` for one. */
+function preflightDefaultProblem(entry, needsSecret) {
+  const given = entry.placement.defaultTier;
+  if (needsSecret === false && given !== 'merge')
+    return `names defaultTier ${given}; the registry names no environmentKeys and the target is no skill or agent runner, so the target needs no secret and AD-10 defaults its live preflight to merge`;
+  if (needsSecret === true && given === 'merge')
+    return 'names defaultTier merge; the target needs a secret (the registry names environmentKeys or the target is a skill or agent runner), so AD-10 defaults its live preflight to scheduled and release';
+  return null;
+}
+
+/**
+ * The placement rules over a plan that already meets the schema.
+ *
+ * @param {object} plan
+ * @param {EvaluationFacts} [facts] what the evaluation says about secrets, so a `preflight-live` default can be checked
+ */
+function placementFindings(plan, facts = {}) {
   const findings = [];
   const seen = new Set();
   for (const [index, entry] of plan.checks.entries()) {
@@ -174,10 +219,32 @@ function placementFindings(plan) {
         ),
       );
     }
+    const allowedTriggers = TIER_TRIGGERS[entry.placement.tier];
+    const foreign = entry.trigger.filter((event) => !allowedTriggers.includes(event));
+    if (foreign.length > 0) {
+      findings.push(
+        finding(
+          'trigger',
+          `${label} names trigger ${foreign.map((event) => JSON.stringify(event)).join(', ')}, which the ${entry.placement.tier} tier does not use; the ${entry.placement.tier} tier allows ${allowedTriggers.join(', ')}`,
+        ),
+      );
+    }
     const lead = COMMAND_LEADS[entry.kind];
     if (entry.command[0] !== lead) {
       findings.push(
         finding('command', `${label} is led by ${JSON.stringify(entry.command[0])}; a ${entry.kind} check's command is led by ${lead}`),
+      );
+    }
+    const left = [
+      ...entry.command.map((argument, at) => [`command[${at}]`, argument]),
+      ...entry.evidence.map((evidence, at) => [`evidence[${at}]`, evidence]),
+    ].filter(([, text]) => text.includes(EVALUATION_FOLDER_PLACEHOLDER));
+    for (const [where] of left) {
+      findings.push(
+        finding(
+          'placeholder',
+          `${label} still holds ${EVALUATION_FOLDER_PLACEHOLDER} in ${where}; replace it with the repository-relative path of the evaluation folder (<invocationId> stays, the runtime fills it)`,
+        ),
       );
     }
     const defaults = entry.kind === 'evaluate' ? DEFAULT_TIERS[entry.id] : GATE_DEFAULT_TIERS;
@@ -188,13 +255,18 @@ function placementFindings(plan) {
           `${label} names defaultTier ${entry.placement.defaultTier}; AD-10's default table gives ${entry.id} ${defaults.join(', ')}`,
         ),
       );
+    } else if (entry.kind === 'evaluate' && entry.id === 'preflight-live') {
+      const problem = preflightDefaultProblem(entry, facts.needsSecret);
+      if (problem !== null) findings.push(finding('placement-default', `${label} ${problem}`));
     }
     const reason = typeof entry.placement.reason === 'string' ? entry.placement.reason.trim() : '';
-    if (entry.placement.tier !== entry.placement.defaultTier && reason === '') {
+    if (reason === '') {
       findings.push(
         finding(
           'placement-reason',
-          `${label} moves the check off its default tier ${entry.placement.defaultTier} and records no reason; name what the repository inspection found`,
+          entry.placement.tier === entry.placement.defaultTier
+            ? `${label} records no reason; name the file or the adopter's answer the placement came from, default placements included`
+            : `${label} moves the check off its default tier ${entry.placement.defaultTier} and records no reason; name what the repository inspection found`,
         ),
       );
     }
@@ -228,27 +300,150 @@ function placementFindings(plan) {
 }
 
 /**
- * The findings of a parsed plan: schema violations, and only when there are none, the placement rules.
+ * What `evaluation.json` and `contract.json` say that the plan's rules read; a field is `undefined` when the file or the
+ * field cannot be read, and the rule that needs it is skipped.
+ *
+ * @typedef {object} EvaluationFacts
+ * @property {string[]} [tiers] `evaluation.json` `tiers`
+ * @property {boolean} [needsSecret] whether the target needs a secret: the registry names `environmentKeys`, the target
+ *   is a skill or agent runner, or `targetKind` is `skill` or `agent`
+ * @property {boolean} [hasHttpTarget] whether the registry names an HTTP target
+ * @property {() => boolean|undefined} [declaresRubric] whether the contract (every partition's view of it) declares a rubric, read when asked
+ */
+
+/** The rules that read the evaluation beside the plan (`tiers`, `applicability`). */
+function evaluationFindings(plan, facts) {
+  const findings = [];
+  if (Array.isArray(facts.tiers) && plan.checks.length > 0) {
+    const used = new Set(plan.checks.map((entry) => entry.placement.tier));
+    const declared = new Set(facts.tiers);
+    const missing = TIERS.filter((tier) => used.has(tier) && !declared.has(tier));
+    const extra = TIERS.filter((tier) => declared.has(tier) && !used.has(tier));
+    if (missing.length > 0 || extra.length > 0) {
+      const fix = [
+        ...(missing.length > 0 ? [`add ${missing.join(', ')}`] : []),
+        ...(extra.length > 0 ? [`remove ${extra.join(', ')}`] : []),
+      ].join(' and ');
+      findings.push(
+        finding(
+          'tiers',
+          `evaluation.json tiers ${JSON.stringify(facts.tiers)} differ from the tiers the plan places a check on ${JSON.stringify(TIERS.filter((tier) => used.has(tier)))}; ${fix} in evaluation.json tiers`,
+        ),
+      );
+    }
+  }
+  if (facts.hasHttpTarget === false) {
+    for (const [index, entry] of plan.checks.entries()) {
+      if (entry.kind === 'evaluate' && entry.id === 'api-conformance') {
+        findings.push(
+          finding(
+            'applicability',
+            `checks[${index}] (evaluate "api-conformance" on ${entry.placement.tier}) runs over an evaluation whose registry names no HTTP target, so no port exists to hold to conformance; take the check out of the plan`,
+          ),
+        );
+      }
+    }
+  }
+  const liveTiers = ['scheduled', 'release'].filter((tier) =>
+    plan.checks.some((entry) => entry.kind === 'evaluate' && LIVE_CHECKS.includes(entry.id) && entry.placement.tier === tier),
+  );
+  const uncalibrated = liveTiers.filter(
+    (tier) => !plan.checks.some((entry) => entry.kind === 'evaluate' && entry.id === 'judge-calibration' && entry.placement.tier === tier),
+  );
+  if (uncalibrated.length > 0 && facts.declaresRubric?.() === true) {
+    for (const tier of uncalibrated) {
+      findings.push(
+        finding(
+          'applicability',
+          `the contract declares a rubric and the plan runs live checks on ${tier} with no judge-calibration check there, so a judge drifts unnoticed; place judge-calibration on ${tier}`,
+        ),
+      );
+    }
+  }
+  return findings;
+}
+
+/**
+ * The findings of a parsed plan: schema violations, and only when there are none, the placement rules and, when `facts`
+ * carries what the evaluation says, the rules that read it.
  *
  * @param {unknown} plan
+ * @param {EvaluationFacts} [facts]
  * @returns {Array<{ file: string, rule: string, message: string }>}
  */
-function planFindings(plan) {
+function planFindings(plan, facts = {}) {
   if (!validatePlan(plan)) {
     return [...new Set(validatePlan.errors.map((error) => `${error.instancePath || '/'} ${error.message}`))].map((message) =>
       finding('schema', message),
     );
   }
-  return placementFindings(plan);
+  return [...placementFindings(plan, facts), ...evaluationFindings(plan, facts)];
+}
+
+/** A JSON file of the evaluation folder, or `undefined` when it is absent, not a regular file or not JSON. */
+function readFolderJson(folder, name) {
+  const file = path.join(folder, name);
+  try {
+    if (!fs.lstatSync(file).isFile()) return;
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return;
+  }
+}
+
+/** Whether a registry entry's `environmentKeys` (and an HTTP entry's server keys) are lists where present. */
+function environmentKeysAreLists(entry) {
+  return [entry.environmentKeys, entry.server?.environmentKeys].every((keys) => keys === undefined || Array.isArray(keys));
+}
+
+/**
+ * What `evaluation.json` and `contract.json` say that the plan's rules read.
+ *
+ * @param {string} folder
+ * @param {object} [options]
+ * @param {() => boolean|undefined} [options.declaresRubric] how the caller already decided whether the contract declares a
+ *   rubric, so `check` holds one decision for every rule and a `development` run never opens the held-out plan; `ci` reads
+ *   the both view of the contract itself
+ * @returns {EvaluationFacts}
+ */
+function evaluationFacts(folder, { declaresRubric } = {}) {
+  const evaluation = readFolderJson(folder, 'evaluation.json');
+  if (evaluation === null || typeof evaluation !== 'object' || Array.isArray(evaluation)) return {};
+  const facts = {};
+  if (Array.isArray(evaluation.tiers)) facts.tiers = evaluation.tiers;
+  if (Array.isArray(evaluation.registry) && evaluation.registry.every((entry) => entry !== null && typeof entry === 'object')) {
+    const registry = evaluation.registry;
+    facts.hasHttpTarget = registry.some(isApiEntry);
+    // An entry whose environmentKeys are no list fails the registry schema, which `check` reports; the rule has nothing to read.
+    if (registry.every(environmentKeysAreLists)) {
+      facts.needsSecret =
+        MODEL_TARGET_KINDS.has(evaluation.targetKind) ||
+        registry.some((entry) => isSkillRunnerEntry(entry) || entryEnvironmentKeys(entry).length > 0);
+    }
+  }
+  facts.declaresRubric =
+    declaresRubric ??
+    (() => {
+      try {
+        const { contract } = loadContractView({ folder, evaluation, partition: 'both' });
+        return Array.isArray(contract?.rubrics) && contract.rubrics.length > 0;
+      } catch {
+        // A contract or held-out plan that cannot be read is a finding of `check`; the rule has nothing to read.
+        return;
+      }
+    });
+  return facts;
 }
 
 /**
  * Reads the plan of an evaluation folder.
  *
  * @param {string} folder
+ * @param {object} [options]
+ * @param {() => boolean|undefined} [options.declaresRubric] see `evaluationFacts`
  * @returns {{ absent: true, path: string } | { absent?: false, plan?: object, findings: Array<{ file: string, rule: string, message: string }> }}
  */
-function readPlan(folder) {
+function readPlan(folder, options = {}) {
   const file = path.join(folder, ...PLAN_PATH.split('/'));
   let text;
   try {
@@ -269,7 +464,7 @@ function readPlan(folder) {
   } catch (error) {
     return { findings: [finding('json', `${PLAN_PATH} cannot be read as JSON: ${error.message}`)] };
   }
-  const findings = planFindings(plan);
+  const findings = planFindings(plan, evaluationFacts(folder, options));
   return findings.length === 0 ? { plan, findings } : { findings };
 }
 
@@ -284,6 +479,7 @@ module.exports = {
   PLAN_SCHEMA_VERSION,
   SEVERITY,
   TIERS,
+  TIER_TRIGGERS,
   WARN_ALLOWED,
   classify,
   mostSevere,

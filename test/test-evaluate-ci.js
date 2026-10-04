@@ -32,8 +32,10 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { engineCliPath, engineVersion, loadEngine } = require('../cli/lib/evaluate/engine');
+const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { MAX_OUTPUT_BYTES, confine } = require('../cli/lib/evaluate/ci');
 const planModule = require('../cli/lib/evaluate/ci-plan');
+const { principalMappingProblems } = require('../cli/lib/evaluate/registry');
 const { EXIT_CODES } = require('../cli/evaluate');
 const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
@@ -117,9 +119,20 @@ function copyFixture(name, label = name) {
 const PLAN = 'ci/evaluation-ci-plan.json';
 const planOf = (folder) => read(path.join(folder, PLAN));
 
-function writePlan(folder, value) {
+/**
+ * Writes the plan. Unless `syncTiers` is false, `evaluation.json` `tiers` become the tiers the plan places a check on, so a
+ * case that edits a plan keeps the `tiers` rule quiet and a case about that rule sets the mismatch itself.
+ */
+function writePlan(folder, value, { syncTiers = true } = {}) {
   fs.mkdirSync(path.join(folder, 'ci'), { recursive: true });
   write(path.join(folder, PLAN), value);
+  const manifest = path.join(folder, 'evaluation.json');
+  const used = new Set((value.checks ?? []).map((item) => item.placement?.tier));
+  if (syncTiers && used.size > 0 && fs.existsSync(manifest)) {
+    const evaluation = read(manifest);
+    evaluation.tiers = planModule.TIERS.filter((tier) => used.has(tier));
+    write(manifest, evaluation);
+  }
 }
 
 /** One plan check; `tier` is where it runs and `defaultTier` AD-10's default for it. */
@@ -461,6 +474,386 @@ function checkPlacementRules() {
     const checked = cli(folder, 'check');
     assert.equal(checked.status, 10, checked.output);
     assert.match(checked.stdout, /\[schema\] ci is a link or a file where the plan's directory is required/);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The derivable fields of a plan (Story 1.96): the six rules `check` and `ci` both read
+
+/** Whether `folder`'s plan reads clean (`check` exits 0) or fails with `[rule]` from both `check` and `ci` (exit 10, `ci` runs nothing). */
+function derivedProblem(
+  label,
+  rule,
+  { folder = copyFixture('mcp', 'derived'), plan = () => {}, evaluation = () => {}, files = () => {} } = {},
+) {
+  const value = planOf(folder);
+  plan(value);
+  writePlan(folder, value);
+  const manifest = path.join(folder, 'evaluation.json');
+  const declared = read(manifest);
+  evaluation(declared);
+  write(manifest, declared);
+  files(folder);
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 10, `${label}: ci exited ${result.status}\n${result.output}`);
+  assert.ok(result.stdout.includes(`${PLAN}: [${rule}]`), `${label}: ci lacks the [${rule}] finding\n${result.output}`);
+  assert.equal(fs.existsSync(path.join(folder, 'runs')), false, `${label}: ci ran something over a plan that fails ${rule}`);
+  const checked = cli(folder, 'check');
+  assert.equal(checked.status, 10, `${label}: check exited ${checked.status}\n${checked.output}`);
+  assert.ok(checked.stdout.includes(`${PLAN}: [${rule}]`), `${label}: check lacks the [${rule}] finding\n${checked.output}`);
+  return result.stdout;
+}
+
+/** The plan `edit` leaves reads clean: `check` exits 0 over the copy. */
+function derivedValid(label, { folder = copyFixture('mcp', 'derived'), plan = () => {}, evaluation = () => {} } = {}) {
+  const value = planOf(folder);
+  plan(value);
+  writePlan(folder, value);
+  const manifest = path.join(folder, 'evaluation.json');
+  const declared = read(manifest);
+  evaluation(declared);
+  write(manifest, declared);
+  const checked = cli(folder, 'check');
+  assert.equal(checked.status, 0, `${label}: ${checked.output}`);
+}
+
+/** A copy of the evaluation folder of a committed repository plan: no baseline run is needed, the rules read files. */
+function copyEvaluation(name, label) {
+  const { root, folder } = REPOSITORIES[name];
+  const directory = scratch.make(label);
+  const target = path.join(directory, 'evaluation');
+  fs.cpSync(path.join(ROOT, root, folder), target, {
+    recursive: true,
+    filter: (file) => !['runs', 'node_modules'].includes(path.basename(file)),
+  });
+  return target;
+}
+
+const RUBRIC = {
+  id: 'R-101',
+  scaleLevels: [
+    { level: 0, anchor: 'The response misses the verdict.' },
+    { level: 1, anchor: 'The response states the verdict.' },
+  ],
+  failureModePenalties: [{ name: 'missing-verdict', description: 'A missing verdict scores zero.' }],
+  maxLength: 200,
+  criteria: [{ id: 'RC-101', text: 'Does the response state the verdict?', evidence: '/interactions/judge-run/stdout' }],
+};
+
+/** The committed verdict plan cut back to its `pr` checks, so a case names the live checks it needs itself. */
+const prOnly = (value) => ({ ...value, checks: value.checks.filter((item) => item.placement.tier === 'pr') });
+
+const rulesOf = (folder) => planModule.readPlan(folder).findings.map((found) => found.rule);
+
+async function checkDerivableFields() {
+  // trigger: each tier allows its own events (revert: deleting the rule passes every bad case below).
+  for (const [label, tier, trigger] of [
+    ['a pr check naming schedule', 'pr', ['schedule']],
+    ['a pr check naming a pull request and a merge', 'pr', ['pull-request', 'merge']],
+    ['a merge check naming a pull request', 'merge', ['pull-request']],
+    ['a merge check naming a manual dispatch', 'merge', ['merge', 'manual-dispatch']],
+    ['a scheduled check naming a release', 'scheduled', ['schedule', 'release']],
+    ['a release check naming a schedule', 'release', ['release', 'schedule']],
+  ]) {
+    const message = derivedProblem(label, 'trigger', {
+      plan: (value) => {
+        if (tier === 'pr') value.checks[0].trigger = trigger;
+        else value.checks.push({ ...entry('twin-run', tier), trigger });
+      },
+    });
+    assert.match(message, new RegExp(`the ${tier} tier does not use`), label);
+  }
+  for (const [tier, trigger] of [
+    ['scheduled', ['schedule']],
+    ['scheduled', ['manual-dispatch']],
+    ['scheduled', ['schedule', 'manual-dispatch']],
+    ['release', ['release', 'manual-dispatch']],
+    ['release', ['manual-dispatch']],
+  ]) {
+    derivedValid(`${tier} naming ${trigger}`, { plan: (value) => value.checks.push({ ...entry('twin-run', tier), trigger }) });
+  }
+
+  // tiers: evaluation.json names the tiers the plan uses, in any order (revert: deleting the rule passes both bad cases).
+  const extra = derivedProblem('a declared tier the plan does not use', 'tiers', {
+    evaluation: (value) => (value.tiers = ['pr', 'release']),
+  });
+  assert.match(extra, /remove release in evaluation\.json tiers/);
+  {
+    const folder = copyFixture('mcp', 'derived');
+    const value = planOf(folder);
+    value.checks.push(entry('twin-run', 'release'));
+    writePlan(folder, value, { syncTiers: false });
+    const missing = ci(folder, 'pr');
+    assert.equal(missing.status, 10, missing.output);
+    assert.match(missing.stdout, /\[tiers\] .*add release in evaluation\.json tiers/);
+    assert.equal(cli(folder, 'check').status, 10);
+  }
+  derivedValid('declared tiers in another order', {
+    plan: (value) => value.checks.push(entry('twin-run', 'release')),
+    evaluation: (value) => (value.tiers = ['release', 'pr']),
+  });
+
+  // placeholder: `<evaluation-folder>` left in a command or an evidence path, while `<invocationId>` stays (revert: deleting the rule passes both).
+  const inCommand = derivedProblem('a placeholder in a command', 'placeholder', {
+    plan: (value) => (value.checks[0].command = ['tea-evaluate', 'check', '--evaluation', '<evaluation-folder>']),
+  });
+  assert.match(inCommand, /still holds <evaluation-folder> in command\[3\]/);
+  const inEvidence = derivedProblem('a placeholder in an evidence path', 'placeholder', {
+    plan: (value) => (value.checks[0].evidence = ['<evaluation-folder>/runs/<invocationId>/checks/check/stdout']),
+  });
+  assert.match(inEvidence, /still holds <evaluation-folder> in evidence\[0\]/);
+  derivedValid('<invocationId> in an evidence path', {
+    plan: (value) => value.checks[0].evidence.push('runs/<invocationId>/checks/check/stderr'),
+  });
+
+  // applicability: an HTTP conformance check needs an HTTP target; a rubric needs judge calibration on each live tier the plan uses.
+  const noPort = derivedProblem('api-conformance over an evaluation with no HTTP target', 'applicability', {
+    plan: (value) => value.checks.push(entry('api-conformance', 'pr')),
+  });
+  assert.match(noPort, /registry names no HTTP target/);
+  const withRubric = (value) => {
+    const contract = read(path.join(value, 'contract.json'));
+    contract.rubrics = [RUBRIC];
+    write(path.join(value, 'contract.json'), contract);
+  };
+  const liveSet = (tier) => [entry('twin-run', tier), entry('judge-calibration', tier)];
+  for (const [label, checks, tiers] of [
+    [
+      'a rubric with no judge calibration on either live tier',
+      [entry('twin-run', 'scheduled'), entry('twin-run', 'release')],
+      ['scheduled', 'release'],
+    ],
+    ['a rubric with judge calibration on release alone', [...liveSet('release'), entry('twin-run', 'scheduled')], ['scheduled']],
+    ['a rubric with judge calibration on scheduled alone', [...liveSet('scheduled'), entry('twin-run', 'release')], ['release']],
+    ['a rubric over a release-only live set with no judge calibration', [entry('twin-run', 'release')], ['release']],
+  ]) {
+    const folder = copyFixture('verdict', 'derived-rubric');
+    withRubric(folder);
+    const value = prOnly(planOf(folder));
+    value.checks.push(...checks);
+    writePlan(folder, value);
+    const found = planModule.readPlan(folder).findings.filter((item) => item.rule === 'applicability');
+    assert.deepEqual(
+      found.map((item) => /on (scheduled|release) with no judge-calibration/.exec(item.message)?.[1]),
+      tiers,
+      `${label}: ${JSON.stringify(found)}`,
+    );
+    const result = ci(folder, 'pr');
+    assert.equal(result.status, 10, `${label}: ${result.output}`);
+    assert.ok(result.stdout.includes(`${PLAN}: [applicability]`), `${label}: ${result.output}`);
+    assert.ok(cli(folder, 'check').stdout.includes(`${PLAN}: [applicability]`), label);
+  }
+  {
+    // The rule reads live tiers the plan uses and a declared rubric only.
+    const rubric = copyFixture('verdict', 'derived-rubric');
+    withRubric(rubric);
+    const calibrated = prOnly(planOf(rubric));
+    calibrated.checks.push(...liveSet('scheduled'), ...liveSet('release'));
+    writePlan(rubric, calibrated);
+    assert.equal(rulesOf(rubric).includes('applicability'), false, 'judge calibration on both live tiers satisfies the rule');
+    writePlan(rubric, prOnly(planOf(rubric)));
+    assert.equal(rulesOf(rubric).includes('applicability'), false, 'a plan with no scheduled or release check needs no calibration');
+    const plain = copyFixture('verdict', 'derived-plain');
+    assert.equal(rulesOf(plain).includes('applicability'), false, 'a contract with no rubric needs no calibration');
+    // A rubric only the held-out plan declares counts.
+    const held = copyFixture('verdict', 'derived-held-out');
+    const manifest = path.join(held, 'evaluation.json');
+    const declared = read(manifest);
+    declared.partitionPlan = { heldOutPlan: 'corpus/held-out/plan.json', developmentOnlySteps: [] };
+    write(manifest, declared);
+    fs.mkdirSync(path.join(held, 'corpus', 'held-out'), { recursive: true });
+    write(path.join(held, 'corpus', 'held-out', 'plan.json'), {
+      schemaVersion: 1,
+      interactionPlan: [],
+      oracles: [],
+      rubrics: [RUBRIC],
+      behaviorOracles: {},
+    });
+    const heldPlan = prOnly(planOf(held));
+    heldPlan.checks.push(entry('twin-run', 'release'));
+    writePlan(held, heldPlan);
+    assert.equal(rulesOf(held).includes('applicability'), true, 'a held-out rubric needs judge calibration on a live tier');
+  }
+
+  // placement-default: a live preflight's default follows the registry (revert: deleting the registry branch passes all four).
+  {
+    const secret = derivedProblem('a merge preflight defaulting to merge for a target with environmentKeys', 'placement-default', {
+      folder: copyFixture('verdict', 'derived'),
+      plan: (value) => (value.checks.find((item) => item.id === 'preflight-live' && item.tier === 'merge').placement.defaultTier = 'merge'),
+    });
+    assert.match(secret, /the target needs a secret/);
+    const bare = copyEvaluation('tagged-release', 'derived-bare');
+    assert.deepEqual(rulesOf(bare), [], 'the committed plan of a target that needs no secret reads clean');
+    const moved = planOf(bare);
+    moved.checks.find((item) => item.id === 'preflight-live').placement.defaultTier = 'release';
+    writePlan(bare, moved);
+    const noSecret = planModule.readPlan(bare).findings.filter((item) => item.rule === 'placement-default');
+    assert.equal(noSecret.length, 1, JSON.stringify(noSecret));
+    assert.match(noSecret[0].message, /needs no secret and AD-10 defaults its live preflight to merge/);
+    const result = ci(bare, 'merge');
+    assert.equal(result.status, 10, result.output);
+    assert.ok(result.stdout.includes(`${PLAN}: [placement-default]`), result.output);
+    assert.ok(cli(bare, 'check').stdout.includes(`${PLAN}: [placement-default]`));
+    // Each way a target needs a secret turns the merge default into a finding.
+    for (const [label, edit] of [
+      ['a skill target', (evaluation) => (evaluation.targetKind = 'skill')],
+      ['an agent target', (evaluation) => (evaluation.targetKind = 'agent')],
+      ['a server key', (evaluation) => (evaluation.registry[0].server.environmentKeys = ['MODEL_KEY'])],
+      ['an auth key', (evaluation) => (evaluation.registry[0].auth = { header: 'authorization', environmentKey: 'MODEL_KEY' })],
+      [
+        'the skill runner',
+        (evaluation) =>
+          evaluation.registry.push({
+            interfaceId: 'runner',
+            executable: 'tea-skill-runner',
+            target: 'tea-skill-runner',
+            subcommandPaths: [[]],
+            artifacts: {},
+            environmentKeys: [],
+            maxElapsedMs: 1000,
+            infrastructureExitCodes: [3, 4, 5, 6],
+          }),
+      ],
+      [
+        'the skill runner named by its executable beside another target',
+        (evaluation) =>
+          evaluation.registry.push({
+            interfaceId: 'runner',
+            executable: 'tea-skill-runner',
+            target: 'bin/runner.js',
+            subcommandPaths: [[]],
+            artifacts: {},
+            environmentKeys: [],
+            maxElapsedMs: 1000,
+            infrastructureExitCodes: [3, 4, 5, 6],
+          }),
+      ],
+    ]) {
+      const folder = copyEvaluation('tagged-release', 'derived-secret');
+      const manifest = path.join(folder, 'evaluation.json');
+      const evaluation = read(manifest);
+      edit(evaluation);
+      write(manifest, evaluation);
+      const found = planModule.readPlan(folder).findings.filter((item) => item.rule === 'placement-default');
+      assert.equal(found.length, 1, `${label}: ${JSON.stringify(found)}`);
+      assert.match(found[0].message, /names defaultTier merge; the target needs a secret/, label);
+    }
+  }
+
+  // A rule skips what it cannot read: the rules that read evaluation.json or contract.json give way to `check`'s own findings.
+  {
+    const folder = copyFixture('verdict', 'derived-skip');
+    const value = prOnly(planOf(folder));
+    value.checks.push(entry('twin-run', 'release'));
+    writePlan(folder, value, { syncTiers: false });
+    assert.ok(rulesOf(folder).includes('tiers'), 'the control: a pr-only evaluation.json beside a release check fails tiers');
+    const manifest = path.join(folder, 'evaluation.json');
+    const original = read(manifest);
+    for (const [label, bytes] of [
+      ['an evaluation.json that is not JSON', '{not json'],
+      ['an evaluation.json that is an array', '[]'],
+      ['an evaluation.json with tiers that are no array', JSON.stringify({ ...original, tiers: 'pr' })],
+    ]) {
+      fs.writeFileSync(manifest, bytes);
+      const found = planModule.readPlan(folder).findings.map((item) => item.rule);
+      assert.equal(found.includes('tiers'), false, `${label}: tiers`);
+      assert.deepEqual(
+        found.filter((rule) => ['applicability', 'placement-default'].includes(rule)),
+        [],
+        label,
+      );
+    }
+    fs.writeFileSync(manifest, `${JSON.stringify(original, null, 2)}\n`);
+    // A registry the rules cannot read leaves the preflight default with nothing to read. The target is no model kind, so
+    // the registry is read (revert: deleting an entry-shape guard in ci-plan.js or registry.js throws on these inputs).
+    const registryFolder = copyEvaluation('tagged-release', 'derived-registry-skip');
+    const registryPlan = planOf(registryFolder);
+    registryPlan.checks.find((item) => item.id === 'preflight-live').placement.defaultTier = 'release';
+    writePlan(registryFolder, registryPlan);
+    const registryManifest = path.join(registryFolder, 'evaluation.json');
+    const registryOriginal = read(registryManifest);
+    const placementDefaults = () =>
+      planModule
+        .readPlan(registryFolder)
+        .findings.map((item) => item.rule)
+        .filter((rule) => rule === 'placement-default');
+    assert.deepEqual(
+      placementDefaults(),
+      ['placement-default'],
+      'the control: a release default over a registry that needs no secret fails',
+    );
+    for (const [label, registry] of [
+      ['a registry of null and string entries', [null, 'x']],
+      ['a registry that is no array', 5],
+      ['an HTTP entry with auth null and server keys that are a number', [{ kind: 'api', auth: null, server: { environmentKeys: 5 } }]],
+      ['a command entry whose environmentKeys is a string', [{ environmentKeys: 'KEY' }]],
+    ]) {
+      fs.writeFileSync(registryManifest, JSON.stringify({ ...registryOriginal, registry }));
+      assert.deepEqual(placementDefaults(), [], label);
+    }
+    fs.writeFileSync(registryManifest, `${JSON.stringify(registryOriginal, null, 2)}\n`);
+    // The shared key reader tolerates the same entries where principal mappings read it, so `check` reports the registry schema finding.
+    for (const entryShape of [{ environmentKeys: 'KEY' }, { kind: 'api', server: { environmentKeys: 5 }, auth: null }]) {
+      const problems = principalMappingProblems({ operator: { interfaceId: 'x', environmentKey: 'KEY' } }, [
+        { interfaceId: 'x', ...entryShape },
+      ]);
+      assert.equal(problems.length, 1, JSON.stringify(entryShape));
+      assert.match(problems[0], /is not authorized by registry interface/);
+    }
+    // A contract that cannot be read leaves the rubric rule with nothing to read.
+    withRubric(folder);
+    assert.ok(rulesOf(folder).includes('applicability'), 'the control: a rubric with no judge calibration on release fails applicability');
+    fs.writeFileSync(path.join(folder, 'contract.json'), '{not json');
+    assert.equal(rulesOf(folder).includes('applicability'), false);
+    // A plan with no check has no tiers to compare.
+    const none = copyFixture('verdict', 'derived-empty');
+    writePlan(none, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [] });
+    assert.equal(rulesOf(none).includes('tiers'), false);
+  }
+  // A development run never opens the held-out plan, the rubric rule included (Story 1.51); `check` and a both run open it.
+  {
+    const held = copyFixture('verdict', 'derived-open');
+    const manifest = path.join(held, 'evaluation.json');
+    const declared = read(manifest);
+    declared.partitionPlan = { heldOutPlan: 'corpus/held-out/plan.json', developmentOnlySteps: [] };
+    write(manifest, declared);
+    fs.mkdirSync(path.join(held, 'corpus', 'held-out'), { recursive: true });
+    write(path.join(held, 'corpus', 'held-out', 'plan.json'), {
+      schemaVersion: 1,
+      interactionPlan: [],
+      oracles: [],
+      rubrics: [RUBRIC],
+      behaviorOracles: {},
+    });
+    const livePlan = prOnly(planOf(held));
+    livePlan.checks.push(entry('twin-run', 'release'));
+    writePlan(held, livePlan);
+    const opened = async (partition) => {
+      const seen = [];
+      const real = fs.readFileSync;
+      fs.readFileSync = function (file, ...rest) {
+        if (String(file).includes(`${path.sep}held-out${path.sep}`)) seen.push(String(file));
+        return real.call(this, file, ...rest);
+      };
+      try {
+        await checkEvaluation(held, { partition });
+      } finally {
+        fs.readFileSync = real;
+      }
+      return seen;
+    };
+    assert.deepEqual(await opened('development'), [], 'a development run opened the held-out plan');
+    assert.ok((await opened()).length > 0, 'the control: check opens the held-out plan');
+  }
+
+  // placement-reason: every check records one, on its default tier or off it (revert: deleting the rule passes all three).
+  for (const [label, edit] of [
+    ['an empty reason on a default placement', (value) => (value.checks[0].placement.reason = '')],
+    ['a blank reason on a default placement', (value) => (value.checks[0].placement.reason = '  \t')],
+    ['no reason field on a default placement', (value) => delete value.checks[0].placement.reason],
+  ]) {
+    const message = derivedProblem(label, 'placement-reason', { plan: edit });
+    assert.match(message, /records no reason; name the file or the adopter's answer the placement came from/, label);
   }
 }
 
@@ -1865,7 +2258,7 @@ function checkLiveTiers() {
   const project = liveProject('tiers', {
     edit: FLOOR_DEFECT_ONLY,
     plan: [
-      entry('preflight-live', 'merge', { reason }),
+      entry('preflight-live', 'merge', { reason, defaultTier: 'scheduled' }),
       entry('twin-run', 'scheduled', { reason }),
       entry('strength-comparison', 'scheduled', { reason }),
       entry('twin-run', 'release', { reason }),
@@ -1995,7 +2388,7 @@ function checkLiveTiers() {
   // release tier with no check that reads the baseline blocks with 11 (revert: leaving the rule to the checks that read the baseline passes both).
   writePlan(project.folder, {
     schemaVersion: planModule.PLAN_SCHEMA_VERSION,
-    checks: [entry('preflight-live', 'merge', { reason }), entry('preflight-live', 'release', { reason })],
+    checks: [entry('preflight-live', 'merge', { reason, defaultTier: 'scheduled' }), entry('preflight-live', 'release', { reason })],
   });
   write(policy, edited);
   const staleMerge = ci(project.folder, 'merge', project.env);
@@ -2339,7 +2732,15 @@ function checkFixtureTiers() {
   value.checks.push(entry('api-conformance', 'pr'));
   writePlan(mcp, value);
   const wrong = ci(mcp, 'pr');
-  assert.equal(wrong.status, 64, wrong.output);
+  assert.equal(wrong.status, 10, wrong.output);
+  assert.match(wrong.stdout, /\[applicability\] checks\[\d+\] \(evaluate "api-conformance" on pr\)/);
+  // The runtime still refuses the run when it cannot read the registry the rule reads: an evaluation.json with none exits 64.
+  const manifest = path.join(mcp, 'evaluation.json');
+  const evaluation = read(manifest);
+  delete evaluation.registry;
+  write(manifest, evaluation);
+  const unread = ci(mcp, 'pr');
+  assert.equal(unread.status, 64, unread.output);
   assert.equal(rowOf(latestCi(mcp).json, 'api-conformance').exit, 64);
   // A port that fails its conformance run is an authoring defect (exit 10), with the suite's own report kept.
   const api = copyFixture('api', 'conformance-broken');
@@ -3393,6 +3794,7 @@ async function main() {
   const cases = [
     ['the committed plans and baselines', checkFixturePlans],
     ['the placement rules', checkPlacementRules],
+    ['the derivable fields', checkDerivableFields],
     ['wiring', checkWiring],
     ['the AD-10 table', checkEnforcementTable],
     ['tier membership', checkTierMembership],

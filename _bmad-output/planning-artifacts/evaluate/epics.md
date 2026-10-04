@@ -2567,6 +2567,14 @@ So that the runtime validates the plan the stage writes and the guide asks the m
 **And** a check with no non-blank `reason` exits 10 with rule `placement-reason` whether it sits on its default tier or off it, so the template at `assets/evaluation-ci-plan.template.json`, which ships empty reasons, fails `check` until the stage fills them
 **And** the committed plans keep passing, the template validates once `test:evaluate-guidance` fills its reasons, the guide's `## Write the plan` drops the manual `trigger` and `tiers` steps it then leaves to `check`, and each rule is a `test:evaluate-ci` case that fails when its rule is removed
 
+Amended 2026-10-04 in Story 1.96's build: the rubric half of rule `applicability` reads the live tiers the plan uses.
+A plan that places live checks on `release` alone (the tagged-release repository, which has no schedule) needs `judge-calibration` on `release` and none on `scheduled`, so the rule asks for it on each of `scheduled` and `release` that holds a live check and names the tier that lacks it.
+A contract that declares a rubric is `contract.json` or the held-out plan declaring one, since the held-out view adds rubrics.
+Rule `placement-default` reads "a target that needs a secret" as a registry that names `environmentKeys` (a command or server entry's `environmentKeys`, an HTTP entry's server keys and its `auth` key), a registry entry that launches `tea-skill-runner`, or a `targetKind` of `skill` or `agent`.
+Rule `trigger` allows a subset of the tier's events, so a `scheduled` check naming `manual-dispatch` alone is valid.
+The rules that read `evaluation.json` and `contract.json` are skipped when the file cannot be read, which `check` reports itself, so `planFindings(plan)` keeps validating a plan alone.
+An `api-conformance` check over an evaluation with no HTTP target exits 10 from the plan, where `ci` exited 64 only when it ran the check.
+
 **Dependencies:** 2.4.
 **Gate:** `test:evaluate-ci`, `test:evaluate-check`, `test:evaluate-guidance`, `npm test`.
 
