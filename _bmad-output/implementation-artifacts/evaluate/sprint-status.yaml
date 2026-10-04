@@ -136,9 +136,9 @@ development_status:
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: done
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: done
-  1-102-refuse-a-duplicate-interface-identifier-at-compile: review
+  1-102-refuse-a-duplicate-interface-identifier-at-compile: done
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: done
-  1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
+  1-104-count-only-behavior-linked-oracles-for-success-separation: done
   1-105-partition-rubrics-in-a-partition-plan: review
   1-106-partition-waivers-in-a-partition-plan: backlog
   1-107-partition-evaluator-mappings-in-a-partition-plan: backlog

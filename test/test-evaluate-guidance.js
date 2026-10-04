@@ -1093,6 +1093,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       requireHeading(contractGuide, '### ' + rule, 'contract.md', failures);
       const section = headingBody(contractGuide, '### ' + rule);
       requireText(section, 'Without this rule', 'contract.md ' + rule, failures);
+      if (rule === 'success-indicator-separation')
+        requireText(section, 'counts only when a behavior lists it in its `oracles`', 'contract.md ' + rule, failures);
       if (taggedExamples(section, 'contract-patch').length !== 1) failures.push('contract.md ' + rule + ' needs one tagged contract patch');
     }
     for (const heading of ['## Interaction-plan design', '## Sensitivity-witness design', '## Waiver discipline']) {
@@ -1152,6 +1154,14 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     for (const [index, patch] of taggedExamples(contractGuide, 'contract-patch').entries()) {
       const edited = structuredClone(patch.base === 'workflow' ? workflowContract : patch.base === 'numeric' ? numericContract : contract);
       for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
+      if (index === 0) {
+        const separated = (stdout) =>
+          engine.makeResolveOperand({ 'answer-run': { exitCode: 0, stdout: { kind: 'text', value: stdout } } }, {});
+        const resolves = (stdout) =>
+          engine.resolveCheck(edited.oracles[0].check, separated(stdout), () => false, {}, 1000, 'success-separation example').resolution;
+        assert.strictEqual(resolves('skill: stub-skill\n'), 'true');
+        assert.strictEqual(resolves('skill: stub-skill and more\n'), 'false');
+      }
       if (index === 1) {
         const descriptor = edited.permittedInterfaces[0].operations[0].responseDescriptor;
         assert.ok(descriptor.requiredKeys.length > 1, 'the whole-body example declares more than one required key');

@@ -2712,7 +2712,10 @@ So that an orphan check cannot hide a missing success-separation requirement.
 **When** `eval-quality compile` and coverage evaluation run
 **Then** coverage reports `success-indicator-separation` unsatisfied; linking the oracle to the behavior satisfies it, and removing the behavior-link check makes the negative fixture fail
 **And** the equivalent structured-response fixture rejects an unlinked success/payload oracle and accepts the linked oracle, while the existing valid scalar and structured cases remain satisfied
-**And** the published engine patch is adopted by TeA with its peer floor and lockfile updated; the pantry fixture retains PASS because its oracle is behavior-linked.
+**And** the published engine release is adopted by TeA with its peer floor and lockfile updated; the pantry fixture retains PASS because its oracle is behavior-linked
+**And** a TeA test scores a scalar contract whose exit-code and whole-stdout oracle no behavior lists and sees the gap, then sees it close once a behavior lists the oracle, and another scores the routing contracts the same way over their structured responses.
+
+Amended 2026-10-04 in the Story 1.104 build: the engine shipped the change as 7.1.0, a minor release, because it tightens a coverage rule (the plan said patch). The AC names the release instead of the bump, and adds the TeA test line, since the engine's own fixtures cannot show that TeA surfaces the gap. The three accepted fixture baselines are re-recorded on 7.1.0, as for every engine release.
 
 **Dependencies:** 1.55.
 **Gate:** engine `npm run validate`, `npm view eval-quality version`, then TeA `npm run test:evaluate-learned-framework`, `npm run test:release-metadata` and `npm test`.

@@ -19,6 +19,7 @@ Each tagged JSON block below is a worked edit to the complete contract. The guid
 ### success-indicator-separation
 
 Check the process indicator and substantive answer separately. An exit code of zero can accompany a wrong answer. Without this rule, a successful process earns credit for an incorrect result.
+The oracle counts only when a behavior lists it in its `oracles`. An oracle no behavior lists supplies evidence for no behavior, so it leaves the rule unsatisfied.
 
 <!-- example:contract-patch -->
 
@@ -29,7 +30,7 @@ Check the process indicator and substantive answer separately. An exit code of z
     "op": "all",
     "operands": [
       { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/exit-code" }, { "literal": 0 }] },
-      { "op": "containment", "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill" }] }
+      { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill\n" }] }
     ]
   }
 }
