@@ -2,9 +2,9 @@
 title: "Story 1.132: Pack the withheld history without writing into the adopter's repository"
 type: 'bugfix'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: '0984765d9f99c323103e13fdb4c6ac0ebf36957f'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 1.132; Stories 1.57 and 1.80)'
@@ -25,7 +25,7 @@ context:
 `pack-objects` writes its temporary pack and index into the adopter's own `.git/objects/pack` and renames them into the store, which sits under the temp directory.
 A project and a temp directory on different filesystems (a project under a home directory and a tmpfs `/tmp`, the default layout on Linux hosts) are refused with `fatal: unable to rename temporary file ... Invalid cross-device link`, a failed run leaves `tmp_pack_*` and `tmp_idx_*` files in the adopter's `objects/pack`, and a successful run writes there for a moment, which breaks the contract that a confined run writes nothing into the adopter's repository.
 
-**Approach:** The adopter's repository only reads.
+**Approach:** The adopter's object store is only read.
 `pack-objects --stdout` prints the pack and the store's own `git --git-dir=<store> index-pack --stdin` writes it, so the pack and its index are written on the store's device.
 The `pack` job takes a `stages` list of git argument lists and runs them as one pipeline: the revisions go to the first stage's standard input, each stage's output feeds the next one, and the last prints nothing.
 A full repository runs `[pack-objects --revs --stdout, index-pack --stdin]` and a partial clone runs `[rev-list --objects --missing=allow-any --stdin, pack-objects --stdout, index-pack --stdin]`.
@@ -57,7 +57,7 @@ No eval-quality change.
 | Pipeline unit, two stages            | stub `git`, 20,000 revisions                                                              | exit 0, the pack stage read the 20,000 revisions                                                                                     | n/a            |
 | A stage fails or a signal kills it   | the walk exits 5, the pack stage exits 3 or is killed by SIGTERM, the index stage exits 4 | the job exits 5, 3, 143 or 4 with `git <stage> exited N` or `was killed by SIGTERM` on standard error and nothing on standard output | exit as named  |
 | Second workspace for the same commit | a first workspace exists, git before 2.45 (no ref format reported)                        | the second workspace links the first one's objects and packs nothing                                                                 | n/a            |
-| Reference                            | `docs/reference/tea-evaluate-cli.md`, `### File-system confinement`                       | says the build only reads the project's repository and works across filesystems                                                      | n/a            |
+| Reference                            | `docs/reference/tea-evaluate-cli.md`, `### File-system confinement`                       | says the build writes nothing into the project's object store and works across filesystems                                           | n/a            |
 
 </frozen-after-approval>
 
@@ -147,6 +147,7 @@ The `--only` filters match case names: `--only="across filesystems"` runs `check
 | The same revert                                                                                                                                               | `--only="reach units"`           | 9 of 66 fail: the job has no `stages` and exits 1 for every pipeline case                                                                                           |
 | The `pack` job ignores a failed stage (the `fail` call in `finish` removed)                                                                                   | `--only="reach units"`           | 7 of 66 fail: the failing walk, pack (exit and signal) and index (three-stage and two-stage) exit 0, and the failing-pack builds over a partial clone do not refuse |
 | The `pack` job holds the walk's output whole before the next stage reads it (a string collected on `data`)                                                    | `--only="reach units"`           | 3 of 66 fail: under the 48 MB heap the reader ends by a signal (no status) and the last stage is handed nothing                                                     |
+| The `pack` job holds the walk's output as buffer chunks and hands them over at the end (outside the V8 heap)                                                  | `--only="reach units"`           | fails: the walk stub's order check reports `the walk ended before the pack stage read a line`, which the heap limit alone did not catch                             |
 | The git before 2.45 link reverted (`facts.refFormat === 'files'` back), container                                                                             | `--only="git history edges"`     | 2 of 29 fail: a second workspace for the same commit packs the history again and copies the first one's packs instead of linking them                               |
 | The git before 2.45 link reverted, macOS (a shim that answers `--show-ref-format` as an old git does)                                                         | `--only="pack stages"`           | 1 of 32 fails: the second workspace packs again (2 then 4 pack stages)                                                                                              |
 | The reference's new sentence removed                                                                                                                          | `--only="confinement reference"` | 1 of 14 fails                                                                                                                                                       |
@@ -182,3 +183,15 @@ Every finding was checked against the code before it was acted on.
 | The CHANGELOG said the reader keeps a 256 MiB buffer, and named the cross-filesystem case's hosts wrongly (`/dev/shm` runs it on the ubuntu runner)                                                                                                           | nit, fixed | reworded                                                                                                                                                                                                   |
 
 No finding was rejected.
+
+Round 1 (PR #341, three Opus lenses: adversarial and edge cases, test quality, story and guide compliance).
+The adversarial lens found no material defect (bitmaps, pack validity, an empty pack, replace refs, failure ordering, a read-only adopter, the ref-format link).
+Every finding below was reproduced and fixed in the PR.
+
+| Finding                                                                                                                                                                                                                  | Fix                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The reference, the CHANGELOG, AD-8, two code comments and this record said the build only reads the project's repository, while `git worktree add` writes the worktree's own entry under the project's `.git/worktrees/` | Each claim names the object store, and the CHANGELOG and AD-8 name the worktree entry; the reference case holds the new sentence                                                                        |
+| The cross-filesystem case's skip reason named the wrong hosts and `/dev/shm` on a Mac                                                                                                                                    | The reason names a Linux host whose home directory or `/dev/shm` is on another filesystem, such as the ubuntu runner, and says when `/dev/shm` is absent                                                |
+| The index-stage shim exited before it read its input, so the other stage was sometimes killed before it logged, and the pack stages case failed 2 of 24 runs under load                                                  | The shim drains standard input before it fails; 8 parallel runs pass 8 of 8                                                                                                                             |
+| The 48 MB heap did not bind a walk held as buffer chunks, which sit outside the V8 heap                                                                                                                                  | The walk stub fails if it finishes before the pack stub has read a line, which a pipe that streams cannot do for an 82 MB walk; the buffer mutant now fails the unit cases                              |
+| The before and after listing checks could not fail, because `objects/pack` was read-only throughout                                                                                                                      | The cross-filesystem case also builds a full repository over a writable `objects/pack`, and the failed-stage builds in the pack stages case run over a writable one; the container run passes 12 checks |

@@ -28,7 +28,7 @@
  *   The build's stages are a walk or a `pack-objects --stdout` in the adopter's repository (a partial clone needs the walk:
  *   `pack-objects --revs` stops at a tree the project does not hold, and `rev-list --missing=allow-any` walks past it) and
  *   an `index-pack --stdin` in the private repository, which writes its pack on its own device, so nothing is written to
- *   the adopter's repository.
+ *   the adopter's object store.
  *
  * The exit status is git's own, a failed stage's standard error reaches the
  * caller, and nothing is printed on failure.

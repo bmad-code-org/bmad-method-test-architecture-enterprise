@@ -1464,7 +1464,7 @@ function buildWithheldRepository(workspace, withheld) {
   const partial = facts.partial !== null;
   // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
   const readAdopter = ['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`];
-  // The store packs on its own device: the adopter's repository only reads.
+  // The store packs on its own device: the adopter's object store is only read.
   // `pack-objects` run there with a file as its output writes its temporary pack into the adopter's `objects/pack` and renames it
   // into the store, which fails across filesystems and writes into the adopter's repository for a moment.
   // So it prints the pack (`--stdout`) into the store's `index-pack`.

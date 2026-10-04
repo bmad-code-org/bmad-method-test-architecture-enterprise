@@ -9182,15 +9182,16 @@ async function checkWithheldHistoryAcrossFilesystems() {
   if (base === null) {
     skipCase(
       'cross-filesystem pack',
-      `the temp directory ${os.tmpdir()} shares a filesystem with the home directory and /dev/shm (CI hosts with a tmpfs /tmp and the case's container run it)`,
+      `the temp directory ${os.tmpdir()} shares a filesystem with the home directory, and /dev/shm is absent or shares it too (a Linux host whose home directory or /dev/shm is on another filesystem, such as the ubuntu CI runner or the case's container, runs it)`,
     );
     return;
   }
   const parents = [];
-  const buildAcross = (project, what) => {
+  // A locked `objects/pack` stops any write there during the build; an open one lets a stray file show in the listing after it.
+  const buildAcross = (project, what, { locked = true } = {}) => {
     const packs = path.join(project.repository, '.git', 'objects', 'pack');
     const before = fs.readdirSync(packs).sort();
-    fs.chmodSync(packs, 0o555);
+    if (locked) fs.chmodSync(packs, 0o555);
     let workspace = null;
     let refusal = null;
     try {
@@ -9204,7 +9205,7 @@ async function checkWithheldHistoryAcrossFilesystems() {
     } catch (error) {
       refusal = error;
     } finally {
-      fs.chmodSync(packs, 0o755);
+      if (locked) fs.chmodSync(packs, 0o755);
     }
     check(refusal === null, `a build for ${what} on another filesystem than its temp directory refused: ${refusal?.stack ?? refusal}`);
     const after = fs.readdirSync(packs).sort();
@@ -9238,6 +9239,9 @@ async function checkWithheldHistoryAcrossFilesystems() {
     const full = makeHistoryRepository('across-fs-full', { base });
     parents.push(path.dirname(full.repository));
     buildAcross(full, 'a full repository');
+    const open = makeHistoryRepository('across-fs-open', { base });
+    parents.push(path.dirname(open.repository));
+    buildAcross(open, 'a full repository with a writable objects/pack', { locked: false });
     if (hostSkipsLazyFetch()) {
       const source = makeHistoryRepository('across-fs-origin', { base });
       parents.push(path.dirname(source.repository));
@@ -9268,11 +9272,12 @@ async function checkWithheldHistoryPackStages() {
     const before = fs.readdirSync(packs).sort();
     const logFile = path.join(tempDir('pack-stages-log'), 'git.log');
     const log = `case " $* " in *" pack-objects "*|*" index-pack "*|*" rev-list "*) echo "$*" >>"${logFile}" ;; esac`;
-    const attempt = (label, script) => {
+    // A stage that fails runs over a writable `objects/pack`, where a stray temporary file would show in the listing.
+    const attempt = (label, script, { locked = true } = {}) => {
       const scratch = tempDir('pack-stages-tmp');
       let workspace = null;
       let refusal = null;
-      fs.chmodSync(packs, 0o555);
+      if (locked) fs.chmodSync(packs, 0o555);
       try {
         withGitWrapper(`${log}\n${script}`, scratch, () => {
           try {
@@ -9288,7 +9293,7 @@ async function checkWithheldHistoryPackStages() {
           }
         });
       } finally {
-        fs.chmodSync(packs, 0o755);
+        if (locked) fs.chmodSync(packs, 0o755);
       }
       check(
         JSON.stringify(fs.readdirSync(packs).sort()) === JSON.stringify(before),
@@ -9333,10 +9338,14 @@ async function checkWithheldHistoryPackStages() {
     }
     for (const [stage, script, said] of [
       ['pack-stages-pack', 'case " $* " in *" pack-objects "*) echo "pack-objects broke" >&2; exit 1 ;; esac', 'pack-objects broke'],
-      ['pack-stages-index', 'case " $* " in *" index-pack "*) echo "index-pack broke" >&2; exit 1 ;; esac', 'index-pack broke'],
+      [
+        'pack-stages-index',
+        'case " $* " in *" index-pack "*) cat >/dev/null; echo "index-pack broke" >&2; exit 1 ;; esac',
+        'index-pack broke',
+      ],
     ]) {
       fs.rmSync(logFile, { force: true });
-      const failed = attempt(stage, script);
+      const failed = attempt(stage, script, { locked: false });
       if (failed.workspace !== null) removeWorkspace(failed.workspace);
       check(
         failed.refusal instanceof WorkspaceRefusal && failed.refusal.message.includes(said),
@@ -9857,8 +9866,9 @@ async function checkWithheldHistoryReachUnits() {
     "the build no longer reads the store walk, the folder's objects and a partial clone's pack through the streaming reader",
   );
 
-  // A pack job runs its stages as one pipeline, under a heap of 48 MB so that a walk of 2,000,000 objects cannot be held whole:
-  // the revisions go to the first stage's standard input and each stage's output into the next one's.
+  // A pack job runs its stages as one pipeline: the revisions go to the first stage's standard input and each stage's output into
+  // the next one's. A walk of 2,000,000 objects is not held whole, which the order proves (the walk stub fails if it finishes before
+  // the pack stub has read a line) and the heap of 48 MB backs for a string.
   // The revisions travel on standard input, so a history with thousands of tags and folder trees is no argument vector's problem.
   // A stage that dies early ends the job at once with its own status.
   const packers = tempDir('reach-unit-pack');
@@ -9871,12 +9881,18 @@ async function checkWithheldHistoryReachUnits() {
       '  *" rev-list "*)',
       '    if [ -n "$STUB_LIST_FAIL" ]; then echo "rev-list broke" >&2; exit 5; fi',
       '    wc -l | tr -d " " >"$STUB_DIR/revs"',
-      String.raw`    exec awk 'BEGIN { for (i = 1; i <= 2000000; i++) printf "%040x\n", i }'`,
+      // The walk is about 82 MB and a pipe holds well under 1 MB, so a walk that finishes before the pack stage has read its
+      // first line was held whole between the stages, in a string or in buffers a heap limit does not count.
+      String.raw`    awk 'BEGIN { for (i = 1; i <= 2000000; i++) printf "%040x\n", i }'`,
+      '    [ -f "$STUB_DIR/streamed" ] || { echo "the walk ended before the pack stage read a line" >&2; exit 6; }',
+      '    exit 0',
       '    ;;',
       '  *" pack-objects "*)',
       '    if [ -n "$STUB_PACK_FAIL" ]; then echo "pack-objects broke" >&2; exit 3; fi',
       '    if [ -n "$STUB_PACK_KILL" ]; then kill -TERM $$; fi',
-      String.raw`    printf "PACK %s\n" "$(wc -l | tr -d " ")"`,
+      '    IFS= read -r first || exit 7',
+      '    : >"$STUB_DIR/streamed"',
+      String.raw`    printf "PACK %s\n" "$(( $(wc -l | tr -d " ") + 1 ))"`,
       '    exit 0',
       '    ;;',
       '  *" index-pack "*)',
@@ -9911,6 +9927,7 @@ async function checkWithheldHistoryReachUnits() {
   ]) {
     fs.rmSync(received, { force: true });
     fs.rmSync(path.join(packers, 'revs'), { force: true });
+    fs.rmSync(path.join(packers, 'streamed'), { force: true });
     const packed = spawnSync(process.execPath, ['--max-old-space-size=48', reader], {
       encoding: 'utf8',
       input: JSON.stringify({ mode: 'pack', stages, revs: manyRevs }),
@@ -10024,14 +10041,14 @@ function checkConfinementReference() {
       section.includes('an older git makes a partial-clone project exit 12, with the way out named'),
     "the reference's confinement section does not say a promisor-remote project runs without a fetch, that the target's git lists the project's tags, that the history is read as a stream and that a filter driver's whole configuration is carried",
   );
-  // Story 1.132: the build only reads the project's repository, whichever filesystem its temp directory is on.
+  // Story 1.132: the build writes nothing into the project's object store, whichever filesystem its temp directory is on.
   check(
     section.includes(
-      "The build only reads your repository: git prints the pack and the private repository indexes it on the temp directory's own filesystem",
+      "The build writes nothing into your repository's object store: git prints the pack and the private repository indexes it on the temp directory's own filesystem",
     ) &&
       section.includes('a project and a temp directory on different filesystems (a host whose `/tmp` is a tmpfs) work') &&
       section.includes('your `objects/pack` gets no file, even for a moment'),
-    "the reference's confinement section does not say the build only reads the project's repository and works across filesystems",
+    "the reference's confinement section does not say the build writes nothing into the project's object store and works across filesystems",
   );
   // Story 1.85: a sparse-checkout project shows the target the project's status.
   check(

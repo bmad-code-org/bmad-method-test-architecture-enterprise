@@ -458,13 +458,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The section is now a list: match the jobs by marker, work out the id the rules give now, rename the job and its artifact name to it, and keep no job under the old id.
   The live edit run that follows the new text rewrites the job under `evaluation-pr` and `evaluation-pr-runs`, leaves the hand-written job and the create run's checkpoint untouched, and scores 12 of 12.
 
-- A confined run builds its private git repository without writing into the project's repository, so a project and a temp directory on different filesystems work (Story 1.132, AD-7, AD-8).
+- A confined run builds its private git repository without writing into the project's object store, so a project and a temp directory on different filesystems work (Story 1.132, AD-7, AD-8).
   The build ran `git pack-objects --revs <store>/objects/pack/pack` inside the project's repository, which wrote its temporary pack into the project's `.git/objects/pack` and renamed it into the private store under the temp directory.
   A project under a home directory with a tmpfs `/tmp`, the default layout on Linux hosts, was refused with `Invalid cross-device link`, and a failed build left `tmp_pack_*` and `tmp_idx_*` files in the project's `objects/pack`.
-  The project's repository now prints the pack (`pack-objects --stdout`, after a `rev-list --objects --missing=allow-any` walk for a partial clone) and the private repository indexes it (`index-pack --stdin`), so the pack is written on the private store's own device and the project's `objects/pack` is only read.
+  The project's repository now prints the pack (`pack-objects --stdout`, after a `rev-list --objects --missing=allow-any` walk for a partial clone) and the private repository indexes it (`index-pack --stdin`), so the pack is written on the private store's own device and the project's `objects/pack` is only read, and the build writes only the worktree's own entry under the project's `.git/worktrees/`.
   The streaming reader runs the stages as one pipeline, reads a very large history as a stream with no buffer that holds the walk, and a stage that fails ends the others and names itself and its status.
   The commit ids, the digests and the isolation golden are unchanged.
-  The reference's `### File-system confinement` says the build only reads your repository.
+  The reference's `### File-system confinement` says the build writes nothing into your repository's object store.
   `test:evaluate-confinement` holds the build across filesystems with a read-only `objects/pack` (Linux hosts, through the home directory or `/dev/shm`; skipped with its reason where neither is on another filesystem than the temp directory), the stages in a full repository and a partial clone, a failed pack or index stage that leaves no workspace and no file in the project, and the pipeline's unit cases.
   A second workspace for the same commit now links the first one's objects on a git before 2.45 too, which does not report a ref format and has only `files`, and a case holds it on every host.
 
