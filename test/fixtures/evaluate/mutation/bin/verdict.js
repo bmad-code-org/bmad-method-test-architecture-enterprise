@@ -123,6 +123,9 @@
  *                           directory, printing `ref write: exit <code>`
  *   write-config            answer as usual, then run `git config --local
  *                           tea.written by-target`, printing `config write: exit <code>`
+ *   write-hook              answer as usual, then write an executable `pre-commit`
+ *                           into the directory `git config core.hooksPath` names,
+ *                           printing `hook write: <how>`
  *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
  *                           names, outside the workspace, printing
  *                           `ungranted-read: <how>` after the verdict
@@ -522,6 +525,11 @@ if (act === 'update-ref' || act === 'write-config') {
     encoding: 'utf8',
   });
   process.stdout.write(`${act === 'update-ref' ? 'ref write' : 'config write'}: exit ${wrote.status}\n`);
+}
+if (act === 'write-hook') {
+  // The directory the project's hooks run from when `core.hooksPath` moves it outside the git directory.
+  const hooks = spawnSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).stdout.trim();
+  process.stdout.write(`hook write: ${attempt(() => fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 0\n', { mode: 0o755 }))}\n`);
 }
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
   process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);

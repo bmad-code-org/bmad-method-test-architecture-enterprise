@@ -27,14 +27,13 @@
  * planted.
  *
  * A worktree shares the repository it came from: its refs, its configuration
- * and its objects. `adopterTreeState` reads those as well as the working tree,
- * so a run can tell when a write changed any of them. A confined target works
- * in a private repository, but the evaluation layer around it can write the
- * configuration and the hooks, so a confined run compares the working tree,
- * the checkout's own `HEAD`, the configuration and the hooks, and leaves the
- * refs out: a commit or fetch another session makes in the same repository
- * meanwhile does not stop it. A run that opted out of confinement compares the
- * refs as well.
+ * and its objects. A run that opted out of confinement has targets that can
+ * write them, so `adopterTreeState` reads them as well as the working tree and
+ * the run can tell when a write changed any of them. Every process of a
+ * confined run is denied a write to the project's git directory, so a confined
+ * run reads the working tree and the checkout's own `HEAD` only: a commit,
+ * fetch, push or rebase another session makes in the same repository meanwhile
+ * does not stop it.
  *
  * A workspace that cannot be made is a `WorkspaceRefusal` (exit 12), and one
  * that fails part way is removed before the refusal leaves `createWorkspace`.
@@ -56,7 +55,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { killLiveStreams } = require('./confinement-audit');
-const { unlockDirectories } = require('./confinement');
+const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
@@ -1054,35 +1053,13 @@ function contentOf(file) {
 const GIT_BOOKKEEPING = new Set(['objects', 'logs', 'worktrees', 'index', 'modules', 'lfs']);
 
 /**
- * What in a repository's common git directory moves when another session
- * commits, fetches, branches or tags in the same repository, and so is left out
- * of a `configuration` digest: the refs, `HEAD` (the main checkout's, which the
- * checkout's own `HEAD` in `adopterTreeState` replaces), the records `fetch`,
- * `reset`, `merge` and `commit` leave beside them, `info/refs` and `gc.log`.
- */
-const GIT_REFERENCE_STATE = [
-  'refs',
-  'packed-refs',
-  'HEAD',
-  'FETCH_HEAD',
-  'ORIG_HEAD',
-  'COMMIT_EDITMSG',
-  'MERGE_HEAD',
-  'MERGE_MSG',
-  'MERGE_MODE',
-  'info/refs',
-  'gc.log',
-];
-
-/**
  * A digest over a repository's common git directory, bookkeeping left out:
  * its configuration, hooks, `info/` (`exclude`, `attributes`), `description`,
  * refs and anything else a target running git in a worktree could change on
- * the adopter's behalf. With `references: false` the entries other sessions
- * legitimately move (`GIT_REFERENCE_STATE`) are left out too, so what remains
- * is the configuration, the hooks, `info/` and `description`.
+ * the adopter's behalf. A hooks directory `core.hooksPath` names outside the
+ * git directory (`hooksDirectory`) is read with it.
  */
-function sharedStateDigest(gitDirectory, { references = true } = {}) {
+function sharedStateDigest(gitDirectory, hooks = null) {
   let entries;
   try {
     entries = fs.readdirSync(gitDirectory, { withFileTypes: true });
@@ -1092,8 +1069,8 @@ function sharedStateDigest(gitDirectory, { references = true } = {}) {
   const exclude = entries
     .filter((entry) => GIT_BOOKKEEPING.has(entry.name) || entry.name.endsWith('.lock'))
     .map((entry) => path.join(gitDirectory, entry.name));
-  if (!references) exclude.push(...GIT_REFERENCE_STATE.map((entry) => path.join(gitDirectory, ...entry.split('/'))));
-  return treeDigest(gitDirectory, { exclude });
+  const git = treeDigest(gitDirectory, { exclude });
+  return hooks === null ? git : digest([git, hooks, treeDigest(hooks)]);
 }
 
 /**
@@ -1102,26 +1079,29 @@ function sharedStateDigest(gitDirectory, { references = true } = {}) {
  *
  * Inside a git repository: `git status` (tracked and untracked paths), a
  * digest over the content of every path it names (one already modified
- * included), the commit the checkout's own `HEAD` names (another worktree's
- * commit cannot move it), and the repository's common git directory without
- * its bookkeeping (`sharedStateDigest`), since a detached worktree shares it
- * with the repository it came from. `sharedState: 'full'` digests the
- * configuration, hooks, `info/`, `description` and refs and reads every ref
- * (branches, tags, the stash). `sharedState: 'configuration'` leaves the refs
- * and what moves with them out and digests the configuration, hooks, `info/`
- * and `description`. `--no-optional-locks` keeps `git status` from rewriting
- * the index. Gitignored paths are not read.
+ * included) and the commit the checkout's own `HEAD` names (another worktree's
+ * commit cannot move it). With `sharedState` (the default) also the
+ * repository's common git directory without its bookkeeping
+ * (`sharedStateDigest`), since a detached worktree shares it with the
+ * repository it came from, the hooks directory `core.hooksPath` names outside
+ * it, and every ref (branches, tags, the stash). Without it, which is how a
+ * confined run reads, the git directory is left to the confinement: every
+ * process of a confined run is denied a write to it, so a digest of it would
+ * fire on other sessions only (a push, a rebase, a worktree add or a gc in
+ * another worktree or the main checkout all write it).
+ * `--no-optional-locks` keeps `git status` from rewriting the index.
+ * Gitignored paths are not read.
  * Outside a repository: the tree digest of `directory`, the paths in
  * `exclude` left out.
  *
  * @param {string} directory `launch.root`
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
- * @param {'full'|'configuration'} [options.sharedState] how much of the shared git state to compare (Story 1.112): `full` for a run whose targets can write the refs, `configuration` for a confined run, whose evaluation layer can write the configuration and hooks while other sessions move the refs
+ * @param {boolean} [options.sharedState] whether to read the shared git state (Story 1.112): `true` for a run whose targets can write it, `false` for a confined run, whose processes the layer denial keeps out of it
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer
  */
-function adopterTreeState(directory, { exclude = [], sharedState = 'full' } = {}) {
+function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) {
   const repository = repositoryOf(directory);
   if (repository === null) {
     try {
@@ -1148,10 +1128,14 @@ function adopterTreeState(directory, { exclude = [], sharedState = 'full' } = {}
     for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
   }
   const state = { repository: repository.top, head: repository.commit, status: status.stdout, changes: digest(parts) };
-  if (sharedState === 'configuration') return { ...state, shared: sharedStateDigest(repository.gitDirectory, { references: false }) };
+  if (!sharedState) return state;
   const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
   if (!refs.ok) failed(refs);
-  return { ...state, refs: refs.stdout, shared: sharedStateDigest(repository.gitDirectory) };
+  return {
+    ...state,
+    refs: refs.stdout,
+    shared: sharedStateDigest(repository.gitDirectory, hooksDirectory(repository.top, repository.gitDirectory)),
+  };
 }
 
 /**
