@@ -3516,6 +3516,55 @@ function checkTeaPrTier() {
   moved.jobs.prettier.steps.push(gateStep);
   expectProblem(prTier.workflowProblems(moved), /the layering-boundary-lineage job runs/, 'test:direction moved to the prettier job');
 
+  // A gate switched off without leaving its job: an `if: false` or `continue-on-error: true` on the gate's step or on its job
+  // keeps every `npm run` line and still stops the gate from failing the build (R2-12: the jobs stay unchanged).
+  const gateStepOf = (workflow, job, script) => {
+    const step = workflow.jobs[job].steps.find((candidate) => candidate.run === `npm run ${script}`);
+    assert.ok(step, `quality.yaml lost ${script} in ${job}`);
+    return step;
+  };
+  const switchedOffCases = [
+    [
+      'a gate step with if: false',
+      (workflow) => (gateStepOf(workflow, 'supply-chain', 'test:licences').if = false),
+      'supply-chain',
+      /jobs\.supply-chain\.steps\[5\]\.if/,
+    ],
+    [
+      'a gate step with continue-on-error',
+      (workflow) => (gateStepOf(workflow, 'layering-boundary-lineage', 'test:direction')['continue-on-error'] = true),
+      'layering-boundary-lineage',
+      /jobs\.layering-boundary-lineage\.steps\[3\]\.continue-on-error/,
+    ],
+    [
+      'a gate job with if: false',
+      (workflow) => (workflow.jobs['supply-chain'].if = false),
+      'supply-chain',
+      /jobs\.supply-chain\.if \(added\)/,
+    ],
+    [
+      'a gate job with continue-on-error',
+      (workflow) => (workflow.jobs['layering-boundary-lineage']['continue-on-error'] = true),
+      'layering-boundary-lineage',
+      /jobs\.layering-boundary-lineage\.continue-on-error \(added\)/,
+    ],
+    [
+      'a gate job that needs another job',
+      (workflow) => (workflow.jobs['supply-chain'].needs = 'prettier'),
+      'supply-chain',
+      /jobs\.supply-chain\.needs \(added\)/,
+    ],
+  ];
+  for (const [label, edit, job, where] of switchedOffCases) {
+    const workflow = qualityWorkflow();
+    edit(workflow);
+    expectProblem(
+      prTier.workflowProblems(workflow),
+      new RegExp(`the ${job} job differs from its committed copy at ${where.source}`),
+      label,
+    );
+  }
+
   // The wiring: a missing script, a script that runs another key, an evaluation out of the chain, a gate out of the chain.
   for (const entry of prTier.EVALUATIONS) {
     const script = prTier.scriptOf(entry);
@@ -3601,6 +3650,17 @@ function checkTeaPrTier() {
       'learn',
       (folder) => editBaseline(folder, 'run.json', (value) => (value.workspace.kind = 'git')),
       /copy workspace \(AD-8\)/,
+    ],
+    [
+      'a fixture evaluation that declares a git workspace',
+      'workflow',
+      (folder) => {
+        const file = path.join(folder, 'evaluation.json');
+        const value = read(file);
+        value.workspace.kind = 'git';
+        write(file, value);
+      },
+      /evaluation\.json declares a git workspace/,
     ],
     [
       'one partition only',

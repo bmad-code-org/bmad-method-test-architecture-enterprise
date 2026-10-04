@@ -1,10 +1,12 @@
 # Epic 2 Proof: TeA runs its `pr` tier (Story 2.5, AD-11, AD-15)
 
-Recorded 2026-10-04 on branch `feat/evaluate-2.5`, off `main` at `6b6abf49`. Engine: eval-quality 7.1.0, the release `package.json`'s `latest` devDependency resolves. TeA 1.27.2.
+Recorded 2026-10-04 on branch `feat/evaluate-2.5`, off `main` at `6b6abf49`. Engine: eval-quality 7.1.0, the release `package.json`'s `latest` devDependency resolves.
+TeA 1.27.2.
 
 ## Result
 
-Every evaluation TeA keeps is a script of the `npm test` chain, `test:evaluate-pr-<key>`, which runs `node test/test-evaluate-pr-tier.js <key>`: `tea-evaluate ci --tier pr` over the committed folder, with no secret and no model call. The `chain` matrix of `.github/workflows/quality.yaml` runs each one, and `npm run test:ci-coverage` (126 chained steps) and `npm run test:shards` pass.
+Every evaluation TeA keeps is a script of the `npm test` chain, `test:evaluate-pr-<key>`, which runs `node test/test-evaluate-pr-tier.js <key>`: `tea-evaluate ci --tier pr` over the committed folder, with no secret and no model call.
+The `chain` matrix of `.github/workflows/quality.yaml` runs each one, and `npm run test:ci-coverage` (126 chained steps) and `npm run test:shards` pass.
 
 | Script                         | Evaluation (Story)                       | Exit | `pr` checks that ran                                                         | `ci --tier pr` time |
 | ------------------------------ | ---------------------------------------- | ---- | ---------------------------------------------------------------------------- | ------------------- |
@@ -19,15 +21,19 @@ Every evaluation TeA keeps is a script of the `npm test` chain, `test:evaluate-p
 | `test:evaluate-pr-gap-loop`    | gap-loop `after` evaluation (1.25)       | 0    | check, compile, seal, gameability, oracle-agreement, replay                  | 3.4 s               |
 | `test:evaluate-pr-learn`       | learned framework, pantry summary (1.26) | 0    | check, compile, seal, oracle-agreement, replay                               | 1.8 s               |
 
-The two CI repositories of Story 2.4 (`tagged-release`, `nightly-deploy`) already run the `pr` tier of their plans, and three more tiers, in `test:evaluate-ci-repositories`.
+The two CI repositories of Story 2.4 (`tagged-release`, `nightly-deploy`) already run the `pr`, `merge` and `release` tiers of their plans in `test:evaluate-ci-repositories`, and `nightly-deploy` adds `scheduled`.
 
 ### Measured `pr` tier duration (test-design-epic-2 performance row)
 
-The ten `ci --tier pr` invocations take 22.2 s serially on the recording machine (Apple silicon, local disk); the slowest, `ai-feature`, takes 4.7 s, and each chained script (`npm run`, with Node start and the driver's own checks) adds under a second. The weights in `tools/test-shard-weights.json` are the same scripts measured under `NODE_V8_COVERAGE`: 0.9 to 5.5 s each, 27.1 s together. The tier needs no secret, no model call and no target launch, so its time is the replay's `preflight` and `score` over committed bytes.
+The ten `ci --tier pr` invocations take 22.2 s serially on the recording machine (Apple silicon, local disk); the slowest, `ai-feature`, takes 4.7 s, and each chained script (`npm run`, with Node start and the driver's own checks) adds under a second.
+The weights in `tools/test-shard-weights.json` are the same scripts measured under `NODE_V8_COVERAGE`: 0.9 to 5.5 s each, 28.1 s together.
+The tier needs no secret, no model call and no target launch, so its time is the replay's `preflight` and `score` over committed bytes.
 
 ## Baselines
 
-Each baseline came through `compare --accept` from a clean run of both partitions in a disposable copy with a unique directory name under the session scratch directory (a git repository holding one commit, the packages `eval-quality` and the TeA package linked above it), so every `run.json` records `dirty: false`, `workspace.kind: copy` and `completed: true`. The MCP and API baselines are the ones Story 1.104 re-recorded on 7.1.0; the other seven are new. The recorded `run.json` and `ci/` argv carry the recording machine's `/private/tmp` paths.
+Each baseline came through `compare --accept` from a clean run of both partitions in a disposable copy with a unique directory name under the session scratch directory (a git repository holding one commit, the packages `eval-quality` and the TeA package linked above it), so every `run.json` records `dirty: false`, `workspace.kind: copy` and `completed: true`.
+The MCP and API baselines are the ones Story 1.104 re-recorded on 7.1.0; the other seven are new.
+`run.json` records the copy's `/private/tmp` root and its `/private/var/folders` workspaces, and each `scores/<invocation>/` call record carries the copy's `/private/tmp` argv and the eval-quality CLI path of the recording checkout under `/Users/`.
 
 | Evaluation  | Accepted run                   | Score invocation               | Probes | Contract verdict            |
 | ----------- | ------------------------------ | ------------------------------ | ------ | --------------------------- |
@@ -41,11 +47,13 @@ Each baseline came through `compare --accept` from a clean run of both partition
 | gap-loop    | `20261004T192119203Z-1fa663d9` | `20261004T192224143Z-77271974` | 16     | PASS                        |
 | learn       | `20261004T191416879Z-8cc331b3` | `20261004T191429352Z-98099778` | 6      | PASS                        |
 
-The five two-probe protocol fixtures (a clean control and one seeded defect each) record CONCERNS; `ci` reports it as a warning and exits 0, as AD-10 gives it. The four suites authored through Evaluate score PASS.
+The five two-probe protocol fixtures (a clean control and one seeded defect each) record CONCERNS; `ci` reports it as a warning and exits 0, as AD-10 gives it.
+The four suites authored through Evaluate score PASS.
 
 ### Replay digests
 
-The replay re-runs eval-quality's `preflight` over the baseline's contract, probes and observations and `score` over its records, then compares the produced files with the baseline's byte for byte. The produced and baseline digests of the verdict and the strength aggregate for each evaluation, equal in every row:
+The replay re-runs eval-quality's `preflight` over the baseline's contract, probes and observations and `score` over its records, then compares the produced files with the baseline's byte for byte.
+The produced and baseline digests of the verdict and the strength aggregate for each evaluation, equal in every row:
 
 | Evaluation  | `preflight-verdict.json`                                                  | `strength-aggregate.json`                                                 |
 | ----------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -59,13 +67,17 @@ The replay re-runs eval-quality's `preflight` over the baseline's contract, prob
 | gap-loop    | `sha256:3a286900b5250b44d9f2b93afd93e073975adc48617fd75b27edbb33df5bf9ed` | `sha256:f013bc14c9d957608c23a5efdbb8e94af39bcb3405fc1b78953633a513cffd36` |
 | learn       | `sha256:12e1fa8ad6686a2117b015bb2149bd27a6ba789b87c82db9f28ff7265c1d6f32` | `sha256:144cbae24f44c2772800567452101964b91c08280409d71bd09ef1aa36e33b59` |
 
-The gameability arm ran for `ai-feature` (P-009, P-015), `test-review` (P-009, P-015, P-017) and `gap-loop` (P-009, P-017), each through `score` over the baseline's records with no target launch. `oracle-agreement` read `0 oracle outcome(s) that disagree or cannot be evaluated` in every evaluation.
+The gameability arm ran for `ai-feature` (P-009, P-015), `test-review` (P-009, P-015, P-017) and `gap-loop` (P-009, P-017), each through `score` over the baseline's records with no target launch.
+`oracle-agreement` read `0 oracle outcome(s) that disagree or cannot be evaluated` in every evaluation.
 
 ## The Evaluate-authored suite
 
-`test/evaluations/bmad-testarch-evaluate/` has a committed plan, `ci/evaluation-ci-plan.json`, with its three non-replay `pr` checks. `check`, `compile` and `seal` exit 0 through `test:evaluate-pr-suite`, and each invocation leaves `runs/<invocationId>/` with the compiled `eval-contract.json` and the `sealed-evaluator-brief.json`.
+`test/evaluations/bmad-testarch-evaluate/` has a committed plan, `ci/evaluation-ci-plan.json`, with its three non-replay `pr` checks.
+`check`, `compile` and `seal` exit 0 through `test:evaluate-pr-suite`, and each invocation leaves `runs/<invocationId>/` with the compiled `eval-contract.json` and the `sealed-evaluator-brief.json`.
 
-Its replay is pending Story H.1. The suite has no accepted baseline: Story H.1 replaces the dirty proof run with a clean one on the merged tree, accepts it with `compare --accept`, and adds the `replay`, `oracle-agreement` and `gameability` checks to the plan, which `test-evaluate-pr-tier.js` then holds (a `baseline/` beside a three-check plan fails `folderProblems`). The evidence that run replaces is cited from `epic-1-proof.md`:
+Its replay is pending Story H.1.
+The suite has no accepted baseline: Story H.1 replaces the dirty proof run with a clean one on the merged tree, accepts it with `compare --accept`, and adds the `replay`, `oracle-agreement` and `gameability` checks to the plan, which `test-evaluate-pr-tier.js` then holds (a `baseline/` beside a three-check plan fails `folderProblems`).
+The evidence that run replaces is cited from `epic-1-proof.md`:
 
 - The dirty proof run (Story 1.16, section "Commands and exit codes"): development run `20260928T165418209Z-f89a3a6b` and held-out run `20260928T172058296Z-10c3eca0`, both `dirty: true`, with the independent re-score table's evidence artifacts for P-001, P-004, P-002 and P-003 (`sha256:8df27be8…`, `sha256:2ccb0f66…`, `sha256:271f4e0b…`, `sha256:fa8d5d41…`).
 - The verdicts: clean controls `passed-clean-control` in 5 of 5 trials, both seeded probes `caught` in 5 of 5 trials, and the contract verdict recorded as found (section "Result"); the Story 1.46 after state (section "Before and after") closes the four coverage rules.
@@ -73,8 +85,12 @@ Its replay is pending Story H.1. The suite has no accepted baseline: Story H.1 r
 
 ## Evidence retention and the gates
 
-The `chain` job uploads `runs/` of every evaluation as `evaluate-runs-<shard>` with `if: always()`. `test:evaluate-ci`'s case "the pr tier of TeA itself" parses `quality.yaml` and fails when the step, its `always()`, its shard-qualified name, its `if-no-files-found: ignore` or any one of the ten paths is missing. It also holds `supply-chain` to `test:lockfile-age`, `test:lockfile-age-cache`, `test:licences` and `test:supply-chain`, `layering-boundary-lineage` to `test:direction`, `test:boundary`, `test:lineage`, `test:guard-publish` and `test:layering-boundary-lineage`, and keeps the doc gates `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the `npm test` chain: the eight `eval-quality-gates` stay where they were.
+The `chain` job uploads `runs/` of every evaluation as `evaluate-runs-<shard>` with `if: always()`. `test:evaluate-ci`'s case "the pr tier of TeA itself" parses `quality.yaml` and fails when the step, its `always()`, its shard-qualified name, its `if-no-files-found: ignore` or any one of the ten paths is missing.
+It also holds `supply-chain` to `test:lockfile-age`, `test:lockfile-age-cache`, `test:licences` and `test:supply-chain`, `layering-boundary-lineage` to `test:direction`, `test:boundary`, `test:lineage`, `test:guard-publish` and `test:layering-boundary-lineage`, and keeps the doc gates `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the `npm test` chain: the eight `eval-quality-gates` stay where they were.
 
 ## A defect `ci` found
 
-`ci --tier pr` over the gap-loop `after` evaluation exited 11 before Story 2.5: `oracle-agreement` reported 15 outcomes that disagree on P-010, P-012 and P-013, the three held-out probes whose mutations (M-005, M-007, M-008) violate the oracles of behaviors the probe's defects did not declare. Story 1.98 repaired the same three probes in the Story 1.24 test-review evaluation. The `after` evaluation now carries those probes byte for byte, its `replay/` was recorded again from separate development and held-out runs, and `before` keeps the probes the blind session started from. `test:evaluate-gap-loop` requires the repaired probes to equal the test-review ones and `before`'s to differ.
+`ci --tier pr` over the gap-loop `after` evaluation exited 11 before Story 2.5: `oracle-agreement` reported 15 outcomes that disagree on P-010, P-012 and P-013, the three held-out probes whose mutations (M-005, M-007, M-008) violate the oracles of behaviors the probe's defects did not declare.
+Story 1.98 repaired the same three probes in the Story 1.24 test-review evaluation.
+The `after` evaluation now carries those probes byte for byte, its `replay/` was recorded again from separate development and held-out runs, and `before` keeps the probes the blind session started from.
+`test:evaluate-gap-loop` requires the repaired probes to equal the test-review ones and `before`'s to differ.

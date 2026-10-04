@@ -44,7 +44,7 @@ const PROBE_CLASSES = {
 };
 const HELD_OUT_IDS = ['P-010', 'P-011', 'P-012', 'P-013'];
 /**
- * What the blind session never saw and the `pr` tier guards instead (Story 2.5): the CI plan and the accepted baseline of the
+ * What the blind session never saw, and the `pr` tier guards (Story 2.5): the CI plan and the accepted baseline of the
  * `after` evaluation, and the same of the Story 1.24 test-review evaluation, which replaced the placeholder `baseline/README.md`
  * the session started from. The `pr` replay of `after` reproduces its baseline byte for byte, so these are not authored inputs.
  */
@@ -823,6 +823,8 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
   sameBytes(generated.compiled, path.join(replay, 'eval-contract.json'), `${runName} generated compile`);
   sameBytes(generated.sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${runName} generated seal`);
   const runRecord = readJson(path.join(replay, 'run.json'));
+  assert.equal(runRecord.dirty, false, `${runName} replay was recorded from a dirty tree`);
+  assert.equal(runRecord.evaluationFolder.dirty, false, `${runName} replay was recorded from a dirty evaluation folder`);
   assert.equal(runRecord.workspace.treeDigest, treeDigest(path.join(path.dirname(folder), 'target')));
   const verdictFile = path.join(out, `${path.basename(path.dirname(folder))}-${runName}-preflight.json`);
   run(ENGINE, [

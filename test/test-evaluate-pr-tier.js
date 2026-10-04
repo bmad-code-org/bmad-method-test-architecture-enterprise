@@ -8,8 +8,9 @@
  *
  *  - the folder's plan omits a `pr` check its probes or interface call for (the gameability arm when a probe takes that
  *    route, the HTTP port conformance for an `api` evaluation), or places one they do not,
- *  - the baseline is not a clean copy-workspace run of both partitions that `compare --accept` recorded on the installed
- *    engine release,
+ *  - the baseline was recorded on another eval-quality release than the installed one, records a dirty or incomplete run or a
+ *    non-copy workspace, names another run than the one it holds as `acceptedRun`, or records a partition other than both,
+ *    or the evaluation's `evaluation.json` declares a non-copy workspace,
  *  - `ci` exits non-zero, runs other checks than the plan places, or finds the baseline stale.
  *
  * The invocation leaves `runs/<invocationId>/` in the evaluation folder, which the `chain` job uploads as a build artifact.
@@ -26,8 +27,8 @@ const { EVALUATIONS, ROOT, folderProblems, resultProblems } = require('./lib/eva
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
 /**
  * The environment of the child: the caller's, less git's own variables, the engine override and every credential-looking
- * variable (a key, token or secret), so a `pr` check that began to call a model or a service would fail instead of finding the
- * runner's credentials. The fixture targets' own bearer values are added back per evaluation.
+ * variable (a key, token or secret), so a `pr` check that began to call a model or a service finds no runner credential and
+ * fails. The fixture targets' own bearer values are added back per evaluation.
  */
 const ENV = Object.fromEntries(
   Object.entries(process.env).filter(

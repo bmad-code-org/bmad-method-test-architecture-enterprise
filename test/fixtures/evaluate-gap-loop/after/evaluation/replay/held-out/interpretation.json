@@ -1,19 +1,19 @@
 {
-  "scoreInvocationId": "20261004T192352238Z-6028c919",
+  "scoreInvocationId": "20261004T200836169Z-eebb6148",
   "strengthAggregate": {
     "status": "copied",
     "reason": null,
-    "path": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/strength-aggregate.json",
-    "digest": "sha256:71675fb81b8bb98df5137876ee4e585106e2fb612b8cbca1e5013847dbbd2932",
-    "floors": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/strength-floors.json",
+    "path": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/strength-aggregate.json",
+    "digest": "sha256:b87f6e4ce20baecd59744e792ac012518ae143640a0ba8087a38117af9dc6425",
+    "floors": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/strength-floors.json",
     "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
   },
   "probes": [
     {
       "probeId": "P-010",
-      "evidence": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-010/evidence-artifact.json",
+      "evidence": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-010/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-010/score.json",
+      "scoreRecord": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-010/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -1599,9 +1599,9 @@
     },
     {
       "probeId": "P-011",
-      "evidence": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-011/evidence-artifact.json",
+      "evidence": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-011/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-011/score.json",
+      "scoreRecord": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-011/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -3013,9 +3013,9 @@
     },
     {
       "probeId": "P-012",
-      "evidence": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-012/evidence-artifact.json",
+      "evidence": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-012/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-012/score.json",
+      "scoreRecord": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-012/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -4619,9 +4619,9 @@
     },
     {
       "probeId": "P-013",
-      "evidence": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-013/evidence-artifact.json",
+      "evidence": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-013/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261004T192321837Z-8ff2398c/scores/20261004T192352238Z-6028c919/P-013/score.json",
+      "scoreRecord": "runs/20261004T200808474Z-02f0655c/scores/20261004T200836169Z-eebb6148/P-013/score.json",
       "scoreFailure": null,
       "trials": [
         {

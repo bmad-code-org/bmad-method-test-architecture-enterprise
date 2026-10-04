@@ -52,11 +52,46 @@ const GATES = Object.freeze([
   { gate: 'doc-claims', script: 'test:doc-claims', job: 'chain' },
 ]);
 
-/** The `npm run` scripts each dedicated job of `quality.yaml` runs, in order: the jobs the eight gates sit in. */
-const GATE_JOB_STEPS = Object.freeze({
-  'supply-chain': ['test:lockfile-age', 'test:lockfile-age-cache', 'test:licences', 'test:supply-chain'],
-  'layering-boundary-lineage': ['test:direction', 'test:boundary', 'test:lineage', 'test:guard-publish', 'test:layering-boundary-lineage'],
+/**
+ * The two dedicated jobs of `quality.yaml` the eight gates sit in, frozen from the committed jobs at origin/main (Story 2.5
+ * AC: the gates stay in their current jobs, unchanged). Every key of the job and of each step is held: `if`,
+ * `continue-on-error`, `needs`, `runs-on`, `timeout-minutes`, `with` and the rest, so a gate switched off without leaving the
+ * job fails the comparison as surely as a dropped step.
+ */
+const GATE_JOBS = Object.freeze({
+  'supply-chain': {
+    'runs-on': 'ubuntu-latest',
+    'timeout-minutes': 20,
+    steps: [
+      { name: 'Checkout', uses: 'actions/checkout@v5', with: { 'persist-credentials': false } },
+      { name: 'Setup Node', uses: 'actions/setup-node@v6', with: { 'node-version-file': '.nvmrc', cache: 'npm' } },
+      { name: 'Install dependencies', run: 'npm ci' },
+      { name: 'Audit both lockfiles for publication age', run: 'npm run test:lockfile-age' },
+      { name: 'Prove the lockfile-age cache generator still reads the registry correctly', run: 'npm run test:lockfile-age-cache' },
+      { name: 'Hold both lockfiles to the licence allowlist', run: 'npm run test:licences' },
+      { name: 'Seed one violation per gate and watch it fail', run: 'npm run test:supply-chain' },
+    ],
+  },
+  'layering-boundary-lineage': {
+    'runs-on': 'ubuntu-latest',
+    steps: [
+      { name: 'Checkout', uses: 'actions/checkout@v5', with: { 'persist-credentials': false } },
+      { name: 'Setup Node', uses: 'actions/setup-node@v6', with: { 'node-version-file': '.nvmrc', cache: 'npm' } },
+      { name: 'Install dependencies', run: 'npm ci' },
+      { name: 'Report import-direction violations over cli/, tools/, test/ and src/**/*.cjs', run: 'npm run test:direction' },
+      { name: 'Hold the published tree to the package boundary', run: 'npm run test:boundary' },
+      { name: 'Hold schemaVersion to its two generators', run: 'npm run test:lineage' },
+      {
+        name: 'Seed a token-present, workflow-absent environment and watch the publish guard refuse it',
+        run: 'npm run test:guard-publish',
+      },
+      { name: "Verify each gate's script name and seed one violation per failing gate", run: 'npm run test:layering-boundary-lineage' },
+    ],
+  },
 });
+
+/** The `npm run` scripts each dedicated gate job runs, in order, read from the frozen jobs. */
+const GATE_JOB_STEPS = Object.freeze(Object.fromEntries(Object.entries(GATE_JOBS).map(([name, job]) => [name, npmRunsOf(job)])));
 
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -87,6 +122,30 @@ function npmRunsOf(job) {
     const match = typeof step.run === 'string' ? /^npm run ([\w:-]+)\s*$/.exec(step.run.trim()) : null;
     return match ? [match[1]] : [];
   });
+}
+
+/** The path of the first difference between two parsed YAML values, or null when they are deeply equal (every key counts). */
+function firstDifference(actual, expected, at) {
+  if (Array.isArray(expected) || Array.isArray(actual)) {
+    if (!Array.isArray(expected) || !Array.isArray(actual)) return at;
+    if (actual.length !== expected.length) return `${at}.length (${actual.length}, expected ${expected.length})`;
+    for (const [index, item] of expected.entries()) {
+      const found = firstDifference(actual[index], item, `${at}[${index}]`);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (expected !== null && typeof expected === 'object') {
+    if (actual === null || typeof actual !== 'object') return at;
+    for (const key of new Set([...Object.keys(expected), ...Object.keys(actual)])) {
+      if (!(key in expected)) return `${at}.${key} (added)`;
+      if (!(key in actual)) return `${at}.${key} (removed)`;
+      const found = firstDifference(actual[key], expected[key], `${at}.${key}`);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  return Object.is(actual, expected) ? null : `${at} (${JSON.stringify(actual)}, expected ${JSON.stringify(expected)})`;
 }
 
 /**
@@ -127,10 +186,13 @@ function workflowProblems(workflow) {
       if (!lines.has(`${entry.folder}/runs`)) problems.push(`the evaluate-runs upload path omits ${entry.folder}/runs`);
     }
   }
-  for (const [name, expected] of Object.entries(GATE_JOB_STEPS)) {
+  for (const [name, frozen] of Object.entries(GATE_JOBS)) {
     const actual = npmRunsOf(jobs[name]);
+    const expected = GATE_JOB_STEPS[name];
     if (JSON.stringify(actual) !== JSON.stringify(expected))
       problems.push(`the ${name} job runs ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
+    const where = firstDifference(jobs[name], frozen, `jobs.${name}`);
+    if (where !== null) problems.push(`the ${name} job differs from its committed copy at ${where}`);
   }
   return problems;
 }
@@ -152,7 +214,8 @@ function requiredChecks(folder, entry) {
 
 /**
  * The problems of an evaluation folder at rest: its plan places the `pr` checks its probes and interface call for, and its
- * baseline came through `compare --accept` from a clean copy-workspace run of both partitions on the installed engine.
+ * baseline holds a clean (`dirty` false), completed copy-workspace run of both partitions, recorded on the installed engine
+ * release, that its manifest names as `acceptedRun`, in an evaluation whose `evaluation.json` declares the copy workspace.
  *
  * @param {string} folder the evaluation folder
  * @param {{key: string, baseline: boolean}} entry
@@ -196,6 +259,9 @@ function folderProblems(folder, entry, engineVersion) {
     );
   if (accepted.dirty !== false) problems.push(`${entry.key}: the baseline records a dirty run`);
   if (accepted.completed !== true) problems.push(`${entry.key}: the baseline run did not complete`);
+  const declared = read(path.join(folder, 'evaluation.json')).workspace?.kind;
+  if (declared !== 'copy')
+    problems.push(`${entry.key}: evaluation.json declares a ${declared} workspace; a fixture target declares a copy workspace (AD-8)`);
   if (accepted.workspace?.kind !== 'copy')
     problems.push(
       `${entry.key}: the baseline came from a ${accepted.workspace?.kind} workspace; a fixture target declares a copy workspace (AD-8)`,
@@ -224,6 +290,7 @@ module.exports = {
   EVALUATIONS,
   GATES,
   GATE_JOB_STEPS,
+  GATE_JOBS,
   ROOT,
   commandOf,
   folderProblems,
