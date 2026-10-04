@@ -290,6 +290,8 @@ const DELIBERATELY_LOCAL = {
   'eval:test-review': 'a live agent eval; same reason as eval:all',
   'eval:trace': 'a live agent eval; same reason as eval:all',
   'eval:transcript': 'a live agent eval; same reason as eval:all',
+  'test:evaluate-ci-repositories':
+    'the all-tiers form of the Story 1.98 repository suite, for a person who wants every adopter x tier in one command; CI runs the same tiers as the seven `test:evaluate-ci-repositories:<adopter>-<tier>` scripts the chain calls, which the shard planner spreads across runners, so running it there would repeat all seven serially on one runner, which is the single-script overrun the split removed',
   'test:coverage':
     "the single-process local form of the coverage gate; CI holds the same package.json thresholds by merging the chain shards' raw V8 output with `c8 report` in the coverage job, so running it there would repeat the whole chain serially on one runner, which is the 20-minute job the shards replaced",
   prepare:
