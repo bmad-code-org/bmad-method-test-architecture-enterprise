@@ -61,7 +61,7 @@ const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corp
 const { calibrationObservation, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
 const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
-const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
+const { readFolderFile, resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
 const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { digest, digestFiles, redactArgs, redactSecrets } = require('../cli/lib/evaluate/digest');
 const { isDateTime } = require('../cli/lib/evaluate/formats');
@@ -4626,9 +4626,9 @@ async function checkDigestFile() {
     `the outside file is spelled ${outsideSpelling}; expected a ../ path to a file that exists`,
   );
   const refused = [
-    ['a parent segment', '../outside.md', /\.\./],
-    ['a parent segment that returns inside', 'corpus/../requirements.md', /\.\./],
-    ['a parent segment to a file that exists outside the folder', outsideSpelling, /\.\./],
+    ['a parent segment', '../outside.md', /leaves the evaluation folder/],
+    ['a parent segment that returns inside', 'corpus/../requirements.md', /leaves the evaluation folder/],
+    ['a parent segment to a file that exists outside the folder', outsideSpelling, /leaves the evaluation folder/],
     ['an absolute path outside the folder', path.join(outside, 'secret.md'), /absolute/],
     ['an absolute path inside the folder', statement, /absolute/],
     ['a link to a file in the folder', 'linked-requirements.md', /symbolic link/],
@@ -4664,6 +4664,62 @@ async function checkDigestFile() {
         piped.status === 64 && piped.stdout === '' && /regular file/.test(piped.stderr),
         `digest --file over a FIFO exited ${piped.status}\n${piped.output}`,
       );
+    }
+  }
+
+  if (process.platform !== 'win32') {
+    // A directory above the file turns into a link after the walk vetted it: the open follows it, so the descriptor must be refused.
+    const swapRoot = tempDir('swap');
+    const swapFolder = path.join(swapRoot, 'folder');
+    fs.mkdirSync(path.join(swapFolder, 'corpus'), { recursive: true });
+    fs.writeFileSync(path.join(swapFolder, 'corpus', 'file.md'), 'inside\n');
+    const elsewhere = path.join(swapRoot, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    fs.writeFileSync(path.join(elsewhere, 'file.md'), 'outside\n');
+    const realLstat = fs.lstatSync;
+    let swapped = false;
+    fs.lstatSync = (target, ...rest) => {
+      const stats = realLstat(target, ...rest);
+      if (!swapped && String(target) === path.join(swapFolder, 'corpus', 'file.md')) {
+        swapped = true;
+        fs.renameSync(path.join(swapFolder, 'corpus'), path.join(swapRoot, 'corpus-moved'));
+        fs.symlinkSync(elsewhere, path.join(swapFolder, 'corpus'), 'dir');
+      }
+      return stats;
+    };
+    let raced;
+    try {
+      raced = readFolderFile(swapFolder, 'corpus/file.md');
+    } finally {
+      fs.lstatSync = realLstat;
+    }
+    check(swapped, 'the swap fixture never ran: readFolderFile did not lstat the file');
+    check(
+      raced?.ok === false && /changed while it was read/.test(raced.reason),
+      `a directory swapped for a link after the walk read ${JSON.stringify(raced)}; expected a refusal`,
+    );
+    check(
+      readFolderFile(path.join(swapRoot, 'corpus-moved', '..', 'folder'), 'corpus').ok === false,
+      'a link to a directory was read as a file',
+    );
+  }
+
+  // An unreadable directory is reported as unreadable, not as a missing file.
+  if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+    const locked = path.join(folder, 'locked');
+    fs.mkdirSync(locked);
+    fs.writeFileSync(path.join(locked, 'a.md'), 'locked\n');
+    fs.chmodSync(locked, 0o000);
+    try {
+      const refusedLocked = ask('locked/a.md');
+      check(
+        refusedLocked.status === 64 &&
+          /cannot be read \(EACCES\)/.test(refusedLocked.stderr) &&
+          !/does not exist/.test(refusedLocked.stderr),
+        `digest --file below an unreadable directory exited ${refusedLocked.status}: ${refusedLocked.stderr}`,
+      );
+    } finally {
+      fs.chmodSync(locked, 0o755);
     }
   }
 

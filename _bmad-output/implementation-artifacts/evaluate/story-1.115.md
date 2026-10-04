@@ -172,7 +172,7 @@ Local, macOS, on the final tree:
 
 Builder Analyze (five lenses, read only, run as subagents over the whole skill): 0 critical.
 The determinism lens's high from Story 1.46 (a digest computed in the model's own words) is resolved: every place that stamps the requirements digest names the command, and the lens reports `check` as the backstop for `SKILL.md`'s two lines that still say `digestBytes`.
-The one remaining high is `references/corpus.md` at 14,381 tokens against the 9,000-token single-purpose budget, reported by the architecture, enhancement and leanness lenses; Story 1.114 carves that guide, and this story does not touch it.
+The one remaining high is `references/corpus.md` at 14,381 tokens against the 9,000-token single-purpose budget, reported by the architecture, enhancement and leanness lenses; the file is untouched by this story and Story 1.114's acceptance criteria carve it, which is where the finding is cleared; this story merges with that one pre-existing finding by decision, since the Build Rule's skip clause covers only a finding that contradicts a repository test and no change here can move the guide's size.
 Findings on lines this story edited were taken: the self-comparison sentence, the `digestArtifact` remark and the exit-64 enumeration left `intake.md`, and `contract.md` gained the TeA-development form.
 The lenses' findings on `SKILL.md` (its two digest lines) contradict the pinned live capture records and are skipped for that reason.
 The medium determinism finding that `systemPromptDigest` has no command (`references/harness.md`) is answered by Decision 12.
@@ -194,3 +194,11 @@ Every finding was checked against the code before it was acted on.
 | Medium (compliance): the record held placeholders                                                                                             | valid             | Fixed: the Gates section holds the observed results                                                                                                                                                                                                           |
 | Low (compliance): the reference called every refused absolute path "outside the folder"                                                       | valid             | Fixed: the sentence lists the cases as the CHANGELOG does                                                                                                                                                                                                     |
 | Low (compliance): rewritten guide lines held several sentences                                                                                | valid             | Fixed: `intake.md` line 31, `contract.md` line 7 and the README bullet are one sentence per line; the guidance markers sit within single sentences                                                                                                            |
+
+Round 1 on the open PR (three Opus lenses, read only) found these, each fixed in the PR:
+
+- A directory above the file swapped for a symbolic link between the walk and the open was followed, and the command printed the digest of bytes outside the folder. `readFolderFile` now opens the vetted file itself without following a link and refuses a descriptor whose device and inode differ from the walked file's (`changed while it was read`). `test-evaluate-check.js` injects the swap through `fs.lstatSync`; without the comparison that case fails.
+- Every `lstat` failure read "does not exist", which is false for `EACCES` and `ENAMETOOLONG`. Only `ENOENT` says it now; other codes say `cannot be read (<code>)`, and a case under a mode-000 directory holds it.
+- The three parent-segment rows matched `/\.\./`, which the echoed path always satisfies. They match `leaves the evaluation folder`.
+- The Exit codes table's 64 row now lists the `digest --file` refusals.
+- The Analyze high on `references/corpus.md` is recorded above as a decision.
