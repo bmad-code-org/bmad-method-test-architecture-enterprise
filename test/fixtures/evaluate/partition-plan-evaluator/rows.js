@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 /**
- * A stub `command` evaluator for the partition-plan fixture (Story 1.107): it reads `{ sealedBrief, observations }` on stdin and
- * prints one judgment row per observation of the plan, for the key the mapping binds to that step's oracle:
+ * A stub `command` evaluator for the partition-plan fixture (Story 1.107). It reads `{ sealedBrief, observations }` on stdin and
+ * prints one judgment row per plan step it is handed, keyed by the step it reads from the observation's ID (`<label>-<stepId>`):
  *
- *   accepted:shared-run       O-001 over the shared step
- *   accepted:development-run  O-002 over the development-only step
- *   accepted:held-out-run     O-101 over the held-out step
+ *   accepted:<stepId>   the oracle `evaluator/mapping.json` or the held-out plan binds to that key
  *
- * A row is `pass` when the step's stdout says `verdict: accepted` and `fail` otherwise, quoting `verdict: rejected`. It answers only
- * for the steps it is handed, so a partition's evaluator input decides which keys it prints. With `--rubric` it also scores each
- * observation's rubric criterion (`score:RC-001` over the development-only step, `score:RC-002` over the shared one, `score:RC-101`
- * over the held-out one) at level 1 when the step was accepted and 0 otherwise, and a calibration observation at the level its
- * response names.
+ * A row is `pass` when the step's stdout says `verdict: accepted` and `fail` otherwise, quoting `verdict: rejected`. The file spells
+ * no step, oracle or criterion, because the development partition reads this directory and a held-out ID in it would reach every
+ * development run: a partition's evaluator input decides which keys it prints, and the mapping of its view names them. With
+ * `--rubric` it also scores the criterion bound to `score:<stepId>` at level 1 when the step was accepted and 0 otherwise, and a
+ * calibration observation at the level its response names, under the key the response spells (`calibration response <key> <level>`).
  *
  * `--log <file>` appends the stdin it received, as one JSON line `{ "stdin": "<the bytes read>" }`, so a case reads the real stdin of a
  * real run.
@@ -28,29 +26,25 @@ const input = JSON.parse(stdin);
 const log = flag('--log');
 if (log !== null) fs.appendFileSync(log, `${JSON.stringify({ stdin })}\n`);
 
-const STEPS = [
-  ['shared-run', 'accepted:shared-run', 'RC-002'],
-  ['development-run', 'accepted:development-run', 'RC-001'],
-  ['held-out-run', 'accepted:held-out-run', 'RC-101'],
-];
+const RUN_LABELLED = /^(?:(?:trial|attempt)-\d+|baseline)-(.+)$/;
 const text = (body) => (body?.kind === 'text' ? body.value : '');
 const rubric = argv.includes('--rubric');
 const rows = [];
 const calibration = input.observations.find((observation) => observation.observationId === 'calibration');
 if (calibration !== undefined) {
-  const [, criterionId, level] = /calibration response (RC-[0-9]+) ([0-9])/.exec(text(calibration.stdout)) ?? [];
-  rows.push({ key: `score:${criterionId}`, outcome: 'score', score: Number(level), observationIds: ['calibration'] });
+  const [, key, level] = /calibration response (\S+) ([0-9])/.exec(text(calibration.stdout)) ?? [];
+  rows.push({ key, outcome: 'score', score: Number(level), observationIds: ['calibration'] });
 } else {
   for (const observation of input.observations) {
-    const step = STEPS.find(([stepId]) => observation.observationId.endsWith(`-${stepId}`));
+    const step = RUN_LABELLED.exec(observation.observationId)?.[1];
     if (step === undefined) continue;
     const accepted = text(observation.stdout).includes('verdict: accepted');
     const cite = [observation.observationId];
     rows.push(
       accepted
-        ? { key: step[1], outcome: 'pass', observationIds: cite, comment: 'The step says verdict: accepted.' }
+        ? { key: `accepted:${step}`, outcome: 'pass', observationIds: cite, comment: 'The step says verdict: accepted.' }
         : {
-            key: step[1],
+            key: `accepted:${step}`,
             outcome: 'fail',
             observationIds: cite,
             quote: 'verdict: rejected',
@@ -59,7 +53,7 @@ if (calibration !== undefined) {
             comment: 'The step rejected the request it had to accept.',
           },
     );
-    if (rubric) rows.push({ key: `score:${step[2]}`, outcome: 'score', score: accepted ? 1 : 0, observationIds: cite });
+    if (rubric) rows.push({ key: `score:${step}`, outcome: 'score', score: accepted ? 1 : 0, observationIds: cite });
   }
 }
 process.stdout.write(`${JSON.stringify({ rows })}\n`);

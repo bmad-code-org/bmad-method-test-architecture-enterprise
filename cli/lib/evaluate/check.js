@@ -1779,8 +1779,10 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehaviors });
   for (const problem of problems) report.add(problem.file, problem.rule, problem.message);
   // A records harness answers with its own sealed records, and its calibration judgments answer one labelled file for one
-  // contract, so no partition derives them (Story 1.107): a records evaluator beside a rubric of either file is refused.
-  if (kind === 'records' && heldOutPlan !== undefined && (contract.rubrics?.length > 0 || heldOutPlan.rubrics?.length > 0)) {
+  // contract, so no partition derives them (Story 1.107): a records evaluator beside a rubric of either file is refused. A
+  // development check never opens the plan, so the rubric of `contract.json` refuses on its own, and the plan's rubrics join it
+  // when the plan was read.
+  if (kind === 'records' && (contract.rubrics?.length > 0 || heldOutPlan?.rubrics?.length > 0)) {
     report.add(
       MANIFEST_NAME,
       'partition-plan',

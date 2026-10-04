@@ -352,8 +352,10 @@ function leavesView(binding, inSource, inView) {
  *   (an oracle that reads a development-only step, a criterion that does), then the plan's rows.
  * - `both`: every source row, then the plan's rows.
  *
- * A view that drops nothing and adds nothing is the source bytes, so a plan with no `mappings` and nothing to drop changes no
- * byte. Any other view is serialized as `JSON.stringify(mapping, null, 2)` and a newline.
+ * The held-out view is always serialized as `JSON.stringify(mapping, null, 2)` and a newline, so its bytes (the evaluator tree
+ * digest and the evaluator configuration digest of a held-out run) move only with the rows it holds and never with a
+ * development-only row that came or went. The both view of a plan with no `mappings` is the source bytes, and with rows it is
+ * serialized the same way.
  *
  * @param {object} options
  * @param {Buffer} options.mappingBytes the folder's `evaluator/mapping.json`, which meets its schema
@@ -374,11 +376,12 @@ function mappingView({ mappingBytes, source, view, evaluation, heldOutPlan = nul
   const entries = Object.entries(mapping.keys);
   const kept = entries.filter(([, binding]) => !leavesView(binding, inSource, inView));
   const rows = planMappingRows(heldOutPlan);
-  if (kept.length === entries.length && rows.length === 0) return { bytes: mappingBytes, mapping };
+  if (partition === 'both' && rows.length === 0) return { bytes: mappingBytes, mapping };
   const keys = Object.fromEntries(kept);
   for (const [index, row] of rows.entries()) {
     // The plan's text never reaches a message, so a row is named by where it sits.
-    if (!isObject(row) || Object.hasOwn(keys, row.key)) {
+    // A key the file declares collides whether or not the view kept its row, so a plan never reuses a dropped row's key.
+    if (!isObject(row) || Object.hasOwn(mapping.keys, row.key) || Object.hasOwn(keys, row.key)) {
       throw new PartitionPlanError(
         `${evaluation.partitionPlan.heldOutPlan} mappings[${index}] has a key that evaluator/mapping.json or an earlier row declares`,
       );

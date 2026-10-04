@@ -76,6 +76,7 @@ const KEEP_OUT = {
 
 /** The rubric layer: a development criterion, a shared one in `contract.json`, and a held-out one in the plan (Story 1.105). */
 const STUB_JUDGE = path.join(__dirname, 'fixtures', 'evaluate', 'stub-judge.js');
+const STUB_AGENT = path.join(__dirname, 'fixtures', 'evaluate', 'evaluators', 'stub-evaluator-agent.js');
 const SCALE = [
   { level: 0, anchor: 'The response does not say accepted.' },
   { level: 1, anchor: 'The response says accepted.' },
@@ -138,8 +139,8 @@ const HELD_OUT_ROW = { oracleId: 'O-101', behaviorId: 'B-002' };
 const criterionRow = (rubricId, criterion) => ({ rubricId, criterionId: criterion.id, levels: [0, 1] });
 /** What must stay out of each partition's artifacts once the evaluator's keys are partitioned: the other partition's keys. */
 const MAPPING_KEEP_OUT = {
-  development: [...RUBRIC_KEEP_OUT.development, 'accepted:held-out-run', 'score:RC-101'],
-  'held-out': [...RUBRIC_KEEP_OUT['held-out'], 'accepted:development-run', 'score:RC-001'],
+  development: [...RUBRIC_KEEP_OUT.development, 'accepted:held-out-run', 'score:held-out-run'],
+  'held-out': [...RUBRIC_KEEP_OUT['held-out'], 'accepted:development-run', 'score:development-run'],
 };
 
 const test = suite('tea-evaluate-partition-plans');
@@ -266,22 +267,67 @@ function waiverLayer(
 }
 
 /**
+ * Wires the stub sealed-brief agent into a folder (Story 1.107): the stub through the `custom` adapter, the qualification the adopter
+ * declares, a tool-call budget for its bridged run, and the model snapshot it runs under. `capture` is the file the stub appends its
+ * prompt to. The stub answers the key `verdict-accepted`, so the mapping it reads binds that key. It judges a request of its own
+ * that no mutation of the fixture's target changes, so a run through it holds the qualification to a `minimumAgreement` of 0.
+ */
+function sealedBriefAgentLayer(folder, capture, minimumAgreement = 0.9) {
+  const edit = (file, change) => {
+    const value = read(path.join(folder, file));
+    change(value);
+    write(path.join(folder, file), value);
+  };
+  edit('evaluation.json', (evaluation) => {
+    evaluation.evaluator = {
+      kind: 'sealed-brief-agent',
+      agent: 'custom',
+      agentCommand: process.execPath,
+      agentArgs: [STUB_AGENT, '--capture', capture],
+      timeoutMs: 60_000,
+    };
+    evaluation.evaluatorQualification = { attempts: 2, minimumAgreement };
+  });
+  edit('contract.json', (contract) => (contract.budgets.maxToolCalls = 3));
+  write(path.join(folder, 'policy/evaluator-conditions.json'), {
+    schemaVersion: 1,
+    modelSnapshot: 'none',
+    systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
+    evaluator: { modelSnapshot: 'stub-evaluator-2026-09' },
+  });
+}
+
+/**
  * The mapping layer over a project's folder (Story 1.107): the stub command evaluator in `evaluator/`, its mapping (the rows of the
  * shared and the development-only oracle, and with `rubric` those of the development and the shared criterion), and the held-out
  * plan's `mappings` (the held-out oracle's row, and with `rubric` the held-out criterion's). `rubric` joins the rubric layer with no
- * judge, since the evaluator scores the rubric itself. `canary` spells the plan's keys `canary-...`, for the `check` cases that never
+ * judge, since the evaluator scores the rubric itself. `agent` swaps the command for the stub sealed-brief agent. `canary` spells the plan's keys `canary-...`, for the `check` cases that never
  * run the evaluator and hold the output to none of the plan's text. `log` is the file the evaluator appends its stdin to. Stories
  * that partition more of the contract extend a project through this layer and the layers above.
  */
-function mappingLayer({ folder, directory }, { rubric = false, canary = false, log = path.join(directory, 'evaluator-input.jsonl') } = {}) {
-  if (rubric) rubricLayer({ folder, directory }, { judge: false });
+function mappingLayer(
+  { folder, directory },
+  { rubric = false, canary = false, agent = false, log = path.join(directory, 'evaluator-input.jsonl') } = {},
+) {
+  if (rubric) {
+    rubricLayer({ folder, directory }, { judge: false });
+    // The stub names the key a score answers by the step the criterion reads, so each calibration response spells that key.
+    const criteria = [DEVELOPMENT_CRITERION, SHARED_CRITERION, HELD_OUT_CRITERION];
+    const file = path.join(folder, 'policy/judge-calibration.json');
+    const labelled = read(file);
+    for (const item of labelled.items) {
+      const step = /^\/interactions\/([^/]+)\//.exec(criteria.find((criterion) => criterion.id === item.criterionId).evidence)[1];
+      item.response = `calibration response score:${step} ${item.expectedLevel}`;
+    }
+    write(file, labelled);
+  }
   fs.cpSync(EVALUATOR_FIXTURE, path.join(folder, 'evaluator'), { recursive: true });
   const keys = { 'accepted:shared-run': SHARED_ROW, 'accepted:development-run': DEVELOPMENT_ROW };
   const planRows = [{ key: canary ? 'canary-oracle-key' : 'accepted:held-out-run', ...HELD_OUT_ROW }];
   if (rubric) {
-    keys['score:RC-001'] = criterionRow('R-001', DEVELOPMENT_CRITERION);
-    keys['score:RC-002'] = criterionRow('R-001', SHARED_CRITERION);
-    planRows.push({ key: canary ? 'canary-criterion-key' : 'score:RC-101', ...criterionRow('R-101', HELD_OUT_CRITERION) });
+    keys['score:development-run'] = criterionRow('R-001', DEVELOPMENT_CRITERION);
+    keys['score:shared-run'] = criterionRow('R-001', SHARED_CRITERION);
+    planRows.push({ key: canary ? 'canary-criterion-key' : 'score:held-out-run', ...criterionRow('R-101', HELD_OUT_CRITERION) });
   }
   write(path.join(folder, 'evaluator/mapping.json'), { schemaVersion: 1, keys });
   const plan = read(path.join(folder, PLAN_FILE));
@@ -295,6 +341,14 @@ function mappingLayer({ folder, directory }, { rubric = false, canary = false, l
     timeoutMs: 60_000,
   };
   write(path.join(folder, 'evaluation.json'), evaluation);
+  if (agent) {
+    // The stub agent answers the key `verdict-accepted` for the shared oracle, so the file binds that key beside the development-only row.
+    write(path.join(folder, 'evaluator/mapping.json'), {
+      schemaVersion: 1,
+      keys: { 'verdict-accepted': SHARED_ROW, 'accepted:development-run': DEVELOPMENT_ROW },
+    });
+    sealedBriefAgentLayer(folder, path.join(directory, 'agent-capture.jsonl'), 0);
+  }
 }
 
 /** The judge's calls since `from`: whether each was a calibration call and the `rubric/criterion` keys it was asked to score. */
@@ -756,15 +810,15 @@ try {
     keys: {
       'accepted:shared-run': SHARED_ROW,
       'accepted:development-run': DEVELOPMENT_ROW,
-      'score:RC-001': criterionRow('R-001', DEVELOPMENT_CRITERION),
-      'score:RC-002': criterionRow('R-001', SHARED_CRITERION),
+      'score:development-run': criterionRow('R-001', DEVELOPMENT_CRITERION),
+      'score:shared-run': criterionRow('R-001', SHARED_CRITERION),
       'score:RC-003': criterionRow('R-002', lateCriterion),
     },
   };
   const mappingBytes = Buffer.from(JSON.stringify(mappingSource, null, 4));
   const HELD_OUT_ROWS = [
     { key: 'accepted:held-out-run', ...HELD_OUT_ROW },
-    { key: 'score:RC-101', ...criterionRow('R-101', HELD_OUT_CRITERION) },
+    { key: 'score:held-out-run', ...criterionRow('R-101', HELD_OUT_CRITERION) },
   ];
   const mappingPlan = { ...rubricPlan, mappings: HELD_OUT_ROWS };
   const mappingViewOf = (partition, { plan = mappingPlan, bytes = mappingBytes, contract = rubricBytes } = {}) => {
@@ -798,11 +852,11 @@ try {
   // The held-out view drops the rows of the development-only oracle, of a development-only criterion and of a criterion whose rubric
   // went with it, keeps the shared ones in the file's order (the dropped rows come before, between and after them), and appends
   // the plan's rows in the plan's order.
-  assert.deepEqual(mappingKeysIn('held-out'), ['accepted:shared-run', 'score:RC-002', 'accepted:held-out-run', 'score:RC-101']);
+  assert.deepEqual(mappingKeysIn('held-out'), ['accepted:shared-run', 'score:shared-run', 'accepted:held-out-run', 'score:held-out-run']);
   assert.deepEqual(mappingKeysIn('held-out', { plan: { ...mappingPlan, mappings: HELD_OUT_ROWS.toReversed() } }), [
     'accepted:shared-run',
-    'score:RC-002',
-    'score:RC-101',
+    'score:shared-run',
+    'score:held-out-run',
     'accepted:held-out-run',
   ]);
   const heldOutMapping = mappingViewOf('held-out');
@@ -810,16 +864,29 @@ try {
   assert.deepEqual(heldOutMapping.mapping.keys['accepted:shared-run'], SHARED_ROW);
   assert.deepEqual(heldOutMapping.mapping.keys['accepted:held-out-run'], HELD_OUT_ROW, 'the key stays out of its binding');
   assert.equal(heldOutMapping.mapping.schemaVersion, 1);
-  for (const token of ['accepted:development-run', 'score:RC-001', 'score:RC-003', 'O-002'])
+  for (const token of ['accepted:development-run', 'score:development-run', 'score:RC-003', 'O-002'])
     assert.equal(heldOutMapping.bytes.toString('utf8').includes(token), false, `the held-out mapping holds ${token}`);
-  assert.deepEqual(mappingKeysIn('both'), [...Object.keys(mappingSource.keys), 'accepted:held-out-run', 'score:RC-101']);
+  assert.deepEqual(mappingKeysIn('both'), [...Object.keys(mappingSource.keys), 'accepted:held-out-run', 'score:held-out-run']);
   // A plan with no `mappings` adds none, and the held-out view still drops what it cannot reach.
-  assert.deepEqual(mappingKeysIn('held-out', { plan: rubricPlan }), ['accepted:shared-run', 'score:RC-002']);
-  // A view that drops nothing and adds nothing is the source bytes: the both view of a plan with no mappings, and the held-out view of
-  // a file that holds the shared rows alone.
+  assert.deepEqual(mappingKeysIn('held-out', { plan: rubricPlan }), ['accepted:shared-run', 'score:shared-run']);
+  // The both view of a plan with no mappings drops nothing and adds nothing, so it is the source bytes. The held-out view is always
+  // serialized, so its bytes depend on the rows it holds and never on whether a development-only row exists: deleting the last
+  // development-only row leaves the held-out bytes where they were.
   assert.equal(mappingViewOf('both', { plan: rubricPlan }).bytes, mappingBytes, 'the both mapping changed bytes it had no reason to');
-  const sharedOnlyBytes = Buffer.from(JSON.stringify({ schemaVersion: 1, keys: { 'accepted:shared-run': SHARED_ROW } }, null, 4));
-  assert.equal(mappingViewOf('held-out', { plan: rubricPlan, bytes: sharedOnlyBytes }).bytes, sharedOnlyBytes);
+  const sharedOnly = { schemaVersion: 1, keys: { 'accepted:shared-run': SHARED_ROW } };
+  const sharedOnlyBytes = Buffer.from(JSON.stringify(sharedOnly, null, 4));
+  assert.equal(
+    mappingViewOf('held-out', { plan: rubricPlan, bytes: sharedOnlyBytes }).bytes.toString('utf8'),
+    `${JSON.stringify(sharedOnly, null, 2)}\n`,
+  );
+  const withDevelopmentOnly = Buffer.from(
+    JSON.stringify({ ...sharedOnly, keys: { ...sharedOnly.keys, 'accepted:development-run': DEVELOPMENT_ROW } }, null, 4),
+  );
+  assert.deepEqual(
+    mappingViewOf('held-out', { plan: rubricPlan, bytes: sharedOnlyBytes }).bytes,
+    mappingViewOf('held-out', { plan: rubricPlan, bytes: withDevelopmentOnly }).bytes,
+    'the held-out mapping bytes moved when the last development-only row was deleted',
+  );
   // Only a row for what the source declares and the view dropped leaves: a row for an oracle that no view declares stays for `check`
   // and the run to refuse, and so does a criterion of a rubric `contract.json` lacks.
   const strayBytes = Buffer.from(
@@ -840,6 +907,15 @@ try {
   // A plan key that the file declares, or an earlier plan row does, cannot yield a view; the message names the row's place and not its key.
   for (const [rows, place] of [
     [[{ key: 'accepted:shared-run', ...HELD_OUT_ROW }], 'mappings[0]'],
+    // A row of the file the held-out view dropped still owns its key, so the plan cannot reuse it.
+    [[{ key: 'accepted:development-run', ...HELD_OUT_ROW }], 'mappings[0]'],
+    [
+      [
+        { key: 'canary-other', ...HELD_OUT_ROW },
+        { key: 'score:development-run', ...criterionRow('R-101', HELD_OUT_CRITERION) },
+      ],
+      'mappings[1]',
+    ],
     [
       [
         { key: 'canary-repeat', ...HELD_OUT_ROW },
@@ -883,7 +959,7 @@ try {
   const heldOutPrompt = promptMaterial('held-out');
   assert.deepEqual(
     heldOutPrompt.keys.map((entry) => entry.key),
-    ['accepted:shared-run', 'score:RC-002', 'accepted:held-out-run', 'score:RC-101'],
+    ['accepted:shared-run', 'score:shared-run', 'accepted:held-out-run', 'score:held-out-run'],
   );
   assert.equal(heldOutPrompt.keys.at(-1).criterion, HELD_OUT_CRITERION.text);
   for (const { keys } of [developmentPrompt, heldOutPrompt])
@@ -909,7 +985,8 @@ try {
   const disposition = (oracleId) => ({ oracleId, disposition: 'held', observationIds: [], note: null });
   const finding = (oracleId, behaviorId) => ({ findingId: 'F-001', oracleId, behaviorId });
   const judged = (rubricId, criterionId) => ({ rubricId, criterionId, score: 1, note: null });
-  const recordOf = (parts) => ({ oracleDispositions: [], findings: [], judgeResults: [], ...parts });
+  const observed = (observationId) => ({ observationId });
+  const recordOf = (parts) => ({ observations: [], oracleDispositions: [], findings: [], judgeResults: [], ...parts });
   assert.deepEqual(foreignContent(recordOf({}), declaredByDevelopment), []);
   assert.deepEqual(
     foreignContent(
@@ -945,6 +1022,51 @@ try {
       declaredContent(rubricView('development').contract),
     ),
     ['judgeResults[1]'],
+  );
+  // An observation names the plan step it records in its ID (`<label>-<stepId>`), which a development record may not take from the
+  // held-out plan nor a held-out record from `contract.json`'s development-only steps. An ID in the agent's own form
+  // (`<label>-call-<n>`) or in no run's form names no step.
+  const heldOutDeclared = declaredContent(heldOutView.contract);
+  assert.deepEqual(
+    foreignContent(
+      recordOf({
+        observations: ['trial-1-shared-run', 'trial-1-development-run', 'trial-2-call-1', 'attempt-1-shared-run', 'odd'].map(observed),
+      }),
+      declaredByDevelopment,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    foreignContent(recordOf({ observations: ['trial-1-held-out-run', 'trial-1-shared-run'].map(observed) }), declaredByDevelopment),
+    ['observations[0]'],
+  );
+  assert.deepEqual(
+    foreignContent(
+      recordOf({ observations: ['trial-1-shared-run', 'trial-1-development-run', 'attempt-2-held-out-run'].map(observed) }),
+      declaredByDevelopment,
+    ),
+    ['observations[2]'],
+  );
+  assert.deepEqual(
+    foreignContent(
+      recordOf({ observations: ['trial-1-development-run', 'trial-1-shared-run', 'trial-1-held-out-run'].map(observed) }),
+      heldOutDeclared,
+    ),
+    ['observations[0]'],
+  );
+  assert.deepEqual(
+    foreignContent(
+      recordOf({ observations: ['trial-1-shared-run', 'trial-1-held-out-run', 'trial-3-call-2', 'trial-1-development-run'].map(observed) }),
+      heldOutDeclared,
+    ),
+    ['observations[3]'],
+  );
+  assert.equal(
+    JSON.stringify(foreignContent(recordOf({ observations: [observed('trial-1-held-out-run')] }), declaredByDevelopment)).includes(
+      'held-out',
+    ),
+    false,
+    'a path names the held-out step',
   );
   assert.equal(
     JSON.stringify(foreignContent(recordOf({ oracleDispositions: [disposition('O-101')] }), declaredByDevelopment)).includes('O-101'),
@@ -1808,32 +1930,38 @@ try {
       return cli(mappingGuarded, command[0], command.slice(1));
     } finally {
       for (const [file, bytes] of mappingOriginals) fs.writeFileSync(path.join(mappingGuarded.folder, file), bytes);
+      // What a case adds to the folder leaves with it.
+      for (const added of ['policy/evaluator-conditions.json', 'sealed-records'])
+        fs.rmSync(path.join(mappingGuarded.folder, added), { recursive: true, force: true });
       assert.equal(cli(mappingGuarded, 'digest').status, 0);
     }
   };
+  // The sealed-brief agent beside a plan, with the same mapping the command evaluator reads.
+  const sealedBriefAgent = (capture) => () => sealedBriefAgentLayer(mappingGuarded.folder, capture);
   const planFindings = (output) => output.split('\n').filter((line) => /^corpus\/held-out\/plan\.json: \[partition-plan\] /.test(line));
   // A development-only oracle row and a shared one in the file, a held-out oracle row in the plan, and the criterion rows split the same
   // way are a valid plan: the 1.51 refusal of a partition plan beside a command evaluator is replaced by the derivation.
   const mappingsPristine = cli(mappingGuarded, 'check');
   assert.equal(mappingsPristine.status, 0, mappingsPristine.output);
   assert.equal(mappingsPristine.output.includes('canary-'), false, mappingsPristine.output);
-  const decoy = { key: 'canary-decoy', ...HELD_OUT_ROW };
   const oracleRow = (key, binding) => ({ key, ...binding });
   for (const [name, edit, patterns] of [
     [
-      'a plan key that evaluator/mapping.json has (first row) and one a plan row repeats (last row)',
+      'a plan key that evaluator/mapping.json has (first row), one it has and the held-out view dropped, and one a plan row repeats (last row)',
       () =>
         mappingChange(PLAN_FILE, (plan) => {
           plan.mappings = [
             oracleRow('accepted:shared-run', HELD_OUT_ROW),
             plan.mappings[0],
             plan.mappings[1],
+            oracleRow('accepted:development-run', HELD_OUT_ROW),
             oracleRow('canary-oracle-key', { oracleId: 'O-999', behaviorId: 'B-002' }),
           ];
         }),
       [
         /\[partition-plan\] mappings\[0\] has the key of a row evaluator\/mapping\.json declares$/m,
-        /\[partition-plan\] mappings\[3\] has the key of an earlier row$/m,
+        /\[partition-plan\] mappings\[3\] has the key of a row evaluator\/mapping\.json declares$/m,
+        /\[partition-plan\] mappings\[4\] has the key of an earlier row$/m,
       ],
     ],
     [
@@ -1903,22 +2031,33 @@ try {
     assert.equal(ran.output.includes('canary-'), false, `${name}: check quoted a byte of the held-out plan:\n${ran.output}`);
     assert.doesNotMatch(ran.output, /\[1,2\]|levels \[/, `${name}: check printed a level of the plan's rubric`);
   }
-  assert.equal(decoy.key, 'canary-decoy');
-  // The development view cannot hold a held-out oracle's row: one in `evaluator/mapping.json` is named by the file's own key and the
-  // IDs the file holds, with where the row belongs, by `check` of every partition, the development one included (a development preflight
-  // runs it and never opens the plan). The plan's own row for the oracle is removed beside it, so nothing else is wrong.
+  // The development view cannot hold a held-out oracle's or criterion's row: one in `evaluator/mapping.json` is named by the file's own key
+  // and the IDs the file holds, with where the row belongs, by `check` of every partition, the development one included (a development
+  // preflight runs it and never opens the plan). The plan's own rows are removed beside them, so nothing else is wrong. A criterion
+  // row whose rubric `contract.json` lacks (the held-out one) and one whose criterion its rubric lacks each carry the hint.
   const misplaced = () => {
-    mappingChange('evaluator/mapping.json', (mapping) => (mapping.keys['accepted:held-out-run'] = HELD_OUT_ROW));
-    mappingChange(PLAN_FILE, (plan) => (plan.mappings = plan.mappings.slice(1)));
+    mappingChange('evaluator/mapping.json', (mapping) => {
+      mapping.keys['accepted:held-out-run'] = HELD_OUT_ROW;
+      mapping.keys['score:held-out-run'] = criterionRow('R-101', HELD_OUT_CRITERION);
+      mapping.keys['score:ghost'] = criterionRow('R-001', criterionOf('RC-999', 'A criterion the rubric lacks.', 'shared-run'));
+    });
+    mappingChange(PLAN_FILE, (plan) => (plan.mappings = []));
   };
+  const hinted = String.raw`; under a partitionPlan a held-out oracle or criterion binds in the held-out plan's mappings, and this file holds only what contract\.json declares$`;
   for (const command of [['check'], ['preflight', '--partition', 'development']]) {
     const ran = mappingChecked(misplaced, command);
     assert.equal(ran.status, 10, `${command.join(' ')}: ${ran.output}`);
-    assert.match(
-      ran.output,
-      /^evaluator\/mapping\.json: \[evaluator\] key accepted:held-out-run binds oracle O-101, which the contract does not declare; under a partitionPlan a held-out oracle or criterion binds in the held-out plan's mappings, and this file holds only what contract\.json declares$/m,
-      command.join(' '),
-    );
+    for (const finding of [
+      'key accepted:held-out-run binds oracle O-101, which the contract does not declare',
+      'key score:held-out-run binds rubric R-101, which the contract does not declare',
+      'key score:ghost binds criterion RC-999, which rubric R-001 does not declare',
+    ]) {
+      assert.match(
+        ran.output,
+        new RegExp(`^evaluator/mapping\\.json: \\[evaluator\\] ${finding}${hinted}`, 'm'),
+        `${command.join(' ')}: ${finding}`,
+      );
+    }
     assert.equal(ran.output.includes('canary-'), false, `${command.join(' ')}: ${ran.output}`);
   }
   // A development run over that file stops at `check` and launches nothing.
@@ -1941,30 +2080,76 @@ try {
     ],
     deterministic.output,
   );
+  // A sealed-brief agent reads the rows as a command evaluator does, so the same plan is valid beside it and a bad row is named by its place.
+  const agentPlan = mappingChecked(sealedBriefAgent(path.join(mappingGuarded.directory, 'agent-capture.jsonl')));
+  assert.equal(agentPlan.status, 0, agentPlan.output);
+  assert.equal(agentPlan.output.includes('canary-'), false, agentPlan.output);
+  const agentBadRow = mappingChecked(() => {
+    sealedBriefAgent(path.join(mappingGuarded.directory, 'agent-capture.jsonl'))();
+    mappingChange(PLAN_FILE, (plan) => plan.mappings.push(oracleRow('canary-bad', { oracleId: 'O-999', behaviorId: 'B-002' })));
+  });
+  assert.equal(agentBadRow.status, 10, agentBadRow.output);
+  assert.match(
+    planFindings(agentBadRow.output).join('\n'),
+    /\[partition-plan\] key mappings\[2\] binds oracle O-999, which the held-out view does not declare$/m,
+  );
+  assert.equal(agentBadRow.output.includes('canary-'), false, agentBadRow.output);
   // A records evaluator is refused beside a rubric wherever the rubric sits: in both files, in the plan alone, and in `contract.json` alone.
   const recordsRefusal =
     /^evaluation\.json: \[partition-plan\] partitionPlan beside a records evaluator and a rubric: the harness's calibration judgments answer one labelled file for one contract, which no partition derives; use a command or sealed-brief-agent evaluator, or declare no rubric$/m;
-  for (const [name, rubrics] of [
-    ['both files', () => {}],
-    ['the plan alone', () => mappingChange('contract.json', (contract) => (contract.rubrics = []))],
-    ['contract.json alone', () => mappingChange(PLAN_FILE, (plan) => delete plan.rubrics)],
+  const recordsEvaluator = () => {
+    fs.mkdirSync(path.join(mappingGuarded.folder, 'sealed-records'));
+    mappingChange('evaluation.json', (evaluation) => (evaluation.evaluator = { kind: 'records', records: 'sealed-records' }));
+    mappingChange(PLAN_FILE, (plan) => delete plan.mappings);
+  };
+  // A development check, preflight and run never open the plan, so the rubric of `contract.json` refuses on its own and nothing of
+  // the plan's rubric (R-101) reaches their output; a rubric in the plan alone is the held-out and both runs' to refuse.
+  for (const [name, rubrics, development] of [
+    ['both files', () => {}, true],
+    ['the plan alone', () => mappingChange('contract.json', (contract) => (contract.rubrics = [])), false],
+    ['contract.json alone', () => mappingChange(PLAN_FILE, (plan) => delete plan.rubrics), true],
   ]) {
-    const records = mappingChecked(() => {
-      fs.mkdirSync(path.join(mappingGuarded.folder, 'sealed-records'));
-      mappingChange('evaluation.json', (evaluation) => (evaluation.evaluator = { kind: 'records', records: 'sealed-records' }));
-      mappingChange(PLAN_FILE, (plan) => delete plan.mappings);
-      rubrics();
-    });
-    fs.rmSync(path.join(mappingGuarded.folder, 'sealed-records'), { recursive: true });
-    assert.equal(records.status, 10, `a rubric in ${name}: ${records.output}`);
-    assert.match(records.output, recordsRefusal, `a rubric in ${name}`);
+    for (const command of [['check'], ['preflight', '--partition', 'development'], ['run', '--partition', 'development']]) {
+      const records = mappingChecked(() => {
+        recordsEvaluator();
+        rubrics();
+      }, command);
+      fs.rmSync(path.join(mappingGuarded.folder, 'sealed-records'), { recursive: true, force: true });
+      const label = `a rubric in ${name}, ${command.join(' ')}`;
+      // A development command never opens the plan, so the plan's rubric stays out of what it prints.
+      if (command[0] !== 'check')
+        assert.equal(records.output.includes('R-101'), false, `${label} named the held-out rubric:\n${records.output}`);
+      if (development || command[0] === 'check') {
+        assert.equal(records.status, 10, `${label}: ${records.output}`);
+        assert.match(records.output, recordsRefusal, label);
+      } else assert.doesNotMatch(records.output, recordsRefusal, `${label}: the development view refused a rubric it never reads`);
+    }
   }
+  // `mappings` beside a records evaluator with no rubric anywhere are the plan's refusal alone: the harness reads no mapping.
+  const recordsMappings = mappingChecked(() => {
+    recordsEvaluator();
+    mappingChange('contract.json', (contract) => (contract.rubrics = []));
+    mappingChange(PLAN_FILE, (plan) => {
+      delete plan.rubrics;
+      plan.mappings = [oracleRow('canary-oracle-key', HELD_OUT_ROW)];
+    });
+  });
+  fs.rmSync(path.join(mappingGuarded.folder, 'sealed-records'), { recursive: true, force: true });
+  assert.equal(recordsMappings.status, 10, recordsMappings.output);
+  assert.deepEqual(
+    planFindings(recordsMappings.output),
+    [
+      "corpus/held-out/plan.json: [partition-plan] declares mappings, which only a command or sealed-brief-agent evaluator reads; evaluation.json's evaluator is records, so remove them",
+    ],
+    recordsMappings.output,
+  );
+  assert.doesNotMatch(recordsMappings.output, recordsRefusal, 'a records evaluator with no rubric was refused for one');
   // A mapping row of the file that no view can bind is named once, by the file: the rules over the plan's rows leave `evaluator/mapping.json`
   // to `check`'s own rule, and a criterion of `contract.json` that the file leaves unbound is named once too.
   const fileOnly = mappingChecked(() =>
     mappingChange('evaluator/mapping.json', (mapping) => {
       mapping.keys['accepted:ghost'] = { oracleId: 'O-999', behaviorId: 'B-001' };
-      delete mapping.keys['score:RC-002'];
+      delete mapping.keys['score:shared-run'];
     }),
   );
   assert.equal(fileOnly.status, 10, fileOnly.output);
@@ -2621,6 +2806,13 @@ try {
       `${partition}: the evaluator calibrated other items than its view's`,
     );
     assert.deepEqual(holding(run, keepOut), [], `${partition}: the run directory holds the other partition`);
+    // The development partition reads, executes and digests the evaluator's own files, so they spell nothing of the held-out one.
+    if (partition === 'development')
+      assert.deepEqual(
+        holding(path.join(commandFlow.folder, 'evaluator'), keepOut),
+        [],
+        'the evaluator tree a development run reads holds the held-out partition',
+      );
     assert.deepEqual(
       outputKeepOut.filter((token) => output.includes(token)),
       [],
@@ -2655,6 +2847,38 @@ try {
     0,
     'the development run holds a held-out row key',
   );
+
+  // A sealed-brief agent is shown the keys of its view, in the prompt of every call it makes (calibration or none, qualification
+  // attempts and trials alike). Each partition's run captures every prompt its agent was handed, and none holds the other partition.
+  const agentFlow = planProject('plan-agent-flow', null, null, { agent: true });
+  const agentCapture = path.join(agentFlow.directory, 'agent-capture.jsonl');
+  const capturedPrompts = () =>
+    fs.existsSync(agentCapture)
+      ? fs
+          .readFileSync(agentCapture, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => JSON.parse(line).prompt)
+      : [];
+  for (const partition of ['development', 'held-out']) {
+    const from = capturedPrompts().length;
+    const ran = cli(agentFlow, 'run', ['--partition', partition]);
+    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
+    const prompts = capturedPrompts().slice(from);
+    assert.equal(prompts.length > 0, true, `${partition}: the agent was never called`);
+    const keys = (prompt) =>
+      JSON.parse(prompt.slice(prompt.indexOf(MATERIAL_HEADING) + MATERIAL_HEADING.length)).keys.map((entry) => entry.key);
+    const expected =
+      partition === 'development' ? ['verdict-accepted', 'accepted:development-run'] : ['verdict-accepted', 'accepted:held-out-run'];
+    for (const prompt of prompts) {
+      assert.deepEqual(keys(prompt), expected, `${partition}: the agent was shown other keys than its view's`);
+      assert.deepEqual(
+        MAPPING_KEEP_OUT[partition].filter((token) => prompt.includes(token)),
+        [],
+        `${partition}: the agent's prompt holds the other partition`,
+      );
+    }
+  }
 
   // The tree digest a run records covers the files its partition reads: the mapping of its view in place of the file. A development
   // run's digest therefore depends on no held-out row (the plan is never opened), a held-out run's on no development-only row, and
@@ -2703,12 +2927,12 @@ try {
   // A row only the held-out partition drops does not move the held-out digest, and one it keeps does; the development digest moves
   // for both, and never for a plan row (it never opens the plan).
   assert.equal(heldOutDigest(edited('accepted:development-run', { behaviorId: 'B-001' }), mappingPlan), baseline['held-out']);
-  assert.equal(heldOutDigest(edited('score:RC-001', { levels: [0, 1, 2] }), mappingPlan), baseline['held-out']);
+  assert.equal(heldOutDigest(edited('score:development-run', { levels: [0, 1, 2] }), mappingPlan), baseline['held-out']);
   assert.equal(heldOutDigest(edited('score:RC-003', { levels: [0, 1, 2] }), mappingPlan), baseline['held-out']);
   assert.notEqual(heldOutDigest(renamed('accepted:shared-run', 'accepted:shared'), mappingPlan), baseline['held-out']);
-  assert.notEqual(heldOutDigest(renamed('score:RC-002', 'score:shared'), mappingPlan), baseline['held-out']);
+  assert.notEqual(heldOutDigest(renamed('score:shared-run', 'score:shared'), mappingPlan), baseline['held-out']);
   assert.notEqual(developmentDigest(renamed('accepted:development-run', 'accepted:development')), baseline.development);
-  assert.notEqual(developmentDigest(renamed('score:RC-001', 'score:development')), baseline.development);
+  assert.notEqual(developmentDigest(renamed('score:development-run', 'score:development')), baseline.development);
   const otherRows = HELD_OUT_ROWS.map((row, index) => (index === 0 ? { ...row, key: 'accepted:held-out-run-2' } : row));
   assert.notEqual(
     heldOutDigest(mappingSource, { ...mappingPlan, mappings: otherRows }),
@@ -2716,15 +2940,38 @@ try {
     'a plan row left the digest alone',
   );
   assert.equal(layerOf('development', { plan: { ...mappingPlan, mappings: otherRows } }).treeDigest, baseline.development);
+  // The held-out digest moves with the rows the view holds and never with a development-only row that came or went: with no plan
+  // `mappings`, deleting every development-only row leaves it where it was.
+  const sharedOnlyMapping = {
+    schemaVersion: 1,
+    keys: { 'accepted:shared-run': SHARED_ROW, 'score:shared-run': criterionRow('R-001', SHARED_CRITERION) },
+  };
+  assert.equal(
+    heldOutDigest(sharedOnlyMapping, heldOutPlan),
+    heldOutDigest(mappingSource, heldOutPlan),
+    'the held-out digest moved when the last development-only rows were deleted',
+  );
+  // The both view digests the mapping it holds: every row of the file, then the plan's, and it moves when a plan row does.
+  const bothMapping = {
+    ...mappingSource,
+    keys: { ...mappingSource.keys, ...Object.fromEntries(HELD_OUT_ROWS.map(({ key, ...binding }) => [key, binding])) },
+  };
+  assert.equal(layerOf('both').treeDigest, rawDigest(bothMapping), 'the both digest is not over the both mapping');
+  assert.notEqual(layerOf('both').treeDigest, rawDigest(mappingSource), 'the both digest is over the file as it is');
+  assert.notEqual(
+    layerOf('both', { plan: { ...mappingPlan, mappings: otherRows } }).treeDigest,
+    layerOf('both').treeDigest,
+    'a plan row left the both digest alone',
+  );
   // Without a plan the digest is the file's, in every partition.
   for (const partition of ['development', 'held-out'])
     assert.equal(layerOf(partition, { planned: false }).treeDigest, rawDigest(mappingSource), `${partition}: no plan changed the digest`);
   // The layer's mapping is the view's, and a row the held-out view drops and the plan's row stand where `mappingView` puts them.
   assert.deepEqual(Object.keys(layerOf('held-out').mapping.keys), [
     'accepted:shared-run',
-    'score:RC-002',
+    'score:shared-run',
     'accepted:held-out-run',
-    'score:RC-101',
+    'score:held-out-run',
   ]);
   assert.deepEqual(Object.keys(layerOf('development').mapping.keys), Object.keys(mappingSource.keys));
   // A held-out row in the file the development run reads stops the run's layer, naming the file's own key.
@@ -2832,6 +3079,38 @@ try {
     ['oracleDispositions[0]', `findings[${heldOutRecord.findings.length - 1}].oracleId`, 'the held-out view does not declare'],
     ['O-002', 'development-run'],
   );
+  // A record also holds the plan steps its observations record, each with its call inputs and every response channel, named
+  // `<label>-<stepId>`. The other partition's observation is refused wherever it sits in the array (first and last alike), the refusal
+  // names its place and no ID, and nothing of it reaches the run directory: not the step's ID and not the request that carries the canary.
+  const observationOf = (source, probeId, stepId) => {
+    const record = read(path.join(source, probeId, 'record-1.json'));
+    const found = record.observations.find((observation) => observation.observationId.endsWith(`-${stepId}`));
+    assert.ok(found, `${probeId} records no ${stepId} observation`);
+    return found;
+  };
+  const withObservation = (source, probeId, observation, position) =>
+    patchRecord(source, probeId, (record) => {
+      const added = { ...structuredClone(observation), sequence: Math.max(...record.observations.map((entry) => entry.sequence)) + 1 };
+      if (position === 'first') record.observations.unshift(added);
+      else record.observations.push(added);
+    });
+  const heldOutObservation = observationOf(heldOutRecords, 'P-003', 'held-out-run');
+  assert.ok(JSON.stringify(heldOutObservation).includes(CANARY), 'the held-out observation carries none of the held-out request');
+  const developmentObservation = observationOf(developmentRecords, 'P-002', 'development-run');
+  for (const position of ['first', 'last']) {
+    const foreign = withObservation(developmentRecords, 'P-002', heldOutObservation, position);
+    refused(
+      'development',
+      [`observations[${position === 'first' ? 0 : foreign.observations.length - 1}]`, 'the development view does not declare'],
+      [...KEEP_OUT.development, heldOutObservation.observationId],
+    );
+    const other = withObservation(heldOutRecords, 'P-003', developmentObservation, position);
+    refused(
+      'held-out',
+      [`observations[${position === 'first' ? 0 : other.observations.length - 1}]`, 'the held-out view does not declare'],
+      [...KEEP_OUT['held-out'], developmentObservation.observationId],
+    );
+  }
 
   // An empty held-out set is an authoring defect for preflight, as it is for run.
   const none = test.project('plan-none');

@@ -142,7 +142,9 @@ A row in `evaluator/mapping.json` binds what `contract.json` declares: it is in 
 A row for what only the held-out partition declares goes in the plan file's `mappings` array, and it is in the held-out and both views.
 Give a plan row the `key` and the binding of a row of `evaluator/mapping.json`.
 Its key differs from every other key, and each held-out criterion has a row, because a criterion no key binds scores nothing.
+A command evaluator's files under `evaluator/` are read by the development partition, so it derives a held-out key from its input and never spells one.
 A records harness's records name only the oracles, behaviors and criteria of the run's view.
+An observation names its plan step in its ID (`<label>-<stepId>`), so a record whose observation names a step the view does not declare is refused too.
 
 <!-- example:held-out-mappings -->
 
