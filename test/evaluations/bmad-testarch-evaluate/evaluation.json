@@ -66,9 +66,7 @@
   ],
   "trials": 5,
   "tiers": [
-    "pr",
-    "scheduled",
-    "release"
+    "pr"
   ],
   "strengthFloor": {
     "defect": 1
