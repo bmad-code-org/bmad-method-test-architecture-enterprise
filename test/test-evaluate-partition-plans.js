@@ -901,6 +901,17 @@ try {
     /policy\/evaluator-conditions\.json: \[judge\] the contract and its held-out plan declare a rubric, and policy\/evaluator-conditions\.json names no judge\.modelSnapshot/,
   );
   assert.doesNotMatch(noJudge.output, /rubric\(s\)|contract\.json declares/, 'check counted rubrics over the both view for contract.json');
+  // Beside a contract that fails its own schema the plan is not read, so the rubrics `check` counts are `contract.json`'s own.
+  const unreadJudge = rubricChecked(() => {
+    rubricChange('contract.json', (contract) => (contract.oracles[0].polarity = 'bogus'));
+    rubricChange('evaluation.json', (evaluation) => delete evaluation.judge);
+  });
+  assert.equal(unreadJudge.status, 10, unreadJudge.output);
+  assert.match(
+    unreadJudge.output,
+    /evaluation\.json: \[judge\] contract\.json declares 1 rubric\(s\), and evaluation\.json declares no judge/,
+  );
+  assert.doesNotMatch(unreadJudge.output, /held-out plan declare/, 'check named a plan it did not read');
   // A plan criterion's schema error is named by its index among the plan's rubrics: the held-out view lists the rubrics `contract.json`
   // keeps first, and a rubric left with no held-out criterion is not kept, so the plan's rubric is `rubrics[0]` here although
   // `contract.json` declares one rubric.
