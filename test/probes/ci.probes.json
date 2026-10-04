@@ -8,18 +8,18 @@
     "behaviorId": "B-003",
     "systemId": "tea-ci-full-meridian-storefront",
     "implementationDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
-    "artifactDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
+    "artifactDigest": "sha256:45d2d7fb570fa53d26a3f4698af1ba2af8a69d51222a441f3bd7fdfc18a0dd8b",
     "commitDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
     "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationSource": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
       "mutationOperator": "plant-trigger-weekly-schedule-missing",
       "targetArtifact": {
         "storage": "public",
-        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "path": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
         "privateRef": null,
-        "digest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21"
+        "digest": "sha256:4e24e7de2173a3b2d416a7f2dd454760f190fe53450a4f823d7940986738d861"
       },
       "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"0 2 * * 0\".",
       "baselinePassEvidence": {
@@ -30,9 +30,9 @@
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/ci/full-trigger-schedule-missing/.github/workflows/test.yml",
+        "path": "test/fixtures/probe-mutants/ci/trigger-weekly-schedule/test.yml",
         "privateRef": null,
-        "digest": "sha256:9f3590f44d96d5bd509edef35dcadc0c24831742ec5989d79eea2827d00e8b2d"
+        "digest": "sha256:45d2d7fb570fa53d26a3f4698af1ba2af8a69d51222a441f3bd7fdfc18a0dd8b"
       },
       "rollbackVerified": true
     },
@@ -139,18 +139,18 @@
     "behaviorId": "B-004",
     "systemId": "tea-ci-full-meridian-storefront",
     "implementationDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
-    "artifactDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
+    "artifactDigest": "sha256:206be045284784a2268e2da012ce87e05c60caf48eba179a973056b9ca7d6ee4",
     "commitDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
     "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationSource": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
       "mutationOperator": "plant-permission-contents-read-missing",
       "targetArtifact": {
         "storage": "public",
-        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "path": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
         "privateRef": null,
-        "digest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21"
+        "digest": "sha256:4e24e7de2173a3b2d416a7f2dd454760f190fe53450a4f823d7940986738d861"
       },
       "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"contents: read\".",
       "baselinePassEvidence": {
@@ -161,9 +161,9 @@
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/ci/full-permissions-missing/.github/workflows/test.yml",
+        "path": "test/fixtures/probe-mutants/ci/permission-contents-read/test.yml",
         "privateRef": null,
-        "digest": "sha256:3f67e8e3611fe2655aa77845eace9ddf705e0052ad243878ace118ce05377334"
+        "digest": "sha256:206be045284784a2268e2da012ce87e05c60caf48eba179a973056b9ca7d6ee4"
       },
       "rollbackVerified": true
     },
@@ -270,18 +270,18 @@
     "behaviorId": "B-022",
     "systemId": "tea-ci-minimal-lantern-audit-log",
     "implementationDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
-    "artifactDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
+    "artifactDigest": "sha256:b28995bba9f623e14346292bba0a1dc023d0ab6ccbf845fcd343b70eb9748450",
     "commitDigest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21",
     "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationSource": "test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml",
       "mutationOperator": "plant-template-copied-onto-minimal",
       "targetArtifact": {
         "storage": "public",
-        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "path": "test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml",
         "privateRef": null,
-        "digest": "sha256:59a90594cd69dc017faf3a8d922cc8c746c31e6dd00e33070e3248fa45425d21"
+        "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
       },
       "expectedObservableFailure": "The workflow written for minimal-lantern-audit-log contains \"burn-in\".",
       "baselinePassEvidence": {
@@ -292,9 +292,9 @@
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/ci/minimal-template-copied/.github/workflows/test.yml",
+        "path": "test/fixtures/probe-mutants/ci/template-copied/test.yml",
         "privateRef": null,
-        "digest": "sha256:97c56b9079d4f0d72000b27c3d7d3611184491910296b599a6eaaff68db1f34a"
+        "digest": "sha256:b28995bba9f623e14346292bba0a1dc023d0ab6ccbf845fcd343b70eb9748450"
       },
       "rollbackVerified": true
     },

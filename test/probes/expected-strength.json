@@ -1,7 +1,7 @@
 {
   "nfr": {
     "contractId": "tea-nfr-behavioral",
-    "corpusDigest": "sha256:0e093ad90f80758d80c9609f9b34c6915622d621831d30a2207929afc77eb5a4",
+    "corpusDigest": "sha256:85906eceb2aecf6ec8f0871b171c70cde721be86184634ac456024e83328f810",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -59,7 +59,7 @@
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-003",
+        "behaviorId": "B-001",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:25212d28b4be16bd71b806ec5d110a9176b82c87477502372e23d374ed73d6da",
+    "corpusDigest": "sha256:f871cb26d6cfeaa84b9fc7845c1e14338a80f5f582d64fd3d369ff5a2d320dbe",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -1763,7 +1763,7 @@
   },
   "test-review": {
     "contractId": "tea-test-review-behavioral",
-    "corpusDigest": "sha256:119d4152b17905dcf23f2e10914e8c9c7e6772c2d711a1a385dfdb1091e86433",
+    "corpusDigest": "sha256:e8f1afccaae56d9868f711164452ea79414ce879f7d05aa2f8c85426124eb3bb",
     "probeCount": 11,
     "strength": {
       "defect": {
@@ -3818,7 +3818,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
-    "corpusDigest": "sha256:ba5e8b01a4aa63284ba6133815047b182f25414d2c6a5d2af36833d9ecf922fa",
+    "corpusDigest": "sha256:5bcf5e31f50232eb00eacff2edb922a3b6e46c4d966c39c8c7d89fd41d54b4e3",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -3848,7 +3848,7 @@
       "P-002": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -3862,7 +3862,7 @@
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,

@@ -8,31 +8,31 @@
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
     "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:9e054aa57b643929cb14305362aff4e0de8a16ace01bf255b0f283703fd39561",
     "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "rationale": "AC-2 is P0 and its true coverage is NONE: Export is denied to a member without the admin role. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
+    "rationale": "AC-2 is P0 and its true coverage is NONE: Export is denied to a member without the admin role. The gap is the plant, and O-001 is the oracle that has to see its consequence in the gate the summary derives. The mutation withholds AC-2 from the stored correct summary, so P0 reads as covered and the gate the summary derives follows it. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/trace-eval/ground-truth.json",
+      "mutationSource": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
       "mutationOperator": "withhold-coverage-ac-2",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/trace-eval/ground-truth.json",
-        "privateRef": null,
-        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
-      },
-      "expectedObservableFailure": "The traceability matrix classifies AC-2 as NONE and the summary counts it in the gap buckets.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json",
-        "privateRef": null,
-        "digest": "sha256:11b17cf4979dcf3f360b46a8960ab7945285b0c0f53094e6796e9cb8c0189497"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
         "privateRef": null,
         "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "expectedObservableFailure": "The summary's priority breakdown reports P0 fully covered and its inventory counts one more criterion covered, so AC-2, which is NONE, reads as covered; the gate decision is PASS and its gate criteria report the P0 band as met.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/trace/ac-2/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:9e054aa57b643929cb14305362aff4e0de8a16ace01bf255b0f283703fd39561"
       },
       "rollbackVerified": true
     },
@@ -126,34 +126,34 @@
     "revisionCount": 0,
     "probeId": "P-002",
     "probeClass": "defect",
-    "behaviorId": "B-001",
+    "behaviorId": "B-004",
     "systemId": "tea-trace-seeded-tenant-data-export",
     "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:9a65b695bdd4a38ec525b556d12edb9c125e01375b9192475ea6495f439f2c08",
     "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "rationale": "AC-8 is P2 and its true coverage is PARTIAL: The audit log records the actor and the time of every export request. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
+    "rationale": "AC-8 is P2 and its true coverage is PARTIAL: The audit log records the actor and the time of every export request. The gap is the plant, and O-004 is the oracle that has to see its consequence in the priority breakdown the summary derives. The mutation withholds AC-8 from the stored correct summary, so P2 reads as covered. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/trace-eval/ground-truth.json",
+      "mutationSource": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
       "mutationOperator": "withhold-coverage-ac-8",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/trace-eval/ground-truth.json",
-        "privateRef": null,
-        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
-      },
-      "expectedObservableFailure": "The traceability matrix classifies AC-8 as PARTIAL and the summary counts it in the partial coverage items.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json",
-        "privateRef": null,
-        "digest": "sha256:11b17cf4979dcf3f360b46a8960ab7945285b0c0f53094e6796e9cb8c0189497"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
         "privateRef": null,
         "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "expectedObservableFailure": "The summary's priority breakdown reports P2 fully covered and its inventory counts one more criterion covered, so AC-8, which is PARTIAL, reads as covered.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/trace/ac-8/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:9a65b695bdd4a38ec525b556d12edb9c125e01375b9192475ea6495f439f2c08"
       },
       "rollbackVerified": true
     },
@@ -161,7 +161,7 @@
     "defects": [
       {
         "defectId": "D-002",
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "summary": "AC-8 (P2) is covered PARTIAL: The audit log records the actor and the time of every export request.",
         "severity": "material",
         "oracleEvidence": [
@@ -247,34 +247,34 @@
     "revisionCount": 0,
     "probeId": "P-003",
     "probeClass": "defect",
-    "behaviorId": "B-001",
+    "behaviorId": "B-004",
     "systemId": "tea-trace-seeded-tenant-data-export",
     "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:ba548e20e23355768868e19503e61d0ed40d64c6740c527076b95feb56d2062e",
     "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
-    "rationale": "AC-10 is P3 and its true coverage is NONE: The archive filename carries the tenant slug and the request date. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
+    "rationale": "AC-10 is P3 and its true coverage is NONE: The archive filename carries the tenant slug and the request date. The gap is the plant, and O-004 is the oracle that has to see its consequence in the priority breakdown the summary derives. The mutation withholds AC-10 from the stored correct summary, so P3 reads as covered. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/trace-eval/ground-truth.json",
+      "mutationSource": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
       "mutationOperator": "withhold-coverage-ac-10",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/trace-eval/ground-truth.json",
-        "privateRef": null,
-        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
-      },
-      "expectedObservableFailure": "The traceability matrix classifies AC-10 as NONE and the summary counts it in the gap buckets.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json",
-        "privateRef": null,
-        "digest": "sha256:11b17cf4979dcf3f360b46a8960ab7945285b0c0f53094e6796e9cb8c0189497"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
         "privateRef": null,
         "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "expectedObservableFailure": "The summary's priority breakdown reports P3 fully covered and its inventory counts one more criterion covered, so AC-10, which is NONE, reads as covered.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:367cf7ae6d2c7fda59ee9742928e9390a519d1c7e6d80e1001f2501c206c4743"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/trace/ac-10/e2e-trace-summary-epic-4.json",
+        "privateRef": null,
+        "digest": "sha256:ba548e20e23355768868e19503e61d0ed40d64c6740c527076b95feb56d2062e"
       },
       "rollbackVerified": true
     },
@@ -282,7 +282,7 @@
     "defects": [
       {
         "defectId": "D-003",
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "summary": "AC-10 (P3) is covered NONE: The archive filename carries the tenant slug and the request date.",
         "severity": "material",
         "oracleEvidence": [

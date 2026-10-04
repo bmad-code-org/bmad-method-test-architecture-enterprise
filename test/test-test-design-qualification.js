@@ -31,7 +31,8 @@
  *   later corpus cannot be built.
  * - The derived mutation: `deriveReplaceExact` over an insertion, a deletion, a
  *   replaced middle, a span that needs context on either side to be unique, and
- *   the two documents it refuses.
+ *   the documents it refuses: two that are the same, and two that only the whole
+ *   reference turns into the other.
  *
  * Usage: node test/test-test-design-qualification.js
  */
@@ -52,6 +53,7 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { TARGET_ARTIFACT, deriveReplaceExact, qualifyTestDesignMutation, scoreDocument } = require('./lib/test-design-qualification');
 const { GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, run, writeCorpora } = require('../tools/generate-probes');
 const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
+const { checkStatusGuard, gitStatus } = require('./lib/qualification-suite');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
@@ -74,14 +76,6 @@ function check(condition, message) {
 
 const replayDesign = (id) => path.join(REPLAY_ROOT, id, 'design.md');
 const replayResult = (id) => JSON.parse(fs.readFileSync(path.join(REPLAY_ROOT, id, 'expected.json'), 'utf8')).result;
-
-/** The git state of the whole checkout, so a cycle that wrote anywhere in the adopter's tree shows. */
-function gitStatus() {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
-  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: PROJECT_ROOT, env, encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(`git status exited ${result.status}: ${result.stderr}`);
-  return result.stdout;
-}
 
 /** Every workspace directory an arm ran in, so the suite can show each is outside the checkout and gone. */
 const workspaces = new Set();
@@ -139,9 +133,9 @@ function recordingArm(trace, digestBytes, tamper = {}) {
   return async (input) => {
     track(input);
     const digestBefore = digestBytes(fs.readFileSync(input.file));
-    trace.push({ phase: input.phase, file: input.file, digest: digestBefore, text: input.text });
+    trace.push({ phase: input.phase, file: input.file, digest: digestBefore });
     tamper[input.phase]?.(input);
-    return scoreDocument({ ...input, text: fs.readFileSync(input.file, 'utf8') });
+    return scoreDocument(input);
   };
 }
 
@@ -297,6 +291,29 @@ async function checkFailingSteps(digestBytes) {
   const wrongRerun = await wrapped('rerun-bytes', { 're-pass-1': ({ file }) => fs.writeFileSync(file, mutatedBytes()) });
   check(wrongRerun.error?.exitCode === 12 && wrongRerun.qualified === undefined, 'a clean rerun over the mutated bytes still qualified');
 
+  // The shipped arm scores the file the workspace holds in each phase and is handed nothing else, so a phase whose file is tampered with
+  // is scored on the tampered bytes: the clean arm over the mutated design fails (11), the mutated arm over the reference holds (11) and the
+  // clean rerun over the mutated design fails (12). An arm that scored text it was handed would score the untampered bytes and qualify.
+  const viaShippedArm = (label, tamper) =>
+    outcome({
+      ...fixture(label, BROWSER_CASE),
+      arm: async (input) => {
+        tamper[input.phase]?.(input);
+        return trackedScore(input);
+      },
+    });
+  for (const [label, phase, bytes, exitCode, what] of [
+    ['shipped-baseline', 'baseline', mutatedBytes, 11, 'a clean arm over the mutated design'],
+    ['shipped-mutated', 'mutated', referenceBytes, 11, 'a mutated arm over the reference design'],
+    ['shipped-rerun', 're-pass-1', mutatedBytes, 12, 'a clean rerun over the mutated design'],
+  ]) {
+    const tampered = await viaShippedArm(label, { [phase]: ({ file }) => fs.writeFileSync(file, bytes()) });
+    check(
+      tampered.error?.exitCode === exitCode && tampered.qualified === undefined,
+      `the shipped arm, ${what}, stopped with ${tampered.error?.exitCode ?? 'a qualified result'}; expected ${exitCode} and no result`,
+    );
+  }
+
   const drifted = await outcome({
     ...fixture('drift', BROWSER_CASE),
     stored: { ...fixture('drift-source', BROWSER_CASE).stored, mutated: { unmeasurable: 'x' } },
@@ -374,7 +391,7 @@ async function checkFailingSteps(digestBytes) {
   });
   check(
     touchedSeeded.error?.exitCode === 12 &&
-      /stored design changed/.test(touchedSeeded.error.message) &&
+      /stored artifact changed/.test(touchedSeeded.error.message) &&
       touchedSeeded.qualified === undefined,
     `a stored seeded design that changed during the cycle stopped with ${touchedSeeded.error?.exitCode ?? 'a qualified result'}: ${touchedSeeded.error?.message}; expected 12`,
   );
@@ -383,7 +400,7 @@ async function checkFailingSteps(digestBytes) {
   fs.writeFileSync(seededNotText.mutatedPath, Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]));
   const seededBinary = await outcome(seededNotText);
   check(
-    seededBinary.error?.exitCode === 10 && /stored seeded/.test(seededBinary.error.message),
+    seededBinary.error?.exitCode === 10 && /stored mutated/.test(seededBinary.error.message),
     `a stored seeded design that is not UTF-8 gave ${seededBinary.error?.exitCode ?? 'a qualified result'}; expected 10 naming it`,
   );
 
@@ -445,7 +462,7 @@ async function checkFailingSteps(digestBytes) {
     arm: recordingArm([], digestBytes, { mutated: () => fs.appendFileSync(sourceTouched.referencePath, '\nextra\n') }),
   });
   check(
-    touched.error?.exitCode === 12 && /stored design changed/.test(touched.error.message) && touched.qualified === undefined,
+    touched.error?.exitCode === 12 && /stored artifact changed/.test(touched.error.message) && touched.qualified === undefined,
     `a stored design that changed during the cycle stopped with ${touched.error?.exitCode ?? 'a qualified result'}: ${touched.error?.message}; expected 12`,
   );
   checkWorkspacesGone('the failing steps');
@@ -480,11 +497,27 @@ function checkDerivedMutation() {
     leading.text === 'new\na\nb\n' && leading.find === 'a\n',
     `an insertion before the first line gave the anchor ${JSON.stringify(leading.find)}`,
   );
-  // Two repeated lines become three: the unique span is the whole document, reached on the last pass.
-  const wholeDocument = applied('row\nrow\n', 'row\nrow\nrow\n');
+  // Two repeated lines become three: the only unique span is the whole document, which is the edit that turns any file into any
+  // other, so it names no mutation and is refused (Story 1.99).
+  let wholeDocument = null;
+  try {
+    deriveReplaceExact('row\nrow\n', 'row\nrow\nrow\n');
+  } catch (error) {
+    wholeDocument = error;
+  }
   check(
-    wholeDocument.text === 'row\nrow\nrow\n' && wholeDocument.find === 'row\nrow\n',
-    `a span that is unique only as the whole document gave ${JSON.stringify(wholeDocument.find)}`,
+    wholeDocument instanceof QualificationError && wholeDocument.exitCode === 10 && /whole reference/.test(wholeDocument.message),
+    `a span that is unique only as the whole document was given an operator: ${wholeDocument?.message ?? 'no refusal'}`,
+  );
+  let replacedWhole = null;
+  try {
+    deriveReplaceExact('a\nb\n', 'c\nd\n');
+  } catch (error) {
+    replacedWhole = error;
+  }
+  check(
+    replacedWhole instanceof QualificationError && replacedWhole.exitCode === 10,
+    'two documents that share no line were given a mutation, though no edit short of the whole file turns one into the other',
   );
   const unterminated = applied('a\nb', 'a\nc');
   check(unterminated.text === 'a\nc', 'a document without a final newline did not round-trip');
@@ -614,8 +647,9 @@ async function checkGenerator(digestBytes) {
   }
   const invented = await rejection(async (options) => {
     const qualified = await spy(options);
+    // The claim the cycle really reached, carried with digests nobody computed.
     const evidence = {
-      rollbackVerified: true,
+      rollbackVerified: qualified.evidence.rollbackVerified,
       preDigest: 'sha256:x',
       restoredDigest: 'sha256:x',
       mutatedDigest: 'sha256:y',
@@ -627,7 +661,9 @@ async function checkGenerator(digestBytes) {
   // A claim with no digests behind it is not the cycle's evidence.
   const fabricated = await rejection(async (options) => {
     const qualified = await spy(options);
-    return options.mutationId === 'M-006' ? { ...qualified, evidence: { rollbackVerified: true } } : qualified;
+    return options.mutationId === 'M-006'
+      ? { ...qualified, evidence: { rollbackVerified: qualified.evidence.rollbackVerified } }
+      : qualified;
   });
   check(fabricated instanceof GeneratorError, "a rollback claim carrying none of the cycle's digests still produced a corpus");
 }
@@ -824,6 +860,7 @@ async function checkSignals() {
 async function main() {
   try {
     const { digestBytes } = await loadEngine();
+    checkStatusGuard({ check, scratch });
     await checkPerformedSequence(digestBytes);
     await checkRealCorpus(digestBytes);
     await checkFailingSteps(digestBytes);

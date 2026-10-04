@@ -131,11 +131,11 @@ development_status:
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
-  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: backlog
+  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: review
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: review
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
-  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: review
+  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: done
   1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
   1-105-partition-rubrics-in-a-partition-plan: backlog
   1-106-partition-waivers-in-a-partition-plan: backlog
@@ -154,6 +154,7 @@ development_status:
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: backlog
+  1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -196,6 +197,7 @@ parallel_lanes:
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
+    - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -280,4 +282,5 @@ owner_handoff:
       - 1-115-give-the-skill-a-command-that-prints-a-files-digest
       - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
       - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
+      - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

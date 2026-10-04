@@ -2,7 +2,7 @@
 title: 'Story 1.103: Prove the Story 1.42 review fixes against their mutants'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '155abc17d89bddcf67d47d68fa1e7507a76dc556'

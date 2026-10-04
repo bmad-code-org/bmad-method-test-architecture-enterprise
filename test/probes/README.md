@@ -33,17 +33,41 @@ oracle, so `behaviorId` is read out of the generated contract rather than chosen
 refuses a probe whose behavior discharges more than one. A probe that restates a plant nobody can
 detect is worthless, and that check is what keeps one out.
 
-## The test-design mutations are qualified in a disposable copy
+## The mutations are qualified in a disposable copy
 
-A controlled-mutation probe carries `rollbackVerified: true`, and for the test-design corpus
-the generator earns it. Each of its fourteen probes is run through `runMutationCycle` over a
-temporary workspace: the clean arm scores a copy of the reference design, the one exact edit that
-yields the stored seeded design is applied, the mutated arm scores it, the original bytes are restored
-and their digest compared, and the clean arm scores again. Each arm is the projection
-`test/lib/test-design-result.js` stores for the replay corpus, and its result must equal the stored
-run's, so the evidence a probe cites is what the cycle performed. The workspace sits under the runtime's private root, outside the checkout, and the end of the cycle removes it. A killed generator leaves a pid-named parent that the next cycle reclaims. A failed step stops the generator
-before it writes anything. `npm run test:test-design-qualification` plants each failure. The test-review,
-trace, nfr and ci corpora still state the claim from two stored files; Story 1.99 qualifies them.
+A controlled-mutation probe carries `rollbackVerified: true`, and for the five corpora that have one the generator earns it.
+Each of the 32 probes is run through `runMutationCycle` over a temporary workspace: the clean arm scores a copy of a stored
+reference artifact, the one exact edit that yields the stored mutated artifact is applied, the mutated arm scores it, the original
+bytes are restored and their digest compared, and the clean arm scores again.
+The workspace sits under the runtime's private root, outside the checkout, and the end of the cycle removes it.
+A killed generator leaves a pid-named parent that the next cycle reclaims.
+A failed step stops the generator before it writes anything, and the probe's cited evidence must carry the digests of the bytes the cycle worked on.
+
+Each corpus states its own mutation and its own arm:
+
+| Corpus        | Reference artifact                               | Mutation                                                                                     | Arm                                                                                                         |
+| ------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `test-design` | the stored reference design of its set           | the edit that yields a stored seeded design                                                  | the replay projection, read for the oracle's polarity                                                       |
+| `test-review` | the stored review that reports every planted row | withhold one row's finding (`test/fixtures/probe-mutants/test-review/`)                      | the row's oracle, resolved by eval-quality                                                                  |
+| `trace`       | the stored correct summary of the seeded set     | withhold one coverage gap from the priority breakdown (`test/fixtures/probe-mutants/trace/`) | the breakdown oracle (O-004) for AC-8 and AC-10, the gate oracle (O-001) for AC-2, resolved by eval-quality |
+| `nfr`         | the stored correct audit of the gapped bundle    | withhold one domain's finding (`test/fixtures/probe-mutants/nfr/`)                           | the oracle that reads that part of the report                                                               |
+| `ci`          | the stored correct pipeline of its project       | withhold a requested element or add the forbidden one (`test/fixtures/probe-mutants/ci/`)    | the containment oracle that reads the element                                                               |
+
+The test-design arm's result must also equal the result the stored run records, so the evidence a probe cites is what the cycle performed.
+The other four arms are the probe's own contract oracle, so the cycle measures the claim the strength vector later measures.
+That reading is why some probes name an oracle other than the gate: withholding trace's AC-8 or AC-10 leaves the gate at FAIL, because AC-2 holds the P0 band at 50%, and withholding nfr's maintainability concern leaves the overall status at FAIL, because reliability breaches a threshold in the same bundle, so each of those is qualified against the oracle that does see its mutation.
+Each twin under `test/fixtures/probe-mutants/` is its reference with the one named edit, and the suites assert it: they list the lines or JSON paths that differ and the oracles that flip between reference and twin, each from held to violated.
+The derived operator may not span the whole reference.
+
+The direction of the cycle's witness differs between the corpora.
+For the test-review, trace and nfr probes the plant is in the system's input, so the manifestation witness fires on the correct run the clean arm scores and is silent on the mutated artifact, which models a run that misses the plant.
+Pre-flight needs that: its fault leg replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs.
+The three ci probes read the other way round by the witness's wording alone: it reads the element the run gets wrong (the weekly schedule and the `contents: read` grant a run misses, the burn-in job a run adds), so it fires on the mutated pipeline and is silent on the correct one.
+Their plant is the request in the project's docs, as for the other fifteen, so their fault leg replays the correct run and finds the witness silent.
+That is why the pre-flight of all three records `failed: seeded-fault-fired, seeded-faults-scoped` in `expected-strength.json`, which it did before the cycle moved their mutation.
+Fixing the witnesses moves those outcomes, so it is filed as Story 1.121 and not done with the mutation cycle.
+The qualification suites resolve each committed probe's witness over both stored artifacts and hold each corpus to its direction.
+`npm run test:test-design-qualification`, `test:test-review-qualification`, `test:trace-qualification`, `test:nfr-qualification` and `test:ci-qualification` plant each failing step.
 
 ## The routing corpora carry no defect probe
 

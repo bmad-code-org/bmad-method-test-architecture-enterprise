@@ -1164,11 +1164,73 @@ async function checkTranscriptProbe(runDir) {
  * same way. A second copy would let one suite's spawn drift, and then a green check
  * here would say nothing about how the other suite behaves for an operator.
  */
-function runHarnessAgainstStub(harness, stubAgent, jsonPath, stubMode, extraArgs) {
+function runHarnessAgainstStub(harness, stubAgent, jsonPath, stubMode, extraArgs, root = PROJECT_ROOT) {
+  // A harness reads every file that becomes modified or untracked anywhere in the checkout while it runs as a write by the run
+  // (`workingTreeChanges`), and answers exit 2 with a lost run. An editor, a formatter or another suite touching the checkout in
+  // that window is not the stub, and the same case run again does not see it.
+  const first = spawnHarnessOnce(harness, stubAgent, jsonPath, stubMode, extraArgs, root);
+  if (!REPOSITORY_CHANGED.test(`${first.stderr}\n${JSON.stringify(first.record)}`)) return first;
+
+  // The run is repeated in a fresh copy of the checkout at HEAD, which no writer from outside can reach: a write the stub makes
+  // happens again there and fails the case, whether it is a new file, a tracked file, a deletion, or a write that only happens when
+  // a file is missing (the first attempt's leftover in the checkout would have hidden each of those from a repeat in place).
+  // The copy is paid only here.
+  console.log(
+    `  (a file changed in the checkout while ${path.basename(harness)} ran in mode ${stubMode}; running it again in a fresh copy of the checkout)`,
+  );
+  fs.rmSync(jsonPath, { force: true });
+  const parent = path.dirname(jsonPath);
+  let copy = null;
+  try {
+    copy = freshCheckout(root, parent);
+    const inCopy = (file) => (isInside(root, file) ? path.join(copy, path.relative(root, file)) : file);
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+    return spawnHarnessOnce(inCopy(harness), inCopy(stubAgent), jsonPath, stubMode, extraArgs, copy, env);
+  } catch (error) {
+    // A repeat that cannot be set up proves nothing, so the case keeps the failure it has.
+    console.log(`  (the fresh copy could not be made: ${error.message})`);
+    return first;
+  } finally {
+    if (copy !== null) fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+/** Whether a path is the root or lies below it. */
+function isInside(root, file) {
+  const relative = path.relative(root, file);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+/**
+ * A private copy of the checkout as committed: `git archive HEAD` extracted under `parent`, made a repository of its own so the
+ * harness's working-tree comparison runs there, with `node_modules` linked to the checkout's.
+ */
+function freshCheckout(root, parent) {
+  const copy = fs.mkdtempSync(path.join(parent, 'retry-checkout-'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  const run = (command, args, options = {}) => {
+    const done = spawnSync(command, args, { cwd: copy, env, ...options });
+    if (done.status !== 0) throw new Error(`${command} ${args.join(' ')} exited ${done.status}: ${String(done.stderr).slice(0, 200)}`);
+    return done;
+  };
+  const archive = run('git', ['archive', 'HEAD'], { cwd: root, maxBuffer: 1024 * 1024 * 1024 });
+  run('tar', ['-x', '-C', copy], { input: archive.stdout });
+  if (fs.existsSync(path.join(root, 'node_modules'))) fs.symlinkSync(path.join(root, 'node_modules'), path.join(copy, 'node_modules'));
+  run('git', ['init', '-q']);
+  fs.appendFileSync(path.join(copy, '.git', 'info', 'exclude'), 'node_modules\n');
+  run('git', ['add', '.']);
+  run('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.test', 'commit', '-q', '-m', 'seed']);
+  return copy;
+}
+
+/** The reason a harness gives when the working tree differs after a run that was scoped to its workspace. */
+const REPOSITORY_CHANGED = /changed the repository under a scoped-artifact-writes declaration/;
+
+function spawnHarnessOnce(harness, stubAgent, jsonPath, stubMode, extraArgs, root, env = process.env) {
   const result = spawnSync(
     process.execPath,
     [harness, '--agent', 'custom', '--agent-cmd', stubAgent, '--env-pass', 'STUB_MODE', '--json', jsonPath, ...extraArgs],
-    { cwd: PROJECT_ROOT, encoding: 'utf8', env: { ...process.env, STUB_MODE: stubMode }, timeout: 300_000 },
+    { cwd: root, encoding: 'utf8', env: { ...env, STUB_MODE: stubMode }, timeout: 300_000 },
   );
   let record = null;
   if (fs.existsSync(jsonPath)) {
@@ -1201,6 +1263,116 @@ function runNfrHarness(runDir, stubMode, extraArgs) {
 
 function runCiHarness(runDir, stubMode, extraArgs) {
   return runHarnessAgainstStub(CI_HARNESS, CI_STUB_AGENT, path.join(runDir, `ci-harness-${stubMode}.json`), stubMode, extraArgs);
+}
+
+/**
+ * The repeat of a harness case (`runHarnessAgainstStub`) forgives a write that came from outside the run and still fails a write the run makes.
+ *
+ * A stand-in harness takes the whole-tree comparison the product harnesses take, around a stub that writes into a scratch repository
+ * (git, its own copy of the rule, so the real checkout is never written). The repeat runs in a fresh copy of that repository, where
+ * nothing the first attempt wrote is left to hide a second write. So a stub that writes a new file, writes into a tracked file, deletes
+ * a tracked file, writes only when a file is missing, or creates a directory and writes into it once, writes again in the copy and
+ * fails. A save made once from outside, by an editor, is gone from the copy and the case passes.
+ */
+function checkHarnessRetryKeepsStubWrites(runDir) {
+  console.log('\na repeated harness case still fails a write the run makes');
+
+  const standIn = path.join(runDir, 'stand-in-harness.js');
+  fs.writeFileSync(
+    standIn,
+    [
+      "'use strict';",
+      "const fs = require('node:fs');",
+      "const path = require('node:path');",
+      `const { workingTreeState, workingTreeChanges } = require(${JSON.stringify(path.join(__dirname, 'lib', 'runner-capabilities'))});`,
+      // The repository is wherever the harness is run from, as the product harnesses resolve theirs from their own location.
+      'const root = process.cwd();',
+      "const json = process.argv[process.argv.indexOf('--json') + 1];",
+      'const before = workingTreeState(root);',
+      'const mode = process.env.STUB_MODE;',
+      "if (mode === 'leak-new') fs.writeFileSync(path.join(root, 'stub-leak.txt'), 'leaked');",
+      "if (mode === 'edit-tracked') fs.appendFileSync(path.join(root, 'tracked.txt'), 'edited');",
+      "if (mode === 'delete-tracked') fs.rmSync(path.join(root, 'tracked.txt'), { force: true });",
+      "if (mode === 'write-if-missing' && !fs.existsSync(path.join(root, 'cache.txt'))) fs.writeFileSync(path.join(root, 'cache.txt'), 'cached');",
+      "if (mode === 'mkdir-file' && fs.mkdirSync(path.join(root, 'cache'), { recursive: true })) {",
+      "  fs.writeFileSync(path.join(root, 'cache', 'entry.txt'), 'cached');",
+      '}',
+      "if (mode === 'editor-once' && !fs.existsSync(process.env.STAND_IN_MARKER)) {",
+      "  fs.writeFileSync(process.env.STAND_IN_MARKER, 'saved');",
+      "  fs.writeFileSync(path.join(root, 'editor-save.txt'), 'saved');",
+      '}',
+      'const changes = workingTreeChanges(before, workingTreeState(root));',
+      'const reason = `the runner changed the repository under a scoped-artifact-writes declaration: ${changes.join(", ")}`;',
+      'fs.writeFileSync(json, JSON.stringify(changes.length > 0 ? { reason } : { reason: null }));',
+      'if (changes.length > 0) {',
+      '  console.error(reason);',
+      '  process.exit(2);',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  const repository = (label) => {
+    const root = path.join(runDir, `stand-in-${label}`);
+    fs.mkdirSync(root);
+    fs.writeFileSync(path.join(root, 'tracked.txt'), 'tracked\n');
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+    for (const args of [
+      ['init', '-q'],
+      ['add', '.'],
+      ['-c', 'user.name=t', '-c', 'user.email=t@t.test', 'commit', '-q', '-m', 'seed'],
+    ]) {
+      const done = spawnSync('git', args, { cwd: root, env, encoding: 'utf8' });
+      if (done.status !== 0) throw new Error(`git ${args.join(' ')} exited ${done.status}: ${done.stderr}`);
+    }
+    return root;
+  };
+  const run = (label, mode) => {
+    const root = repository(label);
+    process.env.STAND_IN_MARKER = path.join(runDir, `stand-in-${label}.marker`);
+    try {
+      const outcome = runHarnessAgainstStub(standIn, 'unused', path.join(runDir, `stand-in-${label}.json`), mode, [], root);
+      return { root, outcome, reported: REPOSITORY_CHANGED.test(`${outcome.stderr}\n${JSON.stringify(outcome.record)}`) };
+    } finally {
+      delete process.env.STAND_IN_MARKER;
+    }
+  };
+
+  const quiet = run('quiet', 'quiet');
+  assert(quiet.outcome.status === 0, 'a case that writes nothing passes at the first attempt', JSON.stringify(quiet.outcome));
+
+  const once = run('editor-once', 'editor-once');
+  assert(
+    once.outcome.status === 0 && !once.reported,
+    'a file saved once from outside while the run was in progress passes on the repeat',
+    JSON.stringify(once.outcome),
+  );
+
+  for (const [mode, what] of [
+    ['leak-new', 'a stub that writes a new file into the checkout every time it runs'],
+    ['edit-tracked', 'a stub that writes into a tracked file'],
+    ['delete-tracked', 'a stub that deletes a tracked file'],
+    ['write-if-missing', 'a stub that writes a file only when it is missing'],
+    ['mkdir-file', 'a stub that creates a directory and writes into it once'],
+  ]) {
+    const planted = run(mode, mode);
+    assert(
+      planted.outcome.status === 2 && planted.reported,
+      `${what} still fails after the repeat`,
+      JSON.stringify({ status: planted.outcome.status, stderr: planted.outcome.stderr.slice(0, 200) }),
+    );
+  }
+  assert(
+    !fs.existsSync(path.join(PROJECT_ROOT, 'stub-leak.txt')) &&
+      !fs.existsSync(path.join(PROJECT_ROOT, 'editor-save.txt')) &&
+      !fs.existsSync(path.join(PROJECT_ROOT, 'cache.txt')) &&
+      !fs.existsSync(path.join(PROJECT_ROOT, 'cache')),
+    'the planted writes went to the scratch repositories and left nothing in the checkout',
+  );
+  assert(
+    fs.readdirSync(runDir).every((name) => !name.startsWith('retry-checkout-')),
+    'every fresh copy the repeats made is removed',
+    fs.readdirSync(runDir).join(', '),
+  );
 }
 
 /**
@@ -2422,6 +2594,7 @@ async function main() {
     await checkTranscriptProbe(runDir);
     await checkBudgets(runDir);
     await checkProbeRetry();
+    checkHarnessRetryKeepsStubWrites(runDir);
     checkNfrHarnessSmoke(runDir);
     checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);

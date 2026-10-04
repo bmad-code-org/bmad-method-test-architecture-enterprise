@@ -8,31 +8,31 @@
     "behaviorId": "B-001",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "artifactDigest": "sha256:e08b22a62a20003557709b117ba10f55f5f6089639bce994d4db290960de08dd",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row H4 was planted in checkout.spec.ts at line 22: module-level mutable state mutated in a test with no reset. O-001 is the oracle that catches it, and B-001 is the behavior it discharges.",
+    "rationale": "Registry row H4 was planted in checkout.spec.ts at line 22: module-level mutable state mutated in a test with no reset. O-001 is the oracle that catches it, and B-001 is the behavior it discharges. The mutation withholds the finding for H4 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-h4",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-h4",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
-      },
-      "expectedObservableFailure": "The review reports registry row H4 against checkout.spec.ts at one of lines 7, 8, 9, 12, 22.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row H4 against checkout.spec.ts at any of lines 7, 8, 9, 12, 22.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/h4/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:e08b22a62a20003557709b117ba10f55f5f6089639bce994d4db290960de08dd"
       },
       "rollbackVerified": true
     },
@@ -167,31 +167,31 @@
     "behaviorId": "B-002",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "artifactDigest": "sha256:9bf8a7e4f000a506d5a54b1c45774d3dc6e2b2f17e4c86c72184d1564cd4ee62",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row H1 was planted in checkout.spec.ts at line 16: waitForTimeout used to order steps. O-002 is the oracle that catches it, and B-002 is the behavior it discharges.",
+    "rationale": "Registry row H1 was planted in checkout.spec.ts at line 16: waitForTimeout used to order steps. O-002 is the oracle that catches it, and B-002 is the behavior it discharges. The mutation withholds the finding for H1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-h1",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-h1",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
-      },
-      "expectedObservableFailure": "The review reports registry row H1 against checkout.spec.ts at one of lines 12, 15, 16.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row H1 against checkout.spec.ts at any of lines 12, 15, 16.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/h1/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:9bf8a7e4f000a506d5a54b1c45774d3dc6e2b2f17e4c86c72184d1564cd4ee62"
       },
       "rollbackVerified": true
     },
@@ -326,31 +326,31 @@
     "behaviorId": "B-003",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "artifactDigest": "sha256:52046b700c1b63694618629ea55a2fbbbd4d176af416550c11fcea1f37e24a37",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row L1 was planted in checkout.spec.ts at line 19: CSS id locator where a role locator is available. O-003 is the oracle that catches it, and B-003 is the behavior it discharges.",
+    "rationale": "Registry row L1 was planted in checkout.spec.ts at line 19: CSS id locator where a role locator is available. O-003 is the oracle that catches it, and B-003 is the behavior it discharges. The mutation withholds the finding for L1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-l1",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-l1",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
-      },
-      "expectedObservableFailure": "The review reports registry row L1 against checkout.spec.ts at one of lines 12, 18, 19.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row L1 against checkout.spec.ts at any of lines 12, 18, 19.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/l1/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:52046b700c1b63694618629ea55a2fbbbd4d176af416550c11fcea1f37e24a37"
       },
       "rollbackVerified": true
     },
@@ -485,31 +485,31 @@
     "behaviorId": "B-004",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "artifactDigest": "sha256:00c622980679f77eedcdf4f077a56f0a371745bd72ad9f8039c8d0b8dc71c726",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row H3 was planted in checkout.spec.ts at line 31: conditional decides whether anything is asserted. O-004 is the oracle that catches it, and B-004 is the behavior it discharges.",
+    "rationale": "Registry row H3 was planted in checkout.spec.ts at line 31: conditional decides whether anything is asserted. O-004 is the oracle that catches it, and B-004 is the behavior it discharges. The mutation withholds the finding for H3 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-h3",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-h3",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
-      },
-      "expectedObservableFailure": "The review reports registry row H3 against checkout.spec.ts at one of lines 26, 29, 30, 31.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row H3 against checkout.spec.ts at any of lines 26, 29, 30, 31.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/h3/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:00c622980679f77eedcdf4f077a56f0a371745bd72ad9f8039c8d0b8dc71c726"
       },
       "rollbackVerified": true
     },
@@ -644,31 +644,31 @@
     "behaviorId": "B-005",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "artifactDigest": "sha256:0e2891567cf45697a0f78fb69a428a72697b28de8d91378c5513afd3825a1aab",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row C1 was planted in checkout.spec.ts at line 38: the tenant-boundary test is skipped with no reason. O-005 is the oracle that catches it, and B-005 is the behavior it discharges.",
+    "rationale": "Registry row C1 was planted in checkout.spec.ts at line 38: the tenant-boundary test is skipped with no reason. O-005 is the oracle that catches it, and B-005 is the behavior it discharges. The mutation withholds the finding for C1 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-c1",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-c1",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
-      },
-      "expectedObservableFailure": "The review reports registry row C1 against checkout.spec.ts at one of lines 36, 37, 38.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row C1 against checkout.spec.ts at any of lines 36, 37, 38.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/c1/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:0e2891567cf45697a0f78fb69a428a72697b28de8d91378c5513afd3825a1aab"
       },
       "rollbackVerified": true
     },
@@ -803,31 +803,31 @@
     "behaviorId": "B-006",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "artifactDigest": "sha256:61b8c481f761c1ef8f0758e382377c384ffd01cf4934d9038f32b3d4b21a95c5",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row C3 was planted in orders.service.spec.ts at line 17: expect(true).toBe(true) can never fail. O-006 is the oracle that catches it, and B-006 is the behavior it discharges.",
+    "rationale": "Registry row C3 was planted in orders.service.spec.ts at line 17: expect(true).toBe(true) can never fail. O-006 is the oracle that catches it, and B-006 is the behavior it discharges. The mutation withholds the finding for C3 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-c3",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-c3",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
-      },
-      "expectedObservableFailure": "The review reports registry row C3 against orders.service.spec.ts at one of lines 15, 16, 17.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row C3 against orders.service.spec.ts at any of lines 15, 16, 17.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/c3/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:61b8c481f761c1ef8f0758e382377c384ffd01cf4934d9038f32b3d4b21a95c5"
       },
       "rollbackVerified": true
     },
@@ -962,31 +962,31 @@
     "behaviorId": "B-007",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "artifactDigest": "sha256:b99bbe0ac8fed0629eaa33ff0292ad45e413e8eb8efcc666bab97f08808ff78d",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row C4 was planted in orders.service.spec.ts at line 23: test body has no assertion. O-007 is the oracle that catches it, and B-007 is the behavior it discharges.",
+    "rationale": "Registry row C4 was planted in orders.service.spec.ts at line 23: test body has no assertion. O-007 is the oracle that catches it, and B-007 is the behavior it discharges. The mutation withholds the finding for C4 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-c4",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-c4",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
-      },
-      "expectedObservableFailure": "The review reports registry row C4 against orders.service.spec.ts at one of lines 20, 21, 22, 23.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row C4 against orders.service.spec.ts at any of lines 20, 21, 22, 23.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/c4/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:b99bbe0ac8fed0629eaa33ff0292ad45e413e8eb8efcc666bab97f08808ff78d"
       },
       "rollbackVerified": true
     },
@@ -1121,31 +1121,31 @@
     "behaviorId": "B-008",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "artifactDigest": "sha256:86ae9b08b99b6047418922c89357e4e4ad9e687926f0f9ba49d8f723c85c92ac",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row C5 was planted in orders.service.spec.ts at line 31: asserts a mock it configured; the service is never called. O-008 is the oracle that catches it, and B-008 is the behavior it discharges.",
+    "rationale": "Registry row C5 was planted in orders.service.spec.ts at line 31: asserts a mock it configured; the service is never called. O-008 is the oracle that catches it, and B-008 is the behavior it discharges. The mutation withholds the finding for C5 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-c5",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-c5",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
-      },
-      "expectedObservableFailure": "The review reports registry row C5 against orders.service.spec.ts at one of lines 26, 27, 28, 30, 31.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row C5 against orders.service.spec.ts at any of lines 26, 27, 28, 30, 31.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/c5/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:86ae9b08b99b6047418922c89357e4e4ad9e687926f0f9ba49d8f723c85c92ac"
       },
       "rollbackVerified": true
     },
@@ -1280,31 +1280,31 @@
     "behaviorId": "B-009",
     "systemId": "tea-test-review-corpus",
     "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
-    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "artifactDigest": "sha256:a6ea05bfb27d1256fd6dccffb7cac2e13cfb4abb15180f6a7b7b1ff259707d1a",
     "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
-    "rationale": "Registry row H10 was planted in orders.service.spec.ts at line 39: shape-only assertion: the type of the returned id is constrained and its value is not. O-009 is the oracle that catches it, and B-009 is the behavior it discharges.",
+    "rationale": "Registry row H10 was planted in orders.service.spec.ts at line 39: shape-only assertion: the type of the returned id is constrained and its value is not. O-009 is the oracle that catches it, and B-009 is the behavior it discharges. The mutation withholds the finding for H10 from the stored review that reports every plant. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
-      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
-      "mutationOperator": "plant-registry-row-h10",
+      "mutationSource": "test/replay/test-review/full-recall/verdict.json",
+      "mutationOperator": "withhold-registry-row-h10",
       "targetArtifact": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
-      },
-      "expectedObservableFailure": "The review reports registry row H10 against orders.service.spec.ts at one of lines 34, 35, 36, 39.",
-      "baselinePassEvidence": {
-        "storage": "public",
-        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-        "privateRef": null,
-        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
-      },
-      "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-review/full-recall/verdict.json",
         "privateRef": null,
         "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "expectedObservableFailure": "The review reports no finding for registry row H10 against orders.service.spec.ts at any of lines 34, 35, 36, 39.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/probe-mutants/test-review/h10/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:a6ea05bfb27d1256fd6dccffb7cac2e13cfb4abb15180f6a7b7b1ff259707d1a"
       },
       "rollbackVerified": true
     },
