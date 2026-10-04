@@ -2,7 +2,7 @@
 title: 'Story 1.102: Refuse a duplicate interface identifier at compile'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'd295a3ac1cd97c2a99bdbf3a8f31a0d01eb4cd8b'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -60,15 +60,15 @@ TeA:
 
 **Execution:**
 
-- [ ] Engine `src/core/failure-codes.ts`, `interface-inventory.ts`, `compile.ts` -- the `duplicate-interface-identifier` code, `checkDuplicateInterfaceIdentifier`, first call after the stamp check
-- [ ] Engine registry, spine table, count prose, `check:ad5-registry` -- the 27th code listed everywhere the 26th is
-- [ ] Engine tests -- repeated identifier with distinct operation IDs, with one operation ID on each (was `schema-parse-failure` at seal), three interfaces, distinct identifiers compile as before; revert of the check fails them
-- [ ] Engine docs, CHANGELOG, `npm run validate` green
-- [ ] Engine release (bump chosen from CONTRIBUTING) -- `npm view eval-quality version`
-- [ ] TeA floor, lockfile, guard, message, docs reference, AD-5 record and mirrors, CHANGELOG
-- [ ] TeA `check` test for an evaluation folder with a repeated identifier
-- [ ] Re-record the three accepted baselines on the new engine version
-- [ ] Story record, sprint row 1.102 to `review`, flip Story 1.101 row and record from `review` to `done`
+- [x] Engine `src/core/failure-codes.ts`, `interface-inventory.ts`, `compile.ts` -- the `duplicate-interface-identifier` code, `checkDuplicateInterfaceIdentifier`, first call after the stamp check
+- [x] Engine registry, spine table, count prose, `check:ad5-registry` -- the 27th code listed everywhere the 26th is
+- [x] Engine tests -- repeated identifier with distinct operation IDs, with one operation ID on each (was `schema-parse-failure` at seal), three interfaces, distinct identifiers compile as before; revert of the check fails them
+- [x] Engine docs, CHANGELOG, `npm run validate` green
+- [x] Engine release (bump chosen from CONTRIBUTING) -- `npm view eval-quality version`
+- [x] TeA floor, lockfile, guard, message, docs reference, AD-5 record and mirrors, CHANGELOG
+- [x] TeA `check` test for an evaluation folder with a repeated identifier
+- [x] Re-record the three accepted baselines on the new engine version
+- [x] Story record, sprint row 1.102 to `review`, flip Story 1.101 row and record from `review` to `done`
 
 **Acceptance Criteria:**
 
@@ -80,15 +80,20 @@ TeA:
 
 ## Implementation Notes
 
-Decisions (coordinator, no Open Questions: the owner delegated): the code is appended last so no existing code changes rank; the check runs first because every later path addresses an interface by `logicalId`, the same reason `checkArtifactReferences` runs early. `check` already quotes the engine's compile refusal, so no TeA source change is expected beyond the adoption touches and a test.
+Decisions (coordinator, no Open Questions: the owner delegated): the code is appended last so no existing code changes rank; the check runs first because every later path addresses an interface by `logicalId`, the same reason `checkRubricIdentifiers` runs ahead of the other rubric checks. `check` compiles only a contract of two or more interfaces (a single interface cannot repeat an identifier), so suites that count engine calls over one-interface fixtures see no new call.
 
 ## Outcome Record
 
-_To be written when the story lands._
+Engine: eval-quality PR #182 (squash merged by the owner) released as 7.0.1 (owner-run publish, npm `latest`). `compile` refuses two entries of `permittedInterfaces` that share a `logicalId` under `duplicate-interface-identifier`, the 27th and last AD-5 code, thrown by `checkDuplicateInterfaceIdentifier` first in `compile` after the stamp check. It names the identifier and both positions (artifact path is the later entry, A, B, A names 0 and 2). Before it, every repeated-identifier contract compiled and `seal` faulted on it as an anonymous `schema-parse-failure`, and a pointer addressing a duplicated step drew a misleading `unreachable-check-evidence`.
+Engine review: round 1 (Opus adversarial with real mutations, Opus test quality) found a real gap and five comment or test-name defects. `preflight` never compiles, so `planPreflight` planned a hand-assembled contract with a repeated identifier and merged two interfaces' legs: it now calls the same check beside its kind re-assertion, with a plan test and a CLI `preflight` case. A kind-scoped comparison (`kind:logicalId`) survived every test: api+mcp and api+cli cases were added. The false "last code" claim and the wrong precedent in `compile.ts`, the census title, an orphaned comment in `ad5-admissions.test.ts`, a stale count in `seal.test.ts` and a spine citation of AD-35 that does not name the code were all fixed in 09573c3. The release is a patch because the owner chose it and ran it.
+TeA: `check` asks eval-quality's compile once for a contract of two or more interfaces, shared with the report-collision rule (Stories 1.75 and 1.77), and quotes the `duplicate-interface-identifier` line as one `interface-identifier` finding on `contract.json`, so the repeat exits 10 before `seal` or the run's compile. TeA compares no identifier. `signatureCollisionLine` became `compileRefusals` in `release-report.js`. One existing assertion changed with it: a two-interface contract with no report-naming probe now sees the one compile for the identifier rule, and still draws no collision finding. The peer floor moved to `>=7.0.1` in `package.json`, `package-lock.json`, `tools/guard-publish.js`, `test/test-guard-publish.js`, `test/test-release-metadata.js`, the engine-missing message, `docs/reference/tea-evaluate-cli.md` (plus the new `interface-identifier` rule row), the three AD-5 spots in `ARCHITECTURE-SPINE.md`, `eval-quality-facts.md` (27 structural failures) and the CHANGELOG. The three accepted fixture baselines (`evaluate/mutation` verdict-ci, `evaluate-mcp` grader, `evaluate-api` grader) were stamped 7.0.0 and are re-recorded with `compare --accept` on 7.0.1; a re-record is a fresh run, so run IDs, score directories and the digests derived from them changed with the version stamp.
+Story 1.101's sprint row and record flipped from `review` to `done`.
 
 ## Revert observations
 
-_To be written._
+- Engine (checked in /tmp copies): removing the `checkDuplicateInterfaceIdentifier` call in `compile` failed 8 tests (compile census, seal cases including the repeat that used to fault as `schema-parse-failure`, and the CLI `compile` and `seal` exit-4 cases); removing the re-assertion in `planPreflight` failed exactly the plan test and the CLI `preflight` case; the kind-scoped key failed exactly the two cross-kind cases.
+- TeA: removing the `checkInterfaceRepeat` call in `check.js` failed 13 checks of `test:evaluate-check` (the repeat's exit 10, the finding, the engine-line quote, the `preflight` stop and the shim cases); lowering the `package.json` peer floor to `>=7.0.0` fails `test:release-metadata` ("its floor must be 7.0.1 or later"). Both were restored after the run.
+- Replay: baselines stamped 7.0.0 fail `test:evaluate-ci` against the 7.0.1 engine; the re-recorded ones pass.
 
 ## Spec Change Log
 

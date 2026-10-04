@@ -2,7 +2,7 @@
   "legId": "witness-beta",
   "sequence": 2,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-9cab2890-7b02-400b-93b0-d60e8ef04661/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-897ae39f-00fd-4009-98bb-02ba2f2aa53e/target",
   "request": {
     "probeId": "witness-beta",
     "interfaceId": "grader",
@@ -29,7 +29,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Sat, 03 Oct 2026 21:29:47 GMT",
+      "date": "Sun, 04 Oct 2026 09:23:27 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
