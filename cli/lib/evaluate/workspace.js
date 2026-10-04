@@ -1323,6 +1323,30 @@ function linkTree(from, to) {
 }
 
 /**
+ * The sparse-checkout settings a worktree reads, as `[key, value]` pairs for a private repository to carry, or null when
+ * the worktree is not sparse (Story 1.85). A worktree made inside a sparse project inherits its cone: `core.sparseCheckout`
+ * (and `core.sparseCheckoutCone`, and `index.sparse` when the project keeps a sparse index) sit in the project's
+ * configuration or the worktree's own, and the patterns in the worktree's metadata directory. The question is asked of the
+ * worktree, so a git that did not copy the cone into it, and a project that is not sparse, both give null and leave the index
+ * as `read-tree` builds it; `index.sparse` is carried only when the worktree reads it as true, and a git without sparse index
+ * support ignores the key.
+ */
+function sparseSettingsOf(workspace) {
+  const ask = (key) =>
+    runGit(['--git-dir', workspace.metadata, '--work-tree', workspace.top, 'config', '--type=bool', '--get', key], {
+      timeoutMs: GIT_HISTORY_TIMEOUT_MS,
+    });
+  const enabled = ask('core.sparseCheckout');
+  if (!enabled.ok || enabled.stdout.trim() !== 'true') return null;
+  const settings = [['core.sparseCheckout', 'true']];
+  const cone = ask('core.sparseCheckoutCone');
+  if (cone.ok) settings.push(['core.sparseCheckoutCone', cone.stdout.trim()]);
+  const index = ask('index.sparse');
+  if (index.ok && index.stdout.trim() === 'true') settings.push(['index.sparse', 'true']);
+  return settings;
+}
+
+/**
  * Builds the repository a confined target's git sees in place of the
  * adopter's (Story 1.57, AD-7, AD-8), and points the worktree at it.
  *
@@ -1547,10 +1571,24 @@ function buildWithheldRepository(workspace, withheld) {
     must(inStore(['update-ref', '--stdin'], { input: `${tagged.tags.map(([id, ref]) => `update ${ref} ${id}`).join('\n')}\n` }));
   }
   if (!BUILT_REPOSITORIES.has(key) || !fs.existsSync(path.join(BUILT_REPOSITORIES.get(key), 'objects'))) BUILT_REPOSITORIES.set(key, store);
-  // (6) The worktree reads the store, and its index matches the replaced tree.
+  // (6) The worktree reads the store, and its index matches the replaced tree. A worktree that is sparse (it inherited the
+  // project's cone) is asked while its common directory is still the adopter's, since the settings that make it sparse are
+  // the ones that repository and the worktree's own configuration give it.
+  const sparse = sparseSettingsOf(workspace);
+  // `git worktree add` copies the project worktree's `config.worktree` into the new metadata directory, with any remote, URL,
+  // credential helper or hook the project set for its worktree. The private repository never reads it (it has no
+  // `extensions.worktreeConfig`), and the target may read the metadata directory, so it is removed once its sparse settings are read.
+  fs.rmSync(path.join(workspace.metadata, 'config.worktree'), { force: true });
   fs.writeFileSync(path.join(workspace.metadata, 'commondir'), `${store}\n`);
   const view = ['--git-dir', workspace.metadata, '--work-tree', workspace.top, '-c', `core.hooksPath=${hooks}`];
   must(runGit([...view, 'read-tree', 'HEAD'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS }));
+  if (sparse !== null) {
+    // The patterns file stays the worktree's own (`info/sparse-checkout` in its metadata directory). `read-tree HEAD` sets no
+    // skip-worktree bit, so every tracked file outside the cone would read as deleted; `read-tree -m -u` applies the patterns to
+    // that index and touches no file, since a file outside the cone is already absent and one inside it is already there.
+    for (const [name, value] of sparse) must(inStore(['config', name, value]));
+    must(runGit([...view, 'read-tree', '-m', '-u', 'HEAD'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS }));
+  }
   // The index read-tree wrote carries no file stamps, so every `git status` would read every file, and the target cannot
   // write the index to keep the stamps. Best effort: an index left unrefreshed is still correct.
   runGit([...view, 'update-index', '-q', '--refresh'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS });

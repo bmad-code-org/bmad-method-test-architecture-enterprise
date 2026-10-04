@@ -424,6 +424,11 @@ Each target runs confined, and so does every process it starts, one still runnin
   The target's worktree is on a detached `HEAD`, as it is in a run that opted out, and your branches are not carried.
   The private repository carries your local `core.autocrlf`, `core.eol`, `core.safecrlf`, `core.filemode`, `core.ignorecase`, `core.symlinks`, `core.precomposeunicode`, `core.trustctime` and `core.checkstat`, and your `info/exclude` and `info/attributes`, so the target's `git status` reads the tree as yours does; it carries no remote, URL, credential or hook.
   The target's git carries the project's tracked filter drivers (`filter.<name>.clean`, `.smudge`, `.process` and `.required`, a driver whose name holds a space and a `required` written with no value included), and a `core.` setting from the list above written with no value reads as true, so a file a driver filters reads as unmodified in the target's `git status`, as it does in yours.
+  A project that uses sparse checkout (`git sparse-checkout set` in cone mode or with a pattern list, a sparse index, and a clone made with `--sparse`) shows the target the project's status: the worktree keeps the cone it inherited from your project, the private repository carries `core.sparseCheckout`, `core.sparseCheckoutCone` and, when your worktree keeps a sparse index, `index.sparse`, and the index marks every tracked file outside the cone as skip-worktree.
+  The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.
+  The long form of `git status` reports the sparse checkout as it does in your project, a sparse index included.
+  A project that is not sparse keeps the index it has, and the target cannot change the cone, since that writes the private repository.
+  The runtime removes the `config.worktree` that `git worktree add` copies into the worktree's metadata directory, since it can hold the worktree-scoped remotes, URLs and credential helpers of your project, and the private repository never reads it.
   Two limits apply.
   The withheld path is the evaluation folder's current path, so a folder that moved stays readable in the history at its old path.
   A directory outside the folder whose tree is identical to a tree of the folder reads as empty.

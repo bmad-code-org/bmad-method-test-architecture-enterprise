@@ -139,6 +139,19 @@
  *                           configuration, one `key=value` per driver key, sorted)
  *                           and `required` (`git config --type=bool` of the
  *                           `filter.upper.required` key)
+ *   probe-sparse            answer as usual, then ask the worktree's git what a
+ *                           sparse-checkout project shows, printing one
+ *                           `<name>: <value>` line each (Story 1.85): `status`
+ *                           (`git status --porcelain`), `ls-files`, `ls-files-t`
+ *                           (`git ls-files -t`), `status-sparse` (the lines of the
+ *                           long-form `git status` that name a sparse checkout) and
+ *                           `sparse-list` (`git sparse-checkout list`), each the JSON of its
+ *                           standard output (or `exit <code>` when git failed),
+ *                           `sparse-config` (`core.sparseCheckout` and
+ *                           `core.sparseCheckoutCone`) and `files-on-disk`
+ *                           (the tracked files the checkout holds) and `worktree-config`
+ *                           (whether the worktree's metadata directory holds a
+ *                           `config.worktree`)
  *   probe-private           answer as usual, then look for what the run keeps
  *                           from a target, in the call the sealed-brief agent
  *                           stub makes (its request, `Judge a request of my
@@ -420,6 +433,26 @@ if (act === 'probe-history') {
     `hooks: ${hooks}`,
     `filters: ${config.filter((line) => /^filter\./.test(line)).sort().join(' | ')}`,
     `required: ${ask('config', '--type=bool', '--get', 'filter.upper.required').stdout.trim() || 'unset'}`,
+  ];
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+if (act === 'probe-sparse') {
+  const ask = (...args) => spawnSync('git', args, { encoding: 'utf8' });
+  const answer = (result) => (result.status === 0 ? JSON.stringify(result.stdout) : `exit ${result.status}`);
+  const configured = (key) => {
+    const value = ask('config', '--get', key);
+    return value.status === 0 ? value.stdout.trim() : 'unset';
+  };
+  const onDisk = ask('ls-files').stdout.split('\n').filter((name) => name.length > 0 && fs.existsSync(name));
+  const lines = [
+    `status: ${answer(ask('status', '--porcelain'))}`,
+    `ls-files: ${answer(ask('ls-files'))}`,
+    `ls-files-t: ${answer(ask('ls-files', '-t'))}`,
+    `status-sparse: ${JSON.stringify(ask('status').stdout.split('\n').filter((line) => /sparse checkout/.test(line)).join('\n'))}`,
+    `sparse-list: ${answer(ask('sparse-checkout', 'list'))}`,
+    `sparse-config: ${configured('core.sparseCheckout')}/${configured('core.sparseCheckoutCone')}`,
+    `files-on-disk: ${JSON.stringify(onDisk)}`,
+    `worktree-config: ${fs.existsSync(path.join(ask('rev-parse', '--absolute-git-dir').stdout.trim(), 'config.worktree')) ? 'present' : 'absent'}`,
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
 }
