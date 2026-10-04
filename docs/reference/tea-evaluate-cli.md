@@ -446,6 +446,7 @@ Each target runs confined, and so does every process it starts, one still runnin
   A file outside the folder that holds a folder file's bytes stays readable, and so does a directory outside the folder with the same content as one inside it, since those bytes are readable at that other path.
   The object directories your git directory borrows from (`objects/info/alternates`) are withheld the same way.
   The runtime packs the history for the first workspace of a confined run and links its objects into each later workspace for the same commit and tags, so a large history costs time at the start of the run, and a step of the build that fails exits 12 and removes the workspace.
+  The build only reads your repository: git prints the pack and the private repository indexes it on the temp directory's own filesystem, so a project and a temp directory on different filesystems (a host whose `/tmp` is a tmpfs) work, and your `objects/pack` gets no file, even for a moment.
   It reads every walk that grows with the history as a stream, so no buffer bounds the size of a history it builds, and each step has a limit of 10 minutes.
   A project cloned with a promisor remote (`--filter=blob:none`, `--filter=tree:0` and the like) runs confined: the private repository holds the objects your clone holds on disk, and no process of a confined run fetches from the remote.
   The runtime asks git not to fetch lazily, which git 2.44 and later honors; an older git makes a partial-clone project exit 12, with the way out named.

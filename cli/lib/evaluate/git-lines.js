@@ -23,11 +23,12 @@
  *   `git <ask>` (a `cat-file --batch-check`), and prints each distinct id that
  *   git answers is a tree.
  *
- * - `{ "mode": "pack", "list": [args], "pack": [args], "revs": [lines] }`: runs `git <list>` (a
- *   `rev-list --objects --stdin`) over `revs` and pipes its objects into `git <pack>` (a
- *   `pack-objects`), which reads them from its standard input and writes the pack. Nothing is printed.
- *   A partial clone needs it: `pack-objects --revs` stops at a tree the project does not hold, and `rev-list --missing=allow-any`
- *   walks past it.
+ * - `{ "mode": "pack", "stages": [[args], ...], "revs": [lines] }`: runs each `git <args>` as one stage of a pipeline, with
+ *   `revs` on the first stage's standard input and each stage's standard output piped into the next one's, and prints nothing.
+ *   The build's stages are a walk or a `pack-objects --stdout` in the adopter's repository (a partial clone needs the walk:
+ *   `pack-objects --revs` stops at a tree the project does not hold, and `rev-list --missing=allow-any` walks past it) and
+ *   an `index-pack --stdin` in the private repository, which writes its pack on its own device, so nothing is written to
+ *   the adopter's repository.
  *
  * The exit status is git's own, a failed stage's standard error reaches the
  * caller, and nothing is printed on failure.
@@ -205,37 +206,32 @@ function trees(job) {
 }
 
 function pack(job) {
-  const list = spawn('git', job.list, { stdio: ['pipe', 'pipe', 'inherit'] });
-  const packing = spawn('git', job.pack, { stdio: ['pipe', 'ignore', 'inherit'] });
-  list.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
-  packing.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
-  list.stdin.on('error', () => {});
-  packing.stdin.on('error', () => {});
-  list.stdin.end(`${job.revs.join('\n')}\n`);
-  list.stdout.pipe(packing.stdin);
-  const state = { list: null, packing: null, failure: null };
+  const stages = job.stages.map((args, index) =>
+    spawn('git', args, { stdio: ['pipe', index === job.stages.length - 1 ? 'ignore' : 'pipe', 'inherit'] }),
+  );
+  const state = { ended: Array.from({ length: stages.length }, () => null), failure: null };
+  stages[0].stdin.end(`${job.revs.join('\n')}\n`);
+  for (const [index, stage] of stages.entries()) {
+    stage.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
+    stage.stdin.on('error', () => {});
+    if (index > 0) stages[index - 1].stdout.pipe(stage.stdin);
+  }
   const finish = () => {
-    if (state.list === null || state.packing === null) return;
+    if (state.ended.includes(null)) return;
     if (state.failure !== null) fail(state.failure.status, state.failure.note);
     process.exit(0);
   };
-  // A stage that ends badly stops the other, which would otherwise wait on a pipe nobody reads or writes.
-  list.on('close', (code, signal) => {
-    state.list = outcome(stageOf(job.list), code, signal);
-    if (state.list.status !== 0) {
-      state.failure ??= state.list;
-      packing.kill('SIGKILL');
-    }
-    finish();
-  });
-  packing.on('close', (code, signal) => {
-    state.packing = outcome(stageOf(job.pack), code, signal);
-    if (state.packing.status !== 0) {
-      state.failure ??= state.packing;
-      list.kill('SIGKILL');
-    }
-    finish();
-  });
+  // A stage that ends badly stops the others, which would otherwise wait on a pipe nobody reads or writes.
+  for (const [index, stage] of stages.entries()) {
+    stage.on('close', (code, signal) => {
+      state.ended[index] = outcome(stageOf(job.stages[index]), code, signal);
+      if (state.ended[index].status !== 0) {
+        state.failure ??= state.ended[index];
+        for (const other of stages) if (other !== stage) other.kill('SIGKILL');
+      }
+      finish();
+    });
+  }
 }
 
 // The job arrives on standard input: a pack job's revisions can outgrow one argument.
