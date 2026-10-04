@@ -2546,7 +2546,7 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const EVALUATION_FILE = 'evals/answer-grade/evaluation.json';
 const CONTRACT_FILE = 'evals/answer-grade/contract.json';
 /** What a `migrations` entry may carry: the file, the story that moved it and the change in words. */
-const MIGRATION_FIELDS = ['file', 'story', 'change'];
+const MIGRATION_FIELDS = new Set(['file', 'story', 'change']);
 
 /**
  * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
@@ -2621,7 +2621,7 @@ function captureProblems(name, record, bytes) {
     else if (migrated.has(migration.file)) problems.push(`${name}: the capture record declares the migration of ${migration.file} twice`);
     migrated.add(migration?.file);
     // The rebuilt bytes are the only authority: a digest the entry names (`from`, `to`) is a second claim nothing checks.
-    const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.includes(key));
+    const claims = Object.keys(migration ?? {}).filter((key) => !MIGRATION_FIELDS.has(key));
     if (claims.length > 0)
       problems.push(
         `${name}: the migration of ${migration?.file} names ${claims.join(', ')}, which the rebuilt bytes are the only authority for`,
@@ -2978,22 +2978,30 @@ function checkRepositoryPlans() {
 }
 
 /**
- * The Story 2.4 capture-record guard (Story 1.103). Each `wrote` digest is the one a live session produced, and `evaluation.json`
- * moved to schema 2 after it, so the record declares that migration and the guard rebuilds the session's bytes by reversing it. Every
- * case below is a record or a tree that the guard has to refuse by the problem it names; a guard that read the entry's shape alone,
- * or compared nothing, passes the cases it names a mutant of.
+ * The Story 2.4 capture-record guard (Story 1.103). Each `wrote` digest is the one a live session produced. A session that ran before
+ * `evaluation.json` moved to schema 2 declares that migration, and the guard rebuilds its bytes by reversing it; the committed sessions
+ * of Story 1.84 ran after the move and declare none, so the cases hold the record such an older session leaves, built from the
+ * committed one. Every case below is a record or a tree that the guard has to refuse by the problem it names; a guard that read the
+ * entry's shape alone, or compared nothing, passes the cases it names a mutant of.
  */
 function checkCaptureRecordGuard() {
   for (const [name, { root }] of Object.entries(REPOSITORIES)) {
-    const record = read(path.join(ROOT, root, 'capture-record.json'));
+    const committed = read(path.join(ROOT, root, 'capture-record.json'));
     const { bytes } = loadRepository(root);
-    assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the committed record fails its own guard`);
-    assert.deepEqual(
-      record.migrations?.map((migration) => Object.keys(migration).sort()),
-      [MIGRATION_FIELDS.toSorted()],
-      `${name}: the committed migration entry carries more than ${MIGRATION_FIELDS.join(', ')}`,
-    );
+    assert.deepEqual(captureProblems(name, committed, bytes), [], `${name}: the committed record fails its own guard`);
+    // The committed sessions ran on the schema 2 tree, so they wrote schema 2 bytes and declare no migration. The cases below hold the
+    // record a session that ran before Story 1.42 would have left: its `wrote` digest is that of the schema 1 bytes, rebuilt here by
+    // reversing the migration, and its `migrations` entry declares the move.
+    assert.equal(committed.migrations, undefined, `${name}: a session that wrote schema 2 bytes declares a migration it never needed`);
     const evaluationBytes = bytes.get(EVALUATION_FILE);
+    const sessionBytes = reverseSchema2Migration(evaluationBytes, declaredPairs(bytes));
+    assert.notEqual(sessionBytes, null, `${name}: the committed evaluation.json is not a schema 2 file with nested phases`);
+    const record = {
+      ...structuredClone(committed),
+      wrote: { ...committed.wrote, [EVALUATION_FILE]: sha(sessionBytes) },
+      migrations: [{ file: EVALUATION_FILE, story: '1.42', change: 'schemaVersion 1 to 2 and operationPhases keyed by interface' }],
+    };
+    assert.deepEqual(captureProblems(name, record, bytes), [], `${name}: the migrated record fails its own guard`);
     const wrongDigest = `sha256:${'0'.repeat(64)}`;
     const planKey = 'evals/answer-grade/ci/evaluation-ci-plan.json';
     const withMigrations = (migrations) => ({ ...structuredClone(record), migrations });
@@ -3036,6 +3044,12 @@ function checkCaptureRecordGuard() {
         'is not the file the live session wrote',
       ],
       ['a record with an empty migrations list', withMigrations([]), bytes, 'is not the file the live session wrote'],
+      [
+        'a migration declared by a session that wrote schema 2 bytes',
+        { ...structuredClone(committed), migrations: record.migrations },
+        bytes,
+        'is not the file the live session wrote',
+      ],
       [
         'an evaluation.json whose tiers changed beyond the declared migration',
         record,

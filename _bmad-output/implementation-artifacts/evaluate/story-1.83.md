@@ -2,7 +2,7 @@
 title: 'Story 1.83: Give a confined Linux target a route to the hosts its registry entry authorizes'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'a3fa2025'

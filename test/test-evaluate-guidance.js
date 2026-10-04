@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const util = require('node:util');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
@@ -20,6 +21,7 @@ const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
 const { addFormats } = require('../cli/lib/evaluate/formats');
 const { contractView, partitionPlanProblems } = require('../cli/lib/evaluate/partition');
+const { egressRegistryProblems } = require('../cli/lib/evaluate/registry');
 
 const Ajv = AjvModule.default ?? AjvModule;
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
@@ -50,6 +52,11 @@ function requireHeading(content, heading, file, failures) {
 
 function requireText(content, marker, file, failures) {
   if (!content.includes(marker)) failures.push(`${file} lacks ${JSON.stringify(marker)}`);
+}
+
+/** Holds a sentence whole: the guide keeps one sentence per line, so an appended clause or an inserted one breaks the line. */
+function requireLine(content, line, file, failures) {
+  if (!content.split('\n').includes(line)) failures.push(`${file} lacks the whole line ${JSON.stringify(line)}`);
 }
 
 function sections(content, level) {
@@ -765,6 +772,11 @@ function taggedExamples(content, tag) {
   const fence = String.fromCodePoint(96).repeat(3);
   const expression = new RegExp(String.raw`<!-- example:${tag} -->\s*${fence}json\n([\s\S]*?)\n${fence}`, 'g');
   return [...content.matchAll(expression)].map((match) => JSON.parse(match[1]));
+}
+
+/** What `check` says about the egress items of the CI guide's tagged registry example (the runtime check is async, the guide check is not). */
+async function ciEgressProblems(guide) {
+  return egressRegistryProblems(taggedExamples(guide, 'ci-registry'));
 }
 
 function sourceFixturePaths(content, label, failures) {
@@ -3474,7 +3486,7 @@ function ciAssets() {
 }
 
 /** The ci stage guide (Story 2.4): inspection headings, placement rules, the plan template and the tagged plan examples. */
-function checkCiGuidance(guide, failures, assets = ciAssets()) {
+function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = []) {
   const plan = require('../cli/lib/evaluate/ci-plan');
   const INSPECTIONS = [
     [
@@ -3595,6 +3607,15 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     "Keep the template's `enforcement` values",
   ])
     requireText(live, marker, 'ci.md live placement', failures);
+  // Story 1.84: on Linux the live checks need the entry's `egress` authorization, which the proxy serves as `CONNECT` tunnels.
+  for (const line of [
+    "On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches.",
+    "A confined Linux target runs in a network namespace with a loopback and nothing else, so read the entry's `egress` and add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows.",
+    "The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route.",
+    'An entry that lists no `egress` reaches no host, and macOS ignores the field.',
+  ])
+    requireLine(live, line, 'ci.md live placement', failures);
+  checkRetiredNetwork(guide, failures, 'ci.md');
   const gates = headingBody(guide, '## Offer eval-quality-gates');
   for (const marker of [
     'is opt-in',
@@ -3823,6 +3844,13 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
       failures.push(`ci.md registry example fails the runtime schema: ${JSON.stringify(validate.errors)}`);
     if (registries[0].environmentKeys.some((key) => !/^[A-Z][A-Z0-9_]*$/.test(key)))
       failures.push('ci.md registry example names a value or a non-key');
+    // Story 1.84: the skill target's entry authorizes the model provider with the harness guide's `egress` item, and `check` accepts it.
+    const [harnessEntry] = taggedExamples(fs.readFileSync(REFERENCE('harness'), 'utf8'), 'registry');
+    if (!Array.isArray(harnessEntry?.egress) || harnessEntry.egress.length === 0)
+      failures.push("harness.md's tagged registry example lists no `egress` for ci.md's example to match");
+    else if (!util.isDeepStrictEqual(registries[0].egress, harnessEntry.egress))
+      failures.push("ci.md registry example's `egress` differs from the harness guide's registry example");
+    for (const problem of egressProblems) failures.push(`ci.md registry example fails the runtime's egress check: ${problem}`);
   }
 
   // The gate example: a gate the installed binary lists, a section added beside untouched ones, a check led by the binary.
@@ -4009,20 +4037,22 @@ async function main() {
     ['harness', (guide, found) => checkHarnessGuidance(guide, found)],
     ['run', (guide, found) => checkRunGuidance(guide, found)],
     ['gaps', (guide, found) => checkGapsGuidance(guide, engine, found)],
-    ['ci', (guide, found) => checkCiGuidance(guide, found)],
+    ['ci', (guide, found, egressProblems) => checkCiGuidance(guide, found, undefined, egressProblems)],
   ]) {
     try {
       const guide = fs.readFileSync(REFERENCE(name), 'utf8');
-      check(guide, failures);
+      check(guide, failures, name === 'ci' ? await ciEgressProblems(guide) : undefined);
       const firstHeading = guide.match(/^## .+$/m)?.[0];
       const reverted = [];
-      check(guide.replace(firstHeading, '## Removed lesson'), reverted);
+      const removed = guide.replace(firstHeading, '## Removed lesson');
+      check(removed, reverted, name === 'ci' ? await ciEgressProblems(removed) : undefined);
       if (reverted.length === 0) failures.push(`${name}.md heading removal did not fail its guidance check`);
     } catch (error) {
       failures.push(`${name} guidance: ${error.stack}`);
     }
   }
   try {
+    const ciCheck = (text, found, egressProblems) => checkCiGuidance(text, found, undefined, egressProblems);
     const negativeCases = [
       ['mutation example corruption', 'mutation', checkMutationGuidance, (text) => text.replace('"occurrences": 1', '"occurrences": 2')],
       [
@@ -4383,102 +4413,77 @@ async function main() {
             'keeps what each probe printed',
           ),
       ],
-      [
-        'ci tier table reintroduced',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('copy no table.', 'copy no table.\n\n| a | b |\n| - | - |'),
-      ],
-      [
-        'ci default tier start removal',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace("Start every check at AD-10's default tier, then", 'Then'),
-      ],
-      [
-        'ci deterministic set mismatch',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('`oracle-agreement`, `replay`)', '`oracle-agreement`)'),
-      ],
-      ['ci live rule removal', 'ci', checkCiGuidance, (text) => text.replace('Never place a live check on `pr`.', '')],
+      ['ci tier table reintroduced', 'ci', ciCheck, (text) => text.replace('copy no table.', 'copy no table.\n\n| a | b |\n| - | - |')],
+      ['ci default tier start removal', 'ci', ciCheck, (text) => text.replace("Start every check at AD-10's default tier, then", 'Then')],
+      ['ci deterministic set mismatch', 'ci', ciCheck, (text) => text.replace('`oracle-agreement`, `replay`)', '`oracle-agreement`)')],
+      ['ci live rule removal', 'ci', ciCheck, (text) => text.replace('Never place a live check on `pr`.', '')],
       [
         'ci live rule reversed',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('Never place a live check on `pr`.', 'When the adopter asks, place the live set on `pr` too.'),
       ],
       [
         'ci merge preference added',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('and the merge flow allows its run time', 'or `merge` when the adopter prefers'),
       ],
-      ['ci pr placement removal', 'ci', checkCiGuidance, (text) => text.replace('No inspection moves them.', '')],
+      ['ci pr placement removal', 'ci', ciCheck, (text) => text.replace('No inspection moves them.', '')],
       [
         'ci runtime refusal removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' and the runtime refuses a plan that places one elsewhere', ''),
       ],
       [
         'ci baseline readers shortened',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('`replay`, `gameability`, `oracle-agreement`', '`replay`, `oracle-agreement`'),
       ],
       [
         'ci inspection example stub',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/Worked example\. `CONTRIBUTING\.md`[^\n]*/, 'Worked example. A merge queue exists.'),
       ],
       [
         'ci risk example stub',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/Worked example\. The contract declares[^\n]*/, 'Worked example. Price the run.'),
       ],
       [
         'ci release example stub',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/Worked example\. `\.github\/workflows\/release\.yml`[^\n]*/, 'Worked example. A tag releases.'),
       ],
       [
         'ci deviation example reason removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/"reason": "The target needs no secret, but CONTRIBUTING.md[^"]*"/, '"reason": ""'),
       ],
-      [
-        'ci deviation example tier corruption',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('"defaultTier": "merge"', '"defaultTier": "nightly"'),
-      ],
+      ['ci deviation example tier corruption', 'ci', ciCheck, (text) => text.replace('"defaultTier": "merge"', '"defaultTier": "nightly"')],
       [
         'ci deviation example trigger corruption',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('"trigger": ["release"]', '"trigger": ["schedule"]'),
       ],
-      [
-        'ci scheduled example tier argument corruption',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('"--tier", "scheduled"]', '"--tier", "pr"]'),
-      ],
+      ['ci scheduled example tier argument corruption', 'ci', ciCheck, (text) => text.replace('"--tier", "scheduled"]', '"--tier", "pr"]')],
       [
         'ci example reason cites no file',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/"reason": "\.github\/workflows\/nightly\.yml runs[^"]*"/, '"reason": "Default."'),
       ],
       [
         'ci second example moved off its defaults',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             '"tier": "release",\n        "defaultTier": "release",\n        "reason": ".github/workflows/deploy.yml',
@@ -4486,35 +4491,145 @@ async function main() {
           ),
       ],
       [
-        'ci registry key casing',
+        'ci registry example without its egress authorization',
         'ci',
-        checkCiGuidance,
-        (text) => text.replace('"environmentKeys": ["RESERVATION_MODEL_KEY"]', '"environmentKeys": ["reservation_model_key"]'),
+        ciCheck,
+        (text) => text.replace(/,\n {2}"egress": \[[\s\S]*?\n {2}\]/, ''),
       ],
       [
-        'ci gates config rewrite',
+        'ci registry example with an empty egress list',
         'ci',
-        checkCiGuidance,
-        (text) => text.replace('"allowlist": ["MIT", "ISC"] }\n}', '"allowlist": ["MIT"] }\n}'),
+        ciCheck,
+        (text) => text.replace(/"egress": \[[\s\S]*?\n {2}\]/, '"egress": []'),
       ],
-      ['ci gate section from outside the binary', 'ci', checkCiGuidance, (text) => text.replaceAll('lockfile-age', 'lockfile-freshness')],
+      [
+        'ci namespace sentence removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace('A confined Linux target runs in a network namespace with a loopback and nothing else, so read', 'Read'),
+      ],
+      [
+        'ci provider clause removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            " and add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows",
+            '',
+          ),
+      ],
+      [
+        'ci macOS sentence removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace('An entry that lists no `egress` reaches no host, and macOS ignores the field.', ''),
+      ],
+      [
+        'ci egress sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "On Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches.",
+            '',
+          ),
+      ],
+      [
+        'ci CONNECT sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route.",
+            '',
+          ),
+      ],
+      [
+        'ci retired network declaration restored',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace('and macOS ignores the field.', 'and macOS ignores the field.\nThe older declaration was `"network": "host"`.'),
+        'still teaches',
+      ],
+      [
+        'ci egress sentence widened with an empty addresses clause',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'when an item is missing, as the example shows.',
+            'when an item is missing, as the example shows, or leave `addresses` empty to allow every address the host resolves to.',
+          ),
+        'ci.md live placement lacks the whole line',
+      ],
+      [
+        'ci egress sentence with an inserted clause',
+        'ci',
+        ciCheck,
+        (text) => text.replace("so read the entry's `egress` and add", "so read the entry's `egress`, remove every item, and add"),
+        'ci.md live placement lacks the whole line',
+      ],
+      [
+        'ci macOS sentence followed by another on its line',
+        'ci',
+        ciCheck,
+        (text) => text.replace('and macOS ignores the field.', 'and macOS ignores the field. A GitHub-hosted runner needs none.'),
+        'ci.md live placement lacks the whole line',
+      ],
+      [
+        'ci registry example egress port changed',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"port": 443', '"port": 80'),
+        "differs from the harness guide's registry example",
+      ],
+      [
+        'ci registry example egress address a hostname',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"addresses": ["160.79.104.10", "2607:6bc0::10"]', '"addresses": ["api.anthropic.com"]'),
+        "fails the runtime's egress check",
+      ],
+      [
+        'ci registry example egress host a wildcard',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"host": "api.anthropic.com"', '"host": "*.Anthropic.com"'),
+        "fails the runtime's egress check",
+      ],
+      [
+        'ci registry example egress drifts from the harness guide',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"160.79.104.10"', '"160.79.104.11"'),
+        "differs from the harness guide's registry example",
+      ],
+      [
+        'ci registry key casing',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"environmentKeys": ["RESERVATION_MODEL_KEY"]', '"environmentKeys": ["reservation_model_key"]'),
+      ],
+      ['ci gates config rewrite', 'ci', ciCheck, (text) => text.replace('"allowlist": ["MIT", "ISC"] }\n}', '"allowlist": ["MIT"] }\n}')],
+      ['ci gate section from outside the binary', 'ci', ciCheck, (text) => text.replaceAll('lockfile-age', 'lockfile-freshness')],
       [
         'ci gate check command corruption',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('["eval-quality-gates", "lockfile-age"]', '["lockfile-age"]'),
       ],
-      ['ci all gates adopted', 'ci', checkCiGuidance, (text) => text.replace('add only the ones the adopter adopts', 'Add all the gates')],
+      ['ci all gates adopted', 'ci', ciCheck, (text) => text.replace('add only the ones the adopter adopts', 'Add all the gates')],
       [
         'ci bare command',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('`npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare', '`tea-evaluate compare'),
       ],
       [
         'ci unticked npx command',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             'Stage 12 is complete when',
@@ -4524,123 +4639,118 @@ async function main() {
       [
         'ci npx gates help',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace('`npm exec --prefix {tea_evaluations_folder} -- eval-quality-gates --help`', '`npx eval-quality-gates --help`'),
       ],
       [
         'ci rendering rule restated',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('Stage 12 is complete when', 'Render one job per tier. Stage 12 is complete when'),
       ],
       [
         'ci hand-off removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
       ],
       [
         'ci create mode removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(', or in create mode when the inspection found no pipeline file', ''),
       ],
       [
         'ci pending path removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' and record the hand-off as an open item in the inspection record', ''),
       ],
       [
         'ci hand-off event removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('Name in the request the concrete event of this repository for each tier it should render', 'Name the plan'),
       ],
-      [
-        'ci baseline confirmation removal',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('once they confirm it, accept it with', 'accept it with'),
-      ],
+      ['ci baseline confirmation removal', 'ci', ciCheck, (text) => text.replace('once they confirm it, accept it with', 'accept it with')],
       [
         'ci show-nothing reversal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             'Show the adopter the placement table with each deviation and its reason before the hand-off.',
             'Show the adopter nothing before the hand-off.',
           ),
       ],
-      ['ci tier run removal', 'ci', checkCiGuidance, (text) => text.replace(' for each tier that can run on this machine', '')],
+      ['ci tier run removal', 'ci', ciCheck, (text) => text.replace(' for each tier that can run on this machine', '')],
       [
         'ci blocking exit route removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('A blocking exit names the stage that owns its repair', 'A blocking exit is noted'),
       ],
       [
         'ci tier exit record removal',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' Record every tier the plan places a check on, with its exit or the reason it was not run.', ''),
       ],
       [
         'ci judge calibration claim reversed',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('which pass as no-ops', 'which the runtime exits 64 on'),
       ],
       [
         'ci gameability delete rule removed',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' and `gameability` when no probe takes the gameability route', ''),
       ],
       [
         'ci no-baseline skip removed',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('With no accepted baseline, skip the tier runs and record that in the `## CI` section. ', ''),
       ],
       [
         'ci completion reopened by an open item',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('stays a named open item in the `## CI` section and does not reopen the stage', 'reopens the stage'),
       ],
-      ['ci nightly release event dropped', 'ci', checkCiGuidance, (text) => text.replace(', a nightly one included', '')],
+      ['ci nightly release event dropped', 'ci', ciCheck, (text) => text.replace(', a nightly one included', '')],
       [
         'ci published release fallback dropped',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' A repository with none of these gets a published release from step-03b, and the reason says so.', ''),
       ],
       [
         'ci merge move reason reversed',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace('The reason to move one is cost or risk the adopter states', 'The reason to move one is a missing merge queue'),
       ],
       [
         'ci tier runs limited to pr',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('(`pr` always, and each live tier whose target launches here and whose credentials exist)', '(`pr` only)'),
       ],
       [
         'ci live set placed twice sentence dropped',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(/The same evaluation in a repository that deploys nightly[^\n]*\n/, ''),
       ],
       [
         'ci second example release reason names the nightly workflow',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             '.github/workflows/deploy.yml ships main to production on its own schedule',
@@ -4650,26 +4760,21 @@ async function main() {
       [
         'ci no-schedule rule dropped',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace(' Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.', ''),
       ],
-      [
-        'ci preflight secret default dropped',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace(' and to `scheduled` and `release` otherwise', ''),
-      ],
-      ['ci trigger match dropped', 'ci', checkCiGuidance, (text) => text.replace(', and set `trigger` to match the tier', '')],
+      ['ci preflight secret default dropped', 'ci', ciCheck, (text) => text.replace(' and to `scheduled` and `release` otherwise', '')],
+      ['ci trigger match dropped', 'ci', ciCheck, (text) => text.replace(', and set `trigger` to match the tier', '')],
       [
         'ci deterministic set may need a secret',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) => text.replace('`replay`) needs no secret and calls no model.', '`replay`) may need a secret.'),
       ],
       [
         'ci baseline accepted unseen',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             'show the adopter the latest clean scored run and, once they confirm it, accept it with',
@@ -4679,24 +4784,20 @@ async function main() {
       [
         'ci reversal beside an intact marker',
         'ci',
-        checkCiGuidance,
+        ciCheck,
         (text) =>
           text.replace(
             'Never place a live check on `pr`.',
             'Never place a live check on `pr`. The one exception is `preflight-live`, which may run on `pr`.',
           ),
       ],
-      ['ci working state removal', 'ci', checkCiGuidance, (text) => text.replace(', and end the section with the hand-off status', '')],
-      ['ci re-entry removal', 'ci', checkCiGuidance, (text) => text.replace('edit it in place', 'start again')],
-      [
-        'ci prerequisite route-back removal',
-        'ci',
-        checkCiGuidance,
-        (text) => text.replace('return to its stage before inspecting CI', 'go on'),
-      ],
+      ['ci working state removal', 'ci', ciCheck, (text) => text.replace(', and end the section with the hand-off status', '')],
+      ['ci re-entry removal', 'ci', ciCheck, (text) => text.replace('edit it in place', 'start again')],
+      ['ci prerequisite route-back removal', 'ci', ciCheck, (text) => text.replace('return to its stage before inspecting CI', 'go on')],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];
-    for (const [label, file, check, corrupt] of negativeCases) {
+    // A case may name the failure it must raise, so a mutant caught by an unrelated check does not pass for the check it targets.
+    for (const [label, file, check, corrupt, expected] of negativeCases) {
       const original = fs.readFileSync(REFERENCE(file), 'utf8');
       const changed = corrupt(original);
       if (changed === original) {
@@ -4704,8 +4805,10 @@ async function main() {
         continue;
       }
       const rejected = [];
-      check(changed, rejected);
+      check(changed, rejected, file === 'ci' ? await ciEgressProblems(changed) : undefined);
       if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+      else if (expected !== undefined && !rejected.some((failure) => failure.includes(expected)))
+        failures.push(`${label} failed the guidance gate without the failure it targets (${expected}): ${JSON.stringify(rejected)}`);
     }
   } catch (error) {
     failures.push(`guidance negative checks: ${error.stack}`);
