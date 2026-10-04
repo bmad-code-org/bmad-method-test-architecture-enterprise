@@ -2416,6 +2416,12 @@ So that the run works on a Linux host with a tmpfs `/tmp` and my `objects/pack` 
 **Dependencies:** 1.57, 1.80.
 **Gate:** `test:evaluate-confinement`, `test:evaluate-run`, `npm test`, and the Linux CI job.
 
+Amended 2026-10-04 in Story 1.132's build: the build's cases are `the withheld git history across filesystems` (the Linux cases above, run in the container with the command in this story; a full repository, and a partial clone where git honors `GIT_NO_LAZY_FETCH`) and `the withheld git history pack stages` (every host: a `git` shim logs the commands and fails the pack stage or the index stage, over a writable `objects/pack`, with the real `pack-objects` run under a zero file-size limit in the pack arm so the old path's temporary file shows in the listing), both in `test/test-evaluate-run.js`'s `confinement` group, and the unit cases drive the `pack` job through its `stages` list with 20,000 revisions under a 48 MB heap.
+The `pack` job's `list` and `pack` keys became one `stages` list of git argument lists (the first stage reads the revisions on its standard input, each stage's output feeds the next, the last prints nothing).
+The reference's `### File-system confinement` gains the sentence that the build writes nothing into the project's object store, and its case reads it.
+The case's `git` shims need a temp directory that can run files, so the container's tmpfs is mounted with `exec` for the shim cases (`--tmpfs /tmp:rw,exec,mode=1777`) and stays `--tmpfs /tmp` for the cross-filesystem case.
+The build also fixed a defect the container showed: a git before 2.45 reports no ref format, and the link from a first workspace's objects to a second's was skipped for it, so a second workspace for the same commit packed the history again.
+
 ### Story 1.90: Verify the baseline manifest's file digests
 
 Added 2026-10-01 in Story 2.1. `compare --accept` writes `baseline/baseline.json` with a `files` map of every baseline member's path to its `digestBytes`. Neither `compare` nor `tea-evaluate check` re-verifies those digests against the bytes in `baseline/`, so a hand-edited baseline file passes both while the manifest claims otherwise. Only Story 2.2's replay would eventually disagree, and only for the files it reads.
