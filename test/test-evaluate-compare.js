@@ -467,9 +467,28 @@ async function main() {
         (folder) => fs.writeFileSync(path.join(folder, 'baseline', 'probes', 'extra.probe.json'), '{}\n'),
         /baseline\/probes\/extra\.probe\.json: \[baseline-digest\] .*does not list it/,
       );
+      const longName = `${'a'.repeat(300)}.json`;
+      refusedBaseline(
+        'a manifest entry with a name past the file system limit',
+        (folder) => {
+          const file = path.join(folder, 'baseline', 'baseline.json');
+          const manifest = read(file);
+          manifest.files[longName] = manifest.files['run.json'];
+          writeJson(file, manifest);
+        },
+        new RegExp(`baseline/a{300}\\.json: \\[baseline-digest\\] cannot be examined: ENAMETOOLONG`),
+      );
       refusedBaseline(
         'a baseline with no manifest',
         (folder) => fs.rmSync(path.join(folder, 'baseline', 'baseline.json')),
+        /baseline\/baseline\.json: \[baseline-digest\] is absent/,
+      );
+      refusedBaseline(
+        'a baseline with neither manifest nor run.json',
+        (folder) => {
+          fs.rmSync(path.join(folder, 'baseline', 'baseline.json'));
+          fs.rmSync(path.join(folder, 'baseline', 'run.json'));
+        },
         /baseline\/baseline\.json: \[baseline-digest\] is absent/,
       );
       // Every defect is listed, none stops the others.

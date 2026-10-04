@@ -27,8 +27,9 @@
  * - `baseline-digest` (Story 1.90, AD-12): a file of `baseline/` digests to something other than the entry of the
  *   `files` map in `baseline/baseline.json`, a map entry's file is missing or is not a regular file, a file other than
  *   `baseline.json` has no entry, or the manifest cannot be read, so a baseline edited by hand cannot pass as the one
- *   `compare --accept` wrote (`baseline-digests.js`, which `compare` calls too). A `baseline/` with neither manifest nor
- *   `run.json` holds authored qualification evidence and is left alone.
+ *   `compare --accept` wrote (`baseline-digests.js`, which `compare` calls too). Without a manifest, a `baseline/` holding
+ *   only files under `probes/` and `qualification/` and a placeholder `README.md` is authored qualification evidence and is left
+ *   alone; any other file without a manifest is reported as the missing manifest.
  * - `clean-control`: a clean control is not `zero-action` with `expectedClean: true` and no defects.
  * - `infrastructure-exit-code`: a defect signature holds on an observation that carries only one of the
  *   `infrastructureExitCodes` its executable's registry entry declares, so a target that could not run

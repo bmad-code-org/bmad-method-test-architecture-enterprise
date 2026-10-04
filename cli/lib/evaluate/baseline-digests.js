@@ -14,12 +14,13 @@
  * - a manifest that cannot be read as a regular JSON file holding a `files` map,
  *   so nothing could be verified.
  *
- * A `baseline/` with no `baseline.json` and no `run.json` holds authored
- * qualification evidence (probes and qualification files an evaluation commits
- * before any accept), which no manifest describes; the rule has nothing to
- * verify there. `run.json` is a member of every accepted snapshot, so a
- * `baseline/` that holds it and no manifest is a snapshot whose manifest was
- * deleted, and is reported.
+ * A `baseline/` with no `baseline.json` is authored qualification evidence only
+ * when every file in it is what authored evidence holds: files under `probes/`
+ * and `qualification/` and a placeholder `README.md`. No manifest describes
+ * those, so the rule has nothing to verify there. Any other file without a
+ * manifest (`run.json`, `scores/`, `trials/`, `trial-sets.json` and the rest of
+ * an accepted snapshot) is reported as the missing manifest, so deleting the
+ * manifest cannot switch the rule off.
  *
  * Only real directories are entered and every file is opened without following a
  * link, so a link anywhere under `baseline/` is never read. An entry that is
@@ -40,7 +41,9 @@ const { regularFileBytes } = require('./score-inputs');
 
 const BASELINE = 'baseline';
 const MANIFEST = 'baseline.json';
-const RECORD = 'run.json';
+/** What an authored qualification baseline holds, with no manifest: files under these directories and a placeholder README. */
+const AUTHORED_DIRECTORIES = ['probes/', 'qualification/'];
+const AUTHORED_FILES = ['README.md'];
 const RULE = 'baseline-digest';
 
 /** One finding as `check` and `compare` print it; `relative` is below `baseline/`, or empty for the directory itself. */
@@ -52,7 +55,7 @@ function problemOf(error) {
   return error?.code === undefined ? error.message : `${error.code}: ${error.message}`;
 }
 
-/** `lstat`, or null when the entry is absent, or a file stands where a directory above it should. */
+/** `lstat`, or null when the entry is absent, or a file stands where a directory above it should. Any other error is thrown. */
 function lstatOrNull(file) {
   try {
     return fs.lstatSync(file);
@@ -111,7 +114,7 @@ function readFilesMap(baselinePath) {
 
 /**
  * The `baseline-digest` findings over `folder`'s `baseline/`, empty when it matches its manifest, is absent, or is
- * authored qualification evidence with no manifest.
+ * authored qualification evidence (see the header) with no manifest.
  *
  * @param {object} options
  * @param {string} options.folder the evaluation folder
@@ -137,12 +140,16 @@ function baselineDigestFindings({ folder, digestBytes }) {
     return [...findings, finding('', `cannot be listed: ${problemOf(error)}`)];
   }
   if (!present.has(MANIFEST)) {
-    if (!present.has(RECORD)) return findings;
+    const foreign = [...present]
+      .filter((key) => !AUTHORED_FILES.includes(key) && !AUTHORED_DIRECTORIES.some((directory) => key.startsWith(directory)))
+      .sort();
+    if (foreign.length === 0) return findings;
+    const more = foreign.length > 1 ? ` and ${foreign.length - 1} more` : '';
     return [
       ...findings,
       finding(
         MANIFEST,
-        `is absent while ${BASELINE}/ holds ${RECORD}, a file of every accepted snapshot; the digests of ${BASELINE}/ cannot be verified`,
+        `is absent while ${BASELINE}/ holds ${foreign[0]}${more}, which authored qualification evidence (${[...AUTHORED_DIRECTORIES, ...AUTHORED_FILES].join(', ')}) does not hold; the digests of ${BASELINE}/ cannot be verified`,
       ),
     ];
   }
@@ -155,11 +162,18 @@ function baselineDigestFindings({ folder, digestBytes }) {
       continue;
     }
     if (!present.has(key)) {
-      const exists = lstatOrNull(path.join(baselinePath, ...key.split('/'))) !== null;
+      let state;
+      try {
+        state = lstatOrNull(path.join(baselinePath, ...key.split('/'))) === null ? 'missing' : 'not-regular';
+      } catch (error) {
+        // A segment past the file system's name limit, a link loop and any other failure of the probe is a finding, never a throw.
+        findings.push(finding(key, `cannot be examined: ${error.code ?? problemOf(error)}`));
+        continue;
+      }
       findings.push(
         finding(
           key,
-          exists
+          state === 'not-regular'
             ? `${MANIFEST} lists this file and it is not a regular file inside ${BASELINE}/`
             : `${MANIFEST} lists this file and it is missing from ${BASELINE}/`,
         ),

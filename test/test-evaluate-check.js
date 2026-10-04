@@ -46,8 +46,9 @@
  *
  * Story 1.90 adds the `baseline-digest` rule (AD-12): a baseline accepted through the real CLI checks clean, and a baseline
  * file edited by one byte, a file its manifest lists deleted, a file the manifest does not list, an entry that is not a
- * regular file, a manifest that lost its `files` map or its snapshot, and an entry that climbs out of `baseline/` each exit
- * 10 naming the file; the reference documents the rule in its `check` rule list and its `compare` section.
+ * regular file, a manifest that lost its `files` map, a snapshot that lost its manifest, a snapshot that lost its manifest and
+ * its `run.json`, a directory of listed files replaced by a file, an entry that climbs out of `baseline/`, an entry with a
+ * name past the file system's limit and an entry through a link loop each exit 10 naming the file; the reference documents the rule in its `check` rule list and its `compare` section.
  *
  * Usage: node test/test-evaluate-check.js
  */
@@ -4969,8 +4970,38 @@ const BASELINE_DIGEST_CASES = [
   {
     name: 'a snapshot whose manifest was deleted',
     file: 'baseline/baseline.json',
-    says: /is absent while baseline\/ holds run\.json/,
+    says: /is absent while baseline\/ holds .* does not hold/,
     plant: (folder) => fs.rmSync(path.join(folder, 'baseline', 'baseline.json')),
+  },
+  {
+    // The escape hatch the exemption must not be: with `baseline.json` and `run.json` gone, one edited evidence byte still fails.
+    name: 'a snapshot whose manifest and run.json were deleted and whose evidence was edited by one byte',
+    file: 'baseline/baseline.json',
+    says: /is absent while baseline\/ holds .* does not hold/,
+    plant: (folder) => {
+      const baseline = path.join(folder, 'baseline');
+      const scores = path.join(baseline, 'scores');
+      const [scoreId] = fs.readdirSync(scores);
+      fs.appendFileSync(path.join(scores, scoreId, 'P-001', 'evidence-artifact.json'), '\n');
+      fs.rmSync(path.join(baseline, 'baseline.json'));
+      fs.rmSync(path.join(baseline, 'run.json'));
+    },
+  },
+  {
+    name: 'a manifest entry with a name past the file system limit',
+    file: `baseline/${'a'.repeat(300)}.json`,
+    says: /cannot be examined: ENAMETOOLONG/,
+    plant: (folder) => editManifest(folder, (manifest) => (manifest.files[`${'a'.repeat(300)}.json`] = manifest.files['run.json'])),
+  },
+  {
+    name: 'a manifest entry through a link loop',
+    file: 'baseline/loop/entry.json',
+    says: /cannot be examined: ELOOP/,
+    also: ['baseline/loop: [baseline-file]'],
+    plant: (folder) => {
+      fs.symlinkSync('loop', path.join(folder, 'baseline', 'loop'));
+      editManifest(folder, (manifest) => (manifest.files['loop/entry.json'] = manifest.files['run.json']));
+    },
   },
 ];
 
@@ -4991,6 +5022,8 @@ async function checkBaselineDigest() {
       const line = result.output.split('\n').find((candidate) => candidate.startsWith(`${testCase.file}: [baseline-digest]`));
       check(line !== undefined, `${label}no baseline-digest finding names ${testCase.file}\n${result.output}`);
       check(line === undefined || testCase.says.test(line), `${label}the finding does not say ${testCase.says}\n${line}`);
+      for (const other of testCase.also ?? []) check(result.output.includes(other), `${label}no finding ${other}\n${result.output}`);
+      check(!result.output.includes('Error:') && result.status !== 1, `${label}check threw\n${result.output}`);
     }
     // Each defect is reported alone and every one of several is listed: one edited, one deleted and one added file.
     const several = baselines.copyOf(project, copies);

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tea-evaluate check` and `compare` verify the baseline's file digests (Story 1.90, AD-12).
   `compare --accept` records a `files` map of every baseline file's `digestBytes` in `baseline/baseline.json`, and nothing read it back, so a baseline file edited by hand passed both commands.
   `check` now reports a `baseline-digest` finding and exits 10 for each file of `baseline/` whose bytes differ from the map, each listed file that is missing and each file other than `baseline.json` that the map does not list.
-  `check` also reports the finding when the manifest cannot be read, when it lists a path outside `baseline/`, and when `baseline/` holds a snapshot (`run.json`) with no manifest.
+  `check` also reports the finding when the manifest cannot be read, when it lists a path outside `baseline/` or one the file system cannot examine, and when `baseline/` holds anything but authored qualification evidence (`probes/`, `qualification/`, a placeholder `README.md`) with no manifest.
   A plain `compare` refuses a baseline that fails the same check with exit 10 and no verdict, before it reads any of the baseline's evidence.
   One module, `cli/lib/evaluate/baseline-digests.js`, holds the verification for both commands.
   A `test:evaluate-check` case and a `test:evaluate-compare` case accept a baseline through the real CLI, pass it, and fail it for a one-byte edit, a missing listed file and an unlisted file.
