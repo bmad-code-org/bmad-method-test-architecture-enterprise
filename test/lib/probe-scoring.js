@@ -169,6 +169,11 @@ const FORBIDDEN_INPUT_NOTE =
  * Each of the five builders that score a stored run takes `{ storedCase }`, a function from the case a leg names to
  * the case its record reads. `test/test-probe-corpus.js` passes one that reads another set's run, which is how it
  * holds the dispositions to the run they read.
+ *
+ * The trace, nfr and test-design builders also take `{ refusedSets }`, a `Set` they add the identifier of every set
+ * whose stored run the harness refused to score (the `scored === null` branch). A refused run answers `false` for
+ * every oracle it does not measure without calling a scorer, so the corpus check reads this to tell a violation a
+ * scorer produced from one the refusal produced.
  */
 const identity = (caseId) => caseId;
 
@@ -491,7 +496,7 @@ async function traceArtifacts(caseId) {
   };
 }
 
-async function traceEvidence(contract, { storedCase = identity } = {}) {
+async function traceEvidence(contract, { storedCase = identity, refusedSets = new Set() } = {}) {
   const [seededStep, cleanStep] = contract.interactionPlan;
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
 
@@ -630,6 +635,7 @@ async function traceEvidence(contract, { storedCase = identity } = {}) {
             summary.ok && matrix !== null
               ? scoreTraceRun(leg.set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance)
               : null;
+          if (scored === null) refusedSets.add(leg.set.id);
           return [leg.set.id, scored];
         }),
       );
@@ -698,7 +704,7 @@ function testDesignEvidenceChannels(text, designLevel, epicNum) {
  * both plan steps declare one operation, so a leg that could not be told apart
  * would let one set's oracles quantify over the other set's document.
  */
-async function testDesignEvidence(contract, { storedCase = identity, projectionOf = identity } = {}) {
+async function testDesignEvidence(contract, { storedCase = identity, projectionOf = identity, refusedSets = new Set() } = {}) {
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'));
 
   const legs = groundTruth.fixtureSets.map((set, index) => {
@@ -795,6 +801,7 @@ async function testDesignEvidence(contract, { storedCase = identity, projectionO
           const artifact = channelsByLeg[index].artifacts.design;
           const projection = channelsByLeg[index].stdout.value;
           const read = readTestDesign(artifact);
+          if (!read.ok) refusedSets.add(leg.set.id);
           return [
             leg.set.id,
             { artifact, projection, read, scored: read.ok ? scoreTestDesignRun(leg.set, read.design, categories) : null },
@@ -877,7 +884,7 @@ function withCustomCategories(report, categories) {
   ].join('\n');
 }
 
-async function nfrEvidence(contract, { storedCase = identity } = {}) {
+async function nfrEvidence(contract, { storedCase = identity, refusedSets = new Set() } = {}) {
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'));
 
   /**
@@ -999,6 +1006,7 @@ async function nfrEvidence(contract, { storedCase = identity } = {}) {
       const scoredBySet = new Map(
         selected.map((leg) => {
           const report = nfrReportFromArtifact(nfrArtifacts(reportByCase.get(leg.caseId)).report);
+          if (!report.ok) refusedSets.add(leg.set.id);
           return [leg.set.id, report.ok ? scoreNfrRun(leg.set, report.report) : null];
         }),
       );

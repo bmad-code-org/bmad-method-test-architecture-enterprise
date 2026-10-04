@@ -171,13 +171,17 @@ A record that carries no run of a set (a defect probe carries only the project i
 It also holds every set and every oracle to a wrong run, so a disposition that stopped reading its run fails:
 
 - each leg reads the next leg's run in turn, and a set must lose an oracle that holds on its own run;
-- each leg reads every other stored case of its suite, one at a time, and every oracle must be violated by at least one wrong read (the three ci `run-measured` oracles, whose scorer reads no workflow, are listed in `WRONG_RUN_CANNOT_FAIL` in `test/test-probe-corpus.js` with the reason);
-- trace, nfr and test-design read a run the harness refuses to score, which fails every oracle of the set (test-design's projection-coherence oracle reads the projection alone and stays as it measures; a projection with a key dropped is what fails it);
-- a contract declaring an oracle the generator does not specify throws.
+- each leg reads every other stored case of its suite, one at a time, and every oracle must be violated by a scorer under at least one wrong read (the three ci `run-measured` oracles, whose scorer reads no workflow, are listed in `WRONG_RUN_CANNOT_FAIL` in `test/test-probe-corpus.js` with the reason; the two test-design projection-coherence oracles fail only through a projection with its `design` key dropped);
+- trace, nfr and test-design read a run the harness refuses to score through every leg, which fails every oracle of the set (test-design's projection-coherence oracle reads the projection alone and stays as it measures; a projection with a key dropped is what fails it), and a violation a refusal produced counts only for the `run-measured` oracles, since the refusal answers every other oracle without calling its scorer;
+- an evidence builder of those four suites that exposes no `storedRunSpecs` or `storedRunLegs` fails, so a builder reverted to a constant `held` cannot opt out of the checks above;
+- a contract declaring an oracle the generator does not specify throws, for the four builders and for test-review's;
+- test-review reads its verdict with one field dropped at a time and through a verdict the harness refuses to score.
 
-The baseline cannot see a wrong `CI_CORRECT_RUNS` row.
+The baseline records no oracle disposition, so it cannot say which oracle stopped holding, and it sees a wrong `CI_CORRECT_RUNS` row only where the row changes the run a defect probe carries.
 The clean control P-004 passes pre-flight and scores `CONCERNS` with exit 0, and the per-probe summary the baseline keeps carries only `probeId`, `state`, `severity` and `trialIndex` of each outcome, so a moved disposition or corroboration never reaches `expected-strength.json`.
-The oracle-level checks above are what see it.
+The full and minimal defect probes carry their project's run, so six of the 11 caught deviation rows (`full-not-a-workflow`, `full-permissions-missing`, `full-permissions-widened`, `full-trigger-schedule-missing`, `full-triggers-unscoped` and `minimal-template-copied`) and a row of the full project at the minimal project's run, or the reverse, move it anyway.
+The other five caught rows (`evaluation-plan-plan-not-detected`, `evaluation-plan-upload-wrong-path`, `full-e2e-command-replaced`, `minimal-artifact-added` and `minimal-retry-action-added`) and any row of the evaluation-plan project, whose run only P-004 reads, leave it unchanged.
+The oracle-level checks above are what see those.
 
 The contract's vocabulary reaches a workflow as one string, so a deviation that only a structure shows leaves every oracle held.
 Pointing a `CI_CORRECT_RUNS` row at a stored deviation fails `test:probe-corpus` for 11 of the 34 stored constructed ci deviations: `evaluation-plan-plan-not-detected`, `evaluation-plan-upload-wrong-path`, `full-e2e-command-replaced`, `full-not-a-workflow`, `full-permissions-missing`, `full-permissions-widened`, `full-trigger-schedule-missing`, `full-triggers-unscoped`, `minimal-artifact-added`, `minimal-retry-action-added` and `minimal-template-copied`.
