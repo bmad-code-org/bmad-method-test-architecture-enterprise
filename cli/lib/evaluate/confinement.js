@@ -45,6 +45,14 @@
  *                covers a parent another run makes later or concurrently.
  *                Reads elsewhere are left to the audit: node, git and a
  *                target's own toolchain read from the system.
+ *   layer        every process of the evaluation layer (the command evaluator,
+ *                the HTTP port, the judge, the sealed-brief agent) keeps the
+ *                host's file system and cannot write the evaluation folder or
+ *                the project's common git directory (its refs, configuration,
+ *                hooks and `info/`), so none of them plants a hook, changes the
+ *                configuration or moves a ref the adopter's next git command
+ *                reads (Story 1.112); a project in no git repository has no
+ *                such directory.
  *   network      every process the runtime starts for a Bubblewrap target
  *                (`--unshare-net`) runs in a network namespace of its own, a
  *                loopback and nothing else, so the host's abstract Unix sockets
@@ -224,9 +232,35 @@ function refuseUnsafePath(candidate) {
   return new ConfinementError(`the path ${JSON.stringify(candidate)} cannot be carried into a confinement profile`);
 }
 
-/** The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation folder. */
-function seatbeltLayerProfile(evaluationFolder) {
-  const denied = spellings(evaluationFolder).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+/**
+ * The project's common git directory (its refs, configuration, hooks and `info/`, which every worktree of the repository
+ * shares) by its real path, or null when `root` is in no git repository.
+ */
+function commonGitDirectory(root) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  try {
+    const answer = execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    }).trim();
+    return answer === '' ? null : fs.realpathSync.native(path.resolve(root, answer));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation
+ * folder or the project's common git directory, so a layer process cannot plant a hook, change the configuration or move a ref.
+ */
+function seatbeltLayerProfile(evaluationFolder, gitDirectory = null) {
+  const protectedPaths = gitDirectory === null || gitDirectory === undefined ? [evaluationFolder] : [evaluationFolder, gitDirectory];
+  const denied = [...new Set(protectedPaths.flatMap(spellings))].map(
+    (entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`,
+  );
   return ['(version 1)', '(allow default)', `(deny file-write* ${denied.join(' ')})`, ''].join('\n');
 }
 
@@ -546,11 +580,15 @@ function bubblewrapTargetArguments({
 }
 
 /**
- * The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder read-only.
+ * The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder and the
+ * project's common git directory read-only.
  * It keeps the host's network, since the evaluation's HTTP port reaches a started server over the host's loopback.
  */
-function bubblewrapLayerArguments({ executable, evaluationFolder }) {
+function bubblewrapLayerArguments({ executable, evaluationFolder, gitDirectory = null }) {
   const protectedDirectory = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
+  const protectedGit =
+    gitDirectory === null || gitDirectory === undefined ? null : assertProfileSafePath(spellings(gitDirectory).at(-1), refuseUnsafePath);
+  const gitProtected = protectedGit === null ? [] : ['--ro-bind', protectedGit, protectedGit];
   return [
     executable,
     '--unshare-user',
@@ -563,6 +601,7 @@ function bubblewrapLayerArguments({ executable, evaluationFolder }) {
     '--ro-bind',
     protectedDirectory,
     protectedDirectory,
+    ...gitProtected,
     '--',
   ];
 }
@@ -638,11 +677,12 @@ function probeObserver(mechanism, env) {
  * @param {object} options
  * @param {object} options.evaluation the parsed `evaluation.json`
  * @param {string} options.folder the resolved evaluation folder
+ * @param {string} [options.root] the project root (`launch.root`), whose repository's common git directory the evaluation layer may not write; the evaluation folder by default
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {string} [options.platform]
- * @returns {{ mode: string, executable?: string, evaluationFolder: string } | { refusal: string }}
+ * @returns {{ mode: string, executable?: string, evaluationFolder: string, gitDirectory?: string|null } | { refusal: string }}
  */
-function selectConfinement({ evaluation, folder, env = process.env, platform = process.platform }) {
+function selectConfinement({ evaluation, folder, root = folder, env = process.env, platform = process.platform }) {
   const evaluationFolder = path.resolve(folder);
   if (evaluation?.confinement === false) return { mode: 'opt-out', evaluationFolder };
   const optOut = 'or set "confinement": false in evaluation.json to run the targets unconfined, which run.json records as "opt-out"';
@@ -699,7 +739,16 @@ function selectConfinement({ evaluation, folder, env = process.env, platform = p
     };
   }
   mechanism = { ...mechanism, observer: observed.observer };
-  return { ...mechanism, evaluationFolder };
+  // The project's common git directory is read-only to the evaluation layer, so its processes cannot plant a hook, change the
+  // configuration or move a ref the adopter's next git command reads (Story 1.112); null outside a git repository.
+  const gitDirectory = commonGitDirectory(root);
+  const unsafeGit = gitDirectory === null ? undefined : spellings(gitDirectory).find((entry) => !isProfileSafePath(entry));
+  if (unsafeGit !== undefined) {
+    return {
+      refusal: `the project's git directory ${JSON.stringify(unsafeGit)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the project, ${optOut}`,
+    };
+  }
+  return { ...mechanism, evaluationFolder, gitDirectory };
 }
 
 /**
@@ -728,7 +777,8 @@ function confines(confinement) {
  */
 function layerPrefix(confinement) {
   if (!confines(confinement)) return [];
-  if (confinement.mode === 'seatbelt') return [confinement.executable, '-p', seatbeltLayerProfile(confinement.evaluationFolder)];
+  if (confinement.mode === 'seatbelt')
+    return [confinement.executable, '-p', seatbeltLayerProfile(confinement.evaluationFolder, confinement.gitDirectory)];
   return bubblewrapLayerArguments(confinement);
 }
 

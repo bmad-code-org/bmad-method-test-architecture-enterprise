@@ -2855,14 +2855,14 @@ So that no authoring step launches or records a held-out request.
 Added 2026-10-03 from Story 1.46's live runs. `adopterTreeState` (`cli/lib/evaluate/workspace.js`) digests every ref of the repository and its common git directory, so a commit, fetch or branch in any other worktree of the same repository while a `preflight` or `run` is in flight changes the digest and the run exits 12 ("changed during the qualification") with no qualified probe written. The three relay lanes share one repository; Story 1.46's first live preflight failed this way after twelve minutes with no file edited, and the story ran its live legs from a standalone clone to avoid it. A confined target works in a private repository and cannot reach the shared refs, so the comparison guards nothing there; an opted-out target can write them, which is what the comparison is for.
 
 As a maintainer who runs an evaluation from one worktree while other sessions commit to the repository,
-I want a confined run to compare the working tree alone,
+I want a confined run to compare the working tree, the checkout's HEAD, the git configuration and the hooks, and to leave the refs out,
 So that a long live run is not stopped by work in another worktree.
 
 **Acceptance Criteria:**
 
 **Given** a confined run (Seatbelt or Bubblewrap) of a slow fixture target, with the test creating a ref in the repository's shared git directory while the run is in flight
 **When** the run finishes
-**Then** it exits 0 and `run.json` records `adopterTree.unchanged: true`, and the working tree is still compared in full: a tracked file edited while the run is in flight, or an untracked file created, still exits 12
+**Then** it exits 0 and `run.json` records `adopterTree.unchanged: true`, and the rest is still compared: a tracked file edited while the run is in flight, an untracked file created, an edit committed in the project's own checkout (its `HEAD` moves), a write to the git configuration (`.git/config`) or a hook (`.git/hooks/`) still exits 12
 **And** an opted-out run (`"confinement": false`) keeps the comparison of refs and shared state: a target that runs `git update-ref` or writes `.git/config` exits 12, and `docs/reference/tea-evaluate-cli.md` tells a maintainer who shares a repository with other sessions to run an opted-out evaluation from a standalone clone
 **And** restoring the shared-state comparison for a confined run makes the in-flight ref case exit 12 again, and removing it for an opted-out run lets the `git update-ref` target pass and fails the second case.
 
@@ -2871,6 +2871,15 @@ The in-flight ref is a branch and a commit made in a second worktree of the repo
 A confined target that runs `git update-ref` or `git config --local` leaves the project's refs and configuration as they were, and the run exits 0; the case asserts the target ran each command and reads no outcome of it, since git refuses the write on macOS (exit 128 and 255) and the exit on Linux is CI's.
 The reference sentence is read by `checkWorkspaceReference` under `## The workspace`.
 Both `preflight` and `run` read the project through the one `readTree` of the shared pipeline, and the case holds a confined `preflight` (its mutated arm) in flight as well as a `run`.
+
+Amended 2026-10-04 in Story 1.112's review round 1: the first build compared the working tree alone for a confined run.
+The evaluation layer (the adopter's command evaluator, the HTTP probe port, the judge, the sealed-brief agent) ran under the layer prefix, `(allow default)` on Seatbelt and `--bind / /` on Bubblewrap with the evaluation folder read-only, so it could write the project's `.git/config`, `hooks/` and refs, and a planted pre-commit hook runs the next time the adopter commits.
+The layer prefix now also denies a write under the project's common git directory: the Seatbelt layer profile adds a `(deny file-write* (subpath <common git directory>))` beside the evaluation folder's, and the Bubblewrap layer vector adds `--ro-bind <common git directory> <common git directory>` after `--bind / /`.
+`selectConfinement` resolves the directory with `git rev-parse --git-common-dir` from `launch.root` (a linked worktree resolves to the main repository's directory) and a project in no git repository adds nothing.
+A confined run still compares the working tree, the checkout's own `HEAD`, and the common git directory without `refs/`, `packed-refs`, `FETCH_HEAD`, `ORIG_HEAD`, `info/refs`, the main checkout's `HEAD` and the other records a second worktree's commit, fetch or branch moves, as a second guard; an opted-out run compares the refs as well.
+The checkout's `HEAD` is per worktree, so another worktree's commit cannot move it, and an edit committed in the project's own checkout does, which `git status` alone missed.
+A confined target and a confined evaluator that run `git update-ref`, append to `.git/config` or write a hook are refused, and the run records the refs and configuration untouched (`adopterTree.unchanged: true`).
+Story 1.62's byte-identity golden covers the target profile and the layer vectors of a confinement with no git directory, which are unchanged.
 
 **Dependencies:** 1.31.
 **Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-preflight`, `npm run test:evaluate-run`, `npm run docs:validate-links`, `npm test`.

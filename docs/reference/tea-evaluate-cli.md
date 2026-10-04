@@ -351,7 +351,7 @@ In either handoff, an answer the port gives before the call's service is ready, 
 
 Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
 Every process a target starts runs confined to that workspace (see [File-system confinement](#file-system-confinement)), so a write outside it is refused.
-In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run compares your working tree the same way.
+In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run compares your working tree, the checkout's `HEAD`, the git configuration and the hooks the same way.
 `evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
 
 - `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
@@ -376,9 +376,12 @@ The private parent also has an auxiliary ownership record in that journal and a 
 
 In a run that opted out of confinement, a worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), and a target running git in the worktree can change it, which the run detects afterwards and exits 12.
 A confined run gives each worktree a private repository instead, and the target can neither read nor write your git directory, apart from the worktree's own entry in it, which it can read (see [File-system confinement](#file-system-confinement)).
-`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths) and the content of every path it names, and for an opted-out run also every ref and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside a repository, the tree digest of `launch.root` without the evaluation's `runs/`.
-A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree fails the run, and so does an opted-out target that commits, tags or reconfigures the repository.
-A confined run compares your working tree alone, tracked and untracked paths in full, since its targets cannot reach your refs or your git directory.
+`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, the commit the checkout's own `HEAD` names, and the common git directory without its object store, reflogs, worktree records, index, submodule or LFS stores and lock files; outside a repository, the tree digest of `launch.root` without the evaluation's `runs/`.
+An opted-out run also reads every ref.
+A confined run leaves the refs and the entries that move with them (`packed-refs`, `info/refs`, the main checkout's `HEAD` and the records `fetch` and `reset` leave beside them) out of the common git directory, which keeps its configuration, hooks, `info/` and `description` in the comparison as a second guard, since the evaluation layer's processes cannot write the git directory at all.
+A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree fails the run, and so does a write to the git configuration or a hook, and an opted-out target that commits, tags or branches.
+A confined run compares your working tree, the checkout's `HEAD`, and the git configuration and hooks, and does not compare refs.
+An edit you commit in the checkout the run reads ends it with exit 12, since the checkout's `HEAD` moves, and so does a write to `.git/config` or `.git/hooks`.
 A commit, fetch or branch that another session makes in another worktree of the same repository while a confined run is in flight does not stop it, and `run.json` records `adopterTree.unchanged: true`.
 An opted-out run compares the refs and the shared git state as well, so any such change ends it with exit 12.
 If you share a repository with other sessions and run an opted-out evaluation, run it from a standalone clone of the repository, which no other session commits to.
@@ -451,8 +454,9 @@ Credentials an agent needs reach it through `environmentKeys`, which passes envi
 A run that opts out of confinement keeps the host environment and makes no home.
 `tea-skill-runner` hands its agent `HOME` among a short list of variables, so a skill target sees the private home there and the XDG base directories only through `HOME`'s default locations.
 
-Every other process the run starts to run your code or an agent (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge, the evaluation's HTTP port) runs with the evaluation folder read-only, `evaluator/` and `runs/` included, so no process of the run can swap a file of the evaluation layer between the runtime's re-read of it and the evaluator's launch (see [The evaluation layer](#the-evaluation-layer)), or rewrite the run's evidence.
-An evaluator that writes a cache beside itself under `evaluator/` fails its write in a confined run; it may write its working directory, your home directory and the rest of the host.
+Every other process the run starts to run your code or an agent (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge, the evaluation's HTTP port) runs with the evaluation folder read-only, `evaluator/` and `runs/` included, and your project's common git directory (refs, configuration, hooks and `info/`) read-only, so none of them can plant a hook, change the repository's configuration or move a ref your next git command reads, and no process of the run can swap a file of the evaluation layer between the runtime's re-read of it and the evaluator's launch (see [The evaluation layer](#the-evaluation-layer)), or rewrite the run's evidence.
+An evaluator that writes a cache beside itself under `evaluator/`, or runs `git commit`, `git update-ref` or `git config` in your repository, fails its write in a confined run; it may write its working directory, your home directory and the rest of the host.
+A project in no git repository has no git directory to protect.
 
 Each trial also audits what its targets open, through the mechanism itself and for every process the target starts, whatever its language or environment: a shell script, a Python program, a native binary and a Node process started with an empty environment are seen alike.
 On macOS the Seatbelt profile reports each read it allows outside the grants and tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.

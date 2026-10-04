@@ -567,7 +567,7 @@ async function pipeline(
   }
   // How every process the command starts is confined (Story 1.31), decided before anything starts: a host with no
   // mechanism refuses the command unless the evaluation opted out.
-  const confinement = selectConfinement({ evaluation, folder, env });
+  const confinement = selectConfinement({ evaluation, folder, root: realPathLoosely(joinAsSpelled(folder, evaluation.launch.root)), env });
   if (confinement.refusal !== undefined) return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: confinement.refusal });
   // The evaluation's HTTP port, asked for its protocol once, before any workspace is made, so a port that does not serve
   // stops the run as an authoring defect (a port that could not run at all, as infrastructure) with nothing started; and
@@ -655,10 +655,12 @@ async function pipeline(
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
-    // A confined target works in a private repository and cannot reach the shared git state, so a confined run compares the
-    // working tree alone and another session's commit in the same repository does not stop it; an opted-out target can write
-    // the refs and the configuration its worktree shares, so its run keeps comparing them (Story 1.112).
-    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState: !confines(confinement) });
+    // A confined target works in a private repository, but the evaluation layer around it can write the configuration and the
+    // hooks the project's repository holds, so a confined run compares the working tree, the checkout's HEAD, the configuration
+    // and the hooks, and another session's commit or branch in the same repository does not stop it; an opted-out run also
+    // compares the refs, since its target can write them (Story 1.112).
+    const sharedState = confines(confinement) ? 'configuration' : 'full';
+    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState });
     const before = readTree();
     const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one
@@ -900,7 +902,7 @@ async function runInWorkspaces({
           sealing: 'trial',
         }[when],
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents${before.shared === undefined ? '' : ', refs or shared git state'})`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'qualification attempts', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents, HEAD ${confines(confinement) ? 'or git configuration' : 'or the refs and shared git state'})`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'qualification attempts', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
       });
     }
   };

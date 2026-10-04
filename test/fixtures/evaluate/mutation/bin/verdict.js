@@ -120,9 +120,9 @@
  *                           (Story 1.112)
  *   update-ref              answer as usual, then run `git update-ref
  *                           refs/heads/written-by-target HEAD` in the working
- *                           directory, printing `update-ref: exit <code>`
+ *                           directory, printing `ref write: exit <code>`
  *   write-config            answer as usual, then run `git config --local
- *                           tea.written by-target`, printing `write-config: exit <code>`
+ *                           tea.written by-target`, printing `config write: exit <code>`
  *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
  *                           names, outside the workspace, printing
  *                           `ungranted-read: <how>` after the verdict
@@ -521,7 +521,7 @@ if (act === 'update-ref' || act === 'write-config') {
   const wrote = spawnSync('git', act === 'update-ref' ? ['update-ref', 'refs/heads/written-by-target', 'HEAD'] : ['config', '--local', 'tea.written', 'by-target'], {
     encoding: 'utf8',
   });
-  process.stdout.write(`${act}: exit ${wrote.status}\n`);
+  process.stdout.write(`${act === 'update-ref' ? 'ref write' : 'config write'}: exit ${wrote.status}\n`);
 }
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
   process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);
