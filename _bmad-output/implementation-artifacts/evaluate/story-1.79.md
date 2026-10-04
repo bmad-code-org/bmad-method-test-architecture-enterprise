@@ -102,7 +102,7 @@ Each new assertion has a mutant that fails it; a mutant that survives is recorde
 
 - `npm run test:evaluate-evaluators`: 807 checks passed (391 s wall under concurrent mutant runs, below the 491 s weight, so `tools/test-shard-weights.json` stays).
 - `node test/test-evaluate-evaluators.js --agent-version-only --only=sealed-brief`: 30 checks passed (23 before; the case alone runs about 9 s).
-- `npm run test:evaluate-ci`, `test:evaluate-partition-plans` (the other suite that runs the stub) and `test:evaluate-agents`: see the completion message for the results.
+- `npm run test:evaluate-ci`, `test:evaluate-partition-plans` (the other suite that runs the stub), `test:evaluate-agents`, `test:evaluate-held-attempts`, `test:evaluate-private` and `test:evaluate-records` (the groups of the evaluators file the stub serves): all exit 0.
 - `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
 - No docs change: `docs/reference/tea-evaluate-cli.md` says `score` and a baseline replay read the recorded configuration without starting the agent CLI, which the case now also holds for the gameability branch. No file under `src/workflows/testarch/bmad-testarch-evaluate/` changed, so builder Analyze does not apply.
 
