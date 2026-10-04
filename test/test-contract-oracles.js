@@ -450,6 +450,7 @@ function checkTestReviewOracles(evaluator, groundTruth) {
     return rest;
   })();
   const allKeys = { ...VERDICT_KEYS.always, ...VERDICT_KEYS.conditional };
+  const rightValueOf = (type) => ({ string: 'text', number: 1, boolean: true, object: {}, array: [] })[type];
   const wrongTypeOf = (type) =>
     type === 'string' ? 7 : type === 'number' ? 'seven' : type === 'array' ? 'none' : type === 'object' ? [] : 'wrong';
   const planted = [
@@ -464,6 +465,13 @@ function checkTestReviewOracles(evaluator, groundTruth) {
     ...Object.entries(allKeys)
       .filter(([key, type]) => type !== null && Object.hasOwn(base, key))
       .map(([key, type]) => [`a verdict whose ${key} is not ${type}`, { ...base, [key]: wrongTypeOf(type) }, false]),
+    // No stored verdict carries a conditional key, so each one is planted alone: the object the CLI declares permits it
+    // at its declared type and refuses it at another, and a shape that permitted only the required keys would pass
+    // every stored verdict.
+    ...Object.entries(VERDICT_KEYS.conditional).flatMap(([key, type]) => [
+      [`a verdict that also carries the conditional ${key}`, { ...base, [key]: rightValueOf(type) }, true],
+      [`a verdict whose conditional ${key} is not ${type}`, { ...base, [key]: wrongTypeOf(type) }, false],
+    ]),
   ];
   for (const [name, plantedVerdict, whole] of planted) {
     const results = evaluateOracles(evaluator, contract, {

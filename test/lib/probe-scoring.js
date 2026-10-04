@@ -1335,10 +1335,7 @@ function routingBody(answer) {
  */
 function routingOracleFor(contract, caseId, field) {
   const pointer = `/interactions/${caseId}/stdout/${field}`;
-  // An oracle reading one pointer: the whole-body oracle of a case names both required keys, and its first is `action`.
-  const found = contract.oracles.find(
-    (oracle) => oracle.direction.evidenceTargets.length === 1 && oracle.direction.evidenceTargets[0] === pointer,
-  );
+  const found = contract.oracles.find((oracle) => oracle.direction.evidenceTargets[0] === pointer);
   // Named rather than dereferenced blind: the caller reads `.id` off this, and a
   // TypeError there says nothing about which pointer went missing.
   if (found === undefined) throw new Error(`${contract.contractId}: no oracle reads ${pointer}`);

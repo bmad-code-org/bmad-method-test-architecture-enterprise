@@ -2041,10 +2041,7 @@ function buildFragmentSelectionProbes(workflow) {
  */
 function routingOracleFor(contract, caseId, field) {
   const pointer = `/interactions/${caseId}/stdout/${field}`;
-  // An oracle reading one pointer: the whole-body oracle of a case names both required keys, and its first is `action`.
-  const found = contract.oracles.filter(
-    (oracle) => oracle.direction.evidenceTargets.length === 1 && oracle.direction.evidenceTargets[0] === pointer,
-  );
+  const found = contract.oracles.filter((oracle) => oracle.direction.evidenceTargets[0] === pointer);
   assert(found.length === 1, `${contract.contractId}: ${found.length} oracle(s) read ${pointer}, and a probe needs exactly one`);
   return found[0];
 }
