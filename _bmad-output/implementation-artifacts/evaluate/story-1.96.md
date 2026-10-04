@@ -260,3 +260,6 @@ Each session accepted the latest scored run as the baseline in its scratch copy 
 The records took `model`, `turns` and `durationMs` from the output JSON, `claudeCodeVersion` from `claude --version`, the digests from the files, and `repositoryRead` from `test/lib/evaluate-ci-repos.js`.
 Both sessions ran after Story 1.98, so the records declare no `migrations` entry and `wrote` digests `evaluation.json` as it stands.
 `checkCaptureRecordGuard` builds the record of a session that ran before Story 1.98 and Story 1.42 from the committed one, with both migrations declared, and runs every guard case over it, plus a case that a record declaring a migration over the file as it stands fails `is not the file the live session wrote`.
+
+Main's Story 1.107 projects (`plan-mapping-check` and `plan-command-flow`) declare a rubric through the mapping layer, so the verdict plan they place reached the `applicability` rule with no `judge-calibration` on its live tiers and failed `test:evaluate-partition-plans`.
+The `planProject` helper now adds the calibration checks and the matching `tiers` for a rubric from either layer, and the suite passes on the rebased tree.

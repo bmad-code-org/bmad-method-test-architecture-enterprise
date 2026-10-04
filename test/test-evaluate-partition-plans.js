@@ -398,7 +398,7 @@ function planProject(label, layer = null, waivers = null, mappings = null) {
         fs.readFileSync(CI_PLAN, 'utf8').replaceAll('test/fixtures/evaluate/mutation/evals/verdict-ci', 'evals/verdict'),
       );
       // A contract that declares a rubric needs judge calibration on each live tier its plan uses (rule `applicability`).
-      if (layer !== null) {
+      if (layer !== null || mappings?.rubric === true) {
         for (const tier of ['scheduled', 'release']) {
           const twin = plan.checks.find((item) => item.id === 'twin-run' && item.placement.tier === tier);
           plan.checks.push({
