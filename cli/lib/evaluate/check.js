@@ -157,7 +157,7 @@ const { answeredKind, degenerateResponsePath } = require('./gameability');
 /** How a finding names a call of each interface kind. */
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
-const { PartitionPlanError, contractView, partitionPlanProblems, planCriterionName, readHeldOutPlan } = require('./partition');
+const { PartitionPlanError, contractView, partitionPlanProblems, readHeldOutPlan } = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -1205,18 +1205,23 @@ function checkJudge(report, evaluation, contract, conditions, { partial = false 
     }
   }
   if (rubrics.length > 0) {
+    // Over the both view the count is the contract's and the plan's together, so it is neither printed nor put on `contract.json`.
+    const declares =
+      !partial && evaluation.partitionPlan !== undefined
+        ? 'the contract and its held-out plan declare a rubric'
+        : `${CONTRACT_NAME} declares ${rubrics.length} rubric(s)`;
     if (judge === undefined) {
       report.add(
         MANIFEST_NAME,
         'judge',
-        `${CONTRACT_NAME} declares ${rubrics.length} rubric(s), and evaluation.json declares no judge to score them; declare judge with its agent adapter and timeoutMs`,
+        `${declares}, and evaluation.json declares no judge to score them; declare judge with its agent adapter and timeoutMs`,
       );
     }
     if (typeof conditions?.judge?.modelSnapshot !== 'string' || conditions.judge.modelSnapshot.length === 0) {
       report.add(
         CONDITIONS_NAME,
         'judge',
-        `${CONTRACT_NAME} declares ${rubrics.length} rubric(s), and ${CONDITIONS_NAME} names no judge.modelSnapshot, the model every judge call runs and every run records as a fixed condition`,
+        `${declares}, and ${CONDITIONS_NAME} names no judge.modelSnapshot, the model every judge call runs and every run records as a fixed condition`,
       );
     }
   }
@@ -1684,9 +1689,11 @@ function plainSchemaFindings(report, file, validate, locate = (instancePath) => 
  * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
  * run here (`check` compiles nothing); a compile defect surfaces at a held-out or both preflight.
  *
- * Returns the held-out plan only when it is sound: it has no finding of its own and the held-out view it makes passes the engine's
- * contract schema. Whatever else reads the plan (the both view the rubric rules run over) then runs over a plan that is known to fit,
- * and a plan with a finding stays with that finding.
+ * Returns the held-out plan only when it is sound: the file reads, passes its schema and `partitionPlanProblems`, `contract.json`
+ * passes the engine's contract schema, and the held-out view it makes passes it too. Those are the findings that block the return.
+ * An evaluator kind, an empty `heldOutProbes` and a gameability probe are findings of their own and do not: nothing in them
+ * reaches the plan's bytes, and a plan criterion is named by its label either way. Whatever else reads the plan (the both view
+ * the rubric rules run over) then runs over a plan that is known to fit.
  */
 function checkPartitionPlan(report, folder, evaluation, context, { openPlan = true } = {}) {
   const plan = evaluation.partitionPlan;
@@ -2268,10 +2275,11 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
       ? context.contract
       : contractView({ contractBytes: Buffer.from(JSON.stringify(context.contract)), evaluation, heldOutPlan, partition: 'both' }).contract;
   const partial = evaluation.partitionPlan !== undefined && rubricContract === context.contract;
-  // The both view lists `contract.json`'s rubrics first, so a rubric past them is the plan's, and the plan's text stays out of a finding.
+  // The both view lists `contract.json`'s rubrics first, so a rubric past them is the plan's, and the plan's text stays out of a
+  // finding. A plan reaches the both view only after its own schema accepted every rubric and criterion ID, so a plan criterion is
+  // named by those IDs and no position in the plan is needed.
   const sourceRubrics = Array.isArray(context.contract?.rubrics) ? context.contract.rubrics.length : 0;
-  const label = (rubric, rubricIndex, criterion, criterionIndex) =>
-    rubricIndex < sourceRubrics ? undefined : planCriterionName(rubric, rubricIndex - sourceRubrics, criterion, criterionIndex);
+  const label = (rubric, rubricIndex, criterion) => (rubricIndex < sourceRubrics ? undefined : `${rubric.id}/${criterion.id}`);
   checkCalibration(report, folder, evaluation, rubricContract, context.engine, { partial, label });
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);

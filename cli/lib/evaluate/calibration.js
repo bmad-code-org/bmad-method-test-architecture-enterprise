@@ -259,6 +259,19 @@ function calibrationShortfalls(report) {
     );
 }
 
+/**
+ * Whether a run's calibration holds only the criteria of its own view (Story 1.105). Under a partition plan one labelled file
+ * serves every partition, so a development or held-out run skips the items of the other partition's criteria; the both run
+ * and a folder with no plan hold every criterion and refuse an item that belongs to none.
+ *
+ * @param {string} partition the run's partition: `development`, `held-out` or `both`
+ * @param {{ partitionPlan?: object }} evaluation
+ * @returns {boolean}
+ */
+function calibrationPartial(partition, evaluation) {
+  return evaluation.partitionPlan !== undefined && partition !== 'both';
+}
+
 /** A report carries the judge's answer beside its label, never into its input. */
 async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem, partial = false }) {
   if ((contract.rubrics ?? []).length === 0) return null;
@@ -307,6 +320,7 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
 module.exports = {
   CALIBRATION_PATH,
   calibrationObservation,
+  calibrationPartial,
   calibrationStepPair,
   calibrationProblems,
   calibrationShortfalls,

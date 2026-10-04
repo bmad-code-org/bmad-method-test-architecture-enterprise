@@ -4,7 +4,13 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { calibrationObservation, calibrationProblems, calibrationStepPair, runCalibration } = require('../cli/lib/evaluate/calibration');
+const {
+  calibrationObservation,
+  calibrationPartial,
+  calibrationProblems,
+  calibrationStepPair,
+  runCalibration,
+} = require('../cli/lib/evaluate/calibration');
 const { planCriterionName } = require('../cli/lib/evaluate/partition');
 const { suite } = require('./lib/evaluate-story-121');
 
@@ -113,6 +119,14 @@ try {
     calibrationProblems(settings, { rubrics: [] }, { items: own }, engine).join('; '),
     /declares no rubric, so judge calibration has nothing to score/,
   );
+  // `run` holds the calibration to its view's own criteria exactly when a partition plan exists and the run is one partition's.
+  const planned = { ...settings, partitionPlan: { developmentOnlySteps: [], heldOutPlan: 'corpus/held-out/plan.json' } };
+  assert.equal(calibrationPartial('development', planned), true, 'a development run under a plan judges its own criteria only');
+  assert.equal(calibrationPartial('held-out', planned), true, 'a held-out run under a plan judges its own criteria only');
+  assert.equal(calibrationPartial('both', planned), false, 'the both run holds every criterion');
+  for (const partition of ['development', 'held-out', 'both']) {
+    assert.equal(calibrationPartial(partition, { ...settings, partitionPlan: undefined }), false, `a plan-less ${partition} run is strict`);
+  }
   // A run reaching `runCalibration` strictly (the both run, a folder with no partition plan) stops on an item of no criterion
   // before it judges anything, with the exit code `run` gives an invalid calibration. `check` refuses the same item first, so only
   // this call proves the run's own strictness; with `partial` the foreign item is skipped and the view's own items are judged.
@@ -223,6 +237,9 @@ try {
     'a free-text rubric ID reached a finding',
   );
   assert.equal(planCriterionName({ id: 'R-101' }, 2, { id: 'RC-101' }, 3), 'R-101/RC-101');
+  // An ID that starts with the shape and carries a tail is free text too: the shape is the whole ID.
+  assert.equal(planCriterionName({ id: 'R-101' }, 2, { id: 'RC-101-canary' }, 3), 'rubrics[2]/criteria[3]');
+  assert.equal(planCriterionName({ id: 'R-101-canary' }, 2, { id: 'RC-101' }, 3), 'rubrics[2]/criteria[3]');
   // Story 1.103: a criterion's step gives its own interface and operation, also where two interfaces share the operation ID.
   const shared = {
     interactionPlan: [

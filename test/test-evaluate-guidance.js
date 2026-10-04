@@ -731,6 +731,7 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'keep an item at every anchored level for every criterion, the held-out ones included',
     "The items that label a criterion of the plan's `rubrics`",
     'are closed to the authoring loop like the plan',
+    "the loop reads and edits only the items of `contract.json`'s criteria",
     '`evaluation.json` declares the judge once',
     'It names a rubric criterion that no view can reach by its criterion ID',
   ])
@@ -3322,6 +3323,13 @@ function checkGapsGuidance(guide, engine, failures) {
     'gaps.md AD-10 exit mapping',
     failures,
   );
+  // Story 1.105: the repair row that edits `policy/judge-calibration.json` keeps a held-out criterion's items closed.
+  requireText(
+    headingBody(guide, '## Map AD-10 exits and classes to repairs'),
+    'the calibration items of a held-out criterion stay closed',
+    'gaps.md tea-evaluate 11 repair',
+    failures,
+  );
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   checkIsolationViolationGuidance(guide, failures);
   // Stories 1.61 and 1.46: each dogfood mutation replaces bytes of a guide exactly once, so the exit-table rows M-001, M-002 and
@@ -4178,6 +4186,13 @@ async function main() {
         (text) => text.replace('are closed to the authoring loop like the plan', 'are open to the authoring loop'),
       ],
       [
+        'corpus partition plan loop reads every item',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace("the loop reads and edits only the items of `contract.json`'s criteria", 'the loop reads and edits every item'),
+      ],
+      [
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
@@ -4276,6 +4291,16 @@ async function main() {
           text.replace(
             " and the items of `policy/judge-calibration.json` that label a criterion of the plan's `rubrics` included",
             ' included',
+          ),
+      ],
+      [
+        'gaps repair row reopens the held-out calibration items',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) =>
+          text.replace(
+            'a held-out probe and the calibration items of a held-out criterion stay closed',
+            'a held-out probe stays behind `gap-view.json`',
           ),
       ],
       [
