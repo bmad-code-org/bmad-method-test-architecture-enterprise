@@ -374,7 +374,7 @@ async function checkFailingSteps(digestBytes) {
   });
   check(
     touchedSeeded.error?.exitCode === 12 &&
-      /stored design changed/.test(touchedSeeded.error.message) &&
+      /stored artifact changed/.test(touchedSeeded.error.message) &&
       touchedSeeded.qualified === undefined,
     `a stored seeded design that changed during the cycle stopped with ${touchedSeeded.error?.exitCode ?? 'a qualified result'}: ${touchedSeeded.error?.message}; expected 12`,
   );
@@ -383,7 +383,7 @@ async function checkFailingSteps(digestBytes) {
   fs.writeFileSync(seededNotText.mutatedPath, Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]));
   const seededBinary = await outcome(seededNotText);
   check(
-    seededBinary.error?.exitCode === 10 && /stored seeded/.test(seededBinary.error.message),
+    seededBinary.error?.exitCode === 10 && /stored mutated/.test(seededBinary.error.message),
     `a stored seeded design that is not UTF-8 gave ${seededBinary.error?.exitCode ?? 'a qualified result'}; expected 10 naming it`,
   );
 
@@ -445,7 +445,7 @@ async function checkFailingSteps(digestBytes) {
     arm: recordingArm([], digestBytes, { mutated: () => fs.appendFileSync(sourceTouched.referencePath, '\nextra\n') }),
   });
   check(
-    touched.error?.exitCode === 12 && /stored design changed/.test(touched.error.message) && touched.qualified === undefined,
+    touched.error?.exitCode === 12 && /stored artifact changed/.test(touched.error.message) && touched.qualified === undefined,
     `a stored design that changed during the cycle stopped with ${touched.error?.exitCode ?? 'a qualified result'}: ${touched.error?.message}; expected 12`,
   );
   checkWorkspacesGone('the failing steps');

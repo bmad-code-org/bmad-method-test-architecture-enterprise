@@ -2268,6 +2268,7 @@ function plantedTree(plant) {
 /**
  * The `rollback-literal` violations of one file outside `cli/`, found by the same walker `scanCli` runs.
  * Story 1.49: the test-design qualification module reaches the flag through the runtime's cycle, so it holds no literal either.
+ * Story 1.99: so do the shared cycle, the oracle arm, the corpus adapters and the generator, which wrote the constant for the other four corpora.
  */
 function rollbackLiteralsIn(file) {
   const source = fs.readFileSync(file, 'utf8');
@@ -2284,8 +2285,17 @@ function rollbackLiteralsIn(file) {
   return found.filter((violation) => violation.rule === 'rollback-literal');
 }
 
-/** Files outside `cli/` that state the rollback flag from a cycle's result and never write it true. */
-const ROLLBACK_CHECKED_FILES = ['test/lib/test-design-qualification.js'];
+/**
+ * Files outside `cli/` that state the rollback flag from a cycle's result and never write it true: the qualification modules and
+ * the generator that writes the probes, which carried the constant for eighteen controlled-mutation probes until Story 1.99.
+ */
+const ROLLBACK_CHECKED_FILES = [
+  'test/lib/mutation-qualification.js',
+  'test/lib/oracle-arm.js',
+  'test/lib/probe-qualification.js',
+  'test/lib/test-design-qualification.js',
+  'tools/generate-probes.js',
+];
 
 function checkRollbackLiteralOutsideCli() {
   const scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-boundaries-rollback-'));

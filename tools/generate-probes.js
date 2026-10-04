@@ -72,6 +72,17 @@
  *   pre-flight with `seeded-fault-fired` at exit 3. P-011 and P-016 are the two
  *   that clear pre-flight.
  *
+ * WHERE `rollbackVerified` COMES FROM
+ *
+ * A controlled-mutation probe claims it only from a performed cycle (AD-8, Stories 1.49 and 1.99): a
+ * disposable copy of a stored reference artifact, the clean arm, one exact mutation, the mutated arm, the
+ * restore, the digest comparison and the clean rerun, through the runtime's `runMutationCycle`. The
+ * test-design corpus scores a document with the replay projection (`test/lib/test-design-qualification.js`);
+ * the test-review, trace, nfr and ci corpora resolve the probe's own contract oracle over the stored
+ * correct output the mutation edits (`test/lib/probe-qualification.js`). `performedCycle` reads the claim
+ * from the cycle's evidence, holds its digests against the stored bytes the probe cites, and raises a
+ * `GeneratorError` that emits no probe when a step fails. Nothing here writes the flag as a literal.
+ *
  * Usage: node tools/generate-probes.js [--check]
  * Exit codes: 0 = written or up to date, 1 = a corpus is stale, 2 = the generator could not run
  */
@@ -121,11 +132,16 @@ const {
   TEST_DESIGN_OPERATION,
 } = require('../test/eval-test-design');
 const { DEFAULT_AGENT: TEST_DESIGN_DEFAULT_AGENT } = require('../cli/test-design-runner');
-// A test-design controlled-mutation probe claims `rollbackVerified` only from a
-// performed mutation cycle in a disposable copy (AD-8), which this module runs
-// through the runtime's own `runMutationCycle`.
+// A controlled-mutation probe claims `rollbackVerified` only from a performed
+// mutation cycle in a disposable copy (AD-8), which these modules run through the
+// runtime's own `runMutationCycle`: the test-design corpus scores a document with
+// the replay projection, and the test-review, trace, nfr and ci corpora resolve
+// the probe's oracle over the artifact the mutation edits.
 const { QualificationError } = require('../cli/lib/evaluate/mutation');
-const { digestStoredDesign, qualifyTestDesignMutation, testDesignOracleHolds } = require('../test/lib/test-design-qualification');
+const { digestStoredFile } = require('../test/lib/mutation-qualification');
+const { qualifyTestDesignMutation, testDesignOracleHolds } = require('../test/lib/test-design-qualification');
+const { qualifyCorpusMutation } = require('../test/lib/probe-qualification');
+const { pointersOf } = require('../test/lib/oracle-arm');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -144,6 +160,8 @@ const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
 const NFR_FIXTURE_PREFIX = 'test/fixtures/nfr-eval/';
 const TEST_DESIGN_FIXTURE_PREFIX = 'test/fixtures/test-design-eval/';
 const TEST_DESIGN_REPLAY_PREFIX = 'test/replay/test-design/';
+/** The stored mutated artifacts the cycles of the test-review, trace and nfr corpora edit toward, one per plant. */
+const PROBE_MUTANT_PREFIX = 'test/fixtures/probe-mutants/';
 
 /**
  * The Probe schema version this generator writes, read from the installed
@@ -170,6 +188,48 @@ function assert(condition, message) {
 }
 
 const pad = (n) => String(n).padStart(3, '0');
+
+/**
+ * The evidence of one performed mutation cycle, or a generator error that emits no probe.
+ *
+ * The claim is read from the cycle's own evidence, and the evidence must carry the digests of the stored
+ * bytes it worked on: the reference before the mutation and after the restore, the stored mutated artifact
+ * under the mutation, and a clean rerun that held. A result that names other digests is not this probe's
+ * cycle. A cycle that stops (AD-10's exit 10, 11 or 12) or reports no verified rollback raises a
+ * `GeneratorError`, so no probe carries a claim nobody performed.
+ *
+ * @param {object} options
+ * @param {string} options.label names the probe in the error
+ * @param {() => Promise<{evidence: object}>} options.qualify performs the cycle
+ * @param {string} options.referencePath repository-relative path of the stored reference artifact
+ * @param {string} options.mutatedPath repository-relative path of the stored mutated artifact
+ * @returns {Promise<object>} the cycle's evidence, `rollbackVerified` included
+ */
+async function performedCycle({ label, qualify, referencePath, mutatedPath }) {
+  let qualified;
+  try {
+    qualified = await qualify();
+  } catch (error) {
+    if (error instanceof QualificationError) {
+      throw new GeneratorError(
+        `${label}: the mutation could not be qualified (AD-10 exit ${error.exitCode}), so no probe is emitted: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+  const referenceDigest = await digestStoredFile(path.join(PROJECT_ROOT, referencePath));
+  const mutatedDigest = await digestStoredFile(path.join(PROJECT_ROOT, mutatedPath));
+  const performed = qualified?.evidence;
+  assert(
+    performed?.rollbackVerified === true &&
+      performed.preDigest === referenceDigest &&
+      performed.restoredDigest === referenceDigest &&
+      performed.mutatedDigest === mutatedDigest &&
+      performed.rePasses?.at(-1)?.verdict === 'held',
+    `${label}: the mutation cycle did not verify its rollback over the stored artifacts, so no probe may claim it`,
+  );
+  return performed;
+}
 
 /**
  * One repository-relative path in the spelling the generated corpus carries.
@@ -346,7 +406,7 @@ function reviewPlants(groundTruth) {
   );
 }
 
-function buildTestReviewProbes() {
+async function buildTestReviewProbes({ qualify = qualifyCorpusMutation } = {}) {
   const contract = loadContract('test-review.contract.json');
   const groundTruth = JSON.parse(fs.readFileSync(path.join(REVIEW_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const plants = reviewPlants(groundTruth);
@@ -366,19 +426,37 @@ function buildTestReviewProbes() {
   const corpusDigest = digestOf([groundTruthPath, ...reviewedFiles]);
   const systemDigest = digestOf(reviewedFiles);
 
-  // The stored replay outputs the qualification records point at. Both are real
-  // files this repository keeps, and each is what its route demands: a review of
-  // the planted revision that reports every planted row, and the un-planted file
-  // the same review reports nothing against.
-  const mutatedFail = 'test/replay/test-review/full-recall/verdict.json';
+  // The stored replay outputs the qualification records point at. `fullRecall` is the review of the
+  // planted revision that reports every planted row: the reference artifact of every plant's mutation
+  // cycle, whose clean arm each plant's oracle accepts. `gamedFail` is the review that games the suite.
+  const fullRecall = 'test/replay/test-review/full-recall/verdict.json';
   const gamedFail = 'test/replay/test-review/out-of-scope-finding/verdict.json';
 
-  const probes = plants.map((plant, index) => {
+  const probes = [];
+  for (const [index, plant] of plants.entries()) {
     const registrySeverity = severityOfRow.get(plant.row);
     assert(registrySeverity, `ground-truth.json plants row ${plant.row}, which criteria-registry.md does not carry`);
     const oracleId = `O-${pad(index + 1)}`;
     const behaviorId = soleBehaviorFor(contract, oracleId);
-    return {
+    // The mutation withholds this row's finding from the review that reports every row, as a reviewer that
+    // missed the plant would: the stored twin is that review without the finding, and the oracle that
+    // discharges the row's behavior accepts the first and rejects the second.
+    const mutatedReview = `${PROBE_MUTANT_PREFIX}test-review/${plant.row.toLowerCase()}/verdict.json`;
+    const performed = await performedCycle({
+      label: `${oracleId} (${plant.row})`,
+      referencePath: fullRecall,
+      mutatedPath: mutatedReview,
+      qualify: () =>
+        qualify({
+          corpus: 'test-review',
+          contract,
+          oracleId,
+          mutationId: `M-${pad(index + 1)}`,
+          referencePath: path.join(PROJECT_ROOT, fullRecall),
+          mutatedPath: path.join(PROJECT_ROOT, mutatedReview),
+        }),
+    });
+    probes.push({
       schemaVersion: PROBE_SCHEMA_VERSION,
       parentDigest: null,
       revisionCount: 0,
@@ -387,26 +465,27 @@ function buildTestReviewProbes() {
       behaviorId,
       systemId: 'tea-test-review-corpus',
       implementationDigest: systemDigest,
-      artifactDigest: digestOf([plant.relativePath]),
+      artifactDigest: digestOf([mutatedReview]),
       commitDigest: corpusDigest,
       rationale:
         `Registry row ${plant.row} was planted in ${plant.basename} at line ${plant.line}: ${plant.what}. ` +
-        `${oracleId} is the oracle that catches it, and ${behaviorId} is the behavior it discharges.`,
+        `${oracleId} is the oracle that catches it, and ${behaviorId} is the behavior it discharges. ` +
+        `The mutation withholds the finding for ${plant.row} from the stored review that reports every plant.`,
       qualification: {
         route: 'controlled-mutation',
-        mutationSource: groundTruthPath,
-        mutationOperator: `plant-registry-row-${plant.row.toLowerCase()}`,
-        targetArtifact: fileReference(plant.relativePath),
-        expectedObservableFailure: `The review reports registry row ${plant.row} against ${plant.basename} at one of lines ${plant.admittedLines.join(', ')}.`,
-        // The un-planted revision of the same corpus is the clean control this
-        // repository keeps beside the seeded files, and the stored review below
-        // reports nothing against it.
-        baselinePassEvidence: fileReference(cleanPath),
-        mutatedFailEvidence: fileReference(mutatedFail),
-        // The plant lives beside its clean control rather than being restored
-        // after the run, so there is nothing to roll back and the control is on
-        // disk for anyone to read.
-        rollbackVerified: true,
+        // The mutation is to the review a run writes, and a plant lives in a spec file only a reviewer can
+        // score, so the stored review is what the operator is named against.
+        mutationSource: fullRecall,
+        mutationOperator: `withhold-registry-row-${plant.row.toLowerCase()}`,
+        targetArtifact: fileReference(fullRecall),
+        expectedObservableFailure: `The review reports no finding for registry row ${plant.row} against ${plant.basename} at any of lines ${plant.admittedLines.join(', ')}.`,
+        // The review the clean arm scores, and the one exact edit of it the mutated arm scores. Both are
+        // files this repository keeps, and the cycle's own digests are held equal to theirs.
+        baselinePassEvidence: fileReference(fullRecall),
+        mutatedFailEvidence: fileReference(mutatedReview),
+        // The cycle's own conjunction of the restored digest and the clean rerun, asserted true above; a
+        // literal here would claim a rollback nobody performed.
+        rollbackVerified: performed.rollbackVerified,
       },
       expectedClean: false,
       defects: [
@@ -462,8 +541,8 @@ function buildTestReviewProbes() {
           predicate: { op: 'equality', operands: [{ pointer: '/interactions/observed/exit-code' }, { literal: GATING_EXIT_CODE }] },
         },
       },
-    };
-  });
+    });
+  }
 
   const cleanOracleId = `O-${pad(plants.length + 1)}`;
   const scopeOracleId = `O-${pad(plants.length + 2)}`;
@@ -486,7 +565,7 @@ function buildTestReviewProbes() {
         'is that the contract does not fire on a file with nothing in it.',
       qualification: {
         route: 'clean-control',
-        baselinePassEvidence: fileReference(mutatedFail),
+        baselinePassEvidence: fileReference(fullRecall),
         revisionCommitDigest: corpusDigest,
         noKnownDefectStatement:
           `${clean.path} is deliberately clean. ground-truth.json plants nothing in it and records the five findings a ` +
@@ -515,7 +594,7 @@ function buildTestReviewProbes() {
         degenerateResponse:
           'A verdict that files a finding against every file the reviewer opened, including the implementation files the ' +
           'fixtures import and nobody asked it to review.',
-        naiveOracleSatisfiedEvidence: fileReference(mutatedFail),
+        naiveOracleSatisfiedEvidence: fileReference(fullRecall),
         disciplinedOracleRejectedEvidence: fileReference(gamedFail),
       },
       expectedClean: false,
@@ -561,7 +640,7 @@ function buildTestReviewProbes() {
 // trace
 // ---------------------------------------------------------------------------
 
-function buildTraceProbes() {
+async function buildTraceProbes({ qualify = qualifyCorpusMutation } = {}) {
   const contract = loadContract('trace.contract.json');
   const groundTruth = JSON.parse(fs.readFileSync(path.join(TRACE_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const seeded = groundTruth.fixtureSets.find((set) => set.id.startsWith('seeded'));
@@ -577,10 +656,48 @@ function buildTraceProbes() {
   const gaps = seeded.criteria.filter((criterion) => criterion.trueCoverage !== 'FULL');
   assert(gaps.length > 0, 'the seeded trace set declares no coverage gap, so it seeds nothing');
 
-  // The gate oracle is the one every seeded gap is ultimately answerable to: the
-  // gate is derived from the coverage the gaps produce.
-  const gateOracleId = contract.oracles[0].id;
-  const gateBehaviorId = soleBehaviorFor(contract, gateOracleId);
+  // The oracle every seeded gap answers to is the one reading the summary's priority breakdown, which is
+  // the arithmetic a withheld gap moves. The gate does not serve: withholding AC-8 or AC-10 leaves the gate
+  // at FAIL, because AC-2 holds the P0 band at 50%, so no mutation of either gap alone fails it. Found by
+  // what it reads, as the nfr and ci builders find theirs, and it throws when none or several do.
+  const priorityOracles = contract.oracles.filter(
+    (oracle) =>
+      oracle.commentary.startsWith(`${seeded.id}:`) &&
+      pointersOf(oracle.check).some((pointer) => pointer.includes('/coverage/priority_breakdown/')),
+  );
+  assert(
+    priorityOracles.length === 1,
+    `${seeded.id}: ${priorityOracles.length} oracle(s) read the priority breakdown of the summary, and a probe needs exactly one`,
+  );
+  const priorityOracleId = priorityOracles[0].id;
+  const priorityBehaviorId = soleBehaviorFor(contract, priorityOracleId);
+
+  // The reference of every gap's mutation: the stored correct summary of the seeded set, which the oracle
+  // accepts. The mutation withholds one gap from its priority breakdown, so the criterion's band reads as
+  // covered, and the stored twin is that summary with the band edited.
+  const seededSummary = 'test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json';
+  const mutatedSummaries = gaps.map(
+    (criterion) => `${PROBE_MUTANT_PREFIX}trace/${criterion.id.toLowerCase()}/${path.basename(seededSummary)}`,
+  );
+  const performances = [];
+  for (const [index, criterion] of gaps.entries()) {
+    performances.push(
+      await performedCycle({
+        label: `${priorityOracleId} (${criterion.id})`,
+        referencePath: seededSummary,
+        mutatedPath: mutatedSummaries[index],
+        qualify: () =>
+          qualify({
+            corpus: 'trace',
+            contract,
+            oracleId: priorityOracleId,
+            mutationId: `M-${pad(index + 1)}`,
+            referencePath: path.join(PROJECT_ROOT, seededSummary),
+            mutatedPath: path.join(PROJECT_ROOT, mutatedSummaries[index]),
+          }),
+      }),
+    );
+  }
 
   const probes = gaps.map((criterion, index) => ({
     schemaVersion: PROBE_SCHEMA_VERSION,
@@ -588,31 +705,35 @@ function buildTraceProbes() {
     revisionCount: 0,
     probeId: `P-${pad(index + 1)}`,
     probeClass: 'defect',
-    behaviorId: gateBehaviorId,
+    behaviorId: priorityBehaviorId,
     systemId: `tea-trace-${seeded.id}`,
     implementationDigest: corpusDigest,
-    artifactDigest: corpusDigest,
+    artifactDigest: digestOf([mutatedSummaries[index]]),
     commitDigest: corpusDigest,
     rationale:
       `${criterion.id} is ${criterion.priority} and its true coverage is ${criterion.trueCoverage}: ${criterion.text} ` +
-      `The gap is the plant, and ${gateOracleId} is the oracle that has to see its consequence in the derived gate.`,
+      `The gap is the plant, and ${priorityOracleId} is the oracle that has to see its consequence in the priority breakdown the summary derives. ` +
+      `The mutation withholds ${criterion.id} from the stored correct summary, so ${criterion.priority} reads as covered.`,
     qualification: {
       route: 'controlled-mutation',
-      mutationSource: groundTruthPath,
+      // The mutation is to the summary a run writes, so the stored correct summary is what the operator is named against.
+      mutationSource: seededSummary,
       mutationOperator: `withhold-coverage-${criterion.id.toLowerCase()}`,
-      targetArtifact: fileReference(groundTruthPath),
+      targetArtifact: fileReference(seededSummary),
       expectedObservableFailure:
-        `The traceability matrix classifies ${criterion.id} as ${criterion.trueCoverage} and the summary counts it in the ` +
-        `${criterion.trueCoverage === 'NONE' ? 'gap buckets' : 'partial coverage items'}.`,
-      baselinePassEvidence: fileReference('test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json'),
-      mutatedFailEvidence: fileReference('test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json'),
-      rollbackVerified: true,
+        `The summary's priority breakdown reports ${criterion.priority} fully covered, so ${criterion.id}, which is ` +
+        `${criterion.trueCoverage}, no longer reaches ${criterion.trueCoverage === 'NONE' ? 'the gap buckets' : 'the partial coverage items'}.`,
+      baselinePassEvidence: fileReference(seededSummary),
+      mutatedFailEvidence: fileReference(mutatedSummaries[index]),
+      // The cycle's own conjunction of the restored digest and the clean rerun, asserted true above; a
+      // literal here would claim a rollback nobody performed.
+      rollbackVerified: performances[index].rollbackVerified,
     },
     expectedClean: false,
     defects: [
       {
         defectId: `D-${pad(index + 1)}`,
-        behaviorId: gateBehaviorId,
+        behaviorId: priorityBehaviorId,
         summary: `${criterion.id} (${criterion.priority}) is covered ${criterion.trueCoverage}: ${criterion.text}`,
         severity: criterion.priority === 'P0' ? 'critical' : 'material',
         oracleEvidence: [fileReference(groundTruthPath)],
@@ -991,39 +1112,21 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
     // scored, the one exact mutation that yields the stored seeded design applied, the mutated arm
     // scored, the original bytes restored, their digest compared and the clean arm run again. A step
     // that fails stops the generator, so no probe carries a rollback claim the cycle did not perform.
-    let qualified;
-    try {
-      qualified = await qualify({
-        mutationId: `M-${pad(position + 1)}`,
-        referencePath: path.join(PROJECT_ROOT, reference.designPath),
-        mutatedPath: path.join(PROJECT_ROOT, mutated.designPath),
-        entry,
-        set,
-        categories,
-        stored: { baseline: reference.result, mutated: mutated.result },
-      });
-    } catch (error) {
-      if (error instanceof QualificationError) {
-        throw new GeneratorError(
-          `${oracleId} (${mutated.id}): the mutation could not be qualified (AD-10 exit ${error.exitCode}), so no probe is emitted: ${error.message}`,
-        );
-      }
-      throw error;
-    }
-    // The claim is read from the cycle's own evidence, and the evidence must carry the digests of the stored
-    // bytes it worked on: the reference before the mutation and after the restore, the seeded design under
-    // the mutation, and a clean rerun that held. A result that names other digests is not this probe's cycle.
-    const referenceDigest = await digestStoredDesign(path.join(PROJECT_ROOT, reference.designPath));
-    const seededDigest = await digestStoredDesign(path.join(PROJECT_ROOT, mutated.designPath));
-    const performed = qualified?.evidence;
-    assert(
-      performed?.rollbackVerified === true &&
-        performed.preDigest === referenceDigest &&
-        performed.restoredDigest === referenceDigest &&
-        performed.mutatedDigest === seededDigest &&
-        performed.rePasses?.at(-1)?.verdict === 'held',
-      `${oracleId} (${mutated.id}): the mutation cycle did not verify its rollback over the stored designs, so no probe may claim it`,
-    );
+    const performed = await performedCycle({
+      label: `${oracleId} (${mutated.id})`,
+      referencePath: reference.designPath,
+      mutatedPath: mutated.designPath,
+      qualify: () =>
+        qualify({
+          mutationId: `M-${pad(position + 1)}`,
+          referencePath: path.join(PROJECT_ROOT, reference.designPath),
+          mutatedPath: path.join(PROJECT_ROOT, mutated.designPath),
+          entry,
+          set,
+          categories,
+          stored: { baseline: reference.result, mutated: mutated.result },
+        }),
+    });
 
     const authored = {
       'run-measured': {
@@ -1300,7 +1403,7 @@ function overallStatusAny(pointer, status) {
  * says which domain and which rule each probe rests on so a later contract with a
  * per-domain claim can be pointed at the right one.
  */
-function buildNfrProbes() {
+async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
   const contract = loadContract('nfr.contract.json');
   const groundTruth = JSON.parse(fs.readFileSync(path.join(NFR_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const isGapped = (set) => Object.values(set.domains ?? {}).some((domain) => domain.isUndecidable === true);
@@ -1312,15 +1415,48 @@ function buildNfrProbes() {
   const corpusDigest = digestOf([groundTruthPath]);
   const citations = groundTruth.skillRuleCitations ?? {};
 
-  // The stored runs the two evidence fields point at. The clean bundle's audit is
-  // the baseline: four PASS domains and no gap. The gapped bundle's audit is what
-  // the plants produce, and it is the same document test/replay/nfr/ scores.
+  // The clean bundle's audit is the clean control's baseline: four PASS domains and no gap.
   const baselineReport = 'test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
-  const mutatedReport = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
+  // The reference of every plant's mutation: the stored correct audit of the gapped bundle, which the
+  // oracle each plant answers to accepts. Each mutation withholds one domain's finding from it.
+  const correctAudit = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
+  const storedReport = (caseId) => `test/replay/nfr/${caseId}/test-artifacts/nfr/nfr-assessment-system.md`;
 
   const gappedOracles = nfrOraclesFor(contract, gapped.id);
   const unknownOracleId = nfrOracleReading(gappedOracles, NFR_UNKNOWN_TOKEN, gapped.id);
   const gateOracleId = nfrOracleReading(gappedOracles, `overall_status: '${gapped.expectedOverallStatus}'`, gapped.id);
+  const sectionOracleId = nfrOracleReading(gappedOracles, '# Maintainability Assessment', gapped.id);
+
+  // What each planted domain's mutation is, and the oracle that reads the part of the report it edits. A
+  // domain's plant is its status, and the contract states four document-level claims, so a plant that
+  // the rollup does not move has no claim of its own: withholding maintainability's CONCERNS leaves the
+  // report at FAIL, because reliability breaches a threshold in the same bundle. The mutation of each
+  // domain is therefore the withholding the contract can see.
+  const mutations = {
+    // The run supplies a response-time target the sources never state, which the workflow forbids, so
+    // the report stops recording the threshold as UNKNOWN. The stored twin is a run that did exactly that.
+    performance: {
+      operator: 'invent-performance-threshold',
+      oracleId: unknownOracleId,
+      mutatedReport: storedReport('gapped-performance-passed'),
+      failure: `The report records no threshold as ${NFR_UNKNOWN_TOKEN}, because the run supplied the performance target the sources never state.`,
+    },
+    // The run misses the reliability breach, so the Gate YAML rolls the four statuses up to CONCERNS.
+    reliability: {
+      operator: 'roll-up-reliability-as-concerns',
+      oracleId: gateOracleId,
+      mutatedReport: `${PROBE_MUTANT_PREFIX}nfr/reliability/nfr-assessment-system.md`,
+      failure: `The Gate YAML publishes overall_status CONCERNS, not ${gapped.expectedOverallStatus}, because the reliability breach is missing from it.`,
+    },
+    // The run leaves the maintainability section out, so one dispatched domain is never reported. The
+    // stored twin is that run.
+    maintainability: {
+      operator: 'omit-maintainability-section',
+      oracleId: sectionOracleId,
+      mutatedReport: storedReport('gapped-domain-omitted'),
+      failure: 'The report declares no Maintainability Assessment section, so one of the four dispatched domains is never reported.',
+    },
+  };
 
   // The domains this bundle plants a defect in, in the order the harness scores
   // them: the ones the corpus flags undecidable, plus the one whose evidence
@@ -1329,11 +1465,33 @@ function buildNfrProbes() {
     ({ domain }) => domain.isUndecidable === true || domain.expectedStatus === 'FAIL',
   );
   assert(planted.length > 0, `${gapped.id} plants no defect in any domain, so it seeds nothing`);
+  for (const { name } of planted) {
+    assert(mutations[name], `${gapped.id} plants a defect in ${name}, which states no mutation for the cycle to perform`);
+  }
+  const performances = [];
+  for (const [index, { name }] of planted.entries()) {
+    performances.push(
+      await performedCycle({
+        label: `${mutations[name].oracleId} (${name})`,
+        referencePath: correctAudit,
+        mutatedPath: mutations[name].mutatedReport,
+        qualify: () =>
+          qualify({
+            corpus: 'nfr',
+            contract,
+            oracleId: mutations[name].oracleId,
+            mutationId: `M-${pad(index + 1)}`,
+            referencePath: path.join(PROJECT_ROOT, correctAudit),
+            mutatedPath: path.join(PROJECT_ROOT, mutations[name].mutatedReport),
+          }),
+      }),
+    );
+  }
 
   const probes = planted.map(({ name, domain }, index) => {
     const citation = citations[domain.rule];
     assert(citation, `${gapped.id}.domains.${name}: rule "${domain.rule}" names no entry in skillRuleCitations`);
-    const oracleId = domain.thresholdStated === false ? unknownOracleId : gateOracleId;
+    const { oracleId, mutatedReport } = mutations[name];
     const behaviorId = soleBehaviorFor(contract, oracleId);
     const legId = `manifest-${name}`;
     return {
@@ -1345,22 +1503,24 @@ function buildNfrProbes() {
       behaviorId,
       systemId: `tea-nfr-${gapped.id}`,
       implementationDigest: corpusDigest,
-      artifactDigest: corpusDigest,
+      artifactDigest: digestOf([mutatedReport]),
       commitDigest: corpusDigest,
       rationale:
         `${name} is ${domain.expectedStatus} on ${gapped.id}, under skillRuleCitations.${domain.rule}: ${citation.rule} ` +
-        `The bundle is the plant, and ${oracleId} is the oracle that has to see its consequence in the report the run wrote.`,
+        `The bundle is the plant, and ${oracleId} is the oracle that has to see its consequence in the report the run wrote. ` +
+        `The mutation (${mutations[name].operator}) withholds that finding from the stored correct audit of the bundle.`,
       qualification: {
         route: 'controlled-mutation',
-        mutationSource: groundTruthPath,
-        mutationOperator: `plant-${name}-${domain.expectedStatus.toLowerCase()}`,
-        targetArtifact: fileReference(groundTruthPath),
-        expectedObservableFailure:
-          `The ${name} findings of the report are recorded as ${domain.expectedStatus}, and the Gate YAML publishes ` +
-          `overall_status ${gapped.expectedOverallStatus}.`,
-        baselinePassEvidence: fileReference(baselineReport),
+        // The mutation is to the report a run writes, so the stored correct audit is what the operator is named against.
+        mutationSource: correctAudit,
+        mutationOperator: mutations[name].operator,
+        targetArtifact: fileReference(correctAudit),
+        expectedObservableFailure: mutations[name].failure,
+        baselinePassEvidence: fileReference(correctAudit),
         mutatedFailEvidence: fileReference(mutatedReport),
-        rollbackVerified: true,
+        // The cycle's own conjunction of the restored digest and the clean rerun, asserted true above; a
+        // literal here would claim a rollback nobody performed.
+        rollbackVerified: performances[index].rollbackVerified,
       },
       expectedClean: false,
       defects: [
@@ -1490,7 +1650,7 @@ function ciOracleReading(oracles, literal, setId) {
  * project and which rule each probe rests on, so a later contract with a
  * differently addressed deliverable can be pointed at the right claim.
  */
-function buildCiProbes() {
+async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
   const contract = loadContract('ci.contract.json');
   const groundTruth = JSON.parse(fs.readFileSync(path.join(CI_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const full = groundTruth.fixtureSets.find((set) => set.isMinimalRequest === false);
@@ -1538,6 +1698,31 @@ function buildCiProbes() {
     },
   ];
 
+  // Each plant's mutation edits the stored correct pipeline of its project into the stored deviant one:
+  // the requested element withheld, or (for the template probe below) the forbidden one added. The
+  // oracle each plant answers to accepts the first and rejects the second.
+  const cycle = (label, oracleId, index, referencePath, mutatedPath) =>
+    performedCycle({
+      label: `${oracleId} (${label})`,
+      referencePath,
+      mutatedPath,
+      qualify: () =>
+        qualify({
+          corpus: 'ci',
+          contract,
+          oracleId,
+          mutationId: `M-${pad(index + 1)}`,
+          referencePath: path.join(PROJECT_ROOT, referencePath),
+          mutatedPath: path.join(PROJECT_ROOT, mutatedPath),
+        }),
+    });
+  const performances = [];
+  for (const [index, plant] of plants.entries()) {
+    performances.push(await cycle(plant.element.id, plant.oracleId, index, plant.baselineReport, plant.mutatedReport));
+  }
+  const templateMutatedReport = 'test/replay/ci/minimal-template-copied/.github/workflows/test.yml';
+  const templatePerformed = await cycle('template-copied', burnInOracleId, plants.length, baselineMinimalReport, templateMutatedReport);
+
   const probes = plants.map((plant, index) => {
     const behaviorId = soleBehaviorFor(contract, plant.oracleId);
     const legId = `manifest-${plant.element.id}`;
@@ -1550,18 +1735,21 @@ function buildCiProbes() {
       behaviorId,
       systemId: `tea-ci-${plant.set.id}`,
       implementationDigest: corpusDigest,
-      artifactDigest: corpusDigest,
+      artifactDigest: digestOf([plant.mutatedReport]),
       commitDigest: corpusDigest,
       rationale: `${plant.summary} ${plant.oracleId} is the oracle that has to see its consequence in the workflow the run wrote.`,
       qualification: {
         route: 'controlled-mutation',
-        mutationSource: groundTruthPath,
+        // The mutation is to the workflow a run writes, so the stored correct pipeline is what the operator is named against.
+        mutationSource: plant.baselineReport,
         mutationOperator: `plant-${plant.element.id}-missing`,
-        targetArtifact: fileReference(groundTruthPath),
+        targetArtifact: fileReference(plant.baselineReport),
         expectedObservableFailure: plant.expectedObservableFailure,
         baselinePassEvidence: fileReference(plant.baselineReport),
         mutatedFailEvidence: fileReference(plant.mutatedReport),
-        rollbackVerified: true,
+        // The cycle's own conjunction of the restored digest and the clean rerun, asserted true above; a
+        // literal here would claim a rollback nobody performed.
+        rollbackVerified: performances[index].rollbackVerified,
       },
       expectedClean: false,
       defects: [
@@ -1626,18 +1814,18 @@ function buildCiProbes() {
     behaviorId: soleBehaviorFor(contract, burnInOracleId),
     systemId: `tea-ci-${minimal.id}`,
     implementationDigest: corpusDigest,
-    artifactDigest: corpusDigest,
+    artifactDigest: digestOf([templateMutatedReport]),
     commitDigest: corpusDigest,
     rationale: `${minimal.id}'s request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. ${burnInOracleId} is the oracle that has to see the template's burn-in job in the workflow the run wrote.`,
     qualification: {
       route: 'controlled-mutation',
-      mutationSource: groundTruthPath,
+      mutationSource: baselineMinimalReport,
       mutationOperator: 'plant-template-copied-onto-minimal',
-      targetArtifact: fileReference(groundTruthPath),
+      targetArtifact: fileReference(baselineMinimalReport),
       expectedObservableFailure: `The workflow written for ${minimal.id} contains "burn-in".`,
       baselinePassEvidence: fileReference(baselineMinimalReport),
-      mutatedFailEvidence: fileReference('test/replay/ci/minimal-template-copied/.github/workflows/test.yml'),
-      rollbackVerified: true,
+      mutatedFailEvidence: fileReference(templateMutatedReport),
+      rollbackVerified: templatePerformed.rollbackVerified,
     },
     expectedClean: false,
     defects: [
@@ -2054,4 +2242,16 @@ if (require.main === module) {
     });
 }
 
-module.exports = { PROBE_SCHEMA_VERSION, GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, run, targets, writeCorpora };
+module.exports = {
+  PROBE_SCHEMA_VERSION,
+  GeneratorError,
+  buildCiProbes,
+  buildNfrProbes,
+  buildTestDesignProbes,
+  buildTestReviewProbes,
+  buildTraceProbes,
+  loadGeneratorCorpus,
+  run,
+  targets,
+  writeCorpora,
+};

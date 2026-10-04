@@ -131,7 +131,7 @@ development_status:
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
-  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: backlog
+  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: review
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: review
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog

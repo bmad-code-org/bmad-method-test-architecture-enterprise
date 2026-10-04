@@ -1,7 +1,7 @@
 {
   "nfr": {
     "contractId": "tea-nfr-behavioral",
-    "corpusDigest": "sha256:0e093ad90f80758d80c9609f9b34c6915622d621831d30a2207929afc77eb5a4",
+    "corpusDigest": "sha256:77b3ee2bd4afd198c12b19c179eff3aa36fa2a80d54c02d5fba69aebaa2fa64e",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -59,7 +59,7 @@
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-003",
+        "behaviorId": "B-001",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:25212d28b4be16bd71b806ec5d110a9176b82c87477502372e23d374ed73d6da",
+    "corpusDigest": "sha256:8b76f6a3763339590bc27fa30a3b5b92df2a831d49e7b35243dd36b85705f3e4",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -1763,7 +1763,7 @@
   },
   "test-review": {
     "contractId": "tea-test-review-behavioral",
-    "corpusDigest": "sha256:119d4152b17905dcf23f2e10914e8c9c7e6772c2d711a1a385dfdb1091e86433",
+    "corpusDigest": "sha256:73b10453d63f3a1979d50e75d57bdd160a9d380b13becdb9765610c8ddbfba9a",
     "probeCount": 11,
     "strength": {
       "defect": {
@@ -3818,7 +3818,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
-    "corpusDigest": "sha256:ba5e8b01a4aa63284ba6133815047b182f25414d2c6a5d2af36833d9ecf922fa",
+    "corpusDigest": "sha256:5069d788648f1b6147c1bd9e2e09da2f35b144825b6577bd1d5f0487a28b9c52",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -3834,7 +3834,7 @@
       "P-001": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -3848,7 +3848,7 @@
       "P-002": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -3862,7 +3862,7 @@
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-001",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
