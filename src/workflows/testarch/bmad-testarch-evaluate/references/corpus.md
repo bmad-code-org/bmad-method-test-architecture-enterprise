@@ -112,7 +112,31 @@ The items that label a criterion of the plan's `rubrics` sit in that same file a
 }
 ```
 
-`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, beside a gameability probe, or with a waiver that reads a development-only step. It names a rubric criterion that no view can reach by its criterion ID. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
+A waiver follows the step its condition reads.
+A waiver names a discipline rule and no oracle, so its `condition` is the one field that places it.
+A `condition` is a sentence, and every `/interactions/<stepId>` pointer in it names a step wherever the pointer sits, so write each step a condition reads as that pointer: a step named any other way is not read.
+A waiver in `contract.json` whose condition reads a shared step, or no step, is in every view, and one whose condition reads a development-only step anywhere, beside a shared step or alone, is in the development and both views.
+A waiver that reads a held-out step stays out of `contract.json`, because the development view would name the step.
+A waiver only the held-out partition carries goes in the plan file's `waivers` array under its own waiver ID, which differs from every waiver ID in `contract.json`; it is in the held-out and both views, and a step its condition reads is a shared or a held-out one.
+
+<!-- example:held-out-waivers -->
+
+```json
+{
+  "waivers": [
+    {
+      "id": "W-101",
+      "rule": "omission-and-completeness",
+      "rationale": "The held-out seed is unavailable in the sandbox environment.",
+      "condition": "/interactions/held-out-run/exit-code is absent",
+      "approval": "gate-c-reviewer",
+      "expiresAt": "2027-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, or beside a gameability probe. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
 
 ## Agent
 

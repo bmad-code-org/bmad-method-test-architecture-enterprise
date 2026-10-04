@@ -18,15 +18,26 @@ const ORACLE_ID = /^O-[0-9]{3,}$/;
 const BEHAVIOR_ID = /^B-[0-9]{3,}$/;
 const RUBRIC_ID = /^R-[0-9]{3,}$/;
 const CRITERION_ID = /^RC-[0-9]{3,}$/;
+const WAIVER_ID = /^W-[0-9]{3,}$/;
 /** The step an interaction-rooted pointer reads, as eval-quality's pointers and a captured binding spell it. */
 const POINTER_STEP = /^\/interactions\/([a-z0-9]+(?:-[a-z0-9]+)*)\//;
 /**
- * The structured fields that name a step through a pointer: an operand's `pointer`, a binding's `captured`, a rubric
- * criterion's `evidence` and a waiver's `condition`, the one machine-checkable field a waiver has. A step's `after` names
- * a step directly. Nothing else is read: a `literal`, a `commentary` or a `scope` is the adopter's text, and a string in
- * it that looks like a pointer is not a reference.
+ * Every step a waiver's free-text `condition` names (Story 1.106). A step ID has the shape `[a-z0-9]+(?:-[a-z0-9]+)*`, so a
+ * reference is `/interactions/<stepId>` wherever it sits in the sentence. The ID is whole when the next character is not an ASCII
+ * letter, a digit or `_`, and is not a hyphen followed by an ASCII letter or digit: `_` continues a word, so
+ * `/interactions/held-out-run_x` reads no step, and a non-ASCII letter ends a reference. Every pointer is read, the first and each
+ * later one, and a pointer with no path after the step (`/interactions/held-out-run is absent`) still names its step. A position
+ * before the pointer is not constrained, and the scan is a zero-width lookahead, so one reference does not consume the next:
+ * `/interactions/interactions/held-out-run` reads `interactions` and `held-out-run`, and text that wraps a pointer cannot hide it.
  */
-const POINTER_FIELDS = new Set(['pointer', 'captured', 'evidence', 'condition']);
+const CONDITION_STEPS = /(?=\/interactions\/([a-z0-9]+(?:-[a-z0-9]+)*)(?![A-Za-z0-9_]|-[A-Za-z0-9]))/g;
+/**
+ * The structured fields that name a step through a pointer that starts the string: an operand's `pointer`, a binding's `captured`
+ * and a rubric criterion's `evidence`. A waiver's `condition` is a sentence and is read by `CONDITION_STEPS` instead. A step's
+ * `after` names a step directly. Nothing else is read: a `literal`, a `commentary` or a `scope` is the adopter's text, and a
+ * string in it that looks like a pointer is not a reference.
+ */
+const POINTER_FIELDS = new Set(['pointer', 'captured', 'evidence']);
 const HELD_OUT_PLAN_PATH = new RegExp(
   JSON.parse(fs.readFileSync(path.join(__dirname, 'schemas', 'evaluation.schema.json'), 'utf8')).properties.partitionPlan.properties
     .heldOutPlan.pattern,
@@ -88,6 +99,9 @@ function isObject(value) {
 /** The step a pointer string reads, or undefined when it is no interaction-rooted pointer. */
 const pointerStep = (text) => (typeof text === 'string' ? POINTER_STEP.exec(text)?.[1] : undefined);
 
+/** Every step a waiver's `condition` names, in the order the sentence names them, with repeats. */
+const conditionSteps = (text) => (typeof text === 'string' ? [...text.matchAll(CONDITION_STEPS)].map((match) => match[1]) : []);
+
 /** Every step `value` names through a structured reference field, with repeats. */
 function* referencedSteps(value) {
   if (Array.isArray(value)) {
@@ -104,6 +118,10 @@ function* referencedSteps(value) {
       }
       case 'evidenceTargets': {
         for (const target of Array.isArray(item) ? item : []) yield pointerStep(target);
+        break;
+      }
+      case 'condition': {
+        yield* conditionSteps(item);
         break;
       }
       case 'inputBinding': {
@@ -150,7 +168,7 @@ function planCriterionName(rubric, rubricIndex, criterion, criterionIndex) {
  * @param {object} [options]
  * @param {boolean} [options.shaped] refuse a file that lacks the plan's four top-level fields; `check` passes false and validates the
  *   file against its schema instead, to name each defect
- * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], rubrics?: object[], behaviorOracles: Record<string, string[]> }}
+ * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], rubrics?: object[], waivers?: object[], behaviorOracles: Record<string, string[]> }}
  * @throws {PartitionPlanError}
  */
 function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
@@ -210,6 +228,13 @@ function reachableRubric(rubric, developmentOnly) {
 }
 
 /**
+ * Whether the held-out view keeps a waiver of `contract.json` (Story 1.106). A waiver names a discipline rule and no oracle, so
+ * the one thing that places it is its `condition`, the only field of a waiver that reads a step: the waiver leaves with a
+ * development-only step its condition reads. A waiver whose condition reads no step is shared.
+ */
+const reachableWaiver = (waiver, developmentOnly) => !stepsReadBy(waiver).some((id) => developmentOnly.has(id));
+
+/**
  * The contract one partition runs (Story 1.51, AD-9, AD-22), derived from `contract.json` and, for the held-out and both
  * views, the held-out plan.
  *
@@ -219,9 +244,10 @@ function reachableRubric(rubric, developmentOnly) {
  *   a development-only step leaves with it (the engine fails `unreachable-check-evidence` on an oracle whose step is gone),
  *   each behavior gains the oracles the held-out plan lists for it, and the held-out oracles join `oracles`. A rubric
  *   criterion leaves with the step its evidence reads (Story 1.105): `contract.json`'s criteria that read a development-only
- *   step go, a rubric left with none goes, and the held-out plan's rubrics join `rubrics`.
- * - `both`: the whole plan with the held-out steps appended, every oracle and criterion kept and the held-out oracles and
- *   rubrics added.
+ *   step go, a rubric left with none goes, and the held-out plan's rubrics join `rubrics`. A waiver leaves with the
+ *   development-only step its `condition` reads (Story 1.106), and the held-out plan's waivers join `waivers`.
+ * - `both`: the whole plan with the held-out steps appended, every oracle, criterion and waiver kept and the held-out oracles,
+ *   rubrics and waivers added.
  *
  * A derived view is serialized as `JSON.stringify(view, null, 2)` and a newline.
  *
@@ -247,11 +273,15 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
     }
     view.oracles = (source.oracles ?? []).filter((oracle) => !owned.has(oracle.id));
     if (Array.isArray(source.rubrics)) view.rubrics = source.rubrics.flatMap((rubric) => reachableRubric(rubric, developmentOnly));
+    if (Array.isArray(source.waivers)) view.waivers = source.waivers.filter((waiver) => reachableWaiver(waiver, developmentOnly));
   }
   view.interactionPlan = [...(view.interactionPlan ?? []), ...heldOutPlan.interactionPlan];
   view.oracles = [...(view.oracles ?? []), ...heldOutPlan.oracles];
   // A plan that declares no `rubrics` appends nothing; the held-out view still drops the criteria the held-out partition cannot reach.
   if ((heldOutPlan.rubrics ?? []).length > 0) view.rubrics = [...(view.rubrics ?? []), ...heldOutPlan.rubrics];
+  // Likewise for `waivers`: a plan that declares none appends nothing, and the held-out view still drops the waivers that read a
+  // development-only step.
+  if ((heldOutPlan.waivers ?? []).length > 0) view.waivers = [...(view.waivers ?? []), ...heldOutPlan.waivers];
   for (const behavior of view.behaviors ?? []) {
     behavior.oracles = [
       ...(behavior.oracles ?? []).filter((id) => !owned.has(id)),
@@ -333,9 +363,20 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
     if (!sourceSteps.has(id))
       add('evaluation.json', `partitionPlan.developmentOnlySteps names step ${id}, which contract.json does not declare`);
   }
-  for (const id of stepsReadBy(contract.waivers)) {
-    if (developmentOnly.has(id))
-      add('contract.json', `waivers read development-only step ${id}; a partition plan does not partition waivers yet`);
+  // A waiver of contract.json is in the development view, and in the held-out view unless its condition reads a development-only
+  // step, so the development view must declare every step the condition reads (Story 1.106). The IDs are named only when they
+  // have the schema's shape: a free-text one is the adopter's own text.
+  for (const [index, waiver] of (Array.isArray(contract.waivers) ? contract.waivers : []).entries()) {
+    if (!isObject(waiver)) continue;
+    const waiverLabel = named(waiver.id, WAIVER_ID, `waivers[${index}]`);
+    for (const id of stepsReadBy(waiver)) {
+      if (!sourceSteps.has(id)) {
+        add(
+          'contract.json',
+          `waiver ${waiverLabel} reads step ${id}, which the development view does not declare; a waiver that reads a held-out step belongs in the held-out plan's waivers`,
+        );
+      }
+    }
   }
   // A criterion of contract.json is in the development view, and in the held-out view unless it reads a development-only
   // step, so the development view must declare the step it reads (Story 1.105).
@@ -416,6 +457,27 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
         if (!visible.has(id)) {
           add(file, `criterion ${criterionLabel} of rubric ${rubricLabel} reads step ${id}, which the held-out view does not declare`);
         }
+      }
+    }
+  }
+  const sourceWaivers = new Set((Array.isArray(contract.waivers) ? contract.waivers : []).filter(isObject).map((waiver) => waiver.id));
+  const seenWaivers = new Set();
+  for (const [index, waiver] of (heldOutPlan.waivers ?? []).entries()) {
+    if (!isObject(waiver)) continue;
+    const waiverLabel = named(waiver.id, WAIVER_ID, `waivers[${index}]`);
+    if (sourceWaivers.has(waiver.id)) add(file, `waiver ${waiverLabel} has the ID of a waiver contract.json declares`);
+    else if (seenWaivers.has(waiver.id)) add(file, `waiver ${waiverLabel} is declared more than once`);
+    seenWaivers.add(waiver.id);
+    // A waiver's condition is free text that may hold a pointer, so a step is named only when the development partition already
+    // knows it (a development-only step); any other step is the plan's own text.
+    for (const id of stepsReadBy(waiver)) {
+      if (!visible.has(id)) {
+        add(
+          file,
+          developmentOnly.has(id)
+            ? `waiver ${waiverLabel} reads development-only step ${id}, which the held-out view does not declare`
+            : `waiver ${waiverLabel} reads a step the held-out view does not declare`,
+        );
       }
     }
   }

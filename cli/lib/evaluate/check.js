@@ -1769,10 +1769,11 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   const sharedSteps = (contract.interactionPlan ?? []).filter((step) => !developmentOnly.has(step?.stepId)).length;
   const retainedOracles = view.oracles.length - heldOutPlan.oracles.length;
   const retainedRubrics = (view.rubrics ?? []).length - (heldOutPlan.rubrics ?? []).length;
-  const bases = { interactionPlan: sharedSteps, oracles: retainedOracles, rubrics: retainedRubrics };
-  // A step, oracle or rubric of the held-out view that is past the shared ones is the held-out plan's, named by its index there.
+  const retainedWaivers = (view.waivers ?? []).length - (heldOutPlan.waivers ?? []).length;
+  const bases = { interactionPlan: sharedSteps, oracles: retainedOracles, rubrics: retainedRubrics, waivers: retainedWaivers };
+  // A step, oracle, rubric or waiver of the held-out view that is past the shared ones is the held-out plan's, named by its index there.
   const locate = (instancePath) => {
-    const [, collection, index, rest = ''] = /^\/(interactionPlan|oracles|rubrics)\/(\d+)(.*)$/.exec(instancePath) ?? [];
+    const [, collection, index, rest = ''] = /^\/(interactionPlan|oracles|rubrics|waivers)\/(\d+)(.*)$/.exec(instancePath) ?? [];
     const base = bases[collection];
     return collection !== undefined && Number(index) >= base
       ? `${collection}[${Number(index) - base}]${rest}`

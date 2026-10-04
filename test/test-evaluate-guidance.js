@@ -726,7 +726,7 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'under one, replace it that way',
     'A rubric criterion follows the step its evidence reads',
     "goes in the plan file's `rubrics` array under its own rubric ID",
-    'is in the development and both views',
+    'one that reads a development-only step is in the development and both views',
     'it is in the held-out and both views',
     'keep an item at every anchored level for every criterion, the held-out ones included',
     "The items that label a criterion of the plan's `rubrics`",
@@ -734,6 +734,13 @@ function checkPartitionPlanGuidance(corpus, failures) {
     "the loop reads and edits only the items of `contract.json`'s criteria",
     '`evaluation.json` declares the judge once',
     'It names a rubric criterion that no view can reach by its criterion ID',
+    'A waiver follows the step its condition reads',
+    'A waiver names a discipline rule and no oracle, so its `condition` is the one field that places it',
+    'every `/interactions/<stepId>` pointer in it names a step wherever the pointer sits',
+    'whose condition reads a development-only step anywhere, beside a shared step or alone, is in the development and both views',
+    'A waiver that reads a held-out step stays out of `contract.json`',
+    "goes in the plan file's `waivers` array under its own waiver ID",
+    'It names a waiver that no view can reach by its waiver ID',
   ])
     requireText(body, marker, 'corpus.md partition plan', failures);
   const fragments = taggedExamples(body, 'partition-plan');
@@ -810,6 +817,42 @@ function checkPartitionPlanGuidance(corpus, failures) {
   if (!unreachable.some((problem) => /criterion RC-101 of rubric R-101 reads step development-run/.test(problem.message)))
     failures.push(
       'the partition plan check accepts a held-out criterion on a development-only step, so the rubric example check proves nothing',
+    );
+  // Story 1.106: the tagged waiver example, joined to the plan, is a plan the schema, `check` and the engine's contract schema accept,
+  // and a waiver of it that reads a development-only step is one `check` names.
+  const waiverExamples = taggedExamples(body, 'held-out-waivers');
+  if (waiverExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-waivers example; found ${waiverExamples.length}`);
+    return;
+  }
+  const withWaivers = { ...plans[0], ...waiverExamples[0] };
+  if (!validatePlan(withWaivers)) failures.push(`corpus.md held-out waivers fail the plan schema: ${JSON.stringify(validatePlan.errors)}`);
+  const waiverProblems = partitionPlanProblems({ contract, evaluation, heldOutPlan: withWaivers, heldOutBehaviors: new Set(['B-002']) });
+  if (waiverProblems.length > 0) failures.push(`corpus.md held-out waivers raise check findings: ${JSON.stringify(waiverProblems)}`);
+  else {
+    const view = contractView({ contractBytes, evaluation, heldOutPlan: withWaivers, partition: 'held-out' }).contract;
+    const contractAjv = new Ajv({ strict: false, allErrors: true });
+    addFormats(contractAjv);
+    const validateContract = contractAjv.compile(JSON.parse(fs.readFileSync(engineSchemaPath('eval-contract.schema.json'), 'utf8')));
+    if (!validateContract(view))
+      failures.push(`corpus.md held-out waivers make a view the engine schema refuses: ${JSON.stringify(validateContract.errors)}`);
+    if (!view.waivers.some((waiver) => waiver.id === 'W-101')) failures.push('corpus.md held-out waiver never reaches the held-out view');
+  }
+  const unreachableWaiver = partitionPlanProblems({
+    contract,
+    evaluation,
+    heldOutPlan: {
+      ...withWaivers,
+      waivers: withWaivers.waivers.map((waiver) => ({
+        ...waiver,
+        condition: 'the exit code at /interactions/development-run/exit-code is absent',
+      })),
+    },
+    heldOutBehaviors: new Set(['B-002']),
+  });
+  if (!unreachableWaiver.some((problem) => /waiver W-101 reads development-only step development-run/.test(problem.message)))
+    failures.push(
+      'the partition plan check accepts a held-out waiver on a development-only step, so the waiver example check proves nothing',
     );
 }
 
@@ -4187,7 +4230,11 @@ async function main() {
         'corpus partition plan development criterion view',
         'corpus',
         checkPartitionPlanGuidance,
-        (text) => text.replace('is in the development and both views', 'stays in the development view only'),
+        (text) =>
+          text.replace(
+            'one that reads a development-only step is in the development and both views',
+            'one that reads a development-only step stays in the development view only',
+          ),
       ],
       [
         'corpus partition plan held-out calibration items open',
@@ -4201,6 +4248,64 @@ async function main() {
         checkPartitionPlanGuidance,
         (text) =>
           text.replace("the loop reads and edits only the items of `contract.json`'s criteria", 'the loop reads and edits every item'),
+      ],
+      [
+        'corpus partition plan waiver example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-waivers -->', ''),
+      ],
+      [
+        'corpus partition plan waiver on a development-only step',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"/interactions/held-out-run/exit-code is absent"', '"/interactions/development-run/exit-code is absent"'),
+      ],
+      [
+        'corpus partition plan waiver on a development-only step mid-condition',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            '"/interactions/held-out-run/exit-code is absent"',
+            '"the exit code at /interactions/development-run/exit-code is absent"',
+          ),
+      ],
+      [
+        'corpus partition plan waiver condition read from the start only',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'every `/interactions/<stepId>` pointer in it names a step wherever the pointer sits',
+            'a pointer that starts it names a step',
+          ),
+      ],
+      [
+        'corpus partition plan waiver placed by an oracle',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'A waiver names a discipline rule and no oracle, so its `condition` is the one field that places it',
+            'A waiver names the oracle it excuses',
+          ),
+      ],
+      [
+        'corpus partition plan development waiver view',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'whose condition reads a development-only step anywhere, beside a shared step or alone, is in the development and both views',
+            'stays in the development view only',
+          ),
+      ],
+      [
+        'corpus partition plan check names no waiver',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('It names a waiver that no view can reach by its waiver ID. ', ''),
       ],
       [
         'run partition plan preflight removal',
