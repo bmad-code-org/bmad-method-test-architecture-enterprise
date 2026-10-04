@@ -517,6 +517,158 @@
         }
       ],
       "oracles": ["O-027"]
+    },
+    {
+      "id": "B-028",
+      "description": "The whole routing answer for good-or-covering-what-matters: its action and its reason. good-or-covering-what-matters: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for good-or-covering-what-matters carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "good-or-covering-what-matters/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-028"]
+    },
+    {
+      "id": "B-029",
+      "description": "The whole routing answer for measured-some-nfrs-planned-none: its action and its reason. measured-some-nfrs-planned-none: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for measured-some-nfrs-planned-none carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "measured-some-nfrs-planned-none/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-029"]
+    },
+    {
+      "id": "B-030",
+      "description": "The whole routing answer for thin-coverage-on-payments: its action and its reason. thin-coverage-on-payments: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for thin-coverage-on-payments carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "thin-coverage-on-payments/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-030"]
+    },
+    {
+      "id": "B-031",
+      "description": "The whole routing answer for story-half-done: its action and its reason. story-half-done: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for story-half-done carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "story-half-done/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-031"]
+    },
+    {
+      "id": "B-032",
+      "description": "The whole routing answer for run-and-fix-ci-failures: its action and its reason. run-and-fix-ci-failures: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for run-and-fix-ci-failures carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "run-and-fix-ci-failures/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-032"]
+    },
+    {
+      "id": "B-033",
+      "description": "The whole routing answer for write-production-code: its action and its reason. write-production-code: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for write-production-code carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "write-production-code/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-033"]
+    },
+    {
+      "id": "B-034",
+      "description": "The whole routing answer for penetration-test-staging: its action and its reason. penetration-test-staging: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for penetration-test-staging carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "penetration-test-staging/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-034"]
+    },
+    {
+      "id": "B-035",
+      "description": "The whole routing answer for hire-a-qa-lead: its action and its reason. hire-a-qa-lead: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "severity": "material",
+      "observableSuccessCriterion": "The answer for hire-a-qa-lead carries an action the skill allows and a stated reason, and no key the runner does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "hire-a-qa-lead/routingAnswer"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reply-is-not-a-routing-answer"
+        }
+      ],
+      "oracles": ["O-035"]
     }
   ],
   "oracles": [
@@ -1292,6 +1444,479 @@
           }
         ],
         "pattern": "^[\\s\\S]*\\S[\\s\\S]*$"
+      }
+    },
+    {
+      "id": "O-028",
+      "polarity": "expects-hold",
+      "commentary": "good-or-covering-what-matters: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for good-or-covering-what-matters: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": [
+          "/interactions/good-or-covering-what-matters/stdout/action",
+          "/interactions/good-or-covering-what-matters/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/good-or-covering-what-matters/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/good-or-covering-what-matters/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/good-or-covering-what-matters/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-029",
+      "polarity": "expects-hold",
+      "commentary": "measured-some-nfrs-planned-none: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for measured-some-nfrs-planned-none: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": [
+          "/interactions/measured-some-nfrs-planned-none/stdout/action",
+          "/interactions/measured-some-nfrs-planned-none/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/measured-some-nfrs-planned-none/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/measured-some-nfrs-planned-none/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/measured-some-nfrs-planned-none/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-030",
+      "polarity": "expects-hold",
+      "commentary": "thin-coverage-on-payments: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for thin-coverage-on-payments: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": [
+          "/interactions/thin-coverage-on-payments/stdout/action",
+          "/interactions/thin-coverage-on-payments/stdout/reason"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/thin-coverage-on-payments/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/thin-coverage-on-payments/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/thin-coverage-on-payments/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-031",
+      "polarity": "expects-hold",
+      "commentary": "story-half-done: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for story-half-done: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": ["/interactions/story-half-done/stdout/action", "/interactions/story-half-done/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/story-half-done/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/story-half-done/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/story-half-done/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-032",
+      "polarity": "expects-hold",
+      "commentary": "run-and-fix-ci-failures: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for run-and-fix-ci-failures: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": ["/interactions/run-and-fix-ci-failures/stdout/action", "/interactions/run-and-fix-ci-failures/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/run-and-fix-ci-failures/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/run-and-fix-ci-failures/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/run-and-fix-ci-failures/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-033",
+      "polarity": "expects-hold",
+      "commentary": "write-production-code: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for write-production-code: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": ["/interactions/write-production-code/stdout/action", "/interactions/write-production-code/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/write-production-code/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/write-production-code/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/write-production-code/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-034",
+      "polarity": "expects-hold",
+      "commentary": "penetration-test-staging: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for penetration-test-staging: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": ["/interactions/penetration-test-staging/stdout/action", "/interactions/penetration-test-staging/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/penetration-test-staging/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/penetration-test-staging/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/penetration-test-staging/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-035",
+      "polarity": "expects-hold",
+      "commentary": "hire-a-qa-lead: the answer is the object the runner prints. Its keys are the declared ones, its action is one of route, clarify, decline and its reason is a non-blank string.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The whole routing answer for hire-a-qa-lead: its action and its reason.",
+        "negativeDomain": "An answer with a missing, extra or mistyped key, an action outside the three the skill allows, or a reason that is null or blank.",
+        "evidenceTargets": ["/interactions/hire-a-qa-lead/stdout/action", "/interactions/hire-a-qa-lead/stdout/reason"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/hire-a-qa-lead/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["action", "reason"],
+              "permittedKeys": ["action", "menuCode", "workflow", "scope", "reason", "question", "missing"],
+              "types": {
+                "action": "string",
+                "menuCode": null,
+                "workflow": null,
+                "scope": null,
+                "reason": "string",
+                "question": null,
+                "missing": null
+              }
+            }
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/hire-a-qa-lead/stdout/action"
+              },
+              {
+                "literal": ["route", "clarify", "decline"]
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/hire-a-qa-lead/stdout/reason"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          }
+        ]
       }
     }
   ],

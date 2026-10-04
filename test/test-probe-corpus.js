@@ -42,6 +42,7 @@ const prettier = require('prettier');
 const { loadEvalQuality, scoringPolicy, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
 const { ladderExitCode, ladderVerdict, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
+const { routingWholeBodyTargets } = require('../tools/generate-contracts');
 const { baselineDifferences, cacheDirectoryFor, stagedWorkspaceFor, stagingOf } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
 const { compareStoredResults } = require('./lib/compare-dominance');
@@ -407,6 +408,28 @@ async function wrongRunProblems(suite) {
   if (suite.id === 'test-design') {
     take(await readUnder(suite, probe, (caseId) => caseId, { projectionOf: ({ design, ...rest }) => rest }));
   }
+  // The whole-summary oracles read the summary's own keys. The only stored summary that drops a key belongs to the
+  // seeded set (rejected_evidence), so the clean set's oracle is failed by a read that drops each key of the contract's
+  // declaration in turn: the harness still scores the run, and the oracle that reads the whole object is the one that
+  // must notice. A drop the harness refuses (schema_version) answers every oracle of the set, so it fails nothing here.
+  if (suite.id === 'trace') {
+    for (const key of suite.contract.permittedInterfaces[0].operations[0].responseDescriptor.requiredKeys) {
+      const read = await readUnder(suite, probe, (caseId) => caseId, {
+        summaryOf: (summary) => {
+          const { [key]: _dropped, ...rest } = summary;
+          return rest;
+        },
+      });
+      take(read);
+      for (const spec of specs.filter((candidate) => candidate.kind === 'whole-summary')) {
+        if (!read.refused.has(spec.setId) && !read.violated.has(spec.id)) {
+          problems.push(
+            `${suite.id}: ${spec.id} (whole-summary on ${spec.setId}) still held when the stored summary lost ${key}, so a constant held would pass the corpus`,
+          );
+        }
+      }
+    }
+  }
   for (const spec of heldOnOwn) {
     const accepted = WRONG_RUN_CANNOT_FAIL.find((entry) => entry.suiteId === suite.id && entry.kind === spec.kind);
     const where = `${spec.id} (${spec.kind}${spec.elementId ? ` ${spec.elementId}` : ''} on ${spec.setId})`;
@@ -515,11 +538,48 @@ async function unknownOracleProblems(suite) {
 async function testReviewVerdictProblems(suite) {
   if (suite.id !== 'test-review') return [];
   const probe = suite.probes.find((candidate) => candidate.expectedClean);
-  const { exitOracleId, payloadOracleId } = suite.evidence.verdictOracleIds;
+  const { exitOracleId, payloadOracleId, wholeBodyOracleId } = suite.evidence.verdictOracleIds;
   const problems = [];
+  // The contract on disk must carry the oracle that reads the whole verdict. The builder tolerates its absence so a
+  // contract variant without it can be scored for coverage, which leaves this the check that fails the real contract.
+  if (wholeBodyOracleId === undefined) {
+    return ['test-review: no behavior links tea-cli-contract/verdict-whole-body, so no oracle reads the whole verdict'];
+  }
   const own = await violatedUnder(suite, probe, (caseId) => caseId);
-  for (const oracleId of [exitOracleId, payloadOracleId]) {
+  for (const oracleId of [exitOracleId, payloadOracleId, wholeBodyOracleId]) {
     if (own.has(oracleId)) problems.push(`test-review: ${oracleId} is violated on the stored verdict the record carries`);
+  }
+  // The whole-verdict oracle reads every key the CLI always writes and no key it does not declare, so a verdict that
+  // loses any one key, carries an extra one, or holds a key of another type must violate it, whether or not the harness
+  // still scores the verdict. Dropping one key is the read a reader of fewer keys than the oracle names would miss.
+  const { VERDICT_KEYS } = require('../cli/test-review');
+  // A value of another JSON kind than the type the CLI declares: an array is not an object here, and a string is neither.
+  const wrongValueOf = (type) => ({ string: 7, number: 'seven', boolean: 'yes', object: [], array: 'none' })[type];
+  const wholeBodyReads = [
+    { label: 'an undeclared key', verdictOf: (verdict) => ({ ...verdict, undeclaredKey: 1 }) },
+    ...Object.keys(VERDICT_KEYS.always).map((key) => ({
+      label: `the verdict's ${key}`,
+      verdictOf: (verdict) => {
+        const { [key]: _dropped, ...rest } = verdict;
+        return rest;
+      },
+    })),
+    ...Object.entries({ ...VERDICT_KEYS.always, ...VERDICT_KEYS.conditional })
+      .filter(([, type]) => type !== null)
+      .map(([key, type]) => ({
+        label: `a ${key} that is not ${type}`,
+        verdictOf: (verdict) => (Object.hasOwn(verdict, key) ? { ...verdict, [key]: wrongValueOf(type) } : verdict),
+        // A key the stored verdict does not carry stays absent, and the verdict is whole.
+        skipWhenAbsent: key,
+      })),
+  ];
+  const storedVerdict = JSON.parse(fs.readFileSync(path.join(__dirname, 'replay', 'test-review', 'full-recall', 'verdict.json'), 'utf8'));
+  for (const { label, verdictOf, skipWhenAbsent } of wholeBodyReads) {
+    if (skipWhenAbsent !== undefined && !Object.hasOwn(storedVerdict, skipWhenAbsent)) continue;
+    const read = await violatedUnder(suite, probe, (caseId) => caseId, { verdictOf });
+    if (!read.has(wholeBodyOracleId)) {
+      problems.push(`test-review: ${wholeBodyOracleId} still held when the stored verdict carried ${label}`);
+    }
   }
   const exits0 = await violatedUnder(suite, probe, (caseId) => (caseId === 'full-recall' ? 'approved-with-no-findings' : caseId));
   if (!exits0.has(exitOracleId)) {
@@ -578,6 +638,70 @@ async function testReviewVerdictProblems(suite) {
       problems.push(
         `test-review: ${oracleId} still held when the record read verdict-without-findings, which the harness refuses to score`,
       );
+    }
+  }
+  return problems;
+}
+
+/**
+ * The routing records carry the constructed correct answer of every case and no stored run, so they are not in
+ * `STORED_RUN_SUITES`: nothing stored can be pointed at the wrong run. Each case's whole-body oracle is derived from the
+ * answer the record carries for it through the scorer `tools/generate-contracts.js` pairs with it (Story 1.100), and
+ * this holds that derivation to the answer. Read through an answer that lost its reason, lost its action, carries an
+ * action the skill does not allow or carries a key the runner does not declare, the oracle of that case must be
+ * violated and the oracle of every other case must stay held. A builder that fixes the disposition at `held`, or reads
+ * one case's answer for another, fails here, and so does a contract without the oracle of a case.
+ */
+async function routingWholeBodyProblems(suite) {
+  if (!suite.id.startsWith('tea-routing-')) return [];
+  const probe = suite.probes.find((candidate) => candidate.expectedClean);
+  if (probe === undefined) return [];
+  const steps = suite.contract.interactionPlan.map((planStep) => planStep.stepId);
+  const oracleOf = new Map(
+    steps.map((stepId) => [
+      stepId,
+      suite.contract.oracles.find(
+        (oracle) => JSON.stringify(oracle.direction.evidenceTargets) === JSON.stringify(routingWholeBodyTargets(stepId)),
+      )?.id,
+    ]),
+  );
+  const problems = [];
+  for (const [stepId, oracleId] of oracleOf) {
+    if (oracleId === undefined)
+      problems.push(`${suite.id}: no oracle names the two required keys of ${stepId}, so nothing reads its whole answer`);
+  }
+  if (problems.length > 0) return problems;
+  const own = await violatedUnder(suite, probe, (caseId) => caseId);
+  for (const [stepId, oracleId] of oracleOf) {
+    if (own.has(oracleId))
+      problems.push(`${suite.id}: ${oracleId} (whole-body on ${stepId}) is violated on the constructed correct answer`);
+  }
+  const malformed = [
+    { label: 'a reason of null', answerOf: (answer) => ({ ...answer, reason: null }) },
+    {
+      label: 'no reason key',
+      answerOf: ({ reason: _reason, ...rest }) => rest,
+    },
+    {
+      label: 'no action key',
+      answerOf: ({ action: _action, ...rest }) => rest,
+    },
+    { label: 'an action the skill does not allow', answerOf: (answer) => ({ ...answer, action: 'maybe' }) },
+    { label: 'a key the runner does not declare', answerOf: (answer) => ({ ...answer, confidence: 1 }) },
+  ];
+  for (const stepId of [steps[0], steps.at(-1)]) {
+    for (const { label, answerOf } of malformed) {
+      const read = await violatedUnder(suite, probe, (caseId) => caseId, {
+        answerOf: (caseId, answer) => (caseId === stepId ? answerOf(answer) : answer),
+      });
+      if (!read.has(oracleOf.get(stepId))) {
+        problems.push(`${suite.id}: ${oracleOf.get(stepId)} (whole-body on ${stepId}) still held when its answer had ${label}`);
+      }
+      for (const [otherId, oracleId] of oracleOf) {
+        if (otherId !== stepId && read.has(oracleId)) {
+          problems.push(`${suite.id}: ${oracleId} (whole-body on ${otherId}) was violated by an answer of ${stepId} that had ${label}`);
+        }
+      }
     }
   }
   return problems;
@@ -794,6 +918,7 @@ async function main() {
       ...(await wrongRunProblems(suite)),
       ...(await unknownOracleProblems(suite)),
       ...(await testReviewVerdictProblems(suite)),
+      ...(await routingWholeBodyProblems(suite)),
     );
 
     summary[suite.id] = suiteSummary(outcome, registries);

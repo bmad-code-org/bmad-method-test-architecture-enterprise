@@ -94,8 +94,11 @@ const {
   ROUTING_CONTRACTS,
   ciOracleSpecs,
   nfrOracleSpecs,
+  routingAnswerIsWhole,
+  routingWholeBodyTargets,
   testDesignOracleSpecs,
   traceOracleSpecs,
+  verdictIsWhole,
 } = require('../../tools/generate-contracts');
 const {
   buildPrompt: buildTestDesignPrompt,
@@ -262,7 +265,11 @@ function verdictOracleIds(contract) {
       `${contract.contractId} links the verdict payload to oracles this builder cannot tell apart; read test-review's builder`,
     );
   }
-  return { exitOracleId: exitOracleIds[0], payloadOracleId: payloadOracleIds[0] };
+  // The whole-body oracle has a behavior of its own, since a behavior discharged by two oracles resolves no designated one.
+  // Undefined for a contract variant without it, which `test:contract-oracles` scores to show `whole-body` unsatisfied;
+  // `test:probe-corpus` fails the contract on disk when it is undefined.
+  const wholeBodyOracleId = oracleIdsByRequirement(contract).get('tea-cli-contract/verdict-whole-body');
+  return { exitOracleId: exitOracleIds[0], payloadOracleId: payloadOracleIds[0], wholeBodyOracleId };
 }
 
 async function testReviewEvidence(contract, { storedCase = identity, verdictOf = identity } = {}) {
@@ -281,12 +288,12 @@ async function testReviewEvidence(contract, { storedCase = identity, verdictOf =
   const oracleOfBehavior = new Map(
     contract.behaviors.filter((behavior) => behavior.oracles.length === 1).map((behavior) => [behavior.id, behavior.oracles[0]]),
   );
-  const { exitOracleId, payloadOracleId } = verdictOracleIds(contract);
+  const { exitOracleId, payloadOracleId, wholeBodyOracleId } = verdictOracleIds(contract);
 
   return {
     // The oracles that read the stored verdict itself, which `test/test-probe-corpus.js` holds to a verdict that
     // fails them.
-    verdictOracleIds: { exitOracleId, payloadOracleId },
+    verdictOracleIds: { exitOracleId, payloadOracleId, wholeBodyOracleId },
     /**
      * The two witness legs differ in the file list they review, so the answer is
      * chosen the same way: a leg naming a seeded fixture gets the review that
@@ -383,9 +390,11 @@ async function testReviewEvidence(contract, { storedCase = identity, verdictOf =
       const violated = new Set(findings.map((finding) => finding.oracleId));
       const held = (oracleId) => {
         if (violated.has(oracleId) || measured === null) return false;
-        // The verdict payload and the exit code are read off the verdict the record carries, the same way the oracles
-        // read them: the fields it holds, and the exit code `reviewBody` maps its recommendation to.
+        // The verdict payload, the whole verdict and the exit code are read off the verdict the record carries, the same
+        // way the oracles read them: the fields it holds, and the exit code `reviewBody` maps its recommendation to.
         if (oracleId === payloadOracleId) return verdictPayloadPresent(verdict);
+        // The whole verdict: every key the CLI always writes, each of its type, and no key it does not declare.
+        if (oracleId === wholeBodyOracleId) return verdictIsWhole(verdict);
         if (oracleId === exitOracleId) return body.exitCode === 1;
         if (oracleId === scopeOracleId) return measured.outOfScope === 0;
         if (oracleId === cleanOracleId) return measured.falsePositives - measured.outOfScope === 0;
@@ -496,7 +505,7 @@ async function traceArtifacts(caseId) {
   };
 }
 
-async function traceEvidence(contract, { storedCase = identity, refusedSets = new Set() } = {}) {
+async function traceEvidence(contract, { storedCase = identity, refusedSets = new Set(), summaryOf = identity } = {}) {
   const [seededStep, cleanStep] = contract.interactionPlan;
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
 
@@ -507,7 +516,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
    * `buildTracePrompt` is test/eval-trace.js's own `buildPrompt`, which is also
    * what tools/generate-contracts.js calls to build each step's stdin literal. A
    * literal is compared with `deepEquals`, so a prompt restated here in any other
-   * form would select nothing, all twenty-six oracles would resolve `unreached`,
+   * form would select nothing, all twenty-eight oracles would resolve `unreached`,
    * and the run would report clean at exit 0 having examined no evidence. The
    * equality below is the tripwire: the prompt this record will carry is checked
    * against the literal the contract on disk binds, so a divergence fails the run
@@ -578,7 +587,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
       // summary's empty or absent collections and abstained, which was the control's
       // FAIL at exit 2. Two observations under a matcher binding are worse: every
       // observation satisfies both steps, and `exactly-one` then reports selector
-      // ambiguity on all twenty-six oracles. The literals and the second observation
+      // ambiguity on all twenty-eight oracles. The literals and the second observation
       // work only together.
       //
       // A defect probe carries its seeded run alone. AD-9's qualification gate
@@ -595,8 +604,12 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
       // sit in the callback, so a record carrying both runs read each of them
       // once per leg.
       const artifactsByCase = new Map();
-      for (const caseId of new Set(selected.map((leg) => leg.caseId)))
-        artifactsByCase.set(caseId, await traceArtifacts(storedCase(caseId)));
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) {
+        const stored = await traceArtifacts(storedCase(caseId));
+        // `summaryOf` is the stored summary as the record carries it. Only `test/test-probe-corpus.js` passes one, to hand
+        // the whole-summary oracle a summary missing a key the harness would still score, which no stored case is.
+        artifactsByCase.set(caseId, { ...stored, summary: { kind: 'json', value: summaryOf(stored.summary.value) } });
+      }
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -626,6 +639,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
       // `false` for every oracle of its set, since no claim about it holds.
       // `undefined` is the harness skipping a waiver oracle whose gate did not
       // match, which has no measurement to contradict.
+      const summaryBySet = new Map();
       const scoredBySet = new Map(
         selected.map((leg) => {
           const artifacts = artifactsByCase.get(leg.caseId);
@@ -636,6 +650,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
               ? scoreTraceRun(leg.set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance)
               : null;
           if (scored === null) refusedSets.add(leg.set.id);
+          summaryBySet.set(leg.set.id, summary.ok ? summary.summary : null);
           return [leg.set.id, scored];
         }),
       );
@@ -651,7 +666,7 @@ async function traceEvidence(contract, { storedCase = identity, refusedSets = ne
           (spec) => {
             if (!scoredBySet.has(spec.setId)) return;
             const scored = scoredBySet.get(spec.setId);
-            return scored === null ? false : spec.scorer(scored);
+            return scored === null ? false : spec.scorer(scored, summaryBySet.get(spec.setId));
           },
           citedObservationId,
         ),
@@ -1320,14 +1335,17 @@ function routingBody(answer) {
  */
 function routingOracleFor(contract, caseId, field) {
   const pointer = `/interactions/${caseId}/stdout/${field}`;
-  const found = contract.oracles.find((oracle) => oracle.direction.evidenceTargets[0] === pointer);
+  // An oracle reading one pointer: the whole-body oracle of a case names both required keys, and its first is `action`.
+  const found = contract.oracles.find(
+    (oracle) => oracle.direction.evidenceTargets.length === 1 && oracle.direction.evidenceTargets[0] === pointer,
+  );
   // Named rather than dereferenced blind: the caller reads `.id` off this, and a
   // TypeError there says nothing about which pointer went missing.
   if (found === undefined) throw new Error(`${contract.contractId}: no oracle reads ${pointer}`);
   return found;
 }
 
-async function routingEvidence(contract) {
+async function routingEvidence(contract, { answerOf = (_caseId, answer) => answer } = {}) {
   const corpus = await readJson(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'));
   const intents = await readJson(path.join(ROUTING_FIXTURE_ROOT, 'intents.json'));
   // A `for...of` rather than a `map`: the prompt is assembled through the
@@ -1373,7 +1391,9 @@ async function routingEvidence(contract) {
           if (gamedField === 'menuCode') answer.menuCode = corpus.cases[caseId].expectedMenuCode === 'TMT' ? 'TR' : 'TMT';
           else answer.question = 'Could you tell me a bit more about what you are after?';
         }
-        const body = routingBody(answer);
+        // `answerOf` is the answer as the record carries it. Only `test/test-probe-corpus.js` passes one, to hand the
+        // whole-body oracle an answer missing a key or carrying a null reason, which the constructed answers never do.
+        const body = routingBody(answerOf(caseId, answer));
         return recordObservation({
           observationId: `${caseId}-run`,
           sequence: index + 1,
@@ -1423,6 +1443,26 @@ async function routingEvidence(contract) {
             ];
 
       const violated = new Set(findings.map((finding) => finding.oracleId));
+      // The whole-body oracle of each case reads the answer the record carries for it, through the scorer
+      // `routingAnswerIsWhole` that tools/generate-contracts.js pairs with it, so a malformed answer is the oracle that
+      // no longer holds. The record carries the constructed correct answer and no stored run, which is why this
+      // suite is not one of `STORED_RUN_SUITES` in `test/test-probe-corpus.js`.
+      const wholeBodyOracleOf = new Map(
+        contract.interactionPlan.map((planStep) => [
+          planStep.stepId,
+          contract.oracles.find(
+            (oracle) => JSON.stringify(oracle.direction.evidenceTargets) === JSON.stringify(routingWholeBodyTargets(planStep.stepId)),
+          ),
+        ]),
+      );
+      for (const planStep of contract.interactionPlan) {
+        const oracle = wholeBodyOracleOf.get(planStep.stepId);
+        // A contract variant without the oracle is scored by `test:contract-oracles`; `test:probe-corpus` fails the
+        // contract on disk when a case has none.
+        if (oracle === undefined) continue;
+        const answer = observations.find((entry) => entry.observationId === `${planStep.stepId}-run`).stdout.value;
+        if (!routingAnswerIsWhole(answer)) violated.add(oracle.id);
+      }
       return {
         observations,
         findings,

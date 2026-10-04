@@ -5080,7 +5080,17 @@ async function runTests() {
         { label: 'delta-introduced', jsonPath: introducedJsonPath },
       ]) {
         try {
-          for (const key of Object.keys(JSON.parse(fs.readFileSync(jsonPath, 'utf8')))) emittedKeys.add(key);
+          const emitted = Object.keys(JSON.parse(fs.readFileSync(jsonPath, 'utf8')));
+          for (const key of emitted) emittedKeys.add(key);
+          // The contract requires every `always` key of a verdict, so each real run has to carry all of them, and a key
+          // that a branch of the CLI leaves out belongs in `conditional` (Story 1.100: test/contracts/README.md records
+          // that no key of the whole-body declaration is narrowed because none is left out of a verdict).
+          const absent = Object.keys(VERDICT_KEYS.always).filter((key) => !emitted.includes(key));
+          assert(
+            absent.length === 0,
+            `the ${label} verdict carries every key VERDICT_KEYS declares always`,
+            `absent ${JSON.stringify(absent)}`,
+          );
         } catch (error) {
           payloadRunsReadable = false;
           assert(false, `verdict payload runs produce a readable verdict (${label})`, error.message);

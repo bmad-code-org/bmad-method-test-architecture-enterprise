@@ -232,6 +232,25 @@
         }
       ],
       "oracles": ["O-012", "O-013"]
+    },
+    {
+      "id": "B-013",
+      "description": "The verdict artifact is the object the CLI declares, key for key.",
+      "severity": "material",
+      "observableSuccessCriterion": "The verdict carries all 23 keys the CLI always writes, each of its declared type, and no key the CLI does not declare.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "verdict-whole-body"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "malformed-verdict-read-as-a-measurement"
+        }
+      ],
+      "oracles": ["O-014"]
     }
   ],
   "oracles": [
@@ -912,6 +931,336 @@
           },
           {
             "literal": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-014",
+      "polarity": "expects-hold",
+      "commentary": "The verdict is the object the CLI declares: all 23 keys it always writes are present, each of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Every one of the 23 keys the verdict always carries, in the verdict artifact of the one review invocation.",
+        "negativeDomain": "A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key of another type than the one it declares.",
+        "evidenceTargets": [
+          "/interactions/review-corpus/artifact/verdict/report",
+          "/interactions/review-corpus/artifact/verdict/files",
+          "/interactions/review-corpus/artifact/verdict/agent",
+          "/interactions/review-corpus/artifact/verdict/model",
+          "/interactions/review-corpus/artifact/verdict/gateOn",
+          "/interactions/review-corpus/artifact/verdict/gatingQualityScore",
+          "/interactions/review-corpus/artifact/verdict/gatingViolations",
+          "/interactions/review-corpus/artifact/verdict/reviewProvenance",
+          "/interactions/review-corpus/artifact/verdict/recommendation",
+          "/interactions/review-corpus/artifact/verdict/rawQualityScore",
+          "/interactions/review-corpus/artifact/verdict/qualityScore",
+          "/interactions/review-corpus/artifact/verdict/scoreCap",
+          "/interactions/review-corpus/artifact/verdict/scoreOverrideRule",
+          "/interactions/review-corpus/artifact/verdict/verdictRule",
+          "/interactions/review-corpus/artifact/verdict/violations",
+          "/interactions/review-corpus/artifact/verdict/findings",
+          "/interactions/review-corpus/artifact/verdict/reviewedFiles",
+          "/interactions/review-corpus/artifact/verdict/contextBasis",
+          "/interactions/review-corpus/artifact/verdict/contextFiles",
+          "/interactions/review-corpus/artifact/verdict/contextWaiversApplied",
+          "/interactions/review-corpus/artifact/verdict/keyStrengths",
+          "/interactions/review-corpus/artifact/verdict/keyWeaknesses",
+          "/interactions/review-corpus/artifact/verdict/advisoryObservations"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": [
+                "report",
+                "files",
+                "agent",
+                "model",
+                "gateOn",
+                "gatingQualityScore",
+                "gatingViolations",
+                "reviewProvenance",
+                "recommendation",
+                "rawQualityScore",
+                "qualityScore",
+                "scoreCap",
+                "scoreOverrideRule",
+                "verdictRule",
+                "violations",
+                "findings",
+                "reviewedFiles",
+                "contextBasis",
+                "contextFiles",
+                "contextWaiversApplied",
+                "keyStrengths",
+                "keyWeaknesses",
+                "advisoryObservations"
+              ],
+              "permittedKeys": [
+                "report",
+                "files",
+                "agent",
+                "model",
+                "gateOn",
+                "gatingQualityScore",
+                "gatingViolations",
+                "reviewProvenance",
+                "recommendation",
+                "rawQualityScore",
+                "qualityScore",
+                "scoreCap",
+                "scoreOverrideRule",
+                "verdictRule",
+                "violations",
+                "findings",
+                "reviewedFiles",
+                "contextBasis",
+                "contextFiles",
+                "contextWaiversApplied",
+                "keyStrengths",
+                "keyWeaknesses",
+                "advisoryObservations",
+                "conventionBaseline",
+                "executionMode",
+                "reportedQualityScore",
+                "reportedRecommendation",
+                "unscorableTestArtifacts",
+                "gateFailures",
+                "waived",
+                "waiveReason",
+                "waiveUntil",
+                "allFindingsRecommendation"
+              ],
+              "types": {
+                "report": "string",
+                "files": "array",
+                "agent": "string",
+                "model": null,
+                "gateOn": "string",
+                "gatingQualityScore": "number",
+                "gatingViolations": "object",
+                "reviewProvenance": "object",
+                "recommendation": "string",
+                "rawQualityScore": "number",
+                "qualityScore": "number",
+                "scoreCap": "number",
+                "scoreOverrideRule": "string",
+                "verdictRule": "string",
+                "violations": "object",
+                "findings": "array",
+                "reviewedFiles": "array",
+                "contextBasis": "string",
+                "contextFiles": "array",
+                "contextWaiversApplied": "number",
+                "keyStrengths": "array",
+                "keyWeaknesses": "array",
+                "advisoryObservations": "array",
+                "conventionBaseline": "object",
+                "executionMode": "string",
+                "reportedQualityScore": "number",
+                "reportedRecommendation": "string",
+                "unscorableTestArtifacts": "array",
+                "gateFailures": "array",
+                "waived": "boolean",
+                "waiveReason": "string",
+                "waiveUntil": "string",
+                "allFindingsRecommendation": "string"
+              }
+            }
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/report"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/files"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/agent"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/model"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/gateOn"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/gatingQualityScore"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/gatingViolations"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/reviewProvenance"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/recommendation"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/rawQualityScore"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/qualityScore"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/scoreCap"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/scoreOverrideRule"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/verdictRule"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/violations"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/reviewedFiles"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/contextBasis"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/contextFiles"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/contextWaiversApplied"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/keyStrengths"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/keyWeaknesses"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/advisoryObservations"
+              }
+            ]
           }
         ]
       }

@@ -265,6 +265,53 @@ The sensitivity witness differs its two legs on `design_level`, `full` against `
 A differential between the two fixture sets would not do: their documents differ because their staged epics differ, which would attribute to the prompt an effect the workspace produced.
 Both legs stage the clean set, and the contract states the whole arrangement in `testData.setup`, because `SensitivityWitness` is a strict object with no prose field of its own.
 
+## Whole-body coverage for the routing, test-review and trace contracts
+
+eval-quality's `whole-body` rule is satisfied when, for every operation that declares more than one required response key, one oracle's direction and check both address every one of those keys at one step.
+The strength baseline listed it for four contracts after the test-design repair above, because each of their oracles reads a few keys of a response that declares more.
+Story 1.100 adds one oracle per plan step to each of them, after every oracle the contract already stated, so the existing ids and their behavior ids hold.
+The routing contracts gain `O-051` to `O-061` (intents) and `O-028` to `O-035` (controls), the test-review contract `O-014`, and the trace contract `O-027` and `O-028`.
+Each has a behavior of its own, graded `material`, because a behavior discharged by two oracles resolves no designated oracle. It carries the oracle's number, except test-review's `B-013`, since its verdict behavior `B-012` already groups two oracles.
+
+| Contract                             | Operation and response                      | Required keys | Narrowed | Evidence that every required key is always emitted                                                                                                                                                                                                                      |
+| ------------------------------------ | ------------------------------------------- | ------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tea-routing-intents.contract.json`  | `route-intent`, the answer on stdout        | 2             | none     | `cli/lib/parse-routing.js` returns all seven keys of every answer and the runner prints exactly that object: `{"action":"decline"}` parses to `action` plus six keys, all null. A reply with no action is no answer and exits 6                                         |
+| `tea-routing-controls.contract.json` | `route-intent`, the answer on stdout        | 2             | none     | The same parser and runner, over the clarify and decline cases                                                                                                                                                                                                          |
+| `test-review.contract.json`          | `review-test-files`, the `verdict` artifact | 23            | none     | `assertDeclaredKeys` throws when a verdict lacks an `always` key, and `test:test-review-cli` reads the verdict of four real CLI runs (unscorable, score mismatch, waived, delta introduced) and asserts each carries all 23                                             |
+| `trace.contract.json`                | `trace-fixture-set`, the `summary` artifact | 22            | none     | `src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md` assigns each of the 22 inside one object literal with no condition. The three it assigns afterwards under a condition are the permitted keys `waivers`, `gate_status` and `gate_criteria` |
+
+No key is narrowed, because each required key is one the runner or workflow always emits, and `tools/generate-contracts.js` reads each declaration from that source (`ROUTING_RESPONSE_KEYS`, `VERDICT_KEYS.always`, the literal of step-05) so a narrowing has to be an authored exception and fail the generator's own derivation.
+The routing `reason` is the instructive case.
+The parser normalizes a reply that names an action and forgets to say why to a null `reason`, so the key is always printed and its value can still be null.
+The declaration keeps `reason` required and typed `string`, and the new oracle is the one that reads that null as the defect it is.
+`test:contract-oracles` holds the declarations to their sources and to the stored runs the harness scores: every scored stored verdict, every stored correct trace summary and every stored reply the parser accepts carries every required key.
+That is the evidence available for trace and routing, since every stored run of those two suites and of test-review is constructed (each case's `storedOutput.origin` says so), and the real runs are the four CLI runs above and the parser's own output.
+A key a future change narrows out of a declaration without a documented reason fails that check as soon as one stored run carries it, and this section is where the reason has to be recorded.
+
+Each oracle's direction names every required key pointer and its check reads each of them, and no other pointer apart from the root a `shape` operator reads:
+
+- **`tea-routing-*`**: `all` of a `shape` over the answer (the declared keys, `action` and `reason` typed `string`), `set-membership` of `action` in `route`, `clarify` and `decline`, and a non-blank `reason`.
+- **`test-review`**: `all` of a `shape` over the verdict (the 23 required keys, the ten conditional ones permitted, every key of its declared type) and one `existence` per required key.
+- **`trace`**: the same two parts over the summary, with the three conditional keys permitted.
+
+The per-key `existence` conjuncts are what put each key pointer in the check beside the `shape`, which reads the object's root, and the rule counts a parent pointer as no key.
+The three scorer twins, `routingAnswerIsWhole`, `verdictIsWhole` and `traceSummaryIsWhole` in `tools/generate-contracts.js`, say the same thing in JavaScript and are what the probe records and `test:contract-oracles` compare the oracles with.
+Each check fails for a real defect: a null or blank routing reason, a verdict or summary missing a key the CLI or step-05 always writes (the stored `seeded-rejected-evidence-omitted` summary is one), a key of another type, or a key nobody declared.
+The vocabulary has no operator that states a count against another key, so none of the three checks says anything about what the values mean. The existing oracles keep that.
+
+`test:contract-oracles` scores the zero-action probe of each suite through eval-quality against the real contract and against versions of it, as the test-design repair does, and requires the engine's coverage result to follow:
+
+- the real contract satisfies `whole-body`, and the contract without the new oracles and their behaviors leaves it unsatisfied;
+- an oracle that reads one key, one that reads every key but one in both channels, and one whose check reads every key and whose direction omits one each leave it unsatisfied, for every required key of every contract;
+- widening the one-key oracle to every key satisfies it again;
+- an oracle whose direction names a key its check does not read is refused at compile as `direction-check-misaligned` (AD-3), so that variant never reaches the rule.
+
+It also plants incoherent answers, verdicts and summaries, one per claim and per key, and compares each oracle with its twin.
+The probe record of each suite derives the new oracles' dispositions from those twins: trace over the stored summary it carries (so a wrong run or a summary with a key dropped violates them), test-review over the stored verdict, and routing over the constructed correct answer, which reads no stored run.
+`test:probe-corpus` holds each of those derivations to a read that breaks it.
+The new oracles carry no defect probe: no controlled mutation of the skill, the CLI or the workflow makes a run's answer, verdict or summary malformed without being a code change that `test:probe-targets` and the harnesses already catch.
+The routing contracts' `success-indicator-separation` gap closed as a side effect, because the new oracle reads `action`, the success indicator, beside `reason`, a payload key, in both channels.
+
 ## What the operator vocabulary cannot say
 
 Five limits surfaced while writing the oracles, and none of them is about transport.
