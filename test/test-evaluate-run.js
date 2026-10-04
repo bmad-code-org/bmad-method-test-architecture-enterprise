@@ -10020,10 +10020,9 @@ function loginField(stdout, name) {
 
 /**
  * A subscription login reaches a confined target without the rest of the home (Story 1.113).
- * The verdict fixture's `claude-login`
- * act stands in for the Claude Code CLI, which looks for `.claude/.credentials.json` under `HOME` and for the variable
- * `CLAUDE_CODE_OAUTH_TOKEN`, and exits 4 with neither; the host's login is a fake file and a fake token under a temp home, so no
- * real login is read.
+ * The verdict fixture's `claude-login` act stands in for the Claude Code CLI.
+ * It looks for `.claude/.credentials.json` under `HOME` and for the variable `CLAUDE_CODE_OAUTH_TOKEN`, and exits 4 with neither.
+ * The host's login is a fake file and a fake token under a temp home, so no real login is read.
  *
  * - File: the registry entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file
  *   (under `HOME`, under `CLAUDE_CONFIG_DIR`, and through a link the file itself is), which the target reads and cannot write, which
@@ -10033,6 +10032,7 @@ function loginField(stdout, name) {
  * - Without the declaration the call exits 4 and the run 12; a host with only a keychain refuses the run, naming the token route and
  *   the opt-out; the keychain stand-in's read is an observed mount and its sidecar write is refused.
  * - An opt-out run passes the variable, makes no home and records the variable by name.
+ *   A target of that run that reads the host's file through its own `HOME` has the file's strings scrubbed from every record.
  */
 async function checkSubscriptionLogin() {
   const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -10074,6 +10074,8 @@ async function checkSubscriptionLogin() {
           if (login) entry.login = 'claude';
           entry.infrastructureExitCodes = [3, 4];
           entry.environmentKeys.push('VERDICT_SECOND', 'VERDICT_KEYCHAIN');
+          // An unconfined target runs with the host's own home when the entry passes `HOME`, as the dogfood evaluation does.
+          if (unconfined) entry.environmentKeys.push('HOME');
         }),
     });
   const loginRun = (project, env, act = 'claude-login') => {
@@ -10336,7 +10338,7 @@ async function checkSubscriptionLogin() {
     `score over a target that read the host's keychain exited ${stoodScore.status}; expected 3\n${stoodScore.output}`,
   );
 
-  // An opt-out run passes the variable, makes no home, and names the variable in its record.
+  // An opt-out run passes the variable, makes no home, names the variable in its record, and scrubs the host's file the target reads through its own HOME.
   const open = loginRun(loginProject('login-opt-out', { unconfined: true }), { HOME: home, CLAUDE_CODE_OAUTH_TOKEN: fakeToken });
   check(
     open.ran.status === 0,
@@ -10351,17 +10353,28 @@ async function checkSubscriptionLogin() {
   );
   const openOut = trialStdout(open.directory, 'clean', 1);
   check(loginField(openOut, 'login-token') === sha(fakeToken), 'the opted-out agent did not receive the token variable');
-  check(filesHolding(open.folder, fakeToken).length === 0, "the opted-out run's records hold the token's value");
+  check(
+    loginField(openOut, 'login-file') === sha(credentials),
+    `the opted-out agent read ${loginField(openOut, 'login-file')} through its own HOME; expected the host file's digest`,
+  );
+  const openEcho = String(loginField(openOut, 'login-file-echo'));
+  check(
+    openEcho.includes('"accessToken":"[redacted]"') && openEcho.includes('"refreshToken":"[redacted]"'),
+    `the opted-out agent's echo of the host's login file was recorded as ${openEcho}; expected both tokens [redacted]`,
+  );
+  const openSwept = [fakeToken, fakeLogin, fakeRefresh].flatMap((value) => filesHolding(open.folder, value));
+  check(
+    openSwept.length === 0,
+    `the opted-out run's records hold a string of the host's login file or the token: ${openSwept.map((file) => path.relative(open.folder, file))}`,
+  );
 }
 
 /**
  * A login's strings are scrubbed from the observation and the fault of every request kind (Story 1.113 review round 1).
- * The private
- * home with the linked file is shared by every target a sandbox starts, so a tool server or an HTTP server that prints the file, or
- * the token a command target wrote into the home, leaves them in a record as a command target would.
- * A registry that grants a
- * login to a command entry also holds a tool server and an HTTP server; each request's answer and fault hold a string of the
- * file and the token, and the fields the adapter declares public stay as written.
+ * The private home with the linked file is shared by every target a sandbox starts.
+ * A tool server or an HTTP server that prints the file, or the token a command target wrote into the home, leaves them in a record as a command target would.
+ * A registry that grants a login to a command entry also holds a tool server and an HTTP server.
+ * Each request's answer and fault hold a string of the file and the token, and the fields the adapter declares public stay as written.
  */
 async function checkLoginScrubbedFromEveryKind(entry, folder, { file, variable }) {
   const fileString = 'access-token-value';
@@ -10441,6 +10454,68 @@ async function checkLoginScrubbedFromEveryKind(entry, folder, { file, variable }
 }
 
 /**
+ * A login's strings are scrubbed after the host's own CLI rotates the file during a call, and from a read caught mid-write (Story 1.113 review round 2).
+ * A stub port rewrites the granted file inside `probe` and prints what it holds, once with the file whole and once torn (not JSON).
+ * The access and refresh tokens the file held before the call and the ones it holds after are all `[redacted]` in the observation and in the fault, and the fields the adapter declares public stay as written.
+ * A second call after a rotation prints the rotated-out values, which the run-long set still scrubs.
+ */
+async function checkLoginScrubbedAfterRotation(entry, folder) {
+  const old = { access: 'old-access-token-1111', refresh: 'old-refresh-token-2222' };
+  const fresh = { access: 'new-access-token-3333', refresh: 'new-refresh-token-4444' };
+  const document = ({ access, refresh }) =>
+    JSON.stringify({
+      claudeAiOauth: { accessToken: access, refreshToken: refresh, scopes: ['user:inference'], subscriptionType: 'enterprise' },
+    });
+  // What the host's CLI leaves in the file while a call runs: the whole new document, or the start of it.
+  const rewrites = {
+    whole: (tokens) => document(tokens),
+    torn: ({ access, refresh }) => `{"claudeAiOauth":{"accessToken":"${access}","refreshToken":"${refresh}","scop`,
+  };
+  for (const [how, rewrite] of Object.entries(rewrites)) {
+    for (const failing of [false, true]) {
+      const label = `a ${how} rewrite of the login file, ${failing ? 'in the fault' : 'in the observation'}`;
+      const file = path.join(tempDir(`login-rotation-${how}`), '.credentials.json');
+      fs.writeFileSync(file, document(old));
+      const registry = createRegistry([{ ...entry, login: 'claude' }], {
+        root: folder,
+        confinement: {
+          mode: 'opt-out',
+          evaluationFolder: folder,
+          logins: [{ interfaceId: 'agent', executable: 'runner', login: 'claude', variable: null, file: null, scrubFile: file }],
+        },
+      });
+      // The call that rotates the file prints the new tokens (and the old ones); a later call prints both, as a target does that kept a copy.
+      const port = {
+        async probe(request) {
+          if (request.rotate) fs.writeFileSync(file, rewrite(fresh));
+          const printed = `access ${fresh.access} refresh ${fresh.refresh} was ${old.access} and ${old.refresh} on a plan of enterprise`;
+          if (failing) throw Object.assign(new Error(`the target failed: ${printed}`), { captured: printed, cause: new Error(printed) });
+          return { stdout: printed, stderr: '', body: { kind: 'text', value: printed } };
+        },
+      };
+      const wrapped = hostEnvironmentPort({ port, registry });
+      for (const [call, request] of [
+        ['the call that rotated the file', { kind: 'cli', interfaceId: 'agent', executable: 'runner', channels: {}, rotate: true }],
+        ['a later call', { kind: 'cli', interfaceId: 'agent', executable: 'runner', channels: {} }],
+      ]) {
+        let recorded;
+        try {
+          recorded = JSON.stringify((await wrapped.probe(request)).observation);
+        } catch (error) {
+          recorded = `${error.message}${error.scrubbedCause}`;
+        }
+        const leaked = [...Object.values(old), ...Object.values(fresh)].filter((value) => recorded.includes(value));
+        check(
+          leaked.length === 0 && recorded.includes('[redacted]'),
+          `${call} after ${label} recorded ${recorded}; expected the old and the new tokens all [redacted] (leaked ${JSON.stringify(leaked)})`,
+        );
+        check(recorded.includes('enterprise'), `${call} after ${label} lost a word the file declares public: ${recorded}`);
+      }
+    }
+  }
+}
+
+/**
  * The login units: `loginsOf` and `selectConfinement` over a host's environment (the file by its real path, the variable by its
  * name, a refusal naming both ways out for a host with neither, an unsafe path refused, a run that opted out taking no file), the
  * schema and the registry's refusals, the private home's link (planted for each home, removed with the home and leaving the host's
@@ -10466,7 +10541,9 @@ async function checkSubscriptionLoginUnits() {
   const both = loginsOf(evaluation(), { HOME: host, CLAUDE_CODE_OAUTH_TOKEN: 'a-token-value' }, { file: true });
   check(
     JSON.stringify(both) ===
-      JSON.stringify([{ interfaceId: 'agent', executable: 'runner', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file }]),
+      JSON.stringify([
+        { interfaceId: 'agent', executable: 'runner', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file, scrubFile: file },
+      ]),
     `loginsOf named ${JSON.stringify(both)}; expected the one entry that declares a login, with the variable and the file`,
   );
   check(!JSON.stringify(both).includes('a-token-value'), "loginsOf carries the token's value");
@@ -10518,8 +10595,11 @@ async function checkSubscriptionLoginUnits() {
     env: { HOME: host, CLAUDE_CODE_OAUTH_TOKEN: 'a-token-value' },
   });
   check(
-    open.mode === 'opt-out' && open.logins[0].variable === 'CLAUDE_CODE_OAUTH_TOKEN' && open.logins[0].file === null,
-    `an opted-out selection carried ${JSON.stringify(open)}; expected the variable and no file`,
+    open.mode === 'opt-out' &&
+      open.logins[0].variable === 'CLAUDE_CODE_OAUTH_TOKEN' &&
+      open.logins[0].file === null &&
+      open.logins[0].scrubFile === file,
+    `an opted-out selection carried ${JSON.stringify(open)}; expected the variable, no file to link and the host's file to scrub`,
   );
   const unsafeHome = path.join(tempDir('login-units-unsafe'), 'quo"te');
   fs.mkdirSync(path.join(unsafeHome, '.claude'), { recursive: true });
@@ -10631,9 +10711,16 @@ async function checkSubscriptionLoginUnits() {
     JSON.stringify(LOGIN_ADAPTERS.claude.publicFields) === JSON.stringify(['scopes', 'subscriptionType', 'rateLimitTier']),
     `the claude adapter declares the public fields ${JSON.stringify(LOGIN_ADAPTERS.claude.publicFields)}`,
   );
+  // A file that is not JSON contributes its whole trimmed text and each token of it, since a read caught mid-write is such a file.
+  const plainSecrets = ['a plain text login', 'a', 'plain', 'text', 'login'];
   check(
-    JSON.stringify(secretsOf([granted(plainFile)])) === JSON.stringify(['a plain text login']),
-    'the secret of a plain login file is not its text',
+    JSON.stringify(secretsOf([granted(plainFile)])) === JSON.stringify(plainSecrets),
+    `the secrets of a plain login file are ${JSON.stringify(secretsOf([granted(plainFile)]))}; expected its whole text and each token`,
+  );
+  // An opted-out run grants no file to link and still scrubs the host's file, which `scrubFile` names.
+  check(
+    JSON.stringify(secretsOf([{ ...granted(null), scrubFile: plainFile }])) === JSON.stringify(plainSecrets),
+    'a login with no file to link but a file to scrub did not scrub it',
   );
   check(secretsOf([granted(null)]).length === 0 && secretsOf([]).length === 0, 'an entry with no login file has secrets');
 
@@ -10643,7 +10730,7 @@ async function checkSubscriptionLoginUnits() {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'a-host-token-value';
   try {
     check(
-      JSON.stringify(secretsOf([withVariable])) === JSON.stringify(['a-host-token-value', 'a plain text login']),
+      JSON.stringify(secretsOf([withVariable])) === JSON.stringify(['a-host-token-value', ...plainSecrets]),
       `the secrets of a login with a variable and a file are ${JSON.stringify(secretsOf([withVariable]))}; expected the variable's value and the file's text`,
     );
     check(
@@ -10651,10 +10738,11 @@ async function checkSubscriptionLoginUnits() {
       'the secrets of a login with a variable and no file are not the variable value alone',
     );
     check(
-      JSON.stringify(secretsOf([{ ...withVariable, variable: null }])) === JSON.stringify(['a plain text login']),
+      JSON.stringify(secretsOf([{ ...withVariable, variable: null }])) === JSON.stringify(plainSecrets),
       "the host's token was a secret of a login that granted no variable",
     );
     await checkLoginScrubbedFromEveryKind(entry, folder, { file: jsonFile, variable: withVariable.variable });
+    await checkLoginScrubbedAfterRotation(entry, folder);
   } finally {
     if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
     else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
@@ -10796,6 +10884,20 @@ function checkSubscriptionLoginReference() {
     'exits 12',
   ]) {
     check(section.includes(part), `the subscription login section does not name ${part}`);
+  }
+  // Each statement of the token route is pinned as a whole sentence on its own line, so deleting one fails here whichever other line names the route.
+  const lines = new Set(section.split('\n').map((line) => line.replace(/^\s*- /, '').trim()));
+  for (const sentence of [
+    '`CLAUDE_CODE_OAUTH_TOKEN` passes when the host sets it, for a token from `claude setup-token`.',
+    "No other credential variable passes, `ANTHROPIC_API_KEY` included, unless the entry's `environmentKeys` names it.",
+    'Run `claude setup-token` once and export the token it prints as `CLAUDE_CODE_OAUTH_TOKEN` where `tea-evaluate` runs, or set `"confinement": false` in `evaluation.json`, which keeps your home and your keychain for the target and records `opt-out`.',
+    'It replaces the strings of your credentials file in every record all the same, since a target that keeps your `HOME` reads the file there.',
+    'The run keeps every string the file has held since it began and reads the file again when each call settles, so a token that Claude Code on your host rotates out of the file during a call is replaced along with the one that took its place.',
+  ]) {
+    check(
+      lines.has(sentence),
+      `the subscription login section does not hold the sentence ${JSON.stringify(sentence)} on a line of its own`,
+    );
   }
   check(
     section.includes('A login held in the macOS Keychain has no grant.') &&

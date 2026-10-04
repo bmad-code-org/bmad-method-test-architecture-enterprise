@@ -2948,6 +2948,11 @@ Amended 2026-10-04 in Story 1.113's review round 1: the login's strings are scru
 The set holds the host's value of each granted login's variable and each string of the file except the values under the fields the adapter declares public (`scopes`, `subscriptionType`, `rateLimitTier`), which stay as written because they are no secret and a scrub that rewrote them would change an answer's own words.
 A field the adapter does not name is scrubbed.
 
+Amended 2026-10-04 in Story 1.113's review round 2: the scrub set is the union of every string the credentials file has held during the run, read again when each call settles, since the host's own Claude Code can rotate the file while a call runs.
+A read caught mid-write (not valid JSON) contributes its whole text, each whitespace-separated token and each quoted string.
+A run that opted out scrubs the host's credentials file as well, since its target reads the file through its own `HOME`; `run.json` still records no file for it and no link is made.
+The token route's statements in the reference are pinned as whole sentences, one assertion each.
+
 **Dependencies:** 1.59, 1.46.
 **Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-preflight`, `npm run test:evaluate-agents`, `npm run docs:validate-links`, `npm test`.
 

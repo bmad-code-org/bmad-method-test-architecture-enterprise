@@ -826,7 +826,8 @@ async function runInWorkspaces({
     // their processes reach, through the runtime's egress proxy (Story 1.83).
     egress: registry.egressEntries.map((entry) => ({ interfaceId: entry.interfaceId, hosts: [...entry.hosts] })),
     // The entries that declare a `login` and what each was given: the variable's name and the credentials file's path, with no value (Story 1.113).
-    logins: registry.logins.map((login) => ({ ...login })),
+    // `scrubFile` is the host's file an opted-out run reads only to scrub, and no record holds it.
+    logins: registry.logins.map(({ scrubFile, ...login }) => login),
     adopterTree: { repository: before.repository, unchanged: null },
     refused: [],
   };

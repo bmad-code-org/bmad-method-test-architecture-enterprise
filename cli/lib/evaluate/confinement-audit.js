@@ -1052,8 +1052,7 @@ async function readTrace(file, options) {
  */
 function traceDecision(access, grants) {
   const { kind, path: absolute, real, ok, errno, dotdot = false, reentry = false } = access;
-  // A login file the home links to (Story 1.113) is opened by its path in the home and resolves outside it; it is the one file
-  // that may.
+  // A login file the home links to (Story 1.113) is opened by its path in the home and resolves outside it, and it is the one file that may.
   const linked = (grants.linked ?? []).includes(real);
   const except = grants.withheldExcept.some((root) => isInside(root, absolute) && (isInside(root, real) || linked));
   const withheld = !except && grants.withheld.some((root) => isInside(root, absolute) || isInside(root, real));

@@ -587,6 +587,8 @@ A command entry that declares `"login": "claude"` gives its processes the logins
 `run.json` records the grant of each entry under `logins`: the interface, the executable, the adapter, the variable's name and the file's path.
 The isolation manifest names the file read-only in `allowedMounts`, and the note of each forbidden input names the variable and the file.
 The run replaces the variable's value and each string of eight characters or more that the credentials file holds with `[redacted]` wherever any target prints it, a command, a tool server or an HTTP server, so no record holds them.
+The run keeps every string the file has held since it began and reads the file again when each call settles, so a token that Claude Code on your host rotates out of the file during a call is replaced along with the one that took its place.
+A read of the file that a rewrite tore, which is not valid JSON, contributes its whole text, each whitespace-separated token and each quoted string, so a token in it is replaced too.
 The values of the fields Claude Code's file documents as no secret (`scopes`, `subscriptionType` and `rateLimitTier`) stay as written, so a word such as `enterprise` in an answer is not rewritten, and every other field of the file is replaced.
 A confined run on a host that has neither source exits 12 before any target starts, naming the entry, the file it looked for, the token route and the opt-out.
 
@@ -595,7 +597,8 @@ The keychain answers over a Mach service, which a Seatbelt rule allows or denies
 Claude Code also finds the keychain through `HOME`, which a confined target holds privately, and a confined target's read of your keychain files is an observed mount, with the sidecar write a keychain database needs beside it refused.
 A confined target on macOS authenticates through the token route or runs with the opt-out.
 Run `claude setup-token` once and export the token it prints as `CLAUDE_CODE_OAUTH_TOKEN` where `tea-evaluate` runs, or set `"confinement": false` in `evaluation.json`, which keeps your home and your keychain for the target and records `opt-out`.
-An opted-out run passes the variable as well, makes no home and records the variable under `logins`.
+An opted-out run passes the variable as well, makes no home and records the variable under `logins`, with no file.
+It replaces the strings of your credentials file in every record all the same, since a target that keeps your `HOME` reads the file there.
 
 ## The interaction plan
 

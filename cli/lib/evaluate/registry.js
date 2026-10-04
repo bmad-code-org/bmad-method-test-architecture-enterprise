@@ -409,6 +409,25 @@ function isBareCommand(target) {
 }
 
 /**
+ * The strings a credentials file's text holds when it does not parse as JSON, which is what a read caught in the middle of a write returns:
+ * the whole trimmed text, each whitespace-separated token, and each quoted string that is a value (a quoted key is no secret), the last one
+ * cut short by the end of the text included.
+ * A token the file held before the write began survives a torn read this way, whichever part of the text the tear cut.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+function tornStrings(text) {
+  const strings = new Set([text.trim(), ...text.split(/\s+/)]);
+  for (const match of text.matchAll(/"((?:[^"\\]|\\.)*)("?)/g)) {
+    const isKey = match[2] === '"' && /^\s*:/.test(text.slice(match.index + match[0].length));
+    if (!isKey) strings.add(match[1]);
+  }
+  strings.delete('');
+  return [...strings];
+}
+
+/**
  * A registry over validated entries, resolved against one root.
  *
  * @param {unknown} entries RegistryEntry, McpRegistryEntry and ApiRegistryEntry objects.
@@ -439,9 +458,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
   const loginsGranted = Object.freeze((confinement?.logins ?? []).map((login) => Object.freeze({ ...login })));
 
   /**
-   * The environment keys a command entry's requests may carry: its own, the host system directory the Windows runner needs to
-   * launch its Job Object helper, and the variable that carries the login its `login` names (Story 1.113), the one variable of
-   * the host's environment a login hands the target.
+   * The environment keys a command entry's requests may carry: its own, the host system directory the Windows runner needs to launch its Job Object helper, and the variable that carries the login its `login` names (Story 1.113).
+   * That variable is the one variable of the host's environment a login hands the target.
    */
   const commandEnvironmentKeys = (entry) => [
     ...entry.environmentKeys,
@@ -490,31 +508,39 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     return `${mapping.prefix ?? ''}${value}`;
   }
 
+  // Every string a granted login has handed a target during the run, so a value the host's own CLI rotated out of the file (or out of the variable) still scrubs after the file holds a new one.
+  const heldLoginStrings = new Set();
+  // The values the adapters declare public that a read of a file has held, which a read torn mid-write must not scrub.
+  const heldPublicStrings = new Set();
+
   /**
-   * The strings a granted login hands a target (Story 1.113), which must be scrubbed from target answers and faults as an injected
-   * environment value is: the host's value of each granted login's variable, and every string value of each granted file (or the
-   * whole text of a file that is not JSON) except the values under the keys its adapter declares public, since a plan name or a
-   * scope is no secret and scrubbing it would rewrite an answer's own words before the verdict is computed.
+   * The strings a granted login hands a target (Story 1.113), which must be scrubbed from target answers and faults as an injected environment value is.
+   * They are the host's value of each granted login's variable, and every string value of each granted file (or the whole text of a file that is not JSON).
+   * The values under the keys its adapter declares public are left out, since a plan name or a scope is no secret and scrubbing it would rewrite an answer's own words before the verdict is computed.
+   * The set is the union of every string read since the run began, since the host's own CLI can refresh the file during a call.
+   * A file that does not parse (a read caught mid-write) contributes its whole trimmed text, each whitespace-separated token and each quoted string it holds.
    * A command target can write the token into the private home that a server target then prints, so the set covers every request kind.
+   * A run that opted out scrubs the file as well, since its target reads the host's own home.
    */
   function loginSecrets() {
-    const strings = [];
     const files = new Map();
     for (const login of loginsGranted) {
       const adapter = Object.hasOwn(LOGIN_ADAPTERS, login.login) ? LOGIN_ADAPTERS[login.login] : undefined;
       if (login.variable !== null && login.variable !== undefined && adapter !== undefined) {
         const value = process.env[adapter.variable];
-        if (typeof value === 'string' && value !== '') strings.push(value);
+        if (typeof value === 'string' && value !== '') heldLoginStrings.add(value);
       }
-      if (login.file === null || login.file === undefined) continue;
-      files.set(login.file, new Set([...(files.get(login.file) ?? []), ...(adapter?.publicFields ?? [])]));
+      const file = login.scrubFile ?? login.file;
+      if (file === null || file === undefined) continue;
+      files.set(file, new Set([...(files.get(file) ?? []), ...(adapter?.publicFields ?? [])]));
     }
     for (const [file, publicFields] of files) {
       const collect = (value) => {
-        if (typeof value === 'string') strings.push(value);
+        if (typeof value === 'string') heldLoginStrings.add(value);
         else if (value !== null && typeof value === 'object') {
           for (const [key, inner] of Object.entries(value)) {
             if (!publicFields.has(key)) collect(inner);
+            else if (typeof inner === 'string') heldPublicStrings.add(inner);
           }
         }
       };
@@ -527,10 +553,12 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       try {
         collect(JSON.parse(text));
       } catch {
-        strings.push(text.trim());
+        for (const piece of tornStrings(text)) {
+          if (!heldPublicStrings.has(piece)) heldLoginStrings.add(piece);
+        }
       }
     }
-    return strings;
+    return [...heldLoginStrings];
   }
 
   /** The mapped host values that must be scrubbed from target answers and faults. */

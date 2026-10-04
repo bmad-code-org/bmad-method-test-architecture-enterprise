@@ -75,11 +75,11 @@ The frozen block was written for this build from the story's acceptance criteria
 
 - `cli/lib/evaluate/confinement.js`: `LOGIN_ADAPTERS`, `loginsOf`, `selectConfinement` (the `logins` it carries, the refusal for a host with no source, the unsafe-path refusal), `makeTargetHome(scratch, links)`, `targetSandbox`'s `linked` (read roots, the Linux trace grants, the Seatbelt quiet rule), `forbiddenInputNote`'s third argument.
 - `cli/lib/evaluate/confinement-audit.js`: `traceDecision` reads a path in the home that resolves to a linked file as the exception it is.
-- `cli/lib/evaluate/registry.js`: the entry's login variable among its permitted environment keys (an empty value is not handed over), `loginLinksOf` into every private home, `registry.logins`, `registry.loginSecrets`.
-- `cli/lib/evaluate/arm.js`: `hostEnvironmentPort` scrubs the strings of a granted login (the file's, minus its public fields, and the variable's host value) from every request kind as it scrubs an injected value.
-- `cli/lib/evaluate/preflight.js`, `run.js`: `run.json`'s `logins`, the trial's read-only login mount, the manifest note's third argument.
+- `cli/lib/evaluate/registry.js`: the entry's login variable among its permitted environment keys (an empty value is not handed over), `loginLinksOf` into every private home, `registry.logins`, `registry.loginSecrets` (the run-long union of every string read, `tornStrings` for a file that does not parse, the file named by `scrubFile` for an opted-out run).
+- `cli/lib/evaluate/arm.js`: `hostEnvironmentPort` scrubs the strings of a granted login (the file's, minus its public fields, and the variable's host value) from every request kind as it scrubs an injected value, with the set read before the call and again after it settles, on the success path and in the fault path.
+- `cli/lib/evaluate/preflight.js`, `run.js`: `run.json`'s `logins` (without `scrubFile`), the trial's read-only login mount, the manifest note's third argument.
 - `cli/lib/evaluate/schemas/evaluation.schema.json`: the entry's `login`.
-- `test/test-evaluate-run.js`: `checkSubscriptionLogin`, `checkSubscriptionLoginUnits`, `checkSubscriptionLoginReference`, and the pinned sentence of `checkConfinementReference`.
+- `test/test-evaluate-run.js`: `checkSubscriptionLogin`, `checkSubscriptionLoginUnits`, `checkLoginScrubbedFromEveryKind`, `checkLoginScrubbedAfterRotation`, `checkSubscriptionLoginReference`, and the pinned sentence of `checkConfinementReference`.
 - `test/test-evaluate-preflight.js`: `checkSubscriptionLogin` over the real runner and adapter, and `checkSupervisorTraceRetries`.
 - `cli/lib/agent-supervisor.js`: the trace writer's bounded retry (Decision 24).
 - `test/fixtures/evaluate/mutation/bin/verdict.js`: the acts `claude-login` and `claude-keychain`; `test/fixtures/evaluate/stub-agent/claude.js`: the stub CLI.
@@ -159,6 +159,7 @@ The audit evidence the epic asks for comes from the confined run's own audit ove
 16. **A record holds no string of the credentials file.**
     The token's value is scrubbed because it is an injected environment value; the file's strings join that set (`registry.loginSecrets`: every string of a JSON file except the public fields of Decision 23, the whole text of any other), so an agent that prints its login file, or a CLI that dumps it on a debug flag, leaves `[redacted]` in the record.
     The guarantee covers strings of eight characters or more, the length the scrub already uses for injected values, and the reference, the manifest's note and the criteria say so.
+    A file that does not parse contributes its whole trimmed text, each whitespace-separated token and each quoted string (Decision 26).
     The file case echoes the file through the stub and sweeps the whole evaluation folder.
 17. **Two entries that declare one login share one link.**
     `loginLinksOf` keeps one link for each distinct file and location, since a second `symlink` to the same name throws, and the trial's read-only mount is listed once.
@@ -184,19 +185,35 @@ The audit evidence the epic asks for comes from the confined run's own audit ove
     In trace mode the writer retries `EBUSY`, `EPERM`, `EACCES` and `EMFILE` up to 50 times with a 5 ms synchronous wait, and the last error is still swallowed, since a diagnostic never affects supervision.
     The module exports `trace` and runs a role only when it is the process's entry (`require.main === module`), which is the seam the unit case uses.
     The test's assertion is unchanged.
+25. **The scrub set is the union of every string the file has held, read again when each call settles.**
+    The host's own Claude Code can refresh `.credentials.json` while a call runs, and an agent call lasts minutes, so the target reads the new `accessToken` and `refreshToken` through the link and prints them while a set read before the call holds neither.
+    `registry.loginSecrets` keeps a run-long `Set` of every string it has read from each granted file and from each granted variable, and returns the union, so a value rotated out of the file still scrubs in a later call.
+    `hostEnvironmentPort` calls it before `port.probe` and again once the call settles, on the success path and in the fault path, and scrubs with both.
+    The values under the adapter's public fields join a second run-long set that a torn read consults, so a word such as `enterprise` is not scrubbed because a rewrite caught the file mid-write.
+26. **A file that does not parse yields the strings a torn write still carries.**
+    A refresh that writes in place can be read half written, `JSON.parse` fails and the whole trimmed text was the one "secret", which no printed token equals.
+    `tornStrings` returns the whole trimmed text, each whitespace-separated token and each quoted string that is a value (a quoted key is no secret; an unterminated last string counts), so the token strings of eight characters or more still scrub.
+    A plain text login file gains the same tokens, which is the cost of one rule for every file that does not parse.
+27. **An opted-out run scrubs the host's credentials file.**
+    An opted-out target keeps the host's `HOME` (the dogfood evaluation passes it in `environmentKeys`) and reads the file there, so a print of it would land in a record while the reference, the changelog and the record say no record holds a string of the file.
+    `loginsOf` resolves the file for every mode into `scrubFile`, which only `loginSecrets` reads; `file` stays `null` for an opted-out run, no link is made, and `run.json` drops `scrubFile`, so its `logins` are what they were.
+28. **The token route's statements are pinned as whole sentences.**
+    The reference states the route in the bullet and again in the instruction, so loose substring checks held while either statement was deleted.
+    `checkSubscriptionLoginReference` asserts each statement as a whole line of its own (the token bullet, the sentence that closes the other credential variables, the instruction, and the two sentences of this round), and deleting any one fails the case.
 
 ## Implementation Notes
 
-- `loginsOf(evaluation, env, { file })` makes one record per command entry that declares a login: `{ interfaceId, executable, login, variable, file }`.
-  `variable` is the name when the host sets a non-empty value and null otherwise (the value is read where a request is made and is in no record); `file` is the real path of a regular file (a link is followed) or null.
-- `selectConfinement` carries `logins` for a confined run and, for an opt-out, the same list with `file: null`.
+- `loginsOf(evaluation, env, { file })` makes one record per command entry that declares a login: `{ interfaceId, executable, login, variable, file, scrubFile }`.
+  `variable` is the name when the host sets a non-empty value and null otherwise (the value is read where a request is made and is in no record); `file` is the real path of a regular file (a link is followed) or null for a run that opted out; `scrubFile` is the same real path for every mode and is read only to scrub.
+- `selectConfinement` carries `logins` for a confined run and, for an opt-out, the same list with `file: null` and the host's file in `scrubFile`.
 - `createRegistry` adds the login variable to the entry's permitted keys, `registry.logins` carries the list, and `createProbePort` plants the links (`loginLinks`) in every home it makes, a reset's new home included.
 - The trial's `mounts` add `read-only login <path>` for each file, and the note of every forbidden input names the sources.
 - The reference's older sentence, "give such an agent its API key variable instead", is replaced.
 
 ## Revert observations
 
-Every row ran once on the final tree of review round 1 (the tree this commit holds), applied to a scratch copy under the scratchpad directory with `.git` removed, the named case run there, the failed-check count recorded and the changed file copied back from the working tree.
+The first two tables ran on the final tree of review round 1, and the third table ran on the final tree of review round 2 (the tree this commit holds).
+Every row ran once, applied to a scratch copy under the scratchpad directory with `.git` removed, the named case run there, the failed-check count recorded and the changed file copied back from the working tree.
 The run cases are `--only="a confined target's subscription login"` (the case, 84 checks on the final tree), `--only="the subscription login's units"` (the units, 54) and `--only="the subscription login reference"` (the reference, 12), each under `node test/test-evaluate-run.js --group=confinement`; the preflight rows run the whole `node test/test-evaluate-preflight.js` (353 checks).
 A case that stops at a missing run directory ends at that check, so its total is the checks run before it; a case that loses a kernel report reruns itself, which the `widen` rows show (two reruns).
 
@@ -218,7 +235,7 @@ A case that stops at a missing run directory ends at that check, so its total is
 | The token route and opt-out sentence deleted from the reference                            | the reference            | 1 of 12 fails                                                                                                                |
 | The Keychain sentence deleted from the reference                                           | the reference            | 2 of 12 fail                                                                                                                 |
 
-The review rounds' additions were reverted the same way, on the same final tree.
+The review rounds' additions were reverted the same way: this table's rows on the final tree of round 1 (the trace row among them), the next table's on the final tree of round 2.
 
 | Revert (the one edit)                                               | Case run                 | Observed                                                                                                            |
 | ------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
@@ -233,6 +250,23 @@ The review rounds' additions were reverted the same way, on the same final tree.
 | `publicFields` empty                                                | the units, then the case | 5 of 54 fail (the secrets hold `enterprise` and the scopes; the answers lose them); 1 of 84 fails                   |
 | The trace writer attempts one append (`TRACE_APPEND_ATTEMPTS` is 1) | preflight                | 4 of 353 fail: the line after three refused appends is dropped for each of the four codes                           |
 
+Round 2's rows, on the final tree of round 2, in the same scratch copy.
+The case is 86 checks, the units 71 and the reference 17 on this tree.
+
+| Revert (the one edit)                                                                     | Case run                 | Observed                                                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `loginSecrets` returns the strings of one read (no run-long set)                          | the units                | 4 of 71 fail: a later call's observation and fault print the rotated-out tokens, for the whole and the torn rewrite        |
+| `hostEnvironmentPort` scrubs with the pre-call set alone (no read after the call settles) | the units                | 4 of 71 fail: the rotating call's observation and fault hold the new tokens, for the whole and the torn rewrite            |
+| `tornStrings` replaced by the whole trimmed text                                          | the units                | 8 of 71 fail: the plain file's secrets lack its tokens, and the torn rewrite's tokens are recorded                         |
+| `loginSecrets` reads `file` alone (`scrubFile` ignored)                                   | the case, then the units | 2 of 86 fail: the opted-out target's echo of the host file is recorded whole and the sweep finds its strings; 9 of 71 fail |
+| The token bullet's first sentence deleted from the reference                              | the reference            | 1 of 17 fails                                                                                                              |
+| The sentence "No other credential variable passes, ..." deleted from the reference        | the reference            | 1 of 17 fails                                                                                                              |
+| The instruction sentence "Run `claude setup-token` once ..." deleted from the reference   | the reference            | 2 of 17 fail (the sentence, and the section no longer names `"confinement": false`)                                        |
+| The opt-out scrub sentence deleted from the reference                                     | the reference            | 1 of 17 fails                                                                                                              |
+| The rotation sentence deleted from the reference                                          | the reference            | 1 of 17 fails                                                                                                              |
+
+The first build of the rotation case compared the tokens through a spread that kept only the new pair, so the revert of the run-long set passed; the revert row caught it and the list now holds all four tokens.
+
 The hard link row has no revert, since refusing a second name for the file is the mechanism's behavior (Decision 21); the file case holds it and fails on a host where the link succeeds.
 
 The first build of the file case showed the sixth row's defect before the quiet rule existed: the stub's append to its credentials file was a refused write, listed as an observed mount, and `score` exited 3 over an authenticated run.
@@ -245,6 +279,10 @@ No full local `npm test`: the hook and CI carry the chain.
 Local, macOS (Seatbelt), on the final tree:
 
 - Engine check (`evaluateTarget` is a function) at the start and at the end: exit 0.
+- Round 2, on the final tree: `test:evaluate-confinement` ran once in full, 1,718 checks, green, with the login case at 86 checks, the units at 71 and the login reference at 17.
+  `test:evaluate-preflight` 353, `test:evaluate-run` 592, `test:evaluate-agents` 500, `test:evaluate-guidance`, `test:isolation-primitives`, `test:doc-counts`, `test:doc-claims`, `test:shards` 183, `test:ci-coverage`, `test:changelog`: green.
+  `npm run docs:validate-links`, `npm run lint`, `npm run lint:md`, `npm run format:check`: green.
+  `npm run docs:build` did not run in this round; CI carries it.
 - Round 1, on the final tree: `test:evaluate-confinement` ran once in full, 1,653 checks, green, with the login case at 84 checks, the units at 54, the login reference at 12 and no rerun of a lost report.
 - `test:evaluate-preflight` 353, `test:evaluate-run` 592, `test:evaluate-agents` 500, `test:evaluate-evaluators` 800, `test:evaluate-check` 1,232, `test:evaluate-boundaries` 500, `test:evaluate-mcp` 227, `test:evaluate-api` 4,465, `test:cli`, `test:evaluate-guidance`, `test:isolation-primitives`: green.
   `test-windows-job-owner-probe.js`, the other reader of `agent-supervisor.js`, skips outside Windows; the Windows run is the `windows-agent-supervision` job's.
@@ -289,3 +327,14 @@ Round 1: the coordinator's Opus review of PR #339 (code lens and tests lens), ev
 | Low (tests lens): this record's counts and a case name did not match the final tree, and its revert table ran on no stated tree                                                                                                       | valid   | Fixed: every revert row reran on the final tree of this round and the record states which tree each table ran on; the three new reference sentences are held by `checkBridgeReference`                               |
 | Low (writing rule): multi-sentence lines in the test design, this record and the added comments                                                                                                                                       | valid   | Fixed: one sentence per line across the PR's added markdown and comments                                                                                                                                             |
 | Flake (not in this PR's files): the "setup race" case failed on `windows-agent-supervision` because `trace()` dropped a line when a refused append was swallowed                                                                      | valid   | Fixed at the writer with a bounded retry, and a unit case that stubs the refusals (Decision 24); the case's assertion is unchanged                                                                                   |
+
+Round 2: the coordinator's Opus review of PR #339 (code lens and tests lens), every finding reproduced before it was fixed.
+
+| Finding                                                                                                                                                                                                                                  | Verdict | Route                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medium (code lens): the file's strings were read once before `port.probe`, so a refresh by the host's own Claude Code during a call left the new tokens out of the set, and a read caught mid-write made the whole text the one "secret" | valid   | Fixed: a run-long union in `loginSecrets`, a second read after the call settles on the success and the fault path, and `tornStrings` for a file that does not parse (Decisions 25 and 26); `checkLoginScrubbedAfterRotation` holds each, with a revert row |
+| Medium (tests lens): an opted-out run that declares a login left the file's strings unscrubbed, since `loginsOf` gave `file: null` and a target reading the host's file through its own `HOME` printed it into the record                | valid   | Fixed: `scrubFile` resolves the host's file for every mode and only `loginSecrets` reads it, `run.json` keeps `file: null` and drops `scrubFile` (Decision 27); the opt-out case passes `HOME`, reads the fake file and sweeps for its strings             |
+| Low (tests lens): `checkSubscriptionLoginReference` matched `claude setup-token` and `CLAUDE_CODE_OAUTH_TOKEN` as loose substrings, so deleting either statement of the route left every check green                                     | valid   | Fixed: each statement is a whole-line assertion (Decision 28), and each deletion fails the case                                                                                                                                                            |
+| Low (wording): splitting sentences in round 1 left mid-sentence breaks in the comments of `confinement.js`, `confinement-audit.js`, `registry.js`, the verdict fixture and the stub CLI                                                  | valid   | Fixed: each sentence of a comment this PR added or changed sits on one line                                                                                                                                                                                |
+
+Round 2 left no finding open.

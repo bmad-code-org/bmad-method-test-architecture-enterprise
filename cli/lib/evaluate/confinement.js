@@ -71,12 +71,13 @@
  *                from `claude setup-token`), and the credentials file `<CLAUDE_CONFIG_DIR or ~/.claude>/.credentials.json` when the
  *                host has one (Linux and Windows keep the login there), as a link in the private home that names the real file,
  *                which the target may read, cannot write and the audit does not list.
- *                A login held in the macOS Keychain has no
- *                grant: the keychain answers over a mach service, which a Seatbelt rule allows or denies as a whole and no rule
- *                scopes to one item, and the CLI finds the keychain through `HOME`, which a confined target holds privately.
- *                A host
- *                with neither source refuses the run (exit 12), naming the token route and the opt-out.
+ *                A login held in the macOS Keychain has no grant.
+ *                The keychain answers over a mach service, which a Seatbelt rule allows or denies as a whole and no rule scopes to one item.
+ *                The CLI finds the keychain through `HOME`, which a confined target holds privately.
+ *                A host with neither source refuses the run (exit 12), naming the token route and the opt-out.
  *                Every observation and fault of every request kind has the variable's value and each string of the file replaced by `[redacted]`, since the home is shared by every target the sandbox starts.
+ *                The scrub covers every string the file has held during the run, since the host's own CLI can refresh it during a call, and the strings of a read caught mid-write.
+ *                An opted-out run scrubs the host's file as well, since its target reads the file through its own `HOME`.
  *                The values under the keys the adapter's `publicFields` names (the scopes, the subscription type, the rate-limit tier) stay as written, since they are no secret and a run that rewrote them would change an answer's own words, and any field the adapter does not name is scrubbed.
  *   network      every process the runtime starts for a Bubblewrap target
  *                (`--unshare-net`) runs in a network namespace of its own, a
@@ -204,10 +205,9 @@ const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
  * The login sources of the agent CLIs a registry entry's `login` names (Story 1.113): the environment variable that carries a
  * long-lived token, the variable that moves the CLI's configuration directory, that directory's default under the user's home,
  * and the credentials file inside it.
- * `homeFile` is where the CLI looks for the file under the private home, which a link names
- * the real file at.
- * `publicFields` are the keys of that file whose values are no secret (the plan, the scopes, the rate-limit
- * tier), which a record keeps as written while it replaces every other string of the file, a field this list does not know included.
+ * `homeFile` is where the CLI looks for the file under the private home, which a link names the real file at.
+ * `publicFields` are the keys of that file whose values are no secret (the plan, the scopes, the rate-limit tier).
+ * A record keeps those values as written while it replaces every other string of the file, a field this list does not know included.
  */
 const LOGIN_ADAPTERS = Object.freeze({
   claude: Object.freeze({
@@ -798,8 +798,7 @@ function setValue(value) {
 /**
  * The credentials file the host holds for `adapter`, by its real path, or null: `<directory>/<file>` where `directory` is the
  * variable's value when the host sets it and the default beneath the user's home otherwise.
- * A link is followed; a path that is
- * not a regular file is no login.
+ * A link is followed, and a path that is not a regular file is no login.
  */
 function hostLoginFile(adapter, env) {
   const home = setValue(env.HOME) ? env.HOME : os.homedir();
@@ -818,13 +817,14 @@ function hostLoginFile(adapter, env) {
  * The logins the registry's entries declare (`"login": "claude"`, Story 1.113), one record per entry that declares one: the
  * interface and executable, the adapter, the variable's name when the host sets it (its value is read where a request is made and
  * is in no record) and, for a run that confines, the credentials file's real path.
- * A run that opted out takes no file, since its
- * target runs with the host's own home.
+ * A run that opted out takes no `file`, since its target runs with the host's own home and no link is made.
+ * `scrubFile` is the host's credentials file whatever the mode, which the run reads only to scrub its strings from every record,
+ * since an opted-out target reads the host's file through its own `HOME`.
  *
  * @param {object} evaluation the parsed `evaluation.json`
  * @param {NodeJS.ProcessEnv} env
  * @param {{ file: boolean }} options whether the credentials file is a source (a confined run)
- * @returns {Array<{ interfaceId: string, executable: string, login: string, variable: string|null, file: string|null }>}
+ * @returns {Array<{ interfaceId: string, executable: string, login: string, variable: string|null, file: string|null, scrubFile: string|null }>}
  */
 function loginsOf(evaluation, env, { file }) {
   const entries = Array.isArray(evaluation?.registry) ? evaluation.registry : [];
@@ -833,12 +833,14 @@ function loginsOf(evaluation, env, { file }) {
     .filter((entry) => Object.hasOwn(LOGIN_ADAPTERS, entry.login))
     .map((entry) => {
       const adapter = LOGIN_ADAPTERS[entry.login];
+      const hostFile = hostLoginFile(adapter, env);
       return {
         interfaceId: entry.interfaceId,
         executable: entry.executable,
         login: entry.login,
         variable: setValue(env[adapter.variable]) ? adapter.variable : null,
-        file: file ? hostLoginFile(adapter, env) : null,
+        file: file ? hostFile : null,
+        scrubFile: hostFile,
       };
     });
 }
@@ -932,8 +934,8 @@ function selectConfinement({ evaluation, folder, root, env = process.env, platfo
       };
     }
   }
-  // The logins the entries declare (Story 1.113): an entry with a source the host cannot give a confined target is refused here,
-  // since every call of it would exit 4 and read as the target's own transport failure.
+  // The logins the entries declare (Story 1.113): an entry with a source the host cannot give a confined target is refused here.
+  // Every call of such an entry would exit 4 and read as the target's own transport failure.
   const logins = [];
   for (const found of loginsOf(evaluation, env, { file: true })) {
     let login = found;
@@ -1011,9 +1013,8 @@ function layerPrefix(confinement) {
  *   name (`withTemporary`); beneath `privateRoot` it is the one directory of the root the target reaches (re-allowed after the
  *   root's denial in Seatbelt, bound into the root's empty file system in Bubblewrap, excepted from the audit's withholding),
  *   so no other home is reachable; refused inside the workspace or the evaluation folder; `null` where the run made none
- * @param {string[]} [options.linked] the real paths of the host's login files that the home links to (`makeTargetHome`'s `links`,
- *   Story 1.113): files the target may read and the audit does not list, whether it opens them by the real path or by the link in
- *   its home; each stays unwritable
+ * @param {string[]} [options.linked] the real paths of the host's login files that the home links to (`makeTargetHome`'s `links`, Story 1.113).
+ *   The target may read each and the audit does not list it, whether the target opens it by the real path or by the link in its home, and each stays unwritable.
  * @param {{ directory: string, barrierMs?: number }|null} [options.audit] the runtime-private directory (`makeAuditDirectory`) the audit keeps
  *   its files in, which a target cannot reach; `null` for a port that does not audit. The confinement must carry the
  *   `observer` its selection probed.
@@ -1637,8 +1638,8 @@ function makeHomeLayout(home) {
 }
 
 /**
- * The links a home carries for the logins a run grants (Story 1.113): one for each distinct login file and the location the agent
- * looks for it, so two entries that declare one login share one link.
+ * The links a home carries for the logins a run grants (Story 1.113): one for each distinct login file and the location the agent looks for it.
+ * Two entries that declare one login share one link.
  *
  * @param {Array<{ login: string, file: string|null }>} logins `selectConfinement`'s `logins`
  * @returns {Array<{ relative: string, target: string }>}
@@ -1670,8 +1671,8 @@ function makeTargetHome(scratch, links = []) {
   const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-home-')));
   scratch.push(directory);
   makeHomeLayout(directory);
-  // Each login file a registry entry's `login` grants (Story 1.113) is a link in the home that names the host's real file, where
-  // the agent CLI looks for it; the target reads the real file through the link and cannot write it.
+  // Each login file a registry entry's `login` grants (Story 1.113) is a link in the home that names the host's real file, where the agent CLI looks for it.
+  // The target reads the real file through the link and cannot write it.
   for (const { relative, target } of links) {
     fs.mkdirSync(path.dirname(path.join(directory, relative)), { recursive: true });
     fs.symlinkSync(target, path.join(directory, relative));
