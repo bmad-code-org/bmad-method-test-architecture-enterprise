@@ -13,8 +13,13 @@
  *  - a floor for a class with no eligible probe (the zero-action floor is gone, and the held-out partition holds a
  *    gameability probe): `twin-run` and `held-out` on `scheduled` and `release`, whose strength aggregates are read here.
  *
- * It lives beside `test-evaluate-ci.js` and not in it because its live tiers take about ten minutes: the CI shards run the two
- * scripts side by side.
+ * It lives beside `test-evaluate-ci.js` and not in it because its live tiers are slow, and it runs one adopter x tier per
+ * process so the CI shard planner can spread it: `--only=<adopter>:<tier>` runs exactly one tier of one repository, in a copy of
+ * its own, and `--only=<adopter>` runs every tier of the adopters whose name contains that text. With no `--only` every tier of
+ * both runs, serially. The package scripts `test:evaluate-ci-repositories:<adopter>-<tier>` are one process each, and each is
+ * weighted in tools/test-shard-weights.json. A selector that selects nothing fails, so a misspelt one cannot pass. Every run
+ * holds the adopter-level assertions (plan findings, manifest and accepted baseline, the tiers the plan places), so a selected
+ * tier still fails when the plan places tiers the suite does not list.
  */
 
 const assert = require('node:assert/strict');
@@ -90,7 +95,8 @@ function aggregateOf(evaluation, row, prefix) {
 /** The floors of an aggregate as `class: decision` pairs. */
 const decisions = (aggregate) => Object.fromEntries(Object.entries(aggregate.floorDecisions).map(([key, value]) => [key, value.decision]));
 
-function checkRepository(name) {
+/** One tier of one adopter, in a copy of its own: the adopter-level assertions, then the tier's run and what it must hold. */
+function checkTier(name, tier) {
   const evaluation = copyRepository(name);
   const plan = read(path.join(evaluation, 'ci', 'evaluation-ci-plan.json'));
   assert.deepEqual(readPlan(evaluation).findings, [], `${name}: the committed plan fails validation`);
@@ -107,78 +113,94 @@ function checkRepository(name) {
     [false, true, 'copy', 'both'],
     `${name}: the baseline is not a clean copy-workspace run of both partitions`,
   );
-  const planned = ['pr', 'merge', 'scheduled', 'release'].filter((tier) => plan.checks.some((item) => item.placement.tier === tier));
+  const planned = ['pr', 'merge', 'scheduled', 'release'].filter((item) => plan.checks.some((check) => check.placement.tier === item));
   assert.deepEqual(planned, REPOSITORIES[name].tiers, `${name}: the plan places other tiers than this suite runs`);
-  for (const tier of planned) {
-    const started = Date.now();
-    const result = ci(evaluation, tier);
-    assert.equal(result.status, 0, `${name} ${tier}: ci exited ${result.status}\n${result.output}`);
-    const { json } = result;
-    assert.deepEqual(
-      json.checks.map((row) => row.id),
-      plan.checks.filter((item) => item.placement.tier === tier).map((item) => item.id),
-      `${name} ${tier}: the checks that ran`,
+  const started = Date.now();
+  const result = ci(evaluation, tier);
+  assert.equal(result.status, 0, `${name} ${tier}: ci exited ${result.status}\n${result.output}`);
+  const { json } = result;
+  assert.deepEqual(
+    json.checks.map((row) => row.id),
+    plan.checks.filter((item) => item.placement.tier === tier).map((item) => item.id),
+    `${name} ${tier}: the checks that ran`,
+  );
+  assert.ok(
+    json.checks.every((row) => row.exit === 0 && row.warnings.length === 0),
+    `${name} ${tier}: ${JSON.stringify(json.checks.map((row) => [row.id, row.exit, row.warnings]))}`,
+  );
+  assert.deepEqual(json.warnings, [], `${name} ${tier}: the tier warns`);
+  assert.equal(json.baseline.stale, false, `${name} ${tier}: the committed baseline is stale: ${JSON.stringify(json.baseline.reasons)}`);
+  if (tier === 'pr') {
+    const agreement = json.checks.find((row) => row.id === 'oracle-agreement');
+    assert.match(
+      fs.readFileSync(path.join(result.directory, 'checks', 'oracle-agreement', 'stdout'), 'utf8'),
+      /\b0 oracle outcome\(s\) that disagree or cannot be evaluated/,
+      `${name}: oracle-agreement reads a disagreement (${JSON.stringify(agreement.notes)})`,
     );
-    assert.ok(
-      json.checks.every((row) => row.exit === 0 && row.warnings.length === 0),
-      `${name} ${tier}: ${JSON.stringify(json.checks.map((row) => [row.id, row.exit, row.warnings]))}`,
-    );
-    assert.deepEqual(json.warnings, [], `${name} ${tier}: the tier warns`);
-    assert.equal(json.baseline.stale, false, `${name} ${tier}: the committed baseline is stale: ${JSON.stringify(json.baseline.reasons)}`);
-    if (tier === 'pr') {
-      const agreement = json.checks.find((row) => row.id === 'oracle-agreement');
-      assert.match(
-        fs.readFileSync(path.join(result.directory, 'checks', 'oracle-agreement', 'stdout'), 'utf8'),
-        /\b0 oracle outcome\(s\) that disagree or cannot be evaluated/,
-        `${name}: oracle-agreement reads a disagreement (${JSON.stringify(agreement.notes)})`,
-      );
-    }
-    if (tier === 'scheduled' || tier === 'release') {
-      // The twin run and the held-out partition each meet every floor they declare, and each holds an eligible probe of the
-      // classes whose floors the evaluation declares: defect in both, gameability in the held-out partition too.
-      const twin = aggregateOf(
-        evaluation,
-        json.checks.find((row) => row.id === 'twin-run'),
-        'twin run',
-      );
-      const held = aggregateOf(
-        evaluation,
-        json.checks.find((row) => row.id === 'held-out'),
-        'held-out partition',
-      );
-      for (const [label, aggregate] of [
-        ['twin run', twin],
-        ['held-out partition', held],
-      ]) {
-        for (const [probeClass, decision] of Object.entries(decisions(aggregate)))
-          assert.notEqual(
-            decision,
-            'does-not-meet',
-            `${name} ${tier}: the ${label} does not meet its ${probeClass} floor: ${JSON.stringify(aggregate.floorDecisions)}`,
-          );
-        assert.equal(aggregate.floorDecisions.defect.decision, 'meets', `${name} ${tier}: the ${label} defect floor`);
-        assert.equal(
-          aggregate.floorDecisions['zero-action'].decision,
-          'undeclared',
-          `${name} ${tier}: the ${label} declares a zero-action floor`,
-        );
-      }
-      assert.equal(twin.floorDecisions.gameability.decision, 'meets', `${name} ${tier}: the twin run holds no eligible gameability probe`);
-      assert.equal(
-        held.floorDecisions.gameability.decision,
-        'meets',
-        `${name} ${tier}: the held-out partition holds no eligible gameability probe`,
-      );
-      assert.ok(held.classes.gameability?.eligible >= 1, `${name} ${tier}: the held-out partition has no gameability probe`);
-    }
-    process.stdout.write(`  ok ${name} ${tier} (${Math.round((Date.now() - started) / 1000)}s)\n`);
   }
+  if (tier === 'scheduled' || tier === 'release') {
+    // The twin run and the held-out partition each meet every floor they declare, and each holds an eligible probe of the
+    // classes whose floors the evaluation declares: defect in both, gameability in the held-out partition too.
+    const twin = aggregateOf(
+      evaluation,
+      json.checks.find((row) => row.id === 'twin-run'),
+      'twin run',
+    );
+    const held = aggregateOf(
+      evaluation,
+      json.checks.find((row) => row.id === 'held-out'),
+      'held-out partition',
+    );
+    for (const [label, aggregate] of [
+      ['twin run', twin],
+      ['held-out partition', held],
+    ]) {
+      for (const [probeClass, decision] of Object.entries(decisions(aggregate)))
+        assert.notEqual(
+          decision,
+          'does-not-meet',
+          `${name} ${tier}: the ${label} does not meet its ${probeClass} floor: ${JSON.stringify(aggregate.floorDecisions)}`,
+        );
+      assert.equal(aggregate.floorDecisions.defect.decision, 'meets', `${name} ${tier}: the ${label} defect floor`);
+      assert.equal(
+        aggregate.floorDecisions['zero-action'].decision,
+        'undeclared',
+        `${name} ${tier}: the ${label} declares a zero-action floor`,
+      );
+    }
+    assert.equal(twin.floorDecisions.gameability.decision, 'meets', `${name} ${tier}: the twin run holds no eligible gameability probe`);
+    assert.equal(
+      held.floorDecisions.gameability.decision,
+      'meets',
+      `${name} ${tier}: the held-out partition holds no eligible gameability probe`,
+    );
+    assert.ok(held.classes.gameability?.eligible >= 1, `${name} ${tier}: the held-out partition has no gameability probe`);
+  }
+  process.stdout.write(`  ok ${name} ${tier} (${Math.round((Date.now() - started) / 1000)}s)\n`);
+}
+
+/** The adopter x tier pairs a `--only` selector names: `<adopter text>` for every tier of the matching adopters, `<adopter text>:<tier>` for one. */
+function select(only) {
+  if (only === undefined) return Object.entries(REPOSITORIES).flatMap(([name, { tiers }]) => tiers.map((tier) => [name, tier]));
+  const [adopter, tier, ...extra] = only.split(':');
+  assert.ok(adopter && tier !== '' && extra.length === 0, `--only=${only}: expected <adopter> or <adopter>:<tier>`);
+  const selected = Object.entries(REPOSITORIES).flatMap(([name, { tiers }]) =>
+    name.includes(adopter) ? tiers.filter((item) => tier === undefined || item === tier).map((item) => [name, item]) : [],
+  );
+  assert.ok(
+    selected.length > 0,
+    `--only=${only} selects no adopter x tier; the suite runs ${Object.entries(REPOSITORIES)
+      .flatMap(([name, { tiers }]) => tiers.map((item) => `${name}:${item}`))
+      .join(', ')}`,
+  );
+  return selected;
 }
 
 function main() {
   const only = process.argv.find((argument) => argument.startsWith('--only='))?.slice('--only='.length);
   try {
-    for (const name of Object.keys(REPOSITORIES)) if (only === undefined || name.includes(only)) checkRepository(name);
+    const selected = select(only);
+    for (const [name, tier] of selected) checkTier(name, tier);
     process.stdout.write('Evaluate repository CI tiers passed.\n');
   } finally {
     scratch.removeAll();

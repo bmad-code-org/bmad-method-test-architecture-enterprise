@@ -107,6 +107,20 @@ Each new assertion has a mutant that fails it; a mutant that survives is recorde
 - `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
 - No docs change: `docs/reference/tea-evaluate-cli.md` says `score` and a baseline replay read the recorded configuration without starting the agent CLI, which the case now also holds for the gameability branch. No file under `src/workflows/testarch/bmad-testarch-evaluate/` changed, so builder Analyze does not apply.
 
+## CI shard split (round 1 CI finding)
+
+Chain shard 3 of 12 timed out at the job's 20 minutes on PR #345 and on PR #344 (job runs 37226760404 and 37226814213).
+The shard held `test:evaluate-ci-repositories`, the suite of Story 1.98 (#340), which ran its 7 tier runs one after another in one script.
+CI measured them under coverage: tagged-release `pr` 10 s, `merge` 96 s, `release` 309 s; nightly-deploy `pr` 10 s, `merge` 95 s, `scheduled` 309 s, `release` 308 s.
+That is about 1137 seconds against a weight of 530 in `tools/test-shard-weights.json`, so the planner put it beside enough other scripts to overrun the cap.
+One script cannot be split across shards, so the planner could not spread it.
+
+The suite is now seven scripts, `test:evaluate-ci-repositories:<adopter>-<tier>`, each `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>` and each chained in `test` where the single script was.
+Each run uses a copy of the repository of its own, keeps every assertion of the file (the adopter-level ones run in every tier run), and a selector that selects nothing fails.
+`tools/test-shard-weights.json` drops the 530 weight and holds the measured seconds plus 2 for process start and the copy: 12, 98 and 311 for tagged-release, 12, 97, 311 and 310 for nightly-deploy.
+`test:evaluate-ci-repositories` remains as the all-tiers command for a person, is not chained, and is named in `DELIBERATELY_LOCAL` of `tools/validate-ci-coverage.js` with its reason.
+The planner now places the seven scripts on six of the 12 shards, and each of the three scripts of about 310 seconds on a shard of its own.
+
 ## Review Triage Log
 
 Round 1 (Opus reviewers; each finding verified by the coordinator against the code):

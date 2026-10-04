@@ -496,6 +496,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Evaluate repository CI suite is seven scripts, one per adopter and tier, so the CI shards spread it (Story 1.79).
+  `test:evaluate-ci-repositories` ran the seven tier runs of the two fixture repositories one after another in a single script, about 1137 CI seconds under coverage, and the chain shard that held it timed out at the job's 20 minute cap.
+  `test:evaluate-ci-repositories:tagged-release-pr`, `-merge` and `-release`, and `test:evaluate-ci-repositories:nightly-deploy-pr`, `-merge`, `-scheduled` and `-release`, each run `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>`, are chained in `npm test` where the single script was, and carry a measured weight in `tools/test-shard-weights.json`, so the shard planner places them on different runners.
+  Each run uses a copy of the repository of its own and holds every assertion the suite held, including the adopter-level ones, so a selected tier still fails when the plan places tiers the suite does not list.
+  `--only=<adopter>` runs every tier of the matching adopters, and a selector that selects nothing now fails where it used to print `passed` after running nothing.
+  `npm run test:evaluate-ci-repositories` still runs every tier in one command for a person; CI does not run it.
 - An edit run of `bmad-testarch-ci` renames an evaluation job whose id the rules no longer give (Story 1.93, AD-11).
   Section 4 of `steps-c/step-03b-render-evaluation-plans.md` told a second run to rewrite each marker job under the id item 1 of section 3 gives now, and the live edit runs of Story 1.93 kept the id `evaluation-evals-ledger-pr` of a job written while the repository held two plans, with a plan folder in it and its artifact named for it.
   The section is now a list: match the jobs by marker, work out the id the rules give now, rename the job and its artifact name to it, and keep no job under the old id.
