@@ -1,0 +1,165 @@
+---
+title: 'Hold the gameability scoring branch of a sealed-brief baseline to starting no agent version probe'
+type: 'feature'
+created: '2026-10-04'
+status: 'done'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '14218e7be313ba32e9c47c03c0048594a08ba913'
+context:
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.78.md'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.107.md'
+---
+
+<frozen-after-approval reason="owner delegated Story 1.79 build through the Evaluate relay">
+
+## Intent
+
+**Problem:** Story 1.78's case runs `tea-evaluate ci --tier pr` over a sealed-brief baseline that holds no gameability probe, so `gameabilityCheck` returns at its no-probe exit and its scoring branch never runs under the tripwire. A version read added after that return passes the case. The stub agent cannot judge a gameability arm: it quotes `verdict: rejected` for any stdout that lacks `verdict: accepted`, a gameability arm's stdout is `verdict: pending`, and `eval-quality score` refuses the unwitnessed quotation (exit 3).
+
+**Approach:** The stub agent learns one flag, `--quote-observed-verdict`. Story 1.78's case adds the gameability probe to its project, asserts the accepted baseline holds the probe, and asserts the `gameability` row took its scoring branch under the wire.
+
+## Boundaries & Constraints
+
+**Always:** Keep every other stub mode byte-stable in behavior. Assert the baseline holds the probe before the replay. Prove each new assertion with a mutant.
+
+**Never:** Change `ci.js`, `run.js` or any production file; the revert checks inject a version read in a scratch copy. Add a harness or runner file.
+
+</frozen-after-approval>
+
+## Premise Check
+
+What a sealed-brief baseline holds when the evaluation runs a gameability arm (observed from a real run, then read in the code):
+
+- The run seals a trial set per arm: `trials/gameability-P-004/trial-<n>.json`, `trial-sets/P-004/` (records and isolation manifest) and an entry `gameability:P-004` in `trial-sets.json`.
+- `probes/P-004.probe.json` is written by `preflight.js` (`gameabilityQualified`, after the engine verdict) and by `run.js` (`writeQualifiedProbe`, when the trial set seals) if absent, and refused with exit 12 if it differs from the probe the run qualified (`attemptProbeFile` only names the path). `compare --accept` copies `probes/` whole, and `scoreInputList` makes it a required member, so a baseline of a gameability run always holds the file, with `qualification.route === 'gameability'`.
+- `qualification/P-004/naive-oracle-satisfied.json` and `disciplined-oracle-rejected.json` are baseline members too.
+- The accepted score invocation holds `P-004/evidence-artifact.json` and `P-004/score.json`. With the agent judging each trial a catch, the evidence is `contractVerdict: CONCERNS` (the fixture's coverage gaps, the same CONCERNS P-001 and P-002 carry), O-001 `violated` and `caught`, O-002 `confirmed`, `reducedProbeOutcomes[0].trialVotes` three `caught`.
+
+What `gameabilityCheck` reads and does:
+
+- It reads `baseline/` through `locateBaseline`, lists `baseline/probes/*.probe.json` and collects the ids whose `qualification.route` is `gameability`. With none it returns OK with the note `no gameability probe` and the output `the baseline holds no gameability probe`.
+- With ids it takes the scoring branch: `replayScore(context, baseline)` (cached per `ci` run in `context.once('replay-score')`, and the plan runs `gameability` before `replay`, so the gameability check is the call that does the scoring), which places the baseline in a scratch run directory and calls `runScoreCommand`, that is `eval-quality score` once per probe. Per id the check writes `P-004: gameability arm scored through eval-quality score, exit <n>; <evidence path>`, takes the probe's exit and passes CONCERNS lines of the evidence as warnings.
+- Nothing in that branch reaches an agent start or a version probe. The one probe site is `observeAgentVersion` in `run.js` (the run, its qualification and its trials); `ci.js` imports `runRunCommand` from `run.js` but the `pr` checks never call it. A version read could be added at the head of the branch, after `replayScore` or in the scored-arm line of the result loop, and each of those is now covered. The case scores P-004 cleanly, so the unscored-arm branch of the result loop runs only when `score` fails; `test:evaluate-ci`'s gameability case holds its exit 12.
+- The row's recorded fields under the scoring branch: `exit 0`, `class pass`, `action warn` (one warning, `gameability P-004: eval-quality records CONCERNS in its evidence artifact`), `notes []`. The no-probe return records `notes ['no gameability probe']` and `action pass`.
+
+What it takes for the stub to judge the arm:
+
+- The stub calls the `verdict` tool, and the bridge answers a gameability call from the degenerate response (`degeneratePort`), so the observation's stdout is `request: Judge the request.\nverdict: pending\n`.
+- The stub answers `fail` with `quote: 'verdict: rejected'` because that stdout lacks `verdict: accepted`. The quotation is not in the observation, so `eval-quality score` refuses P-004 (`finding F-001: unwitnessed quotation on channel stdout`, exit 3, no evidence artifact), and `compare --accept` refuses the run for the missing evidence. Observed: 1.78's attempt reproduced exactly.
+- With `--quote-observed-verdict` the failing row quotes `verdict: pending`, which the stdout holds, so each trial is a catch.
+
+AC amendments from the premise check: the `gameability` row's action is `warn` (exit 0, class `pass`) because the evidence carries CONCERNS, so "the row passes" is held as exit 0 and class `pass`; the row's output line and the probe's presence in the baseline are asserted too; the case extends Story 1.78's case instead of adding a sibling, because a sibling would repeat the 9-second run for no extra coverage and Story 1.78's own revert checks all still hold over the larger baseline. `epics.md` and `test-design-epic-1.md` carry the amended wording. No engine change is needed.
+
+## Code Map
+
+- `test/fixtures/evaluate/evaluators/stub-evaluator-agent.js`: `--quote-observed-verdict`, documented in the header; the failing row's quote is `/verdict: \S+/` of the call's stdout when the flag is present and `verdict: rejected` otherwise. Nothing else changes.
+- `test/test-evaluate-evaluators.js`: `useSealedBriefAgent` takes `quoteObservedVerdict`; `checkSealedBriefCiReplayStartsNoVersionProbe` passes it, adds `addGameabilityProbe(folder)` (the helper Story 1.34's case uses), asserts the baseline's probe file, trial set and caught votes before the replay, the `gameability` row (class, notes, one warning, output line) after it, and adds P-004's evidence artifact to the byte comparison. The loop that holds each row to action `pass` now expects `warn` for `replay` and `gameability`. The case keeps its registration in `CASES` and in the `--agent-version-only` list.
+- `epics.md` Story 1.79 and `test-design-epic-1.md` Story 1.79: amended wording.
+- `CHANGELOG.md`: Story 1.79 entry; the Story 1.78 entry no longer says the gameability branch stays unproved.
+
+## Design Decisions
+
+- The flag is the narrowest stub change: it replaces one string and only when asked. The suite's other sealed-brief cases never pass it.
+- The baseline assertions read the copy of the repository the `ci` run replays, so they describe what the replay saw.
+- The gameability warning is asserted by exact text so a second warning or a changed row fails the case.
+
+## Revert Observations
+
+Mutants run in a scratch copy of HEAD with the changed files copied over (`mut-1.79-build-a`); each fails the case on the named assertion. The control column runs the same ci.js mutant against HEAD's test (`mut-1.79-build-b`).
+
+| Revert                                                                                                     | Result on the new case                                                                | Control on HEAD's case             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------- |
+| Child process starting the agent with `--version` at the head of the scoring branch (before `replayScore`) | fails: `the pr tier invoked the removed agent CLI, a version read included`           | passes (survivor Story 1.78 filed) |
+| The same child after `replayScore`                                                                         | fails on the wire                                                                     | passes                             |
+| The same child in the scored-arm line of the result loop                                                   | fails on the wire                                                                     | passes                             |
+| `gameabilityCheck` returns at the no-probe exit anyway                                                     | fails 4 assertions: row action, the row and its notes, the warning, the output line   | not applicable                     |
+| Probe reading skipped (no id collected)                                                                    | the same 4 assertions                                                                 | not applicable                     |
+| The stub's other modes alter a quotation (`verdict: refused` in place of `verdict: rejected`)              | `--qualification-only` fails 15 checks (mutated arm agreement, unwitnessed quotation) | not applicable                     |
+
+## Mutant Table
+
+Each new assertion has a mutant that fails it; a mutant that survives is recorded with its reason.
+
+| Assertion                                                              | Mutant                                                                                               | Result                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Wire stays empty                                                       | version read at the head, after `replayScore`, in the scored-arm line of the result loop (3 mutants) | killed                                                                                                                                                                                                                                           |
+| Row notes omit `no gameability probe`, row class and action            | return at the no-probe exit; probe reading skipped                                                   | killed (row action, row text, output)                                                                                                                                                                                                            |
+| Row output names the arm scored through `score`                        | the output line dropped                                                                              | killed (`the gameability check's output was ""`)                                                                                                                                                                                                 |
+| Row warns with the one CONCERNS line                                   | `warnings: []`                                                                                       | killed (action and warning text)                                                                                                                                                                                                                 |
+| Baseline holds the probe, trial set and caught votes                   | the case leaves `addGameabilityProbe` out                                                            | killed (probe file, trial sets, votes, row)                                                                                                                                                                                                      |
+| Votes are `caught`                                                     | the stub flag answers `pass` on every call                                                           | killed: the run stops at qualification, exit 11 (`agreement fell below 0.9 on mutated:M-001`), before any vote exists                                                                                                                            |
+| Stub judges the arm                                                    | the case leaves the flag off                                                                         | killed: `score` refuses P-004 and `compare --accept` is refused                                                                                                                                                                                  |
+| Baseline holds the probe file                                          | `preflight.js` and `run.js` stop writing gameability probe files                                     | the run itself refuses (exit 12, `probes/P-004.probe.json is not a file the runtime wrote`); the case's probe-file assertion is held by the leave-out mutant above, since no production edit can drop the file from a baseline that was accepted |
+| Stub's other modes unchanged                                           | altered quotation                                                                                    | killed in `--qualification-only`                                                                                                                                                                                                                 |
+| Stub quotes the observed verdict only under its flag                   | `quoted` read unconditionally, no `--quote-observed-verdict` test (`mut-1.79-fix-a1`)                | killed in `--qualification-only`: `score` over the default-mode gameability arm exits 0, the case asserts exit 3                                                                                                                                 |
+| Stub quote altered to a substring of the original (`verdict: rejecte`) | first attempt                                                                                        | survived as an equivalent mutant: the engine witnesses a quotation by containment, so the substring is still found; replaced by `verdict: refused`                                                                                               |
+| Probe file removed from `probes/` only in `preflight.js`               | one writer dropped                                                                                   | survived as an equivalent mutant: `run.js` (`writeQualifiedProbe`) writes the file when the trial set seals; both writers removed gives the exit 12 above                                                                                        |
+
+## Verification
+
+- `npm run test:evaluate-evaluators`: 807 checks passed (391 s wall in a local run under concurrent mutant runs). CI measures this suite at 628 s and 610 s under coverage, so `tools/test-shard-weights.json` now weights it 628.4 s (see the CI shard split section).
+- `node test/test-evaluate-evaluators.js --agent-version-only --only=sealed-brief`: 30 checks passed (23 before; the case alone runs about 9 s).
+- `npm run test:evaluate-ci`, `test:evaluate-partition-plans` (the other suite that runs the stub), `test:evaluate-agents`, `test:evaluate-held-attempts`, `test:evaluate-private` and `test:evaluate-records` (the groups of the evaluators file the stub serves): all exit 0.
+- `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
+- No docs change: `docs/reference/tea-evaluate-cli.md` says `score` and a baseline replay read the recorded configuration without starting the agent CLI, which the case now also holds for the gameability branch. No file under `src/workflows/testarch/bmad-testarch-evaluate/` changed, so builder Analyze does not apply.
+
+## CI shard split (round 1 CI finding)
+
+Chain shard 3 of 12 timed out at the job's 20 minutes on PR #345 and on PR #344 (job runs 37226760404 and 37226814213).
+The shard held `test:evaluate-ci-repositories`, the suite of Story 1.98 (#340), which ran its 7 tier runs one after another in one script.
+CI measured them under coverage: tagged-release `pr` 10 s, `merge` 96 s, `release` 309 s; nightly-deploy `pr` 10 s, `merge` 95 s, `scheduled` 309 s, `release` 308 s.
+That is about 1137 seconds against a weight of 530 in `tools/test-shard-weights.json`, so the planner put it beside enough other scripts to overrun the cap.
+One script cannot be split across shards, so the planner could not spread it.
+
+The suite is now seven scripts, `test:evaluate-ci-repositories:<adopter>-<tier>`, each `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>` and each chained in `test` where the single script was.
+Each run uses a copy of the repository of its own, keeps every assertion of the file (the adopter-level ones run in every tier run), and a selector that selects nothing fails.
+The adopter of `--only` is matched exactly (`name === adopter`), so a part of a name such as `e` or `release` selects nothing and fails.
+`tools/test-shard-weights.json` drops the 530 weight and holds the measured seconds plus 2 for process start and the copy: 12, 98 and 311 for tagged-release, 12, 97, 311 and 310 for nightly-deploy.
+`test:evaluate-ci-repositories` remains as the all-tiers command for a person, is not chained, and is named in `DELIBERATELY_LOCAL` of `tools/validate-ci-coverage.js` with its reason.
+The planner now places the seven scripts on six of the 12 shards, and each of the three scripts of about 310 seconds on a shard of its own.
+
+### Weights refreshed from CI (round 2)
+
+The weights of `tools/test-shard-weights.json` are CI seconds under coverage, and several were far below what CI measures: the evaluators suite 628.4 s and 610.2 s against 491, confinement 861 against 502, partition-plans 647 against 400, learned-framework 108 against 34.6, mutation 262 against 203, check 396 against 340.
+The weights now merge the `timings-*` artifacts of runs 37226760404 and 37226814213 (every `shard-<i>.json`, the higher value per script) over the file, through `jq -S`.
+The seven `test:evaluate-ci-repositories:*` weights stay (they are not in those runs), and so does the weight of each script the runs lack.
+Neither run holds a timings file for shard 3, so each script that the other shards of those runs did not run keeps its earlier weight.
+By the weights the 12-shard plan is: shard 1 860.5 s (`test:evaluate-confinement` alone), shard 2 834.0 s (`test:evaluate-agents` alone) and the other ten between 759.3 and 759.7 s, so no shard is above 1000 s.
+The three scripts of about 310 seconds sit on shards 9 (`nightly-deploy-scheduled`), 10 (`tagged-release-release`) and 11 (`nightly-deploy-release`), each on a shard below 760 s.
+
+### Guards of the split (round 2)
+
+Every invocation of `test/test-evaluate-ci-repositories.js`, before any tier runs, holds two things in milliseconds.
+`checkScripts` reads `package.json` and asserts that the `test:evaluate-ci-repositories:<adopter>-<tier>` scripts are exactly the pairs `select()` returns, that each runs `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>`, that each is in the `npm test` chain exactly once, and that each has a weight.
+`checkSelect` asserts what `select` returns for no selector (the 7 pairs), `<adopter>` and `<adopter>:<tier>`, and that these throw: an unknown adopter, an unknown tier, a tier the adopter lacks (`tagged-release:scheduled`), an empty tier, an empty selector, three parts, an empty adopter, a part of an adopter name, and an extra part after a valid pair.
+`main()` runs under `require.main === module` and the file exports `select`.
+
+Mutants, each in a scratch copy, each run as `node test/test-evaluate-ci-repositories.js --only=nightly-deploy:pr`; every one exits 1 where the unmutated file passes:
+
+| Mutant                                                         | Failing check                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `select` ignores the tier                                      | `--only=tagged-release:pr selects exactly that pair`                           |
+| An unknown tier selects the whole adopter                      | `--only=tagged-release:nope (an unknown tier) must throw`                      |
+| The empty-selection guard dropped                              | `--only=nope (an unknown adopter) must throw`                                  |
+| The shape guard dropped                                        | `--only=tagged-release:pr:merge (an extra part after a valid pair) must throw` |
+| Only the first selected pair returned                          | `--only=tagged-release selects the tiers of that adopter only`                 |
+| Adopter matched by substring again (`name.includes(adopter)`)  | `--only=release (a part of an adopter name) must throw`                        |
+| `tagged-release-merge` rewired to `--only=tagged-release:pr`   | `tagged-release-merge does not run exactly tagged-release:merge`               |
+| `tagged-release-merge`, its chain entry and its weight deleted | the scripts are not exactly the suite adopter x tier pairs                     |
+| `tagged-release-merge` left out of the chain, or chained twice | `is not in the npm test chain exactly once`                                    |
+| `tagged-release-merge` without a weight                        | `has no weight`                                                                |
+
+With the exact adopter match, the first shape-guard mutant tried (`a:b:c`) survived as an equivalent one, because every such selector also selects nothing; the extra part after a valid pair is the case only the shape guard holds, and the check names it.
+
+## Review Triage Log
+
+Round 1 (Opus reviewers; each finding verified by the coordinator against the code):
+
+- The stub's flag gate was untested: **medium**, patched. A stub that quoted the observed verdict without `--quote-observed-verdict` survived `test:evaluate-evaluators`. `checkQualificationSkipsOtherArms` now runs `score` over its default-mode gameability arm and asserts exit 3, `P-004: eval-quality score exited 3` and the unwitnessed quotation; the ungated mutant fails it (Mutant Table).
+- The result-loop claim was wider than the case: **medium**, patched. The case scores P-004 cleanly, so it holds the scored-arm line of the result loop. The test design row, the CHANGELOG entry and the Premise Check now say so, and name `test:evaluate-ci`'s gameability case as the holder of the exit of the unscored-arm branch (exit 12 over a killed `score`).
+- The Premise Check said `run.js` writes the probe file again and refuses an absent file: **low**, patched. `writeQualifiedProbe` writes it if absent and stops with exit 12 when it differs from the probe the run qualified; `attemptProbeFile` only names the path. The mutant row for the dropped writer says the same.
+- The Story 1.78 CHANGELOG entry still said only the replay warns: **low**, patched. It now names the gameability row beside the replay.
