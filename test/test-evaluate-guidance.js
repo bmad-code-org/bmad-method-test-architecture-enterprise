@@ -1093,6 +1093,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       requireHeading(contractGuide, '### ' + rule, 'contract.md', failures);
       const section = headingBody(contractGuide, '### ' + rule);
       requireText(section, 'Without this rule', 'contract.md ' + rule, failures);
+      if (rule === 'success-indicator-separation')
+        requireText(section, 'counts only when a behavior lists it in its `oracles`', 'contract.md ' + rule, failures);
       if (taggedExamples(section, 'contract-patch').length !== 1) failures.push('contract.md ' + rule + ' needs one tagged contract patch');
     }
     for (const heading of ['## Interaction-plan design', '## Sensitivity-witness design', '## Waiver discipline']) {

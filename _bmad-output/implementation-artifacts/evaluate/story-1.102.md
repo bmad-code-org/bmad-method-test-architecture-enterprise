@@ -2,7 +2,7 @@
 title: 'Story 1.102: Refuse a duplicate interface identifier at compile'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'd295a3ac1cd97c2a99bdbf3a8f31a0d01eb4cd8b'
 route: 'dispatch'
 review_loop_iteration: 0

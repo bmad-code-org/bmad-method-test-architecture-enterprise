@@ -622,6 +622,70 @@ function pipeline() {
   );
 }
 
+/**
+ * Story 1.104: the scalar pantry contract with its exit-code and whole-stdout pair moved into an oracle O-003 beside a narrowed O-001.
+ * With no behavior listing O-003, eval-quality 7.1.0 counts nothing toward `success-indicator-separation`, and the score records the gap;
+ * listing it under a behavior of its own satisfies the rule again. TeA compares nothing: the gap is the engine's, read from the evidence artifact.
+ */
+function splitPairOracle(linked) {
+  return (evaluation) => {
+    const file = path.join(evaluation, 'contract.json');
+    const contract = read(file);
+    const original = contract.oracles.find((item) => item.id === 'O-001');
+    const pair = structuredClone(original);
+    pair.id = 'O-003';
+    const stdoutOnly = (item) => {
+      item.direction.evidenceTargets = ['/interactions/summarize/stdout'];
+      item.direction.relation = 'equality';
+      item.check = item.check.operands.find((operand) =>
+        operand.operands.some((entry) => entry.pointer === '/interactions/summarize/stdout'),
+      );
+    };
+    stdoutOnly(original);
+    contract.oracles.push(pair);
+    if (linked) {
+      // The defect probes allow one oracle per behavior, so the pair gets a behavior of its own.
+      const behavior = structuredClone(contract.behaviors.find((entry) => entry.id === 'B-001'));
+      behavior.id = 'B-003';
+      behavior.oracles = ['O-003'];
+      contract.behaviors.push(behavior);
+    }
+    fs.writeFileSync(file, `${JSON.stringify(contract, null, 2)}\n`);
+  };
+}
+
+function orphanSuccessOracle() {
+  for (const linked of [false, true]) {
+    const label = linked ? 'linked' : 'orphan';
+    const folder = project(splitPairOracle(linked));
+    const checked = command(process.execPath, [CLI, 'check', '--evaluation', folder]);
+    check(checked.status === 0, `${label} pair oracle: check exited ${checked.status}: ${checked.output}`);
+    const preflight = command(process.execPath, [CLI, 'preflight', '--evaluation', folder]);
+    check(preflight.status === 0, `${label} pair oracle: preflight exited ${preflight.status}: ${preflight.output}`);
+    const development = command(process.execPath, [CLI, 'run', '--evaluation', folder, '--partition', 'development']);
+    check(development.status === 0, `${label} pair oracle: development run exited ${development.status}: ${development.output}`);
+    if (checked.status !== 0 || preflight.status !== 0 || development.status !== 0) continue;
+    const run = latestRun(folder);
+    const scoring = command(process.execPath, [CLI, 'score', '--evaluation', folder, '--run', path.basename(run)]);
+    check(scoring.status === 0, `${label} pair oracle: score exited ${scoring.status}: ${scoring.output}`);
+    if (scoring.status !== 0) continue;
+    const evidence = scored(run, 'P-001');
+    const gap = evidence.coverageGaps.find((entry) => entry.rule === 'success-indicator-separation');
+    if (linked) {
+      check(gap?.satisfied !== false, `linked pair oracle left success-indicator-separation unsatisfied: ${JSON.stringify(gap)}`);
+      check(
+        evidence.coverageGaps.every((entry) => entry.satisfied),
+        `linked pair oracle left a coverage gap: ${JSON.stringify(evidence.coverageGaps)}`,
+      );
+    } else {
+      check(
+        gap?.satisfied === false && evidence.contractVerdict === 'CONCERNS',
+        `orphan pair oracle did not record success-indicator-separation: ${evidence.contractVerdict}, ${JSON.stringify(evidence.coverageGaps)}`,
+      );
+    }
+  }
+}
+
 function brokenMapping() {
   const folder = project((evaluation) => {
     const file = path.join(evaluation, 'evaluator', 'mapping.json');
@@ -742,6 +806,7 @@ function frameworkControlsJudgment() {
     pipeline();
     missingGuardApplication();
     await blockedGuardRestore();
+    orphanSuccessOracle();
     brokenMapping();
     changedResultShape();
     frameworkControlsJudgment();

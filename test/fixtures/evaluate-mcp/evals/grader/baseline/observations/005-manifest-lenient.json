@@ -2,7 +2,7 @@
   "legId": "manifest-lenient",
   "sequence": 5,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-1691398c-aff4-473c-bf01-eee95fed2959/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-c5a330ac-8a66-44d7-89d7-78d1e12b26e1/target",
   "request": {
     "probeId": "manifest-lenient",
     "interfaceId": "grader",

@@ -2102,7 +2102,7 @@ async function checkTestDesignOracles(evaluator) {
 }
 
 /**
- * The `whole-body` coverage result eval-quality reports for one version of the test-design contract.
+ * The result eval-quality reports for one discipline rule on one version of a suite's contract.
  *
  * The rule is decided inside `runScore` and surfaces on the evidence artifact's `coverageGaps`, so a
  * contract is judged by scoring the corpus's zero-action probe against it with the stored runs answering
@@ -2110,7 +2110,7 @@ async function checkTestDesignOracles(evaluator) {
  *
  * @returns {Promise<boolean>} true when the rule is satisfied, false when it is a recorded gap.
  */
-async function wholeBodySatisfied(suite, contract, probe) {
+async function ruleSatisfied(suite, contract, probe, rule) {
   const variant = { ...suite, contract, probes: [probe], evidence: await suite.evidenceFor(contract) };
   const outcome = await runSuite(variant, {
     port: storedProbePort(variant),
@@ -2125,8 +2125,14 @@ async function wholeBodySatisfied(suite, contract, probe) {
   );
   // A satisfied rule leaves no record, so the rule's name is held where it can be seen: the engine publishes it, and
   // the variants that must be unsatisfied would find no entry to read if it were renamed.
-  return !(artifact?.coverageGaps ?? []).some((gap) => gap.rule === 'whole-body' && !gap.satisfied);
+  return !(artifact?.coverageGaps ?? []).some((gap) => gap.rule === rule && !gap.satisfied);
 }
+
+/** The `whole-body` result for one version of a contract. */
+const wholeBodySatisfied = (suite, contract, probe) => ruleSatisfied(suite, contract, probe, 'whole-body');
+
+/** The `success-indicator-separation` result for one version of a contract. */
+const successSeparationSatisfied = (suite, contract, probe) => ruleSatisfied(suite, contract, probe, 'success-indicator-separation');
 
 /**
  * Story 1.48: whole-document coverage for a structured design artifact.
@@ -2444,6 +2450,80 @@ async function checkWholeBodyCoverage() {
       );
     }
     console.log(`  ${colors.dim}${suiteId}: ${steps.length} step(s), ${keyCount} required key(s)${colors.reset}`);
+  }
+}
+
+/**
+ * Story 1.104: `success-indicator-separation` counts an oracle only when some behavior lists it (eval-quality 7.1.0).
+ *
+ * The routing contracts separate the success indicator from the answer in their whole-body oracles, which read every response
+ * key, the indicator among them. The routing suites alone run here: the test-review and trace builders find their oracles through
+ * the behaviors' requirement links, so unlinking an oracle there stops the builder before the engine scores anything. Each version below is the same contract with those oracles' links changed
+ * and scored by the published engine over the zero-action probe of the suite, so the engine's own coverage function is the judge:
+ * the oracles stay in the contract with their directions and checks untouched, and only the `behaviors[].oracles` lists differ.
+ */
+async function checkSuccessSeparationLinking() {
+  console.log('\nsuccess-indicator-separation counts only behavior-linked oracles, scored by eval-quality');
+  assert(
+    require('eval-quality').DISCIPLINE_RULES.includes('success-indicator-separation'),
+    'eval-quality publishes the success-indicator-separation rule these fixtures are scored on',
+  );
+  const allSuites = await probeSuites();
+  const suiteIds = ROUTING_CONTRACTS.map((entry) => entry.relativePath.replace('.contract.json', ''));
+  for (const suiteId of suiteIds) {
+    const suite = allSuites.find((entry) => entry.id === suiteId);
+    if (suite === undefined) unreadable(`the probe corpus holds no ${suiteId} suite`);
+    const probe = suite.probes.find((entry) => entry.probeClass === 'zero-action');
+    if (probe === undefined) unreadable(`the ${suiteId} corpus holds no zero-action probe`);
+    const contract = suite.contract;
+
+    // The oracles that read the indicator beside the answer are the whole-body ones, found by what their direction names.
+    const pointerSets = new Set((await wholeBodyTargetsOf(suiteId)).map((step) => JSON.stringify([...step.pointers].sort())));
+    const carriers = new Set(
+      contract.oracles
+        .filter((oracle) => pointerSets.has(JSON.stringify([...oracle.direction.evidenceTargets].sort())))
+        .map((oracle) => oracle.id),
+    );
+    assert(
+      carriers.size === pointerSets.size && carriers.size > 0,
+      `${suiteId}: one whole-body oracle per plan step carries the separation`,
+    );
+
+    const withLinks = (relink) => ({ ...contract, behaviors: contract.behaviors.map(relink) });
+    const linkedOnly = (ids) => (behavior) => ({ ...behavior, oracles: behavior.oracles.filter((id) => !carriers.has(id) || ids.has(id)) });
+    const orphaned = withLinks(linkedOnly(new Set()));
+    for (const id of carriers) {
+      assert(
+        contract.oracles.some((oracle) => oracle.id === id) && orphaned.oracles.some((oracle) => oracle.id === id),
+        `${suiteId}: the orphaned variant still declares ${id}`,
+      );
+      assert(
+        contract.behaviors.some((behavior) => behavior.oracles.includes(id)) &&
+          !orphaned.behaviors.some((behavior) => behavior.oracles.includes(id)),
+        `${suiteId}: ${id} is listed by a behavior in the contract and by none in the orphaned variant`,
+      );
+    }
+
+    assert(
+      (await successSeparationSatisfied(suite, contract, probe)) === true,
+      `${suiteId}: the real contract satisfies success-indicator-separation`,
+    );
+    assert(
+      (await successSeparationSatisfied(suite, orphaned, probe)) === false,
+      `${suiteId}: the same oracles listed by no behavior leave success-indicator-separation unsatisfied`,
+    );
+    // Any behavior counts, not only the one the oracles came from: list every carrier under the first behavior instead.
+    const [first] = contract.behaviors;
+    const relinked = withLinks((behavior) =>
+      behavior.id === first.id
+        ? { ...linkedOnly(new Set())(behavior), oracles: [...linkedOnly(new Set())(behavior).oracles, ...carriers] }
+        : linkedOnly(new Set())(behavior),
+    );
+    assert(
+      (await successSeparationSatisfied(suite, relinked, probe)) === true,
+      `${suiteId}: listing the oracles under one behavior satisfies success-indicator-separation again`,
+    );
+    console.log(`  ${colors.dim}${suiteId}: ${carriers.size} separating oracle(s)${colors.reset}`);
   }
 }
 
@@ -3080,6 +3160,7 @@ async function main() {
   await checkTestDesignOracles(evaluator);
   await checkTestDesignCoverage();
   await checkWholeBodyCoverage();
+  await checkSuccessSeparationLinking();
   await checkWholeBodyDeclarations();
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);

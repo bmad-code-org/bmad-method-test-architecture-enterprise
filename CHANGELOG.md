@@ -268,6 +268,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- eval-quality 7.1.0 counts an oracle toward `success-indicator-separation` only when some behavior lists it (Story 1.104, AD-1, AD-20).
+  Until 7.1.0 an oracle that checked the success indicator beside the answer satisfied the rule even when no behavior in the contract listed it in `behaviors[].oracles`, so a check that supported no behavior could hide a missing success-separation requirement.
+  Such an oracle now leaves the rule unsatisfied, in the scalar-command branch (exit code 0 and exact whole stdout) and in the structured-response branch alike, and the evidence artifact records the gap with `no behavior-linked oracle addresses operation <id>'s success indicator beside another roled pointer at one step, in both channels`.
+  Linking the oracle to the behavior it supports satisfies the rule again.
+  No shipped contract or fixture changes outcome, and the pantry fixture still scores `PASS`.
+  The peer floor moves to `>=7.1.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, and the three accepted fixture baselines are re-recorded on 7.1.0.
+  The skill's contract guide says that the oracle must be listed by a behavior.
 - Evaluate's CI guide teaches the network authorization a Linux skill target needs for its live checks (Story 1.84, CAP-11, AD-8, AD-16, AD-18).
   `references/ci.md`'s `## Place the live checks` says that on Linux the live checks also need the target's registry entry to carry the `egress` authorization for the hosts it reaches, that a confined Linux target runs in a network namespace with a loopback and nothing else, that the runtime's proxy carries `CONNECT` tunnels for a listed host and port so a client that opens none has no route, and that an entry listing no `egress` reaches no host while macOS ignores the field.
   The tagged `ci-registry` example lists the model provider's host, port and addresses in `egress`, and `test:evaluate-guidance` validates it against the runtime schema, holds the four sentences as whole lines, requires the example's `egress` to equal the harness guide's item and to pass the runtime's egress check, and refuses the retired `"network"` declaration; deleting the authorization, changing a field of it or adding a clause to a sentence fails it.
