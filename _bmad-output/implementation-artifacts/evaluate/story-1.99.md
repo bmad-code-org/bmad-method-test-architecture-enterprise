@@ -2,7 +2,7 @@
 title: 'Story 1.99: Prove mutation rollback for the test-review, trace, nfr and ci probe corpora'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 2
 baseline_commit: 'e27a5e4645b735f7ba0b2925d61a11a35ad5d81f'

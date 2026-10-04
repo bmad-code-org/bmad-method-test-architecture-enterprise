@@ -127,12 +127,12 @@ development_status:
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
-  1-94-score-each-stored-workflow-in-the-ci-probe-leg: backlog
+  1-94-score-each-stored-workflow-in-the-ci-probe-leg: review
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
-  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: review
+  1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: review
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
@@ -156,6 +156,8 @@ development_status:
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: backlog
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: backlog
   1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: backlog
+  1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: backlog
+  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -199,6 +201,8 @@ parallel_lanes:
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
     - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
+    - 1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture
+    - 1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -285,4 +289,6 @@ owner_handoff:
       - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
       - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
       - 1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes
+      - 1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture
+      - 1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
