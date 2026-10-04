@@ -1177,10 +1177,10 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
 /**
  * `evaluation.json`'s `judge` and the judge's model snapshot in
  * `policy/evaluator-conditions.json`: both required when the contract
- * declares a rubric, and the judge's adapter, command and model ones TeA's
- * agent adapters can run.
+ * (under a partition plan, `contract.json` and the held-out plan together) declares a rubric, and the judge's
+ * adapter, command and model ones TeA's agent adapters can run.
  */
-function checkJudge(report, evaluation, contract, conditions) {
+function checkJudge(report, evaluation, contract, conditions, { partial = false } = {}) {
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
   const judge = evaluation.judge;
   // TeA's judge serves the deterministic evaluator alone; any other kind scores the rubric itself (AD-21). An
@@ -1195,8 +1195,9 @@ function checkJudge(report, evaluation, contract, conditions) {
     }
     return;
   }
-  // A judge block beside a contract with no rubric is never used, so it is refused rather than ignored.
-  if (contract !== undefined && rubrics.length === 0) {
+  // A judge block beside a contract with no rubric is never used, so it is refused rather than ignored. `partial` is a
+  // partition plan whose held-out plan `check` has not read, which may declare the rubric the judge serves (Story 1.105).
+  if (contract !== undefined && rubrics.length === 0 && !partial) {
     const unused = `${CONTRACT_NAME} declares no rubric, so no judge runs and this block is never used; remove it`;
     if (judge !== undefined) report.add(MANIFEST_NAME, 'judge', `declares judge: ${unused}`);
     if (conditions !== null && typeof conditions === 'object' && Object.hasOwn(conditions, 'judge')) {
@@ -1734,25 +1735,28 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   }
   const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehaviors });
   for (const problem of problems) report.add(problem.file, problem.rule, problem.message);
-  if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return;
+  if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return heldOutPlan;
   const sourceBytes = Buffer.from(JSON.stringify(contract));
   const { contract: view } = contractView({ contractBytes: sourceBytes, evaluation, heldOutPlan, partition: 'held-out' });
-  if (context.validate.contract(view)) return;
+  if (context.validate.contract(view)) return heldOutPlan;
   const developmentOnly = new Set(plan.developmentOnlySteps);
   const sharedSteps = (contract.interactionPlan ?? []).filter((step) => !developmentOnly.has(step?.stepId)).length;
   const retainedOracles = view.oracles.length - heldOutPlan.oracles.length;
-  // A step or oracle of the held-out view that is past the shared ones is the held-out plan's, named by its index there.
+  const retainedRubrics = (view.rubrics ?? []).length - (heldOutPlan.rubrics ?? []).length;
+  const bases = { interactionPlan: sharedSteps, oracles: retainedOracles, rubrics: retainedRubrics };
+  // A step, oracle or rubric of the held-out view that is past the shared ones is the held-out plan's, named by its index there.
   const locate = (instancePath) => {
-    const [, collection, index, rest = ''] = /^\/(interactionPlan|oracles)\/(\d+)(.*)$/.exec(instancePath) ?? [];
-    const base = collection === 'interactionPlan' ? sharedSteps : retainedOracles;
+    const [, collection, index, rest = ''] = /^\/(interactionPlan|oracles|rubrics)\/(\d+)(.*)$/.exec(instancePath) ?? [];
+    const base = bases[collection];
     return collection !== undefined && Number(index) >= base
       ? `${collection}[${Number(index) - base}]${rest}`
       : `held-out view ${instancePath || '(root)'}`;
   };
   plainSchemaFindings(report, plan.heldOutPlan, context.validate.contract, locate);
+  return heldOutPlan;
 }
 
-function checkCalibration(report, folder, evaluation, contract, engine) {
+function checkCalibration(report, folder, evaluation, contract, engine, { partial = false } = {}) {
   let calibration;
   try {
     calibration = readCalibration(folder);
@@ -1760,7 +1764,7 @@ function checkCalibration(report, folder, evaluation, contract, engine) {
     report.add(CALIBRATION_PATH, 'judge-calibration', error.message);
     return;
   }
-  for (const problem of calibrationProblems(evaluation, contract, calibration?.value, engine))
+  for (const problem of calibrationProblems(evaluation, contract, calibration?.value, engine, { partial }))
     report.add(CALIBRATION_PATH, 'judge-calibration', problem);
 }
 
@@ -2251,8 +2255,16 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry, env);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
-  checkPartitionPlan(report, folder, evaluation, context, { openPlan });
-  checkCalibration(report, folder, evaluation, context.contract, context.engine);
+  const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
+  // The rubrics the evaluation judges are those of every partition (Story 1.105): `contract.json`'s and the held-out plan's. When
+  // the plan is not known (a development run does not open it, or it is unreadable) `check` holds the rubrics it can see and
+  // leaves the rest to the partition that owns them.
+  const planKnown = evaluation.partitionPlan === undefined || heldOutPlan !== undefined;
+  const rubricContract =
+    heldOutPlan === undefined || context.contract === undefined || !context.validate.contract(context.contract)
+      ? context.contract
+      : contractView({ contractBytes: Buffer.from(JSON.stringify(context.contract)), evaluation, heldOutPlan, partition: 'both' }).contract;
+  checkCalibration(report, folder, evaluation, rubricContract, context.engine, { partial: !planKnown });
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);
@@ -2262,7 +2274,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   } catch {
     conditions = undefined;
   }
-  checkJudge(report, evaluation, context.contract, conditions);
+  checkJudge(report, evaluation, rubricContract, conditions, { partial: !planKnown });
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
   checkCiPlan(report, folder);

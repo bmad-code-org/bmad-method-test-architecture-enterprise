@@ -16,6 +16,8 @@ const HELD_OUT_PLAN_VERSION = 1;
 const STEP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ORACLE_ID = /^O-[0-9]{3,}$/;
 const BEHAVIOR_ID = /^B-[0-9]{3,}$/;
+const RUBRIC_ID = /^R-[0-9]{3,}$/;
+const CRITERION_ID = /^RC-[0-9]{3,}$/;
 /** The step an interaction-rooted pointer reads, as eval-quality's pointers and a captured binding spell it. */
 const POINTER_STEP = /^\/interactions\/([a-z0-9]+(?:-[a-z0-9]+)*)\//;
 /**
@@ -138,7 +140,7 @@ const named = (value, pattern, fallback) => (typeof value === 'string' && patter
  * @param {object} [options]
  * @param {boolean} [options.shaped] refuse a file that lacks the plan's four top-level fields; `check` passes false and validates the
  *   file against its schema instead, to name each defect
- * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], behaviorOracles: Record<string, string[]> }}
+ * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], rubrics?: object[], behaviorOracles: Record<string, string[]> }}
  * @throws {PartitionPlanError}
  */
 function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
@@ -184,6 +186,20 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
 }
 
 /**
+ * A rubric of `contract.json` as the held-out view holds it (Story 1.105): without the criteria whose evidence reads a
+ * development-only step, and not at all when that leaves it none. A rubric that loses nothing, and one that never had a
+ * criterion, is returned as it is.
+ *
+ * @returns {object[]} the rubric, a copy that holds its remaining criteria, or nothing
+ */
+function reachableRubric(rubric, developmentOnly) {
+  if (!isObject(rubric) || !Array.isArray(rubric.criteria)) return [rubric];
+  const criteria = rubric.criteria.filter((criterion) => !stepsReadBy(criterion).some((id) => developmentOnly.has(id)));
+  if (criteria.length === rubric.criteria.length) return [rubric];
+  return criteria.length === 0 ? [] : [{ ...rubric, criteria }];
+}
+
+/**
  * The contract one partition runs (Story 1.51, AD-9, AD-22), derived from `contract.json` and, for the held-out and both
  * views, the held-out plan.
  *
@@ -191,8 +207,11 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
  *   `contract.json`, so the development view is the file itself.
  * - `held-out`: the plan without the development-only steps and with the held-out steps appended; every oracle that reads
  *   a development-only step leaves with it (the engine fails `unreachable-check-evidence` on an oracle whose step is gone),
- *   each behavior gains the oracles the held-out plan lists for it, and the held-out oracles join `oracles`.
- * - `both`: the whole plan with the held-out steps appended, every oracle kept and the held-out oracles added.
+ *   each behavior gains the oracles the held-out plan lists for it, and the held-out oracles join `oracles`. A rubric
+ *   criterion leaves with the step its evidence reads (Story 1.105): `contract.json`'s criteria that read a development-only
+ *   step go, a rubric left with none goes, and the held-out plan's rubrics join `rubrics`.
+ * - `both`: the whole plan with the held-out steps appended, every oracle and criterion kept and the held-out oracles and
+ *   rubrics added.
  *
  * A derived view is serialized as `JSON.stringify(view, null, 2)` and a newline.
  *
@@ -217,9 +236,12 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
       if (stepsReadBy(oracle).some((id) => developmentOnly.has(id))) owned.add(oracle.id);
     }
     view.oracles = (source.oracles ?? []).filter((oracle) => !owned.has(oracle.id));
+    if (Array.isArray(source.rubrics)) view.rubrics = source.rubrics.flatMap((rubric) => reachableRubric(rubric, developmentOnly));
   }
   view.interactionPlan = [...(view.interactionPlan ?? []), ...heldOutPlan.interactionPlan];
   view.oracles = [...(view.oracles ?? []), ...heldOutPlan.oracles];
+  // A plan that declares no rubric leaves `rubrics` exactly as the source has it.
+  if ((heldOutPlan.rubrics ?? []).length > 0) view.rubrics = [...(view.rubrics ?? []), ...heldOutPlan.rubrics];
   for (const behavior of view.behaviors ?? []) {
     behavior.oracles = [
       ...(behavior.oracles ?? []).filter((id) => !owned.has(id)),
@@ -301,13 +323,22 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
     if (!sourceSteps.has(id))
       add('evaluation.json', `partitionPlan.developmentOnlySteps names step ${id}, which contract.json does not declare`);
   }
-  for (const [where, value] of [
-    ['rubrics', contract.rubrics],
-    ['waivers', contract.waivers],
-  ]) {
-    for (const id of stepsReadBy(value)) {
-      if (developmentOnly.has(id))
-        add('contract.json', `${where} read development-only step ${id}; a partition plan does not partition ${where} yet`);
+  for (const id of stepsReadBy(contract.waivers)) {
+    if (developmentOnly.has(id))
+      add('contract.json', `waivers read development-only step ${id}; a partition plan does not partition waivers yet`);
+  }
+  // A criterion of contract.json is in the development view, and in the held-out view unless it reads a development-only
+  // step, so the development view must declare the step it reads (Story 1.105).
+  for (const rubric of (Array.isArray(contract.rubrics) ? contract.rubrics : []).filter(isObject)) {
+    for (const criterion of (Array.isArray(rubric.criteria) ? rubric.criteria : []).filter(isObject)) {
+      for (const id of stepsReadBy(criterion)) {
+        if (!sourceSteps.has(id)) {
+          add(
+            'contract.json',
+            `criterion ${criterion.id} of rubric ${rubric.id} reads step ${id}, which the development view does not declare; a criterion that reads a held-out step belongs in the held-out plan's rubrics`,
+          );
+        }
+      }
     }
   }
   for (const step of sourcePlan) {
@@ -353,6 +384,24 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
   for (const { oracle, label } of heldOracles) {
     for (const id of stepsReadBy(oracle)) {
       if (!visible.has(id)) add(file, `oracle ${label} reads step ${id}, which the held-out view does not declare`);
+    }
+  }
+  const sourceRubrics = new Set((Array.isArray(contract.rubrics) ? contract.rubrics : []).filter(isObject).map((rubric) => rubric.id));
+  const seenRubrics = new Set();
+  for (const [index, rubric] of (heldOutPlan.rubrics ?? []).entries()) {
+    if (!isObject(rubric)) continue;
+    const rubricLabel = named(rubric.id, RUBRIC_ID, `rubrics[${index}]`);
+    if (sourceRubrics.has(rubric.id)) add(file, `rubric ${rubricLabel} has the ID of a rubric contract.json declares`);
+    else if (seenRubrics.has(rubric.id)) add(file, `rubric ${rubricLabel} is declared more than once`);
+    seenRubrics.add(rubric.id);
+    for (const [position, criterion] of (Array.isArray(rubric.criteria) ? rubric.criteria : []).entries()) {
+      if (!isObject(criterion)) continue;
+      const criterionLabel = named(criterion.id, CRITERION_ID, `criteria[${position}]`);
+      for (const id of stepsReadBy(criterion)) {
+        if (!visible.has(id)) {
+          add(file, `criterion ${criterionLabel} of rubric ${rubricLabel} reads step ${id}, which the held-out view does not declare`);
+        }
+      }
     }
   }
   const behaviors = new Set((Array.isArray(contract.behaviors) ? contract.behaviors : []).filter(isObject).map((behavior) => behavior.id));

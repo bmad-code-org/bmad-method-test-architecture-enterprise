@@ -2,7 +2,7 @@
 title: 'Story 1.100: Report whole-body coverage for the routing, test-review and trace contracts'
 type: 'bugfix'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'bc50863e'

@@ -99,10 +99,27 @@ function calibrationStepPair(contract, criterion) {
   return { interfaceId: step?.interfaceId ?? 'calibration', operationId: step?.operationId ?? 'calibration' };
 }
 
-function calibrationProblems(evaluation, contract, calibration, engine) {
+/**
+ * What is wrong with the labelled file for the rubrics `contract` declares.
+ *
+ * Under a partition plan (Story 1.105) `contract` can be one partition's view, and the labelled file is one file for every
+ * partition: with `partial`, an item that names a criterion the view does not hold belongs to another partition, or to none,
+ * and is neither validated nor judged here. `check` reads the whole contract, so it still names an item of no criterion.
+ *
+ * @param {object} evaluation
+ * @param {object} contract
+ * @param {object|undefined} calibration the parsed labelled file
+ * @param {object} engine
+ * @param {object} [options]
+ * @param {boolean} [options.partial] `contract` is one partition's view of the evaluation's contract
+ * @returns {string[]}
+ */
+function calibrationProblems(evaluation, contract, calibration, engine, { partial = false } = {}) {
   const problems = [];
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
   if (rubrics.length === 0) {
+    // A view with no rubric has nothing to judge, and the labelled file may serve the partition that has some.
+    if (partial) return problems;
     if (evaluation.judgeCalibration !== undefined || calibration !== undefined)
       problems.push('the contract declares no rubric, so judge calibration has nothing to score');
     return problems;
@@ -148,7 +165,7 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
     }
     const key = `${item?.rubricId}/${item?.criterionId}`;
     if (!expected.has(key)) {
-      problems.push(`items[${index}] names unknown rubric criterion ${key}`);
+      if (!partial) problems.push(`items[${index}] names unknown rubric criterion ${key}`);
       continue;
     }
     if (typeof item.response !== 'string' || item.response.length === 0) problems.push(`items[${index}] needs a nonempty response`);
@@ -228,9 +245,9 @@ function calibrationShortfalls(report) {
 }
 
 /** A report carries the judge's answer beside its label, never into its input. */
-async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem }) {
+async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem, partial = false }) {
   if ((contract.rubrics ?? []).length === 0) return null;
-  const problems = calibrationProblems(evaluation, contract, calibration?.value, engine);
+  const problems = calibrationProblems(evaluation, contract, calibration?.value, engine, { partial });
   if (problems.length > 0)
     throw stop({
       stage: 'trial',

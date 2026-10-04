@@ -2688,7 +2688,7 @@ So that an orphan check cannot hide a missing success-separation requirement.
 
 ### Story 1.105: Partition rubrics in a partition plan
 
-Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a `partitionPlan` beside a rubric or waiver that reads a development-only step, because a rubric criterion's evidence pointer disappears with its step in the held-out view.
+Added 2026-10-03 from Story 1.51's build. Story 1.51 refused a `partitionPlan` beside a rubric or waiver that reads a development-only step, because a rubric criterion's evidence pointer disappears with its step in the held-out view. Story 1.105 replaces the rubric half of that refusal with the derivation below; the waiver half stays until Story 1.106.
 
 As an adopter whose behavior needs a judged criterion on a held-out request,
 I want a rubric criterion to belong to one partition,

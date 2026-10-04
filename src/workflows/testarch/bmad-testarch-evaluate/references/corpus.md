@@ -84,7 +84,34 @@ The plan file lives directly under `corpus/held-out/`, so `corpus-index.json` di
 
 The two files together make three views. A development run executes `contract.json` as it stands and never opens the plan file; a held-out run executes the shared steps and the held-out ones, without the development-only steps and the oracles that read them; a run with no `--partition` executes everything. Each view is the only contract its run compiles, seals and records, so no run directory, trial record or replay file of one partition holds a request, step ID or oracle meant for the other. Qualify held-out probes with `tea-evaluate preflight --partition held-out`. Probe files are not sealed, so a held-out probe selects with an `any` matcher and witnesses with a non-private input, as [source fixture: P-003.probe.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/partition-plan/evals/verdict/probes/P-003.probe.json) does. The `[held-out]` P-006 examples below keep the private literal, which a folder with no `partitionPlan` allows; under one, replace it that way.
 
-`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, beside a gameability probe, or with a rubric or waiver that reads a development-only step. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
+A rubric criterion follows the step its evidence reads.
+A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step stays in the development view only.
+A criterion only the held-out partition judges goes in the plan file's `rubrics` array under its own rubric ID, which differs from every rubric ID in `contract.json`, and its evidence reads a shared or a held-out step.
+Each run calibrates and judges the criteria of its own view from the one `policy/judge-calibration.json`, so keep two items per anchored level for every criterion, the held-out ones included.
+`evaluation.json` declares the judge once.
+
+<!-- example:held-out-rubrics -->
+
+```json
+{
+  "rubrics": [
+    {
+      "id": "R-101",
+      "scaleLevels": [
+        { "level": 0, "anchor": "The held-out run does not say the verdict is accepted." },
+        { "level": 1, "anchor": "The held-out run says the verdict is accepted." }
+      ],
+      "failureModePenalties": [{ "name": "silent", "description": "No verdict is stated." }],
+      "maxLength": 100,
+      "criteria": [
+        { "id": "RC-101", "text": "Does the held-out run say the verdict is accepted?", "evidence": "/interactions/held-out-run/stdout" }
+      ]
+    }
+  ]
+}
+```
+
+`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, beside a gameability probe, or with a waiver that reads a development-only step. It names a rubric criterion that no view can reach by its criterion ID. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
 
 ## Agent
 

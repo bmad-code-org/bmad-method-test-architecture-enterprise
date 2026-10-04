@@ -1275,7 +1275,18 @@ async function runTrialSets(given) {
       return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
     };
     try {
-      const result = await runCalibration({ calibration: snapshot.calibration, evaluation, contract, engine, writer, stop, judgeItem });
+      // Under a partition plan one labelled file serves every partition, and a partition's run judges the items of its own criteria.
+      const partial = evaluation.partitionPlan !== undefined && snapshot.partition !== 'both';
+      const result = await runCalibration({
+        calibration: snapshot.calibration,
+        evaluation,
+        contract,
+        engine,
+        writer,
+        stop,
+        judgeItem,
+        partial,
+      });
       calibrationDigest = result.digest;
     } catch (error) {
       if (error instanceof JudgeError || error instanceof EvaluatorError) {

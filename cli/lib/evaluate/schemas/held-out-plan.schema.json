@@ -27,6 +27,14 @@
         "properties": { "id": { "type": "string", "pattern": "^O-[0-9]{3,}$" } }
       }
     },
+    "rubrics": {
+      "description": "Rubrics whose criteria only the held-out partition judges (Story 1.105), appended to contract.json's rubrics in the held-out and both views. Each has the shape eval-quality's contract gives a rubric, and a criterion's evidence pointer must name a step the held-out view declares: a shared step or a held-out one. A rubric's ID must differ from every rubric ID of contract.json. A criterion in contract.json belongs to the development partition, and to the held-out one too unless it reads a development-only step. Omit the field when the held-out partition judges nothing of its own.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "id": { "type": "string", "pattern": "^R-[0-9]{3,}$" } }
+      }
+    },
     "behaviorOracles": {
       "description": "The oracle IDs each behavior gains in the held-out view, keyed by behaviorId. Every behavior keeps at least one oracle there, because the engine compiles each behavior against the oracles it names; a behavior whose only oracle reads a development-only step needs an entry here.",
       "type": "object",

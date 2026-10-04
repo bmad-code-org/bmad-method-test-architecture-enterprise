@@ -74,6 +74,42 @@ try {
   );
   assert.equal(seen.length, 1);
   assert.equal(typeof seen[0].interfaceId, 'string', 'the calibration observation names no interface');
+  // Story 1.105: under a partition plan one labelled file serves every partition, and a view judges the items of its own criteria.
+  const view = {
+    rubrics: [
+      {
+        id: 'R-101',
+        criteria: [{ id: 'RC-101', evidence: '/interactions/judge-run/stdout' }],
+        scaleLevels: [{ level: 0 }, { level: 1 }],
+      },
+    ],
+  };
+  const itemOf = (rubricId, criterionId, expectedLevel) => ({ rubricId, criterionId, response: 'calibration response', expectedLevel });
+  const own = [itemOf('R-101', 'RC-101', 0), itemOf('R-101', 'RC-101', 1)];
+  const foreign = [itemOf('R-102', 'RC-102', 0), itemOf('R-101', 'RC-999', 5), { rubricId: 'R-102' }];
+  const settings = { evaluator: { kind: 'command' }, judgeCalibration: { minimumAgreement: 1 } };
+  // Without `partial` an item of no criterion in the contract is refused, as it always was.
+  assert.match(
+    calibrationProblems(settings, view, { items: [...own, foreign[0]] }, engine).join('; '),
+    /items\[2\] names unknown rubric criterion R-102\/RC-102/,
+  );
+  // With `partial` the same items belong to another partition and are neither validated nor judged.
+  assert.deepEqual(calibrationProblems(settings, view, { items: [...own, ...foreign] }, engine, { partial: true }), []);
+  // The view's own criteria are still held to their items: a missing level and a malformed own item are named.
+  assert.match(
+    calibrationProblems(settings, view, { items: [own[0], ...foreign] }, engine, { partial: true }).join('; '),
+    /R-101\/RC-101 has no calibration item labelled at anchored level 1/,
+  );
+  assert.match(
+    calibrationProblems(settings, view, { items: [...own, 'not an item'] }, engine, { partial: true }).join('; '),
+    /items\[2\] must be an object/,
+  );
+  // A view with no rubric has nothing to judge, and a labelled file beside it serves the partition that has some.
+  assert.deepEqual(calibrationProblems(settings, { rubrics: [] }, { items: own }, engine, { partial: true }), []);
+  assert.match(
+    calibrationProblems(settings, { rubrics: [] }, { items: own }, engine).join('; '),
+    /declares no rubric, so judge calibration has nothing to score/,
+  );
   // Story 1.103: a criterion's step gives its own interface and operation, also where two interfaces share the operation ID.
   const shared = {
     interactionPlan: [

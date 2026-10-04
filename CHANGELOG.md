@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A rubric criterion belongs to one partition under a `partitionPlan` (Story 1.105, AD-9, AD-22).
+  Story 1.51 refused a `partitionPlan` beside a rubric that reads a development-only step, because the criterion's evidence pointer left with its step in the held-out view.
+  A criterion now belongs to the partition whose steps its `evidence` pointer reads.
+  A criterion in `contract.json` is in the development view, and in the held-out view unless it reads a development-only step; a rubric the held-out view leaves with no criterion leaves with them.
+  The held-out plan's optional `rubrics` array (`held-out-plan.schema.json`, `schemaVersion` stays 1) holds the criteria only the held-out partition judges, under rubric IDs `contract.json` does not use, and they join the held-out and both views only.
+  The development view stays the folder's own `contract.json` bytes and never holds a plan criterion; a plan with no `rubrics` leaves every view byte for byte as it was.
+  Each partition's run compiles, calibrates and scores its own view's criteria.
+  `policy/judge-calibration.json` stays one file, and a partition's run judges the items of the criteria its view holds, so an item of the other partition's criterion is not judged there; `check`, which reads both files, still names an item of a criterion no view declares.
+  `check` names a criterion that no view can reach by its criterion and rubric IDs (a `contract.json` criterion reading a step the development view lacks, a plan criterion reading a development-only step or a step no view holds), a plan rubric ID that collides with `contract.json`'s or repeats, and a judge block no view uses.
+  A contract whose only rubrics sit in the held-out plan still declares the judge once in `evaluation.json`, a development run over it calls no judge, and `ci`'s `judge-calibration` check calibrates the view of the baseline's partition.
+  Waivers keep the Story 1.51 refusal until Story 1.106.
+  The `corpus.md` guide teaches the rule with a tagged `held-out-rubrics` example that `test:evaluate-guidance` validates through the plan schema, `check` and the engine's contract schema, and the `tea-evaluate` reference and the AD-22 text record it.
+  `test:evaluate-partition-plans` and `test:evaluate-calibration` hold each view's criteria, the unreachable-criterion findings and the per-partition calibration.
 - The routing, test-review and trace contracts report whole-body coverage (Story 1.100, eval-quality's AD-20 rule 2 and AD-31).
   `whole-body` is satisfied when one oracle's direction and check both address every required response key of an operation at one step, and the baseline listed it for these four contracts.
   `tools/generate-contracts.js` appends one oracle per plan step after each contract's existing oracles, so every earlier id and behavior id holds: `O-051` to `O-061` for `tea-routing-intents`, `O-028` to `O-035` for `tea-routing-controls`, `O-014` for `test-review` and `O-027` and `O-028` for `trace`.

@@ -724,6 +724,11 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'selects with an `any` matcher',
     'witnesses with a non-private input',
     'under one, replace it that way',
+    'A rubric criterion follows the step its evidence reads',
+    "goes in the plan file's `rubrics` array under its own rubric ID",
+    'keep two items per anchored level for every criterion',
+    '`evaluation.json` declares the judge once',
+    'It names a rubric criterion that no view can reach by its criterion ID',
   ])
     requireText(body, marker, 'corpus.md partition plan', failures);
   const fragments = taggedExamples(body, 'partition-plan');
@@ -766,6 +771,41 @@ function checkPartitionPlanGuidance(corpus, failures) {
   });
   if (collided.length === 0)
     failures.push('the partition plan check accepts an oracle ID that contract.json declares, so the example check proves nothing');
+  // Story 1.105: the tagged rubric example, joined to the plan, is a plan the schema, `check` and the engine's contract schema accept,
+  // and a criterion of it that reads a development-only step is one `check` names.
+  const rubricExamples = taggedExamples(body, 'held-out-rubrics');
+  if (rubricExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-rubrics example; found ${rubricExamples.length}`);
+    return;
+  }
+  const withRubrics = { ...plans[0], ...rubricExamples[0] };
+  if (!validatePlan(withRubrics)) failures.push(`corpus.md held-out rubrics fail the plan schema: ${JSON.stringify(validatePlan.errors)}`);
+  const rubricProblems = partitionPlanProblems({ contract, evaluation, heldOutPlan: withRubrics, heldOutBehaviors: new Set(['B-002']) });
+  if (rubricProblems.length > 0) failures.push(`corpus.md held-out rubrics raise check findings: ${JSON.stringify(rubricProblems)}`);
+  else {
+    const view = contractView({ contractBytes, evaluation, heldOutPlan: withRubrics, partition: 'held-out' }).contract;
+    const contractAjv = new Ajv({ strict: false, allErrors: true });
+    addFormats(contractAjv);
+    const validateContract = contractAjv.compile(JSON.parse(fs.readFileSync(engineSchemaPath('eval-contract.schema.json'), 'utf8')));
+    if (!validateContract(view))
+      failures.push(`corpus.md held-out rubrics make a view the engine schema refuses: ${JSON.stringify(validateContract.errors)}`);
+  }
+  const unreachable = partitionPlanProblems({
+    contract,
+    evaluation,
+    heldOutPlan: {
+      ...withRubrics,
+      rubrics: withRubrics.rubrics.map((rubric) => ({
+        ...rubric,
+        criteria: rubric.criteria.map((criterion) => ({ ...criterion, evidence: '/interactions/development-run/stdout' })),
+      })),
+    },
+    heldOutBehaviors: new Set(['B-002']),
+  });
+  if (!unreachable.some((problem) => /criterion RC-101 of rubric R-101 reads step development-run/.test(problem.message)))
+    failures.push(
+      'the partition plan check accepts a held-out criterion on a development-only step, so the rubric example check proves nothing',
+    );
 }
 
 function taggedExamples(content, tag) {
