@@ -655,9 +655,11 @@ async function pipeline(
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
-    // A confined run reads the working tree and the checkout's own HEAD only: every process of it is denied a write to the
-    // project's git directory (the target's profile withholds it, the layer's denies it), so a digest of that directory could
-    // fire on other sessions' work alone. An opted-out run keeps the full comparison, refs and shared state included (Story 1.112).
+    // A confined run reads the working tree, the checkout's own HEAD and where the checkout's git commands read their repository
+    // from (the resolved git directory, the .git file, the hooks directory's presence): every process of it is denied a write to
+    // the project's git directory and the checkout's .git file (the target's profile withholds them, the layer's denies them), so
+    // a digest of the git directory could fire on other sessions' work alone. An opted-out run keeps the full comparison, refs
+    // and shared state included (Story 1.112).
     const sharedState = !confines(confinement);
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState });
     const before = readTree();

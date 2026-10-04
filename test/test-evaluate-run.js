@@ -7333,6 +7333,24 @@ async function heldRun(project, during, { command = 'run', label = 'trial-clean-
   return { status, signal, held: gate !== null, output, runDirectory: runDirectoryOf(project.folder) };
 }
 
+/** Puts `source` at the top of the wrapped command evaluator (`useWrappedEvaluator`), so it runs in the evaluation layer before the evaluator answers. */
+function writeEvaluatorAttempts(folder, source) {
+  const impl = path.join(folder, 'evaluator', 'impl.js');
+  fs.writeFileSync(
+    impl,
+    fs.readFileSync(impl, 'utf8').replace("const fs = require('node:fs');\n", () => `const fs = require('node:fs');\n${source}\n`),
+    { mode: 0o755 },
+  );
+}
+
+/** The evaluator source that reports `<name>: allowed` or `<name>: refused <code>` for what `body` does, into the file `report`. */
+function evaluatorAttempt(report, name, body) {
+  return [
+    "const outcome = (run) => { try { run(); return 'allowed'; } catch (error) { return `refused ${error.code}`; } };",
+    `fs.writeFileSync(${JSON.stringify(report)}, \`${name}: \${outcome(() => { ${body} })}\`);`,
+  ].join('\n');
+}
+
 /**
  * A second worktree of the project's repository, as another session has one: a branch, a commit, a tag and a `gc` made in it,
  * a `push -u` of its branch to a local bare remote and a third worktree started from the remote-tracking ref (`worktree add -b`)
@@ -7502,7 +7520,6 @@ async function checkSharedStateAcrossSessions() {
       outside,
       edit: ({ project: directory, folder }) => {
         useWrappedEvaluator(folder);
-        const impl = path.join(folder, 'evaluator', 'impl.js');
         const gitDirectory = path.join(fs.realpathSync(directory), '.git');
         const attempts = [
           "const spawned = require('node:child_process').spawnSync('git', ['update-ref', 'refs/heads/written-by-layer', 'HEAD'], { cwd: " +
@@ -7517,11 +7534,7 @@ async function checkSharedStateAcrossSessions() {
           String.raw`].join('\n');`,
           `fs.writeFileSync(${JSON.stringify(report)}, report);`,
         ].join('\n');
-        fs.writeFileSync(
-          impl,
-          fs.readFileSync(impl, 'utf8').replace("const fs = require('node:fs');\n", () => `const fs = require('node:fs');\n${attempts}\n`),
-          { mode: 0o755 },
-        );
+        writeEvaluatorAttempts(folder, attempts);
       },
     });
     git(project.repository, ['config', 'core.hooksPath', hooksPath]);
@@ -7583,6 +7596,112 @@ async function checkSharedStateAcrossSessions() {
         `${label}: the unconfined control left the git directory as it was`,
       );
     }
+  }
+
+  // The project a linked worktree: its `.git` is a file outside the common git directory, so the layer's denial of that directory
+  // does not cover it, and a rewritten gitfile would send the adopter's next git command into a copy the layer controls. The
+  // confined layer is refused a write to it; opted out, the same append lands (git ignores trailing whitespace in a gitfile) and
+  // the reading of the gitfile stops the run.
+  for (const [label, confined] of [
+    ['shared-gitfile', true],
+    ['shared-gitfile-open', false],
+  ]) {
+    const report = path.join(tempDir(`${label}-report`), 'evaluator-report');
+    const worktree = path.join(fs.realpathSync(tempDir(`${label}-worktree`)), 'worktree');
+    const gitFile = path.join(worktree, '.git');
+    const main = makeProject(label, {
+      toolchain: true,
+      unconfined: !confined,
+      edit: ({ folder }) => {
+        useWrappedEvaluator(folder);
+        writeEvaluatorAttempts(folder, evaluatorAttempt(report, 'gitfile write', `fs.appendFileSync(${JSON.stringify(gitFile)}, '\\n');`));
+      },
+    });
+    git(main.repository, ['worktree', 'add', '--quiet', '--detach', worktree]);
+    const linkedProject = { ...main, repository: worktree, project: worktree, folder: path.join(worktree, EVALUATION) };
+    const gitFileBefore = fs.readFileSync(gitFile, 'utf8');
+    const result = evaluate(['run', '--evaluation', linkedProject.folder], { ...main.env, VERDICT_WHEN: 'trial-clean-1' });
+    const reported = fs.existsSync(report) ? fs.readFileSync(report, 'utf8') : '';
+    check(
+      /^gitfile write: (allowed|refused \w+)$/.test(reported),
+      `${label}: the evaluator never reported its gitfile write, so the case proves nothing: ${JSON.stringify(reported)}\n${result.output}`,
+    );
+    const record = recorded(runDirectoryOf(linkedProject.folder));
+    if (confined) {
+      check(
+        /^gitfile write: refused \w+$/.test(reported) && fs.readFileSync(gitFile, 'utf8') === gitFileBefore,
+        `${label}: the evaluation layer's write to the checkout's .git file was not refused: ${JSON.stringify(reported)}`,
+      );
+      check(
+        result.status === 0 && record.confinement === CONFINEMENT && record.adopterTree?.unchanged === true,
+        `${label}: a confined run whose evaluator wrote the gitfile exited ${result.status} and recorded ${record.confinement} and ${JSON.stringify(record.adopterTree)}; expected 0, ${CONFINEMENT} and unchanged: true\n${result.output}`,
+      );
+    } else {
+      check(
+        reported === 'gitfile write: allowed' && fs.readFileSync(gitFile, 'utf8') !== gitFileBefore,
+        `${label}: the unconfined control's gitfile write did not land, so the case proves nothing: ${JSON.stringify(reported)}`,
+      );
+      check(
+        result.status === 12 && record.confinement === 'opt-out' && record.adopterTree?.unchanged === false,
+        `${label}: an opted-out run whose evaluator wrote the gitfile exited ${result.status} and recorded ${record.confinement} and ${JSON.stringify(record.adopterTree)}; expected 12, opt-out and unchanged: false\n${result.output}`,
+      );
+    }
+  }
+
+  // A `core.hooksPath` that names a directory that does not exist yet (husky's `.husky/_` before `npm install`, a shared path
+  // configured and never created): Seatbelt denies the path it will have, so the layer cannot create it; Bubblewrap cannot bind
+  // an absent path, so the reading names it and the run ends with exit 12 when a hooks directory appears. Each host either
+  // refuses the write or stops the run; opted out, the creation lands and stops the run.
+  for (const [label, confined, spelling] of [
+    ['shared-absent-hooks', true, 'relative'],
+    ['shared-absent-hooks-absolute', true, 'absolute'],
+    ['shared-absent-hooks-open', false, 'absolute'],
+  ]) {
+    const report = path.join(tempDir(`${label}-report`), 'evaluator-report');
+    const absolute = path.join(fs.realpathSync(tempDir(`${label}-hooks`)), 'absent', '_');
+    const relative = path.join('vendor', 'absent-hooks', '_');
+    let hooksDirectory = absolute;
+    const project = makeProject(label, {
+      toolchain: true,
+      unconfined: !confined,
+      edit: ({ project: directory, folder }) => {
+        if (spelling === 'relative') hooksDirectory = path.join(fs.realpathSync(directory), relative);
+        useWrappedEvaluator(folder);
+        writeEvaluatorAttempts(
+          folder,
+          evaluatorAttempt(
+            report,
+            'hooks directory create',
+            `fs.mkdirSync(${JSON.stringify(hooksDirectory)}, { recursive: true }); fs.writeFileSync(${JSON.stringify(path.join(hooksDirectory, 'pre-commit'))}, '#!/bin/sh\\nexit 0\\n', { mode: 0o755 });`,
+          ),
+        );
+      },
+    });
+    git(project.repository, ['config', 'core.hooksPath', spelling === 'relative' ? relative : absolute]);
+    check(!fs.existsSync(hooksDirectory), `${label}: the hooks directory exists before the run, so the case proves nothing`);
+    const result = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_WHEN: 'trial-clean-1' });
+    const reported = fs.existsSync(report) ? fs.readFileSync(report, 'utf8') : '';
+    check(
+      /^hooks directory create: (allowed|refused \w+)$/.test(reported),
+      `${label}: the evaluator never reported its attempt, so the case proves nothing: ${JSON.stringify(reported)}\n${result.output}`,
+    );
+    const record = recorded(runDirectoryOf(project.folder));
+    if (reported.includes('refused')) {
+      check(
+        confined && !fs.existsSync(hooksDirectory) && result.status === 0 && record.adopterTree?.unchanged === true,
+        `${label}: a refused creation left the hooks directory ${fs.existsSync(hooksDirectory) ? 'present' : 'absent'} and the run at exit ${result.status}; expected an absent directory and exit 0`,
+      );
+    } else {
+      check(
+        fs.existsSync(path.join(hooksDirectory, 'pre-commit')) && result.status === 12 && record.adopterTree?.unchanged === false,
+        `${label}: a hooks directory created during the run ended it with exit ${result.status} and ${JSON.stringify(record.adopterTree)}; expected 12 and unchanged: false\n${result.output}`,
+      );
+    }
+    check(
+      !confined || CONFINEMENT !== 'seatbelt' || reported.includes('refused'),
+      `${label}: Seatbelt let the layer create the absent hooks directory: ${JSON.stringify(reported)}`,
+    );
+    check(confined || reported.includes('allowed'), `${label}: the unconfined control's creation was refused: ${JSON.stringify(reported)}`);
   }
 
   // Confined: a target that runs a git write (the private repository the sandbox gives it is read-only to it, so git refuses) leaves
@@ -7655,6 +7774,8 @@ function checkLayerGitDirectoryUnits() {
   const gitDirectory = path.join(root, 'repository', '.git');
   const hooksDirectory = path.join(root, 'repository', '.husky', '_');
   fs.mkdirSync(folder, { recursive: true });
+  // The hooks directory exists, so Bubblewrap binds it; an absent one is covered below.
+  fs.mkdirSync(hooksDirectory, { recursive: true });
   const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder };
   const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
 
@@ -7686,6 +7807,30 @@ function checkLayerGitDirectoryUnits() {
       hooksBind < hooksVector.indexOf('--') &&
       hooksVector.indexOf('--bind') < hooksBind,
     `the Bubblewrap layer vector does not bind the hooks directory read-only after the git directory and --bind / /: ${hooksVector.join(' ')}`,
+  );
+  // The checkout's `.git` file (a linked worktree or a submodule) sits outside the git directory: a literal deny on Seatbelt, a
+  // read-only bind of the file on Bubblewrap, after the directories.
+  const gitFile = path.join(root, 'worktree', '.git');
+  const gitFileProfile = layerPrefix({ ...seatbelt, gitDirectory, hooksDirectory, gitFile }).at(-1);
+  check(
+    gitFileProfile.includes(
+      `(deny file-write* (subpath "${folder}") (subpath "${gitDirectory}") (subpath "${hooksDirectory}") (literal "${gitFile}"))`,
+    ),
+    `the Seatbelt layer profile does not deny a write to the checkout's .git file beside the directories: ${JSON.stringify(gitFileProfile)}`,
+  );
+  const gitFileVector = layerPrefix({ ...bubblewrap, gitDirectory, gitFile });
+  const gitFileBind = readOnlyBind(gitFileVector, gitFile);
+  check(
+    gitFileBind > readOnlyBind(gitFileVector, gitDirectory) &&
+      gitFileBind < gitFileVector.indexOf('--') &&
+      gitFileVector.indexOf('--bind') < gitFileBind,
+    `the Bubblewrap layer vector does not bind the checkout's .git file read-only after the git directory and --bind / /: ${gitFileVector.join(' ')}`,
+  );
+  check(
+    !layerPrefix({ ...seatbelt, gitDirectory })
+      .at(-1)
+      .includes('(literal') && !layerPrefix({ ...bubblewrap, gitDirectory }).includes(gitFile),
+    'a layer vector of a checkout whose .git is a directory names a .git file',
   );
   for (const [name, bare] of [
     ['Seatbelt', layerPrefix(seatbelt).at(-1)],
@@ -7734,11 +7879,61 @@ function checkLayerGitDirectoryUnits() {
     inside.hooksDirectory === null,
     `selectConfinement names the hooks directory ${JSON.stringify(inside.hooksDirectory)} for a core.hooksPath inside the git directory; expected null`,
   );
+  // A `core.hooksPath` that names a directory that does not exist yet resolves to the real path of its nearest existing ancestor
+  // plus the components below it, relative or absolute. Seatbelt's profile denies it (a `subpath` matches a path that does not
+  // exist yet); Bubblewrap cannot bind an absent path, so its vector carries none until the directory exists, and the reading holds it.
+  const repositoryReal = fs.realpathSync(project.repository);
+  const absentAbsolute = path.join(fs.realpathSync(tempDir('layer-git-absent')), 'shared', 'hooks');
+  for (const [label, configured, expected] of [
+    ['relative', 'absent-relative/_', path.join(repositoryReal, 'absent-relative', '_')],
+    ['absolute', absentAbsolute, absentAbsolute],
+  ]) {
+    git(project.repository, ['config', 'core.hooksPath', configured]);
+    const absent = selectConfinement({ evaluation: {}, folder: project.folder, root: project.project });
+    check(
+      absent.hooksDirectory === expected && !fs.existsSync(expected),
+      `selectConfinement names the hooks directory ${JSON.stringify(absent.hooksDirectory)} for an absent ${label} core.hooksPath; expected ${JSON.stringify(expected)}`,
+    );
+    const absentProfile = layerPrefix({ ...seatbelt, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory }).at(-1);
+    check(
+      absentProfile.includes(`(subpath "${expected}")`),
+      `the Seatbelt layer profile does not deny the absent ${label} hooks directory: ${JSON.stringify(absentProfile)}`,
+    );
+    const absentVector = layerPrefix({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
+    check(
+      !absentVector.includes(expected) && absentVector.includes(absent.gitDirectory),
+      `the Bubblewrap layer vector binds the absent ${label} hooks directory, or drops the git directory: ${absentVector.join(' ')}`,
+    );
+    fs.mkdirSync(expected, { recursive: true });
+    const created = layerPrefix({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
+    check(
+      readOnlyBind(created, expected) > 0,
+      `the Bubblewrap layer vector does not bind the ${label} hooks directory once it exists: ${created.join(' ')}`,
+    );
+    fs.rmSync(expected, { recursive: true, force: true });
+  }
+  git(project.repository, ['config', '--unset', 'core.hooksPath']);
+  // The checkout's `.git` file: null for a checkout whose `.git` is a directory, the real path of the file for a linked worktree.
+  check(
+    selected.gitFile === null,
+    `selectConfinement names the .git file ${JSON.stringify(selected.gitFile)} for a checkout whose .git is a directory; expected null`,
+  );
+  const gitFileTree = path.join(fs.realpathSync(tempDir('layer-git-gitfile')), 'worktree');
+  git(project.repository, ['worktree', 'add', '--quiet', '--detach', gitFileTree]);
+  try {
+    const fromWorktree = selectConfinement({ evaluation: {}, folder: project.folder, root: path.join(gitFileTree, 'rules') });
+    check(
+      fromWorktree.gitFile === path.join(gitFileTree, '.git'),
+      `selectConfinement names the .git file ${JSON.stringify(fromWorktree.gitFile)} for a linked worktree (root below its top); expected ${JSON.stringify(path.join(gitFileTree, '.git'))}`,
+    );
+  } finally {
+    git(project.repository, ['worktree', 'remove', '--force', gitFileTree]);
+  }
   const outside = tempDir('layer-git-none');
   const none = selectConfinement({ evaluation: {}, folder: outside, root: outside });
   check(
-    none.gitDirectory === null && none.hooksDirectory === null,
-    `selectConfinement names ${JSON.stringify(none.gitDirectory)} and ${JSON.stringify(none.hooksDirectory)} for a project in no git repository; expected null for both`,
+    none.gitDirectory === null && none.hooksDirectory === null && none.gitFile === null,
+    `selectConfinement names ${JSON.stringify(none.gitDirectory)}, ${JSON.stringify(none.hooksDirectory)} and ${JSON.stringify(none.gitFile)} for a project in no git repository; expected null for all three`,
   );
   let thrown = null;
   try {
@@ -7751,8 +7946,10 @@ function checkLayerGitDirectoryUnits() {
 
 /**
  * The two readings of the adopter's tree (Story 1.112): a confined run (`sharedState: false`) reads the checkout's own `HEAD`,
- * the status and the content of the paths it names, and no git directory, so what another worktree or the main checkout does to the
- * shared git state (a commit, tag, gc, pack-refs, fetch, push -u, a worktree add from a remote-tracking ref) leaves it unchanged;
+ * the status and the content of the paths it names, and where the checkout's git commands read their repository from (the git
+ * directory it resolves to, its `.git` file, the `core.hooksPath` directory's presence), and no shared git state, so what another
+ * worktree or the main checkout does to the shared git state (a commit, tag, gc, pack-refs, fetch, push -u, a worktree add from a
+ * remote-tracking ref) leaves it unchanged, while a gitfile pointed into a copy or a hooks directory that appears moves it;
  * an opted-out run (`sharedState: true`) also reads every ref, the configuration, the hooks, `info/` and the hooks directory
  * `core.hooksPath` names, and each of those moves its reading.
  */
@@ -7764,13 +7961,15 @@ function checkAdopterTreeModes() {
   const baseline = { confined: read(project, false), full: read(project, true) };
   const keys = Object.keys(JSON.parse(baseline.confined));
   check(
-    JSON.stringify(keys) === JSON.stringify(['repository', 'head', 'status', 'changes']),
-    `a confined reading holds the keys ${JSON.stringify(keys)}; expected the repository, HEAD, status and changes alone`,
+    JSON.stringify(keys) === JSON.stringify(['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes']),
+    `a confined reading holds the keys ${JSON.stringify(keys)}; expected the repository, HEAD, git directory, gitfile, hooks path, status and changes alone`,
   );
   const fullKeys = Object.keys(JSON.parse(baseline.full));
   check(
-    ['repository', 'head', 'status', 'changes', 'refs', 'shared'].every((key) => fullKeys.includes(key)),
-    `a full reading holds the keys ${JSON.stringify(fullKeys)}; expected the repository, HEAD, status, changes, refs and shared digest`,
+    ['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes', 'refs', 'shared'].every((key) =>
+      fullKeys.includes(key),
+    ),
+    `a full reading holds the keys ${JSON.stringify(fullKeys)}; expected the confined keys plus the refs and shared digest`,
   );
 
   // What another session does in a second worktree of the repository moves no confined reading and every full one.
@@ -7830,6 +8029,69 @@ function checkAdopterTreeModes() {
   git(project.repository, ['commit', '--quiet', '--allow-empty', '--message', 'in the checkout']);
   check(read(project, false) !== settled.confined, 'a commit in the checkout itself left a confined reading unchanged');
   check(read(project, true) !== settled.full, 'a commit in the checkout itself left a full reading unchanged');
+
+  // A `core.hooksPath` that names a directory that does not exist yet: creating it moves both readings, since a hook planted there
+  // runs on the adopter's next commit and Bubblewrap cannot bind an absent path.
+  for (const [label, configured, directory] of [
+    ['relative', 'vendor/absent-hooks/_', path.join(project.repository, 'vendor', 'absent-hooks', '_')],
+    ['absolute', path.join(fs.realpathSync(tempDir('tree-modes-absent')), 'absent', '_'), null],
+  ]) {
+    const hooksDirectory = directory ?? configured;
+    git(project.repository, ['config', 'core.hooksPath', configured]);
+    const absent = { confined: read(project, false), full: read(project, true) };
+    check(
+      JSON.parse(absent.confined).hooks?.endsWith('<absent>') === true,
+      `the confined reading of an absent ${label} core.hooksPath holds ${JSON.stringify(JSON.parse(absent.confined).hooks)}; expected its path marked <absent>`,
+    );
+    fs.mkdirSync(hooksDirectory, { recursive: true });
+    check(read(project, false) !== absent.confined, `creating the absent ${label} hooks directory left a confined reading unchanged`);
+    check(read(project, true) !== absent.full, `creating the absent ${label} hooks directory left a full reading unchanged`);
+    fs.rmSync(hooksDirectory, { recursive: true, force: true });
+    check(read(project, false) === absent.confined, `removing the ${label} hooks directory again left a confined reading moved`);
+  }
+  git(project.repository, ['config', 'core.hooksPath', hooksPath]);
+
+  // The project a linked worktree: its `.git` file names a git directory outside the common one. A copy of the repository with
+  // `core.fsmonitor` and a hook planted in it, the gitfile pointed into the copy, reads the same HEAD, status and content as the
+  // original, so only the resolved git directory and the gitfile tell them apart; and the reading must not run the copy's
+  // fsmonitor command.
+  const worktree = path.join(fs.realpathSync(tempDir('tree-modes-linked')), 'worktree');
+  git(project.repository, ['worktree', 'add', '--quiet', '--detach', worktree]);
+  const readLinked = () => JSON.stringify(adopterTreeState(worktree, { sharedState: false }));
+  const linkedBefore = readLinked();
+  const linkedKeys = JSON.parse(linkedBefore);
+  check(
+    linkedKeys.gitFile?.startsWith('gitdir: ') && linkedKeys.gitDirectory.includes(`${path.sep}worktrees${path.sep}`),
+    `the reading of a linked worktree holds the gitfile ${JSON.stringify(linkedKeys.gitFile)} and the git directory ${JSON.stringify(linkedKeys.gitDirectory)}; expected both`,
+  );
+  const copy = path.join(fs.realpathSync(tempDir('tree-modes-copy')), 'copy');
+  fs.cpSync(project.repository, copy, { recursive: true });
+  const marker = path.join(copy, 'fsmonitor-ran');
+  fs.writeFileSync(path.join(copy, 'fsmonitor.sh'), `#!/bin/sh\ntouch ${JSON.stringify(marker)}\n`, { mode: 0o755 });
+  git(copy, ['config', 'core.fsmonitor', path.join(copy, 'fsmonitor.sh')]);
+  fs.writeFileSync(path.join(copy, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const metadata = fs.readdirSync(path.join(copy, '.git', 'worktrees'))[0];
+  const gitFile = path.join(worktree, '.git');
+  const original = fs.readFileSync(gitFile, 'utf8');
+  fs.writeFileSync(gitFile, `gitdir: ${path.join(copy, '.git', 'worktrees', metadata)}\n`);
+  try {
+    const redirected = readLinked();
+    const before = JSON.parse(linkedBefore);
+    const after = JSON.parse(redirected);
+    check(
+      after.head === before.head && after.status === before.status && after.changes === before.changes && redirected !== linkedBefore,
+      'a gitfile redirected to an identical copy of the repository left the reading unchanged, or moved HEAD, status or content that the copy shares',
+    );
+    check(
+      after.gitDirectory !== before.gitDirectory && after.gitFile !== before.gitFile,
+      `a redirected gitfile left the resolved git directory ${after.gitDirectory === before.gitDirectory ? 'as it was' : 'moved'} and the gitfile's content ${after.gitFile === before.gitFile ? 'as it was' : 'moved'}; expected both moved`,
+    );
+    check(!fs.existsSync(marker), "reading a checkout redirected to a copy ran the copy's core.fsmonitor command");
+  } finally {
+    fs.writeFileSync(gitFile, original);
+  }
+  check(readLinked() === linkedBefore, 'restoring the gitfile left the reading of the linked worktree moved');
+  git(project.repository, ['worktree', 'remove', '--force', worktree]);
 }
 
 /**
@@ -9584,7 +9846,9 @@ function checkWorkspaceReference() {
       "A confined run compares your working tree and the checkout's `HEAD`, and does not compare refs, the git configuration, branch tracking or an in-progress operation.",
     ) &&
       section.includes("An edit you commit in the checkout the run reads ends it with exit 12, since the checkout's `HEAD` moves") &&
-      section.includes('does not stop it, and `run.json` records `adopterTree.unchanged: true`') &&
+      section.includes(
+        'in any other checkout of the same repository (the main checkout when the run reads a linked worktree) while a confined run is in flight does not stop it, and `run.json` records `adopterTree.unchanged: true`',
+      ) &&
       section.includes('An opted-out run compares the refs and the shared git state as well'),
     "the reference's workspace section does not say a confined run compares the working tree and the checkout's HEAD and no refs, git configuration, branch tracking or in-progress operation, that another session's commit does not stop it, and that an opted-out run compares the refs and the shared git state as well",
   );

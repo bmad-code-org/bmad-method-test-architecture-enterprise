@@ -30,10 +30,11 @@
  * and its objects. A run that opted out of confinement has targets that can
  * write them, so `adopterTreeState` reads them as well as the working tree and
  * the run can tell when a write changed any of them. Every process of a
- * confined run is denied a write to the project's git directory, so a confined
- * run reads the working tree and the checkout's own `HEAD` only: a commit,
- * fetch, push or rebase another session makes in the same repository meanwhile
- * does not stop it.
+ * confined run is denied a write to the project's git directory and the
+ * checkout's `.git` file, so a confined run reads the working tree, the
+ * checkout's own `HEAD` and where its git commands read their repository from: a commit,
+ * fetch, push or rebase another session makes in any other checkout of the same
+ * repository meanwhile does not stop it.
  *
  * A workspace that cannot be made is a `WorkspaceRefusal` (exit 12), and one
  * that fails part way is removed before the refusal leaves `createWorkspace`.
@@ -1070,7 +1071,33 @@ function sharedStateDigest(gitDirectory, hooks = null) {
     .filter((entry) => GIT_BOOKKEEPING.has(entry.name) || entry.name.endsWith('.lock'))
     .map((entry) => path.join(gitDirectory, entry.name));
   const git = treeDigest(gitDirectory, { exclude });
-  return hooks === null ? git : digest([git, hooks, treeDigest(hooks)]);
+  return hooks === null ? git : digest([git, hooks, fs.existsSync(hooks) ? treeDigest(hooks) : '<absent>']);
+}
+
+/**
+ * Where the checkout's git commands read their repository from: the git directory the checkout resolves to (a real path), the
+ * content of the checkout's `.git` file when it is a file (a linked worktree or a submodule; null for a directory), and the
+ * hooks directory `core.hooksPath` names outside the common git directory, with `<absent>` or `<present>` after it. A layer
+ * process that rewrote the gitfile to point into a copy it controls, or created a hooks directory that did not exist when the
+ * run started (a Bubblewrap bind cannot cover an absent path), moves this reading, so the run ends with exit 12 whatever write
+ * path the confinement missed.
+ */
+function repositoryRedirects(repository) {
+  const absolute = runGit(['-C', repository.top, 'rev-parse', '--absolute-git-dir']);
+  if (!absolute.ok) throw new WorkspaceRefusal(`could not read the state of the adopter's tree at ${repository.top}: ${absolute.detail}`);
+  const gitFile = path.join(repository.top, '.git');
+  let content = null;
+  try {
+    if (fs.lstatSync(gitFile).isFile()) content = fs.readFileSync(gitFile, 'utf8');
+  } catch {
+    // A checkout whose `.git` cannot be read is read through git alone.
+  }
+  const hooks = hooksDirectory(repository.top, repository.gitDirectory);
+  return {
+    gitDirectory: fs.realpathSync.native(absolute.stdout.trim()),
+    gitFile: content,
+    hooks: hooks === null ? null : `${hooks} ${fs.existsSync(hooks) ? '<present>' : '<absent>'}`,
+  };
 }
 
 /**
@@ -1079,8 +1106,11 @@ function sharedStateDigest(gitDirectory, hooks = null) {
  *
  * Inside a git repository: `git status` (tracked and untracked paths), a
  * digest over the content of every path it names (one already modified
- * included) and the commit the checkout's own `HEAD` names (another worktree's
- * commit cannot move it). With `sharedState` (the default) also the
+ * included), the commit the checkout's own `HEAD` names (another worktree's
+ * commit cannot move it), and where the checkout's git commands read their
+ * repository from (`repositoryRedirects`: the git directory it resolves to, its
+ * `.git` file and the hooks directory `core.hooksPath` names), which a layer
+ * process that redirects the checkout moves. With `sharedState` (the default) also the
  * repository's common git directory without its bookkeeping
  * (`sharedStateDigest`), since a detached worktree shares it with the
  * repository it came from, the hooks directory `core.hooksPath` names outside
@@ -1113,7 +1143,20 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
   const failed = (answer) => {
     throw new WorkspaceRefusal(`could not read the state of the adopter's tree at ${repository.top}: ${answer.detail}`);
   };
-  const status = runGit(['--no-optional-locks', '-C', repository.top, 'status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  // The redirects are read first, and `core.fsmonitor` is switched off for the status, since a checkout redirected to a
+  // repository a layer process controls would run that repository's fsmonitor command from the runtime's own unconfined read.
+  const redirects = repositoryRedirects(repository);
+  const status = runGit([
+    '-c',
+    'core.fsmonitor=false',
+    '--no-optional-locks',
+    '-C',
+    repository.top,
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all',
+  ]);
   if (!status.ok) failed(status);
   const parts = [];
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
@@ -1127,7 +1170,13 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
     }
     for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
   }
-  const state = { repository: repository.top, head: repository.commit, status: status.stdout, changes: digest(parts) };
+  const state = {
+    repository: repository.top,
+    head: repository.commit,
+    ...redirects,
+    status: status.stdout,
+    changes: digest(parts),
+  };
   if (!sharedState) return state;
   const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
   if (!refs.ok) failed(refs);
