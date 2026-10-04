@@ -2055,6 +2055,15 @@ function checkElement(element, set, workflow, text = '', aux = {}) {
       if (!jobCarriesMarker(text, element.jobId, element.marker)) {
         return { present: false, detail: `job ${element.jobId} does not carry the comment ${element.marker}` };
       }
+      // A tier's job runs its own tier's step, and the `pr` step ahead of it when the element says so, and no other
+      // evaluation invocation: a `pr` job that also runs the scheduled step runs live checks on every pull request.
+      const allowed = new Set([element.command, element.after].filter((command) => command !== undefined));
+      const foreign = jobScripts(job)
+        .flatMap((script) => script.split(/&&|\|\||[;|\n]/))
+        .find((segment) => EVALUATION_INVOCATION.test(segment) && !allowed.has(shellForm(segment).trim()));
+      if (foreign !== undefined) {
+        return { present: false, detail: `job ${element.jobId} runs ${shellForm(foreign).trim()}, which is not a step of its tier` };
+      }
       if (element.after !== undefined) {
         // The command that runs first is a step of its own ahead of this job's own, each holding that one command: the
         // `merge` job runs the `pr` tier's step first, since a tier holds only the checks placed on it.

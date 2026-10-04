@@ -10,7 +10,7 @@
     "origin": "real-capture",
     "workflow": ".github/workflows/test.yml",
     "sha256": "f5641719f506f850bcb7444d322cd1ae944eec3fb3b4318ca8e119e9d2740a95",
-    "capturedBy": "a live `node test/eval-ci.js --agent claude --runs 2 --set evaluation-edit-ember-ledger` run on 2026-10-04 (12 of 12 requested elements, 0 unrequested, stable across both repetitions, every threshold met; Claude Code 2.1.289, model alias sonnet), whose staged workspace and edit prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores (39 seconds); the file is the by-hand run's, byte for byte, and the checkpoint is the one that run left"
+    "capturedBy": "a live `npm run eval:ci -- --agent claude --runs 2 --set evaluation-tiers-granite-router --set evaluation-edit-ember-ledger` run (one invocation for both adopters) on 2026-10-04 (12 of 12 requested elements, 0 unrequested, stable across both repetitions, every threshold met; Claude Code 2.1.289, model alias sonnet), whose staged workspace and edit prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores (39 seconds); the file is the by-hand run's, byte for byte, and the checkpoint is the one that run left"
   },
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",

@@ -265,7 +265,7 @@
     {
       "$comment": [
         "Five projects, five written requests, each its own service: a full request, a minimal one, and three",
-        "evaluation projects (a plan with pr checks, a plan with pr, merge and scheduled checks, and an edit of a pipeline that",
+        "evaluation projects (a plan with pr checks, a plan with pr, merge, scheduled and release checks, and an edit of a pipeline that",
         "already holds a marker job and a hand-written job).",
         "",
         "`fixtures` is the five projects plus their request files. `groundTruth` is the oracle, which the",

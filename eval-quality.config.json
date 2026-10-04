@@ -1836,7 +1836,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "9bc424f6d66abdf36c72eec655bea33e16d8676b9e1295a60f90d17447632c35"
+            "hash": "01c093a63f552e8e935435af89472b99330d89de1e30a399771e01f56bb21f82"
           }
         },
         {
@@ -1924,7 +1924,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "9bc424f6d66abdf36c72eec655bea33e16d8676b9e1295a60f90d17447632c35"
+            "hash": "01c093a63f552e8e935435af89472b99330d89de1e30a399771e01f56bb21f82"
           }
         },
         {

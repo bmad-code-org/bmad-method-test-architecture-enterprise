@@ -127,7 +127,7 @@ development_status:
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
-  1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: review
+  1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog

@@ -203,7 +203,7 @@
     "evaluationReRender": {
       "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "4. Re-render Without Duplicating",
-      "lines": "103-105",
+      "lines": "100-105",
       "rule": "A second run rewrites each job that carries the plan's marker under the id the rules give now and never leaves two jobs for one tier, and it leaves every job without the marker as it is.",
       "requiredPhrase": "Leave every job without the marker as it is."
     },

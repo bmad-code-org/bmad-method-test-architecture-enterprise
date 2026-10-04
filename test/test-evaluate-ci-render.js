@@ -25,8 +25,8 @@
  *  - the CI suite's manifest lists exactly the files under each project root;
  *  - the stored `evaluation-plan` replay is a real capture of the live `eval:ci` run.
  *
- * Story 1.93 adds the projects that carry the rest of the step: the tiers adopter's plan places checks on pr, merge and
- * scheduled, and its ground truth is the job, tier step, event, timeout and artifact name each tier's rules give; the
+ * Story 1.93 adds the projects that carry the rest of the step: the tiers adopter's plan places checks on pr, merge,
+ * scheduled and release, and its ground truth is the job, tier step, event, timeout and artifact name each tier's rules give; the
  * edit adopter's pipeline carries a marker job under an id the rules no longer give and a hand-written job, and its
  * ground truth digests that job and the create run's checkpoint. The scorer's event guard reader, the corpus validator's
  * refusals of the new element fields and the stored tiers and edit cases (one real capture each, and the constructed
@@ -430,7 +430,7 @@ function groundTruthSet(setId) {
 
 /**
  * The two fixture adopters of Story 1.93 hold their ground truth to their plans: the tiers adopter places checks on pr,
- * merge and scheduled, and each tier's job, tier step, timeout, event, artifact name and the merge job's pr step ahead
+ * merge, scheduled and release, and each tier's job, tier step, timeout, event, artifact name and the merge job's pr step ahead
  * of its own are the ones the step's rules give for that plan. The edit adopter's pipeline carries a marker job under
  * an id the rules no longer give and a hand-written job, and its checkpoint is the one the create run left.
  */
@@ -584,6 +584,37 @@ function checkNeedsAndExistingJobGuards() {
   check(
     missesOf(created).join(',') === 'trigger-release-published',
     `a release trigger of type created misses ${missesOf(created).join(', ') || 'nothing'} where only the release trigger element belongs`,
+  );
+  // The merge job's own step ahead of the pr step runs the tiers in the wrong order.
+  const prStep =
+    '      - name: "check, compile, seal, replay"\n        run: |\n          npm exec --prefix evals -- tea-evaluate ci --evaluation evals/router --tier pr\n\n';
+  const mergeStep =
+    '      - name: "preflight-live"\n        run: |\n          npm exec --prefix evals -- tea-evaluate ci --evaluation evals/router --tier merge\n\n';
+  const swapped = capture.replace(`${prStep}${mergeStep}`, `${mergeStep}${prStep}`);
+  check(swapped !== capture, 'the tiers capture has no pr step ahead of the merge step to swap');
+  check(
+    missesOf(swapped).join(',') === 'job-evaluation-merge',
+    `a merge job that runs its own step ahead of the pr step misses ${missesOf(swapped).join(', ') || 'nothing'} where only the merge job element belongs`,
+  );
+  // A tier's job runs its own tier's step and no other tier's: the pr job carrying the scheduled step runs live checks on every pull request.
+  const scheduledStep =
+    '      - name: "twin-run, held-out"\n        run: |\n          npm exec --prefix evals -- tea-evaluate ci --evaluation evals/router --tier scheduled\n\n';
+  const carrying = capture.replace(prStep, `${prStep}${scheduledStep}`);
+  check(carrying !== capture, 'the tiers capture has no pr step to follow with the scheduled step');
+  check(
+    missesOf(carrying).join(',') === 'job-evaluation-pr',
+    `a pr job that also runs the scheduled step misses ${missesOf(carrying).join(', ') || 'nothing'} where only the pr job element belongs`,
+  );
+  // The scheduled job's guard names the cron the workflow declares, so it is read per cron the event fired for.
+  const cron = (value) => capture.replace("    if: github.event_name == 'schedule'\n", `    if: github.event.schedule == '${value}'\n`);
+  check(cron('0 3 * * 0') !== capture, 'the tiers capture has no scheduled job guard to name a cron');
+  check(
+    missesOf(cron('0 3 * * 0')).length === 0,
+    `a scheduled job guarded by the declared cron misses ${missesOf(cron('0 3 * * 0')).join(', ')}`,
+  );
+  check(
+    missesOf(cron('0 4 * * 0')).join(',') === 'job-evaluation-scheduled',
+    `a scheduled job guarded by another cron misses ${missesOf(cron('0 4 * * 0')).join(', ') || 'nothing'} where only the scheduled job element belongs`,
   );
   const everyEvent = capture.replace(
     "    if: github.event_name == 'pull_request' || github.event_name == 'push'\n",
@@ -1032,6 +1063,20 @@ async function checkCorpusGuards() {
       'job-evaluation-pr',
       { timeoutMinutes: '30' },
       'timeoutMinutes is declared and is not a positive integer',
+      TIERS_SET_ID,
+    ],
+    [
+      'trigger whose types is not a list',
+      'trigger-release-published',
+      { types: 'published' },
+      'types is declared and is not a non-empty list of event types',
+      TIERS_SET_ID,
+    ],
+    [
+      'command whose runsOn is empty',
+      'guard-unit-tests',
+      { runsOn: [] },
+      'runsOn is declared and is not a non-empty list of events',
       TIERS_SET_ID,
     ],
     [
