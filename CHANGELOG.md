@@ -517,6 +517,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The four evaluations that commit a `pr`-only plan declare `pr` as their only tier (Story 1.96, Story 2.5).
+  `tea-evaluate check` now holds `evaluation.json` `tiers` to the tiers the plan places a check on, and the Evaluate dogfood evaluation, the AI-feature and test-review authoring evaluations and the gap-loop `after` evaluation still listed `scheduled` and `release` beside a plan that holds `pr` checks only, so `test:evaluate-dogfood` and the `pr` suites of those evaluations exited 10 on `main`.
+  The gap-loop test treats `tiers` as recorded by the ci stage, like `ci/` and `baseline/`, when it compares `before` with `after`.
+
 - The gap-loop `after` evaluation passes `oracle-agreement` (Story 2.5, AD-12).
   Its held-out probes P-010, P-012 and P-013 each let one mutation violate the oracles of behaviors the probe's defects did not declare, so `ci --tier pr` over its baseline exited 11 with 15 oracle outcomes that disagree.
   They now carry the repair Story 1.98 gave the Story 1.24 test-review evaluation, byte for byte: a defect per behavior the mutation violates, each with its own manifestation witness, and a signature that is an `any` over the witnesses.
