@@ -1145,6 +1145,38 @@ try {
     fs.writeFileSync(labelledFile, labelledBytes);
   }
 
+  // `ci`'s judge-calibration check calibrates the view of the baseline's partition. A rubric only the held-out plan declares left
+  // `contract.json` with none, so the check used to report "no rubric declared" and skip the calibration it exists to gate.
+  const rubricCi = planProject('plan-rubric-ci', { development: [], heldOut: [HELD_OUT_CRITERION] });
+  write(path.join(rubricCi.folder, 'ci/evaluation-ci-plan.json'), {
+    schemaVersion: 1,
+    checks: [
+      {
+        id: 'judge-calibration',
+        tier: 'scheduled',
+        trigger: ['schedule', 'manual-dispatch'],
+        kind: 'evaluate',
+        command: ['tea-evaluate', 'ci', '--evaluation', '.', '--tier', 'scheduled'],
+        enforcement: 'block',
+        evidence: ['runs/<invocationId>/checks/judge-calibration/stdout'],
+        placement: { tier: 'scheduled', defaultTier: 'scheduled', reason: 'AD-10 default' },
+      },
+    ],
+  });
+  commit(rubricCi.repository, 'scheduled plan');
+  const calibratedByCi = cli(rubricCi, 'ci', ['--tier', 'scheduled']);
+  assert.equal(calibratedByCi.status, 0, calibratedByCi.output);
+  assert.doesNotMatch(
+    calibratedByCi.output,
+    /declares no rubric/,
+    'ci skipped the calibration of a rubric only the held-out plan declares',
+  );
+  assert.equal(
+    judgeCalls(rubricCi).filter((call) => call.calibration).length,
+    2,
+    'ci did not calibrate the held-out criterion over its two labelled items',
+  );
+
   // An empty held-out set is an authoring defect for preflight, as it is for run.
   const none = test.project('plan-none');
   for (const command of ['preflight', 'run']) {
