@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-004",
   "expectedClean": false,
-  "rationale": "[held-out] An inverted request guard accepts the same extra-field request.",
+  "rationale": "[held-out] An inverted request guard accepts the same extra-field request and refuses every valid request.",
   "defects": [
     {
       "defectId": "D-013",
@@ -56,6 +56,174 @@
           ]
         }
       }
+    },
+    {
+      "defectId": "D-016",
+      "behaviorId": "B-001",
+      "summary": "An inverted request guard refuses the assertion-free test review request.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-013-missing",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/missing-assertion.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-missing/call-inputs/stdin"
+                },
+                {
+                  "literal": {
+                    "action": "review",
+                    "file": "cases/missing-assertion.test.js"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-missing/stdout"
+                },
+                {
+                  "literal": {
+                    "error": "provide a JSON object with action review and a file string"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "defectId": "D-017",
+      "behaviorId": "B-002",
+      "summary": "An inverted request guard refuses the disabled test review request.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-013-disabled",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-disabled/call-inputs/stdin"
+                },
+                {
+                  "literal": {
+                    "action": "review",
+                    "file": "cases/disabled-test.test.js"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-disabled/stdout"
+                },
+                {
+                  "literal": {
+                    "error": "provide a JSON object with action review and a file string"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "defectId": "D-018",
+      "behaviorId": "B-003",
+      "summary": "An inverted request guard refuses the valid assertion review request.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-013-strict",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/clean-strict-equal.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-strict/call-inputs/stdin"
+                },
+                {
+                  "literal": {
+                    "action": "review",
+                    "file": "cases/clean-strict-equal.test.js"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013-strict/stdout"
+                },
+                {
+                  "literal": {
+                    "error": "provide a JSON object with action review and a file string"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
     }
   ],
   "defectSignature": {
@@ -71,22 +239,137 @@
           "argument": null,
           "option": null,
           "environment": null,
-          "stdin": {
-            "raw": {
-              "literal": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
-            }
-          },
+          "stdin": null,
           "arguments": null
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "any",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/status"
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "raw": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
           },
           {
-            "literal": "clean"
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/missing-assertion.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/disabled-test.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin"
+                  },
+                  {
+                    "literal": {
+                      "action": "review",
+                      "file": "cases/clean-strict-equal.test.js"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "error": "provide a JSON object with action review and a file string"
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

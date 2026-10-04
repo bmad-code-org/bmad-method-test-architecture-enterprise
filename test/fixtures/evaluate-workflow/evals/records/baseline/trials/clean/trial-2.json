@@ -1,0 +1,105 @@
+{
+  "conditionArm": "clean",
+  "trialIndex": 2,
+  "workspace": "trial-clean-2",
+  "elapsedMs": 163,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-2-read-back",
+        "trial-2-create"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "create",
+      "request": {
+        "probeId": "trial-2-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "create"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Ship the workflow"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-2-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "id": "rec-7abb1c32-079e-41bf-8bfc-12fbe185bbbe",
+            "title": "Ship the workflow",
+            "path": "store/rec-7abb1c32-079e-41bf-8bfc-12fbe185bbbe.json"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "read-back",
+      "request": {
+        "probeId": "trial-2-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "read"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {
+            "id": "rec-7abb1c32-079e-41bf-8bfc-12fbe185bbbe"
+          },
+          "environment": [],
+          "stdin": {
+            "kind": "absent"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-2-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "found": true,
+            "id": "rec-7abb1c32-079e-41bf-8bfc-12fbe185bbbe",
+            "title": "Ship the workflow"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

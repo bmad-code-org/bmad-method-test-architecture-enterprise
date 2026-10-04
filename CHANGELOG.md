@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- TeA's own pull requests run the `pr` tier of every evaluation it keeps (Story 2.5, AD-11, CAP-11, CAP-12).
+  Each of the nine fixture evaluations (the stdio MCP and HTTP API graders, the workflow, tool-use, promptfoo and learned-framework evaluations, the AI-feature and test-review authoring suites, and the gap-loop `after` evaluation) and the Evaluate-authored suite is a script of the `npm test` chain, `test:evaluate-pr-<key>`, which the `chain` matrix runs.
+  `test/test-evaluate-pr-tier.js <key>` runs `tea-evaluate ci --tier pr` over the committed folder with no secret and no model call, and fails when the folder's plan omits a `pr` check its probes or interface call for (the gameability arm, the HTTP port conformance), when its baseline was recorded on another eval-quality release than the installed one, holds a dirty or incomplete run, a non-copy workspace, a manifest `acceptedRun` that names another run, or a partition other than both, or when the evaluation's `evaluation.json` declares a non-copy workspace, or when `ci` exits non-zero, runs other checks than the plan places or reads a stale baseline.
+  Every fixture evaluation now commits `ci/evaluation-ci-plan.json` and a `baseline/`, so the replay, the gameability arm, contract-source freshness and oracle agreement run on every pull request.
+  The suite runs `check`, `compile` and `seal` from a committed plan; its replay joins them when Story H.1 accepts its clean baseline.
+  The `chain` job uploads each evaluation's `runs/<invocationId>/` as the build artifact `evaluate-runs-<shard>` with `if: always()`, so a red run leaves its evidence bundle.
+  A `test:evaluate-ci` case parses `quality.yaml` and fails when the upload step, its `always()`, its shard-qualified name or any evaluation's path is missing, when a script leaves the `npm test` chain, and when any of the eight `eval-quality-gates` leaves its job: `test:lockfile-age` and `test:licences` stay in `supply-chain`, `test:direction`, `test:boundary` and `test:lineage` in `layering-boundary-lineage`, and `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the chain.
+  The case also carries a revert case for each folder rule, each wiring rule and each result rule.
 - An evaluator mapping follows the contract view under a `partitionPlan` (Story 1.107, AD-9, AD-21, AD-22).
   Story 1.51 refused a `partitionPlan` beside any evaluator but the deterministic one, because a `command` or `sealed-brief-agent` evaluator binds oracles and rubric criteria through `evaluator/mapping.json` and a `records` evaluator's records name them too.
   A command evaluator, a sealed-brief agent and a records evaluator now run beside a plan, and the refusal is gone.
@@ -496,6 +504,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The gap-loop `after` evaluation passes `oracle-agreement` (Story 2.5, AD-12).
+  Its held-out probes P-010, P-012 and P-013 each let one mutation violate the oracles of behaviors the probe's defects did not declare, so `ci --tier pr` over its baseline exited 11 with 15 oracle outcomes that disagree.
+  They now carry the repair Story 1.98 gave the Story 1.24 test-review evaluation, byte for byte: a defect per behavior the mutation violates, each with its own manifestation witness, and a signature that is an `any` over the witnesses.
+  `before` keeps the probes the blind session started from, `replay/` of `after` was recorded again from separate development and held-out runs, and `test:evaluate-gap-loop` reads the oracles of every behavior a probe declares and requires the repaired probes to equal the test-review ones.
 - The Evaluate repository CI suite is seven scripts, one per adopter and tier, so the CI shards spread it (Story 1.79).
   `test:evaluate-ci-repositories` ran the seven tier runs of the two fixture repositories one after another in a single script, about 1137 CI seconds under coverage, and the chain shard that held it timed out at the job's 20 minute cap.
   `test:evaluate-ci-repositories:tagged-release-pr`, `-merge` and `-release`, and `test:evaluate-ci-repositories:nightly-deploy-pr`, `-merge`, `-scheduled` and `-release`, each run `node test/test-evaluate-ci-repositories.js --only=<adopter>:<tier>`, are chained in `npm test` where the single script was, and carry a measured weight in `tools/test-shard-weights.json`, so the shard planner places them on different runners.

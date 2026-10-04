@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "systemId": "promptfoo-summary",
+  "implementationDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+  "artifactDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+  "commitDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+  "rationale": "Clean control: the summary names apples and pears and excludes shellfish.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191353878Z-cbee24f1/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:891202d1b0f7bc09aea10a51fc6bfe8ec8e89c003d461cdd1e4493501d4f2d30"
+    },
+    "revisionCommitDigest": "sha256:3149a3744478e391ec9cb3f7e44f8a5b9907836a2a412b1d5569b44f9d68614c",
+    "noKnownDefectStatement": "The clean item rules have no known defect."
+  },
+  "expectedClean": true,
+  "defects": []
+}

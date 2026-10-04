@@ -1,0 +1,55 @@
+{
+  "probeId": "P-001",
+  "phase": "baseline-pass",
+  "workspace": "qualify-clean",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-call-tool"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "call-tool",
+      "request": {
+        "probeId": "baseline-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "executable": "calling-agent",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Weather in Austin"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

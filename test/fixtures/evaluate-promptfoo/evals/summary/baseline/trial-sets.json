@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "invocationId": "20261004T191353878Z-cbee24f1",
+  "corpusDigest": "sha256:ffce54109ac1b07bfb9374021e71d38e90707028839b9ea4c2ec4f3c1cefb3b8",
+  "contract": "eval-contract.json",
+  "policy": "scoring-policy.json",
+  "preflightVerdict": "preflight-verdict.json",
+  "evaluatorConfiguration": "evaluator-configuration.json",
+  "trialSets": [
+    {
+      "probeId": "P-001",
+      "runId": "20261004T191353878Z-cbee24f1-P-001",
+      "conditionArm": "clean",
+      "probe": "probes/P-001.probe.json",
+      "records": [
+        "trial-sets/P-001/record-1.json",
+        "trial-sets/P-001/record-2.json",
+        "trial-sets/P-001/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-001/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-002",
+      "runId": "20261004T191353878Z-cbee24f1-P-002",
+      "conditionArm": "mutated:M-001",
+      "probe": "probes/P-002.probe.json",
+      "records": [
+        "trial-sets/P-002/record-1.json",
+        "trial-sets/P-002/record-2.json",
+        "trial-sets/P-002/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-002/isolation-manifest.json"
+    }
+  ]
+}

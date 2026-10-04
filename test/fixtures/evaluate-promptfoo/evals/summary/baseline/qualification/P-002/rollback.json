@@ -1,0 +1,65 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "targetArtifact": "rules/items.json",
+  "preDigest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a",
+  "mutatedDigest": "sha256:da99f2fb8672d6db86a2492eef60dd8a4ff6ec57c598476fd7311d79cbfb65cd",
+  "restoredDigest": "sha256:70e8fdc87b188ec04faa36ffb5de6625988efb79c78df25d181dcd3a8b9ab57a",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-summarize"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "summarize",
+          "request": {
+            "probeId": "re-pass-1-summarize",
+            "interfaceId": "summarizer",
+            "operationId": "summarize",
+            "kind": "cli",
+            "executable": "summarizer",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "List pantry"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-summarize",
+            "interfaceId": "summarizer",
+            "operationId": "summarize",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "text",
+              "value": "Summary for List pantry: apples, pears\n"
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

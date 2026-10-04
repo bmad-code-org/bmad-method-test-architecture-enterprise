@@ -1,0 +1,1004 @@
+{
+  "invocationId": "20261004T192119203Z-1fa663d9",
+  "seed": "20261004T192119203Z-1fa663d9",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "7.1.0",
+  "commit": null,
+  "dirty": false,
+  "evaluationFolder": {
+    "dirty": false
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "dirty": false
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-73bef9b2-e4b3-4dbe-95d5-07a8406c110b/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-e6cf7fa9-030f-4587-846b-6d4632e9a9b5/target",
+    "mutated:M-002": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-002-95444158-851b-466b-90ec-0446f28bdaa8/target",
+    "mutated:M-003": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-003-8b9c6b53-18dd-4ead-8364-25ce6c05d636/target",
+    "mutated:M-004": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-004-f0697ae6-492d-4f6c-96c0-96ee7afb30d9/target",
+    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-f25c2238-7497-42b1-97a9-665e66359232/target",
+    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-57935571-2253-401a-be84-11a5c983d8af/target",
+    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-1b28cea1-93bf-4120-b51f-e37055eb4bac/target",
+    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-9b75d6d4-2c6b-4d1e-9537-cc50c8d73cdf/target"
+  },
+  "confinement": "seatbelt",
+  "egress": [],
+  "logins": [],
+  "adopterTree": {
+    "repository": "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/8358f7e4-14a3-47c7-92e3-38333c606f6e/scratchpad/s25-gap-loop2-142111/after",
+    "unchanged": true
+  },
+  "refused": [],
+  "artifacts": {
+    "contract": "sha256:22ecc19290e91dac264e8f5ef274e8cf962f7a1824288a09bd2148589583ca83",
+    "operationPhases": "sha256:0250e2d877c200e1cf7b444af622636a603e4ec5d35264f711f6c3b66e5af06d",
+    "evaluatorConfiguration": "sha256:ad71ff2c41623ede0d5694cafe6c817c1949e6ac3a7817dadc940cf62eeb7651",
+    "preflightVerdict": "sha256:3a286900b5250b44d9f2b93afd93e073975adc48617fd75b27edbb33df5bf9ed",
+    "probes": {
+      "P-001": "sha256:45e1219ed504983d2d06e59304972f41c7b73d168426841514a2b493bf86db3e",
+      "P-002": "sha256:5a7305bafe7c04edb50f05af9b698e49f63bf2281fe6173add8c6fc451c5aacf",
+      "P-003": "sha256:f87e0d9f5a161cad836867c0178d80131647f4cf0efe06c05bad59679a6a38c7",
+      "P-004": "sha256:51e459ded4edfce1a877bc6ef26ba502c800094a17c4704d665eb850627957b1",
+      "P-014": "sha256:58b25e12c6edf6e875d64f2f455c9e405a90c9cd365595dc8b10f249dbe1b7f0",
+      "P-016": "sha256:2302e0737e54916e066f3683ce466bd83d9b5b1f8c210ac8f53a1f9b9e6ee949",
+      "P-005": "sha256:2462aa16bc361b59032ccfb522e4a2a3ac8a42bc7db54a509d539d922fa38d96",
+      "P-006": "sha256:c80cdf6d85d1241ce322b77763b720a1651aa0dcab470580efa919fd8a8d2523",
+      "P-007": "sha256:8084b20e59641f5fb1d84305eb6e332fa81e05532f45f67dcae75225d09e9eec",
+      "P-008": "sha256:153a2f53e0652c2a6a9c0406a04c234e2e1101f2b1a6c096fc29c02061f66002",
+      "P-010": "sha256:2fa6a0154df522aacb9c33a3f4ea8bcdbeb109c76495e733fdac64629d9e7eaa",
+      "P-011": "sha256:f7fed2ff739c7ed606b6e632a6283eab1866b03afddbae348c29ad3f34517722",
+      "P-012": "sha256:d052d4bfeb805c96d00b7d36b81768361fe45bd0e612dd99b6b267a0285ced91",
+      "P-013": "sha256:a6867879550de777c5dcaf44508969b9582d4a8ef755107cf16543203ad83802",
+      "P-009": "sha256:18349bd7db329f5ea8ba3eab7ae548ce21cf9e7734998657aa3f2c5a37901b2f",
+      "P-017": "sha256:5dcbce51d86ba8782337ec0fd42016e92a2978eadb52e9a32d2cbaae28de4b00"
+    },
+    "records": {
+      "trial-sets/P-001/record-1.json": "sha256:f0172612c2f4774c97a1c0f3e428580d1cca9058be1e17b5d14f8126cef8a696",
+      "trial-sets/P-001/record-2.json": "sha256:526bb4a99ded278d94954cf9ce4a6fc80836af6f5f1faadf09c6a2c16308b2f0",
+      "trial-sets/P-001/record-3.json": "sha256:4e6719c7d43627fe0e4a4ff71c224f2483811e6465b9d1a29a82ab1c4ace6fe6",
+      "trial-sets/P-002/record-1.json": "sha256:d091ba8f37f9ebd015bbb3979dd64a83f8f0e31a89372b0777f9e364380c07ed",
+      "trial-sets/P-002/record-2.json": "sha256:5ae3b365df0f7f59d38e0e4536f6fa61969fdfbb5a5d6559b6ddea47a03fabb2",
+      "trial-sets/P-002/record-3.json": "sha256:b3a6e7fd99d577c21c11efc1d42d978d3fee808b77583978c08552b14795d001",
+      "trial-sets/P-003/record-1.json": "sha256:df1cdc8fc3c72911d20f312da0536e53215044174070c91f7eddb777a8d0dd27",
+      "trial-sets/P-003/record-2.json": "sha256:18c2d0720acc5eacb5e725c47a43f4482aaaa45ed8e02956fc2e4208f6732395",
+      "trial-sets/P-003/record-3.json": "sha256:00f23f1cb54983f434c097e7a2d0d37b13fc7ad4b83a2f8ca1292a31b38a7e20",
+      "trial-sets/P-004/record-1.json": "sha256:b43999519625625710cc5f364156805f98a6f67424f7617779e73e45295aadbe",
+      "trial-sets/P-004/record-2.json": "sha256:1b59b8e8c134357d1f37da8eacc36fb9a93bff2d3a29b24f5d0aa68de5cbdfa8",
+      "trial-sets/P-004/record-3.json": "sha256:b9a2943333d8d9a39dcf83e25090498e209c27ff6a2eb472716cba5249bd7e1a",
+      "trial-sets/P-014/record-1.json": "sha256:c3bd973e0a086c4ec39f2e37f40eca6d364752586faf799535914afd9e43c886",
+      "trial-sets/P-014/record-2.json": "sha256:d21fe821c8522cfa9915328e6046929c8c095b62a8ae2b9d6a80029d0cf648f0",
+      "trial-sets/P-014/record-3.json": "sha256:6b662475f78ba43c1edce92f22a097380b7d3ee8545750b0982167a8976b5412",
+      "trial-sets/P-016/record-1.json": "sha256:57a80f964ce9c7a94d9d30f83a7fccdf987b19f14080c29b0ba2c84136bea694",
+      "trial-sets/P-016/record-2.json": "sha256:730b01902e769bf0be1af53df8ca6dd7fd3f8d54caf85970c72b0ad3dc85fc5c",
+      "trial-sets/P-016/record-3.json": "sha256:df69f70070876f3ff88eaf6a24258aa8f2b700c4191bf279b67d789e359c5889",
+      "trial-sets/P-005/record-1.json": "sha256:f60c34bbb07872c3b26f8f1f95aa0316eca8d00b11bff411bd89de8953b9784c",
+      "trial-sets/P-005/record-2.json": "sha256:1aafa97a11217e383aac8c2ed8791fcfb0fe9c3a52f6f7fc22733686b9607df9",
+      "trial-sets/P-005/record-3.json": "sha256:11533bd0ef7e343d2a5f8f9efae28739f753e8b211d29fa46d4e2c9441144fd4",
+      "trial-sets/P-006/record-1.json": "sha256:4271dfae71070a88f80919ae0dfab5c79d828ca2a4d205b26589bc2245b38f12",
+      "trial-sets/P-006/record-2.json": "sha256:62544e232a4d893fae231d0675dd7155bd628edadf3743742b4431f4767f6457",
+      "trial-sets/P-006/record-3.json": "sha256:bc440da9fa103f31ef5eff2875556e93292c9fb42681374dd8bfa0ee3b511ef1",
+      "trial-sets/P-007/record-1.json": "sha256:88267d02be906d6431061d211f2502998b45454926eb6b5d39ab21098f3bb684",
+      "trial-sets/P-007/record-2.json": "sha256:4d8b58940cfb7242e8ebd74fbf82f65576f40a9ff2354e978b57134b5bef5c31",
+      "trial-sets/P-007/record-3.json": "sha256:c674889eb951ca1b84249c19de00f83801fe13927d709f6a946ddecffd4ccaee",
+      "trial-sets/P-008/record-1.json": "sha256:8db9c667a576491c861422b06d4f296bba2d64fbe7e3392e2caf45c0ac583ea0",
+      "trial-sets/P-008/record-2.json": "sha256:b2181e52b703754e78c3342bc3265992bb14aa38cde0d3c844d9647f14797bbc",
+      "trial-sets/P-008/record-3.json": "sha256:c9aa1560082eb85c4bc57aca0b61b9d8734abe1b689dd90203199befaa94285e",
+      "trial-sets/P-010/record-1.json": "sha256:bf40422a16cde468abd38121b1ab5275c2c0488a1833ed320825730963c39f5b",
+      "trial-sets/P-010/record-2.json": "sha256:87a2b671373b02d658e57432d8ae357bae3d67d67feb631c944b9ae7c623f71a",
+      "trial-sets/P-010/record-3.json": "sha256:f747b12d5185ec6d9c86c123d2b4a9d65736b4f6df4f7f5a23a273208427b359",
+      "trial-sets/P-011/record-1.json": "sha256:fff6d6dc010f3a08504e31bdcaccf809ba4bff57e817b144df2ac62f82b11bd1",
+      "trial-sets/P-011/record-2.json": "sha256:97498a4b7a42f068afa7ca6316b5c0ad5918651bc6ac7e08e0f0e43f85cf8811",
+      "trial-sets/P-011/record-3.json": "sha256:838d7d2ebd09fa2f9ef1f61d509d8faca3f8fc32a77bd809f6fc349d9dfdd35c",
+      "trial-sets/P-012/record-1.json": "sha256:b27d058d023c09bcb6c48ec6a5d427c98f2495cc7eb07b860d63517c85a7122d",
+      "trial-sets/P-012/record-2.json": "sha256:6a300b57b2b5fa269e0325178a1758f6c9eb0faf49dd8ff4c65ebe385ecd4b1f",
+      "trial-sets/P-012/record-3.json": "sha256:78fa69e9075ce51a07788e6fce5d8c00c1c9ef12e27219d779b0f25bad555171",
+      "trial-sets/P-013/record-1.json": "sha256:84c1d536f38499d3881825d1c597a1b9713fb4ae3e3a2643710d48d2b4f897a9",
+      "trial-sets/P-013/record-2.json": "sha256:ae84a28f4b694f161baab54325694941fffa5f2319596e34ea4c03e0134e3590",
+      "trial-sets/P-013/record-3.json": "sha256:1feb3512e22f4bc1493329172cae02805998a5235164c786dc5ad8fcdf71d032",
+      "trial-sets/P-009/record-1.json": "sha256:31b220a1abba94d44f3186be45a3c1a9b621b6df648e986b5c7a94d804dc02fb",
+      "trial-sets/P-009/record-2.json": "sha256:8dc4cbf67283cee39db42e610ff232ffd36376e8e17fd61b63cb4311764e2185",
+      "trial-sets/P-009/record-3.json": "sha256:b38cdc12c8c8d3f48a6c91a93da77e74a1666c4d4aa08dcb13b16284f4bf1839",
+      "trial-sets/P-017/record-1.json": "sha256:3fbb1e0e92f94ab692e7e4e5b713f00447dbf181bb9d9c5a242cd75bdd37b90f",
+      "trial-sets/P-017/record-2.json": "sha256:39f26bbed9621b0eff18cc932a4e256f3394b640edfe69015e1c9314fe4f0bcd",
+      "trial-sets/P-017/record-3.json": "sha256:caeac998f1bfc135670effcda587a1b7cff43cdef170a28938fc84a601c294f2"
+    },
+    "isolationManifests": {
+      "P-001": "sha256:3ee3a70e5ee388d318a9e0d070009e4f62a922faaf6078db3460104a19aa12ae",
+      "P-002": "sha256:88f4ab63710e078607c8cd5d48e5d671eb32530ced062288d2207200b416c633",
+      "P-003": "sha256:024846beadc4746e6ade4f4f5976ae8ca13c45c87992690d17d26b5c9408e00f",
+      "P-004": "sha256:eeb936e5a9ad6fdc84041bf0d6064a7511031fa606cf51bf224383641f670811",
+      "P-014": "sha256:fe8d526031e22515db59184330b451b032857691dd532b5cb07e6f12a7f41527",
+      "P-016": "sha256:f51724153b85351c40394fd2031e36c0ca335f0a12fed17ea8b2e058e7882603",
+      "P-005": "sha256:32871df73638344300929f9c995139ecbb93935fa4e04732318a6a4a2ff0aead",
+      "P-006": "sha256:cccd2f8c7cd4210d925607b628cfcf14e45d3b3f81e501a87cb6ec0b16a6be5b",
+      "P-007": "sha256:be997c7433a12ec47d36120c1fe20b63ac7614a62dc6ba0a0f23bb66f475b79c",
+      "P-008": "sha256:5a5b2a0ab9b8d3bcef8a3c07a139895b9ac2b8a6a858832e2675eae669947447",
+      "P-010": "sha256:6ccd10a9c10bdc6e97dd321f74bad40fdbe92e4e73ded9fec282787781587a9a",
+      "P-011": "sha256:4b729ecde09111683e3e9f8ce5b85d030bf9ec3a3714ace54d3e6db3c1723002",
+      "P-012": "sha256:18748db2f62321088b2571bc429b56c4d1bb1b3e2d08fdec338989eccd670095",
+      "P-013": "sha256:d5f6705c2bd306c8ab4e56ac94a75426b088923651a89e31bc30d35f793f290e",
+      "P-009": "sha256:bbc825ea657785572c549f6967fa9bf697e3350e2e0987b0166c7db2ccd1b0de",
+      "P-017": "sha256:f3c5a2e1c8ff93beb75c6ad75d17e3ecbb113e345f850d1aa402de1c44ee4dab"
+    }
+  },
+  "contractDigest": "sha256:4cfbd1aedf09e9b080c489bf4bc8a389e0e4aec3b5cbc4c4e9ef3a3dca49a14f",
+  "corpusDigest": "sha256:4cc2181f944f0c38c993dff774b4e9570ed0c53a8f94aa0f17f5b65d682a3cb5",
+  "policyDigest": "sha256:3e6a40f97ee68a2f82473c8b98ab14f4e7ccc0b3eb4557325f11be67b92fed09",
+  "sealedBriefDigest": "sha256:cb031c0e0c58b9bc02f4cb65bcc79207ff19b080cfeb2689bb558baf50af1f41",
+  "evaluatorConfigurationDigest": "sha256:feba06e7f5ddc613428d1f2a513823b5e47c84a4dabe55ae3f5996e16e7040dd",
+  "partition": "both",
+  "heldOutProbes": [
+    "P-010",
+    "P-011",
+    "P-012",
+    "P-013"
+  ],
+  "operationPhases": {
+    "review-cli": {
+      "review": "outcome"
+    }
+  },
+  "runner": [
+    {
+      "interfaceId": "review-cli",
+      "executable": "review",
+      "target": "bin/review.mjs"
+    }
+  ],
+  "evaluator": {
+    "kind": "deterministic",
+    "identity": "tea-evaluate deterministic evaluator"
+  },
+  "model": {
+    "modelSnapshot": "none",
+    "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "judge": null,
+  "trials": {
+    "perArm": 3,
+    "arms": [
+      "clean",
+      "mutated:M-001",
+      "mutated:M-002",
+      "mutated:M-003",
+      "mutated:M-004",
+      "mutated:M-005",
+      "mutated:M-006",
+      "mutated:M-007",
+      "mutated:M-008",
+      "gameability:P-009",
+      "gameability:P-017"
+    ]
+  },
+  "trialCount": 3,
+  "unreportedResourceUse": [
+    {
+      "conditionArm": "clean",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "typed-file",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable"
+      ]
+    }
+  ],
+  "observedMountsChannel": [
+    {
+      "conditionArm": "clean",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 24,
+      "canariesDelivered": 24,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-002",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-003",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 22,
+      "canariesDelivered": 22,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-004",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 1,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 2,
+      "completeness": "complete",
+      "canariesSent": 22,
+      "canariesDelivered": 22,
+      "logReportedLoss": false
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 3,
+      "completeness": "complete",
+      "canariesSent": 23,
+      "canariesDelivered": 23,
+      "logReportedLoss": false
+    }
+  ],
+  "hostSocketTruncation": [],
+  "egressRefusals": [],
+  "startedAt": "2026-10-04T19:21:18.673Z",
+  "durationMs": 65063,
+  "completed": true,
+  "outcome": {
+    "stage": "trial",
+    "exitCode": 0,
+    "message": "16 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001, mutated:M-002, mutated:M-003, mutated:M-004, mutated:M-005, mutated:M-006, mutated:M-007, mutated:M-008, gameability:P-009, gameability:P-017; score them with tea-evaluate score --run 20261004T192119203Z-1fa663d9"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "policyId": "answer-grade-critical-v1",
+  "severityFloor": "low",
+  "confidenceThreshold": 0.5,
+  "catchThreshold": 0.9,
+  "minimumTrialCount": 3,
+  "reExecutionCap": 2,
+  "remediationCap": 3,
+  "regexMatchStepBudget": 1000000
+}

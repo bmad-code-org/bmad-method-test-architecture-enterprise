@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "calling-agent-tool-use",
+  "implementationDigest": "sha256:578fd346c6953c229b79dad65aeb8e693c6a53238f261083d945badc165e18de",
+  "artifactDigest": "sha256:ff0a7deb3ffaf7107b67b9aa27b9846518e771330b0545265f8347c69876c97b",
+  "commitDigest": "sha256:578fd346c6953c229b79dad65aeb8e693c6a53238f261083d945badc165e18de",
+  "rationale": "Seeded defect: the rule selects search_web instead of get_weather.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "rules/tool.json: select search_web for the weather request",
+    "mutationOperator": "replace-exact: \"\\\"name\\\": \\\"get_weather\\\"\" -> \"\\\"name\\\": \\\"search_web\\\"\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "rules/tool.json",
+      "privateRef": null,
+      "digest": "sha256:ff0a7deb3ffaf7107b67b9aa27b9846518e771330b0545265f8347c69876c97b"
+    },
+    "expectedObservableFailure": "The trajectory stdout names search_web as the first tool call.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:fbd08d1fbff02d3cda4a70f85f234ea3c635a7bb5661e66a3fa88c4b6bbb008a"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The calling agent selects search_web for a weather request.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-wrong-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Weather in Austin"
+          }
+        },
+        "relation": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-wrong-tool/stdout"
+            },
+            {
+              "literal": "\"name\":\"search_web\""
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "calling-agent",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "matcher": "any"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "\"name\":\"search_web\""
+          }
+        ]
+      }
+    }
+  }
+}

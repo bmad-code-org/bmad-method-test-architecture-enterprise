@@ -1,0 +1,61 @@
+{
+  "conditionArm": "clean",
+  "trialIndex": 1,
+  "workspace": "trial-clean-1",
+  "steps": [
+    {
+      "stepId": "call-tool",
+      "request": {
+        "probeId": "trial-1-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "executable": "calling-agent",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Weather in Austin"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-1-call-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ],
+  "elapsedMs": 944,
+  "evaluator": {
+    "kind": "command",
+    "answer": {
+      "rows": [
+        {
+          "key": "trajectory_strict_match",
+          "outcome": "pass",
+          "observationIds": [
+            "trial-1-call-tool"
+          ],
+          "comment": "The trajectory strictly matches the reference."
+        }
+      ]
+    },
+    "streams": "evaluator/clean/trial-1",
+    "calls": null
+  }
+}

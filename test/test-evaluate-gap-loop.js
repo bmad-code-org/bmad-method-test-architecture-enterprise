@@ -43,6 +43,20 @@ const PROBE_CLASSES = {
   'P-017': 'gameability',
 };
 const HELD_OUT_IDS = ['P-010', 'P-011', 'P-012', 'P-013'];
+/**
+ * What the blind session never saw, and the `pr` tier guards (Story 2.5): the CI plan and the accepted baseline of the
+ * `after` evaluation, and the same of the Story 1.24 test-review evaluation, which replaced the placeholder `baseline/README.md`
+ * the session started from. The `pr` replay of `after` reproduces its baseline byte for byte, so these are not authored inputs.
+ */
+const RECORDED = (file) => file.startsWith('baseline/') || file.startsWith('ci/');
+/** The placeholder the blind session started from; `before` keeps it and nothing else of the kind. */
+const PLACEHOLDER = 'baseline/README.md';
+/**
+ * Story 2.5 gave the `after` evaluation Story 1.98's repair of the Story 1.24 evaluation: the held-out probes that violate a
+ * behavior their defects did not declare, which `oracle-agreement` on `pr` reports as a disagreement. The blind session ran before
+ * the repair, so `before` keeps the probes it started from and the gap report names the session's own changes only.
+ */
+const AFTER_REPAIR = ['probes/P-010.probe.json', 'probes/P-012.probe.json', 'probes/P-013.probe.json'];
 const DEVELOPMENT_IDS = Object.keys(PROBE_CLASSES).filter((id) => !HELD_OUT_IDS.includes(id));
 
 function readJson(file) {
@@ -84,7 +98,9 @@ function checkInventory() {
   assert.equal(inventory.schemaVersion, 1);
   const actual = ['before', 'after'].flatMap((phase) => {
     const phaseRoot = path.join(FIXTURE, phase);
-    return filesUnder(phaseRoot, EXCLUDED).map((file) => `${phase}/${file}`);
+    return filesUnder(phaseRoot, EXCLUDED)
+      .filter((file) => !(phase === 'after' && RECORDED(file.replace(/^evaluation\//, ''))))
+      .map((file) => `${phase}/${file}`);
   });
   assert.deepEqual(Object.keys(inventory.hashes).sort(), actual.sort(), 'source inventory misses an authored file');
   for (const [file, hash] of Object.entries(inventory.hashes)) {
@@ -120,8 +136,8 @@ function checkInventory() {
   }
   const before = path.join(FIXTURE, 'before/evaluation');
   const original = path.join(SOURCE, 'evaluation');
-  const beforeFiles = new Set(filesUnder(before, EXCLUDED));
-  const originalFiles = new Set(filesUnder(original, EXCLUDED));
+  const beforeFiles = new Set(filesUnder(before, EXCLUDED).filter((file) => file !== PLACEHOLDER));
+  const originalFiles = new Set(filesUnder(original, EXCLUDED).filter((file) => !RECORDED(file)));
   const omitted = [...originalFiles].filter((file) => !beforeFiles.has(file)).sort();
   // Story 1.98 added the held-out gameability probe P-015 to the Story 1.24 evaluation after the blind loop ran on its own copy.
   assert.deepEqual(
@@ -155,6 +171,13 @@ function checkInventory() {
     ],
     'before differs from Story 1.24 outside the two seeds, the Story 1.98 repair and generated files',
   );
+  for (const file of AFTER_REPAIR) {
+    sameBytes(path.join(FIXTURE, 'after/evaluation', file), path.join(original, file), `after ${file} (the Story 1.98 repair)`);
+    assert.ok(
+      !fs.readFileSync(path.join(before, file)).equals(fs.readFileSync(path.join(FIXTURE, 'after/evaluation', file))),
+      `before ${file} must stay the probe the blind session started from`,
+    );
+  }
 }
 
 function checkReplayManifest(folder, expectedRuns) {
@@ -187,8 +210,12 @@ function checkGapReport() {
   assert.ok(listed, 'gap report needs a Changed files section');
   const before = path.join(FIXTURE, 'before/evaluation');
   const after = path.join(FIXTURE, 'after/evaluation');
-  const files = new Set([...filesUnder(before, EXCLUDED), ...filesUnder(after, EXCLUDED)]);
+  const files = new Set([
+    ...filesUnder(before, EXCLUDED).filter((file) => file !== PLACEHOLDER),
+    ...filesUnder(after, EXCLUDED).filter((file) => !RECORDED(file)),
+  ]);
   const changed = [...files]
+    .filter((file) => !AFTER_REPAIR.includes(file))
     .filter((file) => {
       const left = path.join(before, file);
       const right = path.join(after, file);
@@ -616,7 +643,9 @@ async function checkQualification(folder, replay, runId, probe, source) {
   assert.equal(baseline.verdict, 'held');
   const contract = readJson(path.join(folder, 'contract.json'));
   const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
-  const oracleIds = oraclesOfBehaviors(contract, [source.behaviorId]);
+  // A probe whose mutation violates the oracles of several behaviors declares a defect for each (Story 1.98), and the saved
+  // phases read the oracles of every one of them.
+  const oracleIds = oraclesOfBehaviors(contract, [...new Set([source.behaviorId, ...probe.defects.map((defect) => defect.behaviorId)])]);
   const checkSavedPhase = async (phase, label) => {
     const oracles = await evaluateOracles({
       contract,
@@ -656,10 +685,9 @@ async function checkQualification(folder, replay, runId, probe, source) {
   assert.equal(mutated.targetArtifactDigest, mutatedDigest);
   assert.equal(mutated.verdict, 'violated');
   await checkSavedPhase(mutated, 'mutated');
-  assert.deepEqual(
-    probe.defects.flatMap((defect) => defect.oracleEvidence),
-    [probe.qualification.mutatedFailEvidence],
-  );
+  // Every defect of the probe cites the one mutated-fail evidence its mutation produced.
+  assert.ok(probe.defects.length > 0, `${probe.probeId} declares no defect`);
+  for (const defect of probe.defects) assert.deepEqual(defect.oracleEvidence, [probe.qualification.mutatedFailEvidence]);
   const rollback = readJson(path.join(replay, 'qualification', probe.probeId, 'rollback.json'));
   assert.equal(rollback.probeId, probe.probeId);
   assert.equal(rollback.mutationId, mutationId);
@@ -723,11 +751,13 @@ function checkHeldOutInputIsolation(folder) {
   const corpus = filesUnder(path.join(folder, 'corpus/requests'))
     .filter((file) => file.endsWith('.stdin'))
     .map((file) => normalizedStdin(fs.readFileSync(path.join(folder, 'corpus/requests', file), 'utf8')));
-  const heldOutWitnesses = evaluation.heldOutProbes.flatMap((id) => {
-    const probe = readJson(path.join(folder, 'probes', `${id}.probe.json`));
-    return probe.defects.map((defect) => defect.manifestationWitness.inputs.stdin.value);
-  });
-  assert.equal(heldOutWitnesses.length, evaluation.heldOutProbes.length);
+  const heldOutDefects = evaluation.heldOutProbes.flatMap((id) => readJson(path.join(folder, 'probes', `${id}.probe.json`)).defects);
+  // A probe declares one defect for each behavior its mutation violates (Story 1.98), each with its own witness.
+  const heldOutWitnesses = heldOutDefects.map((defect) => defect.manifestationWitness.inputs.stdin.value);
+  for (const id of evaluation.heldOutProbes) {
+    const { defects } = readJson(path.join(folder, 'probes', `${id}.probe.json`));
+    assert.ok(defects.length > 0, `held-out probe ${id} declares no witnessed defect`);
+  }
   assert.ok(
     heldOutWitnesses.every((input) => corpus.some((candidate) => isDeepStrictEqual(candidate, input))),
     'a held-out-only request needs an explicit development evidence scan',
@@ -793,6 +823,8 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
   sameBytes(generated.compiled, path.join(replay, 'eval-contract.json'), `${runName} generated compile`);
   sameBytes(generated.sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${runName} generated seal`);
   const runRecord = readJson(path.join(replay, 'run.json'));
+  assert.equal(runRecord.dirty, false, `${runName} replay was recorded from a dirty tree`);
+  assert.equal(runRecord.evaluationFolder.dirty, false, `${runName} replay was recorded from a dirty evaluation folder`);
   assert.equal(runRecord.workspace.treeDigest, treeDigest(path.join(path.dirname(folder), 'target')));
   const verdictFile = path.join(out, `${path.basename(path.dirname(folder))}-${runName}-preflight.json`);
   run(ENGINE, [

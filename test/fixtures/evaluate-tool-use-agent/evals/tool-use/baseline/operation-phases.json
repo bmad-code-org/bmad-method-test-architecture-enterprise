@@ -1,0 +1,5 @@
+{
+  "calling-agent": {
+    "call-weather-tool": "process"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "targetArtifact": "rules/tool.json",
+  "preDigest": "sha256:ff0a7deb3ffaf7107b67b9aa27b9846518e771330b0545265f8347c69876c97b",
+  "mutatedDigest": "sha256:632fff0d23d86cefcefdbfc2c197aa6a79e736b5360814e10e14ed0b23e7b1cf",
+  "restoredDigest": "sha256:ff0a7deb3ffaf7107b67b9aa27b9846518e771330b0545265f8347c69876c97b",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-001",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-call-tool"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "call-tool",
+          "request": {
+            "probeId": "re-pass-1-call-tool",
+            "interfaceId": "calling-agent",
+            "operationId": "call-weather-tool",
+            "kind": "cli",
+            "executable": "calling-agent",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "Weather in Austin"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-call-tool",
+            "interfaceId": "calling-agent",
+            "operationId": "call-weather-tool",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "text",
+              "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

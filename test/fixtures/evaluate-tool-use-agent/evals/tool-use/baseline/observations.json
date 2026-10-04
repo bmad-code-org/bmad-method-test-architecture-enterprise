@@ -1,0 +1,82 @@
+[
+  {
+    "probeId": "request-alpha",
+    "interfaceId": "calling-agent",
+    "operationId": "call-weather-tool",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "request-beta",
+    "interfaceId": "calling-agent",
+    "operationId": "call-weather-tool",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Dallas\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "calling-agent",
+    "operationId": "call-weather-tool",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "calling-agent",
+    "operationId": "call-weather-tool",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-wrong-tool",
+    "interfaceId": "calling-agent",
+    "operationId": "call-weather-tool",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "trajectory: [{\"role\":\"user\",\"content\":\"Weather in Austin\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"search_web\",\"arguments\":\"{\\\"city\\\":\\\"Austin\\\"}\"}}]}]\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+]

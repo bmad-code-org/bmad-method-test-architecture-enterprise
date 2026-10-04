@@ -1,0 +1,104 @@
+{
+  "conditionArm": "mutated:M-001",
+  "trialIndex": 1,
+  "workspace": "trial-mutated-M-001-1",
+  "elapsedMs": 164,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "trial-1-read-back",
+        "trial-1-create"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "create",
+      "request": {
+        "probeId": "trial-1-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "create"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Ship the workflow"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-1-create",
+        "interfaceId": "records",
+        "operationId": "create",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "id": "rec-7c2d60f2-cdcb-42ae-b52e-487bddb3ec3b",
+            "title": "Ship the workflow",
+            "path": "store/rec-fc2e28d5-f4c4-4f06-843c-f3a654364e10.json"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "read-back",
+      "request": {
+        "probeId": "trial-1-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "executable": "records",
+        "subcommandPath": [
+          "read"
+        ],
+        "channels": {
+          "argument": {},
+          "option": {
+            "id": "rec-7c2d60f2-cdcb-42ae-b52e-487bddb3ec3b"
+          },
+          "environment": [],
+          "stdin": {
+            "kind": "absent"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-1-read-back",
+        "interfaceId": "records",
+        "operationId": "read-back",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "found": false,
+            "id": "rec-7c2d60f2-cdcb-42ae-b52e-487bddb3ec3b"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

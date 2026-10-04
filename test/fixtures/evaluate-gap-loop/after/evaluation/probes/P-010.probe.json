@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test.",
+  "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test and reports a disabled test as also lacking an assertion.",
   "defects": [
     {
       "defectId": "D-010",
@@ -55,6 +55,48 @@
           ]
         }
       }
+    },
+    {
+      "defectId": "D-014",
+      "behaviorId": "B-002",
+      "summary": "A broadened assertion rule reports a disabled test as also lacking an assertion.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-010-disabled",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "deep-equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-p-010-disabled/stdout"
+            },
+            {
+              "literal": {
+                "file": "cases/disabled-test.test.js",
+                "status": "findings",
+                "findings": [
+                  "missing-assertion",
+                  "disabled-test"
+                ]
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "defectSignature": {
@@ -75,20 +117,75 @@
               "literal": "review"
             },
             "file": {
-              "literal": "cases/missing-assertion.test.js"
+              "matcher": "any"
             }
           },
           "arguments": null
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "any",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/status"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/missing-assertion.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
           },
           {
-            "literal": "clean"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/disabled-test.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/disabled-test.test.js",
+                      "status": "findings",
+                      "findings": [
+                        "missing-assertion",
+                        "disabled-test"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

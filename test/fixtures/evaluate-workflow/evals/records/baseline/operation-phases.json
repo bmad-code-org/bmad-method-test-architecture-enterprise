@@ -1,0 +1,6 @@
+{
+  "records": {
+    "create": "process",
+    "read-back": "outcome"
+  }
+}

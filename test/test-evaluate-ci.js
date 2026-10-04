@@ -31,6 +31,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
+const yaml = require('js-yaml');
+
 const { engineCliPath, engineVersion, loadEngine } = require('../cli/lib/evaluate/engine');
 const { MAX_OUTPUT_BYTES, confine } = require('../cli/lib/evaluate/ci');
 const planModule = require('../cli/lib/evaluate/ci-plan');
@@ -38,6 +40,7 @@ const { EXIT_CODES } = require('../cli/evaluate');
 const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
+const prTier = require('./lib/evaluate-pr-tier');
 const { suite } = require('./lib/evaluate-story-121');
 const {
   holdPrivateParents,
@@ -3389,6 +3392,354 @@ function checkScratchHolds() {
   releasePrivateParents();
 }
 
+// ---------------------------------------------------------------------------
+// TeA's own pr tier (Story 2.5, AD-11, R2-06, R2-12)
+
+/** The parsed `quality.yaml`, a fresh copy each call so a revert case edits its own. */
+const qualityWorkflow = () => yaml.load(fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'quality.yaml'), 'utf8'));
+const packageJson = () => read(path.join(ROOT, 'package.json'));
+const chainJob = (workflow) => workflow.jobs.chain;
+const uploadStep = (workflow) =>
+  chainJob(workflow).steps.find(
+    (step) =>
+      typeof step.uses === 'string' &&
+      step.uses.startsWith('actions/upload-artifact@') &&
+      String(step.with?.name).startsWith('evaluate-runs'),
+  );
+
+/** A copy of an evaluation folder in a scratch directory (its plan and baseline, none of its runs), for a revert case to edit. */
+function copyEvaluationFolder(entry, label) {
+  const copy = path.join(scratch.make(label), entry.key);
+  fs.cpSync(path.join(ROOT, entry.folder), copy, {
+    recursive: true,
+    filter: (file) => !['runs', 'node_modules'].includes(path.basename(file)),
+  });
+  return copy;
+}
+
+function expectProblem(problems, pattern, label) {
+  assert.ok(
+    problems.some((problem) => pattern.test(problem)),
+    `${label}: no problem matches ${pattern}\n${JSON.stringify(problems)}`,
+  );
+}
+
+function checkTeaPrTier() {
+  const version = engineVersion();
+  const entryOf = (key) => prTier.EVALUATIONS.find((candidate) => candidate.key === key);
+  // The committed state: every evaluation's script, the chain, the upload, the eight gates' jobs and every folder at rest.
+  assert.deepEqual(prTier.wiringProblems(packageJson()), []);
+  assert.deepEqual(prTier.workflowProblems(qualityWorkflow()), []);
+  for (const entry of prTier.EVALUATIONS)
+    assert.deepEqual(prTier.folderProblems(path.join(ROOT, entry.folder), entry, version), [], entry.key);
+  // The evaluations are the ones the story names, each listed once, and each folder is ignored by the fixture runs/ rule.
+  assert.deepEqual(prTier.EVALUATIONS.map((entry) => entry.story).sort(), [
+    '1.10',
+    '1.11',
+    '1.16',
+    '1.18',
+    '1.19',
+    '1.20',
+    '1.24',
+    '1.24',
+    '1.25',
+    '1.26',
+  ]);
+  for (const entry of prTier.EVALUATIONS) {
+    const ignored = spawnSync('git', ['check-ignore', '-q', `${entry.folder}/runs/probe/ci.json`], { cwd: ROOT });
+    assert.equal(ignored.status, 0, `${entry.key}: ${entry.folder}/runs is not ignored, so a chained run would leave untracked files`);
+  }
+  assert.equal(new Set(prTier.EVALUATIONS.map((entry) => entry.key)).size, prTier.EVALUATIONS.length);
+  assert.equal(new Set(prTier.EVALUATIONS.map((entry) => entry.folder)).size, prTier.EVALUATIONS.length);
+
+  // The upload (R2-06): removing the step, its `always()`, an evaluation's path, the shard in its name, or letting an empty shard
+  // fail the upload each fails.
+  const uploadCases = [
+    [
+      'the upload step removed',
+      (workflow) => (chainJob(workflow).steps = chainJob(workflow).steps.filter((step) => step !== uploadStep(workflow))),
+      /no actions\/upload-artifact step named evaluate-runs-/,
+    ],
+    [
+      'the upload moved to another job',
+      (workflow) => {
+        const step = uploadStep(workflow);
+        chainJob(workflow).steps = chainJob(workflow).steps.filter((candidate) => candidate !== step);
+        assert.ok(workflow.jobs.coverage, 'quality.yaml has no coverage job for the moved-upload case');
+        workflow.jobs.coverage.steps.push(step);
+      },
+      /no actions\/upload-artifact step named evaluate-runs-/,
+    ],
+    ['the upload without if: always()', (workflow) => delete uploadStep(workflow).if, /must run if: always\(\)/],
+    ['the upload on success only', (workflow) => (uploadStep(workflow).if = 'success()'), /must run if: always\(\)/],
+    ['the upload name without the shard', (workflow) => (uploadStep(workflow).with.name = 'evaluate-runs'), /omits matrix\.shard/],
+    [
+      'the upload failing on a shard with no runs',
+      (workflow) => (uploadStep(workflow).with['if-no-files-found'] = 'error'),
+      /if-no-files-found: ignore/,
+    ],
+    ...prTier.EVALUATIONS.map((entry) => [
+      `the upload path without ${entry.key}`,
+      (workflow) => {
+        const step = uploadStep(workflow);
+        step.with.path = step.with.path
+          .split('\n')
+          .filter((line) => line.trim() !== `${entry.folder}/runs`)
+          .join('\n');
+      },
+      new RegExp(`omits ${entry.folder.replaceAll('/', String.raw`\/`)}\\/runs`),
+    ]),
+    [
+      'the upload path naming another directory',
+      (workflow) => (uploadStep(workflow).with.path = uploadStep(workflow).with.path.replaceAll('/runs', '/out')),
+      /omits test\/evaluations\/bmad-testarch-evaluate\/runs/,
+    ],
+  ];
+  for (const [label, edit, pattern] of uploadCases) {
+    const workflow = qualityWorkflow();
+    edit(workflow);
+    expectProblem(prTier.workflowProblems(workflow), pattern, label);
+  }
+
+  // The eight eval-quality-gates stay in their jobs: a gate step moved to another job, dropped, or added to the wrong job fails.
+  for (const [job, scripts] of Object.entries(prTier.GATE_JOB_STEPS)) {
+    for (const script of scripts) {
+      const workflow = qualityWorkflow();
+      workflow.jobs[job].steps = workflow.jobs[job].steps.filter((step) => step.run !== `npm run ${script}`);
+      expectProblem(prTier.workflowProblems(workflow), new RegExp(`the ${job} job runs`), `${script} dropped from ${job}`);
+    }
+  }
+  const moved = qualityWorkflow();
+  const gateStep = moved.jobs['layering-boundary-lineage'].steps.find((step) => step.run === 'npm run test:direction');
+  moved.jobs['layering-boundary-lineage'].steps = moved.jobs['layering-boundary-lineage'].steps.filter((step) => step !== gateStep);
+  assert.ok(gateStep && moved.jobs.prettier, 'quality.yaml lost the layering gate step or the prettier job the move case uses');
+  moved.jobs.prettier.steps.push(gateStep);
+  expectProblem(prTier.workflowProblems(moved), /the layering-boundary-lineage job runs/, 'test:direction moved to the prettier job');
+
+  // A gate switched off without leaving its job: an `if: false` or `continue-on-error: true` on the gate's step or on its job
+  // keeps every `npm run` line and still stops the gate from failing the build (R2-12: the jobs stay unchanged).
+  const gateStepOf = (workflow, job, script) => {
+    const step = workflow.jobs[job].steps.find((candidate) => candidate.run === `npm run ${script}`);
+    assert.ok(step, `quality.yaml lost ${script} in ${job}`);
+    return step;
+  };
+  const switchedOffCases = [
+    [
+      'a gate step with if: false',
+      (workflow) => (gateStepOf(workflow, 'supply-chain', 'test:licences').if = false),
+      'supply-chain',
+      /jobs\.supply-chain\.steps\[5\]\.if/,
+    ],
+    [
+      'a gate step with continue-on-error',
+      (workflow) => (gateStepOf(workflow, 'layering-boundary-lineage', 'test:direction')['continue-on-error'] = true),
+      'layering-boundary-lineage',
+      /jobs\.layering-boundary-lineage\.steps\[3\]\.continue-on-error/,
+    ],
+    [
+      'a gate job with if: false',
+      (workflow) => (workflow.jobs['supply-chain'].if = false),
+      'supply-chain',
+      /jobs\.supply-chain\.if \(added\)/,
+    ],
+    [
+      'a gate job with continue-on-error',
+      (workflow) => (workflow.jobs['layering-boundary-lineage']['continue-on-error'] = true),
+      'layering-boundary-lineage',
+      /jobs\.layering-boundary-lineage\.continue-on-error \(added\)/,
+    ],
+    [
+      'a gate job that needs another job',
+      (workflow) => (workflow.jobs['supply-chain'].needs = 'prettier'),
+      'supply-chain',
+      /jobs\.supply-chain\.needs \(added\)/,
+    ],
+  ];
+  for (const [label, edit, job, where] of switchedOffCases) {
+    const workflow = qualityWorkflow();
+    edit(workflow);
+    expectProblem(
+      prTier.workflowProblems(workflow),
+      new RegExp(`the ${job} job differs from its committed copy at ${where.source}`),
+      label,
+    );
+  }
+
+  // The wiring: a missing script, a script that runs another key, an evaluation out of the chain, a gate out of the chain.
+  for (const entry of prTier.EVALUATIONS) {
+    const script = prTier.scriptOf(entry);
+    let value = packageJson();
+    delete value.scripts[script];
+    expectProblem(prTier.wiringProblems(value), new RegExp(`${script} is undefined`), `${script} deleted`);
+    value = packageJson();
+    value.scripts[script] = `node test/test-evaluate-pr-tier.js ${entry.key === 'mcp' ? 'api' : 'mcp'}`;
+    expectProblem(prTier.wiringProblems(value), new RegExp(`${script} is`), `${script} runs another key`);
+    value = packageJson();
+    value.scripts.test = value.scripts.test.replace(` && npm run ${script}`, '');
+    expectProblem(prTier.wiringProblems(value), new RegExp(`${script} is not in the npm test chain`), `${script} out of the chain`);
+  }
+  for (const { script } of prTier.GATES) {
+    const value = packageJson();
+    value.scripts.test = value.scripts.test.replace(` && npm run ${script}`, '');
+    expectProblem(prTier.wiringProblems(value), new RegExp(`${script} left the npm test chain`), `${script} out of the chain`);
+  }
+
+  // The folders: a plan that drops the gameability arm or the port conformance, places a check the evaluation does not call for,
+  // or carries a plan error; a baseline from another engine release, a dirty run, a git workspace, one partition, or none.
+  const folderCases = [
+    [
+      'gameability dropped',
+      'ai-feature',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'gameability'))),
+      /the pr tier lacks gameability/,
+    ],
+    [
+      'port conformance dropped',
+      'ai-feature',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'api-conformance'))),
+      /lacks api-conformance/,
+    ],
+    [
+      'oracle agreement dropped',
+      'mcp',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'oracle-agreement'))),
+      /lacks oracle-agreement/,
+    ],
+    [
+      'replay dropped',
+      'mcp',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'replay'))),
+      /lacks replay/,
+    ],
+    [
+      'a gameability check with no gameability probe',
+      'mcp',
+      (folder) => editPlan(folder, (plan) => plan.checks.splice(3, 0, entryFor(plan, 'gameability'))),
+      /places gameability, which this evaluation does not call for/,
+    ],
+    [
+      'a plan copied from another evaluation',
+      'mcp',
+      (folder) =>
+        editPlan(folder, (plan) => {
+          for (const item of plan.checks) item.command = item.command.map((part) => part.replace('evaluate-mcp', 'evaluate-api'));
+        }),
+      /runs over "test\/fixtures\/evaluate-api\/evals\/grader", not test\/fixtures\/evaluate-mcp/,
+    ],
+    ['a plan error', 'workflow', (folder) => editPlan(folder, (plan) => (plan.checks[0].placement.tier = 'merge')), /plan tier:/],
+    [
+      'another engine release',
+      'tool-use',
+      (folder) => editBaseline(folder, 'baseline.json', (value) => (value.evalQualityVersion = '0.0.1')),
+      /re-record it with compare --accept/,
+    ],
+    [
+      'a dirty baseline run',
+      'promptfoo',
+      (folder) => editBaseline(folder, 'run.json', (value) => (value.dirty = true)),
+      /records a dirty run/,
+    ],
+    [
+      'an incomplete baseline run',
+      'promptfoo',
+      (folder) => editBaseline(folder, 'run.json', (value) => (value.completed = false)),
+      /did not complete/,
+    ],
+    [
+      'a git workspace baseline',
+      'learn',
+      (folder) => editBaseline(folder, 'run.json', (value) => (value.workspace.kind = 'git')),
+      /copy workspace \(AD-8\)/,
+    ],
+    [
+      'a fixture evaluation that declares a git workspace',
+      'workflow',
+      (folder) => {
+        const file = path.join(folder, 'evaluation.json');
+        const value = read(file);
+        value.workspace.kind = 'git';
+        write(file, value);
+      },
+      /evaluation\.json declares a git workspace/,
+    ],
+    [
+      'one partition only',
+      'gap-loop',
+      (folder) => editBaseline(folder, 'baseline.json', (value) => (value.partition = 'held-out')),
+      /not both/,
+    ],
+    [
+      'another accepted run',
+      'test-review',
+      (folder) => editBaseline(folder, 'baseline.json', (value) => (value.acceptedRun = '20200101T000000000Z-00000000')),
+      /names another run/,
+    ],
+    ['no baseline', 'api', (folder) => fs.rmSync(path.join(folder, 'baseline'), { recursive: true }), /no accepted baseline/],
+    ['no plan', 'mcp', (folder) => fs.rmSync(path.join(folder, 'ci'), { recursive: true }), /evaluation-ci-plan\.json is absent/],
+    [
+      'a baseline where the suite has none yet',
+      'suite',
+      (folder) => {
+        fs.mkdirSync(path.join(folder, 'baseline'));
+        write(path.join(folder, 'baseline', 'baseline.json'), {});
+      },
+      /so the replay belongs in the pr tier/,
+    ],
+    [
+      'a suite plan that drops the seal',
+      'suite',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'seal'))),
+      /lacks seal/,
+    ],
+  ];
+  for (const [label, key, edit, pattern] of folderCases) {
+    const entry = entryOf(key);
+    const folder = copyEvaluationFolder(entry, `pr-tier-${key}`);
+    edit(folder);
+    expectProblem(prTier.folderProblems(folder, entry, version), pattern, label);
+  }
+
+  // The result: a non-zero exit, a check that did not run, a check that exited non-zero and a stale baseline each fail.
+  const entry = entryOf('mcp');
+  const folder = path.join(ROOT, entry.folder);
+  const plan = planOf(folder);
+  const good = { baseline: { stale: false, reasons: [] }, checks: plan.checks.map((item) => ({ id: item.id, exit: 0, class: 'pass' })) };
+  assert.deepEqual(prTier.resultProblems(entry, 0, good, plan), []);
+  expectProblem(prTier.resultProblems(entry, 11, good, plan), /exited 11/, 'a blocking exit');
+  expectProblem(
+    prTier.resultProblems(entry, 0, { ...good, checks: good.checks.slice(1) }, plan),
+    /the checks that ran were/,
+    'a check that did not run',
+  );
+  expectProblem(
+    prTier.resultProblems(entry, 0, { ...good, checks: good.checks.map((row) => ({ ...row, exit: row.id === 'replay' ? 13 : 0 })) }, plan),
+    /replay exited 13/,
+    'a drifting replay',
+  );
+  expectProblem(
+    prTier.resultProblems(entry, 0, { ...good, baseline: { stale: true, reasons: ['policy'] } }, plan),
+    /the baseline is stale/,
+    'a stale baseline',
+  );
+}
+
+function editPlan(folder, edit) {
+  const file = path.join(folder, PLAN);
+  const value = read(file);
+  edit(value);
+  write(file, value);
+}
+
+function editBaseline(folder, name, edit) {
+  const file = path.join(folder, 'baseline', name);
+  const value = read(file);
+  edit(value);
+  write(file, value);
+}
+
+/** A `pr` entry of `id` shaped like the plan's others, for a case that adds a check. */
+const entryFor = (plan, id) => ({ ...structuredClone(plan.checks[0]), id });
+
 async function main() {
   const cases = [
     ['the committed plans and baselines', checkFixturePlans],
@@ -3413,6 +3764,7 @@ async function main() {
     ['oracle agreement', checkOracleAgreement],
     ['the gameability arm', checkGameability],
     ['the fixture adopters', checkFixtureTiers],
+    ['the pr tier of TeA itself', checkTeaPrTier],
     ['the committed live tiers', checkCommittedLiveTiers],
     ['the plans of two repositories', checkRepositoryPlans],
     ['the capture-record guard', checkCaptureRecordGuard],

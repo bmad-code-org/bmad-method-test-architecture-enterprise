@@ -1,0 +1,103 @@
+{
+  "probeId": "P-006",
+  "mutationId": "M-002",
+  "targetArtifact": "target/summarizer.js",
+  "preDigest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121",
+  "mutatedDigest": "sha256:3eab607af5a4ecf3f44bfb2aab2b39121a2de0d8b6969e48a00bb575a4c4a0d5",
+  "restoredDigest": "sha256:0476a0c2712cb338cfcda42d13ddad9336665bb6335e3632b1e09d77c1c35121",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-reject-malformed"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "summarize",
+          "request": {
+            "probeId": "re-pass-1-summarize",
+            "interfaceId": "pantry-cli",
+            "operationId": "summarize",
+            "kind": "cli",
+            "executable": "node",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "List pantry\n"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-summarize",
+            "interfaceId": "pantry-cli",
+            "operationId": "summarize",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "text",
+              "value": "Summary for List pantry: apples, pears\n"
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "reject-malformed",
+          "request": {
+            "probeId": "re-pass-1-reject-malformed",
+            "interfaceId": "pantry-cli",
+            "operationId": "summarize",
+            "kind": "cli",
+            "executable": "node",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "prompt": 42
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-reject-malformed",
+            "interfaceId": "pantry-cli",
+            "operationId": "summarize",
+            "kind": "cli",
+            "exitCode": 2,
+            "stdout": {
+              "kind": "text",
+              "value": ""
+            },
+            "stderr": {
+              "kind": "text",
+              "value": "error: invalid list request\n"
+            },
+            "artifacts": {}
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

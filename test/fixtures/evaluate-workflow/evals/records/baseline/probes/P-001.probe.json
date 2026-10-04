@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "systemId": "records-workflow",
+  "implementationDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+  "artifactDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+  "commitDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+  "rationale": "Clean control: a record create stores reads back under the identifier create printed.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261004T191316166Z-bc619555/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:6861e4c7972a06a17958c85c260e749f0f2395db1dd3e6fe56ddb390053316e8"
+    },
+    "revisionCommitDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
+    "noKnownDefectStatement": "The record store has no known defect."
+  },
+  "expectedClean": true,
+  "defects": []
+}

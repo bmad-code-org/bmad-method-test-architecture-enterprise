@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
   "artifactDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
   "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-  "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test.",
+  "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test and reports a disabled test as also lacking an assertion.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "Adopter-owned B-001 rule change",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "stdout reports the assertion-free test clean because its test call is treated as an assertion",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/baseline-pass.json",
+      "path": "runs/20261004T200808474Z-02f0655c/qualification/P-010/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:f87fad5bf4802620b2d33b2b5294367ad9b64cc953fe0f67903d7177628d5a47"
+      "digest": "sha256:02c33262f1dc82c350d918ab927e5b3df8b0973ab84debbf4da52c6192f8534f"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/mutated-fail.json",
+      "path": "runs/20261004T200808474Z-02f0655c/qualification/P-010/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:83530f6e813d8f9b176a260a85b3ffc0cbf653814654b3e75fcb6befb9d26a27"
+      "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261002T210737725Z-3c5e3598/qualification/P-010/mutated-fail.json",
+          "path": "runs/20261004T200808474Z-02f0655c/qualification/P-010/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:83530f6e813d8f9b176a260a85b3ffc0cbf653814654b3e75fcb6befb9d26a27"
+          "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
         }
       ],
       "source": "controlled-mutation",
@@ -95,6 +95,56 @@
           ]
         }
       }
+    },
+    {
+      "defectId": "D-014",
+      "behaviorId": "B-002",
+      "summary": "A broadened assertion rule reports a disabled test as also lacking an assertion.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261004T200808474Z-02f0655c/qualification/P-010/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:6831d0306f94c43d988083ae8f55d91c95f10619d4d516127db27f4090f04188"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-010-disabled",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "deep-equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-p-010-disabled/stdout"
+            },
+            {
+              "literal": {
+                "file": "cases/disabled-test.test.js",
+                "status": "findings",
+                "findings": [
+                  "missing-assertion",
+                  "disabled-test"
+                ]
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "defectSignature": {
@@ -115,20 +165,75 @@
               "literal": "review"
             },
             "file": {
-              "literal": "cases/missing-assertion.test.js"
+              "matcher": "any"
             }
           },
           "arguments": null
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "any",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/status"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/missing-assertion.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
           },
           {
-            "literal": "clean"
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/call-inputs/stdin/file"
+                  },
+                  {
+                    "literal": "cases/disabled-test.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "deep-equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/observed/stdout"
+                  },
+                  {
+                    "literal": {
+                      "file": "cases/disabled-test.test.js",
+                      "status": "findings",
+                      "findings": [
+                        "missing-assertion",
+                        "disabled-test"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

@@ -1,0 +1,130 @@
+[
+  {
+    "probeId": "pantry-label",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List pantry: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "kitchen-label",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List kitchen: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List pantry: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List pantry: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-missing-pears",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List pantry: apples\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-held-out-missing-pears",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for List pantry: apples\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-accepted-malformed",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for {\"prompt\":42}: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-held-out-accepted-malformed",
+    "interfaceId": "pantry-cli",
+    "operationId": "summarize",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "text",
+      "value": "Summary for {\"prompt\":42}: apples, pears\n"
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+]

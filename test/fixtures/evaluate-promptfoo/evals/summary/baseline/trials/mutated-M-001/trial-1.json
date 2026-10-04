@@ -1,0 +1,80 @@
+{
+  "conditionArm": "mutated:M-001",
+  "trialIndex": 1,
+  "workspace": "trial-mutated-M-001-1",
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "trial-1-summarize",
+        "interfaceId": "summarizer",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "summarizer",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-1-summarize",
+        "interfaceId": "summarizer",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ],
+  "elapsedMs": 1443,
+  "evaluator": {
+    "kind": "command",
+    "answer": {
+      "rows": [
+        {
+          "key": "required-apples",
+          "outcome": "pass",
+          "observationIds": [
+            "trial-1-summarize"
+          ],
+          "comment": "Assertion passed"
+        },
+        {
+          "key": "required-pears",
+          "outcome": "fail",
+          "observationIds": [
+            "trial-1-summarize"
+          ],
+          "quote": "Summary for List pantry: apples\n",
+          "quoteChannel": "stdout",
+          "confidence": 1,
+          "comment": "Expected output to contain \"pears\""
+        },
+        {
+          "key": "forbidden-shellfish",
+          "outcome": "pass",
+          "observationIds": [
+            "trial-1-summarize"
+          ],
+          "comment": "Assertion passed"
+        }
+      ]
+    },
+    "streams": "evaluator/mutated-M-001/trial-1",
+    "calls": null
+  }
+}

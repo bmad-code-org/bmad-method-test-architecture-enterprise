@@ -1,0 +1,96 @@
+{
+  "probeId": "P-003",
+  "mutationId": "M-001",
+  "phase": "mutated-fail",
+  "workspace": "qualify-P-003",
+  "targetArtifact": "target/rules/items.json",
+  "targetArtifactDigest": "sha256:da99f2fb8672d6db86a2492eef60dd8a4ff6ec57c598476fd7311d79cbfb65cd",
+  "verdict": "violated",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-summarize"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "summarize",
+      "request": {
+        "probeId": "mutated-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "List pantry\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-summarize",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "Summary for List pantry: apples\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "request": {
+        "probeId": "mutated-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "executable": "node",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "mutated-reject-malformed",
+        "interfaceId": "pantry-cli",
+        "operationId": "summarize",
+        "kind": "cli",
+        "exitCode": 2,
+        "stdout": {
+          "kind": "text",
+          "value": ""
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "error: invalid list request\n"
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}
