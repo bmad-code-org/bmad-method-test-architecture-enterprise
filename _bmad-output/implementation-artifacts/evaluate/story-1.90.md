@@ -3,7 +3,7 @@ title: "Story 1.90: Verify the baseline manifest's file digests"
 type: 'feature'
 created: '2026-10-04'
 baseline_commit: 'dc9df4d05b94c092ec9a300d96f2138a4f6c199c'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -30,7 +30,7 @@ A baseline file edited by hand passed `check` and `compare` while the manifest c
   A file whose bytes digest to something other than the map's entry, a map entry whose file is missing or is not a regular file, a file other than `baseline.json` with no entry in the map, a map key that is not a path inside `baseline/`, and a manifest that cannot be read as a JSON object holding a `files` map each produce a finding.
   A `baseline/` with no `baseline.json` is authored qualification evidence only when every file in it is under `probes/` or `qualification/` or is a placeholder `README.md` (the `valid` fixture and the gap-loop `before` placeholder hold exactly that), and then has nothing to verify.
   Any other file without a manifest (`run.json`, `scores/`, `trials/`, `trial-sets.json`) is reported as the missing manifest, so deleting `baseline.json` and `run.json` from an accepted snapshot cannot switch the rule off.
-  The existence probe for a listed path is total: a name past the file system's limit (`ENAMETOOLONG`) or a path through a link loop (`ELOOP`) is a `baseline-digest` finding on that key, `cannot be examined: <code>`, and never a throw.
+  The existence probe for a listed path is total: a name past the file system's limit (`ENAMETOOLONG`) or a path through a link loop (`ELOOP`) is a `baseline-digest` finding on that key, `cannot be examined: <code>`.
   The module requires only `score-inputs.js`, because `check.js` is reached from `preflight.js`, which `score.js` and `compare.js` require, so a module that imported `compare.js` would be a cycle.
 - `cli/lib/evaluate/check.js` adds `checkBaselineDigests`, so `check` reports the `baseline-digest` rule and exits 10.
 - `cli/lib/evaluate/compare.js` runs the helper right after the tree check and before `run.json`, `trial-sets.json` or any evidence artifact of the baseline is read.
@@ -38,7 +38,7 @@ A baseline file edited by hand passed `check` and `compare` while the manifest c
   `compare --accept` is unchanged: it replaces `baseline/` wholesale from a run, so an edited baseline is no obstacle to a reviewed re-accept.
 - `docs/reference/tea-evaluate-cli.md` lists `baseline-digest` in the `check` rule list (the rule count reads thirty-two) and describes the refusal in the `compare` section.
 - `_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md` AD-12 records the verification as an amendment.
-- `test/test-evaluate-check.js` accepts a baseline through the real CLI and runs `check` over it (exit 0), then over twelve planted defects (one byte appended to a listed file, a listed file deleted, an unlisted file, a manifest entry that is a directory, a listed file replaced by a link to a file with the same bytes, a manifest key that climbs out of `baseline/`, a manifest with no `files` map, a snapshot whose manifest was deleted, a directory of listed files replaced by a file, a snapshot whose manifest and `run.json` were deleted and whose evidence was edited by one byte, a manifest key with a 300-character name, a manifest key through a link loop) and over three of them at once.
+- `test/test-evaluate-check.js` accepts a baseline through the real CLI and runs `check` over it (exit 0), then over twelve planted defects (one byte appended to a listed file, a listed file deleted, an unlisted file, a manifest entry that is a directory, a listed file replaced by a link to a file with the same bytes, a manifest key that climbs out of `baseline/`, a manifest with no `files` map, a snapshot whose manifest was deleted, a directory of listed files replaced by a file, a snapshot whose manifest and `run.json` were deleted and whose evidence was edited by one byte, a manifest key with a 305-character name, a manifest key through a link loop) and over three of them at once.
   Each defect exits 10 with a `baseline-digest` line that names the file and says why.
   Each case also asserts that `check` did not throw.
   A static case fails when the reference's `check` rule list has no `baseline-digest` row or its `compare` section does not name the rule.
@@ -76,7 +76,7 @@ The scratch run of `test:evaluate-check` kept only the two Story 1.90 functions.
 | A snapshot with no manifest ignored                                                              | `check` fails `a snapshot whose manifest was deleted`, `compare` fails `a baseline with no manifest`.                                                                                            |
 | A manifest key that climbs out of `baseline/` accepted                                           | `check` fails `a manifest entry that climbs out of baseline/`.                                                                                                                                   |
 | The exemption keyed on `run.json` again (a manifest-less `baseline/` without `run.json` skipped) | `check` fails `a snapshot whose manifest and run.json were deleted and whose evidence was edited by one byte` (2 of 58 checks); `compare` fails `a baseline with neither manifest nor run.json`. |
-| The existence probe rethrows instead of reporting `cannot be examined`                           | `check` fails 7 of 58 checks, the first `a manifest entry with a name past the file system limit: check exited 1; expected 10`; `compare` exits 12 on the same case.                             |
+| The existence probe rethrows its error                                                           | `check` fails 7 of 58 checks, the first `a manifest entry with a name past the file system limit: check exited 1; expected 10`; `compare` exits 12 on the same case.                             |
 | `baseline-digest` removed from the reference's `check` rule list, or from its `compare` section  | `check` fails ``the reference's check rule list has no `baseline-digest` row`` and ``the reference's compare section does not name the `baseline-digest` rule``, one each.                       |
 
 ## Gates
@@ -113,7 +113,7 @@ Each is fixed.
 
 - **The existence probe was not total.** A manifest key with a segment past `NAME_MAX` threw `ENAMETOOLONG` (`check` exited 1 with a stack trace, `compare` exited 12), and a key through a link loop threw `ELOOP`, which also hid the `baseline-file` finding for the link.
   The probe now turns any error other than absence into a `baseline-digest` finding on that key, `cannot be examined: <code>`.
-  `test:evaluate-check` plants a 300-character key and a link-loop key (the loop case also expects the `baseline-file` finding), every case asserts that `check` did not throw, and `test:evaluate-compare` plants the long key (exit 10, no verdict).
+  `test:evaluate-check` plants a 305-character key and a link-loop key (the loop case also expects the `baseline-file` finding), every case asserts that `check` did not throw, and `test:evaluate-compare` plants the long key (exit 10, no verdict).
 - **The authored-evidence exemption was an escape hatch.** A `baseline/` with neither `baseline.json` nor `run.json` was skipped, so deleting both from an accepted snapshot switched the rule off for `scores/`, `trials/` and `trial-sets.json`, and one edited evidence byte passed `check`.
   A manifest-less `baseline/` now counts as authored qualification evidence only when every file is under `probes/` or `qualification/` or is a placeholder `README.md`; anything else reports the missing manifest.
   The helper header, the `check.js` header, the reference row, the AD-12 amendment, the CHANGELOG entry and this record state that rule.

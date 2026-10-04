@@ -166,7 +166,7 @@ function baselineDigestFindings({ folder, digestBytes }) {
       try {
         state = lstatOrNull(path.join(baselinePath, ...key.split('/'))) === null ? 'missing' : 'not-regular';
       } catch (error) {
-        // A segment past the file system's name limit, a link loop and any other failure of the probe is a finding, never a throw.
+        // A segment past the file system's name limit, a link loop and any other failure of the probe is a finding on that key.
         findings.push(finding(key, `cannot be examined: ${error.code ?? problemOf(error)}`));
         continue;
       }
