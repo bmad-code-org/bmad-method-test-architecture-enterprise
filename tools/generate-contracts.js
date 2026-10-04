@@ -1596,11 +1596,17 @@ function summaryKeysFromStep05() {
 /**
  * The same read over the step's text, so a test can hand it an edited copy without touching the file.
  *
- * A key of the literal is "always" only when the workflow always gives it a value. `JSON.stringify` drops a key whose
- * value is `undefined`, so a line that reads a field of the coverage matrix, or an optional chain, with no `||` or `??`
- * fallback can leave the key out of the written summary, and a fallback to the literal `undefined` is the same defect.
- * The read refuses such a line, so removing a fallback fails `--check` instead of narrowing the contract's keys silently.
- * A value that opens a nested object on its own line is read by its key alone.
+ * Every line of the literal at exactly two spaces of indent is read, and one this read cannot place is refused: a comment, a
+ * blank line and a closer are skipped, and anything else has to be `key: value` with a snake_case key, so a camelCase key, a key
+ * with a digit, a shorthand key or a spread cannot add a summary key the contract never learns of.
+ *
+ * A key of the literal is "always" only when the workflow always gives it a value. `JSON.stringify` drops a key whose value is
+ * `undefined`, so a value that reads the coverage matrix (by dot or by bracket) or an optional chain with no `||`, `??` or
+ * ternary fallback can leave the key out of the written summary, and a fallback to the literal `undefined` is the same defect,
+ * as is an empty value (wrapped onto the next line, where this read cannot see it). A value that is a bare identifier is followed
+ * to its single-line `const` or `let` declaration earlier in the step and held to the same rule. A declaration that spans lines,
+ * or a value reached through a call, is out of this read's scope: the real runs of the trace workflow are the guard there.
+ * A value that opens a nested object or array on its own line is read by its key alone.
  *
  * @param {string} text The text of step-05.
  */
@@ -1609,21 +1615,37 @@ function summaryKeysFromText(text) {
   assert(start !== -1, 'step-05 no longer declares `const e2eTraceSummary = {`, so the summary key set cannot be read');
   const end = text.indexOf('\n};', start);
   assert(end !== -1, 'step-05 declares `const e2eTraceSummary = {` and never closes it');
+  const before = text.slice(0, start);
+  const hasFallback = (value) => /\|\||\?\?/.test(value) || (/\s\?\s/.test(value) && /\s:\s/.test(value));
+  const mayBeUndefined = (value) =>
+    /(\|\||\?\?)\s*undefined\b/.test(value) || (/coverageMatrix(\.|\[)|\?\./.test(value) && !hasFallback(value));
   const always = [];
-  for (const line of text.slice(start, end).split('\n')) {
-    const key = /^ {2}([a-z_]+):/.exec(line);
-    if (!key) continue;
-    always.push(key[1]);
-    const value = line
-      .slice(key[0].length)
-      .replace(/\/\/.*$/, '')
-      .trim();
-    if (value.endsWith('{')) continue;
-    const mayBeUndefined = /(\|\||\?\?)\s*undefined\b/.test(value) || (/coverageMatrix\.|\?\./.test(value) && !/\|\||\?\?/.test(value));
+  for (const line of text.slice(start, end).split('\n').slice(1)) {
+    if (!/^ {2}\S/.test(line) || /^ {2}(\/\/|[}\]],?\s*(\/\/.*)?$)/.test(line)) continue;
+    const entry = /^ {2}([A-Za-z_$][\w$]*):(.*)$/.exec(line);
+    assert(entry !== null, `step-05's summary literal has a line this read cannot place as \`key: value\` (${line.trim()})`);
+    const key = entry[1];
     assert(
-      !mayBeUndefined,
-      `step-05's summary literal gives "${key[1]}" a value that can be undefined (${value}), and JSON.stringify drops such a key, so it is not always written; give it a fallback`,
+      /^[a-z_]+$/.test(key),
+      `step-05's summary literal has the key "${key}", which is not lowercase letters and underscores, so the key read would not see it`,
     );
+    always.push(key);
+    const value = entry[2]
+      .replace(/\/\/.*$/, '')
+      .trim()
+      .replace(/,$/, '')
+      .trim();
+    assert(value !== '', `step-05's summary literal gives "${key}" an empty value on its line, so this read cannot tell what it holds`);
+    if (/[{[]$/.test(value)) continue;
+    const declared = /^[A-Za-z_$][\w$]*$/.test(value)
+      ? new RegExp(`^\\s*(?:const|let) ${value.replaceAll('$', String.raw`\$`)} = (.*);\\s*$`, 'm').exec(before)
+      : null;
+    for (const candidate of declared === null ? [value] : [value, declared[1]]) {
+      assert(
+        !mayBeUndefined(candidate),
+        `step-05's summary literal gives "${key}" a value that can be undefined (${candidate}), and JSON.stringify drops such a key, so it is not always written; give it a fallback`,
+      );
+    }
   }
   const conditional = [...new Set([...text.matchAll(/^\s*e2eTraceSummary\.([a-z_]+) = /gm)].map((match) => match[1]))];
   assert(always.length > 0, "no top-level key was read off step-05's summary literal");

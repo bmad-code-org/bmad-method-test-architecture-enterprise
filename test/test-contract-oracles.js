@@ -815,6 +815,12 @@ async function checkTraceOracles(evaluator) {
       );
     }
     planted.push(['a summary carrying an undeclared key that is null', { ...base, extra_key: null }, false]);
+    // The conditional keys are typed too, and a wrong type is refused whether or not the set's run carries the key.
+    for (const [key, type] of Object.entries(wholeSummaryTypes)) {
+      if (type !== null && !summaryKeysFromStep05().always.includes(key)) {
+        planted.push([`a summary whose conditional ${key} is not ${type}`, { ...base, [key]: type === 'string' ? 7 : [] }, false]);
+      }
+    }
     // `gate_status` and `gate_criteria` are written only when the gate was eligible, so a summary without them is whole.
     for (const dropped of [['gate_status'], ['gate_criteria'], ['gate_status', 'gate_criteria']]) {
       const rest = Object.fromEntries(Object.entries(base).filter(([key]) => !dropped.includes(key)));
@@ -2455,6 +2461,25 @@ const STORED_CORRECT_REPLIES = ['correct-route', 'clarification-correct', 'decli
  * new count and lists the key under `Narrowed`, in the same diff as the change that narrowed it. A type removed or changed at the
  * source differs from the frozen one the same way, and fails until this list and the README change together.
  */
+/** The conditional keys each contract permits, with the type it states for each, frozen beside the required keys. */
+const FROZEN_CONDITIONAL_TYPES = {
+  'tea-routing-intents.contract.json': { menuCode: null, workflow: null, scope: null, question: null, missing: null },
+  'tea-routing-controls.contract.json': { menuCode: null, workflow: null, scope: null, question: null, missing: null },
+  'test-review.contract.json': {
+    conventionBaseline: 'object',
+    executionMode: 'string',
+    reportedQualityScore: 'number',
+    reportedRecommendation: 'string',
+    unscorableTestArtifacts: 'array',
+    gateFailures: 'array',
+    waived: 'boolean',
+    waiveReason: 'string',
+    waiveUntil: 'string',
+    allFindingsRecommendation: 'string',
+  },
+  'trace.contract.json': { waivers: 'object', gate_status: 'string', gate_criteria: 'object' },
+};
+
 const FROZEN_EMITTED_KEYS = {
   'tea-routing-intents.contract.json': {
     action: 'string',
@@ -2555,16 +2580,32 @@ async function checkWholeBodyDeclarations() {
     const added = required.filter((key) => !frozenKeys.includes(key));
     const declaredTypes = readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0]
       .responseDescriptor.types;
-    const retyped = frozenKeys.filter((key) => required.includes(key) && (declaredTypes[key] ?? null) !== frozen[key]);
+    // The permitted keys beyond the required ones are the conditional ones, and their types are frozen beside the required keys'.
+    const allFrozen = { ...frozen, ...FROZEN_CONDITIONAL_TYPES[relativePath] };
+    const descriptor = readJson(path.join(CONTRACT_ROOT, relativePath), relativePath).permittedInterfaces[0].operations[0]
+      .responseDescriptor;
+    assert(
+      sameKeys(descriptor.permittedKeys, Object.keys(allFrozen)),
+      `${relativePath}: the permitted keys are the frozen required and conditional keys`,
+      `declared ${descriptor.permittedKeys.join(', ')}`,
+    );
+    const retyped = Object.keys(allFrozen).filter((key) => (declaredTypes[key] ?? null) !== allFrozen[key]);
     assert(
       retyped.length === 0,
-      `${relativePath}: every required key has the type frozen in this test`,
-      retyped.map((key) => `${key}: frozen ${frozen[key]}, declared ${declaredTypes[key] ?? null}`).join('; '),
+      `${relativePath}: every permitted key has the type frozen in this test`,
+      retyped.map((key) => `${key}: frozen ${allFrozen[key]}, declared ${declaredTypes[key] ?? null}`).join('; '),
     );
     const row = section.split('\n').find((line) => line.startsWith(`| \`${relativePath}\``));
     assert(row !== undefined, `test/contracts/README.md records the whole-body required-key decision for ${relativePath}`);
     if (row === undefined) continue;
     const cells = row.split('|').map((cell) => cell.trim());
+    // A `|` inside a code span is a cell delimiter to Prettier and to GFM, so a row has exactly as many cells as the table's header.
+    const header = section.split('\n').find((line) => line.startsWith('| Contract'));
+    assert(
+      header !== undefined && cells.length === header.split('|').length,
+      `${relativePath}: the README row has as many cells as the table header`,
+      `row ${cells.length}, header ${header?.split('|').length}`,
+    );
     assert(
       cells[3] === String(required.length),
       `${relativePath}: the README row states ${required.length} required keys`,
@@ -2628,27 +2669,6 @@ async function checkWholeBodyDeclarations() {
   // fallback, and a fallback to `undefined`, which is shown on the step's own text with each fallback removed in turn.
   const step05Path = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
   const step05 = fs.readFileSync(step05Path, 'utf8');
-  const withoutFallback = [
-    [
-      'recommendations',
-      step05.replaceAll('recommendations: coverageMatrix.recommendations || [],', 'recommendations: coverageMatrix.recommendations,'),
-    ],
-    [
-      'rejected_evidence',
-      step05.replaceAll(
-        'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence || [],',
-        'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence,',
-      ),
-    ],
-    [
-      'target',
-      step05.replaceAll(
-        "target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },",
-        'target: coverageMatrix.trace_target,',
-      ),
-    ],
-    ['source_sha', step05.replaceAll("source_sha: sourceSha || '',", 'source_sha: sourceSha || undefined,')],
-  ];
   assert(
     (() => {
       try {
@@ -2659,8 +2679,89 @@ async function checkWholeBodyDeclarations() {
     })(),
     "step-05's summary literal gives each of its 22 keys a value that cannot be undefined",
   );
-  for (const [key, text] of withoutFallback) {
-    assert(text !== step05, `the copy of step-05 without the fallback of ${key} differs from the step`);
+  // Each case edits a copy of the step's text, and the read has to refuse it with a message that names the key. The first
+  // four remove a fallback, the next three read through an optional chain, a nullish fallback to `undefined` and a bracket,
+  // the empty value is wrapped onto the next line, and `const` declarations ahead of the literal are followed from a bare
+  // identifier. The last three add a 23rd key the lowercase read would not see: camelCase, a digit and a shorthand.
+  const recommendations = 'recommendations: coverageMatrix.recommendations || [],';
+  const cases = [
+    [
+      'recommendations',
+      'recommendations loses its fallback',
+      (text) => text.replaceAll(recommendations, 'recommendations: coverageMatrix.recommendations,'),
+    ],
+    [
+      'rejected_evidence',
+      'rejected_evidence loses its fallback',
+      (text) =>
+        text.replaceAll(
+          'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence || [],',
+          'rejected_evidence: coverageMatrix.gap_analysis?.rejected_evidence,',
+        ),
+    ],
+    [
+      'target',
+      'target loses its fallback',
+      (text) =>
+        text.replaceAll(
+          "target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },",
+          'target: coverageMatrix.trace_target,',
+        ),
+    ],
+    [
+      'source_sha',
+      'source_sha falls back to undefined',
+      (text) => text.replaceAll("source_sha: sourceSha || '',", 'source_sha: sourceSha || undefined,'),
+    ],
+    [
+      'source_sha',
+      'source_sha reads an optional chain',
+      (text) => text.replaceAll("source_sha: sourceSha || '',", 'source_sha: liveEvidence?.current_source_sha,'),
+    ],
+    ['repo', 'repo reads an optional chain', (text) => text.replaceAll('  repo: repoName,', '  repo: runtime.project?.name,')],
+    [
+      'recommendations',
+      'recommendations falls back to undefined with ??',
+      (text) => text.replaceAll(recommendations, 'recommendations: coverageMatrix.recommendations ?? undefined,'),
+    ],
+    [
+      'recommendations',
+      'recommendations reads the matrix by bracket',
+      (text) => text.replaceAll(recommendations, "recommendations: coverageMatrix['recommendations'],"),
+    ],
+    ['repo', 'repo has its value wrapped onto the next line', (text) => text.replaceAll('  repo: repoName,', '  repo:\n    repoName,')],
+    [
+      'recommendations',
+      'recommendations is a variable declared without a fallback',
+      (text) =>
+        text
+          .replaceAll(recommendations, 'recommendations: recs,')
+          .replace('const e2eTraceSummary = {', 'const recs = coverageMatrix.recommendations;\nconst e2eTraceSummary = {'),
+    ],
+    [
+      'blockers',
+      'blockers is a variable that loses its fallback',
+      (text) =>
+        text.replace(
+          'const blockers = coverageMatrix.blockers || coverageMatrix.test_inventory?.blockers || fallbackInventory.blockers;',
+          'const blockers = coverageMatrix.blockers;',
+        ),
+    ],
+    [
+      'gateDecision',
+      'a camelCase key is added',
+      (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  gateDecision: gateDecision,'),
+    ],
+    [
+      'p0_gate_ok',
+      'a key with a digit is added',
+      (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  p0_gate_ok: gateEligible,'),
+    ],
+    ['gateEligible', 'a shorthand key is added', (text) => text.replace('  repo: repoName,', '  repo: repoName,\n  gateEligible,')],
+  ];
+  for (const [key, name, edit] of cases) {
+    const text = edit(step05);
+    assert(text !== step05, `the copy of step-05 where ${name} differs from the step`);
     let refused = null;
     try {
       summaryKeysFromText(text);
@@ -2668,8 +2769,8 @@ async function checkWholeBodyDeclarations() {
       refused = error;
     }
     assert(
-      refused !== null && refused.message.includes(`"${key}"`) && refused.message.includes('can be undefined'),
-      `the key read refuses step-05 when ${key} loses its fallback`,
+      refused !== null && refused.message.includes(key),
+      `the key read refuses step-05 when ${name}`,
       refused === null ? 'it was accepted' : refused.message,
     );
   }
