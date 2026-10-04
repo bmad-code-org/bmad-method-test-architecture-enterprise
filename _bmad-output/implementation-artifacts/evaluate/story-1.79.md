@@ -2,7 +2,7 @@
 title: 'Hold the gameability scoring branch of a sealed-brief baseline to starting no agent version probe'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '14218e7be313ba32e9c47c03c0048594a08ba913'
