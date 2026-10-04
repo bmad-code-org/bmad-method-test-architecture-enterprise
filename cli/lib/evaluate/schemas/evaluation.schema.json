@@ -176,7 +176,7 @@
       "items": { "type": "string", "pattern": "^P-[0-9]{3,}$" }
     },
     "partitionPlan": {
-      "description": "Isolates interaction plan steps by evaluation partition (Story 1.51, AD-9, AD-22). Absent, every partition runs the whole contract.json plan. Declared, the development partition runs contract.json, whose plan holds the shared steps and the development-only ones, and the held-out partition runs the shared steps and the steps and oracles of a sealed held-out plan, so no artifact of one partition carries a request, an observation or an oracle meant only for the other. Requires the deterministic evaluator.",
+      "description": "Isolates interaction plan steps by evaluation partition (Story 1.51, AD-9, AD-22). Absent, every partition runs the whole contract.json plan. Declared, the development partition runs contract.json, whose plan holds the shared steps and the development-only ones, and the held-out partition runs the shared steps and the steps and oracles of a sealed held-out plan, so no artifact of one partition carries a request, an observation or an oracle meant only for the other. A command or sealed-brief-agent evaluator reads the mapping of its partition (evaluator/mapping.json's rows that bind what the partition declares, and for the held-out and both views the held-out plan's mappings), and a records evaluator's records name only what the partition declares.",
       "type": "object",
       "additionalProperties": false,
       "required": ["developmentOnlySteps", "heldOutPlan"],

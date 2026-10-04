@@ -27,6 +27,13 @@
  * The records directory must resolve inside the evaluation
  * folder, through no link.
  *
+ * Under a `partitionPlan` (Story 1.107) a record names only what the run's view declares. A record carries no plan step; it carries
+ * the oracles it disposes (`oracleDispositions`, a finding's `oracleId`), the behavior a finding names and the rubric criteria it
+ * scores (`judgeResults`), and eval-quality's `score` ignores an oracle its contract lacks and takes no position on a
+ * criterion its rubric lacks, so a record that carries one the view dropped would reach the run directory unchallenged. It is
+ * refused, exit 10 with nothing copied, naming where in the record the content sits and never what it names: the other
+ * partition's ID is that partition's own text.
+ *
  * When the contract declares a rubric, the harness also writes
  * `<records>/calibration-judgments.json`, its scorer's answers over the
  * labelled items. Once the configuration validates and before any record is
@@ -48,6 +55,47 @@ const { calibrateImported } = require('./records-calibration');
 const CONFIGURATION_NAME = 'evaluator-configuration.json';
 const MANIFEST_NAME = 'isolation-manifest.json';
 const RECORD_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+
+/**
+ * What a view declares, for `foreignContent`: the oracle IDs, behavior IDs and `rubricId/criterionId` pairs of a contract.
+ *
+ * @param {object} contract
+ * @returns {{ oracles: Set<string>, behaviors: Set<string>, criteria: Set<string> }}
+ */
+function declaredContent(contract) {
+  const list = (value) => (Array.isArray(value) ? value : []);
+  return {
+    oracles: new Set(list(contract.oracles).map((oracle) => oracle?.id)),
+    behaviors: new Set(list(contract.behaviors).map((behavior) => behavior?.id)),
+    criteria: new Set(
+      list(contract.rubrics).flatMap((rubric) => list(rubric?.criteria).map((criterion) => `${rubric?.id}/${criterion?.id}`)),
+    ),
+  };
+}
+
+/**
+ * Where a sealed run record carries an oracle, a behavior or a rubric criterion that `declared` lacks, as the record's own paths
+ * (`oracleDispositions[1]`, `findings[0].oracleId`, `findings[0].behaviorId`, `judgeResults[2]`), in the order the record lists them.
+ * A path names the place and never the ID, which would hand the other partition's text to this run's output.
+ *
+ * @param {object} record a record that meets eval-quality's sealed-run-record schema
+ * @param {{ oracles: Set<string>, behaviors: Set<string>, criteria: Set<string> }} declared `declaredContent(contract)`
+ * @returns {string[]}
+ */
+function foreignContent(record, declared) {
+  const found = [];
+  for (const [index, disposition] of record.oracleDispositions.entries()) {
+    if (!declared.oracles.has(disposition.oracleId)) found.push(`oracleDispositions[${index}]`);
+  }
+  for (const [index, finding] of record.findings.entries()) {
+    if (finding.oracleId !== null && !declared.oracles.has(finding.oracleId)) found.push(`findings[${index}].oracleId`);
+    if (finding.behaviorId !== null && !declared.behaviors.has(finding.behaviorId)) found.push(`findings[${index}].behaviorId`);
+  }
+  for (const [index, result] of record.judgeResults.entries()) {
+    if (!declared.criteria.has(`${result.rubricId}/${result.criterionId}`)) found.push(`judgeResults[${index}]`);
+  }
+  return found;
+}
 
 /** The bytes of a regular file the records directory holds, never through a link. */
 function regularBytes(file, spelled) {
@@ -74,10 +122,11 @@ function regularBytes(file, spelled) {
  * @param {object} options.engine
  * @param {object} options.writer the run directory's writer
  * @param {{ labelled: object, evaluation: object, contract: object, engine: object, stop: Function }|null} [options.calibration] the labelled items and what the gate needs, when the contract declares a rubric
+ * @param {{ contract: object, partition: string }|null} [options.view] the contract the run compiled and its partition, under a `partitionPlan`: a record that names an oracle, behavior or criterion the contract lacks is refused (Story 1.107); null for a folder with no plan
  * @returns {Promise<{ configuration: object, configurationDigest: string, sets: Array<{ probeId: string, runId: string, conditionArm: string, records: string[], manifest: string|null }> }>}
  * @throws {EvaluatorLayerError}
  */
-async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, engine, writer, calibration = null }) {
+async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, engine, writer, calibration = null, view = null }) {
   const root = path.join(folder, ...evaluator.records.split('/'));
   let real;
   try {
@@ -129,6 +178,7 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
   // The imported rubric scores count only once their calibration holds, so no record is read before it does.
   if (calibration !== null) await calibrateImported({ ...calibration, records: evaluator.records, root, configuration, writer });
 
+  const declared = view === null ? null : declaredContent(view.contract);
   const sets = [];
   const copies = [[CONFIGURATION_NAME, configurationBytes]];
   for (const { probeId, conditionArm } of probes) {
@@ -153,6 +203,12 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
       const bytes = regularBytes(path.join(directory, name), spell(probeId, name));
       const record = parsed(bytes, spell(probeId, name));
       await held('sealed-run-record', record, spell(probeId, name));
+      const foreign = declared === null ? [] : foreignContent(record, declared);
+      if (foreign.length > 0) {
+        throw new EvaluatorLayerError(
+          `${spell(probeId, name)} carries ${foreign.join(', ')}, which name${foreign.length === 1 ? 's' : ''} an oracle, behavior or rubric criterion the ${view.partition} view does not declare, so the record was not produced for this partition's contract`,
+        );
+      }
       sealedAgainst(record, spell(probeId, name));
       if (record.sealedBriefDigest !== sealedBriefDigest) {
         throw new EvaluatorLayerError(
@@ -184,4 +240,4 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
   return { configuration, configurationDigest, sets };
 }
 
-module.exports = { importRecords };
+module.exports = { declaredContent, foreignContent, importRecords };

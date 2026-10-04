@@ -34,6 +34,7 @@ const path = require('node:path');
 const { resolveModel } = require('../agent-adapters');
 const { FRAMEWORKS_PATH, declarationProblems, declaredFrameworks } = require('./frameworks');
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems, rowsValidator } = require('./judgment-rows');
+const { PartitionPlanError, mappingView } = require('./partition');
 const { evaluatorTemplateDigest } = require('./sealed-brief-agent');
 const { runGit } = require('./workspace');
 
@@ -262,23 +263,23 @@ function readFrameworks(held, tracked) {
  * @param {object} options
  * @param {string} options.folder
  * @param {object} options.evaluation
- * @param {object} options.contract
+ * @param {object} options.contract the contract the run compiles: the partition's view under a `partitionPlan`
  * @param {object} options.engine the loaded engine (`digestBytes`, `digestArtifact`)
+ * @param {{ source: object, heldOutPlan: object|null, partition: string }} [options.view] the contract view `contract` came
+ *   from (`contractView`, Story 1.51). Under a `partitionPlan` the mapping is that partition's (`mappingView`, Story 1.107): the
+ *   mapping the layer holds, validates rows with and digests is the view's, so a development run's layer never names a
+ *   held-out oracle and a held-out run's never names a development-only one
  * @returns {{ evaluator: object, files: Array<{ path: string, bytes: Buffer }>|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null, frameworks: Array<{ package: string, version: string, probe: object }>|null }}
  *   `files` are the layer's files as read, null for a kind with no layer to read; `frameworks` the command
  *   evaluator's declared dependencies (`evaluator/frameworks.json`, sorted by package), null for any other kind
  * @throws {EvaluatorLayerError}
  */
-function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
+function readEvaluatorLayer({ folder, evaluation, contract, engine, view }) {
   const evaluator = evaluatorOf(evaluation);
   const layer = { evaluator, files: null, mapping: null, validate: null, treeDigest: null, executableDigest: null, frameworks: null };
   if (evaluator.kind === 'deterministic' || evaluator.kind === 'records') return layer;
   const { tracked, files } = evaluatorFiles(folder);
   layer.files = files.map((file) => ({ path: file.path, bytes: file.bytes }));
-  layer.treeDigest = engine.digestArtifact(
-    files.map((file) => ({ path: file.path, sha256: engine.digestBytes(file.bytes).slice(DIGEST_PREFIX.length) })),
-    'evaluator-tree',
-  );
   const held = (relative) => files.find((file) => file.path === relative);
   const mappingFile = held(MAPPING_PATH);
   if (mappingFile === undefined) throw new EvaluatorLayerError(`${MAPPING_PATH} cannot be read: ${notInLayer(MAPPING_PATH, tracked)}`);
@@ -289,8 +290,36 @@ function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
     throw new EvaluatorLayerError(`${MAPPING_PATH} cannot be read: ${error.message}`);
   }
   const problems = mappingSchemaProblems(mapping);
-  if (problems.length === 0) problems.push(...mappingContractProblems(mapping, contract));
   if (problems.length > 0) throw new EvaluatorLayerError(`${MAPPING_PATH}: ${problems.join('; ')}`);
+  // The mapping a partition reads (Story 1.107): the file's own bytes unless the view drops a row or adds the held-out plan's.
+  let mappingBytes = mappingFile.bytes;
+  if (view !== undefined) {
+    try {
+      ({ bytes: mappingBytes, mapping } = mappingView({
+        mappingBytes: mappingFile.bytes,
+        source: view.source,
+        view: contract,
+        evaluation,
+        heldOutPlan: view.heldOutPlan,
+        partition: view.partition,
+      }));
+    } catch (error) {
+      if (!(error instanceof PartitionPlanError)) throw error;
+      throw new EvaluatorLayerError(`${MAPPING_PATH}: ${error.message}`);
+    }
+  }
+  const contractProblems = mappingContractProblems(mapping, contract);
+  if (contractProblems.length > 0) throw new EvaluatorLayerError(`${MAPPING_PATH}: ${contractProblems.join('; ')}`);
+  // The tree digest covers the files the run's partition reads: the mapping's row set is the view's, so a development run's digest
+  // holds no byte of a held-out row and a held-out run's none of a development-only one. `layer.files` stays the bytes on disk,
+  // which `evaluatorLayerChange` holds the layer to.
+  layer.treeDigest = engine.digestArtifact(
+    files.map((file) => ({
+      path: file.path,
+      sha256: engine.digestBytes(file.path === MAPPING_PATH ? mappingBytes : file.bytes).slice(DIGEST_PREFIX.length),
+    })),
+    'evaluator-tree',
+  );
   layer.mapping = mapping;
   layer.validate = rowsValidator(mapping);
   if (evaluator.kind === 'command') {

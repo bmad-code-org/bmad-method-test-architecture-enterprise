@@ -116,12 +116,35 @@ function isOracleBinding(binding) {
  * no key binds (under an evaluator that scores the rubric, nothing else
  * would).
  *
+ * Under a partition plan (Story 1.107) the mapping is a view's, checked against that view's contract, and a held-out plan's
+ * rows are checked by the label the caller gives them, so the options say how a finding reads and which findings the caller owns:
+ *
+ * - `subject` is what the contract is called in a finding (`the contract` by default);
+ * - `levels: false` keeps the levels out of a finding, since a held-out plan's anchored scale is its own text;
+ * - `reportKey(key)` limits the findings that name a key to the keys it accepts, and `reportCriterion(pair)` the
+ *   unbound-criterion findings to the pairs it accepts, so a caller that checks only a held-out plan's rows leaves
+ *   `contract.json`'s to the check that owns them;
+ * - `hint` ends a finding about an oracle, behavior or criterion the contract does not declare.
+ *
  * @param {object} mapping a mapping that meets its schema
  * @param {object} contract
+ * @param {object} [options]
+ * @param {string} [options.subject]
+ * @param {boolean} [options.levels]
+ * @param {(key: string) => boolean} [options.reportKey]
+ * @param {(pair: string) => boolean} [options.reportCriterion]
+ * @param {string} [options.hint]
  * @returns {string[]}
  */
-function mappingContractProblems(mapping, contract) {
+function mappingContractProblems(
+  mapping,
+  contract,
+  { subject = 'the contract', levels: showLevels = true, reportKey = () => true, reportCriterion = () => true, hint = '' } = {},
+) {
   const problems = [];
+  const add = (key, message) => {
+    if (reportKey(key)) problems.push(message);
+  };
   // The contract may be off its schema here (check reports that on its own), so every list is read defensively.
   const list = (value) => (Array.isArray(value) ? value : []);
   const oracles = new Set(list(contract.oracles).map((oracle) => oracle?.id));
@@ -131,39 +154,42 @@ function mappingContractProblems(mapping, contract) {
   const boundCriteria = new Map();
   for (const [key, binding] of Object.entries(mapping.keys)) {
     if (isOracleBinding(binding)) {
-      if (!oracles.has(binding.oracleId)) problems.push(`key ${key} binds oracle ${binding.oracleId}, which the contract does not declare`);
+      if (!oracles.has(binding.oracleId)) add(key, `key ${key} binds oracle ${binding.oracleId}, which ${subject} does not declare${hint}`);
       const behavior = behaviors.get(binding.behaviorId);
-      if (behavior === undefined) problems.push(`key ${key} binds behavior ${binding.behaviorId}, which the contract does not declare`);
+      if (behavior === undefined) add(key, `key ${key} binds behavior ${binding.behaviorId}, which ${subject} does not declare${hint}`);
       else if (oracles.has(binding.oracleId) && !list(behavior.oracles).includes(binding.oracleId)) {
-        problems.push(`key ${key} binds oracle ${binding.oracleId} to behavior ${binding.behaviorId}, which does not declare that oracle`);
+        add(key, `key ${key} binds oracle ${binding.oracleId} to behavior ${binding.behaviorId}, which does not declare that oracle`);
       }
       if (boundOracles.has(binding.oracleId)) {
-        problems.push(`keys ${boundOracles.get(binding.oracleId)} and ${key} both bind oracle ${binding.oracleId}`);
+        add(key, `keys ${boundOracles.get(binding.oracleId)} and ${key} both bind oracle ${binding.oracleId}`);
       } else boundOracles.set(binding.oracleId, key);
       continue;
     }
     const rubric = rubrics.get(binding.rubricId);
     const criterion = list(rubric?.criteria).find((candidate) => candidate?.id === binding.criterionId);
-    if (rubric === undefined) problems.push(`key ${key} binds rubric ${binding.rubricId}, which the contract does not declare`);
+    if (rubric === undefined) add(key, `key ${key} binds rubric ${binding.rubricId}, which ${subject} does not declare${hint}`);
     else if (criterion === undefined) {
-      problems.push(`key ${key} binds criterion ${binding.criterionId}, which rubric ${binding.rubricId} does not declare`);
+      add(key, `key ${key} binds criterion ${binding.criterionId}, which rubric ${binding.rubricId} does not declare${hint}`);
     } else {
       const anchored = list(rubric.scaleLevels).map((level) => level?.level);
-      const sorted = (levels) => JSON.stringify([...levels].sort((a, b) => a - b));
+      const sorted = (values) => JSON.stringify([...values].sort((a, b) => a - b));
       if (sorted(anchored) !== sorted(binding.levels)) {
-        problems.push(
-          `key ${key} restates levels ${JSON.stringify(binding.levels)} for ${binding.rubricId}/${binding.criterionId}, whose anchored scale levels are ${JSON.stringify(anchored)}`,
+        add(
+          key,
+          showLevels
+            ? `key ${key} restates levels ${JSON.stringify(binding.levels)} for ${binding.rubricId}/${binding.criterionId}, whose anchored scale levels are ${JSON.stringify(anchored)}`
+            : `key ${key} restates levels other than the anchored scale levels of ${binding.rubricId}/${binding.criterionId}`,
         );
       }
     }
     const pair = `${binding.rubricId}/${binding.criterionId}`;
-    if (boundCriteria.has(pair)) problems.push(`keys ${boundCriteria.get(pair)} and ${key} both bind criterion ${pair}`);
+    if (boundCriteria.has(pair)) add(key, `keys ${boundCriteria.get(pair)} and ${key} both bind criterion ${pair}`);
     else boundCriteria.set(pair, key);
   }
   for (const rubric of list(contract.rubrics)) {
     for (const criterion of list(rubric?.criteria)) {
       const pair = `${rubric.id}/${criterion.id}`;
-      if (!boundCriteria.has(pair)) {
+      if (!boundCriteria.has(pair) && reportCriterion(pair)) {
         problems.push(`no key binds rubric criterion ${pair}, so nothing would score it; bind it to a key the evaluator prints`);
       }
     }

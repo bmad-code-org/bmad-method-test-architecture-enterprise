@@ -20,7 +20,7 @@ const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require(
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
 const { addFormats } = require('../cli/lib/evaluate/formats');
-const { contractView, partitionPlanProblems } = require('../cli/lib/evaluate/partition');
+const { contractView, mappingViewProblems, partitionPlanProblems } = require('../cli/lib/evaluate/partition');
 const { egressRegistryProblems } = require('../cli/lib/evaluate/registry');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -752,7 +752,7 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'names every defect by path and ID without quoting the plan',
     '`tea-evaluate preflight --partition held-out`',
     'neither the plan file nor a held-out baseline under `baseline/`',
-    'beside any evaluator but the deterministic one',
+    'beside a gameability probe, or beside a records evaluator and a rubric',
     'has no designated oracle there',
     'selects with an `any` matcher',
     'witnesses with a non-private input',
@@ -774,6 +774,12 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'A waiver that reads a held-out step stays out of `contract.json`',
     "goes in the plan file's `waivers` array under its own waiver ID",
     'It names a waiver that no view can reach by its waiver ID',
+    'An evaluator mapping row follows the oracle or criterion it binds',
+    'which the development partition reads, so a held-out oracle',
+    "goes in the plan file's `mappings` array",
+    'each held-out criterion has a row',
+    "A records harness's records name only the oracles, behaviors and criteria of the run's view",
+    'It names a plan mapping row by its place in `mappings`',
   ])
     requireText(body, marker, 'corpus.md partition plan', failures);
   const fragments = taggedExamples(body, 'partition-plan');
@@ -886,6 +892,39 @@ function checkPartitionPlanGuidance(corpus, failures) {
   if (!unreachableWaiver.some((problem) => /waiver W-101 reads development-only step development-run/.test(problem.message)))
     failures.push(
       'the partition plan check accepts a held-out waiver on a development-only step, so the waiver example check proves nothing',
+    );
+  // Story 1.107: the tagged mapping example, joined to the plan, is a plan the schema and `check` accept, and over the mapping the
+  // fixture's `contract.json` needs its row binds an oracle the held-out view declares; a row for a development-only oracle is one `check` names.
+  const mappingExamples = taggedExamples(body, 'held-out-mappings');
+  if (mappingExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-mappings example; found ${mappingExamples.length}`);
+    return;
+  }
+  const withMappings = { ...withRubrics, ...mappingExamples[0] };
+  if (!validatePlan(withMappings))
+    failures.push(`corpus.md held-out mappings fail the plan schema: ${JSON.stringify(validatePlan.errors)}`);
+  const mappingSource = {
+    schemaVersion: 1,
+    keys: {
+      'accepted:shared-run': { oracleId: 'O-001', behaviorId: 'B-001' },
+      'accepted:development-run': { oracleId: 'O-002', behaviorId: 'B-002' },
+    },
+  };
+  const mappingView = (plan) => ({
+    mapping: mappingSource,
+    source: contract,
+    view: contractView({ contractBytes, evaluation, heldOutPlan: plan, partition: 'held-out' }).contract,
+    heldOutPlan: plan,
+  });
+  const mappingProblems = mappingViewProblems(mappingView(withMappings));
+  if (mappingProblems.length > 0) failures.push(`corpus.md held-out mappings raise check findings: ${JSON.stringify(mappingProblems)}`);
+  const misplacedMapping = {
+    ...withMappings,
+    mappings: withMappings.mappings.map((row) => (row.oracleId === undefined ? row : { ...row, oracleId: 'O-002' })),
+  };
+  if (!mappingViewProblems(mappingView(misplacedMapping)).some((problem) => /mappings\[0\] binds oracle O-002/.test(problem)))
+    failures.push(
+      'the partition plan check accepts a mapping row for a development-only oracle, so the mapping example check proves nothing',
     );
 }
 
@@ -4370,6 +4409,40 @@ async function main() {
         'corpus',
         checkPartitionPlanGuidance,
         (text) => text.replace('It names a waiver that no view can reach by its waiver ID. ', ''),
+      ],
+      [
+        'corpus partition plan mapping example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-mappings -->', ''),
+      ],
+      [
+        'corpus partition plan mapping example on a development-only oracle',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"oracleId": "O-101", "behaviorId": "B-002" }', '"oracleId": "O-002", "behaviorId": "B-002" }'),
+      ],
+      [
+        'corpus partition plan mapping example with a key the file has',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"key": "accepted:held-out-run"', '"key": "accepted:shared-run"'),
+      ],
+      [
+        'corpus partition plan mapping row held in the file the development run reads',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "A row for what only the held-out partition declares goes in the plan file's `mappings` array",
+            'A row for what only the held-out partition declares goes in `evaluator/mapping.json`',
+          ),
+      ],
+      [
+        'corpus partition plan records view sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace("A records harness's records name only the oracles, behaviors and criteria of the run's view.", ''),
       ],
       [
         'run partition plan preflight removal',

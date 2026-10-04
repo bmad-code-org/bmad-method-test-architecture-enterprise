@@ -150,14 +150,14 @@ const {
 } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { supervisedAgentCeilingMs } = require('../agent-supervisor-bounds');
-const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
+const { EVALUATOR_DIRECTORY, EvaluatorLayerError, convertsRows, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { FRAMEWORKS_PATH, LEARNED_PATH, declarationProblems, declaredFrameworks, learnedProblems } = require('./frameworks');
 const { answeredKind, degenerateResponsePath } = require('./gameability');
 
 /** How a finding names a call of each interface kind. */
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
-const { PartitionPlanError, contractView, partitionPlanProblems, readHeldOutPlan } = require('./partition');
+const { PartitionPlanError, contractView, mappingViewProblems, partitionPlanProblems, readHeldOutPlan } = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -1456,7 +1456,13 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
       const shape = mappingSchemaProblems(mapping);
       for (const problem of shape) report.add(MAPPING_PATH, 'schema', problem);
       if (shape.length === 0 && contract !== undefined) {
-        for (const problem of mappingContractProblems(mapping, contract)) report.add(MAPPING_PATH, 'evaluator', problem);
+        // Under a partition plan a held-out oracle or criterion binds in the held-out plan's mappings, never in this file, which the
+        // development partition reads (Story 1.107).
+        const hint =
+          evaluation.partitionPlan === undefined
+            ? ''
+            : "; under a partitionPlan a held-out oracle or criterion binds in the held-out plan's mappings, and this file holds only what contract.json declares";
+        for (const problem of mappingContractProblems(mapping, contract, { hint })) report.add(MAPPING_PATH, 'evaluator', problem);
       }
     }
   } else {
@@ -1699,6 +1705,24 @@ function plainSchemaFindings(report, file, validate, locate = (instancePath) => 
 }
 
 /**
+ * The rows a held-out plan's `mappings` add to `evaluator/mapping.json` in the held-out and both views (Story 1.107), held to the
+ * held-out view: each names a key no other row has, an oracle or criterion the view declares and no other key binds. A row is
+ * named by its place in `mappings`, never by its key. `evaluator/mapping.json` itself is read only when it parses and meets its
+ * schema; `checkEvaluator` reports it otherwise, and its own rows are checked there against `contract.json`.
+ */
+function checkPlanMappings(report, folder, planFile, contract, view, heldOutPlan) {
+  let mapping;
+  try {
+    mapping = readJsonFile(path.join(folder, ...MAPPING_PATH.split('/')));
+  } catch {
+    return;
+  }
+  if (mappingSchemaProblems(mapping).length > 0) return;
+  for (const message of mappingViewProblems({ mapping, source: contract, view, heldOutPlan }))
+    report.add(planFile, 'partition-plan', message);
+}
+
+/**
  * `partitionPlan` (Story 1.51): the development-only steps exist, the held-out plan is a valid file of its own, and the held-out
  * view it makes keeps every behavior an oracle. Every finding names a path or an ID and none quotes held-out plan bytes, so the
  * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
@@ -1715,13 +1739,6 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   const contract = context.contract;
   if (!isPlainObject(plan) || typeof plan.heldOutPlan !== 'string' || contract === undefined) return;
   const kind = evaluatorOf(evaluation).kind;
-  if (kind !== 'deterministic') {
-    report.add(
-      MANIFEST_NAME,
-      'partition-plan',
-      `partitionPlan requires the deterministic evaluator; evaluator.kind is ${JSON.stringify(kind)}`,
-    );
-  }
   const selected = Array.isArray(evaluation.heldOutProbes) ? evaluation.heldOutProbes : [];
   if (selected.length === 0) {
     report.add(MANIFEST_NAME, 'partition-plan', 'partitionPlan declares a held-out plan and heldOutProbes names no probe that runs it');
@@ -1761,10 +1778,31 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
   }
   const problems = partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehaviors });
   for (const problem of problems) report.add(problem.file, problem.rule, problem.message);
+  // A records harness answers with its own sealed records, and its calibration judgments answer one labelled file for one
+  // contract, so no partition derives them (Story 1.107): a records evaluator beside a rubric of either file is refused.
+  if (kind === 'records' && heldOutPlan !== undefined && (contract.rubrics?.length > 0 || heldOutPlan.rubrics?.length > 0)) {
+    report.add(
+      MANIFEST_NAME,
+      'partition-plan',
+      "partitionPlan beside a records evaluator and a rubric: the harness's calibration judgments answer one labelled file for one contract, which no partition derives; use a command or sealed-brief-agent evaluator, or declare no rubric",
+    );
+  }
+  if (heldOutPlan !== undefined && !convertsRows(kind) && (heldOutPlan.mappings?.length ?? 0) > 0) {
+    report.add(
+      plan.heldOutPlan,
+      'partition-plan',
+      `declares mappings, which only a command or sealed-brief-agent evaluator reads; evaluation.json's evaluator is ${kind}, so remove them`,
+    );
+  }
   if (heldOutPlan === undefined || problems.length > 0 || !context.validate.contract(contract)) return;
   const sourceBytes = Buffer.from(JSON.stringify(contract));
   const { contract: view } = contractView({ contractBytes: sourceBytes, evaluation, heldOutPlan, partition: 'held-out' });
-  if (context.validate.contract(view)) return heldOutPlan;
+  if (context.validate.contract(view)) {
+    // The rows the held-out plan adds to the evaluator's mapping are checked over a view that is itself sound, so a contract
+    // defect elsewhere is never blamed on a mapping row (Story 1.107).
+    if (convertsRows(kind)) checkPlanMappings(report, folder, plan.heldOutPlan, contract, view, heldOutPlan);
+    return heldOutPlan;
+  }
   const developmentOnly = new Set(plan.developmentOnlySteps);
   const sharedSteps = (contract.interactionPlan ?? []).filter((step) => !developmentOnly.has(step?.stepId)).length;
   const retainedOracles = view.oracles.length - heldOutPlan.oracles.length;

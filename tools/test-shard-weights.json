@@ -70,7 +70,7 @@
   "test:evaluate-learned-framework": 34.6,
   "test:evaluate-mcp": 129.9,
   "test:evaluate-mutation": 203.4,
-  "test:evaluate-partition-plans": 215,
+  "test:evaluate-partition-plans": 290,
   "test:evaluate-partitions": 80.3,
   "test:evaluate-preflight": 132.1,
   "test:evaluate-private": 73.9,

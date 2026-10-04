@@ -1697,12 +1697,13 @@ Added 2026-10-03 from Story 1.51's build; amended 2026-10-04 in Story 1.106, bec
 
 ### Story 1.107: Partition evaluator mappings in a partition plan
 
-Added 2026-10-03 from Story 1.51's build. Levels: command evaluator integration over a partition plan.
+Added 2026-10-03 from Story 1.51's build. Levels: command evaluator integration over a partition plan, `check` over mapping rows, records import over real eval-quality. Amended 2026-10-04 in Story 1.107: a command evaluator's stdin holds the brief and observations and no mapping, a `records` evaluator's records carry oracles, behaviors and criteria and no step, and an import refusal exits 10.
 
-| AC                                               | Test                                                                                               | Level       | P   | Revert check                                                             |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------------------ |
-| The evaluator sees one partition                 | Run each partition under a command evaluator; read the evaluator's recorded stdin and mapping rows | Integration | P0  | A development run whose evaluator receives a held-out row fails the scan |
-| Records are refused when they carry another step | Import records with a step the view lacks; assert exit 12 naming the step                          | Integration | P1  | An accepted foreign step reaches `score`                                 |
+| AC                                                | Test                                                                                                                                                                                                       | Level       | P   | Revert check                                                                               |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------------------------------------ |
+| The evaluator sees one partition                  | Run each partition under a command evaluator over split oracle and criterion rows; read the evaluator's recorded stdin, its records, its calibration and the run directory; derive each view's mapping     | Integration | P0  | A held-out view that keeps a development-only row fails the pure case and the held-out run |
+| `check` names a mapping row without the plan text | Check plans whose rows repeat a key, bind what the held-out view lacks, restate levels, leave a criterion unbound, or sit in `mapping.json`; assert the finding, the place, and no plan text               | Integration | P0  | A check that accepts a misplaced or unbound row passes the plan                            |
+| Records are refused when they carry another view  | Import records with an oracle disposition, a finding's oracle or behavior and a criterion the view lacks, in a development and a held-out run; assert exit 10 naming where each sits and not what it names | Integration | P1  | An accepted foreign record reaches `score` and the run directory holds the foreign ID      |
 
 ### Story 1.108: Compile and seal each partition view in `ci`
 
