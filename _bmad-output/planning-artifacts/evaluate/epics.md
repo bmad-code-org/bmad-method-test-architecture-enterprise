@@ -2772,7 +2772,7 @@ So that the engine compiles each view without a waiver that reads the other part
 
 ### Story 1.107: Partition evaluator mappings in a partition plan
 
-Added 2026-10-03 from Story 1.51's build. Story 1.51 requires the deterministic evaluator. A `command`, `sealed-brief-agent` or `records` evaluator binds oracles and behaviors through `evaluator/mapping.json`, which names IDs the held-out view drops.
+Added 2026-10-03 from Story 1.51's build. Story 1.51 requires the deterministic evaluator. A `command`, `sealed-brief-agent` or `records` evaluator binds oracles and behaviors through `evaluator/mapping.json`, which names IDs the held-out view drops. Amended 2026-10-04 in Story 1.107: a command evaluator receives `{ sealedBrief, observations }` and never the mapping, a `records` evaluator reads no mapping and each observation of its records names the plan step it records in its ID (`<label>-<stepId>`, as in `trial-<n>-<stepId>`), and an import refusal exits 10, so the criteria below name what each artifact carries and the exit the code gives. Held-out rows live in the held-out plan's `mappings`, because `evaluator/mapping.json` is read by the development partition and a held-out ID in it would reach every development run.
 
 As an adopter whose evaluator is an adopter command or an agent,
 I want the evaluator mapping and the evaluator's sealed brief to follow the partition view,
@@ -2780,11 +2780,11 @@ So that a development run never hands the evaluator a held-out oracle, request o
 
 **Acceptance Criteria:**
 
-**Given** an `evaluator/mapping.json` with rows for a development-only and a held-out oracle
+**Given** an `evaluator/mapping.json` with rows for a development-only and a shared oracle and criterion, and a held-out plan whose `mappings` hold the rows of a held-out oracle and criterion
 **When** each partition runs under a command evaluator
-**Then** the evaluator receives only its partition's brief, observations and mapping rows, a row for an oracle the view dropped is ignored by name in `check`, and a development run's evaluator stdin and tree digest hold no held-out ID
-**And** a `records` evaluator's sealed records are refused when they carry a step the view does not hold.
-**And** a development run whose evaluator receives a held-out row fails the scan of its recorded stdin, and a `records` import that accepts a foreign step reaches `score` and fails its case.
+**Then** each run's evaluator layer holds only its view's rows (the keys its answers are validated against and converted by, the keys a sealed-brief agent is shown, and the tree digest it records), the evaluator's recorded stdin and the run directory hold no ID or key of the other partition, and `check` names a plan row by its place in `mappings` and a `mapping.json` row that binds what `contract.json` lacks by its key and IDs
+**And** under a `partitionPlan`, a `records` evaluator's sealed records are refused (exit 10, nothing copied) when they carry an oracle, a behavior, a rubric criterion, a step or a citation the view does not hold, named by where it sits in the record: an observation is admitted only when its ID is `<run label>-<a step the view declares>` or `<run label>-call-<n>`, a citation only when the record holds the observation it names, and `check` refuses a step named `call-<n>` under a plan
+**And** removing the mapping filter fails the pure view case and the held-out run at the evaluator layer, a held-out row in `evaluator/mapping.json` stops a development `check`, `preflight` and `run` with exit 10, no launch and a finding that says the row belongs in the plan's `mappings`, and a `records` import that accepts a foreign oracle, behavior, criterion or step reaches `score` and fails its case.
 
 **Dependencies:** 1.51, 1.20.
 **Gate:** `npm run test:evaluate-partition-plans`, `npm run test:evaluate-evaluators`, `npm test`.

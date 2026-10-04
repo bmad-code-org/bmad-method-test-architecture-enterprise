@@ -8,6 +8,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { strengthAggregatePointer } = require('./interpret');
+const { isOracleBinding, mappingContractProblems } = require('./judgment-rows');
+const { CHOSEN_CALL } = require('./records');
 
 const PROBE_FILE = /\.probe\.json$/;
 const PARTITIONS = ['development', 'held-out'];
@@ -168,7 +170,7 @@ function planCriterionName(rubric, rubricIndex, criterion, criterionIndex) {
  * @param {object} [options]
  * @param {boolean} [options.shaped] refuse a file that lacks the plan's four top-level fields; `check` passes false and validates the
  *   file against its schema instead, to name each defect
- * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], rubrics?: object[], waivers?: object[], behaviorOracles: Record<string, string[]> }}
+ * @returns {{ schemaVersion: number, interactionPlan: object[], oracles: object[], rubrics?: object[], waivers?: object[], mappings?: object[], behaviorOracles: Record<string, string[]> }}
  * @throws {PartitionPlanError}
  */
 function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
@@ -251,17 +253,22 @@ const reachableWaiver = (waiver, developmentOnly) => !stepsReadBy(waiver).some((
  *
  * A derived view is serialized as `JSON.stringify(view, null, 2)` and a newline.
  *
+ * The result carries the parsed `source`, the `heldOutPlan` the view was derived from (null when none was read) and the
+ * `partition`, which `mappingView` derives the evaluator's mapping from (Story 1.107).
+ *
  * @param {object} options
  * @param {Buffer} options.contractBytes the folder's `contract.json`
  * @param {object} options.evaluation parsed `evaluation.json`
  * @param {object|null} [options.heldOutPlan] the parsed held-out plan; never read for the development partition
  * @param {'development'|'held-out'|'both'} options.partition
- * @returns {{ bytes: Buffer, contract: object }}
+ * @returns {{ bytes: Buffer, contract: object, source: object, heldOutPlan: object|null, partition: string }}
  * @throws {PartitionPlanError}
  */
 function contractView({ contractBytes, evaluation, heldOutPlan = null, partition }) {
   const source = JSON.parse(contractBytes.toString('utf8'));
-  if (evaluation.partitionPlan === undefined || partition === 'development') return { bytes: contractBytes, contract: source };
+  if (evaluation.partitionPlan === undefined || partition === 'development') {
+    return { bytes: contractBytes, contract: source, source, heldOutPlan: null, partition };
+  }
   if (heldOutPlan === null) throw new PartitionPlanError(`the ${partition} view needs ${evaluation.partitionPlan.heldOutPlan}`);
   const developmentOnly = new Set(evaluation.partitionPlan.developmentOnlySteps ?? []);
   const view = structuredClone(source);
@@ -288,7 +295,7 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
       ...(Object.hasOwn(heldOutPlan.behaviorOracles, behavior.id) ? heldOutPlan.behaviorOracles[behavior.id] : []),
     ];
   }
-  return { bytes: Buffer.from(`${JSON.stringify(view, null, 2)}\n`), contract: view };
+  return { bytes: Buffer.from(`${JSON.stringify(view, null, 2)}\n`), contract: view, source, heldOutPlan, partition };
 }
 
 /**
@@ -298,13 +305,137 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
  * @param {string} options.folder
  * @param {object} options.evaluation
  * @param {'development'|'held-out'|'both'} options.partition
- * @returns {{ bytes: Buffer, contract: object }}
+ * @returns {{ bytes: Buffer, contract: object, source: object, heldOutPlan: object|null, partition: string }}
  * @throws {PartitionPlanError}
  */
 function loadContractView({ folder, evaluation, partition }) {
   const contractBytes = fs.readFileSync(path.join(folder, 'contract.json'));
   const needsPlan = evaluation.partitionPlan !== undefined && partition !== 'development';
   return contractView({ contractBytes, evaluation, heldOutPlan: needsPlan ? readHeldOutPlan(folder, evaluation) : null, partition });
+}
+
+/** The oracle IDs and `rubricId/criterionId` pairs a contract declares, read defensively: `check` reports a contract off its schema on its own. */
+function declaredBindings(contract) {
+  const list = (value) => (Array.isArray(value) ? value : []);
+  return {
+    oracles: new Set(list(contract?.oracles).map((oracle) => oracle?.id)),
+    criteria: new Set(
+      list(contract?.rubrics).flatMap((rubric) => list(rubric?.criteria).map((criterion) => `${rubric?.id}/${criterion?.id}`)),
+    ),
+  };
+}
+
+/** The binding a held-out plan's mapping row holds, which is the row without its key. */
+function rowBinding(row) {
+  return Object.fromEntries(Object.entries(row).filter(([name]) => name !== 'key'));
+}
+
+/** The mapping rows a held-out plan declares, as an array of objects only (`check` holds the plan to its schema). */
+const planMappingRows = (heldOutPlan) => (Array.isArray(heldOutPlan?.mappings) ? heldOutPlan.mappings : []);
+
+/** Whether a `mapping.json` row binds an oracle or a rubric criterion that `source` declares and `view` does not. */
+function leavesView(binding, inSource, inView) {
+  if (isOracleBinding(binding)) return inSource.oracles.has(binding.oracleId) && !inView.oracles.has(binding.oracleId);
+  const pair = `${binding?.rubricId}/${binding?.criterionId}`;
+  return inSource.criteria.has(pair) && !inView.criteria.has(pair);
+}
+
+/**
+ * The evaluator mapping one partition's run reads (Story 1.107, AD-21, AD-22): the rows of `evaluator/mapping.json` that bind
+ * what the view declares, and for the held-out and both views the rows the held-out plan's `mappings` add. An evaluator other
+ * than the deterministic one binds oracles and rubric criteria through this mapping, so the mapping follows the contract view
+ * the run compiles, seals and records, and a run's evaluator layer (its tree digest, its row validator, the keys a sealed-brief
+ * agent is shown, the rows the runtime converts) never names an oracle or criterion its view dropped.
+ *
+ * - No `partitionPlan`, or the development partition: the source bytes, untouched. `contract.json` holds every oracle and
+ *   criterion the development view declares, and a row for one it lacks stays in the mapping for `check` and the run to refuse.
+ * - `held-out`: the source rows without those that bind an oracle or a criterion of `contract.json` the held-out view dropped
+ *   (an oracle that reads a development-only step, a criterion that does), then the plan's rows.
+ * - `both`: every source row, then the plan's rows.
+ *
+ * The held-out view is always serialized as `JSON.stringify(mapping, null, 2)` and a newline, so its bytes (the evaluator tree
+ * digest and the evaluator configuration digest of a held-out run) move only with the rows it holds and never with a
+ * development-only row that came or went. The both view of a plan with no `mappings` is the source bytes, and with rows it is
+ * serialized the same way.
+ *
+ * @param {object} options
+ * @param {Buffer} options.mappingBytes the folder's `evaluator/mapping.json`, which meets its schema
+ * @param {object} options.source the parsed `contract.json`
+ * @param {object} options.view the contract the run compiles (`contractView(...).contract`)
+ * @param {object} options.evaluation parsed `evaluation.json`
+ * @param {object|null} [options.heldOutPlan] the parsed held-out plan; never read for the development partition
+ * @param {'development'|'held-out'|'both'} options.partition
+ * @returns {{ bytes: Buffer, mapping: object }}
+ * @throws {PartitionPlanError}
+ */
+function mappingView({ mappingBytes, source, view, evaluation, heldOutPlan = null, partition }) {
+  const mapping = JSON.parse(mappingBytes.toString('utf8'));
+  if (evaluation.partitionPlan === undefined || partition === 'development') return { bytes: mappingBytes, mapping };
+  if (heldOutPlan === null) throw new PartitionPlanError(`the ${partition} mapping needs ${evaluation.partitionPlan.heldOutPlan}`);
+  const inSource = declaredBindings(source);
+  const inView = declaredBindings(view);
+  const entries = Object.entries(mapping.keys);
+  const kept = entries.filter(([, binding]) => !leavesView(binding, inSource, inView));
+  const rows = planMappingRows(heldOutPlan);
+  if (partition === 'both' && rows.length === 0) return { bytes: mappingBytes, mapping };
+  const keys = Object.fromEntries(kept);
+  for (const [index, row] of rows.entries()) {
+    // The plan's text never reaches a message, so a row is named by where it sits.
+    // A key the file declares collides whether or not the view kept its row, so a plan never reuses a dropped row's key.
+    if (!isObject(row) || Object.hasOwn(mapping.keys, row.key) || Object.hasOwn(keys, row.key)) {
+      throw new PartitionPlanError(
+        `${evaluation.partitionPlan.heldOutPlan} mappings[${index}] has a key that evaluator/mapping.json or an earlier row declares`,
+      );
+    }
+    keys[row.key] = rowBinding(row);
+  }
+  const derived = { ...mapping, keys };
+  return { bytes: Buffer.from(`${JSON.stringify(derived, null, 2)}\n`), mapping: derived };
+}
+
+/**
+ * What is wrong with the rows a held-out plan's `mappings` add to the held-out view (Story 1.107), as messages that name a row
+ * by where it sits (`mappings[2]`) and never by its key, which is the plan's own text: a key `evaluator/mapping.json` declares or
+ * an earlier row declares, an oracle, behavior or criterion the held-out view does not declare, an oracle its behavior does not
+ * declare in that view, levels other than the criterion's anchored scale levels, an oracle or criterion another key binds, and a
+ * plan rubric criterion no key binds. Rows of `contract.json` are `check`'s own business (`mappingContractProblems` over
+ * `contract.json`), so none of them is reported here.
+ *
+ * @param {object} options
+ * @param {object} options.mapping the parsed `evaluator/mapping.json`, which meets its schema
+ * @param {object} options.source the parsed `contract.json`
+ * @param {object} options.view the held-out view's contract
+ * @param {object} options.heldOutPlan the held-out plan, which meets its schema
+ * @returns {string[]}
+ */
+function mappingViewProblems({ mapping, source, view, heldOutPlan }) {
+  const problems = [];
+  const inSource = declaredBindings(source);
+  const inView = declaredBindings(view);
+  const labelled = {};
+  for (const [key, binding] of Object.entries(mapping.keys)) if (!leavesView(binding, inSource, inView)) labelled[key] = binding;
+  const planLabels = new Set();
+  const seen = new Set();
+  for (const [index, row] of planMappingRows(heldOutPlan).entries()) {
+    if (!isObject(row)) continue;
+    const label = `mappings[${index}]`;
+    if (Object.hasOwn(mapping.keys, row.key)) problems.push(`${label} has the key of a row evaluator/mapping.json declares`);
+    else if (seen.has(row.key)) problems.push(`${label} has the key of an earlier row`);
+    else {
+      labelled[label] = rowBinding(row);
+      planLabels.add(label);
+    }
+    seen.add(row.key);
+  }
+  problems.push(
+    ...mappingContractProblems({ ...mapping, keys: labelled }, view, {
+      subject: 'the held-out view',
+      levels: false,
+      reportKey: (key) => planLabels.has(key),
+      reportCriterion: (pair) => !inSource.criteria.has(pair),
+    }),
+  );
+  return problems;
 }
 
 /**
@@ -362,6 +493,14 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
   for (const id of developmentOnly) {
     if (!sourceSteps.has(id))
       add('evaluation.json', `partitionPlan.developmentOnlySteps names step ${id}, which contract.json does not declare`);
+  }
+  // `<label>-call-<n>` is how an observation of a call the agent chose is named, so a step named `call-<n>` would make its own
+  // observation look like an agent's call, and a records harness's observation of it would pass for one (Story 1.107). The ID is
+  // `contract.json`'s own text, so it is named.
+  for (const step of sourcePlan) {
+    if (typeof step.stepId === 'string' && CHOSEN_CALL.test(step.stepId)) {
+      add('contract.json', `step ${step.stepId} has an ID of the form call-<n>, which names a call the agent chose; rename the step`);
+    }
   }
   // A waiver of contract.json is in the development view, and in the held-out view unless its condition reads a development-only
   // step, so the development view must declare every step the condition reads (Story 1.106). The IDs are named only when they
@@ -421,6 +560,9 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
   for (const { step, label } of heldSteps) {
     if (sourceSteps.has(step.stepId)) add(file, `step ${label} has the ID of a step contract.json declares`);
     else if (seenSteps.has(step.stepId)) add(file, `step ${label} is declared more than once`);
+    if (typeof step.stepId === 'string' && CHOSEN_CALL.test(step.stepId)) {
+      add(file, `step ${label} has an ID of the form call-<n>, which names a call the agent chose; rename the step`);
+    }
     seenSteps.add(step.stepId);
   }
   const sourceOracles = new Set((Array.isArray(contract.oracles) ? contract.oracles : []).filter(isObject).map((oracle) => oracle.id));
@@ -528,6 +670,8 @@ module.exports = {
   committedProbes,
   contractView,
   loadContractView,
+  mappingView,
+  mappingViewProblems,
   partitionPlanProblems,
   planCriterionName,
   readHeldOutPlan,

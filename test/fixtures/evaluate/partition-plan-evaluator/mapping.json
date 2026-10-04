@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "accepted:shared-run": { "oracleId": "O-001", "behaviorId": "B-001" },
+    "accepted:development-run": { "oracleId": "O-002", "behaviorId": "B-002" }
+  }
+}

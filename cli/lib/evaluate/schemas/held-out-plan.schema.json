@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:held-out-plan",
   "title": "corpus/held-out/<plan>.json",
-  "description": "The held-out partition's own interaction plan steps and oracles (Story 1.51, AD-9, AD-22), which evaluation.json's partitionPlan.heldOutPlan names. The held-out and both views append interactionPlan and oracles (and the optional rubrics and waivers) to contract.json's and add behaviorOracles to each named behavior; a development run never opens this file. Each step and oracle has the shape eval-quality's contract gives it, and the engine's compile over the held-out view is what judges them; tea-evaluate check validates each against the contract schema in the view and names a path or an ID, never a value. The tea-evaluate runtime owns this schema.",
+  "description": "The held-out partition's own interaction plan steps and oracles (Story 1.51, AD-9, AD-22), which evaluation.json's partitionPlan.heldOutPlan names. The held-out and both views append interactionPlan and oracles (and the optional rubrics, waivers and mappings) to contract.json's and add behaviorOracles to each named behavior; a development run never opens this file. Each step and oracle has the shape eval-quality's contract gives it, and the engine's compile over the held-out view is what judges them; tea-evaluate check validates each against the contract schema in the view and names a path or an ID, never a value. The tea-evaluate runtime owns this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "interactionPlan", "oracles", "behaviorOracles"],
@@ -41,6 +41,35 @@
       "items": {
         "type": "object",
         "properties": { "id": { "type": "string", "pattern": "^W-[0-9]{3,}$" } }
+      }
+    },
+    "mappings": {
+      "description": "Evaluator mapping rows only the held-out partition reads (Story 1.107), added to evaluator/mapping.json's rows in the held-out and both views, for a command or sealed-brief-agent evaluator. A row has the key the evaluator prints and the binding evaluator/mapping.json gives a key: an oracle and the behavior it answers, or a rubric criterion and its anchored scale levels. A row's key must differ from every key of evaluator/mapping.json and from the other rows', and it binds an oracle or criterion the held-out view declares and no other key binds: a row for an oracle or criterion of the held-out plan belongs here, since evaluator/mapping.json is read by the development partition, which must hold no held-out ID. A row of evaluator/mapping.json that binds an oracle or criterion of contract.json belongs to the development partition, and to the held-out one too unless the held-out view drops what it binds. Omit the field when the held-out partition binds nothing of its own.",
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "oracleId", "behaviorId"],
+            "properties": {
+              "key": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" },
+              "oracleId": { "type": "string", "pattern": "^O-[0-9]{3,}$" },
+              "behaviorId": { "type": "string", "pattern": "^B-[0-9]{3,}$" }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "rubricId", "criterionId", "levels"],
+            "properties": {
+              "key": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" },
+              "rubricId": { "type": "string", "pattern": "^R-[0-9]{3,}$" },
+              "criterionId": { "type": "string", "pattern": "^RC-[0-9]{3,}$" },
+              "levels": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer" } }
+            }
+          }
+        ]
       }
     },
     "behaviorOracles": {

@@ -31,6 +31,18 @@ const { addFormats } = require('./formats');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
+/**
+ * How a plan step's observation is named: `<label>-<stepId>`, with `<label>` one of the labels the run writes an arm under (`run.js`,
+ * `arm.js`, `gameability.js`, `preflight.js`): `trial-<n>` and `attempt-<n>` for a trial and an evaluator attempt, `baseline` and
+ * `degenerate` for the baseline and the gameability arm, `mutated` and `re-pass-<n>` for the mutation phases. A call the agent chose is
+ * `<label>-call-<n>`. This is the one place the forms are written: the importer's allowlist (`records-evaluator.js`) and the fixture
+ * evaluator that reads a step from an observation's ID take them from here.
+ */
+const RUN_LABELS = String.raw`(?:(?:trial|attempt|re-pass)-\d+|baseline|degenerate|mutated)`;
+
+/** The step part of an observation ID that names a call the agent chose, not a plan step. */
+const CHOSEN_CALL = /^call-\d+$/;
+
 /** The seven forbidden inputs an isolation manifest accounts for by name. */
 const FORBIDDEN_INPUTS = [
   'original-spec',
@@ -359,7 +371,9 @@ function sealedRunRecord({
 }
 
 module.exports = {
+  CHOSEN_CALL,
   FORBIDDEN_INPUTS,
+  RUN_LABELS,
   createArtifactValidator,
   evaluatorConfiguration,
   isolationManifest,

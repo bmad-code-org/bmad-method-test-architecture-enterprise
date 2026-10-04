@@ -136,7 +136,32 @@ A waiver only the held-out partition carries goes in the plan file's `waivers` a
 }
 ```
 
-`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside any evaluator but the deterministic one, or beside a gameability probe. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
+An evaluator mapping row follows the oracle or criterion it binds.
+A command or sealed-brief-agent evaluator binds each key it prints to an oracle and behavior, or to a rubric criterion, in `evaluator/mapping.json` (shape in `references/evaluator.md`), which the development partition reads, so a held-out oracle's or criterion's ID stays out of that file.
+A row in `evaluator/mapping.json` binds what `contract.json` declares: it is in the development and both views, and in the held-out view unless the held-out view drops what it binds.
+A row for what only the held-out partition declares goes in the plan file's `mappings` array, and it is in the held-out and both views.
+Give a plan row the `key` and the binding of a row of `evaluator/mapping.json`.
+Its key differs from every other key, and each held-out criterion has a row, because a criterion no key binds scores nothing.
+A command evaluator's files under `evaluator/` are read by the development partition, so it derives a held-out key from its input and never spells one.
+A records harness's records name only the oracles, behaviors and criteria of the run's view.
+Under a partition plan a records harness names each observation `<label>-<stepId>`, or `<label>-call-<n>` for a call the agent chose.
+The label is `trial-<n>`, `attempt-<n>`, `baseline`, `degenerate`, `mutated` or `re-pass-<n>`.
+The import admits an observation only when its ID is `<label>-<a step the run's view declares>` or `<label>-call-<n>`, and refuses every other ID, because a development run never opens the plan and cannot know a held-out step ID.
+A disposition or finding that cites an observation its record does not hold is refused too.
+A step ID of the form `call-<n>` is refused by `check` under a plan, because its observation would look like an agent's chosen call.
+
+<!-- example:held-out-mappings -->
+
+```json
+{
+  "mappings": [
+    { "key": "accepted:held-out-run", "oracleId": "O-101", "behaviorId": "B-002" },
+    { "key": "score:RC-101", "rubricId": "R-101", "criterionId": "RC-101", "levels": [0, 1] }
+  ]
+}
+```
+
+`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside a gameability probe, or beside a records evaluator and a rubric, and `mappings` beside an evaluator that reads none. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It names a plan mapping row by its place in `mappings`: a key another row has, an oracle or criterion the held-out view does not declare or another key already binds, and a held-out criterion no key binds. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
 
 ## Agent
 

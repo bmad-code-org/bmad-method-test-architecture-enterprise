@@ -273,6 +273,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
           evaluation: context.evaluation,
           contract: context.contract,
           engine: await loadEngine(),
+          view: context.view,
         });
       } catch (error) {
         if (!(error instanceof EvaluatorLayerError)) throw error;
@@ -1868,6 +1869,8 @@ async function concludeImportedRecords(context) {
       writer,
       // An imported rubric score is gated on the harness's calibration judgments, over the labelled file this run took (exit 11 below the minimum).
       calibration: (contract.rubrics ?? []).length > 0 ? { labelled: snapshot.calibration, evaluation, contract, engine, stop } : null,
+      // Under a partition plan a record names only what this run's view declares (Story 1.107).
+      view: evaluation.partitionPlan === undefined ? null : { contract, partition: snapshot.partition },
     });
   } catch (error) {
     if (!(error instanceof EvaluatorLayerError)) throw error;

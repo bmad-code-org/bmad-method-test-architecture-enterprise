@@ -652,7 +652,7 @@ async function pipeline(
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
-    const refused = await prepare({ folder, evaluation, seeded, contract: view.contract });
+    const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
     // A confined run reads the working tree, the checkout's own HEAD and where the checkout's git commands read their repository
