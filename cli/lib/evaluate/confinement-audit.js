@@ -1047,12 +1047,14 @@ async function readTrace(file, options) {
  * one is reported when its path is withheld or outside what the sandbox may write.
  *
  * @param {object} access `TraceReader`'s access
- * @param {{ read: string[], write: string[], withheld: string[], withheldExcept: string[] }} grants
+ * @param {{ read: string[], write: string[], withheld: string[], withheldExcept: string[], linked?: string[] }} grants
  * @returns {string|null}
  */
 function traceDecision(access, grants) {
   const { kind, path: absolute, real, ok, errno, dotdot = false, reentry = false } = access;
-  const except = grants.withheldExcept.some((root) => isInside(root, absolute) && isInside(root, real));
+  // A login file the home links to (Story 1.113) is opened by its path in the home and resolves outside it, and it is the one file that may.
+  const linked = (grants.linked ?? []).includes(real);
+  const except = grants.withheldExcept.some((root) => isInside(root, absolute) && (isInside(root, real) || linked));
   const withheld = !except && grants.withheld.some((root) => isInside(root, absolute) || isInside(root, real));
   if (withheld) {
     // Node resolves a module by looking for a `package.json` in every directory above it, so one asked for above the sandbox's

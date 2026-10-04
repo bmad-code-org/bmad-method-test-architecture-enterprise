@@ -201,6 +201,24 @@
  *                           directory HOME sits in), and `host-write` (the file
  *                           VERDICT_TOUCH names, which a case puts in the
  *                           host's real home)
+ *   claude-login            a stand-in for the Claude Code CLI's login lookup (Story 1.113).
+ *                           Before it answers it looks for the login the way the CLI does on Linux.
+ *                           It reads the credentials file under HOME (`.claude/.credentials.json`) and the variable CLAUDE_CODE_OAUTH_TOKEN.
+ *                           With neither it prints `Not logged in` to standard error and exits 4, as the CLI does.
+ *                           After the verdict it prints these lines:
+ *                           `login-file: <sha256 of the file or refused <code>>`,
+ *                           `login-file-echo` (the file's content, which the run must scrub),
+ *                           `login-file-hardlink` (a second name for it in the home),
+ *                           `login-file-write` (an append to that file),
+ *                           `login-token: <sha256 of the variable or unset>`,
+ *                           `login-token-echo: <the variable's value>` (which the run must scrub),
+ *                           `second-read` (a read of the file VERDICT_SECOND names, a second file under the host's real home)
+ *                           and `credential-environment` (the names of the ANTHROPIC, CLAUDE and OPENAI variables it holds)
+ *   claude-keychain         a stand-in for a CLI that reads the macOS Keychain (Story 1.113).
+ *                           It prints `keychain-home` (what listing `Library/Keychains` under HOME shows),
+ *                           `keychain-read` (a read of the file VERDICT_KEYCHAIN names, a fake login keychain under the host's real home)
+ *                           and `keychain-sidecar-write` (the write of `<that file>-shm` a keychain database needs beside a read).
+ *                           It exits 4 when it read no keychain.
  *   leftover-tamper         answer as usual, and leave a process running,
  *                           outside this process group, whose argument vector
  *                           carries VERDICT_TOUCH as a marker: once the
@@ -252,6 +270,72 @@ if (text.includes('infrastructure: exit 3') || act === 'infrastructure') {
   process.stderr.write('verdict: asked to report an infrastructure failure\n');
   process.exit(3);
 }
+/** How an attempt on a path ended: allowed, or refused with the error code. */
+const attempt = (action) => {
+  try {
+    action();
+    return 'allowed';
+  } catch (error) {
+    return `refused ${error.code ?? error.message}`;
+  }
+};
+/** The lines a login stand-in prints after the verdict (Story 1.113). */
+const loginReport = [];
+if (act === 'claude-login') {
+  const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  const credentials = path.join(process.env.HOME ?? '', '.claude', '.credentials.json');
+  let fromFile;
+  let content = '';
+  try {
+    content = fs.readFileSync(credentials, 'utf8');
+    fromFile = sha(content);
+  } catch (error) {
+    fromFile = `refused ${error.code}`;
+  }
+  const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (fromFile.startsWith('refused') && token === undefined) {
+    process.stderr.write('Not logged in. Run `claude login`.\n');
+    process.exit(4);
+  }
+  const second = process.env.VERDICT_SECOND;
+  loginReport.push(
+    `login-file: ${fromFile}`,
+    `login-file-echo: ${content.trim()}`,
+    `login-file-hardlink: ${attempt(() => fs.linkSync(fs.realpathSync(credentials), path.join(path.dirname(credentials), 'hardlink.json')))}`,
+    `login-file-write: ${attempt(() => fs.appendFileSync(credentials, 'rewritten by the target\n'))}`,
+    `login-token: ${token === undefined ? 'unset' : sha(token)}`,
+    `login-token-echo: ${token ?? '(unset)'}`,
+    `second-read: ${second ? attempt(() => fs.readFileSync(second)) : '(none)'}`,
+    `credential-environment: ${JSON.stringify(
+      Object.keys(process.env)
+        .filter((name) => /^(ANTHROPIC|CLAUDE|OPENAI)/.test(name))
+        .sort(),
+    )}`,
+  );
+}
+if (act === 'claude-keychain') {
+  const keychain = process.env.VERDICT_KEYCHAIN ?? '';
+  const list = (directory) => {
+    try {
+      return JSON.stringify(fs.readdirSync(directory).sort());
+    } catch (error) {
+      return `refused ${error.code}`;
+    }
+  };
+  const read = attempt(() => fs.readFileSync(keychain));
+  // A keychain database is read again after the sidecar it writes beside it, as a SQLite reader does.
+  const sidecar = attempt(() => fs.appendFileSync(`${keychain}-shm`, 'written by the target\n'));
+  attempt(() => fs.readFileSync(keychain));
+  loginReport.push(
+    `keychain-home: ${list(path.join(process.env.HOME ?? '', 'Library', 'Keychains'))}`,
+    `keychain-read: ${read}`,
+    `keychain-sidecar-write: ${sidecar}`,
+  );
+  if (read !== 'allowed') {
+    process.stderr.write('No keychain.\n');
+    process.exit(4);
+  }
+}
 const sleep = /sleep: (\d+)/.exec(text);
 if (sleep !== null) {
   if (process.env.VERDICT_PID) fs.writeFileSync(process.env.VERDICT_PID, String(process.pid));
@@ -299,6 +383,7 @@ process.stdout.write(
     '',
   ].join('\n'),
 );
+if (loginReport.length > 0) process.stdout.write(`${loginReport.join('\n')}\n`);
 const usageReport = here && process.env.VERDICT_USAGE_BAD !== undefined ? process.env.VERDICT_USAGE_BAD : process.env.VERDICT_USAGE;
 if (usageReport !== undefined) process.stderr.write(`TEA_EVALUATE_USAGE_JSON:${usageReport}\n`);
 
@@ -347,15 +432,6 @@ if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes
     fs.symlinkSync(stolen, trials);
   }
 }
-/** How an attempt on a path ended: allowed, or refused with the error code. */
-const attempt = (action) => {
-  try {
-    action();
-    return 'allowed';
-  } catch (error) {
-    return `refused ${error.code ?? error.message}`;
-  }
-};
 /**
  * The adopter's evaluation folder, found through the worktree's own git directory, `<project>/.git/worktrees/<name>`:
  * a confined target's git no longer shares the project's git directory (Story 1.57), but the path of the worktree's

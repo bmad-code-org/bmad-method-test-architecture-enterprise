@@ -700,21 +700,26 @@ function hostEnvironmentPort({ port, registry }) {
       // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
       const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
       const principalValues = typeof registry.principalSecrets === 'function' ? registry.principalSecrets() : [];
+      // The strings a registry entry's `login` grants (Story 1.113), scrubbed from every request kind since the private home with the linked file is shared by every target the sandbox starts.
+      const loginValues = () => (typeof registry.loginSecrets === 'function' ? registry.loginSecrets() : []);
       const injectedSecrets = Object.entries(injected)
         .filter(([key]) => !windowsRunner || key.toUpperCase() !== 'SYSTEMROOT')
         .map(([, value]) => value);
-      const values = [...injectedSecrets, ...Object.values(server), ...carried, ...principalValues].filter(
-        (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
-      );
-      const secrets = formsFor(values);
+      const heldValues = [...injectedSecrets, ...Object.values(server), ...carried, ...principalValues];
+      const secretsOf = (logins) => formsFor([...heldValues, ...logins].filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH));
+      // The host's own CLI can refresh the credentials file while the call runs, so the set is read again once the call settles.
+      // The scrub covers what the file held before the call and what it holds after.
+      const before = loginValues();
       try {
         const observation = await port.probe(augmented, signal);
+        const secrets = secretsOf([...before, ...loginValues()]);
         return {
           request: augmented,
           observation: scrub(observation, secrets),
           ...(request?.kind === 'cli' ? { usageReportStderr: observation.stderr } : {}),
         };
       } catch (error) {
+        const secrets = secretsOf([...before, ...loginValues()]);
         error.request = augmented;
         // A fault's message and cause can quote what the target sent: a denial names the host a redirect gave, which a
         // URL lowercases, and eval-quality reports a mechanism's own failure (a server that would not start, a refused

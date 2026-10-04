@@ -63,6 +63,7 @@
 
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
@@ -1049,6 +1050,67 @@ class FakePowerShell {
   }
 }
 
+/**
+ * The supervisor's trace writer survives concurrent writers.
+ * Four processes (the supervisor, the leader, the guardian and the helper) append to one trace file, a Windows sharing violation under load raised `EBUSY`, `EPERM` or `EACCES` from the append, and a writer that swallowed it dropped the line (the "setup race" case then missed `guardian-agent-spawned`).
+ * The case stubs `fs.appendFileSync`, so it runs on every platform: the line is written once after a few refusals of each code, a persistent refusal neither throws nor loops past its bound, an error no sharing raises is not retried, and a run with no trace file appends nothing.
+ */
+function checkSupervisorTraceRetries() {
+  const { trace, TRACE_APPEND_ATTEMPTS } = require('../cli/lib/agent-supervisor');
+  const realAppend = fs.appendFileSync;
+  const saved = process.env.TEA_WINDOWS_JOB_TRACE;
+  const traceFile = path.join(tempDir('supervisor-trace'), 'trace.log');
+  const stubbed = (refusals, code) => {
+    const seen = { calls: 0 };
+    fs.appendFileSync = (target, line) => {
+      seen.calls += 1;
+      if (seen.calls <= refusals) throw Object.assign(new Error(`${code}: stubbed refusal`), { code });
+      return realAppend(target, line);
+    };
+    return seen;
+  };
+  const lines = () => (fs.existsSync(traceFile) ? fs.readFileSync(traceFile, 'utf8').split('\n').filter(Boolean) : []);
+  try {
+    process.env.TEA_WINDOWS_JOB_TRACE = traceFile;
+    for (const code of ['EBUSY', 'EPERM', 'EACCES', 'EMFILE']) {
+      fs.rmSync(traceFile, { force: true });
+      const seen = stubbed(3, code);
+      trace('retried', `after ${code}`);
+      check(
+        seen.calls === 4 && lines().length === 1 && lines()[0].endsWith(`retried after ${code}`),
+        `a trace line whose first three appends raised ${code} made ${seen.calls} append call(s) and the file holds ${JSON.stringify(lines())}; expected one line after four calls`,
+      );
+    }
+    fs.rmSync(traceFile, { force: true });
+    const persistent = stubbed(Number.POSITIVE_INFINITY, 'EBUSY');
+    const started = Date.now();
+    let thrown;
+    try {
+      trace('never', 'written');
+    } catch (error) {
+      thrown = error;
+    }
+    check(
+      thrown === undefined,
+      `a trace line whose every append raised EBUSY threw ${thrown?.message}; a diagnostic must never affect supervision`,
+    );
+    check(
+      persistent.calls === TRACE_APPEND_ATTEMPTS && lines().length === 0 && Date.now() - started < 10_000,
+      `a persistent EBUSY made ${persistent.calls} append(s) in ${Date.now() - started} ms and the file holds ${JSON.stringify(lines())}; expected ${TRACE_APPEND_ATTEMPTS} attempts, then the line dropped`,
+    );
+    const missing = stubbed(Number.POSITIVE_INFINITY, 'ENOENT');
+    trace('missing', 'directory');
+    check(missing.calls === 1, `an ENOENT from the append was tried ${missing.calls} time(s); expected 1`);
+    delete process.env.TEA_WINDOWS_JOB_TRACE;
+    const off = stubbed(0, 'EBUSY');
+    trace('off', 'no trace file');
+    check(off.calls === 0, `a trace call with no TEA_WINDOWS_JOB_TRACE appended ${off.calls} time(s)`);
+  } finally {
+    fs.appendFileSync = realAppend;
+    if (saved === undefined) delete process.env.TEA_WINDOWS_JOB_TRACE;
+    else process.env.TEA_WINDOWS_JOB_TRACE = saved;
+  }
+}
 function checkWindowsRunnerReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
@@ -2233,6 +2295,153 @@ function checkPrivateHome() {
   );
 }
 
+/**
+ * A confined `tea-skill-runner --agent claude` authenticates with the host's subscription login (Story 1.113): the stub CLI `stub-agent/claude.js` looks for CLAUDE_CODE_OAUTH_TOKEN and for `.claude/.credentials.json` under HOME as the real one does on Linux, and exits 1 with neither, which the runner reports as exit 4.
+ * The entry's `"login": "claude"` makes the call authenticate through a link in the private home to the host's file, read-only, or through the variable alone; the host's login is a fake file and a fake token, and no record holds either.
+ * Without the declaration the same call exits 4 and the preflight fails, and a host with neither source is refused before any call, naming the token route.
+ */
+function checkSubscriptionLogin() {
+  const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  const fakeLogin = `fake-subscription-login-${crypto.randomBytes(12).toString('hex')}`;
+  const fakeToken = `sk-ant-oat01-${crypto.randomBytes(24).toString('hex')}`;
+  const credentials = JSON.stringify({ claudeAiOauth: { accessToken: fakeLogin } });
+  const noLogin = { CLAUDE_CODE_OAUTH_TOKEN: undefined, CLAUDE_CONFIG_DIR: undefined, ANTHROPIC_API_KEY: undefined };
+  const makeHome = (label, withFile) => {
+    const home = fs.realpathSync(tempDir(label));
+    if (withFile) {
+      fs.mkdirSync(path.join(home, '.claude'));
+      fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), credentials);
+    }
+    return home;
+  };
+  const claudeFolder = (label, { login = true, say = '' } = {}) => {
+    const folder = copyFixture(PREFLIGHT_FIXTURE, stubProject(label));
+    editJson(folder, 'evaluation.json', (value) => {
+      if (login) value.registry[0].login = 'claude';
+    });
+    editJson(folder, 'contract.json', (contract) => {
+      const text = JSON.stringify(contract).replaceAll('"agent":"custom"', '"agent":"claude"').replaceAll('./agent.js', './claude.js');
+      const changed = JSON.parse(text);
+      for (const leg of changed.permittedInterfaces[0].operations[0].sensitivityWitness.legs) {
+        leg.inputs.stdin.value = `${leg.inputs.stdin.value} ${say}`.trim();
+      }
+      for (const key of Object.keys(contract)) delete contract[key];
+      Object.assign(contract, changed);
+    });
+    return folder;
+  };
+  const preflightWith = (folder, home, env = {}) => {
+    const temp = privateTemp('login-temp');
+    const result = runPreflight(folder, { env: { ...temp.env, ...noLogin, HOME: home, ...env } });
+    return { ...result, directory: runDirectoryOf(folder), temp };
+  };
+  const loginLines = (directory) => observedStdouts(directory).map((stdout) => /^login: (\S+) (\S+)$/m.exec(stdout)?.slice(1));
+
+  // The login file: every call authenticates through the link, the write to it is refused, and nothing is recorded of its content.
+  const home = makeHome('login-host-file', true);
+  const realFile = fs.realpathSync(path.join(home, '.claude', '.credentials.json'));
+  const filed = preflightWith(claudeFolder('login-file', { say: 'STUB-TRY-WRITE-LOGIN STUB-ECHO-LOGIN' }), home);
+  check(
+    filed.status === 0,
+    `a confined preflight whose agent finds its login through the host's file exited ${filed.status}; expected 0\n${filed.output}`,
+  );
+  const filedLines = loginLines(filed.directory);
+  check(
+    filedLines.length > 1 && filedLines.every((line) => line?.[0] === 'file' && line[1] === sha(credentials)),
+    `the calls of a preflight with the login file read ${JSON.stringify(filedLines)}; expected the file's digest in each`,
+  );
+  check(
+    observedStdouts(filed.directory).length > 1 &&
+      observedStdouts(filed.directory).every((stdout) => /^login-write: refused (EPERM|EACCES|EROFS)$/m.test(stdout)),
+    "a confined agent's write to its login file was not refused in every call",
+  );
+  check(
+    observedStdouts(filed.directory).length > 1 &&
+      observedStdouts(filed.directory).every((stdout) => /^login-echo: .*\[redacted\]/m.test(stdout) && !stdout.includes(fakeLogin)),
+    "the agent's echo of its login file was not scrubbed in every observation",
+  );
+  const filedRun = filed.directory === null ? null : readJson(path.join(filed.directory, 'run.json'));
+  check(
+    ['seatbelt', 'bubblewrap'].includes(filedRun?.confinement) &&
+      JSON.stringify(filedRun?.logins) ===
+        JSON.stringify([{ interfaceId: 'stub-skill', executable: 'tea-skill-runner', login: 'claude', variable: null, file: realFile }]),
+    `the preflight's run.json recorded confinement ${filedRun?.confinement} and the logins ${JSON.stringify(filedRun?.logins)}; expected the mechanism and the file by path`,
+  );
+  check(
+    filesUnder(filed.directory ?? '').every((file) => fs.statSync(file).isDirectory() || !fs.readFileSync(file).includes(fakeLogin)),
+    "a file of the preflight's run directory holds the login file's content",
+  );
+  check(fs.readFileSync(realFile, 'utf8') === credentials, "the confined agent changed the host's login file");
+  check(
+    fs.readdirSync(filed.temp.directory).length === 0,
+    `the preflight left ${fs.readdirSync(filed.temp.directory)} in its temp directory`,
+  );
+
+  // The token: the variable authenticates the call and no other credential variable passes; an echo of it is scrubbed.
+  const bare = makeHome('login-host-token', false);
+  const tokened = preflightWith(claudeFolder('login-token', { say: 'STUB-ECHO-TOKEN' }), bare, {
+    CLAUDE_CODE_OAUTH_TOKEN: fakeToken,
+    ANTHROPIC_API_KEY: `sk-ant-api03-${crypto.randomBytes(24).toString('hex')}`,
+  });
+  check(
+    tokened.status === 0,
+    `a confined preflight whose agent finds its login in the token variable exited ${tokened.status}; expected 0\n${tokened.output}`,
+  );
+  const tokenLines = loginLines(tokened.directory);
+  check(
+    tokenLines.length > 1 && tokenLines.every((line) => line?.[0] === 'token' && line[1] === sha(fakeToken)),
+    `the calls of a preflight with the token read ${JSON.stringify(tokenLines)}; expected the token's digest in each`,
+  );
+  check(
+    observedStdouts(tokened.directory).length > 1 &&
+      observedStdouts(tokened.directory).every((stdout) => /^token-echo: \[redacted\]$/m.test(stdout)),
+    "the agent's echo of the token was not scrubbed in every observation",
+  );
+  check(
+    filesUnder(tokened.directory ?? '').every((file) => fs.statSync(file).isDirectory() || !fs.readFileSync(file).includes(fakeToken)) &&
+      !tokened.output.includes(fakeToken),
+    "the token's value is in a file of the preflight's run directory or in its output",
+  );
+  const tokenRun = tokened.directory === null ? null : readJson(path.join(tokened.directory, 'run.json'));
+  check(
+    JSON.stringify(tokenRun?.logins?.map(({ variable, file }) => ({ variable, file }))) ===
+      JSON.stringify([{ variable: 'CLAUDE_CODE_OAUTH_TOKEN', file: null }]),
+    `the token preflight recorded the logins ${JSON.stringify(tokenRun?.logins)}; expected the variable by name and no file`,
+  );
+
+  // Without the declaration the call finds no login: the runner exits 4, which the entry declares as infrastructure, and the preflight fails.
+  const ungranted = preflightWith(claudeFolder('login-ungranted', { login: false }), home);
+  check(
+    ungranted.status === 3,
+    `a confined preflight with a login on the host and no "login" declared exited ${ungranted.status}; expected 3\n${ungranted.output}`,
+  );
+  const exits = filesUnder(path.join(ungranted.directory ?? '', 'observations'))
+    .filter((file) => file.endsWith('.json'))
+    .map((file) => readJson(file).observation?.exitCode);
+  check(
+    exits.length > 0 && exits.every((exit) => exit === 4),
+    `the calls of a preflight with no "login" exited ${JSON.stringify(exits)}; expected the runner's 4 (transport) for each`,
+  );
+  check(
+    observedStdouts(ungranted.directory).length === exits.length && !loginLines(ungranted.directory).some((line) => line !== undefined),
+    'a call with no login printed a login line',
+  );
+
+  // A host with neither source is refused before any call, naming the token route and the opt-out.
+  const refused = preflightWith(claudeFolder('login-refused'), bare);
+  check(
+    refused.status === 12,
+    `a confined preflight on a host with no login a target can use exited ${refused.status}; expected 12\n${refused.output}`,
+  );
+  for (const part of ['claude setup-token', 'CLAUDE_CODE_OAUTH_TOKEN', '"confinement": false']) {
+    check(
+      refused.output.includes(part),
+      `the refusal of a host with no login a target can use does not name ${JSON.stringify(part)}\n${refused.output}`,
+    );
+  }
+  check(refused.directory === null, 'a refused login left a run directory');
+}
+
 /** Appends `text` to the first witness leg's prompt. */
 function firstLegSays(folder, text) {
   editJson(folder, 'contract.json', (contract) => {
@@ -2624,6 +2833,7 @@ async function main() {
     await checkSupervision();
     await checkWindowsSupervision();
     checkWindowsRunnerReference();
+    checkSupervisorTraceRetries();
     if (process.platform !== 'win32') checkPosixRunnerReference();
     checkPasses();
     checkRemovedEntry();
@@ -2632,6 +2842,7 @@ async function main() {
     checkRefusals();
     checkEnvironmentValuesStayOut();
     checkPrivateHome();
+    checkSubscriptionLogin();
     checkCopyAndRunsIgnore();
     checkCopyContents();
     checkLinks();

@@ -550,7 +550,11 @@
           }
         },
         "systemPaths": { "$ref": "#/$defs/SystemPaths" },
-        "egress": { "$ref": "#/$defs/Egress" }
+        "egress": { "$ref": "#/$defs/Egress" },
+        "login": {
+          "description": "The agent CLI whose login this command's processes use (Story 1.113). A confined target runs with a private home that holds none of your own, so a skill or agent target that authenticates with a subscription declares the CLI here and the runtime hands its processes the logins that CLI documents and nothing else of your home: for claude, the variable CLAUDE_CODE_OAUTH_TOKEN when the host sets it (a token from `claude setup-token`) and the credentials file `.credentials.json` in CLAUDE_CONFIG_DIR, or in `.claude` under your home, when the host has one, read-only and linked into the private home where the CLI looks for it. A login held in the macOS Keychain has no grant, so a confined run on a host that has neither source exits 12 and names the token route and the opt-out. The grant belongs to the run's private home, which every target of the run shares, so every process of a confined run can read the linked file. A run that opted out of confinement passes the variable and keeps the host's own home.",
+          "enum": ["claude"]
+        }
       }
     },
     "McpRegistryEntry": {

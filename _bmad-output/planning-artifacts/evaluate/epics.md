@@ -2931,14 +2931,33 @@ So that live runs keep file-system confinement.
 
 **Acceptance Criteria:**
 
-**Given** the `claude` adapter and a login that only the user's real home holds
-**When** `preflight` and `run` confine a `tea-skill-runner --agent claude` target
-**Then** either the target's calls authenticate and exit 0, `run.json` records `seatbelt` or `bubblewrap`, the isolation manifest names the granted login source by path or variable and never carries its content, and the grant is read-only and names exactly what the adapter needs (which the story records from a confined run's audit), so a target that reads a second file under the real home lists it in `observedMounts` and `score` exits 3; or the story records in `story-1.113.md`, from that audit, why no grant can work (for instance a login held in an operating-system keychain that confinement withholds from every sandboxed process), and the CLI reference documents the opt-out for a subscription login
-**And** under the grant the dogfood evaluation drops `"confinement": false` and the sentence of its `requirements.md` that names the reason, and under the recorded alternative it keeps both
-**And** removing the grant makes the claude call exit 4 under confinement and widening it to the whole home fails the second-file case, both held by `test:evaluate-confinement` with a fake login; under the recorded alternative, deleting the documented opt-out fails the doc assertion.
+**Given** the `claude` adapter and a registry entry for `tea-skill-runner` that declares `"login": "claude"`
+**When** `preflight` and `run` confine the target on a host whose login is the file `.credentials.json` (in `CLAUDE_CONFIG_DIR`, or in `.claude` under the real home) or the variable `CLAUDE_CODE_OAUTH_TOKEN`
+**Then** the target's calls authenticate and exit 0, `run.json` records `seatbelt` or `bubblewrap` and the grant under `logins` (the variable by name and the file by path), the isolation manifest names the file read-only in `allowedMounts` and both sources in its forbidden-input note, and no recorded file holds the token's value or a string of eight characters or more from the file, an echo of either included
+**And** the file grant is read-only and names exactly the file the adapter reads (a link in the private home), so a target that reads a second file under the real home, in the configuration directory or beside it, lists it in `observedMounts` and `score` exits 3; the variable is the one credential variable that passes, so `ANTHROPIC_API_KEY` and the rest of the host's environment stay withheld
+**And** a login held in the macOS Keychain has no grant, and the story records in `story-1.113.md` why (no Seatbelt rule scopes the keychain below the whole keychain, and the CLI finds it through the `HOME` a confined target holds privately): a confined run on a host with neither the file nor the variable exits 12 before any target starts, naming the entry, the file it looked for, the token route (`claude setup-token`, then `CLAUDE_CODE_OAUTH_TOKEN`) and the opt-out, and the CLI reference documents both under `#### A subscription login under confinement` and drops its API key advice
+**And** the dogfood evaluation keeps `"confinement": false` and the sentence of its `requirements.md` that names the reason, since its owner's host holds the login in the Keychain and the story proves the file and the token routes against stub CLIs alone
+**And** removing the declaration makes the claude call exit 4 under confinement, widening the grant to the whole home fails the second-file case, writing the token's value or a string of the file into a record fails the content sweep, and deleting the documented token route or opt-out fails the doc assertion, held by `test:evaluate-confinement` (the run and the audit) and `test:evaluate-preflight` (the real runner and adapter).
+
+Amended 2026-10-04 in Story 1.113's build: the story's two branches (a grant, or a recorded reason and the opt-out) both hold, one per login source.
+The three sources are those Claude Code documents (the macOS Keychain item `Claude Code-credentials`, the file `~/.claude/.credentials.json` under `CLAUDE_CONFIG_DIR` when set on Linux and Windows, the variable a `claude setup-token` token arrives in), and the owner delegated the design without a probe of any credential location, so each path is proved against a stub CLI under the confined run's own audit.
+The declaration is the registry entry's `login` field (`evaluation.schema.json`, `"claude"` the one adapter).
+The live confined preflight of the dogfood evaluation leaves the gate, since the build starts no real CLI, and the evaluation keeps its opt-out because its owner's host holds the login in the Keychain.
+
+Amended 2026-10-04 in Story 1.113's review round 1: the login's strings are scrubbed from every request kind (a command, a tool server, an HTTP server), since the private home with the linked file is shared by every target the sandbox starts.
+The set holds the host's value of each granted login's variable and each string of the file except the values under the fields the adapter declares public (`scopes`, `subscriptionType`, `rateLimitTier`), which stay as written because they are no secret and a scrub that rewrote them would change an answer's own words.
+A field the adapter does not name is scrubbed.
+
+Amended 2026-10-04 in Story 1.113's review round 2: the scrub set is the union of every string the credentials file has held during the run, read again when each call settles, since the host's own Claude Code can rotate the file while a call runs.
+A read caught mid-write (not valid JSON) contributes its whole text, each whitespace-separated token and each quoted string.
+A run that opted out scrubs the host's credentials file as well, since its target reads the file through its own `HOME`; `run.json` still records no file for it and no link is made.
+The token route's statements in the reference are pinned as whole sentences, one assertion each.
+
+Amended 2026-10-04 in Story 1.113's review round 3: a read caught mid-write leaves out the values under the fields the adapter declares public, so a torn read does not rewrite `user:inference`, `user:profile` or a rate-limit tier in an answer.
+A quoted value belongs to the nearest key before it, and an element of an array belongs to the key before its `[`, so a first read that is torn is covered as well.
 
 **Dependencies:** 1.59, 1.46.
-**Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-agents`, `npm run docs:validate-links`, `npm test`, and a live confined preflight of `test/evaluations/bmad-testarch-evaluate`.
+**Gate:** `npm run test:evaluate-confinement`, `npm run test:evaluate-preflight`, `npm run test:evaluate-agents`, `npm run docs:validate-links`, `npm test`.
 
 ### Story 1.114: Carve the corpus guide into one guide per target kind
 

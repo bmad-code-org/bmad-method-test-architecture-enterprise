@@ -85,12 +85,39 @@ const { spawn, spawnSync } = require('node:child_process');
 const { POSIX_SETUP_MS: WATCHDOG_SETUP_MS, POSIX_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 const { SUPERVISOR_BACKSTOP_MS: BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 
+/** What a Windows sharing violation or a descriptor shortage raises when several processes append to the trace file at once. */
+const TRACE_RETRY_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'EMFILE']);
+
+/** How many times one trace line is tried before it is dropped. */
+const TRACE_APPEND_ATTEMPTS = 50;
+
+/** How long one retry of a trace line waits, in milliseconds. */
+const TRACE_RETRY_WAIT_MS = 5;
+
+const traceWait = new Int32Array(new SharedArrayBuffer(4));
+
+/**
+ * Appends one trace line, retrying a bounded number of times on the errors that four processes appending to one file raise under load (the supervisor, the leader, the guardian and the helper), each wait a short synchronous one.
+ * The last error is thrown.
+ */
+function appendTraceLine(file, line) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      fs.appendFileSync(file, line);
+      return;
+    } catch (error) {
+      if (attempt >= TRACE_APPEND_ATTEMPTS || !TRACE_RETRY_CODES.has(error?.code)) throw error;
+      Atomics.wait(traceWait, 0, 0, TRACE_RETRY_WAIT_MS);
+    }
+  }
+}
+
 /** Synchronous, opt-in trace for the Windows guardian startup probe. */
 function trace(stage, detail = '') {
   if (!process.env.TEA_WINDOWS_JOB_TRACE) return;
   try {
     const message = String(detail).replaceAll(/\s+/g, ' ').slice(0, 1000);
-    fs.appendFileSync(process.env.TEA_WINDOWS_JOB_TRACE, `${Date.now()} node ${process.pid} ${stage} ${message}\n`);
+    appendTraceLine(process.env.TEA_WINDOWS_JOB_TRACE, `${Date.now()} node ${process.pid} ${stage} ${message}\n`);
   } catch {
     // A diagnostic must never affect supervision.
   }
@@ -972,8 +999,13 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   setInterval(watch, POLL_MS);
 }
 
-const argv = process.argv.slice(2);
-if (argv[0] === LEADER_FLAG) lead(argv.slice(1));
-else if (argv[0] === GUARDIAN_FLAG) guard(argv.slice(1));
-else if (argv[0] === WATCHDOG_FLAG && GROUPS) watchGuardian(argv.slice(1));
-else supervise(argv);
+// A test loads this file for `trace`; only a process started on it runs a role.
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  if (argv[0] === LEADER_FLAG) lead(argv.slice(1));
+  else if (argv[0] === GUARDIAN_FLAG) guard(argv.slice(1));
+  else if (argv[0] === WATCHDOG_FLAG && GROUPS) watchGuardian(argv.slice(1));
+  else supervise(argv);
+}
+
+module.exports = { trace, TRACE_APPEND_ATTEMPTS };
