@@ -432,7 +432,7 @@ npm run eval:all -- --agent agy
 npm run eval:all -- --agent agy --agent claude --agent codex
 ```
 
-`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story. One runner makes 109 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 6 pipelines, 4 test designs, 4 traces, and 2 ATDD generations. All three built-in runners make 327 calls.
+`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story. One runner makes 113 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 10 pipelines, 4 test designs, 4 traces, and 2 ATDD generations. All three built-in runners make 339 calls.
 
 Check the data, executable, login, fixtures, and expected results without making a model call:
 

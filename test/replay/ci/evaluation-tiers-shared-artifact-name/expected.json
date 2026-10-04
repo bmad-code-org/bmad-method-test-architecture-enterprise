@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the merge job uploads its runs under the name the pr job already used. upload-artifact refuses a second upload of one name, so the second job's evidence is lost; the text carries a plausible name on both uploads, so only a scorer that reads each upload's name per job sees it.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-tiers-shared-artifact-name",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-tiers-granite-router",
+    "scoringInputsDigest": "sha256:590c5bc9290096452ab5ec4c44fce3c306bf3ca1eeb68e0b8a6dde3165a55dd6"
+  },
+  "derivation": [
+    "The file parses and lints clean. Two uploads carry the name evaluation-pr-runs, so the merge job's artifact element misses (its name is evaluation-merge-runs) and the pr job's is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-push-main": true,
+      "trigger-weekly-schedule": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "guard-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-merge": true,
+      "command-evaluation-ci-scheduled": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": true,
+      "job-evaluation-merge": true,
+      "job-evaluation-scheduled": true,
+      "job-evaluation-release": true,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-merge": false,
+      "artifact-evaluation-runs-scheduled": true,
+      "artifact-evaluation-runs-release": true
+    },
+    "elementMisses": [
+      "artifact-evaluation-runs-merge: the upload of evals/router/runs/ in job evaluation-merge is not named evaluation-merge-runs"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

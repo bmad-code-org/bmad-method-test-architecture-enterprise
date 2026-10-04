@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "devDependencies": {
+    "bmad-method-test-architecture-enterprise": "latest",
+    "eval-quality": "latest"
+  }
+}

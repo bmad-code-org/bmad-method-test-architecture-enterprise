@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
-  "sourceSpecDigest": "sha256:b78bef7ac68b11d7491ef32c42e81e2dfdd3e5a2d0c3d6bfbbbd1e1549ba329e",
+  "sourceSpecDigest": "sha256:1d50fe99e7956eec6e44ff8a4bdc15404b832efe918605e2f2643c93a15731cb",
   "behaviors": [
     {
       "id": "B-001",
@@ -669,6 +669,595 @@
         }
       ],
       "oracles": ["O-035"]
+    },
+    {
+      "id": "B-036",
+      "description": "evaluation-tiers-granite-router: trigger-pull-request-main is requested. pull requests targeting `main`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-036"]
+    },
+    {
+      "id": "B-037",
+      "description": "evaluation-tiers-granite-router: trigger-push-main is requested. pushes to `main`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-037"]
+    },
+    {
+      "id": "B-038",
+      "description": "evaluation-tiers-granite-router: trigger-weekly-schedule is requested. a weekly schedule on Sundays at 03:00 UTC (`0 3 * * 0`)",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-038"]
+    },
+    {
+      "id": "B-039",
+      "description": "evaluation-tiers-granite-router: trigger-release-published is requested. published releases",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-039"]
+    },
+    {
+      "id": "B-040",
+      "description": "evaluation-tiers-granite-router: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-040"]
+    },
+    {
+      "id": "B-041",
+      "description": "evaluation-tiers-granite-router: command-install is requested. install with `npm ci`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-041"]
+    },
+    {
+      "id": "B-042",
+      "description": "evaluation-tiers-granite-router: command-unit-tests is requested. then run `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-042"]
+    },
+    {
+      "id": "B-043",
+      "description": "evaluation-tiers-granite-router: command-evaluation-install is requested. Run its pull request checks on every pull request",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-043"]
+    },
+    {
+      "id": "B-044",
+      "description": "evaluation-tiers-granite-router: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-044"]
+    },
+    {
+      "id": "B-045",
+      "description": "evaluation-tiers-granite-router: command-evaluation-ci-merge is requested. its merge checks when a change lands on `main`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-045"]
+    },
+    {
+      "id": "B-046",
+      "description": "evaluation-tiers-granite-router: command-evaluation-ci-scheduled is requested. its scheduled checks on the weekly schedule",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-046"]
+    },
+    {
+      "id": "B-047",
+      "description": "evaluation-tiers-granite-router: command-evaluation-ci-release is requested. its release checks when a release is published",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-047"]
+    },
+    {
+      "id": "B-048",
+      "description": "evaluation-tiers-granite-router: job-evaluation-pr is requested. Run its pull request checks on every pull request",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-048"]
+    },
+    {
+      "id": "B-049",
+      "description": "evaluation-tiers-granite-router: job-evaluation-merge is requested. its merge checks when a change lands on `main`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-049"]
+    },
+    {
+      "id": "B-050",
+      "description": "evaluation-tiers-granite-router: job-evaluation-scheduled is requested. the scheduled and release checks call live models, so they get more time than the pull request and merge checks.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-050"]
+    },
+    {
+      "id": "B-051",
+      "description": "evaluation-tiers-granite-router: job-evaluation-release is requested. the scheduled and release checks call live models, so they get more time than the pull request and merge checks.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-051"]
+    },
+    {
+      "id": "B-052",
+      "description": "evaluation-tiers-granite-router: artifact-evaluation-runs-pr is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-052"]
+    },
+    {
+      "id": "B-053",
+      "description": "evaluation-tiers-granite-router: artifact-evaluation-runs-merge is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-053"]
+    },
+    {
+      "id": "B-054",
+      "description": "evaluation-tiers-granite-router: artifact-evaluation-runs-scheduled is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-054"]
+    },
+    {
+      "id": "B-055",
+      "description": "evaluation-tiers-granite-router: artifact-evaluation-runs-release is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-055"]
+    },
+    {
+      "id": "B-056",
+      "description": "evaluation-tiers-granite-router: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-tiers-granite-router/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-056"]
+    },
+    {
+      "id": "B-057",
+      "description": "evaluation-edit-ember-ledger: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-057"]
+    },
+    {
+      "id": "B-058",
+      "description": "evaluation-edit-ember-ledger: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-058"]
+    },
+    {
+      "id": "B-059",
+      "description": "evaluation-edit-ember-ledger: command-install is requested. install with `npm ci`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-059"]
+    },
+    {
+      "id": "B-060",
+      "description": "evaluation-edit-ember-ledger: command-unit-tests is requested. then run `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-060"]
+    },
+    {
+      "id": "B-061",
+      "description": "evaluation-edit-ember-ledger: command-evaluation-install is requested. Run its pull request checks on every pull request.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-061"]
+    },
+    {
+      "id": "B-062",
+      "description": "evaluation-edit-ember-ledger: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-062"]
+    },
+    {
+      "id": "B-063",
+      "description": "evaluation-edit-ember-ledger: job-evaluation-pr is requested. Run its pull request checks on every pull request.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-063"]
+    },
+    {
+      "id": "B-064",
+      "description": "evaluation-edit-ember-ledger: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-064"]
+    },
+    {
+      "id": "B-065",
+      "description": "evaluation-edit-ember-ledger: preserved-job-test is requested. The platform team wrote this job by hand and keeps it as it is.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-065"]
+    },
+    {
+      "id": "B-066",
+      "description": "evaluation-edit-ember-ledger: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-edit-ember-ledger/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-066"]
     }
   ],
   "oracles": [
@@ -1564,6 +2153,751 @@
           }
         ]
       }
+    },
+    {
+      "id": "O-036",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: trigger-pull-request-main is requested. pull requests targeting `main`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-037",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: trigger-push-main is requested. pushes to `main`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"push:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "push:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-038",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: trigger-weekly-schedule is requested. a weekly schedule on Sundays at 03:00 UTC (`0 3 * * 0`)",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"0 3 * * 0\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "0 3 * * 0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-039",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: trigger-release-published is requested. published releases",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"release:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "release:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-040",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-041",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-install is requested. install with `npm ci`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm ci\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "npm ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-042",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-unit-tests is requested. then run `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-043",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-evaluation-install is requested. Run its pull request checks on every pull request",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "npm install --prefix"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-044",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "--tier pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-045",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-evaluation-ci-merge is requested. its merge checks when a change lands on `main`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier merge\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "--tier merge"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-046",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-evaluation-ci-scheduled is requested. its scheduled checks on the weekly schedule",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier scheduled\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "--tier scheduled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-047",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: command-evaluation-ci-release is requested. its release checks when a release is published",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier release\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "--tier release"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-048",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: job-evaluation-pr is requested. Run its pull request checks on every pull request",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-049",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: job-evaluation-merge is requested. its merge checks when a change lands on `main`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-merge\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-merge"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-050",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: job-evaluation-scheduled is requested. the scheduled and release checks call live models, so they get more time than the pull request and merge checks.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-scheduled\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-scheduled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-051",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: job-evaluation-release is requested. the scheduled and release checks call live models, so they get more time than the pull request and merge checks.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-release\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-release"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-052",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: artifact-evaluation-runs-pr is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-053",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: artifact-evaluation-runs-merge is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-merge-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-merge-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-054",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: artifact-evaluation-runs-scheduled is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-scheduled-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-scheduled-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-055",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: artifact-evaluation-runs-release is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-tiers-granite-router, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-release-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-release-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-056",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-tiers-granite-router: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for evaluation-tiers-granite-router.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow",
+          "/interactions/ci-evaluation-tiers-granite-router/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-tiers-granite-router/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-tiers-granite-router/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-057",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-058",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-059",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: command-install is requested. install with `npm ci`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm ci\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "npm ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-060",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: command-unit-tests is requested. then run `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-061",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: command-evaluation-install is requested. Run its pull request checks on every pull request.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "npm install --prefix"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-062",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "--tier pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-063",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: job-evaluation-pr is requested. Run its pull request checks on every pull request.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-064",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-065",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: preserved-job-test is requested. The platform team wrote this job by hand and keeps it as it is.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-edit-ember-ledger, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"# Maintained by the platform team\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+          },
+          {
+            "literal": "# Maintained by the platform team"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-066",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-edit-ember-ledger: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for evaluation-edit-ember-ledger.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow",
+          "/interactions/ci-evaluation-edit-ember-ledger/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-edit-ember-ledger/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-edit-ember-ledger/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "rubrics": [],
@@ -1764,6 +3098,48 @@
           }
         }
       }
+    },
+    {
+      "stepId": "ci-evaluation-tiers-granite-router",
+      "interfaceId": "tea-ci-runner",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` against the project in `granite-router/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `granite-router`\n- `{config_source}`: `granite-router/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `granite-router/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `granite-router/tests`\n\nThe pipeline this project needs is stated in `granite-router/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `granite-router/`, and write\n`granite-router/test-artifacts/ci/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `granite-router/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    },
+    {
+      "stepId": "ci-evaluation-edit-ember-ledger",
+      "interfaceId": "tea-ci-runner",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` in edit mode against the project in `ember-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/SKILL.md`, answer its mode question with `[E] Edit`, then execute\n`skill/steps-e/step-01-assess.md` and `skill/steps-e/step-02-apply-edit.md` in order, in full, following every\nstep they load, without skipping or reordering.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `ember-ledger`\n- `{config_source}`: `ember-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `ember-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `ember-ledger/tests`\n\nThe pipeline to edit is `ember-ledger/.github/workflows/test.yml`, which the project already has. The requirements its team keeps for it are\nin `ember-ledger/docs/ci-requirements.md`. Treat them as decisions the edited pipeline has to keep carrying, and read the rest of\nthe project the way the edit steps say to. Apply the edits those steps treat as requested, and no other.\n\nThis workspace has no shell, so a check that runs a command cannot be executed here. Record each of those as\nnot run and continue; do not halt on them.\n\n----- what to produce -----\nEdit `ember-ledger/.github/workflows/test.yml` in place. Do not edit or delete any other file that was under `ember-ledger/` when you\nstarted, and write no file this workflow does not write in edit mode.\n\nWhen you are done, print one line naming the pipeline file you edited. Nothing else you print is read."
+          }
+        }
+      }
     }
   ],
   "scopedResources": null,
@@ -1777,15 +3153,15 @@
     "human-labels"
   ],
   "testData": {
-    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log, quarry-grader/ for evaluation-plan-quarry-grader), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
+    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log, quarry-grader/ for evaluation-plan-quarry-grader, granite-router/ for evaluation-tiers-granite-router, ember-ledger/ for evaluation-edit-ember-ledger), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
     "cleanup": "Delete the workspace. The corpus under test/fixtures/ci-eval/ is read-only and the harness digests it before and after every run.",
     "principals": null,
     "resources": null
   },
   "budgets": {
-    "maxToolCalls": 900,
-    "maxWallClockMinutes": 60,
-    "maxCostUsd": "12.00"
+    "maxToolCalls": 1500,
+    "maxWallClockMinutes": 100,
+    "maxCostUsd": "20.00"
   },
   "safetyLimits": [
     "The runner writes only inside the staged workspace, and only what the workflow scaffolds; the harness fails a run that changed the repository or a pre-existing project file.",
@@ -1797,6 +3173,6 @@
     "The exit code of each invocation.",
     "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
   ],
-  "probeStepBound": 5,
+  "probeStepBound": 7,
   "fixtureReset": null
 }

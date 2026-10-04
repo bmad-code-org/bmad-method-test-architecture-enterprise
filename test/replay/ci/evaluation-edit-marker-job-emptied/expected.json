@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the run added the evaluation-pr job and kept the stale job under its marker with its tier step replaced by an echo. One job runs the tier and two jobs carry the plan's marker, so a later run would find the stale job again by its marker, and a count of the jobs that run the tier alone sees one.",
+    "The new job is the capture's and the stale job is the pipeline's own with its tier command replaced, so the result is that one deviation."
+  ],
+  "id": "evaluation-edit-marker-job-emptied",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and lints clean. Two jobs carry the marker and one runs the tier's command, so the evaluation-pr job element misses (it expects one job for the tier under the marker), and every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": false,
+      "artifact-evaluation-runs": true,
+      "preserved-job-test": true,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [
+      "job-evaluation-pr: 2 job(s) carry the comment # tea-evaluation-plan: evals/ledger/ci/evaluation-ci-plan.json (evaluation-pr, evaluation-evals-ledger-pr), expected 1"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

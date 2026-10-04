@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the merge job runs only the merge tier's step. A tier holds only the checks placed on it, so the pull request checks never run on a merge, which the step's merge rule exists to prevent.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-tiers-merge-without-pr-step",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-tiers-granite-router",
+    "scoringInputsDigest": "sha256:590c5bc9290096452ab5ec4c44fce3c306bf3ca1eeb68e0b8a6dde3165a55dd6"
+  },
+  "derivation": [
+    "The file parses and lints clean. The merge job has one step of its own for the merge tier and none for the pr tier, so the merge job element misses; the pr job still holds the pr step once, so the pr tier step element is present, and every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-push-main": true,
+      "trigger-weekly-schedule": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "guard-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-merge": true,
+      "command-evaluation-ci-scheduled": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": true,
+      "job-evaluation-merge": false,
+      "job-evaluation-scheduled": true,
+      "job-evaluation-release": true,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-merge": true,
+      "artifact-evaluation-runs-scheduled": true,
+      "artifact-evaluation-runs-release": true
+    },
+    "elementMisses": [
+      "job-evaluation-merge: job evaluation-merge has no step of its own for npm exec --prefix evals -- tea-evaluate ci --evaluation evals/router --tier pr"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

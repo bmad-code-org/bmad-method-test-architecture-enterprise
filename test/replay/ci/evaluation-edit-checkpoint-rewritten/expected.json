@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the edit run saved its progress into the create run's checkpoint. In edit mode the checkpoint belongs to the create run, so the file the project came with must come back byte for byte.",
+    "The workflow is the capture's and the stored checkpoint carries one appended line, so the result is that one deviation."
+  ],
+  "id": "evaluation-edit-checkpoint-rewritten",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and lints clean. The stored checkpoint's bytes differ from the ones the create run left, so the checkpoint element misses and every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": true,
+      "preserved-job-test": true,
+      "checkpoint-untouched": false
+    },
+    "elementMisses": [
+      "checkpoint-untouched: test-artifacts/ci/ci-pipeline-progress.md was rewritten: its bytes are not the ones the create run left"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

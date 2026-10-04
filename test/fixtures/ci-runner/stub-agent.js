@@ -13,7 +13,8 @@
  * chosen by which project the workspace carries, so the runner can be driven
  * against it. The workflows are the replay corpus's own correct runs,
  * test/replay/ci/full-correct-pipeline, test/replay/ci/minimal-correct-pipeline and
- * the real capture test/replay/ci/evaluation-plan-live-capture,
+ * the real captures test/replay/ci/evaluation-plan-live-capture,
+ * test/replay/ci/evaluation-tiers-live-capture and test/replay/ci/evaluation-edit-live-capture,
  * which `npm run test:eval-replay` already pins to a scored result; a second copy
  * here would be a second thing to keep in step with the ground truth.
  *
@@ -28,6 +29,8 @@
  *   fail        exits 3 without writing, so the runner reports environment-transport
  *   mutate      write the workflow, add a file under the project's evidence/, and
  *               change a byte of package.json, so the caller must count a mutation
+ *   checkpoint  write the correct workflow and append a line to the project's create-run checkpoint,
+ *               test-artifacts/ci/ci-pipeline-progress.md, so an edit run reads as one that wrote it
  *   unparseable write the file with a syntax error, so the caller reads a parse failure
  *   deviation   write the evaluation-plan project's one-step-per-check deviation, one requested
  *               element short of its correct run, and the correct run for every other project
@@ -85,6 +88,8 @@ const projectRoot = named === null ? process.cwd() : path.join(process.cwd(), na
 const correctRuns = [
   [/lantern/, 'minimal-correct-pipeline'],
   [/quarry/, 'evaluation-plan-live-capture'],
+  [/granite/, 'evaluation-tiers-live-capture'],
+  [/ember/, 'evaluation-edit-live-capture'],
 ];
 // A one-element deviation of the evaluation-plan project's correct run: the tier step repeated once per check.
 const deviations = [[/quarry/, 'evaluation-plan-one-step-per-check']];
@@ -92,7 +97,9 @@ const replaySource =
   mode === 'unrequested'
     ? 'full-correct-pipeline'
     : mode === 'deviation'
-      ? (deviations.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline')
+      ? (deviations.find(([pattern]) => pattern.test(named ?? ''))?.[1] ??
+        correctRuns.find(([pattern]) => pattern.test(named ?? ''))?.[1] ??
+        'full-correct-pipeline')
       : (correctRuns.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline');
 const source = path.join(__dirname, '..', '..', 'replay', 'ci', replaySource, '.github', 'workflows', 'test.yml');
 const workflowDir = path.join(projectRoot, '.github', 'workflows');
@@ -117,6 +124,12 @@ if (mode === 'mutate') {
     pkg.description = `${pkg.description ?? ''} (edited by a run that should not touch this file)`;
     fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
   }
+}
+
+// The checkpoint belongs to the create run, so an edit run that saves its own progress there has rewritten it.
+if (mode === 'checkpoint') {
+  const checkpointPath = path.join(projectRoot, 'test-artifacts', 'ci', 'ci-pipeline-progress.md');
+  if (fs.existsSync(checkpointPath)) fs.appendFileSync(checkpointPath, '\n## Edit run\n\n- progress saved by an edit run\n', 'utf8');
 }
 
 process.stdout.write(`Wrote ${path.relative(process.cwd(), workflowPath)}.\n`);

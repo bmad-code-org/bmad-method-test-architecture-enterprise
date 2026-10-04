@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:f871cb26d6cfeaa84b9fc7845c1e14338a80f5f582d64fd3d369ff5a2d320dbe",
+    "corpusDigest": "sha256:c6c521d300fcb1bab5760a238ef9a4988f1c6243fcada5507fbada05f55a93d0",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -324,6 +324,192 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",

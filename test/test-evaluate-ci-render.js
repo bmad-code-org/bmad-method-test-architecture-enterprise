@@ -24,6 +24,13 @@
  *  - the corpus validator refuses the malformed elements it names;
  *  - the CI suite's manifest lists exactly the files under each project root;
  *  - the stored `evaluation-plan` replay is a real capture of the live `eval:ci` run.
+ *
+ * Story 1.93 adds the projects that carry the rest of the step: the tiers adopter's plan places checks on pr, merge and
+ * scheduled, and its ground truth is the job, tier step, event, timeout and artifact name each tier's rules give; the
+ * edit adopter's pipeline carries a marker job under an id the rules no longer give and a hand-written job, and its
+ * ground truth digests that job and the create run's checkpoint. The scorer's event guard reader, the corpus validator's
+ * refusals of the new element fields and the stored tiers and edit cases (one real capture each, and the constructed
+ * deviations that each miss exactly the elements they remove) are held here.
  */
 
 const crypto = require('node:crypto');
@@ -35,7 +42,7 @@ const { spawnSync } = require('node:child_process');
 const YAML = require('yaml');
 
 const { DEFAULT_TIERS, PLAN_PATH, readPlan } = require('../cli/lib/evaluate/ci-plan');
-const { validateCorpus, scoreRun } = require('./eval-ci');
+const { validateCorpus, scoreRun, guardHolds, jobBlockOf, sha256Of } = require('./eval-ci');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-ci');
@@ -410,6 +417,215 @@ function checkFixturePlan() {
   check(set.projectFiles.includes('evals/package.json'), 'the fixture adopter does not declare the evaluations folder manifest');
 }
 
+const TIERS_SET_ID = 'evaluation-tiers-granite-router';
+const EDIT_SET_ID = 'evaluation-edit-ember-ledger';
+/** The event a plan trigger starts, as the step maps it for a pipeline that lists no merge_group. */
+const EVENT_OF_TRIGGER = { 'pull-request': 'pull_request', merge: 'push', schedule: 'schedule', release: 'release' };
+/** The limit in minutes the step gives each tier's job. */
+const TIMEOUT_OF_TIER = { pr: 30, merge: 30, scheduled: 120, release: 120 };
+
+function groundTruthSet(setId) {
+  return JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8')).fixtureSets.find((entry) => entry.id === setId);
+}
+
+/**
+ * The two fixture adopters of Story 1.93 hold their ground truth to their plans: the tiers adopter places checks on pr,
+ * merge and scheduled, and each tier's job, tier step, timeout, event, artifact name and the merge job's pr step ahead
+ * of its own are the ones the step's rules give for that plan. The edit adopter's pipeline carries a marker job under
+ * an id the rules no longer give and a hand-written job, and its checkpoint is the one the create run left.
+ */
+function checkTierFixtures() {
+  const tiers = groundTruthSet(TIERS_SET_ID);
+  check(tiers !== undefined, `ground-truth.json has no fixture set ${TIERS_SET_ID}`);
+  const folder = 'test/fixtures/ci-eval/evaluation-tiers/evals/router';
+  const adopter = readPlan(path.join(ROOT, folder));
+  check(
+    adopter.plan !== undefined && adopter.findings.length === 0,
+    `the tiers adopter's plan breaks the runtime schema: ${JSON.stringify(adopter.findings)}`,
+  );
+  if (tiers !== undefined && adopter.plan !== undefined) {
+    const placed = ['pr', 'merge', 'scheduled', 'release'].filter((tier) => checkIdsOf(adopter.plan, tier).length > 0);
+    check(
+      placed.join(',') === 'pr,merge,scheduled,release',
+      `the tiers adopter's plan places checks on ${placed.join(', ')}, expected pr, merge, scheduled and release`,
+    );
+    const element = (id) => tiers.expectedElements.find((entry) => entry.id === id);
+    const command = (tier) => `npm exec --prefix evals -- tea-evaluate ci --evaluation evals/router --tier ${tier}`;
+    const marker = `# tea-evaluation-plan: evals/router/${PLAN_PATH}`;
+    for (const tier of placed) {
+      const step = element(`command-evaluation-ci-${tier}`);
+      check(
+        step?.command === command(tier) &&
+          step?.standaloneStep === true &&
+          JSON.stringify(step?.checkIds) === JSON.stringify(checkIdsOf(adopter.plan, tier)),
+        `the ground truth's ${tier} tier step is ${JSON.stringify(step)}, expected ${command(tier)} named for ${checkIdsOf(adopter.plan, tier).join(', ')}`,
+      );
+      const events = [
+        ...new Set(
+          adopter.plan.checks
+            .filter((entry) => entry.placement.tier === tier)
+            .flatMap((entry) => entry.trigger.map((trigger) => EVENT_OF_TRIGGER[trigger])),
+        ),
+      ];
+      const job = element(`job-evaluation-${tier}`);
+      check(
+        job?.jobId === `evaluation-${tier}` &&
+          job?.command === command(tier) &&
+          job?.marker === marker &&
+          job?.timeoutMinutes === TIMEOUT_OF_TIER[tier] &&
+          JSON.stringify(job?.runsOn) === JSON.stringify(events),
+        `the ground truth's evaluation-${tier} job is ${JSON.stringify(job)}, expected ${command(tier)} under ${marker}, ${TIMEOUT_OF_TIER[tier]} minutes, on ${events.join(', ')}`,
+      );
+      const upload = element(`artifact-evaluation-runs-${tier}`);
+      check(
+        upload?.jobId === `evaluation-${tier}` &&
+          upload?.name === `evaluation-${tier}-runs` &&
+          upload?.pathToken === 'evals/router/runs/' &&
+          upload?.condition === 'always()',
+        `the ground truth's ${tier} upload is ${JSON.stringify(upload)}, expected evals/router/runs/ under always() named evaluation-${tier}-runs in job evaluation-${tier}`,
+      );
+    }
+    check(
+      element('job-evaluation-merge')?.after === command('pr'),
+      "the ground truth does not put the pr step ahead of the merge job's own",
+    );
+    const names = tiers.expectedElements.filter((entry) => entry.kind === 'artifact').map((entry) => entry.name);
+    check(new Set(names).size === names.length, `the ground truth names two uploads alike: ${names.join(', ')}`);
+    const guard = element('guard-unit-tests');
+    check(
+      guard?.command === 'npm test' && JSON.stringify(guard?.runsOn) === JSON.stringify(['pull_request', 'push']),
+      `the ground truth limits the test job to ${JSON.stringify(guard?.runsOn)}, expected pull_request and push, the events it ran on before the plan's tiers added schedule and release`,
+    );
+    const release = element('trigger-release-published');
+    check(
+      release?.event === 'release' && JSON.stringify(release?.types) === JSON.stringify(['published']),
+      'the ground truth does not map the release tier to release of type published',
+    );
+    check(
+      element('trigger-push-main')?.event === 'push' && element('trigger-weekly-schedule')?.event === 'schedule',
+      'the ground truth lacks the push and schedule triggers the merge and scheduled tiers map to',
+    );
+    check(tiers.requireEveryElement === true, 'the tiers adopter is not held to every one of its elements');
+    check(
+      tiers.projectFiles.includes(`evals/router/${PLAN_PATH}`) && tiers.projectFiles.includes('evals/package.json'),
+      'the tiers adopter does not declare its plan and its evaluations folder manifest',
+    );
+    const request = fs.readFileSync(path.join(FIXTURE_ROOT, 'evaluation-tiers', 'docs', 'ci-requirements.md'), 'utf8');
+    check(!/evaluation-ci-plan|ci\/|plan/i.test(request), "the tiers adopter's request names the plan");
+  }
+
+  const edit = groundTruthSet(EDIT_SET_ID);
+  check(edit !== undefined, `ground-truth.json has no fixture set ${EDIT_SET_ID}`);
+  const editFolder = 'test/fixtures/ci-eval/evaluation-edit/evals/ledger';
+  const editPlan = readPlan(path.join(ROOT, editFolder));
+  check(
+    editPlan.plan !== undefined && editPlan.findings.length === 0,
+    `the edit adopter's plan breaks the runtime schema: ${JSON.stringify(editPlan.findings)}`,
+  );
+  if (edit !== undefined && editPlan.plan !== undefined) {
+    const prIds = checkIdsOf(editPlan.plan, 'pr');
+    check(
+      prIds.length === editPlan.plan.checks.length && prIds.length >= 3,
+      "the edit adopter's plan places checks off pr, or fewer than the stale job's step names and two more",
+    );
+    const step = edit.expectedElements.find((entry) => entry.id === 'command-evaluation-ci-pr');
+    check(
+      JSON.stringify(step?.checkIds) === JSON.stringify(prIds),
+      `the edit adopter's tier step names ${JSON.stringify(step?.checkIds)}, expected ${prIds.join(', ')}`,
+    );
+    const pipeline = fs.readFileSync(path.join(FIXTURE_ROOT, 'evaluation-edit', '.github', 'workflows', 'test.yml'), 'utf8');
+    const marker = `# tea-evaluation-plan: evals/ledger/${PLAN_PATH}`;
+    const staleId = /^ {2}(\S+):\n {4}# tea-evaluation-plan:/m.exec(pipeline)?.[1];
+    check(
+      staleId !== undefined && staleId !== 'evaluation-pr',
+      `the edit adopter's pipeline carries its marker job under ${staleId}, which must differ from the id the rules give now (evaluation-pr)`,
+    );
+    check(pipeline.split(marker).length === 2, "the edit adopter's pipeline must carry the marker on exactly one job");
+    const staleName = /name: "([^"]*)"\n {8}run: \|\n {10}npm exec/.exec(pipeline)?.[1] ?? '';
+    check(
+      staleName.length > 0 && prIds.some((id) => !staleName.includes(id)),
+      "the stale job's step is already named for every pr check, so the edit has nothing to replace",
+    );
+    check(
+      jobBlockOf(pipeline, 'test') !== null &&
+        sha256Of(jobBlockOf(pipeline, 'test')) === edit.expectedElements.find((entry) => entry.kind === 'preserved')?.sha256,
+      'the hand-written job is not the one the ground truth digests',
+    );
+    check(
+      edit.mode === 'edit' && edit.editTarget === '.github/workflows/test.yml',
+      'the edit adopter is not an edit set over the pipeline',
+    );
+  }
+}
+
+/**
+ * A job that waits for a job its event skips is skipped with it, and a guard on a job that existed before an event is read
+ * for the command it runs, so both are scored through the stored tiers capture with one edit each.
+ */
+function checkNeedsAndExistingJobGuards() {
+  const set = groundTruthSet(TIERS_SET_ID);
+  const captureFile = path.join(REPLAY_ROOT, 'evaluation-tiers-live-capture', '.github', 'workflows', 'test.yml');
+  check(fs.existsSync(captureFile), 'the stored tiers capture is gone, so the needs and guard cases cannot run');
+  if (!fs.existsSync(captureFile)) return;
+  const capture = fs.readFileSync(captureFile, 'utf8');
+  const missesOf = (text) =>
+    scoreRun(set, text, { findings: [] })
+      .elements.filter((element) => !element.present)
+      .map((element) => element.id);
+  check(missesOf(capture).length === 0, `the stored tiers capture misses ${missesOf(capture).join(', ')}`);
+  const waiting = capture.replace('  evaluation-merge:\n', '  evaluation-merge:\n    needs: evaluation-pr\n');
+  check(waiting !== capture, 'the tiers capture has no evaluation-merge job to make wait');
+  check(
+    missesOf(waiting).join(',') === 'job-evaluation-merge',
+    `a merge job that needs the pr job (skipped on push) misses ${missesOf(waiting).join(', ') || 'nothing'} where only the merge job element belongs`,
+  );
+  const created = capture.replace('    types: [published]\n', '    types: [created]\n');
+  check(created !== capture, 'the tiers capture has no release type to change');
+  check(
+    missesOf(created).join(',') === 'trigger-release-published',
+    `a release trigger of type created misses ${missesOf(created).join(', ') || 'nothing'} where only the release trigger element belongs`,
+  );
+  const everyEvent = capture.replace(
+    "    if: github.event_name == 'pull_request' || github.event_name == 'push'\n",
+    "    if: github.event_name != 'release'\n",
+  );
+  check(everyEvent !== capture, 'the tiers capture has no test job to guard');
+  check(
+    missesOf(everyEvent).join(',') === 'guard-unit-tests',
+    `a test job that still runs on schedule misses ${missesOf(everyEvent).join(', ') || 'nothing'} where only the guard element belongs`,
+  );
+}
+
+/** The event guards the scorer reads, and the ones it refuses to guess at. */
+function checkEventGuards() {
+  const cases = [
+    [undefined, 'push', true],
+    ["github.event_name == 'push'", 'push', true],
+    ["github.event_name == 'push'", 'schedule', false],
+    ["${{ github.event_name != 'schedule' }}", 'pull_request', true],
+    ["${{ github.event_name != 'schedule' }}", 'schedule', false],
+    ["github.event_name == 'push' && github.ref == 'refs/heads/main'", 'push', true],
+    ["github.event_name == 'pull_request' || github.event_name == 'push'", 'schedule', false],
+    ["!(github.event_name == 'schedule')", 'push', true],
+    ["github.event_name == 'pull_request' && github.ref == 'refs/heads/main'", 'pull_request', false],
+    ['contains(fromJSON(\'["push"]\'), github.event_name)', 'push', null],
+    ["github.event_name == 'push' && (function () { return true; })()", 'push', null],
+    ["github.event_name == 'push' && process.exit(1)", 'push', null],
+    ["github.event_name == 'PUSH'", 'push', true],
+    ["startsWith(github.ref, 'refs/tags/')", 'release', true],
+    ["startsWith(github.ref, 'refs/tags/')", 'push', false],
+    ['startsWith(github.ref, github.ref)', 'push', null],
+    ["github.event.schedule == '0 3 * * 0'", 'schedule', true, '0 3 * * 0'],
+    ["github.event.schedule == '0 3 * * 0'", 'schedule', false, '0 4 * * 0'],
+  ];
+  for (const [condition, event, expected, cron] of cases) {
+    check(
+      guardHolds(condition, event, cron) === expected,
+      `the guard ${JSON.stringify(condition)} on ${event} reads ${guardHolds(condition, event, cron)}, expected ${expected}`,
+    );
+  }
+}
+
 /**
  * The scorer's reading of the tier step's name. Two replay cases cannot hold it, since a case that misses the tier step
  * element for another reason signs like it, so the capture is scored here with the step renamed.
@@ -591,6 +807,14 @@ function checkStepSentences() {
     [
       'cleanup removes the jobs of gone plans',
       'Remove a job only when its plan file is gone or the plan no longer places a check on its tier.',
+    ],
+    [
+      'a re-render renames the job to the id the rules give now',
+      'Rewrite the job under the id item 1 gives now: rename it, give its artifact the name item 1 derives from the new id, and keep no job under the old id, so a renamed or newly shared id never leaves two jobs.',
+    ],
+    [
+      'the id a job carries can differ from the id the rules give now',
+      "For each job whose plan still places checks on its tier, work out the id item 1 gives that plan and tier now. It can differ from the id the job carries: a job written while the repository held several plans carries the plan's folder, and with one plan left item 1 gives `evaluation-<tier>`.",
     ],
     [
       'Node floor',
@@ -801,10 +1025,50 @@ async function checkCorpusGuards() {
       'retentionDays is declared and is not an integer',
     ],
     ['job with no marker', 'job-evaluation-pr', { marker: '' }, 'job declares no marker'],
+    ['job whose after is empty', 'job-evaluation-merge', { after: '' }, 'after is declared and is not a non-empty command', TIERS_SET_ID],
+    ['job whose runsOn is empty', 'job-evaluation-pr', { runsOn: [] }, 'runsOn is declared and is not a non-empty list', TIERS_SET_ID],
+    [
+      'job whose timeout is not a number',
+      'job-evaluation-pr',
+      { timeoutMinutes: '30' },
+      'timeoutMinutes is declared and is not a positive integer',
+      TIERS_SET_ID,
+    ],
+    [
+      'job whose marker count is zero',
+      'job-evaluation-pr',
+      { markerJobs: 0 },
+      'markerJobs is declared and is not a positive integer',
+      EDIT_SET_ID,
+    ],
+    [
+      'artifact whose name is empty',
+      'artifact-evaluation-runs-pr',
+      { name: '' },
+      'name is declared and is not a non-empty string',
+      TIERS_SET_ID,
+    ],
+    [
+      'artifact whose job is empty',
+      'artifact-evaluation-runs-pr',
+      { jobId: '' },
+      'jobId is declared and is not a non-empty string',
+      TIERS_SET_ID,
+    ],
+    ["preserved job whose digest is not the staged job's", 'preserved-job-test', { sha256: '0'.repeat(64) }, 'digests to', EDIT_SET_ID],
+    ['preserved job the pipeline does not hold', 'preserved-job-test', { jobId: 'absent' }, 'carries no job absent', EDIT_SET_ID],
+    ["checkpoint whose digest is not the staged file's", 'checkpoint-untouched', { sha256: '0'.repeat(64) }, 'digests to', EDIT_SET_ID],
+    [
+      'checkpoint that names no project file',
+      'checkpoint-untouched',
+      { file: 'test-artifacts/other.md' },
+      'not a declared project file',
+      EDIT_SET_ID,
+    ],
   ];
-  for (const [label, elementId, patch, expected] of cases) {
+  for (const [label, elementId, patch, expected, setId = SET_ID] of cases) {
     const mutated = structuredClone(baseline);
-    const element = mutated.fixtureSets.find((set) => set.id === SET_ID).expectedElements.find((entry) => entry.id === elementId);
+    const element = mutated.fixtureSets.find((set) => set.id === setId).expectedElements.find((entry) => entry.id === elementId);
     Object.assign(element, patch);
     const { problems } = await validateCorpus(mutated);
     check(
@@ -839,11 +1103,125 @@ function checkStoredCapture() {
   check(captures === 1, `test/replay/ci holds ${captures} real captures of the evaluation-plan project, expected one`);
 }
 
+/** The corpus validator refuses an edit set that leaves out what its edit must keep, and a mode it does not know. */
+async function checkEditSetGuards() {
+  const baseline = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+  const cases = [
+    [
+      'an edit set with no preserved element',
+      (set) =>
+        set.expectedElements.splice(
+          set.expectedElements.findIndex((entry) => entry.kind === 'preserved'),
+          1,
+        ),
+      'declares no preserved element',
+    ],
+    [
+      'an edit set with no checkpoint element',
+      (set) =>
+        set.expectedElements.splice(
+          set.expectedElements.findIndex((entry) => entry.kind === 'checkpoint'),
+          1,
+        ),
+      'declares no checkpoint element',
+    ],
+    ['an edit set with no edit target', (set) => delete set.editTarget, 'names editTarget'],
+    ['a mode that is neither create nor edit', (set) => (set.mode = 'repair'), 'is not one of [create, edit]'],
+  ];
+  for (const [label, mutate, expected] of cases) {
+    const mutated = structuredClone(baseline);
+    mutate(mutated.fixtureSets.find((set) => set.id === EDIT_SET_ID));
+    const { problems } = await validateCorpus(mutated);
+    check(
+      problems.some((problem) => problem.includes(expected)),
+      `validateCorpus does not refuse ${label} (${problems.length} problems)`,
+    );
+  }
+  const mutated = structuredClone(baseline);
+  mutated.fixtureSets.find((set) => set.id === TIERS_SET_ID).editTarget = '.github/workflows/test.yml';
+  const { problems } = await validateCorpus(mutated);
+  check(
+    problems.some((problem) => problem.includes('not an edit set')),
+    'validateCorpus does not refuse an editTarget on a create set',
+  );
+}
+
+/**
+ * The stored cases of the tiers and edit projects: one real capture each with its recorded sha256, the three constructed
+ * deviations the story names, each missing exactly the element it removes, and the edit cases holding the checkpoint
+ * the run left.
+ */
+function checkTierAndEditCases() {
+  const read = (name) => JSON.parse(fs.readFileSync(path.join(REPLAY_ROOT, name, 'expected.json'), 'utf8'));
+  const missesOf = (name) =>
+    Object.entries(read(name).result.elements)
+      .filter(([, present]) => !present)
+      .map(([id]) => id);
+  for (const [prefix, setId] of [
+    ['evaluation-tiers-', TIERS_SET_ID],
+    ['evaluation-edit-', EDIT_SET_ID],
+  ]) {
+    const names = fs.readdirSync(REPLAY_ROOT).filter((name) => name.startsWith(prefix));
+    let captures = 0;
+    for (const name of names) {
+      const directory = path.join(REPLAY_ROOT, name);
+      const expected = read(name);
+      check(expected.inputs?.fixtureSet === setId, `${name} scores against ${expected.inputs?.fixtureSet}, expected ${setId}`);
+      check(fs.existsSync(path.join(directory, '.github', 'workflows', 'test.yml')), `${name} holds no stored workflow`);
+      if (setId === EDIT_SET_ID) {
+        check(
+          fs.existsSync(path.join(directory, 'test-artifacts', 'ci', 'ci-pipeline-progress.md')),
+          `${name} holds no checkpoint, which the edit set scores`,
+        );
+      }
+      if (expected.storedOutput?.origin !== 'real-capture') continue;
+      captures += 1;
+      const stored = fs.readFileSync(path.join(directory, '.github', 'workflows', 'test.yml'));
+      check(
+        typeof expected.storedOutput.capturedBy === 'string' && expected.storedOutput.capturedBy.length > 0,
+        `${name} is a real capture and does not say which run produced it`,
+      );
+      check(
+        expected.storedOutput.sha256 === crypto.createHash('sha256').update(stored).digest('hex'),
+        `${name} holds a workflow whose sha256 differs from the one recorded when the run was captured`,
+      );
+      check(missesOf(name).length === 0, `${name} is the real capture and misses ${missesOf(name).join(', ')}`);
+    }
+    check(captures === 1, `test/replay/ci holds ${captures} real captures of ${setId}, expected one`);
+  }
+  // Each constructed deviation misses exactly the elements it removes.
+  const exact = {
+    'evaluation-tiers-merge-without-pr-step': ['job-evaluation-merge'],
+    'evaluation-tiers-shared-artifact-name': ['artifact-evaluation-runs-merge'],
+    'evaluation-tiers-scheduled-under-pr-timeout': ['job-evaluation-scheduled'],
+    'evaluation-tiers-pr-job-unguarded': ['job-evaluation-pr'],
+    'evaluation-tiers-artifact-names-swapped': ['artifact-evaluation-runs-merge', 'artifact-evaluation-runs-pr'],
+    'evaluation-tiers-test-job-unguarded': ['guard-unit-tests'],
+    'evaluation-edit-test-job-reformatted': ['preserved-job-test'],
+    'evaluation-edit-checkpoint-rewritten': ['checkpoint-untouched'],
+    'evaluation-edit-stale-job-kept': ['command-evaluation-ci-pr', 'job-evaluation-pr'],
+    'evaluation-edit-stale-job-kept-unmarked': ['command-evaluation-ci-pr', 'job-evaluation-pr'],
+    'evaluation-edit-marker-job-emptied': ['job-evaluation-pr'],
+    'evaluation-edit-job-id-kept': ['artifact-evaluation-runs', 'job-evaluation-pr'],
+  };
+  for (const [name, expectedMisses] of Object.entries(exact)) {
+    check(fs.existsSync(path.join(REPLAY_ROOT, name)), `test/replay/ci holds no case ${name}`);
+    if (!fs.existsSync(path.join(REPLAY_ROOT, name))) continue;
+    check(
+      missesOf(name).sort().join(',') === expectedMisses.join(','),
+      `${name} misses ${missesOf(name).join(', ') || 'nothing'}, expected ${expectedMisses.join(', ')}`,
+    );
+  }
+}
+
 async function main() {
   checkEntryPoints();
   checkTemplateBlock();
   checkNoRestatedTable();
   checkFixturePlan();
+  checkTierFixtures();
+  checkEventGuards();
+  checkNeedsAndExistingJobGuards();
   checkStepSentences();
   checkSupportingFiles();
   checkManifestFixtures();
@@ -851,7 +1229,9 @@ async function main() {
   checkPrescribedRenderings();
   checkTemplateNodeStep();
   await checkCorpusGuards();
+  await checkEditSetGuards();
   checkStoredCapture();
+  checkTierAndEditCases();
 
   if (failures.length > 0) {
     for (const message of failures) console.error(`${colors.red}✗${colors.reset} ${message}`);
@@ -859,7 +1239,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds its patterns, and the fixture adopter's plan is the Story 1.10 plan`,
+    `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds its patterns, the fixture adopter's plan is the Story 1.10 plan, and the tiers and edit adopters hold their ground truth to their plans`,
   );
 }
 

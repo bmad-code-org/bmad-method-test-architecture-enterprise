@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the run rewrote the marker job and kept the id the earlier run gave it, which carries the plan's folder. The live edit runs before the step spelled the rename out did exactly this, twice. With one plan left, the rules give evaluation-pr, and an id a run keeps from a time the repository held several plans is a rendering the step does not prescribe.",
+    "The rewrite is the capture's under the old id and the old artifact name, so the result is the two elements that name the id."
+  ],
+  "id": "evaluation-edit-job-id-kept",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-edit-ember-ledger",
+    "scoringInputsDigest": "sha256:397de0230fe5176e25e1c5767e639b3183c3a0e665dacfb8dbf49824cd451f8d"
+  },
+  "derivation": [
+    "The file parses and lints clean. No job is named evaluation-pr, so the job element misses, and the upload of evals/ledger/runs/ is in no job of that name, so the artifact element misses; every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": false,
+      "artifact-evaluation-runs": false,
+      "preserved-job-test": true,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [
+      "job-evaluation-pr: no job is named evaluation-pr",
+      "artifact-evaluation-runs: no upload-artifact step in job evaluation-pr names a path containing evals/ledger/runs/"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

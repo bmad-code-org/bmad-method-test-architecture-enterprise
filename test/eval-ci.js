@@ -41,8 +41,10 @@
  *                        the parsed document: a trigger with its branches or cron, a
  *                        permission scope at its level, a command as a standalone
  *                        invocation in a run: block, a gate by its shape, an upload
- *                        step by its path, condition and retention, and the Node
- *                        version by where it comes from
+ *                        step by its path, condition, retention, job and name, the
+ *                        Node version by where it comes from, a job by its id, marker,
+ *                        event guard, timeout and the step that runs first, a job left
+ *                        byte for byte and a file left untouched
  *   trigger accuracy     the trigger elements on their own, because a workflow with
  *                        the wrong triggers never runs and every other element is moot
  *   unrequested elements every trigger, permission scope, test-runner invocation,
@@ -90,8 +92,20 @@
  *
  * ONE PROJECT PER RUN
  *
- * The two projects are two services with two requests. Each is its own
+ * The five projects are five services with five requests. Each is its own
  * workspace, its own agent call, and its own case.
+ *
+ * EDIT SETS
+ *
+ * A set whose ground truth declares `mode: "edit"` runs the skill's edit entry over a
+ * pipeline the project already has, which the set names as its `editTarget`. Its prompt
+ * chooses `[E] Edit` and asks for no other deliverable, and the target is the one project
+ * file the run changes on purpose, so the fixture-mutation digest leaves it out and holds
+ * every other file, the create run's checkpoint included. What the edit must leave alone
+ * is scored by two element kinds: `preserved` digests the source of a job the pipeline
+ * holds and compares it with the job in the edited file, and `checkpoint` digests a project
+ * file and compares it with the file after the run. A stored edit case keeps that file
+ * beside the workflow.
  *
  * THREE MODES
  *
@@ -160,6 +174,7 @@
  * write into a project's own tree, goes through `test/lib/file-system-port.js`.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -260,7 +275,13 @@ const ACTIONLINT = {
 const LINT_TIMEOUT_MS = 30_000;
 
 /** The kinds an expected element may declare, and what each one is checked with. */
-const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job'];
+const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job', 'preserved', 'checkpoint'];
+
+/** The two modes a fixture set runs the skill in: create writes the pipeline, edit changes the pipeline the project already has. */
+const SET_MODES = ['create', 'edit'];
+
+/** A SHA-256 digest as `crypto` prints it. */
+const SHA256_HEX = /^[\da-f]{64}$/;
 
 /** The gate shapes checkElement knows how to read. */
 const GATE_SHAPES = ['lint-precedes-tests', 'matrix-shards', 'burn-in'];
@@ -373,16 +394,13 @@ const THRESHOLDS = {
   // an untrusted input interpolated into a script, a syntax error. Each is a
   // workflow that fails on its first push.
   maxLintFindings: 0,
-  // Twenty-eight requested elements across the three projects, thirteen, five
-  // and ten. 0.9 admits two misses in the corpus, the width of a defensible
-  // disagreement about how an element is spelled in the two projects whose
-  // requests state their elements in prose. A project whose ground truth sets
-  // `requireEveryElement` is held to every one of its elements on its own,
-  // whatever this ratio says: the evaluation-plan project's elements each read
-  // one property the skill's step prescribes, so a single miss is a deviation
-  // and must not hide in the aggregate.
-  requestedElementRecall: 0.9,
-  // The four trigger elements on their own. A workflow whose triggers are
+  // Sixty-three requested elements across the five projects: thirteen, five, ten, twenty-three and twelve. 0.96 admits two
+  // misses in the corpus, the width of a defensible disagreement about how an element is spelled in the two projects
+  // whose requests state their elements in prose. A project whose ground truth sets `requireEveryElement` is held to
+  // every one of its elements on its own, whatever this ratio says: the three evaluation projects' elements each read
+  // one property the skill's step prescribes, so a single miss is a deviation and must not hide in the aggregate.
+  requestedElementRecall: 0.96,
+  // The trigger elements on their own. A workflow whose triggers are
   // wrong never runs on the event the team asked for, so nothing else in it
   // matters, and the one disagreement the recall admits can never be a trigger.
   triggerAccuracy: 1,
@@ -747,6 +765,26 @@ async function validateCorpus(groundTruth) {
     if (set.requireEveryElement !== undefined && typeof set.requireEveryElement !== 'boolean') {
       problems.push(`${label}: requireEveryElement is declared and is not a boolean`);
     }
+    if (set.mode !== undefined && !SET_MODES.includes(set.mode)) {
+      problems.push(`${label}: mode ${JSON.stringify(set.mode)} is not one of [${SET_MODES.join(', ')}]`);
+    }
+    if (set.mode === 'edit') {
+      // An edit set stages the pipeline the skill edits, so that file is a project file the run changes on purpose.
+      if (set.editTarget !== WORKFLOW_PATH) {
+        problems.push(
+          `${label}: an edit set names editTarget ${WORKFLOW_PATH}, the pipeline the run edits; found ${JSON.stringify(set.editTarget)}`,
+        );
+      } else if (!(set.projectFiles ?? []).includes(set.editTarget)) {
+        problems.push(`${label}: editTarget ${set.editTarget} is not a declared project file, so there is no pipeline to edit`);
+      }
+      for (const kind of ['preserved', 'checkpoint']) {
+        if (!(set.expectedElements ?? []).some((element) => element.kind === kind)) {
+          problems.push(`${label}: an edit set declares no ${kind} element, so nothing scores what the edit must leave alone`);
+        }
+      }
+    } else if (set.editTarget !== undefined) {
+      problems.push(`${label}: editTarget is declared on a set that is not an edit set`);
+    }
 
     // The declared project file list is held equal to what is on disk in both
     // directions, for the reason the nfr harness gives: a shipped file the
@@ -843,6 +881,12 @@ async function validateCorpus(groundTruth) {
           if (element.cron !== undefined && (typeof element.cron !== 'string' || element.cron.trim().length === 0)) {
             problems.push(`${elementLabel}: cron is declared and is not a non-empty string`);
           }
+          if (
+            element.types !== undefined &&
+            (!Array.isArray(element.types) || element.types.length === 0 || element.types.some((type) => typeof type !== 'string'))
+          ) {
+            problems.push(`${elementLabel}: types is declared and is not a non-empty list of event types`);
+          }
           break;
         }
         case 'permission': {
@@ -859,6 +903,12 @@ async function validateCorpus(groundTruth) {
           const script = npmScriptOf(element.command);
           if (script !== null && scripts !== null && !Object.hasOwn(scripts, script)) {
             problems.push(`${elementLabel}: asks for "${element.command}" and the project's package.json declares no "${script}" script`);
+          }
+          if (
+            element.runsOn !== undefined &&
+            (!Array.isArray(element.runsOn) || element.runsOn.length === 0 || element.runsOn.some((event) => typeof event !== 'string'))
+          ) {
+            problems.push(`${elementLabel}: runsOn is declared and is not a non-empty list of events`);
           }
           if (element.standaloneStep !== undefined && typeof element.standaloneStep !== 'boolean') {
             problems.push(`${elementLabel}: standaloneStep is declared and is not a boolean`);
@@ -911,6 +961,11 @@ async function validateCorpus(groundTruth) {
           if (element.condition !== undefined && (typeof element.condition !== 'string' || element.condition.trim().length === 0)) {
             problems.push(`${elementLabel}: condition is declared and is not a non-empty string`);
           }
+          for (const field of ['name', 'jobId']) {
+            if (element[field] !== undefined && (typeof element[field] !== 'string' || element[field].trim().length === 0)) {
+              problems.push(`${elementLabel}: ${field} is declared and is not a non-empty string`);
+            }
+          }
           if (element.condition !== undefined && element.onFailureOnly === true) {
             problems.push(`${elementLabel}: declares a condition and onFailureOnly, which both constrain the upload's if`);
           }
@@ -932,6 +987,54 @@ async function validateCorpus(groundTruth) {
           for (const field of ['jobId', 'marker', 'command']) {
             if (typeof element[field] !== 'string' || element[field].trim().length === 0) {
               problems.push(`${elementLabel}: job declares no ${field}`);
+            }
+          }
+          if (element.after !== undefined && (typeof element.after !== 'string' || element.after.trim().length === 0)) {
+            problems.push(`${elementLabel}: after is declared and is not a non-empty command`);
+          }
+          if (
+            element.runsOn !== undefined &&
+            (!Array.isArray(element.runsOn) || element.runsOn.length === 0 || element.runsOn.some((event) => typeof event !== 'string'))
+          ) {
+            problems.push(`${elementLabel}: runsOn is declared and is not a non-empty list of events`);
+          }
+          for (const field of ['timeoutMinutes', 'markerJobs']) {
+            if (element[field] !== undefined && (!Number.isInteger(element[field]) || element[field] < 1)) {
+              problems.push(`${elementLabel}: ${field} is declared and is not a positive integer`);
+            }
+          }
+          break;
+        }
+        case 'preserved': {
+          if (typeof element.jobId !== 'string' || element.jobId.trim().length === 0) {
+            problems.push(`${elementLabel}: preserved declares no jobId`);
+          }
+          if (typeof element.sha256 !== 'string' || !SHA256_HEX.test(element.sha256)) {
+            problems.push(`${elementLabel}: preserved declares no sha256 of the job's bytes`);
+          } else if (setRoot && typeof element.jobId === 'string') {
+            const staged = await readText(path.join(setRoot, set.editTarget ?? WORKFLOW_PATH));
+            const block = staged.present ? jobBlockOf(staged.text, element.jobId) : null;
+            if (block === null) problems.push(`${elementLabel}: the staged pipeline carries no job ${element.jobId}`);
+            else if (sha256Of(block) !== element.sha256) {
+              problems.push(
+                `${elementLabel}: the staged job ${element.jobId} digests to ${sha256Of(block)}, which is not the declared sha256`,
+              );
+            }
+          }
+          break;
+        }
+        case 'checkpoint': {
+          if (typeof element.file !== 'string' || !(set.projectFiles ?? []).includes(element.file)) {
+            problems.push(`${elementLabel}: checkpoint names a file that is not a declared project file`);
+          }
+          if (typeof element.sha256 !== 'string' || !SHA256_HEX.test(element.sha256)) {
+            problems.push(`${elementLabel}: checkpoint declares no sha256 of the file's bytes`);
+          } else if (setRoot && typeof element.file === 'string') {
+            const staged = await readText(path.join(setRoot, element.file));
+            if (staged.present && sha256Of(staged.text) !== element.sha256) {
+              problems.push(
+                `${elementLabel}: the staged ${element.file} digests to ${sha256Of(staged.text)}, which is not the declared sha256`,
+              );
             }
           }
           break;
@@ -1160,7 +1263,9 @@ async function stageIntoWorkspace(dir, set) {
   // The project files the run must leave alone: exactly what the corpus
   // shipped, which validateCorpus holds equal to `projectFiles`. Everything the
   // harness wrote and everything the run adds is outside the list.
-  const projectFiles = filesUnder(setRoot);
+  // An edit set's pipeline is the one project file the run changes on purpose, and what must survive in it is scored by
+  // its `preserved` element, so it stays out of the digest; every other file, the checkpoint included, is held.
+  const projectFiles = filesUnder(setRoot).filter((relative) => relative !== set.editTarget);
   return { dir, projectDir, projectFiles, projectDigest: await digestTree(projectDir, projectFiles) };
 }
 
@@ -1226,6 +1331,7 @@ async function assertGroundTruthAbsent(dir) {
  */
 function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
   const root = set.projectRoot;
+  if (set.mode === 'edit') return buildEditPrompt(set, { ciPlatform });
   return [
     `You are running the TEA workflow \`bmad-testarch-ci\` against the project in \`${root}/\`.`,
     '',
@@ -1257,6 +1363,49 @@ function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
     'project and changes nothing the project already had.',
     '',
     'When you are done, print one line naming the pipeline file you wrote. Nothing else you print is read.',
+  ].join('\n');
+}
+
+/**
+ * The prompt an edit set gets: the same configuration as the create prompt, and the edit entry of the skill in place of
+ * the create chain. The project already holds the pipeline, so the prompt names the file the edit steps load and asks
+ * for no other deliverable. It names no plan: the edit steps look for plans themselves.
+ *
+ * @param {object} set
+ * @param {{ciPlatform?: string}} [options]
+ * @returns {string}
+ */
+function buildEditPrompt(set, { ciPlatform = PLATFORM } = {}) {
+  const root = set.projectRoot;
+  return [
+    `You are running the TEA workflow \`bmad-testarch-ci\` in edit mode against the project in \`${root}/\`.`,
+    '',
+    'The workflow is in `skill/`. Read `skill/SKILL.md`, answer its mode question with `[E] Edit`, then execute',
+    '`skill/steps-e/step-01-assess.md` and `skill/steps-e/step-02-apply-edit.md` in order, in full, following every',
+    'step they load, without skipping or reordering.',
+    '',
+    '----- run configuration -----',
+    'Resolve the workflow placeholders and variables to these values:',
+    '',
+    `- \`{project-root}\`: \`${root}\``,
+    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
+    '- `{skill-root}`: `skill`',
+    `- \`ci_platform\`: \`${ciPlatform}\``,
+    `- \`test_dir\`: \`${root}/tests\``,
+    '',
+    `The pipeline to edit is \`${root}/${set.editTarget}\`, which the project already has. The requirements its team keeps for it are`,
+    `in \`${root}/${set.requestSource}\`. Treat them as decisions the edited pipeline has to keep carrying, and read the rest of`,
+    'the project the way the edit steps say to. Apply the edits those steps treat as requested, and no other.',
+    '',
+    'This workspace has no shell, so a check that runs a command cannot be executed here. Record each of those as',
+    'not run and continue; do not halt on them.',
+    '',
+    '----- what to produce -----',
+    `Edit \`${root}/${set.editTarget}\` in place. Do not edit or delete any other file that was under \`${root}/\` when you`,
+    'started, and write no file this workflow does not write in edit mode.',
+    '',
+    'When you are done, print one line naming the pipeline file you edited. Nothing else you print is read.',
   ].join('\n');
 }
 
@@ -1571,6 +1720,113 @@ function jobCarriesMarker(text, jobId, marker) {
   return false;
 }
 
+/** The SHA-256 of a text, as lowercase hexadecimal. */
+function sha256Of(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * The source of one job as the file spells it: its two-space key line and every line after it up to the next key at
+ * the same or a shallower depth, with the blank lines that trail it dropped. A parse drops comments, quotes and
+ * layout, so a job left byte for byte is read from the source. Null when the file has no such job.
+ */
+function jobBlockOf(text, jobId) {
+  const lines = String(text).split('\n');
+  const start = lines.findIndex((line) => line.trimEnd() === `  ${jobId}:`);
+  if (start === -1) return null;
+  let end = start + 1;
+  while (end < lines.length && !/^ {0,2}\S/.test(lines[end])) end += 1;
+  while (end > start + 1 && lines[end - 1].trim() === '') end -= 1;
+  return lines.slice(start, end).join('\n');
+}
+
+/**
+ * The ids of the jobs that carry `marker` as a comment line, in the order the file lists them. A re-render that left
+ * a job under an old id beside the new one shows here as two.
+ */
+function markerJobIds(workflow, text, marker) {
+  return jobsOf(workflow)
+    .map(([jobId]) => jobId)
+    .filter((jobId) => jobCarriesMarker(text, jobId, marker));
+}
+
+/**
+ * Whether a job's `if` holds for one event, read with the names, literals and operators this scorer understands:
+ * `github.event_name`, `github.event.schedule`, `github.ref`, string literals, `startsWith(github.ref, '<literal>')`,
+ * `==`, `!=`, `!`, `&&`, `||` and parentheses, with the `${{ }}` wrapper GitHub allows removed. GitHub compares
+ * strings without regard to case, so the expression and the values it reads are lowered first. A job without an `if`
+ * runs on every event. The event's ref is the one such an event carries (a pull request merge ref, a release tag, the
+ * default branch otherwise), and `schedule` is the cron the event fired for. Null when the expression says anything
+ * else, so a guard written in a form this does not read is a miss that names it and passes nothing.
+ */
+function guardHolds(condition, event, schedule = '') {
+  if (condition === undefined || condition === null) return true;
+  if (typeof condition === 'boolean') return condition;
+  const written = String(condition)
+    .trim()
+    .replace(/^\$\{\{\s*([\S\s]*?)\s*\}\}$/, '$1')
+    .trim()
+    .toLowerCase();
+  const startsWithRef = String.raw`startswith\(\s*github\.ref\s*,\s*'[^'\\]*'\s*\)`;
+  const token = new RegExp(
+    String.raw`^(?:\s|github\.event_name|github\.event\.schedule|github\.ref|${startsWithRef}|'[^'\\]*'|==|!=|&&|\|\||!|\(|\))+$`,
+  );
+  if (!token.test(written)) return null;
+  const ref = event === 'pull_request' ? 'refs/pull/1/merge' : event === 'release' ? 'refs/tags/v1.0.0' : 'refs/heads/main';
+  const context = {
+    name: event.toLowerCase(),
+    schedule: String(schedule).toLowerCase(),
+    ref,
+    startsWith: (value, prefix) => value.startsWith(prefix),
+  };
+  const source = written
+    .replaceAll(/startswith\(\s*github\.ref\s*,/g, 'context.startsWith(context.ref,')
+    .replaceAll('github.event_name', 'context.name')
+    .replaceAll('github.event.schedule', 'context.schedule')
+    .replaceAll('github.ref', 'context.ref');
+  try {
+    return Boolean(new Function('context', `return (${source});`)(context));
+  } catch {
+    return null;
+  }
+}
+
+/** The crons the workflow's `schedule` trigger names, or one empty cron when it names none. */
+function cronsOf(workflow) {
+  const crons = asList(triggersOf(workflow).get('schedule'))
+    .map((entry) => (entry && typeof entry === 'object' ? String(entry.cron ?? '').trim() : ''))
+    .filter((cron) => cron.length > 0);
+  return crons.length > 0 ? crons : [''];
+}
+
+/**
+ * Whether a job runs when `event` starts the workflow: its own guard holds and every job it waits for runs too, since a
+ * job whose `needs` was skipped is skipped. Null when a guard on the way cannot be read.
+ */
+function jobRunsOn(workflow, jobId, event, seen = new Set()) {
+  if (seen.has(jobId)) return true;
+  const job = jobsOf(workflow).find(([id]) => id === jobId)?.[1];
+  if (job === undefined) return true;
+  const own = event === 'schedule' ? cronsOf(workflow).map((cron) => guardHolds(job.if, event, cron)) : [guardHolds(job.if, event)];
+  if (own.includes(null)) return null;
+  if (!own.includes(true)) return false;
+  const waited = new Set(needsOf(job).map((needed) => jobRunsOn(workflow, needed, event, new Set([...seen, jobId]))));
+  if (waited.has(null)) return null;
+  return !waited.has(false);
+}
+
+/**
+ * The events of the workflow a job runs on: each event the workflow's `on` names for which the job runs. Null when a
+ * guard cannot be read.
+ */
+function eventsRunBy(workflow, job) {
+  const jobId = jobsOf(workflow).find(([, candidate]) => candidate === job)?.[0];
+  const events = [...triggersOf(workflow).keys()];
+  const held = events.map((event) => jobRunsOn(workflow, jobId, event));
+  if (held.includes(null)) return null;
+  return events.filter((_, index) => held[index]);
+}
+
 /** The `needs` of a job, as a list of job ids. */
 function needsOf(job) {
   return asList(job?.needs).map(String);
@@ -1682,9 +1938,10 @@ function nodeVersionAtFloor(job, index, step, nvmrcVersion, floor) {
  * @param {object} set The fixture set, for the values a check reads off it.
  * @param {object} workflow The parsed document.
  * @param {string} [text] The workflow's source, for what a parse drops (a comment).
+ * @param {{files?: Object<string, string|null>}} [aux] Project files an element reads after the run, by path, each null when the run left none.
  * @returns {{present: boolean, detail: string}}
  */
-function checkElement(element, set, workflow, text = '') {
+function checkElement(element, set, workflow, text = '', aux = {}) {
   const jobs = jobsOf(workflow);
   switch (element.kind) {
     case 'trigger': {
@@ -1700,6 +1957,11 @@ function checkElement(element, set, workflow, text = '') {
           .map((entry) => (entry && typeof entry === 'object' ? String(entry.cron ?? '') : ''))
           .map((cron) => cron.trim());
         if (!crons.includes(element.cron)) return { present: false, detail: `schedule carries no cron ${JSON.stringify(element.cron)}` };
+      }
+      if (element.types !== undefined) {
+        const types = new Set(asList(config?.types).map(String));
+        const missing = element.types.filter((type) => !types.has(type));
+        if (missing.length > 0) return { present: false, detail: `${element.event} does not name the type ${missing.join(', ')}` };
       }
       return { present: true, detail: `${element.event} trigger as requested` };
     }
@@ -1764,6 +2026,22 @@ function checkElement(element, set, workflow, text = '') {
             return { present: false, detail: `the step that runs ${element.command} is not named for ${unnamed.join(', ')}` };
         }
       }
+      if (element.runsOn !== undefined) {
+        // Every job that runs the command runs on exactly these events: a job that existed before an event the workflow
+        // gained is limited to the events it already ran on.
+        const holderJobs = [...new Set(entries.filter((entry) => invokes([entry.script], element.command)).map((entry) => entry.jobId))];
+        for (const holder of holderJobs) {
+          const job = jobs.find(([jobId]) => jobId === holder)[1];
+          const events = eventsRunBy(workflow, job);
+          if (events === null) return { present: false, detail: `the if of job ${holder} cannot be read as an event guard` };
+          if ([...events].sort().join(',') !== [...element.runsOn].sort().join(',')) {
+            return {
+              present: false,
+              detail: `job ${holder} runs ${element.command} on ${events.join(', ') || 'no event'}, expected ${element.runsOn.join(', ')}`,
+            };
+          }
+        }
+      }
       return { present: true, detail: `a run: block invokes ${element.command}` };
     }
     case 'gate': {
@@ -1777,13 +2055,80 @@ function checkElement(element, set, workflow, text = '') {
       if (!jobCarriesMarker(text, element.jobId, element.marker)) {
         return { present: false, detail: `job ${element.jobId} does not carry the comment ${element.marker}` };
       }
+      if (element.after !== undefined) {
+        // The command that runs first is a step of its own ahead of this job's own, each holding that one command: the
+        // `merge` job runs the `pr` tier's step first, since a tier holds only the checks placed on it.
+        const stepsOfJob = stepsOf(job).filter(({ step }) => typeof step.run === 'string');
+        const indexOfCommand = (command) => stepsOfJob.findIndex(({ step }) => shellForm(step.run).trim() === command);
+        const first = indexOfCommand(element.after);
+        const own = indexOfCommand(element.command);
+        if (first === -1) return { present: false, detail: `job ${element.jobId} has no step of its own for ${element.after}` };
+        if (own === -1) return { present: false, detail: `job ${element.jobId} has no step of its own for ${element.command}` };
+        if (first > own) return { present: false, detail: `job ${element.jobId} runs ${element.after} after ${element.command}` };
+      }
+      if (element.runsOn !== undefined) {
+        const events = eventsRunBy(workflow, job);
+        if (events === null) return { present: false, detail: `the if of job ${element.jobId} cannot be read as an event guard` };
+        if ([...events].sort().join(',') !== [...element.runsOn].sort().join(',')) {
+          return {
+            present: false,
+            detail: `job ${element.jobId} runs on ${events.join(', ') || 'no event'}, expected ${element.runsOn.join(', ')}`,
+          };
+        }
+      }
+      if (element.timeoutMinutes !== undefined && Number(job['timeout-minutes']) !== element.timeoutMinutes) {
+        return {
+          present: false,
+          detail: `job ${element.jobId} has timeout-minutes ${JSON.stringify(job['timeout-minutes'] ?? null)}, expected ${element.timeoutMinutes}`,
+        };
+      }
+      if (element.markerJobs !== undefined) {
+        const carriers = markerJobIds(workflow, text, element.marker);
+        // A job that runs the tier's command with its marker removed is a second job for the tier all the same.
+        const runners = jobs.filter(([, candidate]) => invokes(jobScripts(candidate), element.command)).map(([jobId]) => jobId);
+        if (runners.length !== element.markerJobs) {
+          return {
+            present: false,
+            detail: `${runners.length} job(s) run ${element.command} (${runners.join(', ') || 'none'}), expected ${element.markerJobs}`,
+          };
+        }
+        if (carriers.length !== element.markerJobs) {
+          return {
+            present: false,
+            detail: `${carriers.length} job(s) carry the comment ${element.marker} (${carriers.join(', ') || 'none'}), expected ${element.markerJobs}`,
+          };
+        }
+      }
       return { present: true, detail: `job ${element.jobId} runs the command under its marker` };
     }
+    case 'preserved': {
+      const block = jobBlockOf(text, element.jobId);
+      if (block === null) return { present: false, detail: `job ${element.jobId} is gone from the pipeline` };
+      if (sha256Of(block) !== element.sha256)
+        return { present: false, detail: `job ${element.jobId} was changed: its bytes are not the ones the pipeline held` };
+      return { present: true, detail: `job ${element.jobId} is byte for byte as it was` };
+    }
+    case 'checkpoint': {
+      const written = aux.files?.[element.file];
+      if (written === undefined || written === null) return { present: false, detail: `${element.file} is gone` };
+      if (sha256Of(written) !== element.sha256)
+        return { present: false, detail: `${element.file} was rewritten: its bytes are not the ones the create run left` };
+      return { present: true, detail: `${element.file} is untouched` };
+    }
     case 'artifact': {
-      const uploads = allSteps(workflow).filter(({ step }) => usesAction(step, 'actions/upload-artifact'));
+      const uploads = allSteps(workflow).filter(
+        ({ jobId, step }) => usesAction(step, 'actions/upload-artifact') && (element.jobId === undefined || jobId === element.jobId),
+      );
       const matching = uploads.filter(({ step }) => pathText(step.with?.path).includes(element.pathToken));
-      if (matching.length === 0) return { present: false, detail: `no upload-artifact step names a path containing ${element.pathToken}` };
+      const where = element.jobId === undefined ? '' : ` in job ${element.jobId}`;
+      if (matching.length === 0)
+        return { present: false, detail: `no upload-artifact step${where} names a path containing ${element.pathToken}` };
+      // Each job's upload carries a name of its own: one name for two jobs makes the second upload collide with the first.
+      if (element.name !== undefined && !matching.some(({ step }) => String(step.with?.name) === element.name)) {
+        return { present: false, detail: `the upload of ${element.pathToken}${where} is not named ${element.name}` };
+      }
       const satisfying = matching.filter(({ step }) => {
+        if (element.name !== undefined && String(step.with?.name) !== element.name) return false;
         if (element.onFailureOnly && !String(step.if ?? '').includes('failure()')) return false;
         if (element.condition !== undefined && !conditionIs(step, element.condition)) return false;
         if (element.retentionDays !== undefined && Number(step.with?.['retention-days']) !== element.retentionDays) return false;
@@ -2011,14 +2356,15 @@ function workflowRuleViolations(workflow) {
  * @param {object} set One entry of groundTruth.fixtureSets.
  * @param {string} text The workflow file.
  * @param {{findings: Array<{kind: string, message: string, line: number|null}>}} lint One lintWorkflow result.
+ * @param {{files?: Object<string, string|null>}} [aux] The project files the run's edit must leave alone, read after the run (see checkpointFilesOf).
  * @returns {object}
  */
-function scoreRun(set, text, lint) {
+function scoreRun(set, text, lint, aux = {}) {
   const parsed = parseWorkflow(text);
   const workflow = parsed.ok ? parsed.workflow : null;
   const elements = (set.expectedElements ?? []).map((element) => {
     const result =
-      workflow === null ? { present: false, detail: 'the workflow did not parse' } : checkElement(element, set, workflow, text);
+      workflow === null ? { present: false, detail: 'the workflow did not parse' } : checkElement(element, set, workflow, text, aux);
     return { id: element.id, kind: element.kind, present: result.present, detail: result.detail };
   });
   return {
@@ -2030,6 +2376,11 @@ function scoreRun(set, text, lint) {
     unrequested: workflow === null ? [] : unrequestedElements(set, workflow),
     ruleViolations: workflow === null ? [] : workflowRuleViolations(workflow),
   };
+}
+
+/** The project files an edit set's checkpoint elements read after the run, as relative paths. */
+function checkpointFilesOf(set) {
+  return (set.expectedElements ?? []).filter((element) => element.kind === 'checkpoint').map((element) => element.file);
 }
 
 /**
@@ -2204,7 +2555,12 @@ async function runCase(set, options, agent, runIndex) {
     // The workflow scaffolds and does not edit. A changed or deleted project
     // file has moved the benchmark; an added file is what a scaffolder does.
     const mutations = (await digestTree(workspace.projectDir, workspace.projectFiles)) === workspace.projectDigest ? 0 : 1;
-    return { ok: true, scored: scoreRun(set, workflow.text, lint), mutations };
+    const files = {};
+    for (const relative of checkpointFilesOf(set)) {
+      const read = await readText(path.join(workspace.projectDir, relative));
+      files[relative] = read.present ? read.text : null;
+    }
+    return { ok: true, scored: scoreRun(set, workflow.text, lint, { files }), mutations };
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
@@ -2413,11 +2769,16 @@ async function main() {
           for (const problem of leaked) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
           await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
-        if (fs.existsSync(path.join(workspace.projectDir, WORKFLOW_PATH))) {
-          console.error(`${colors.red}eval: ${set.id} stages a ${WORKFLOW_PATH} already; the run must write the only one${colors.reset}`);
+        const stagesWorkflow = fs.existsSync(path.join(workspace.projectDir, WORKFLOW_PATH));
+        if (stagesWorkflow !== (set.mode === 'edit')) {
+          console.error(
+            `${colors.red}eval: ${set.id} ${stagesWorkflow ? `stages a ${WORKFLOW_PATH} already; the run must write the only one` : `is an edit set and stages no ${WORKFLOW_PATH} to edit`}${colors.reset}`,
+          );
           await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
-        console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and no workflow file`);
+        console.log(
+          `  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and ${set.mode === 'edit' ? 'the pipeline to edit' : 'no workflow file'}`,
+        );
       } finally {
         fs.rmSync(workspace.dir, { recursive: true, force: true });
       }
@@ -2674,6 +3035,10 @@ module.exports = {
   workflowFromArtifact,
   workflowMentions,
   checkElement,
+  checkpointFilesOf,
+  guardHolds,
+  jobBlockOf,
+  sha256Of,
   unrequestedElements,
   workflowRuleViolations,
   scoreRun,

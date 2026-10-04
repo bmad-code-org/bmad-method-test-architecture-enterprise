@@ -1079,6 +1079,8 @@ const CI_CORRECT_RUNS = {
   'full-meridian-storefront': { caseId: 'full-correct-pipeline', observationId: 'ci-full-run' },
   'minimal-lantern-audit-log': { caseId: 'minimal-correct-pipeline', observationId: 'ci-minimal-run' },
   'evaluation-plan-quarry-grader': { caseId: 'evaluation-plan-live-capture', observationId: 'ci-evaluation-plan-run' },
+  'evaluation-tiers-granite-router': { caseId: 'evaluation-tiers-live-capture', observationId: 'ci-evaluation-tiers-run' },
+  'evaluation-edit-ember-ledger': { caseId: 'evaluation-edit-live-capture', observationId: 'ci-evaluation-edit-run' },
 };
 
 /** The `ci_platform` value one assembled prompt carries. */

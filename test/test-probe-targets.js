@@ -126,7 +126,7 @@ const {
   classOfAgentError: ciClassOfAgentError,
   failureClassForExit: ciFailureClassForExit,
 } = require('../cli/ci-runner');
-const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT } = require('./eval-ci');
+const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT, THRESHOLDS: CI_THRESHOLDS } = require('./eval-ci');
 const { RUNNER_CAPABILITIES: ATDD_RUNNER_DECLARED_CAPABILITIES } = require('../cli/atdd-runner');
 const { RUNNER_CAPABILITIES: ATDD_HARNESS_DECLARED_CAPABILITIES } = require('./eval-atdd');
 const {
@@ -1467,7 +1467,7 @@ function checkCiHarnessSmoke(runDir) {
   const complete = runCiHarness(runDir, 'complete', ['--runs', '2']);
   assert(
     complete.status === 0,
-    'a correct pipeline for all three projects, twice, exits 0',
+    'a correct pipeline for all five projects, twice, exits 0',
     complete.stderr.trim().split('\n').slice(-3).join(' | '),
   );
   assert(
@@ -1477,8 +1477,8 @@ function checkCiHarnessSmoke(runDir) {
   );
   const runner = complete.record?.runners?.[0];
   assert(
-    runner?.repetitions?.expected === 6 && runner?.repetitions?.completed === 6,
-    'every declared repetition completed: three projects, two runs each',
+    runner?.repetitions?.expected === 10 && runner?.repetitions?.completed === 10,
+    'every declared repetition completed: five projects, two runs each',
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct pipeline', JSON.stringify(runner?.failures));
@@ -1525,12 +1525,32 @@ function checkCiHarnessSmoke(runDir) {
   assert(deviation.status === 1, 'a run one requested element short on the evaluation-plan project exits 1', `exit ${deviation.status}`);
   assert(
     deviation.record?.failureClass === 'quality' &&
-      deviation.record?.runners?.[0]?.measurements?.requestedElementRecall >= 0.9 &&
+      deviation.record?.runners?.[0]?.measurements?.requestedElementRecall >= CI_THRESHOLDS.requestedElementRecall &&
       deviation.record?.runners?.[0]?.failures?.some((failure) =>
         failure.includes('evaluation-plan-quarry-grader missed a requested element'),
       ),
     'the record names the evaluation-plan project that missed an element while the corpus recall stays above its threshold',
     JSON.stringify(deviation.record?.runners?.[0]?.failures),
+  );
+
+  // The edit project keeps the create run's checkpoint, so an edit run that saves its progress there is a measured
+  // quality failure twice over: its checkpoint element misses and the digest of the project's files moved.
+  const checkpoint = runCiHarness(runDir, 'checkpoint', ['--runs', '1', '--set', 'evaluation-edit-ember-ledger']);
+  assert(checkpoint.status === 1, "an edit run that rewrites the create run's checkpoint exits 1", `exit ${checkpoint.status}`);
+  assert(
+    checkpoint.record?.failureClass === 'quality' &&
+      checkpoint.record?.runners?.[0]?.measurements?.fixtureMutations === 1 &&
+      checkpoint.record?.runners?.[0]?.failures?.some((failure) =>
+        failure.includes('evaluation-edit-ember-ledger missed a requested element (checkpoint-untouched)'),
+      ),
+    'the record counts the fixture mutation and names the checkpoint element the edit run missed',
+    JSON.stringify(checkpoint.record?.runners?.[0]?.failures),
+  );
+  const editComplete = runCiHarness(runDir, 'complete', ['--runs', '1', '--set', 'evaluation-edit-ember-ledger']);
+  assert(
+    editComplete.status === 0,
+    "the edit project's correct run, which edits its pipeline in place, exits 0",
+    `exit ${editComplete.status}`,
   );
 
   // The workflow scaffolds a pipeline and does not edit the project, so a write
