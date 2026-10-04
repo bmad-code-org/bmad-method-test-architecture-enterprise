@@ -2718,7 +2718,7 @@ So that an orphan check cannot hide a missing success-separation requirement.
 
 ### Story 1.105: Partition rubrics in a partition plan
 
-Added 2026-10-03 from Story 1.51's build. Story 1.51 refuses a `partitionPlan` beside a rubric or waiver that reads a development-only step, because a rubric criterion's evidence pointer disappears with its step in the held-out view.
+Added 2026-10-03 from Story 1.51's build. Story 1.51 refused a `partitionPlan` beside a rubric or waiver that reads a development-only step, because a rubric criterion's evidence pointer disappears with its step in the held-out view. Story 1.105 replaces the rubric half of that refusal with the derivation below; the waiver half stays until Story 1.106.
 
 As an adopter whose behavior needs a judged criterion on a held-out request,
 I want a rubric criterion to belong to one partition,
@@ -2729,7 +2729,7 @@ So that a held-out run compiles, calibrates and scores its own criteria without 
 **Given** a rubric criterion whose evidence reads a held-out-only step and one that reads a development-only step
 **When** preflight and run execute each partition
 **Then** each view holds only the criteria its partition's steps can reach, `check` names a criterion that no view can reach, and calibration items are judged in the partition that owns their criterion
-**And** removing the partition filter makes the development view carry the held-out criterion and fails the isolation fixture.
+**And** removing the held-out view's partition filter fails the pure view case, and a held-out run over a view that keeps a development criterion stops at the engine's compile (`rubric-evidence-unreachable`, exit 4) before the run-level isolation scan, which is a second line; the development view is `contract.json`'s own bytes and never reads the plan, so it holds no held-out criterion.
 
 **Dependencies:** 1.51, 1.9.
 **Gate:** `npm run test:evaluate-partition-plans`, `npm run test:evaluate-calibration`, `npm test`.
