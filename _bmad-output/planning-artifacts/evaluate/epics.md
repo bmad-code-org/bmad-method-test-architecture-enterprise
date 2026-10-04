@@ -317,8 +317,8 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 Rules the lanes share:
 
-- Rebase onto the latest `origin/main` immediately before merging. In `CHANGELOG.md`, `sprint-status.yaml`, `epics.md`, `test-design-epic-1.md`, `docs/reference/tea-evaluate-cli.md`, the `package.json` test chain and `quality.yaml`, keep both sides, then rerun the suites the story touches.
-- A finding that becomes a new story takes the next free number in its lane's range: lane 1 uses 1.120 to 1.129, lane 2 uses 1.86 to 1.89 then 1.130 to 1.139, and lane 3 uses 1.116 to 1.119 then 1.140 to 1.149 (the ranges in the relay's `LANES.md`, set after two stories took the same number); grep `sprint-status.yaml` on `origin/main` and on every open PR branch before taking a number. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
+- Rebase only when GitHub reports the PR `DIRTY` or `BEHIND`; a `CLEAN` PR with green CI merges as it stands. In `CHANGELOG.md`, `sprint-status.yaml`, `epics.md`, `test-design-epic-1.md`, `docs/reference/tea-evaluate-cli.md`, the `package.json` test chain and `quality.yaml`, keep both sides, then rerun the suites the story touches.
+- Every real defect a review, CodeRabbit or CI finds in or around a story is fixed in that story's pull request before it merges. No story is appended to `epics.md`, `test-design-epic-1.md` or `sprint-status.yaml` (the relay's `LANES.md` rule 15, which replaced the numbered lane ranges).
 - A lane that needs an eval-quality change it does not own asks the coordinator, who routes it to lane 3's publisher.
 - Story H.1 runs once every lane has drained.
 
