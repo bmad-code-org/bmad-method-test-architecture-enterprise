@@ -279,7 +279,8 @@ const WRONG_RUN_CANNOT_FAIL = [
  * rows). Every oracle of that leg's set then answers `false`, which is the `scored === null` branch of each builder,
  * and the builder reports the set on `refusedSets` so the read is known to have been refused. `measuresStill` lists the
  * kinds that keep answering from what they read: test-design's projection-coherence reads the projection alone, so it
- * measures, and the read is repeated with the projection's `design` key dropped to hold that branch. The ci scorer is a
+ * measures. It holds with the projection intact and is violated when the read is repeated with the projection's
+ * `design` key dropped, so the branch is held in both directions. The ci scorer is a
  * substring search over the workflow and refuses nothing, so its entry is `null`.
  *
  * A leg without an entry fails: the run-measured oracle of a set is failed only by a refusal of that set's run, so
@@ -455,9 +456,16 @@ async function wrongRunProblems(suite) {
         );
       }
     }
-    // The kinds that keep measuring on a refused run read the projection alone, so a malformed projection must still
-    // fail them.
+    // The kinds that keep measuring on a refused run read the projection alone. With the projection intact they hold,
+    // and a malformed projection must fail them, so the branch is held in both directions.
     if (refusal.measuresStill.length > 0) {
+      for (const spec of setSpecs.filter((candidate) => refusal.measuresStill.includes(candidate.kind))) {
+        if (refused.violated.has(spec.id)) {
+          problems.push(
+            `${suite.id}: ${spec.id} (${spec.kind}) on ${spec.setId} was violated when the set read ${refusal.through} with its projection intact, so the refused-run branch does not measure it`,
+          );
+        }
+      }
       const malformed = await readUnder(suite, probe, through, { projectionOf: ({ design, ...rest }) => rest });
       for (const spec of setSpecs.filter((candidate) => refusal.measuresStill.includes(candidate.kind))) {
         if (!malformed.violated.has(spec.id)) {
@@ -528,11 +536,20 @@ async function testReviewVerdictProblems(suite) {
         return rest;
       },
     })),
+    // The oracle's operands are `for-all` over the findings, so a field dropped from the first finding and from the
+    // last one must both fail it: a reader of the first finding alone passes the first.
     ...['row', 'file', 'line', 'severity'].map((key) => ({
       label: `the ${key} of its first finding`,
       verdictOf: (verdict) => {
         const { [key]: _dropped, ...first } = verdict.findings[0];
         return { ...verdict, findings: [first, ...verdict.findings.slice(1)] };
+      },
+    })),
+    ...['row', 'file', 'line', 'severity'].map((key) => ({
+      label: `the ${key} of its last finding`,
+      verdictOf: (verdict) => {
+        const { [key]: _dropped, ...last } = verdict.findings.at(-1);
+        return { ...verdict, findings: [...verdict.findings.slice(0, -1), last] };
       },
     })),
   ];
