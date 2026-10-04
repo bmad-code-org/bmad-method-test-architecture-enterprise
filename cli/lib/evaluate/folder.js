@@ -16,8 +16,8 @@ const path = require('node:path');
 const { regularFileBytes } = require('./score-inputs');
 
 const MANIFEST_NAME = 'evaluation.json';
-/** A path argument is spelled with the platform's separators; on POSIX a backslash is an ordinary file name character. */
 const LINK_REASON = 'passes through a symbolic link; name the file itself';
+/** A path argument is spelled with the platform's separators; on POSIX a backslash is an ordinary file name character. */
 const SEPARATOR = path.sep === '\\' ? /[/\\]/ : /\//;
 
 function isFile(candidate) {
