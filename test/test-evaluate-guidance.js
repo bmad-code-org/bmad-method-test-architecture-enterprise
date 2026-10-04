@@ -2747,8 +2747,8 @@ function checkSystemPathsFragment(guide, failures) {
     failures.push(
       'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose names',
     );
-  if (fragment.confinement === false || fragment.registry?.[0]?.network === 'host')
-    failures.push('harness.md systemPaths fragment must keep the default confinement and network');
+  if (fragment.confinement === false || fragment.registry?.[0]?.egress !== undefined)
+    failures.push('harness.md systemPaths fragment must keep the default confinement and list no egress');
   const relative = structuredClone(fragment);
   if (Array.isArray(relative.registry?.[0]?.systemPaths)) relative.registry[0].systemPaths = ['opt/relative'];
   if (validate({ ...starter, ...relative }))
