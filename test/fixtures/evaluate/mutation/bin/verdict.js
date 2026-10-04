@@ -143,8 +143,9 @@
  *                           sparse-checkout project shows, printing one
  *                           `<name>: <value>` line each (Story 1.85): `status`
  *                           (`git status --porcelain`), `ls-files`, `ls-files-t`
- *                           (`git ls-files -t`) and `sparse-list`
- *                           (`git sparse-checkout list`), each the JSON of its
+ *                           (`git ls-files -t`), `status-sparse` (the lines of the
+ *                           long-form `git status` that name a sparse checkout) and
+ *                           `sparse-list` (`git sparse-checkout list`), each the JSON of its
  *                           standard output (or `exit <code>` when git failed),
  *                           `sparse-config` (`core.sparseCheckout` and
  *                           `core.sparseCheckoutCone`) and `files-on-disk`
@@ -447,6 +448,7 @@ if (act === 'probe-sparse') {
     `status: ${answer(ask('status', '--porcelain'))}`,
     `ls-files: ${answer(ask('ls-files'))}`,
     `ls-files-t: ${answer(ask('ls-files', '-t'))}`,
+    `status-sparse: ${JSON.stringify(ask('status').stdout.split('\n').filter((line) => /sparse checkout/.test(line)).join('\n'))}`,
     `sparse-list: ${answer(ask('sparse-checkout', 'list'))}`,
     `sparse-config: ${configured('core.sparseCheckout')}/${configured('core.sparseCheckoutCone')}`,
     `files-on-disk: ${JSON.stringify(onDisk)}`,

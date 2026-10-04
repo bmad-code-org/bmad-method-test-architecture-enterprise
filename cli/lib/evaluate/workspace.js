@@ -1325,9 +1325,11 @@ function linkTree(from, to) {
 /**
  * The sparse-checkout settings a worktree reads, as `[key, value]` pairs for a private repository to carry, or null when
  * the worktree is not sparse (Story 1.85). A worktree made inside a sparse project inherits its cone: `core.sparseCheckout`
- * (and `core.sparseCheckoutCone`) sit in the project's configuration or the worktree's own, and the patterns in the
- * worktree's metadata directory. The question is asked of the worktree, so a git that did not copy the cone into it, and a
- * project that is not sparse, both give null and leave the index as `read-tree` builds it.
+ * (and `core.sparseCheckoutCone`, and `index.sparse` when the project keeps a sparse index) sit in the project's
+ * configuration or the worktree's own, and the patterns in the worktree's metadata directory. The question is asked of the
+ * worktree, so a git that did not copy the cone into it, and a project that is not sparse, both give null and leave the index
+ * as `read-tree` builds it; a git without sparse index support never reports `index.sparse`, so the key is set only when the
+ * worktree says it is true.
  */
 function sparseSettingsOf(workspace) {
   const ask = (key) =>
@@ -1339,6 +1341,8 @@ function sparseSettingsOf(workspace) {
   const settings = [['core.sparseCheckout', 'true']];
   const cone = ask('core.sparseCheckoutCone');
   if (cone.ok) settings.push(['core.sparseCheckoutCone', cone.stdout.trim()]);
+  const index = ask('index.sparse');
+  if (index.ok && index.stdout.trim() === 'true') settings.push(['index.sparse', 'true']);
   return settings;
 }
 

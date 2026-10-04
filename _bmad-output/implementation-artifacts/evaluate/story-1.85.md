@@ -34,7 +34,9 @@ A worktree that is not sparse keeps the index it has today.
 **Always:** Commit ids, `commitDigest`, `implementationDigest`, the profiles and the isolation golden stay unchanged.
 The sparse state comes from the worktree the build made, so a git that did not copy the cone into it (before 2.36) and a project that is not sparse both leave the index as `read-tree HEAD` builds it.
 A step that fails is a `WorkspaceRefusal` (exit 12) and the half-built workspace is removed by the existing path.
-The engine check runs at start and end. No eval-quality change. No skill file changes.
+The engine check runs at start and end.
+No eval-quality change.
+No skill file changes.
 
 **Never:** a sparse setting in the private repository of a worktree that is not sparse, a file written or removed in the checkout by the index step, a change to what the profiles allow, a new dependency.
 
@@ -46,7 +48,7 @@ The engine check runs at start and end. No eval-quality change. No skill file ch
 | ---------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | Cone                         | `git sparse-checkout set bin rules evals`, tracked `docs/`, `archive/`, `src/` outside | target's `status` clean, `ls-files` lists the outside files, `ls-files -t` equals the project's, `sparse-checkout list` prints the project's cone | n/a                               |
 | Pattern list                 | `set --no-cone '/*' '!/docs/' '!/archive/' '!/src/'`                                   | same lines as the project's, `core.sparseCheckoutCone` is `false`                                                                                 | n/a                               |
-| Sparse index                 | cone with `--sparse-index`                                                             | same lines as the project's (the private index is a full one)                                                                                     | n/a                               |
+| Sparse index                 | cone with `--sparse-index`                                                             | same lines as the project's, the long-form `git status` included                                                                                  | n/a                               |
 | Blob-less `--sparse` clone   | `--filter=blob:none --sparse`, cone set                                                | same lines as the project's, no process fetches from the remote                                                                                   | git before 2.44 skips, as in 1.80 |
 | Not sparse                   | no sparse rule                                                                         | `status`, `ls-files`, `ls-files -t` equal the project's, `sparse-checkout list` exits 128 as the project's, no sparse setting                     | n/a                               |
 | Worktree-scoped project keys | `git config --worktree remote.leak.url ...`, `credential.helper`                       | the worktree's metadata directory holds no `config.worktree`                                                                                      | n/a                               |
@@ -103,23 +105,36 @@ The control (a project that is not sparse) passed, so `git ls-files` and `git st
 6. **A failing `read-tree -m -u` refuses the build (exit 12).**
    The reviewer found no input where it fails after `read-tree HEAD` succeeded (patterns that leave no entry, a missing or empty patterns file, legacy settings in the common configuration, gitlinks, a project that is itself a linked worktree all exit 0 on git 2.39 and 2.55), and a refusal beats a target that sees false deletions.
 7. **`config.worktree` leaves the metadata directory (found in review, pre-existing).**
-   `git worktree add` copies the project worktree's `config.worktree` into the new metadata directory, which the target may read, with any worktree-scoped remote URL, credential helper or hook, and `git sparse-checkout set` is what turns that file on, so sparse projects are the ones that have it.
-   The private repository never reads it, so it is removed after the sparse settings are read.
-8. **The sparse index is not carried.**
-   The private repository's index is a full one; `status`, `ls-files` and `ls-files -t` equal the project's (the case runs a sparse-index project), while `ls-files --sparse` differs.
-   AD-8 says so.
+   `git worktree add` copies the project worktree's `config.worktree` into the new metadata directory, which the target may read, with any worktree-scoped remote URL, credential helper or hook.
+   A sparse project that used `git sparse-checkout set` has that file, a legacy sparse project (`core.sparseCheckout` in `.git/config`, patterns in `.git/info/sparse-checkout`) has none, and a non-sparse project that uses `extensions.worktreeConfig` has one too.
+   The private repository never reads it, so the code removes it unconditionally after the sparse settings are read.
+8. **The sparse index is carried (review round 1).**
+   A project with a sparse index printed "You are in a sparse checkout." in the long-form `git status`, and the target printed "You are in a sparse checkout with 96% of tracked files present", because the private repository's index was a full one.
+   `sparseSettingsOf` also asks the worktree for `index.sparse` and carries it into the store when the answer is `true`.
+   A git before 2.37 or without sparse index support never reports the key, so nothing is set there.
+   The stub's `status-sparse` line and `sparseView` compare the long-form lines that name a sparse checkout; the sparse-index run failed 1 check before the key was carried.
 9. **The case compares every line with the project's own, byte for byte.**
    The stub prints `status`, `ls-files`, `ls-files -t`, `sparse-checkout list`, both settings and the tracked files the checkout holds as JSON, and `sparseView` asks the project for the same lines with the same git commands.
    The evaluation folder's paths leave the project's lines, since the target's git sees the folder as an empty tree (Story 1.57).
    The cone is `bin`, `rules` and `evals`, which the stub target needs on disk; `docs/`, `archive/old/` and `src/` are the tracked files outside it.
 10. **The `--sparse` clone case runs where git honors `GIT_NO_LAZY_FETCH` (2.44 and later), like Story 1.80's partial-clone cases.**
     The clone sets its cone before the remote's upload-pack logging starts, so the log holds only fetches of the run.
+11. **The index step has a failing-step case (review round 1).**
+    The I/O row "Index step fails" had no case: a bare `runGit` in place of `must(runGit([...view, 'read-tree', '-m', '-u', 'HEAD'], ...))` still passed and handed the target the false deletions silently.
+    `checkSparseCheckout` runs a sparse project with a `git` shim on `PATH` that exits 1 for `read-tree -m`, in process and through the CLI.
+    It asserts a `WorkspaceRefusal` naming `read-tree` and the shim's message, an empty temp directory, no worktree registration or metadata, and exit 12 for `run`.
+    `withGitWrapper` passes the shim's directory to its body for the CLI run.
+12. **The cross-filesystem pack failure moves to Story 1.132 (review round 1, owner decision).**
+    The review found a pre-existing defect of Story 1.57: `packInto` and the `pack` job of `git-lines.js` run `pack-objects` inside the adopter's repository, which writes its temporary pack into the adopter's `objects/pack` and fails the rename into a store on another filesystem.
+    The fix is a separate change with its own container reproduction, so this PR carries none of it.
+    The unfinished work is saved as `/Users/murat/opensource/_wt/evaluate-relay/wip-pack-crossfs.patch` for the Story 1.132 builder.
+    The Linux CI job carries the Linux runs of this round; no container ran in it.
 
 ## Implementation Notes
 
-- `sparseSettingsOf` runs `git config --type=bool --get` for the two keys against `--git-dir <metadata> --work-tree <top>`; one process more for a non-sparse worktree and three for a sparse one.
+- `sparseSettingsOf` runs `git config --type=bool --get` for the keys against `--git-dir <metadata> --work-tree <top>`; one process for a non-sparse worktree and three for a sparse one (`core.sparseCheckout`, `core.sparseCheckoutCone`, `index.sparse`).
 - The linked-objects shortcut of Story 1.57 needs no change: the settings and the index step run in step (6) for every workspace, linked or built.
-- Not done, by decision: a sparse index in the private repository; a cone edit by the target (it writes the private repository, which the reference already lists among the git writes a target cannot make).
+- Not done, by decision: a cone edit by the target (it writes the private repository, which the reference already lists among the git writes a target cannot make).
 - Linux: the new case ran in the container `tea-bwrap-strace` (Debian bookworm, git 2.39.5, bubblewrap 0.8.0, strace 6.1, user `tester`), exactly as `story-1.82.md` records, on a copy of the tree under the scratchpad directory with `.git` left out and the worktree's `node_modules` mounted read-only: `docker run --init --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined --cap-add SYS_ADMIN --cap-add SYS_PTRACE -u tester -e HOME=/home/tester -v <copy>:/work -v <worktree>/node_modules:/work/node_modules:ro -w /work tea-bwrap-strace node test/test-evaluate-run.js --group=confinement --only="sparse checkout"`.
   51 checks passed on the first change (the `--sparse` clone case skips there, git 2.39 predates 2.44, and prints the skip line); the final tree is in the Gates section.
 
@@ -127,40 +142,71 @@ The control (a project that is not sparse) passed, so `git ls-files` and `git st
 
 Each revert was applied once to a scratch copy of the tree under the scratchpad directory (never the working tree), the named case run, the failed-check count recorded and the copy restored.
 
-| Revert (the one edit)                                                         | Case run                         | Observed                                                                                                                                 |
-| ----------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| A plain `read-tree` (the sparse block removed)                                | `--only="sparse checkout"`       | 20 of 66 fail: status lists the outside files as deleted, `ls-files -t` flags them `H`, `sparse-checkout list` exits 128, settings unset |
-| Every worktree treated as sparse (the `core.sparseCheckout` question removed) | `--only="sparse checkout"`       | 3 of 66 fail, all in the non-sparse control: `sparse-list` prints `""` where the project's exits 128, `sparse-config` reads `true/unset` |
-| The settings not written to the private repository                            | `--only="sparse checkout"`       | 20 of 66 fail: `read-tree -m -u` applies no pattern, so the status lists deletions and `sparse-config` reads `unset/unset`               |
-| `core.sparseCheckoutCone` not carried                                         | `--only="sparse checkout"`       | 7 of 66 fail: `sparse-list` prints the raw patterns of a cone, `sparse-config` reads `true/unset`                                        |
-| The `read-tree -m -u HEAD` step removed, the settings kept                    | `--only="sparse checkout"`       | 8 of 66 fail: the status lists deletions, `ls-files -t` flags the outside files `H`                                                      |
-| The reference's sparse sentences deleted                                      | `--only="confinement reference"` | 1 of 13 fails                                                                                                                            |
-| `config.worktree` left in the metadata directory (review finding 1)           | `--only="sparse checkout"`       | 4 of 74 fail: the cone, pattern list, sparse index and `--sparse` clone runs each find the file                                          |
+| Revert (the one edit)                                                         | Case run                         | Observed                                                                                                                                                                        |
+| ----------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A plain `read-tree` (the sparse block removed)                                | `--only="sparse checkout"`       | 20 of 66 fail: status lists the outside files as deleted, `ls-files -t` flags them `H`, `sparse-checkout list` exits 128, settings unset                                        |
+| Every worktree treated as sparse (the `core.sparseCheckout` question removed) | `--only="sparse checkout"`       | 3 of 66 fail, all in the non-sparse control: `sparse-list` prints `""` where the project's exits 128, `sparse-config` reads `true/unset`                                        |
+| The settings not written to the private repository                            | `--only="sparse checkout"`       | 20 of 66 fail: `read-tree -m -u` applies no pattern, so the status lists deletions and `sparse-config` reads `unset/unset`                                                      |
+| `core.sparseCheckoutCone` not carried                                         | `--only="sparse checkout"`       | 7 of 66 fail: `sparse-list` prints the raw patterns of a cone, `sparse-config` reads `true/unset`                                                                               |
+| The `read-tree -m -u HEAD` step removed, the settings kept                    | `--only="sparse checkout"`       | 8 of 66 fail: the status lists deletions, `ls-files -t` flags the outside files `H`                                                                                             |
+| The reference's sparse sentences deleted                                      | `--only="confinement reference"` | 1 of 13 fails                                                                                                                                                                   |
+| `config.worktree` left in the metadata directory (review finding 1)           | `--only="sparse checkout"`       | 4 of 74 fail: the cone, pattern list, sparse index and `--sparse` clone runs each find the file                                                                                 |
+| `index.sparse` not carried (round 1 finding 1)                                | `--only="sparse checkout"`       | 1 of 85 fails: the sparse-index run prints "You are in a sparse checkout with 96% of tracked files present." where the project prints "You are in a sparse checkout."           |
+| The index step called through a bare `runGit` (round 1 finding 2)             | `--only="sparse checkout"`       | 5 of 85 fail: no refusal naming `read-tree`, the temp directory, the worktree registration and the worktree metadata keep what the half-built workspace left, and `run` exits 0 |
 
-The first six rows ran on the tree before the `config.worktree` change and its reference sentence; the last row ran on the final tree.
+The first six rows ran on the tree before the `config.worktree` change and its reference sentence; the seventh ran on the tree of the build review, and the last two ran on the final tree of review round 1.
 
 ## Gates
 
-Run on the final tree, one host-heavy gate at a time, on a machine shared with the other lanes. No full local `npm test`: the hook and CI carry the chain.
+Run on one host-heavy gate at a time, on a machine shared with the other lanes.
+No full local `npm test`: the hook and CI carry the chain.
 
-- Build round on the final tree: `test:evaluate-confinement` 1,311 checks (the new case is 74 of them), `test:evaluate-run` 592, `test:evaluate-arms` 733, `test:evaluate-mutation` 727, `test:evaluate-preflight` 324, `test:evaluate-guidance`, `test:isolation-primitives` (golden unchanged), `test:bmad-output-gated` 124 green. `test:evaluate-run`, `-mutation`, `-preflight` and `-isolation-primitives` ran before the `config.worktree` removal, which only deletes a file in a metadata directory; `-confinement` and `-arms` ran after it.
-- Linux: `checkSparseCheckout` in the `tea-bwrap-strace` container, 58 checks green on the final tree (the `--sparse` clone case skips on git 2.39 and prints the skip line).
+Build round (local, macOS):
+
+- On the build's final tree: `test:evaluate-confinement` 1,311 checks (the new case is 74 of them), `test:evaluate-run` 592, `test:evaluate-arms` 733, `test:evaluate-mutation` 727, `test:evaluate-preflight` 324, `test:evaluate-guidance`, `test:isolation-primitives` (golden unchanged), `test:bmad-output-gated` 124 green.
+- `test:evaluate-run`, `-mutation`, `-preflight` and `-isolation-primitives` ran before the `config.worktree` removal, which only deletes a file in a metadata directory.
+- `test:evaluate-confinement` and `-arms` ran after it.
+- Linux: `checkSparseCheckout` in the `tea-bwrap-strace` container, 58 checks green (the `--sparse` clone case skips on git 2.39 and prints the skip line).
 - `test:doc-counts`, `test:doc-claims`, `test:shards` (the confinement weight is 502 seconds: 450.4 plus the case's 34 seconds at the 1.517 CI ratio), `test:ci-coverage`, `test:changelog`: green.
 - `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`: green.
 - Engine check at the start and the end: exit 0. `git diff -- package.json package-lock.json` is empty.
+
+Review round 1 (local, macOS, on the final tree unless noted):
+
+- `test:evaluate-confinement` 1,324 checks green. This run finished before the coordinator's instruction to skip local confinement runs, on the tree whose only later changes are the story record and the sprint and planning documents.
+- `test:evaluate-run` 592 and `test:evaluate-guidance` green. `test:doc-counts`, `test:doc-claims`, `test:bmad-output-gated` 125, `npm run lint`, `npm run lint:md`, `npm run format:check` and `npm run docs:validate-links`: green.
+- `npm run docs:build`: green, run once on the final tree.
+- The sparse-index and index-step reverts ran on a scratch copy and are in the Revert observations; no other confinement run was made locally after the instruction.
+- No container ran in this round. The owner decides container calls, and the Linux CI job carries the Linux runs, including `checkSparseCheckout` on git 2.39 and later.
+- CI runs `test:evaluate-confinement` in its shards for the pushed commit; its result is the confinement record of the round.
 
 ## Build review
 
 One fresh Opus subagent reviewed the commit in three lenses (code, tests, adversarial), read only, in place of `/bmad-code-review`.
 Every finding was checked against code or by experiment before it was acted on.
 
-| Finding                                                                                                                                                                               | Verdict           | Route                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Low (adversarial, pre-existing): the metadata directory holds a copy of the project's `config.worktree`, which a target can read, with worktree-scoped remote URLs, helpers and hooks | valid, reproduced | Fixed here: the file is removed after the sparse settings are read; the case sets a worktree-scoped URL and helper and asserts the file is absent; reference, AD-8 and CHANGELOG say so |
-| Low (code): `index.sparse` is not carried, so the target's index is a full one and `ls-files --sparse` differs                                                                        | valid, accepted   | Decision 8 and AD-8 name it; `status`, `ls-files` and `ls-files -t` equal the project's                                                                                                 |
-| Low (tests): the evaluation-folder filter handled the one-character `ls-files -t` tag and not the two-character status prefix                                                         | valid             | Fixed: the filter accepts both prefixes                                                                                                                                                 |
-| Low (code, informational): a populated submodule outside the cone is `H` in the project and `S` in the target (status clean on both)                                                  | valid, accepted   | A submodule inside `launch.root` is already refused; an outside one differs in a flag only                                                                                              |
-| Info (tests): the `--sparse` clone case skips on a git before 2.44                                                                                                                    | valid, accepted   | As Story 1.80's partial-clone cases: they run on macOS here and on CI hosts with git 2.44 or later, and fail under `CI` on an older git                                                 |
+| Finding                                                                                                                                                                               | Verdict                 | Route                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Low (adversarial, pre-existing): the metadata directory holds a copy of the project's `config.worktree`, which a target can read, with worktree-scoped remote URLs, helpers and hooks | valid, reproduced       | Fixed here: the file is removed after the sparse settings are read; the case sets a worktree-scoped URL and helper and asserts the file is absent; reference, AD-8 and CHANGELOG say so |
+| Low (code): `index.sparse` is not carried, so the target's index is a full one and `ls-files --sparse` differs                                                                        | valid, fixed in round 1 | Decision 8: the worktree's `index.sparse` is carried into the store; the long-form `git status` line is compared                                                                        |
+| Low (tests): the evaluation-folder filter handled the one-character `ls-files -t` tag and not the two-character status prefix                                                         | valid                   | Fixed: the filter accepts both prefixes                                                                                                                                                 |
+| Low (code, informational): a populated submodule outside the cone is `H` in the project and `S` in the target (status clean on both)                                                  | valid, accepted         | A submodule inside `launch.root` is already refused; an outside one differs in a flag only                                                                                              |
+| Info (tests): the `--sparse` clone case skips on a git before 2.44                                                                                                                    | valid, accepted         | As Story 1.80's partial-clone cases: they run on macOS here and on CI hosts with git 2.44 or later, and fail under `CI` on an older git                                                 |
 
-No finding is left for a new story.
+The build review left no finding for a new story.
 Bubblewrap ran only in the container, once.
+
+### Review round 1
+
+Three Opus reviewers read the commit; the adversarial reviewer could not break the sparse mechanism, and the revert counts of the record all reproduced.
+Every finding was checked against code or by experiment before it was acted on.
+
+| Finding                                                                                                                                                                                                                      | Verdict                                                          | Route                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medium: a sparse index shows "You are in a sparse checkout." in the project and "with 96% of tracked files present" in the target                                                                                            | valid, reproduced                                                | Fixed here: `index.sparse` is carried when the worktree reports `true` (Decision 8); the stub and `sparseView` compare the long-form lines; AD-8, the I/O matrix, the reference and CHANGELOG say so; revert row recorded |
+| Low: the I/O row "Index step fails" has no case, and a bare `runGit` still passed                                                                                                                                            | valid, reproduced                                                | Fixed here: the failing-step case (Decision 11) and its revert row                                                                                                                                                        |
+| Low: "a sparse project always has that file" and "sparse projects are the ones that have it" are false both ways, the test design overstates which runs hold a worktree-scoped URL, and the CHANGELOG says the stub compares | valid                                                            | Fixed here: the justification says the runtime removes the file unconditionally (Decision 7, `epics.md`), the test design names the three runs that hold the URL and helper, the CHANGELOG says the case compares         |
+| Low: the story record put three sentences on one line and two on two others, and the Gates section lacked `npm run docs:build`                                                                                               | valid                                                            | Fixed here: one sentence per line; the Gates section records `npm run docs:build`                                                                                                                                         |
+| High, pre-existing (Story 1.57): `pack-objects` runs inside the adopter's repository and fails across filesystems                                                                                                            | valid, reproduced earlier on macOS with `TMPDIR` on a disk image | Owner decision: out of this PR. Filed as Story 1.132 (Decision 12) with the repro, the approach and the saved patch                                                                                                       |
+
+Story 1.132 is the one finding left for a new story.

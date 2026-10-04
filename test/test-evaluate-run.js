@@ -7084,6 +7084,13 @@ function sparseView(directory) {
     status: listing(ask('status', '--porcelain')),
     'ls-files': listing(ask('ls-files')),
     'ls-files-t': listing(ask('ls-files', '-t')),
+    // The long form of `git status` says whether the checkout is sparse, and with how many of the tracked files present.
+    'status-sparse': JSON.stringify(
+      ask('status')
+        .stdout.split('\n')
+        .filter((line) => /sparse checkout/.test(line))
+        .join('\n'),
+    ),
     'sparse-list': answer(ask('sparse-checkout', 'list')),
     'sparse-config': `${configured('core.sparseCheckout')}/${configured('core.sparseCheckoutCone')}`,
     'files-on-disk': JSON.stringify(onDisk),
@@ -7180,6 +7187,46 @@ async function checkSparseCheckout() {
         `a confined target's checkout of a project that is not sparse lacks docs/guide.md\n${out}`,
       );
     }
+  }
+
+  // The index step fails (the I/O row "Index step fails"): a sparse project's build refuses naming `read-tree`, exit 12, and leaves
+  // no workspace, temp file or worktree registration, so the target is never handed an index that lists the cone's outside as deleted.
+  {
+    const failing = sparseProject('sparse-index-step', { cone: true });
+    const temporary = tempDir('sparse-index-step-temp');
+    const shim = 'case " $* " in\n  *" read-tree -m "*) echo "read-tree refused by the case" >&2; exit 1 ;;\nesac';
+    let refusal = null;
+    withGitWrapper(shim, temporary, () => {
+      try {
+        createWorkspace({ root: failing.repository, kind: 'git', exclude: [failing.folder], label: 'index-step', withholdHistory: true });
+      } catch (error) {
+        refusal = error;
+      }
+    });
+    check(
+      refusal instanceof WorkspaceRefusal && refusal.message.includes('read-tree') && refusal.message.includes('refused by the case'),
+      `a failing git read-tree -m over a sparse project did not refuse the workspace naming it: ${refusal?.stack ?? refusal}`,
+    );
+    check(
+      fs.readdirSync(temporary).length === 0,
+      `a workspace refused at the index step left ${JSON.stringify(fs.readdirSync(temporary))} in the temp directory`,
+    );
+    check(
+      !git(failing.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes('tea-evaluate-index-step'),
+      'a workspace refused at the index step left its worktree registration',
+    );
+    check(
+      !fs.existsSync(path.join(failing.repository, '.git', 'worktrees')) ||
+        fs.readdirSync(path.join(failing.repository, '.git', 'worktrees')).length === 0,
+      'a workspace refused at the index step left its worktree metadata',
+    );
+    const ran = withGitWrapper(shim, null, (bin) =>
+      evaluate(['run', '--evaluation', failing.folder], { ...failing.env, PATH: `${bin}${path.delimiter}${BASE_ENV.PATH}` }),
+    );
+    check(
+      ran.status === 12 && ran.output.includes('read-tree'),
+      `a confined run whose index step fails exited ${ran.status} with ${JSON.stringify(ran.output.slice(0, 300))}; expected 12 naming read-tree`,
+    );
   }
 
   // A blob-less clone made with `--sparse` (Story 1.80's partial-clone shape): nothing fetches and the status is the project's.
@@ -7725,7 +7772,10 @@ async function checkWithheldHistoryUnits() {
   );
 }
 
-/** Runs `body` with a `git` ahead of the real one on `PATH` that runs `script` first (it may `exit`), and TMPDIR at `temporary`. */
+/**
+ * Runs `body(bin)` with a `git` ahead of the real one on `PATH` that runs `script` first (it may `exit`), and TMPDIR at
+ * `temporary`; `bin` is the directory of that `git`, for a child process that is given its own environment.
+ */
 function withGitWrapper(script, temporary, body) {
   const bin = tempDir('withheld-git-wrapper');
   const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
@@ -7734,7 +7784,7 @@ function withGitWrapper(script, temporary, body) {
   process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
   if (temporary !== null) process.env.TMPDIR = temporary;
   try {
-    return body();
+    return body(bin);
   } finally {
     process.env.PATH = saved.PATH;
     if (saved.TMPDIR === undefined) delete process.env.TMPDIR;
@@ -8859,7 +8909,10 @@ function checkConfinementReference() {
     section.includes(
       "(`git sparse-checkout set` in cone mode or with a pattern list, a sparse index, and a clone made with `--sparse`) shows the target the project's status",
     ) &&
-      section.includes('the private repository carries `core.sparseCheckout` and `core.sparseCheckoutCone`') &&
+      section.includes(
+        'the private repository carries `core.sparseCheckout`, `core.sparseCheckoutCone` and, when your worktree keeps a sparse index, `index.sparse`',
+      ) &&
+      section.includes('The long form of `git status` reports the sparse checkout as it does in your project, a sparse index included.') &&
       section.includes('marks every tracked file outside the cone as skip-worktree') &&
       section.includes(
         "The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.",
