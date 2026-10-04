@@ -776,11 +776,7 @@ function taggedExamples(content, tag) {
 
 /** What `check` says about the egress items of the CI guide's tagged registry example (the runtime check is async, the guide check is not). */
 async function ciEgressProblems(guide) {
-  try {
-    return await egressRegistryProblems(taggedExamples(guide, 'ci-registry'));
-  } catch {
-    return [];
-  }
+  return egressRegistryProblems(taggedExamples(guide, 'ci-registry'));
 }
 
 function sourceFixturePaths(content, label, failures) {
