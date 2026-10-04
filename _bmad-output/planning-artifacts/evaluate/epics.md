@@ -2958,6 +2958,8 @@ So that no stage computes a digest in its own words.
 **And** the guides that say to stamp a digest (`references/intake.md`, replacing its inline script, `references/contract.md` and `assets/README.md`) name the command there, through `bmad-workflow-builder` Edit, and `test:evaluate-guidance` holds the sentence in each; `SKILL.md` is untouched, since it is a `sessionRead` key of the live capture records
 **And** changing one byte of the file changes the printed digest, a path outside the folder exits 64, and removing the option fails the CLI case.
 
+(Amended 2026-10-04 in Story 1.115's build: `--file` names a path relative to the evaluation folder, and an absolute path, a `..` segment, a symbolic link at any component, a directory, a missing file and anything that is not a regular file each exit 64 with one line on stderr, as does `--file` together with `--calibration-inputs`. `references/intake.md` also tells the model to put `assets/evaluation.json` in the folder first, since the command locates the folder through its `evaluation.json`. The cases are `checkDigestFile` in `test/test-evaluate-check.js` (`test:evaluate-check`) and `checkDigestFileGuidance` in `test/test-evaluate-guidance.js` (`test:evaluate-guidance`).)
+
 **Dependencies:** 1.12.
 **Gate:** builder Analyze, `npm run test:evaluate-check`, `npm run test:evaluate-guidance`, `npm run docs:validate-links`, `npm test`.
 

@@ -755,6 +755,17 @@ It carries no `answer` (your scorer supplies it) and no `expectedLevel`.
 It reads only what it needs and does not run `check`, so run `check` once the judgments file is written.
 It exits 10 with a `judge-calibration` finding for an evaluator that is not `records`, a contract that declares no rubric, a labelled file `check` refuses, or a configuration that is absent, a link, not JSON or off eval-quality's `evaluator-configuration` schema.
 
+```bash
+npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation --file requirements.md
+```
+
+With `--file <path>`, `digest` is read-only and prints eval-quality's `digestBytes` over the bytes of one file the folder holds, as `sha256:` and 64 hex digits on one line.
+This is the value for `requirements.digest` in `evaluation.json` and for the contract's `sourceSpecDigest`: both are the digest of the exact bytes of `requirements.md`, with nothing trimmed or normalized.
+It writes nothing under the folder, `corpus-index.json` included, and prints no corpus digest.
+The path is relative to the evaluation folder.
+It exits 64 with one line on stderr for an absolute path, a path with a `..` segment, a symbolic link at any component, a directory, a file the folder does not hold, or an entry that is not a regular file, and for `--file` together with `--calibration-inputs`.
+Change one byte of the file and the printed digest changes.
+
 ## preflight
 
 ```bash

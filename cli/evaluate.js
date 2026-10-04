@@ -4,12 +4,14 @@
  *
  * Subcommands in this release:
  *   tea-evaluate check  --evaluation <path>   validate the folder; exit 10 on any authoring defect
- *   tea-evaluate digest --evaluation <path> [--calibration-inputs]
+ *   tea-evaluate digest --evaluation <path> [--calibration-inputs | --file <path>]
  *                                             write corpus-index.json and print corpusDigest; with
  *                                             --calibration-inputs write nothing and print, as JSON, the values a
  *                                             records harness copies into calibration-judgments.json: the labelled
  *                                             file's digest, the scorer configuration digest and each labelled
- *                                             item's label-free scorerInput
+ *                                             item's label-free scorerInput; with --file write nothing and print
+ *                                             eval-quality's digestBytes over the bytes of one file the folder
+ *                                             holds, named relative to the folder (--file and --calibration-inputs cannot be combined)
  *   tea-evaluate preflight --evaluation <path> [--from-working-tree]
  *                                             qualify the seeded probes in a disposable workspace, drive the
  *                                             preflight legs and take the verdict from eval-quality
@@ -89,6 +91,8 @@
  *       through when they are not success or FAIL)
  *   64  also ci: no ci/evaluation-ci-plan.json, an unknown --tier, a check that needs a baseline/ that is absent, an
  *       api-conformance check over an evaluation with no HTTP target, or a gate's own 64 passed through
+ *   64  also digest --file: a path outside the folder, through a symbolic link, to a directory, to a file the folder
+ *       does not hold or to something that is not a regular file, and --file with --calibration-inputs
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
  *       eval-quality's own 64; score: no run to score, a --run naming no run or a preflight, or a run that did
  *       not complete; compare: the same, and a run with no score invocation; a sealed-brief agent qualification's score call that exits 64 stops the run with 12)
@@ -98,10 +102,10 @@
 
 const { Command } = require('commander');
 
-const { resolveEvaluationFolder } = require('./lib/evaluate/folder');
+const { readFolderFile, resolveEvaluationFolder } = require('./lib/evaluate/folder');
 const { checkEvaluation } = require('./lib/evaluate/check');
 const { CorpusIndexError, writeCorpusIndex } = require('./lib/evaluate/corpus-index');
-const { EngineUnavailableError } = require('./lib/evaluate/engine');
+const { EngineUnavailableError, loadEngine } = require('./lib/evaluate/engine');
 const { EngineStageError } = require('./lib/evaluate/engine-cli');
 const { runPreflightCommand } = require('./lib/evaluate/preflight');
 const { runRunCommand } = require('./lib/evaluate/run');
@@ -155,8 +159,24 @@ async function runCalibrationInputs(folder) {
   return EXIT_CODES.ok;
 }
 
+/** Prints eval-quality's `digestBytes` over one file the folder holds; writes nothing under the folder. */
+async function runFileDigest(folder, file) {
+  const read = readFolderFile(folder, file);
+  if (!read.ok) {
+    process.stderr.write(`${NAME} digest: --file ${escapeUnprintable(JSON.stringify(file))} ${escapeUnprintable(read.reason)}\n`);
+    return EXIT_CODES.usage;
+  }
+  const engine = await loadEngine();
+  process.stdout.write(`${engine.digestBytes(read.bytes)}\n`);
+  return EXIT_CODES.ok;
+}
+
 async function runDigest(options) {
+  if (options.file !== undefined && options.calibrationInputs === true) {
+    throw new UsageError('--file and --calibration-inputs cannot be combined');
+  }
   const folder = folderFrom(options);
+  if (options.file !== undefined) return runFileDigest(folder, options.file);
   if (options.calibrationInputs === true) return runCalibrationInputs(folder);
   const { index, corpusDigest, indexPath } = await writeCorpusIndex(folder);
   process.stderr.write(`${NAME} digest: wrote ${indexPath} (${index.length} file(s))\n`);
@@ -245,13 +265,14 @@ function buildProgram(run) {
   program
     .command('digest')
     .description(
-      'Write corpus-index.json over corpus/, probes/ and mutations/, and print corpusDigest; with --calibration-inputs, print the values a records harness copies instead.',
+      'Write corpus-index.json over corpus/, probes/ and mutations/, and print corpusDigest; with --calibration-inputs, print the values a records harness copies instead; with --file, print the digest of one file the folder holds.',
     )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option(
       '--calibration-inputs',
       "print, and write nothing: the labelled file's digest, the scorer configuration digest and each item's scorerInput",
     )
+    .option('--file <path>', "print, and write nothing: eval-quality's digestBytes over this file, named relative to the evaluation folder")
     .action((options) => run(runDigest, options));
   program
     .command('preflight')

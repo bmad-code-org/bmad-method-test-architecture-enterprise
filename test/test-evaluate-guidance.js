@@ -302,10 +302,43 @@ function checkIntake(intake, failures) {
     '{tea_evaluations_folder}/package.json',
     '`{"private":true,"devDependencies":{"eval-quality":"latest","bmad-method-test-architecture-enterprise":"latest"}}`',
     'npm install --prefix {tea_evaluations_folder}',
-    'From `{tea_evaluations_folder}/<evaluationId>/`',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check',
   ])
     requireText(intake, marker, 'intake.md', failures);
+}
+
+/** The command the guides that stamp a digest name (Story 1.115), as the two npm-led guides spell it. */
+const DIGEST_FILE_COMMAND =
+  'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation {tea_evaluations_folder}/<evaluationId> --file requirements.md';
+
+/**
+ * Each guide that says to stamp a digest over `requirements.md` names `tea-evaluate digest --file`, and intake.md carries no
+ * inline script for it. The command in the guide runs, spelled as the guide spells it, and prints `digestBytes` of the file.
+ */
+function checkDigestFileGuidance({ intake, contractGuide, readme }, engine, failures) {
+  requireText(intake, DIGEST_FILE_COMMAND, 'intake.md', failures);
+  requireText(
+    intake,
+    'Put `assets/evaluation.json` at `{tea_evaluations_folder}/<evaluationId>/evaluation.json` if it is not there yet',
+    'intake.md',
+    failures,
+  );
+  requireText(contractGuide, DIGEST_FILE_COMMAND, 'contract.md', failures);
+  requireText(readme, 'tea-evaluate digest --evaluation <folder> --file requirements.md', 'assets/README.md', failures);
+  if (readme.split('tea-evaluate digest --evaluation <folder> --file requirements.md').length < 3)
+    failures.push('assets/README.md names `digest --file` once; the evaluation.json line and the contract line each name it');
+  if (intake.includes('--input-type=module') || intake.includes('readFileSync'))
+    failures.push('intake.md still computes the requirements digest with an inline script');
+  const folder = path.join(__dirname, 'fixtures', 'evaluate', 'valid');
+  const command = DIGEST_FILE_COMMAND.replace(/^npm exec --prefix \{tea_evaluations_folder\} -- tea-evaluate /, '')
+    .replace('{tea_evaluations_folder}/<evaluationId>', folder)
+    .split(' ');
+  const ran = spawnSync(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), ...command], { encoding: 'utf8' });
+  const expected = engine.digestBytes(fs.readFileSync(path.join(folder, 'requirements.md')));
+  if (ran.status !== 0 || ran.stdout !== `${expected}\n`)
+    failures.push(
+      `the guides' digest command exited ${ran.status} and printed ${JSON.stringify(ran.stdout)}; expected ${expected}\n${ran.stderr}`,
+    );
 }
 
 function checkCorpus(corpus, engine, failures) {
@@ -4066,6 +4099,37 @@ async function main() {
   const engine = await loadEngine();
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
+  const digestGuides = {
+    intake,
+    contractGuide: fs.readFileSync(REFERENCE('contract'), 'utf8'),
+    readme: fs.readFileSync(ASSET('README.md'), 'utf8'),
+  };
+  checkDigestFileGuidance(digestGuides, engine, failures);
+  for (const [label, corrupt] of [
+    ['intake.md without the command', (guides) => (guides.intake = guides.intake.replace(DIGEST_FILE_COMMAND, 'the digest command'))],
+    [
+      'intake.md without placing evaluation.json first',
+      (guides) => (guides.intake = guides.intake.replace('if it is not there yet', 'when convenient')),
+    ],
+    [
+      'intake.md with its inline script back',
+      (guides) => (guides.intake += ' node --input-type=module -e "readFileSync(\'requirements.md\')"'),
+    ],
+    [
+      'contract.md without the command',
+      (guides) => (guides.contractGuide = guides.contractGuide.replace(DIGEST_FILE_COMMAND, 'the digest command')),
+    ],
+    [
+      'assets/README.md without the command',
+      (guides) => (guides.readme = guides.readme.replaceAll('digest --evaluation <folder> --file', 'digest')),
+    ],
+  ]) {
+    const corrupted = { ...digestGuides };
+    corrupt(corrupted);
+    const rejected = [];
+    checkDigestFileGuidance(corrupted, engine, rejected);
+    if (rejected.length === 0) failures.push(`${label} passed the digest guidance gate`);
+  }
   checkCorpus(corpus, engine, failures);
   checkRetiredNetwork(fs.readFileSync(REFERENCE('adapters'), 'utf8'), failures, 'adapters.md');
   try {

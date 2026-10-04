@@ -6,11 +6,12 @@ The one exception is the scoring-policy template's `parentDigest: null`, which i
 
 - `evaluation.json` is a schema-valid worked starter for a reservation-review skill.
   Replace its target, launch and registry paths using the inspection record before running `tea-evaluate check`.
-  Its `requirements.digest` matches the exact bytes of `requirements-statement.md`; recalculate it with eval-quality's `digestBytes` after filling the statement and copying it to `requirements.md`.
+  Its `requirements.digest` matches the exact bytes of `requirements-statement.md`; recalculate it with `tea-evaluate digest --evaluation <folder> --file requirements.md` after filling the statement and copying it to `requirements.md`.
 - `inspection-record.md` is copied to a run-specific working draft and captures the target's entry points, behaviors, surfaces, existing tests and failure history without recording a second target-kind field.
 - `requirements-statement.md` supplies the six intake sections.
   Copy it to the working drafts folder, fill and confirm that copy with the adopter, then copy the confirmed bytes to the committed evaluation folder as `requirements.md`.
-- `contract.skeleton.json` becomes `contract.json` after replacing every whole quoted `"{{key}}"` token with the JSON serialization of its keyed value from the confirmed requirements and corpus. Stamp `sourceSpecDigest` with eval-quality's `digestBytes` over the committed `requirements.md` bytes, then run `tea-evaluate check`, `eval-quality compile` and `eval-quality seal` in order.
+- `contract.skeleton.json` becomes `contract.json` after replacing every whole quoted `"{{key}}"` token with the JSON serialization of its keyed value from the confirmed requirements and corpus.
+  Stamp `sourceSpecDigest` with the output of `tea-evaluate digest --evaluation <folder> --file requirements.md`, then run `tea-evaluate check`, `eval-quality compile` and `eval-quality seal` in order.
 - `scoring-policy.template.json` becomes `policy/scoring-policy.json`, eval-quality's scoring policy.
   The adopter sets `policyId`, `severityFloor`, `catchThreshold` and `minimumTrialCount`; `confidenceThreshold` and the three caps carry eval-quality's published defaults, which the adopter may change.
 - `evaluator-conditions.template.json` becomes `policy/evaluator-conditions.json`, the model a run uses, the digest of its system prompt and, in its `judge` block, the model the rubric judge uses, which `tea-evaluate run` records in every run's evaluator configuration.
