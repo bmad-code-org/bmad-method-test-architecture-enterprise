@@ -167,6 +167,7 @@ development_status:
   2-3-render-evaluation-plans-in-bmad-testarch-ci: done
   2-4-finish-the-evaluation-with-its-ci-stage: done
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
+  2-6-document-evaluate-for-the-people-who-use-it: backlog
   epic-2-retrospective: optional
 parallel_lanes:
   # Run order inside each lane. A story's coordinator hands off to the next
@@ -262,6 +263,8 @@ parallel_lanes:
     - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
     - 1-115-give-the-skill-a-command-that-prints-a-files-digest
     - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
+    # Starts only once every other story has merged.
+    - 2-6-document-evaluate-for-the-people-who-use-it
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
@@ -270,6 +273,7 @@ owner_handoff:
       using the published engine resolved by the final TeA lockfile."
     status: backlog
     depends_on:
+      - 2-6-document-evaluate-for-the-people-who-use-it
       - 1-76-require-an-explicit-custom-agent-version-response
       - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
       - 1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe
