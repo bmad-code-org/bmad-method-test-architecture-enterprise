@@ -471,6 +471,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test:evaluate-authoring` holds both Story 1.24 replays, the AI-feature and the test-review evaluation, to agreeing oracles, a defect for every behavior a mutation violates, a degenerate answer that violates only its own behavior's oracle, and an eligible probe in each partition for every declared floor.
   The behaviors a mutation or a degenerate answer violates come from the oracle outcomes of the scored trials, which hold every contract oracle with its disposition. The qualification evidence lists only the oracles of the behaviors a probe declares, so a check over it could not fail.
   Every oracle outcome must read `agrees`, so a `not-evaluable` outcome fails too.
+  Per scored trial, one assertion fails for a violated behavior the probe does not declare and another for a declared behavior whose oracles the trial leaves held, each printing `trial n violates the oracles of [..] where the probe declares [..]`; the corroboration assertion runs after them.
   Run over the pre-repair bytes of `origin/main`, the checks fail by name: P-006 violates B-002 and B-004 where its defects declare B-002, P-009 violates B-001, B-003 and B-004 where it games B-001, and the test-review held-out probes P-010, P-012 and P-013 violate behaviors their defects do not declare.
   The capture records of both repositories declare the repair of `evaluation.json` as a Story 1.98 migration, which the guard in `test:evaluate-ci` reverses to the bytes the live session wrote; a file that still declares the `zero-action` floor beside `P-015` is refused.
   The test-review evaluation of Story 1.24 gets the same repair.
@@ -480,7 +481,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The zero-action floor is gone, since the six zero-action probes are all `expectedClean` and no behavior is a mandatory action; P-015 joins the held-out partition as a gameability probe for B-003 (every valid test flagged as disabled), so the gameability floor holds there.
   The replay is recorded again on eval-quality 7.1.0 with its manifest, and every oracle outcome of both partitions reads `agrees`.
   The Evaluate skill's starter `assets/evaluation.json` declares the `defect` floor alone, and `references/corpus.md` says what a floor needs.
-  A `zero-action` floor needs a `zero-action` defect probe in each partition it is read on, because an `expectedClean` probe never counts toward a floor, and a `gameability` floor needs a gameability probe in `heldOutProbes`.
+  Every class a floor declares needs an eligible probe in the development partition and in `heldOutProbes`, or the evaluation declares no floor for it, because an `expectedClean` probe never counts toward a floor and the twin run repeats the partition `baseline/` recorded (the whole corpus for a `both` baseline).
+  The Workflow kind's worked corpus holds out P-008, a defect probe of B-002 (M-003, unseen reservation R-19), since its held-out P-006 is a `zero-action` defect probe and P-007, the only development probe of B-002, has to stay in development.
+  With it the starter's `defect` floor has an eligible probe in both partitions of all six kinds, and `test:evaluate-guidance` checks that per kind.
+  One gameability probe cannot sit in both partitions, so the guide has the adopter commit a second gameability probe beside the worked P-004 before declaring a `gameability` floor.
   An adopter who followed the starter ended at `ci --tier release` with exit 2 and `no-eligible-probe`.
   `test:evaluate-guidance` holds the starter's floor and each new sentence, and the CLI reference states the same rules.
   The CLI reference says which floors an evaluation can declare.

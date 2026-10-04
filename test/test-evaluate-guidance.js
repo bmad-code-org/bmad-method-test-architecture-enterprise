@@ -360,12 +360,15 @@ function checkCorpus(corpus, engine, failures) {
     'add `gameability` to `evaluation.json.arms`',
     '`strengthFloor.gameability`',
     'A clean control never fills a strength floor',
-    'Declare a `zero-action` floor only when each partition it is read on',
-    'holds a `zero-action` defect probe',
-    'declares `defect` alone',
-    'the list also needs a probe of every class `strengthFloor` declares',
-    '`no-eligible-probe`',
-    'List a gameability probe in `heldOutProbes` as well',
+    'Declare a `zero-action` floor only when a `zero-action` defect probe sits in the partition `baseline/` records',
+    'which the twin run repeats (the whole corpus for a `both` baseline, the corpus without `heldOutProbes` for a development baseline)',
+    'and in the `heldOutProbes` list; an evaluation with no mandatory-action behavior declares `defect` alone',
+    'The held-out partition is scored on its own and the twin run repeats the partition `baseline/` recorded',
+    'every class `strengthFloor` declares needs an eligible probe in the development partition (the corpus without `heldOutProbes`) and one in the `heldOutProbes` list',
+    'hold one probe of the class out and keep another in development, or declare no floor for the class',
+    'A floor with no eligible probe in a partition it is read on exits `ci --tier release` 2 with `no-eligible-probe`',
+    'Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe',
+    '`P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then',
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
     'assets/scoring-policy.template.json',
@@ -473,7 +476,8 @@ function checkCorpus(corpus, engine, failures) {
       'Representative inputs': ['representative'],
       'Negative and malformed inputs': ['negative', 'malformed', 'negative'],
       'Gameability design': ['gameability'],
-      'Held-out probe selection': ['held-out'],
+      // The Workflow kind holds out a second probe: its P-006 is a zero-action defect probe, so a defect probe fills the starter's floor.
+      'Held-out probe selection': kind.title === 'Workflow' ? ['held-out', 'held-out'] : ['held-out'],
     };
     const malformedBody = headings.get('Negative and malformed inputs') ?? '';
     for (const marker of [
@@ -544,7 +548,15 @@ function checkCorpus(corpus, engine, failures) {
       }
     }
     try {
-      assert.deepStrictEqual(foundTags, ['representative', 'negative', 'malformed', 'negative', 'gameability', 'held-out']);
+      assert.deepStrictEqual(foundTags, [
+        'representative',
+        'negative',
+        'malformed',
+        'negative',
+        'gameability',
+        'held-out',
+        ...(kind.title === 'Workflow' ? ['held-out'] : []),
+      ]);
     } catch (error) {
       failures.push(`corpus.md ${kind.title} tagged corpus changed: ${error.message}`);
     }
@@ -555,9 +567,31 @@ function checkCorpus(corpus, engine, failures) {
       seed.defects?.[0]?.manifestationWitness == null
     )
       failures.push(`corpus.md ${kind.title} lacks a worked seeded defect with a manifestation witness`);
-    const heldOut = kind.title === 'Skill' ? ['P-004', 'P-006'] : ['P-006'];
+    const heldOut = { Skill: ['P-004', 'P-006'], Workflow: ['P-006', 'P-008'] }[kind.title] ?? ['P-006'];
     const heldOutBody = headings.get('Held-out probe selection') ?? '';
     for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `corpus.md ${kind.title} held-out selection`, failures);
+    if (kind.title === 'Workflow')
+      for (const marker of [
+        'Select an unseen two-step reservation and an unseen reporting request early. List `P-006` and `P-008` in `heldOutProbes`.',
+        '`P-006` is a `zero-action` defect probe and fills no `defect` floor',
+        'so `P-008` holds out a `defect` probe of B-002, whose development probe is `P-007`',
+        "the starter's `defect` floor has an eligible probe in both partitions",
+        'No `zero-action` defect probe stays in development, so the evaluation declares the `defect` floor alone.',
+        '`P-008` seeds the reporting rule for unseen reservation R-19 through `M-003`; qualify it as `P-006` is.',
+      ])
+        requireText(heldOutBody, marker, 'corpus.md Workflow held-out selection', failures);
+    // The starter's floors are read on the development partition (a development baseline's twin run) and on the held-out list. The engine's
+    // strength vector leaves canaries and every `expectedClean` probe out, so a floor class needs a non-clean probe of its class in each.
+    const starterFloors = Object.keys(JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8')).strengthFloor);
+    for (const [partition, members] of [
+      ['development', probes.filter((probe) => !heldOut.includes(probe.probeId))],
+      ['held-out', probes.filter((probe) => heldOut.includes(probe.probeId))],
+    ])
+      for (const probeClass of starterFloors)
+        if (!members.some((probe) => probe.probeClass === probeClass && probe.probeClass !== 'canary' && !probe.expectedClean))
+          failures.push(
+            `corpus.md ${kind.title} worked ${partition} partition holds no eligible ${probeClass} probe for the starter's floor`,
+          );
     for (const id of heldOut) {
       const selected = probes.find((probe) => probe.probeId === id);
       if (!selected || selected.expectedClean !== false || selected.qualification?.route === 'clean-control')
@@ -722,6 +756,31 @@ function checkCorpus(corpus, engine, failures) {
           JSON.stringify(expectedFaultPredicate('observed', heldOutFaultOutputs.Workflow)))
     )
       failures.push('corpus.md Workflow P-006 must skip all required actions while claiming success');
+    if (kind.title === 'Workflow') {
+      const heldOutReport = probes.find((probe) => probe.probeId === 'P-008');
+      const input = 'Create reservation R-19 and read it back.';
+      try {
+        assert.strictEqual(heldOutReport?.probeClass, 'defect');
+        assert.strictEqual(heldOutReport.behaviorId, 'B-002');
+        assert.strictEqual(heldOutReport.qualification.mutation, 'M-003');
+        assert.strictEqual(heldOutReport.defects[0].severity, 'low');
+        assert.strictEqual(heldOutReport.defects[0].manifestationWitness.inputs.stdin.value, input);
+        assert.deepStrictEqual(heldOutReport.defectSignature.condition.selector.inputBinding.stdin, { prompt: { literal: input } });
+        assert.strictEqual(heldOutReport.defects[0].manifestationWitness.legId, 'manifest-b002-fault');
+        assert.deepStrictEqual(
+          heldOutReport.defects[0].manifestationWitness.relation,
+          expectedFaultPredicate('manifest-b002-fault', comparisonFaultOutputs.Workflow),
+        );
+        assert.deepStrictEqual(
+          heldOutReport.defectSignature.condition.predicate,
+          expectedFaultPredicate('observed', comparisonFaultOutputs.Workflow),
+        );
+      } catch (error) {
+        failures.push(
+          `corpus.md Workflow P-008 must hold out a B-002 defect probe that reports failure after both actions: ${error.message}`,
+        );
+      }
+    }
     if (
       kind.title === 'AI feature' &&
       (seed?.defects?.[0]?.manifestationWitness?.inputs?.body?.value?.answer !==
@@ -2481,6 +2540,19 @@ function checkEvaluatorGuidance(guide, failures) {
       headingBody(cliReference, '### The evaluation layer'),
       marker,
       'docs/reference/tea-evaluate-cli.md custom agent version response',
+      failures,
+    );
+  // Story 1.98: the CLI reference states the floor rule the corpus guide teaches, over the partition the twin run repeats and the held-out list.
+  for (const marker of [
+    'once it holds a gameability probe in each partition, `gameability`',
+    'The twin run repeats the partition `baseline/` recorded and the held-out partition is read on its own',
+    'needs an eligible probe in the development partition (the corpus without `heldOutProbes`) and one in `heldOutProbes`',
+    'a `gameability` or `zero-action` floor needs two probes of that class, one held out and one kept in development',
+  ])
+    requireText(
+      headingBody(cliReference, '### The live tiers'),
+      marker,
+      'docs/reference/tea-evaluate-cli.md strength floor rule',
       failures,
     );
   // Story 1.42: a sealed observation names its interface beside its operation, in a harness's records and in each calibration input.

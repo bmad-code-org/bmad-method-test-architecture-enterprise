@@ -119,7 +119,7 @@ function containsPrivateInput(value, privateValues, markers) {
 const isAiFeature = (folder) => folder.endsWith(path.join('ai-feature', 'evaluation'));
 
 /**
- * The behaviors whose oracles each scored trial of a probe violates, one sorted list per trial. The qualification evidence
+ * The behaviors whose oracles each scored trial of a probe violates, one `[trialIndex, sorted list]` pair per trial. The qualification evidence
  * lists only the oracles of the behaviors a probe declares (the engine judges a degenerate response and a mutation against
  * those alone), so a mutation or a degenerate answer that also breaks another behavior is visible only in the scored
  * evidence, whose outcomes hold every contract oracle with its disposition.
@@ -134,7 +134,7 @@ function violatedBehaviorsByTrial(folder, evidence) {
     if (outcome.disposition === 'violated') violated.add(owner.get(outcome.oracleId));
     trials.set(outcome.trialIndex, violated);
   }
-  return [...trials].sort(([left], [right]) => left - right).map(([, violated]) => [...violated].sort());
+  return [...trials].sort(([left], [right]) => left - right).map(([trialIndex, violated]) => [trialIndex, [...violated].sort()]);
 }
 
 /** The behaviors a probe is declared to break: a controlled mutation's defects, a gameability probe's own behavior, nothing for a control. */
@@ -144,24 +144,39 @@ function declaredBehaviors(probe) {
 }
 
 /**
- * Every oracle the scored trials of a probe judge agrees with the evidence, and the oracles they violate belong to exactly the
- * behaviors the probe declares. A mutation that breaks a behavior its defects do not declare files no finding for it
- * (eval-quality records the disposition as `disagrees`), and a degenerate answer that differs from the correct server on a step
- * another behavior's oracle reads violates that oracle too, so each probe answers like the correct server beyond what it seeds.
+ * In every scored trial of a probe the oracles that are violated belong to exactly the behaviors the probe declares, and every
+ * oracle the trials judge agrees with the evidence. A trial can differ from its declaration in two ways, and each has its own
+ * assertion: it violates a behavior the probe does not declare (a mutation that breaks a behavior its defects do not declare, a
+ * degenerate answer that differs from the correct server on a step another behavior's oracle reads), or it leaves every oracle
+ * of a declared behavior held. The corroboration assertion runs last. The judgment files a finding for every violated oracle of
+ * the behaviors a probe discharges and eval-quality records any other violated oracle as `disagrees`, so an undeclared violation
+ * also reads `disagrees`; that assertion alone catches an outcome that is `not-evaluable` or that disagrees for another reason.
  */
 function checkScoredBehaviors(folder, probe, evidence, label) {
+  const declared = declaredBehaviors(probe);
+  const subject = {
+    'controlled-mutation': 'mutation',
+    gameability: 'degenerate response',
+    'clean-control': 'clean control',
+  }[probe.qualification.route];
+  for (const [trialIndex, violated] of violatedBehaviorsByTrial(folder, evidence)) {
+    const sets = `trial ${trialIndex} violates the oracles of [${violated.join(', ')}] where the probe declares [${declared.join(', ')}]`;
+    assert.deepEqual(
+      violated.filter((behaviorId) => !declared.includes(behaviorId)),
+      [],
+      `${label} ${subject} violates a behavior the probe does not declare: ${sets}`,
+    );
+    assert.deepEqual(
+      declared.filter((behaviorId) => !violated.includes(behaviorId)),
+      [],
+      `${label} ${subject} leaves a declared behavior held: ${sets}`,
+    );
+  }
   assert.deepEqual(
     evidence.outcomes.filter((entry) => entry.corroboration !== 'agrees').map((entry) => `${entry.oracleId} ${entry.corroboration}`),
     [],
     `${label} has an oracle whose judgment the evidence does not corroborate`,
   );
-  const declared = declaredBehaviors(probe);
-  const message = {
-    'controlled-mutation': `${label} mutation violates the oracles of behaviors its defects do not declare`,
-    gameability: `${label} degenerate response violates the oracles of behaviors other than ${probe.behaviorId}`,
-    'clean-control': `${label} clean control violates an oracle`,
-  }[probe.qualification.route];
-  for (const violated of violatedBehaviorsByTrial(folder, evidence)) assert.deepEqual(violated, declared, message);
 }
 
 function checkGameabilityEvidence(folder, probe, source, naive, disciplined) {
