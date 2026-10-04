@@ -3178,6 +3178,12 @@ function checkCaptureRecordGuard() {
         'declared migration could have produced',
       ],
       [
+        'a Story 1.98 migration over an evaluation.json that declares the zero-action floor beside the held-out gameability probe',
+        record,
+        withEvaluation(serialized({ ...evaluationValue, strengthFloor: { defect: 1, 'zero-action': 1, gameability: 1 } })),
+        'declared migration could have produced',
+      ],
+      [
         'an evaluation.json whose floors changed beyond the Story 1.98 repair',
         record,
         withEvaluation(serialized({ ...evaluationValue, strengthFloor: { ...evaluationValue.strengthFloor, gameability: 2 } })),

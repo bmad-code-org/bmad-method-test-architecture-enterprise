@@ -8,6 +8,16 @@
   "verdict": "violated",
   "oracles": [
     {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-disabled",
+        "mutated-it-skip"
+      ]
+    },
+    {
       "oracleId": "O-003",
       "polarity": "expects-hold",
       "resolution": "false",

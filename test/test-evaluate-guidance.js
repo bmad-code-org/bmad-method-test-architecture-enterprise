@@ -359,6 +359,13 @@ function checkCorpus(corpus, engine, failures) {
     'non-Node adopter repositories',
     'add `gameability` to `evaluation.json.arms`',
     '`strengthFloor.gameability`',
+    'A clean control never fills a strength floor',
+    'Declare a `zero-action` floor only when each partition it is read on',
+    'holds a `zero-action` defect probe',
+    'declares `defect` alone',
+    'the list also needs a probe of every class `strengthFloor` declares',
+    '`no-eligible-probe`',
+    'List a gameability probe in `heldOutProbes` as well',
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
     'assets/scoring-policy.template.json',
@@ -5207,6 +5214,13 @@ async function main() {
     assert.deepStrictEqual(template.registry?.[0]?.infrastructureExitCodes, [3, 4, 5, 6]);
   } catch (error) {
     failures.push(`assets/evaluation.json starter runner codes changed: ${error.message}`);
+  }
+  // A zero-action floor needs a zero-action defect probe in each partition it is read on, which a fresh corpus lacks: the starter
+  // declares the defect class alone.
+  try {
+    assert.deepStrictEqual(template.strengthFloor, { defect: 1 });
+  } catch (error) {
+    failures.push(`assets/evaluation.json starter strengthFloor changed: ${error.message}`);
   }
   const actualDigest = engine.digestBytes(fs.readFileSync(ASSET('requirements-statement.md')));
   if (template.requirements?.path !== 'requirements.md' || template.requirements.digest !== actualDigest)

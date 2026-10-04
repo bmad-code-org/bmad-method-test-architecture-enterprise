@@ -106,6 +106,29 @@
     "artifacts": {}
   },
   {
+    "probeId": "manifest-p-010-disabled",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/disabled-test.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion",
+          "disabled-test"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
     "probeId": "manifest-p-011",
     "interfaceId": "review-cli",
     "operationId": "review",
@@ -148,6 +171,29 @@
     "artifacts": {}
   },
   {
+    "probeId": "manifest-p-012-disabled",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/disabled-test.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion",
+          "disabled-test"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
     "probeId": "manifest-p-013",
     "interfaceId": "review-cli",
     "operationId": "review",
@@ -159,6 +205,60 @@
         "file": "cases/clean-strict-equal.test.js",
         "status": "clean",
         "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-013-missing",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "error": "provide a JSON object with action review and a file string"
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-013-disabled",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "error": "provide a JSON object with action review and a file string"
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-013-strict",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "error": "provide a JSON object with action review and a file string"
       }
     },
     "stderr": {

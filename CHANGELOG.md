@@ -468,8 +468,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The held-out partition gains P-015, a gameability probe for B-004 (strict mode reported, the doubled minimum not applied), so the gameability floor holds there too.
   Both repositories commit a `baseline/` recorded by `compare --accept` over a clean copy, and the Story 1.24 replay bundles are recorded again on 7.1.0.
   `test:evaluate-ci-repositories` runs the tiers `pr`, `merge`, `scheduled` and `release` that each plan places over a copy of each repository, and expects exit 0, no warning, an agreeing oracle and a floor decision of `meets` for the classes the evaluation declares.
-  `test:evaluate-authoring` holds the AI-feature replay to agreeing oracles, a defect for every behavior a mutation violates, a degenerate answer that violates only its own behavior's oracle, and an eligible probe in each partition for every declared floor.
-  The capture records of both repositories declare the repair of `evaluation.json` as a Story 1.98 migration, which the guard in `test:evaluate-ci` reverses to the bytes the live session wrote.
+  `test:evaluate-authoring` holds both Story 1.24 replays, the AI-feature and the test-review evaluation, to agreeing oracles, a defect for every behavior a mutation violates, a degenerate answer that violates only its own behavior's oracle, and an eligible probe in each partition for every declared floor.
+  The behaviors a mutation or a degenerate answer violates come from the oracle outcomes of the scored trials, which hold every contract oracle with its disposition. The qualification evidence lists only the oracles of the behaviors a probe declares, so a check over it could not fail.
+  Every oracle outcome must read `agrees`, so a `not-evaluable` outcome fails too.
+  Run over the pre-repair bytes of `origin/main`, the checks fail by name: P-006 violates B-002 and B-004 where its defects declare B-002, P-009 violates B-001, B-003 and B-004 where it games B-001, and the test-review held-out probes P-010, P-012 and P-013 violate behaviors their defects do not declare.
+  The capture records of both repositories declare the repair of `evaluation.json` as a Story 1.98 migration, which the guard in `test:evaluate-ci` reverses to the bytes the live session wrote; a file that still declares the `zero-action` floor beside `P-015` is refused.
+  The test-review evaluation of Story 1.24 gets the same repair.
+  Its held-out replay held 15 `disagrees` outcomes (P-010 O-002, P-012 O-002, P-013 O-001, O-002 and O-003, each over three trials), and it declared `zero-action` and `gameability` floors that its held-out partition could not fill.
+  M-005 (P-010) and M-007 (P-012) add `missing-assertion` to a disabled test, which violates O-002 beside the oracle each probe declares; M-008 (P-013) refuses every valid request, which violates O-001, O-002 and O-003 beside O-004.
+  Each probe now declares a defect for every behavior its mutation violates (D-014 to D-018), each with a witness that reads what its mutation answers, and a signature that admits all of its witnesses.
+  The zero-action floor is gone, since the six zero-action probes are all `expectedClean` and no behavior is a mandatory action; P-015 joins the held-out partition as a gameability probe for B-003 (every valid test flagged as disabled), so the gameability floor holds there.
+  The replay is recorded again on eval-quality 7.1.0 with its manifest, and every oracle outcome of both partitions reads `agrees`.
+  The Evaluate skill's starter `assets/evaluation.json` declares the `defect` floor alone, and `references/corpus.md` says what a floor needs.
+  A `zero-action` floor needs a `zero-action` defect probe in each partition it is read on, because an `expectedClean` probe never counts toward a floor, and a `gameability` floor needs a gameability probe in `heldOutProbes`.
+  An adopter who followed the starter ended at `ci --tier release` with exit 2 and `no-eligible-probe`.
+  `test:evaluate-guidance` holds the starter's floor and each new sentence, and the CLI reference states the same rules.
   The CLI reference says which floors an evaluation can declare.
 - Another session's commit in a second worktree does not stop a confined run, and the evaluation layer cannot write the project's git directory or its hooks directory (Story 1.112, AD-8).
   `preflight` and `run` compared every ref and the shared git state of the repository before and after, so a commit, fetch or branch in any other worktree of the same repository while a run was in flight changed the digest and ended the run with exit 12, with no qualified probe written.

@@ -5,10 +5,10 @@ Design from the confirmed `requirements.md` and inspection record. `probes/P-NNN
 ## Corpus rules and layout
 
 - Put representative inputs in `corpus/` and refer to them from the interaction plan. Add negative and malformed inputs that distinguish a disciplined response from a plausible shortcut.
-- Keep at least one `zero-action` probe with `expectedClean: true` and no defects as a clean control. For every mandatory-action behavior, add a `zero-action` defect probe whose signature exposes the missing action.
+- Keep at least one `zero-action` probe with `expectedClean: true` and no defects as a clean control. For every mandatory-action behavior, add a `zero-action` defect probe whose signature exposes the missing action. A clean control never fills a strength floor, because eval-quality's strength vector leaves every `expectedClean` probe out. Declare a `zero-action` floor only when each partition it is read on, the whole corpus and the `heldOutProbes` list, holds a `zero-action` defect probe; an evaluation with no mandatory-action behavior declares `defect` alone.
 - For every behavior, plan one seeded-defect probe or record its refusal with the reason. A non-canary defect carries a `manifestationWitness`; an AD-19 signature addresses the exit code or descriptor-nominated stream or response body. A file-only manifestation is refused until an allowed channel exposes it.
 - For every rubric- or judgment-governed behavior, include a `gameability` probe whose degenerate response satisfies a naive oracle of a different behavior and fails the probe behavior's disciplined oracle. Commit the response bytes at `corpus/gameability/<probeId>.json` and declare the naive oracle in the probe's qualification.
-- Choose non-clean held-out probes before writing oracles, and retain a development probe for each held-out behavior. List at least one per `material` or `critical` behavior in `evaluation.json`'s `heldOutProbes`. The gap loop reads `gap-view.json`, which contains only held-out ID, class and outcome, and must not read held-out input or expected answer. Run held-out probes as a separate partition (AD-22).
+- Choose non-clean held-out probes before writing oracles, and retain a development probe for each held-out behavior. List at least one per `material` or `critical` behavior in `evaluation.json`'s `heldOutProbes`. The held-out partition is scored on its own, so the list also needs a probe of every class `strengthFloor` declares; a floor with no eligible probe there exits `ci --tier release` 2 with `no-eligible-probe`. The gap loop reads `gap-view.json`, which contains only held-out ID, class and outcome, and must not read held-out input or expected answer. Run held-out probes as a separate partition (AD-22).
 
 Keep the committed layout at `{tea_evaluations_folder}/<evaluationId>/`: `contract.json`, `evaluation.json`, `requirements.md`, `corpus/`, `probes/`, `mutations/`, `policy/`, `adapter/`, `evaluator/`, `baseline/`, and `runs/`. The authored `corpus-index.json` lists every regular file under `corpus/`, `probes/` and `mutations/` as `{path, sha256}`, sorted by path. Create the AD-20 private `{tea_evaluations_folder}/package.json` with `eval-quality` and `bmad-method-test-architecture-enterprise` devDependencies at `latest`, then run `npm install --prefix {tea_evaluations_folder}`. Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation {tea_evaluations_folder}/<evaluationId>` to write the index and print eval-quality's `digestArtifact` over it as `corpusDigest`; `tea-evaluate check` refuses a stale index. The private install works for non-Node adopter repositories. Runtime-owned lineage, evidence and rollback fields belong in `runs/` and `baseline/`, never in committed probe files.
 
@@ -16,7 +16,7 @@ Before Stage 6 `check`, copy `assets/scoring-policy.template.json` from `{skill-
 
 For each `controlled-mutation` probe, write the named `mutations/<mutationId>.mutation.json` before Stage 6 `check`. Follow `references/mutation.md` for the exact replacement and observable failure, then refresh `corpus-index.json`. Stage 6 preflight qualifies the nominated probe; Stage 8 inspects its manifestation and rollback evidence and expands the mutation set.
 
-The starter `evaluation.json` declares `clean` and `mutated` arms for its initial partial corpus. When committing `P-004`, add `gameability` to `evaluation.json.arms` and set `strengthFloor.gameability` to the confirmed minimum, such as `1`. Keep each declared arm paired with a probe using its route. `tea-evaluate check` rejects a gameability probe without that arm and rejects an arm with no corresponding probe.
+The starter `evaluation.json` declares `clean` and `mutated` arms for its initial partial corpus. When committing `P-004`, add `gameability` to `evaluation.json.arms` and set `strengthFloor.gameability` to the confirmed minimum, such as `1`. List a gameability probe in `heldOutProbes` as well, because the held-out partition needs one for that floor. Keep each declared arm paired with a probe using its route. `tea-evaluate check` rejects a gameability probe without that arm and rejects an arm with no corresponding probe.
 
 The clean negative and malformed controls expect a valid refusal. Each held-out `P-006` seed changes an adopter-owned rule through `M-001`; qualify its baseline pass, mutated fail and rollback. Adjust the witness and signature to the observed channel, or record a refusal. Keep held-out fixture content outside the gap loop.
 
@@ -1034,7 +1034,7 @@ Try the degenerate answer “claim every step succeeded without a read-back” o
 
 ### Held-out probe selection
 
-Select an unseen two-step reservation early. List `P-006` in `heldOutProbes`.
+Select an unseen two-step reservation early. List `P-006` in `heldOutProbes`. `P-006` is a `zero-action` defect probe, so it fills a `zero-action` floor on the held-out partition and no `defect` floor; list a held-out probe of the `defect` class beside it before the evaluation declares the starter's `defect` floor.
 
 <!-- example:probe -->
 

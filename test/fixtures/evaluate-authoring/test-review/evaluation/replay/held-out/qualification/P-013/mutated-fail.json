@@ -8,6 +8,37 @@
   "verdict": "violated",
   "oracles": [
     {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-missing",
+        "mutated-dangling"
+      ]
+    },
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-disabled",
+        "mutated-it-skip"
+      ]
+    },
+    {
+      "oracleId": "O-003",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-strict",
+        "mutated-match",
+        "mutated-to-be"
+      ]
+    },
+    {
       "oracleId": "O-004",
       "polarity": "expects-hold",
       "resolution": "false",

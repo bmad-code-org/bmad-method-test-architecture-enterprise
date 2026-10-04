@@ -1,0 +1,46 @@
+{
+  "legId": "manifest-p-011",
+  "sequence": 7,
+  "workspace": "mutated:M-006",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-5f8aac54-4d63-47f2-83a8-6edf38af0b11/target",
+  "request": {
+    "probeId": "manifest-p-011",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "executable": "review",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {},
+      "environment": [],
+      "stdin": {
+        "kind": "json",
+        "value": {
+          "action": "review",
+          "file": "cases/disabled-test.test.js"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "manifest-p-011",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/disabled-test.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+}

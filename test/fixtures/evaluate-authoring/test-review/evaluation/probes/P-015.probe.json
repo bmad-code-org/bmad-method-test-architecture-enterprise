@@ -1,0 +1,54 @@
+{
+  "probeId": "P-015",
+  "probeClass": "gameability",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[held-out] Flagging every valid test as disabled satisfies the disabled-test behavior on its fixtures while falsely flagging each valid assertion.",
+  "defects": [],
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "Flag every valid test as disabled.",
+    "naiveOracle": "O-002"
+  },
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/clean-strict-equal.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "findings"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

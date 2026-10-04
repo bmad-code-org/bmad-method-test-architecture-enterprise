@@ -118,13 +118,50 @@ function containsPrivateInput(value, privateValues, markers) {
 
 const isAiFeature = (folder) => folder.endsWith(path.join('ai-feature', 'evaluation'));
 
-/** The behaviors whose oracles an evidence file records as violated, sorted. */
-function violatedBehaviors(folder, evidence) {
+/**
+ * The behaviors whose oracles each scored trial of a probe violates, one sorted list per trial. The qualification evidence
+ * lists only the oracles of the behaviors a probe declares (the engine judges a degenerate response and a mutation against
+ * those alone), so a mutation or a degenerate answer that also breaks another behavior is visible only in the scored
+ * evidence, whose outcomes hold every contract oracle with its disposition.
+ */
+function violatedBehaviorsByTrial(folder, evidence) {
   const contract = readJson(path.join(folder, 'contract.json'));
   const owner = new Map(contract.behaviors.flatMap((behavior) => behavior.oracles.map((oracleId) => [oracleId, behavior.id])));
-  return [
-    ...new Set(evidence.oracles.filter((oracle) => oracle.disposition === 'violated').map((oracle) => owner.get(oracle.oracleId))),
-  ].sort();
+  const trials = new Map();
+  for (const outcome of evidence.outcomes) {
+    assert.ok(owner.has(outcome.oracleId), `oracle ${outcome.oracleId} belongs to no behavior`);
+    const violated = trials.get(outcome.trialIndex) ?? new Set();
+    if (outcome.disposition === 'violated') violated.add(owner.get(outcome.oracleId));
+    trials.set(outcome.trialIndex, violated);
+  }
+  return [...trials].sort(([left], [right]) => left - right).map(([, violated]) => [...violated].sort());
+}
+
+/** The behaviors a probe is declared to break: a controlled mutation's defects, a gameability probe's own behavior, nothing for a control. */
+function declaredBehaviors(probe) {
+  if (probe.qualification.route === 'controlled-mutation') return [...new Set(probe.defects.map((defect) => defect.behaviorId))].sort();
+  return probe.qualification.route === 'gameability' ? [probe.behaviorId] : [];
+}
+
+/**
+ * Every oracle the scored trials of a probe judge agrees with the evidence, and the oracles they violate belong to exactly the
+ * behaviors the probe declares. A mutation that breaks a behavior its defects do not declare files no finding for it
+ * (eval-quality records the disposition as `disagrees`), and a degenerate answer that differs from the correct server on a step
+ * another behavior's oracle reads violates that oracle too, so each probe answers like the correct server beyond what it seeds.
+ */
+function checkScoredBehaviors(folder, probe, evidence, label) {
+  assert.deepEqual(
+    evidence.outcomes.filter((entry) => entry.corroboration !== 'agrees').map((entry) => `${entry.oracleId} ${entry.corroboration}`),
+    [],
+    `${label} has an oracle whose judgment the evidence does not corroborate`,
+  );
+  const declared = declaredBehaviors(probe);
+  const message = {
+    'controlled-mutation': `${label} mutation violates the oracles of behaviors its defects do not declare`,
+    gameability: `${label} degenerate response violates the oracles of behaviors other than ${probe.behaviorId}`,
+    'clean-control': `${label} clean control violates an oracle`,
+  }[probe.qualification.route];
+  for (const violated of violatedBehaviorsByTrial(folder, evidence)) assert.deepEqual(violated, declared, message);
 }
 
 function checkGameabilityEvidence(folder, probe, source, naive, disciplined) {
@@ -140,14 +177,6 @@ function checkGameabilityEvidence(folder, probe, source, naive, disciplined) {
   assert.equal(disciplined.verdict, 'violated');
   assert.ok(naive.oracles.some((oracle) => oracle.oracleId === source.qualification.naiveOracle && oracle.disposition === 'held'));
   assert.ok(disciplined.oracles.some((oracle) => oracle.disposition === 'violated'));
-  // A degenerate answer that differs from the correct server on a step another behavior's oracle reads violates that oracle too,
-  // which the evidence records as a disagreement: it answers like the correct server on every step but the one it games.
-  if (isAiFeature(folder))
-    assert.deepEqual(
-      violatedBehaviors(folder, disciplined),
-      [probe.behaviorId],
-      `${probe.probeId} degenerate response violates the oracles of behaviors other than ${probe.behaviorId}`,
-    );
   assert.deepEqual(naive.steps, disciplined.steps, `${probe.probeId} gameability evidence changed between judgments`);
   const corpus = readJson(path.join(folder, corpusPath));
   assert.deepEqual(
@@ -223,13 +252,6 @@ function checkQualification(folder, replay, runId, probe, source) {
   assert.equal(mutated.mutationId, mutationId);
   assert.equal(mutated.targetArtifactDigest, mutatedDigest);
   assert.equal(mutated.verdict, 'violated', `${probe.probeId} mutation did not manifest`);
-  // One mutation can violate the oracles of several behaviors; the probe declares a defect, with its own witness, for each.
-  if (isAiFeature(folder))
-    assert.deepEqual(
-      violatedBehaviors(folder, mutated),
-      [...new Set(probe.defects.map((defect) => defect.behaviorId))].sort(),
-      `${probe.probeId} mutation violates the oracles of behaviors its defects do not declare`,
-    );
   assert.deepEqual(
     probe.defects.flatMap((defect) => defect.oracleEvidence),
     probe.defects.map(() => probe.qualification.mutatedFailEvidence),
@@ -538,14 +560,7 @@ function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
       `${runName} ${set.probeId} has an uncovered rule`,
     );
     assert.ok(evidence.reducedProbeOutcomes.some((outcome) => outcome.probeId === set.probeId));
-    // The AI-feature evaluation is the one a repository adopts and runs `ci` over, where `oracle-agreement` blocks `pr` on a
-    // disagreement (Story 1.98); the test-review replay predates that check and is not run through `ci`.
-    if (isAiFeature(folder))
-      assert.deepEqual(
-        evidence.outcomes.filter((entry) => entry.corroboration === 'disagrees').map((entry) => entry.oracleId),
-        [],
-        `${runName} ${set.probeId} has an oracle whose judgment the evidence does not corroborate`,
-      );
+    checkScoredBehaviors(folder, probe, evidence, `${runName} ${set.probeId}`);
     const outcome = evidence.reducedProbeOutcomes.find((entry) => entry.probeId === set.probeId);
     const expected = probe.expectedClean ? 'passed-clean-control' : 'caught';
     assert.deepEqual(
@@ -603,20 +618,18 @@ function checkSuite(kind, out) {
     sections.add(section);
   }
   for (const section of SECTIONS) assert.ok(sections.has(section), `${kind} lacks ${section} corpus coverage`);
-  if (kind === 'ai-feature') {
-    // A floor stays only for a class its partition can hold an eligible probe of. A clean control never is one (eval-quality's
-    // strength vector leaves every `expectedClean` probe out), so a floor on its class reads `no-eligible-probe` on `ci`.
-    const authored = probes.map((name) => readJson(path.join(folder, 'probes', name)));
-    for (const [partition, members] of [
-      ['development', authored.filter((probe) => !heldOut.includes(probe.probeId))],
-      ['held-out', authored.filter((probe) => heldOut.includes(probe.probeId))],
-    ])
-      for (const probeClass of Object.keys(evaluation.strengthFloor))
-        assert.ok(
-          members.some((probe) => probe.probeClass === probeClass && !probe.expectedClean),
-          `${kind} declares a ${probeClass} floor that its ${partition} partition holds no eligible probe for`,
-        );
-  }
+  // A floor stays only for a class its partition can hold an eligible probe of. A clean control never is one (eval-quality's
+  // strength vector leaves every `expectedClean` probe out), so a floor on its class reads `no-eligible-probe` on `ci`.
+  const authored = probes.map((name) => readJson(path.join(folder, 'probes', name)));
+  for (const [partition, members] of [
+    ['development', authored.filter((probe) => !heldOut.includes(probe.probeId))],
+    ['held-out', authored.filter((probe) => heldOut.includes(probe.probeId))],
+  ])
+    for (const probeClass of Object.keys(evaluation.strengthFloor))
+      assert.ok(
+        members.some((probe) => probe.probeClass === probeClass && !probe.expectedClean),
+        `${kind} declares a ${probeClass} floor that its ${partition} partition holds no eligible probe for`,
+      );
   assert.ok(fs.readdirSync(path.join(folder, 'mutations')).some((name) => name.endsWith('.mutation.json')));
   assert.ok(fs.existsSync(path.join(folder, 'evaluator/selection.md')), `${kind} lacks an evaluator selection reason`);
 

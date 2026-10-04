@@ -123,7 +123,12 @@ function checkInventory() {
   const beforeFiles = new Set(filesUnder(before, EXCLUDED));
   const originalFiles = new Set(filesUnder(original, EXCLUDED));
   const omitted = [...originalFiles].filter((file) => !beforeFiles.has(file)).sort();
-  assert.deepEqual(omitted, ['adapter/README.md', 'gap-report.md'], 'before omitted an unexpected Story 1.24 source file');
+  // Story 1.98 added the held-out gameability probe P-015 to the Story 1.24 evaluation after the blind loop ran on its own copy.
+  assert.deepEqual(
+    omitted,
+    ['adapter/README.md', 'corpus/gameability/P-015.json', 'gap-report.md', 'probes/P-015.probe.json'],
+    'before omitted an unexpected Story 1.24 source file',
+  );
   assert.deepEqual(
     [...beforeFiles].filter((file) => !originalFiles.has(file)),
     [],
@@ -140,9 +145,15 @@ function checkInventory() {
       'corpus-index.json',
       'corpus/gameability/P-009.json',
       'corpus/gameability/P-017.json',
+      // Story 1.98 repaired the Story 1.24 evaluation after the blind loop ran on its own copy: the held-out probes that violate a
+      // behavior their defects did not declare, and the floors with no eligible probe.
+      'evaluation.json',
+      'probes/P-010.probe.json',
+      'probes/P-012.probe.json',
+      'probes/P-013.probe.json',
       'sealed-brief.json',
     ],
-    'before differs from Story 1.24 outside the two seeds and generated files',
+    'before differs from Story 1.24 outside the two seeds, the Story 1.98 repair and generated files',
   );
 }
 
