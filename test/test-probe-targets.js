@@ -1165,6 +1165,31 @@ async function checkTranscriptProbe(runDir) {
  * here would say nothing about how the other suite behaves for an operator.
  */
 function runHarnessAgainstStub(harness, stubAgent, jsonPath, stubMode, extraArgs) {
+  let outcome;
+  for (let attempt = 1; attempt <= HARNESS_ATTEMPTS; attempt += 1) {
+    // An earlier attempt's record must not stand in for the one this attempt writes.
+    if (attempt > 1) fs.rmSync(jsonPath, { force: true });
+    outcome = spawnHarnessOnce(harness, stubAgent, jsonPath, stubMode, extraArgs);
+    // A harness reads every file that becomes modified or untracked anywhere in the checkout while it runs as a write by the run
+    // (`workingTreeChanges`), and answers exit 2 with a lost run. An editor, a formatter or another suite touching the checkout in
+    // that window is not the stub, and the same case run again does not see it. A write the stub really makes comes back every time.
+    if (!REPOSITORY_CHANGED.test(`${outcome.stderr}\n${JSON.stringify(outcome.record)}`)) break;
+    if (attempt < HARNESS_ATTEMPTS) {
+      console.log(
+        `  (a file changed in the checkout while ${path.basename(harness)} ran in mode ${stubMode}; running it again, attempt ${attempt + 1} of ${HARNESS_ATTEMPTS})`,
+      );
+    }
+  }
+  return outcome;
+}
+
+/** How often a harness is run for one case before a repository change it reports is believed to be the stub's. */
+const HARNESS_ATTEMPTS = 3;
+
+/** The reason a harness gives when the working tree differs after a run that was scoped to its workspace. */
+const REPOSITORY_CHANGED = /changed the repository under a scoped-artifact-writes declaration/;
+
+function spawnHarnessOnce(harness, stubAgent, jsonPath, stubMode, extraArgs) {
   const result = spawnSync(
     process.execPath,
     [harness, '--agent', 'custom', '--agent-cmd', stubAgent, '--env-pass', 'STUB_MODE', '--json', jsonPath, ...extraArgs],

@@ -31,7 +31,8 @@
  *   later corpus cannot be built.
  * - The derived mutation: `deriveReplaceExact` over an insertion, a deletion, a
  *   replaced middle, a span that needs context on either side to be unique, and
- *   the two documents it refuses.
+ *   the documents it refuses: two that are the same, and two that only the whole
+ *   reference turns into the other.
  *
  * Usage: node test/test-test-design-qualification.js
  */
@@ -480,11 +481,27 @@ function checkDerivedMutation() {
     leading.text === 'new\na\nb\n' && leading.find === 'a\n',
     `an insertion before the first line gave the anchor ${JSON.stringify(leading.find)}`,
   );
-  // Two repeated lines become three: the unique span is the whole document, reached on the last pass.
-  const wholeDocument = applied('row\nrow\n', 'row\nrow\nrow\n');
+  // Two repeated lines become three: the only unique span is the whole document, which is the edit that turns any file into any
+  // other, so it names no mutation and is refused (Story 1.99).
+  let wholeDocument = null;
+  try {
+    deriveReplaceExact('row\nrow\n', 'row\nrow\nrow\n');
+  } catch (error) {
+    wholeDocument = error;
+  }
   check(
-    wholeDocument.text === 'row\nrow\nrow\n' && wholeDocument.find === 'row\nrow\n',
-    `a span that is unique only as the whole document gave ${JSON.stringify(wholeDocument.find)}`,
+    wholeDocument instanceof QualificationError && wholeDocument.exitCode === 10 && /whole reference/.test(wholeDocument.message),
+    `a span that is unique only as the whole document was given an operator: ${wholeDocument?.message ?? 'no refusal'}`,
+  );
+  let replacedWhole = null;
+  try {
+    deriveReplaceExact('a\nb\n', 'c\nd\n');
+  } catch (error) {
+    replacedWhole = error;
+  }
+  check(
+    replacedWhole instanceof QualificationError && replacedWhole.exitCode === 10,
+    'two documents that share no line were given a mutation, though no edit short of the whole file turns one into the other',
   );
   const unterminated = applied('a\nb', 'a\nc');
   check(unterminated.text === 'a\nc', 'a document without a final newline did not round-trip');
@@ -614,8 +631,9 @@ async function checkGenerator(digestBytes) {
   }
   const invented = await rejection(async (options) => {
     const qualified = await spy(options);
+    // The claim the cycle really reached, carried with digests nobody computed.
     const evidence = {
-      rollbackVerified: true,
+      rollbackVerified: qualified.evidence.rollbackVerified,
       preDigest: 'sha256:x',
       restoredDigest: 'sha256:x',
       mutatedDigest: 'sha256:y',
@@ -627,7 +645,9 @@ async function checkGenerator(digestBytes) {
   // A claim with no digests behind it is not the cycle's evidence.
   const fabricated = await rejection(async (options) => {
     const qualified = await spy(options);
-    return options.mutationId === 'M-006' ? { ...qualified, evidence: { rollbackVerified: true } } : qualified;
+    return options.mutationId === 'M-006'
+      ? { ...qualified, evidence: { rollbackVerified: qualified.evidence.rollbackVerified } }
+      : qualified;
   });
   check(fabricated instanceof GeneratorError, "a rollback claim carrying none of the cycle's digests still produced a corpus");
 }

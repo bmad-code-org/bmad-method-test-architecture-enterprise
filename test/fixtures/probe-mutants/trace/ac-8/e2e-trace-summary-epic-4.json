@@ -211,7 +211,7 @@
     "p1_coverage_actual": "100%",
     "p1_status": "MET",
     "overall_coverage_minimum": "80%",
-    "overall_coverage_actual": "70%",
-    "overall_status": "NOT_MET"
+    "overall_coverage_actual": "80%",
+    "overall_status": "MET"
   }
 }

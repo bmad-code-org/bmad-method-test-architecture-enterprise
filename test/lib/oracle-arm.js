@@ -18,6 +18,15 @@
  * because the contracts address a verdict, a summary, a report and a workflow
  * differently. The step the observation answers for is read out of the oracle's
  * own pointers, so a contract that renames a step does not strand the arm.
+ *
+ * The arm reads the workspace file it is handed (`file`), so the phase that is running
+ * scores the bytes that phase holds and a cycle cannot hand it other text. A stored
+ * artifact scored directly is handed its `text`.
+ *
+ * `witnessArm` resolves a probe's manifestation witness the same way, over the same
+ * artifact, and reports `fires`, `silent` or `inconclusive`. Reading the witness and the
+ * oracle against the two stored artifacts of a cycle says which direction the probe's
+ * defect runs (`test/lib/qualification-suite.js`).
  */
 
 'use strict';
@@ -86,6 +95,41 @@ function observation({ operationId, exitCode = null, stdout = { kind: 'absent' }
 }
 
 /**
+ * The resolver of one check over the artifact an arm is handed.
+ *
+ * @param {object} options
+ * @param {object} options.contract the compiled contract the check belongs to
+ * @param {{id: string, check: object}} options.subject the oracle, or a manifestation witness shaped like one (`id` its leg, `check` its relation)
+ * @param {Function} options.observationOf how an artifact's text becomes the observation the check resolves over
+ * @param {string} options.operationId the operation the step runs
+ * @param {object} options.evaluator eval-quality's evaluator
+ * @returns {(input: {file?: string, text?: string}) => {resolution: string}} the resolution of the check over the artifact
+ */
+function resolver({ contract, subject, observationOf, operationId, evaluator }) {
+  const step = stepOf(subject);
+  const referenceSets = Object.fromEntries(Object.entries(contract.referenceSets ?? {}).map(([id, set]) => [id, set.members]));
+  const denotesCollection = evaluator.makePointerDenotesCollection(contract);
+  const referenceSetKeys = evaluator.referenceSetKeysOf(contract);
+  const budget = regexStepBudget();
+
+  return ({ file, text }) => {
+    // A cycle hands the arm the workspace file, so each phase scores the bytes that phase holds. Text is for a stored artifact scored directly.
+    const made = observationOf(file === undefined ? text : fs.readFileSync(file, 'utf8'));
+    if (made === null) return { resolution: 'no-artifact' };
+    const resolveOperand = evaluator.makeResolveOperand({ [step]: observation({ operationId, ...made }) }, referenceSets);
+    const resolved = evaluator.resolveCheck(
+      subject.check,
+      resolveOperand,
+      denotesCollection,
+      referenceSetKeys,
+      budget,
+      `oracles/${subject.id}`,
+    );
+    return { resolution: resolved.resolution };
+  };
+}
+
+/**
  * The arm for one oracle of one contract.
  *
  * @param {object} options
@@ -95,35 +139,40 @@ function observation({ operationId, exitCode = null, stdout = { kind: 'absent' }
  *   artifact's text makes, or `null` for text that is no artifact, which no oracle can read and the arm reports as `inconclusive`
  * @param {string} options.operationId the operation the step runs
  * @param {object} [options.evaluator] eval-quality's evaluator; the installed package's by default
- * @returns {(input: {text: string}) => {verdict: 'held'|'violated'|'inconclusive', result: {resolution: string}}}
+ * @returns {(input: {file?: string, text?: string}) => {verdict: 'held'|'violated'|'inconclusive', result: {resolution: string}}} the arm
+ *   reads `file` when it is handed one (the workspace a cycle runs in), and `text` otherwise
  * @throws {Error} when the contract carries no such oracle
  */
 function oracleArm({ contract, oracleId, observationOf, operationId, evaluator = require('eval-quality') }) {
   const oracle = contract.oracles.find((candidate) => candidate.id === oracleId);
   if (oracle === undefined) throw new Error(`${contract.contractId} declares no oracle ${oracleId}`);
-  const step = stepOf(oracle);
-  const referenceSets = Object.fromEntries(Object.entries(contract.referenceSets ?? {}).map(([id, set]) => [id, set.members]));
-  const denotesCollection = evaluator.makePointerDenotesCollection(contract);
-  const referenceSetKeys = evaluator.referenceSetKeysOf(contract);
-  const budget = regexStepBudget();
-
-  return ({ text }) => {
-    const made = observationOf(text);
-    if (made === null) return { verdict: 'inconclusive', result: { resolution: 'no-artifact' } };
-    const resolveOperand = evaluator.makeResolveOperand({ [step]: observation({ operationId, ...made }) }, referenceSets);
-    const resolved = evaluator.resolveCheck(
-      oracle.check,
-      resolveOperand,
-      denotesCollection,
-      referenceSetKeys,
-      budget,
-      `oracles/${oracle.id}`,
-    );
-    return {
-      verdict: resolved.resolution === 'true' ? 'held' : resolved.resolution === 'false' ? 'violated' : 'inconclusive',
-      result: { resolution: resolved.resolution },
-    };
+  const resolve = resolver({ contract, subject: oracle, observationOf, operationId, evaluator });
+  return (input) => {
+    const result = resolve(input);
+    return { verdict: result.resolution === 'true' ? 'held' : result.resolution === 'false' ? 'violated' : 'inconclusive', result };
   };
 }
 
-module.exports = { observation, oracleArm, pointersOf, stepOf };
+/**
+ * The arm of a probe's manifestation witness: the relation that has to fire when the defect is present in a run.
+ *
+ * Resolved by the same evaluator over the same artifact as `oracleArm`, so a probe's witness and its oracle can be read
+ * against the one stored output and their directions compared.
+ *
+ * @param {object} options
+ * @param {object} options.contract the compiled contract the probe's behavior belongs to
+ * @param {{legId: string, relation: object}} options.witness the probe's `manifestationWitness`
+ * @param {Function} options.observationOf as for `oracleArm`
+ * @param {string} options.operationId the operation the witness leg runs
+ * @param {object} [options.evaluator]
+ * @returns {(input: {file?: string, text?: string}) => 'fires'|'silent'|'inconclusive'}
+ */
+function witnessArm({ contract, witness, observationOf, operationId, evaluator = require('eval-quality') }) {
+  const resolve = resolver({ contract, subject: { id: witness.legId, check: witness.relation }, observationOf, operationId, evaluator });
+  return (input) => {
+    const { resolution } = resolve(input);
+    return resolution === 'true' ? 'fires' : resolution === 'false' ? 'silent' : 'inconclusive';
+  };
+}
+
+module.exports = { observation, oracleArm, pointersOf, stepOf, witnessArm };

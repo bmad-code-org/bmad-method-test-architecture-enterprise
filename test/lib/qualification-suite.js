@@ -8,8 +8,9 @@
  *
  * - The performed sequence. The arms run in AD-8's order against the bytes AD-8 names (the reference, the
  *   stored mutated artifact, the reference again), the digests the evidence records agree, both stored
- *   artifacts hold their bytes, every workspace lay outside the checkout and is gone, and `git status`
- *   of the whole checkout is what it was.
+ *   artifacts hold their bytes, every workspace and its private parent lay outside the checkout and are gone
+ *   (whichever artifact the corpus's workspace holds), and `git status` of the whole checkout, ignored files
+ *   included, is what it was.
  * - Each failing step, planted one at a time, stops the cycle with AD-10's exit and no qualified result:
  *   a clean arm that fails (11), a mutated arm that holds or is inconclusive (11), a restore that cannot
  *   be written (12), a restored digest that differs (12), a clean rerun that fails or reads wrong bytes
@@ -17,7 +18,13 @@
  * - The generator. The corpus's builder performs one cycle for every controlled-mutation probe it emits, each
  *   probe carries its own cycle's claim, and the builder emits no probe when a cycle fails in any of
  *   the four ways the story names (failed restore, mismatched digest, missing baseline pass, missing
- *   mutated failure) or reports a rollback it did not verify. The builder's source states no claim as a literal.
+ *   mutated failure), when the clean rerun fails, when a stored artifact changes under the cycle, or when a result
+ *   reports a rollback it did not verify. The builder's source states no claim as a literal.
+ * - The committed probes. Each one's artifacts carry the digests the probe records, its manifestation witness
+ *   has the direction its corpus declares (`plant-reported`: the witness fires on the clean arm's correct run and is
+ *   silent on the mutated artifact; `defect-shown`: the other way round), and the oracles that flip between its
+ *   reference and its twin are the ones the corpus names, every one from held to violated.
+ *   `extra` receives the probes the builder emitted, so a corpus holds the twins they cite to their named edit.
  */
 
 'use strict';
@@ -25,21 +32,66 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { isDeepStrictEqual } = require('node:util');
 
 const { QualificationError } = require('../../cli/lib/evaluate/mutation');
 const { loadEngine } = require('../../cli/lib/evaluate/engine');
-const { corpusArm, loadCorpusContract, qualifyCorpusMutation } = require('./probe-qualification');
+const { CORPORA, corpusArm, corpusWitnessArm, loadCorpusContract, qualifyCorpusMutation } = require('./probe-qualification');
 const { scratchDirectories } = require('./scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
-/** The git state of the whole checkout, so a cycle that wrote anywhere in the adopter's tree shows. */
+/**
+ * Ignored paths the guard leaves out: installed packages, and the files the agent harness and Finder keep beside a checkout.
+ * Everything else that git ignores (`coverage/`, `*.log`, a build directory) is read, since a cycle that leaks there is invisible
+ * to a status that lists only tracked and untracked files.
+ */
+const UNWATCHED = /(^|\/)node_modules(\/|$)|^\.claude(\/|$)|(^|\/)\.DS_Store$/;
+
+/** The git state of the whole checkout, ignored files included, so a cycle that wrote anywhere in the adopter's tree shows. */
 function gitStatus() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
-  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: PROJECT_ROOT, env, encoding: 'utf8' });
+  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all', '--ignored'], {
+    cwd: PROJECT_ROOT,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (result.status !== 0) throw new Error(`git status exited ${result.status}: ${result.stderr}`);
-  return result.stdout;
+  return result.stdout
+    .split('\n')
+    .filter((line) => line !== '' && !UNWATCHED.test(line.slice(3)))
+    .join('\n');
+}
+
+/**
+ * The lines two documents differ at. Documents of one length are compared line by line, which lists every changed line; documents
+ * of different lengths differ by one region, the lines left after the shared head and tail are trimmed.
+ *
+ * @returns {{same: boolean, lines: {line: number, from: string, to: string}[]}|{same: boolean, at: number, removed: string[], added: string[]}}
+ */
+function changedLines(reference, twin) {
+  const before = reference.split('\n');
+  const after = twin.split('\n');
+  if (before.length === after.length) {
+    const lines = before.flatMap((line, index) => (line === after[index] ? [] : [{ line: index + 1, from: line, to: after[index] }]));
+    return { same: lines.length === 0, lines };
+  }
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head += 1;
+  let tail = 0;
+  while (tail < before.length - head && tail < after.length - head && before.at(-1 - tail) === after.at(-1 - tail)) tail += 1;
+  return { same: false, at: head + 1, removed: before.slice(head, before.length - tail), added: after.slice(head, after.length - tail) };
+}
+
+/** The leaf paths two JSON documents differ at; an array is one leaf, so an element removed from it names the array. */
+function changedJsonPaths(reference, twin, prefix = '') {
+  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (!isObject(reference) || !isObject(twin)) return isDeepStrictEqual(reference, twin) ? [] : [prefix];
+  return [...new Set([...Object.keys(reference), ...Object.keys(twin)])].flatMap((key) =>
+    changedJsonPaths(reference[key], twin[key], `${prefix}/${key}`),
+  );
 }
 
 /**
@@ -50,10 +102,26 @@ function gitStatus() {
  * @param {(options: {qualify: Function}) => Promise<object[]>} options.build the corpus's builder in `tools/generate-probes.js`
  * @param {string} options.probesFile absolute path of the committed probe file
  * @param {{oracleId: string, referencePath: string, mutatedPath: string}} options.sample one real mutation of the corpus, with absolute paths
- * @param {(kit: object) => Promise<void>} [options.extra] the corpus's own checks
+ * @param {'plant-reported'|'defect-shown'} options.witnessDirection which of the two stored artifacts the probes' manifestation witness fires on:
+ *   `plant-reported` fires on the clean arm's correct run and is silent on the mutated artifact (the plant is in the input, the mutation models
+ *   a run that misses it); `defect-shown` is silent on the clean arm and fires on the mutated artifact (the defect is in the run's output)
+ * @param {{byProject: boolean, expected?: (probe: object, designated: string) => string[]}} [options.flips] the oracles whose verdict flips between a
+ *   probe's reference and its twin: those of the probe's own project (`byProject`, read off each oracle's commentary) or of the whole contract,
+ *   and the ones expected to flip (the probe's designated oracle by default)
+ * @param {(kit: object) => Promise<void>} [options.extra] the corpus's own checks; `probes` are the controlled-mutation probes the builder emitted
  * @returns {Promise<number>} the exit code
  */
-async function runQualificationSuite({ title, scratchPrefix, corpus, build, probesFile, sample, extra }) {
+async function runQualificationSuite({
+  title,
+  scratchPrefix,
+  corpus,
+  build,
+  probesFile,
+  sample,
+  witnessDirection,
+  flips = { byProject: false },
+  extra,
+}) {
   const failures = [];
   let checks = 0;
   const scratch = scratchDirectories(scratchPrefix);
@@ -64,28 +132,40 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
 
   const contract = loadCorpusContract(corpus);
   const { digestBytes } = await loadEngine();
-  const { loadGeneratorCorpus, GeneratorError } = require('../../tools/generate-probes');
+  const { loadGeneratorCorpus, GeneratorError, digestOf } = require('../../tools/generate-probes');
 
-  /** Every workspace directory an arm ran in, so the suite can show each is outside the checkout and gone. */
+  /**
+   * Every workspace root an arm ran in, so the suite can show each is outside the checkout and gone, with the private parent that
+   * holds it. The root is the arm's file with the corpus's target artifact taken off, whatever depth that artifact sits at.
+   */
   const workspaces = new Set();
-  const track = (input) => workspaces.add(path.dirname(input.file));
+  const targetArtifact = path.join(...CORPORA[corpus].targetArtifact.split('/'));
+  const track = (input) => {
+    const suffix = `${path.sep}${targetArtifact}`;
+    const isTarget = input.file.endsWith(suffix);
+    check(isTarget, `the ${input.phase} arm ran on ${input.file}, which is not the ${targetArtifact} of a workspace`);
+    workspaces.add(isTarget ? input.file.slice(0, -suffix.length) : path.dirname(input.file));
+  };
 
-  /** The real arm of an oracle, with its workspace noted and a case's tampering applied first. */
+  /**
+   * The real arm of an oracle, with its workspace noted and a case's tampering applied first. The arm is handed the workspace file
+   * alone and reads it itself, so each phase scores the bytes that phase holds, a case's tampering included.
+   */
   const armFor = (options, tamper = {}, trace = []) => {
     const base = corpusArm({ corpus, contract, oracleId: options.oracleId });
     return async (input) => {
       track(input);
       trace.push({ phase: input.phase, digest: digestBytes(fs.readFileSync(input.file)) });
       tamper[input.phase]?.(input, options);
-      return base({ ...input, text: fs.readFileSync(input.file, 'utf8') });
+      return base({ file: input.file });
     };
   };
 
   const checkWorkspacesGone = (label) => {
-    for (const directory of workspaces) {
-      check(!directory.startsWith(PROJECT_ROOT), `${label}: a workspace was made inside the checkout at ${directory}`);
-      check(!fs.existsSync(directory), `${label}: the workspace ${directory} still exists`);
-      check(!fs.existsSync(path.dirname(directory)), `${label}: the private parent ${path.dirname(directory)} still exists`);
+    for (const root of workspaces) {
+      check(!root.startsWith(PROJECT_ROOT), `${label}: a workspace was made inside the checkout at ${root}`);
+      check(!fs.existsSync(root), `${label}: the workspace ${root} still exists`);
+      check(!fs.existsSync(path.dirname(root)), `${label}: the private parent ${path.dirname(root)} still exists`);
     }
     workspaces.clear();
   };
@@ -306,6 +386,9 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
     checkWorkspacesGone('the failing steps');
   }
 
+  /** The controlled-mutation probes the builder emitted while the generator was checked, which `extra` reads the twins they cite from. */
+  const emitted = [];
+
   /** Every `rollbackVerified` the committed probes carry was produced by a cycle, and a failed one emits no probe. */
   async function checkGenerator() {
     await loadGeneratorCorpus();
@@ -324,6 +407,7 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
       return;
     }
     const mutationProbes = probes.filter((probe) => probe.qualification.route === 'controlled-mutation');
+    emitted.push(...mutationProbes);
     check(mutationProbes.length > 0, 'the generator emitted no controlled-mutation probe');
     check(
       performed.length === mutationProbes.length &&
@@ -333,8 +417,10 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
       `${performed.length} cycle(s) were performed for ${mutationProbes.length} controlled-mutation probe(s), each of which needs its own`,
     );
     check(
-      mutationProbes.every((probe, index) => probe.qualification.rollbackVerified === performed[index].qualified.evidence.rollbackVerified),
-      'a probe states a rollback claim other than the one its cycle reached',
+      mutationProbes.every(
+        (probe, index) => probe.qualification.rollbackVerified === performed[index]?.qualified.evidence.rollbackVerified,
+      ),
+      `a probe states a rollback claim other than the one its cycle reached, or has no cycle of its own (${performed.length} cycle(s) for ${mutationProbes.length} probe(s); each needs its own cycle)`,
     );
     // The artifacts a probe cites are the ones its cycle worked on: the reference it copied, the stored mutated artifact it edited toward.
     const absolute = (reference) => path.join(PROJECT_ROOT, reference.path);
@@ -401,13 +487,13 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
     rejected(
       await planted(second, (options) => ({ baseline: ({ file }) => fs.writeFileSync(file, fs.readFileSync(options.mutatedPath)) })),
       'a clean arm that fails',
-      /AD-10 exit 11\), so no probe is emitted/,
+      /AD-10 exit 11\), so no probe is emitted: .*clean arm did not pass/,
     );
     rejected(
       // The mutated arm sees the original bytes, so the oracle holds.
       await planted(second, (options) => ({ mutated: ({ file }) => fs.writeFileSync(file, fs.readFileSync(options.referencePath)) })),
       'a mutated arm that holds',
-      /AD-10 exit 11\), so no probe is emitted/,
+      /AD-10 exit 11\), so no probe is emitted: .*mutated arm did not fail/,
     );
     rejected(
       await planted(second, () => ({
@@ -438,6 +524,45 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
       'a restored digest that differs',
       /AD-10 exit 12\), so no probe is emitted: .*not the pre-mutation/,
     );
+    // A clean rerun that fails its verdict: only the cycle's own reading of the rerun can stop it.
+    rejected(
+      await planted(
+        second,
+        () => ({}),
+        (options) => {
+          const base = armFor(options);
+          return {
+            arm: async (input) => {
+              const answer = await base(input);
+              return input.phase === 're-pass-1' ? { ...answer, verdict: 'violated' } : answer;
+            },
+          };
+        },
+      ),
+      'a clean rerun that fails',
+      /AD-10 exit 12\), so no probe is emitted/,
+    );
+    // A stored artifact that changes while its cycle runs. The cycle works over a copy of the stored file here, so the case
+    // writes to its own copy and never to the checkout.
+    for (const [which, key] of [
+      ['reference', 'referencePath'],
+      ['mutated', 'mutatedPath'],
+    ]) {
+      rejected(
+        await planted(
+          second,
+          () => ({}),
+          (options) => {
+            const copy = path.join(scratch.make(`planted-${which}`), which);
+            fs.copyFileSync(options[key], copy);
+            const changed = { ...options, [key]: copy };
+            return { [key]: copy, arm: armFor(changed, { mutated: () => fs.appendFileSync(copy, '\nextra\n') }) };
+          },
+        ),
+        `a stored ${which} artifact that changes during the cycle`,
+        /AD-10 exit 12\), so no probe is emitted: .*stored artifact changed/,
+      );
+    }
     check(workspaces.size > 0, 'the planted failures ran no arm');
     checkWorkspacesGone('the planted failures');
 
@@ -484,7 +609,10 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
     }
     const fabricated = await rejection(async (options) => {
       const qualified = await spy(options);
-      return options.mutationId === 'M-001' ? { ...qualified, evidence: { rollbackVerified: true } } : qualified;
+      // The claim the cycle really reached, handed on without any of the digests that back it.
+      return options.mutationId === 'M-001'
+        ? { ...qualified, evidence: { rollbackVerified: qualified.evidence.rollbackVerified } }
+        : qualified;
     });
     rejected(fabricated, "a rollback claim carrying none of the cycle's digests", /did not verify its rollback/);
     const nothing = await rejection(async () => ({}));
@@ -492,10 +620,20 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
     check(gitStatus() === statusBefore, 'the checkout status moved while the generator rejected the planted cycles');
   }
 
+  /** The oracles of the project one oracle belongs to: those whose commentary opens with the same `<set id>:`, or the whole contract. */
+  const scopeOf = (oracleId) => {
+    if (!flips.byProject) return contract.oracles.map((oracle) => oracle.id);
+    const setOf = (oracle) => /^([\da-z][\da-z-]*): /.exec(oracle.commentary)?.[1];
+    const set = setOf(contract.oracles.find((oracle) => oracle.id === oracleId));
+    return contract.oracles.filter((oracle) => setOf(oracle) === set).map((oracle) => oracle.id);
+  };
+
   /**
    * The committed probe file read directly, not through the builder: for each controlled-mutation probe the
    * oracle its behavior discharges holds on the artifact it names as its target and is violated by the
-   * mutated artifact it cites, and both artifacts carry the digests the probe records.
+   * mutated artifact it cites, both artifacts carry the digests the probe records, the probe's manifestation
+   * witness has the direction its corpus declares, and the oracles that flip between the two artifacts are the
+   * ones the corpus names.
    */
   function checkCommittedProbes() {
     const committed = JSON.parse(fs.readFileSync(probesFile, 'utf8'));
@@ -503,7 +641,8 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
       const { targetArtifact, baselinePassEvidence, mutatedFailEvidence } = probe.qualification;
       const behavior = contract.behaviors.find((candidate) => candidate.id === probe.behaviorId);
       check(behavior?.oracles.length === 1, `${probe.probeId}: ${probe.behaviorId} does not discharge exactly one oracle`);
-      const arm = corpusArm({ corpus, contract, oracleId: behavior.oracles[0] });
+      const designated = behavior?.oracles[0];
+      const arm = corpusArm({ corpus, contract, oracleId: designated });
       const read = (reference) => fs.readFileSync(path.join(PROJECT_ROOT, reference.path), 'utf8');
       check(
         targetArtifact.path === baselinePassEvidence.path,
@@ -511,15 +650,70 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
       );
       check(
         arm({ text: read(baselinePassEvidence) }).verdict === 'held',
-        `${probe.probeId}: ${behavior.oracles[0]} does not hold on ${baselinePassEvidence.path}`,
+        `${probe.probeId}: ${designated} does not hold on ${baselinePassEvidence.path}`,
       );
       check(
         arm({ text: read(mutatedFailEvidence) }).verdict === 'violated',
-        `${probe.probeId}: ${behavior.oracles[0]} is not violated by ${mutatedFailEvidence.path}`,
+        `${probe.probeId}: ${designated} is not violated by ${mutatedFailEvidence.path}`,
       );
       check(
         mutatedFailEvidence.path !== baselinePassEvidence.path && probe.qualification.mutationSource === targetArtifact.path,
         `${probe.probeId}: the mutation names no edit of its own target`,
+      );
+
+      // The digests the probe records are those of the files it cites.
+      for (const [label, reference] of [
+        ['target artifact', targetArtifact],
+        ['clean arm artifact', baselinePassEvidence],
+        ['mutated artifact', mutatedFailEvidence],
+      ]) {
+        check(
+          reference.digest === digestOf([reference.path]),
+          `${probe.probeId}: the ${label} digest is not the digest of ${reference.path}`,
+        );
+      }
+      check(
+        probe.artifactDigest === digestOf([mutatedFailEvidence.path]),
+        `${probe.probeId}: artifactDigest is not the digest of the mutated artifact ${mutatedFailEvidence.path}`,
+      );
+
+      // Which stored artifact the probe's own witness fires on. A witness that reaches no conclusion on either has no direction.
+      const witness = probe.defects[0]?.manifestationWitness;
+      check(
+        probe.defects.length === 1 && witness !== undefined,
+        `${probe.probeId}: the probe does not declare exactly one defect with a manifestation witness`,
+      );
+      if (witness !== undefined) {
+        const fires = corpusWitnessArm({ corpus, contract, witness });
+        const onClean = fires({ text: read(baselinePassEvidence) });
+        const onMutated = fires({ text: read(mutatedFailEvidence) });
+        const direction =
+          onClean === 'fires' && onMutated === 'silent'
+            ? 'plant-reported'
+            : onClean === 'silent' && onMutated === 'fires'
+              ? 'defect-shown'
+              : `unreadable (witness ${onClean} on the clean arm, ${onMutated} on the mutated artifact)`;
+        check(
+          direction === witnessDirection,
+          `${probe.probeId}: the witness has direction ${direction}, and this corpus declares ${witnessDirection} ` +
+            `(plant-reported fires on the clean arm and is silent on the mutated artifact; defect-shown is the reverse)`,
+        );
+      }
+
+      // Exactly the expected oracles flip, each from held to violated: a twin that is some other file fails more or fewer.
+      const scope = scopeOf(designated);
+      const verdictsOn = (reference) =>
+        Object.fromEntries(
+          scope.map((oracleId) => [oracleId, corpusArm({ corpus, contract, oracleId })({ text: read(reference) }).verdict]),
+        );
+      const before = verdictsOn(baselinePassEvidence);
+      const after = verdictsOn(mutatedFailEvidence);
+      const flipped = scope.filter((oracleId) => before[oracleId] !== after[oracleId]);
+      const expected = (flips.expected ?? ((_, only) => [only]))(probe, designated);
+      check(
+        JSON.stringify(flipped) === JSON.stringify(expected) &&
+          flipped.every((oracleId) => before[oracleId] === 'held' && after[oracleId] === 'violated'),
+        `${probe.probeId}: ${flipped.map((oracleId) => `${oracleId} ${before[oracleId]} to ${after[oracleId]}`).join(', ') || 'no oracle'} flip(s) between ${baselinePassEvidence.path} and ${mutatedFailEvidence.path}; expected ${expected.join(', ')}, each held then violated`,
       );
     }
   }
@@ -529,7 +723,7 @@ async function runQualificationSuite({ title, scratchPrefix, corpus, build, prob
     await checkFailingSteps();
     await checkGenerator();
     checkCommittedProbes();
-    if (extra !== undefined) await extra({ check, contract, corpusArm, digestBytes });
+    if (extra !== undefined) await extra({ check, contract, corpusArm, digestBytes, probes: emitted });
   } finally {
     scratch.removeAll();
   }
@@ -555,4 +749,4 @@ function exitWith(promise, title) {
   );
 }
 
-module.exports = { exitWith, gitStatus, runQualificationSuite };
+module.exports = { changedJsonPaths, changedLines, exitWith, gitStatus, runQualificationSuite };

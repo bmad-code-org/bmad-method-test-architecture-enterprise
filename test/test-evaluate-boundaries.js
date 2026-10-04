@@ -2286,16 +2286,69 @@ function rollbackLiteralsIn(file) {
 }
 
 /**
- * Files outside `cli/` that state the rollback flag from a cycle's result and never write it true: the qualification modules and
- * the generator that writes the probes, which carried the constant for eighteen controlled-mutation probes until Story 1.99.
+ * The values written to `rollbackVerified` in one file that a cycle's result did not hand over.
+ *
+ * Outside `cli/` the flag is only ever copied from a result: an identifier (`rollbackVerified`), a member expression
+ * (`performed.rollbackVerified`, `results[index]?.rollbackVerified`) or the literal `false`, which claims nothing. Every other value
+ * mints a claim in the file that wrote it, whether it is `true`, `!0`, `1`, `'yes'`, a comparison or a call, so the literal walker
+ * above (which sees only `true`) is not enough on its own.
+ *
+ * @returns {{line: number, message: string}[]}
  */
-const ROLLBACK_CHECKED_FILES = [
-  'test/lib/mutation-qualification.js',
-  'test/lib/oracle-arm.js',
-  'test/lib/probe-qualification.js',
-  'test/lib/test-design-qualification.js',
-  'tools/generate-probes.js',
-];
+function rollbackValueViolationsIn(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const ast = parseSource(file, source);
+  const found = [];
+  const handedOver = (node) =>
+    node.type === 'Identifier' ||
+    node.type === 'MemberExpression' ||
+    (node.type === 'ChainExpression' && node.expression.type === 'MemberExpression') ||
+    (node.type === 'Literal' && node.value === false);
+  const inspect = (node, value, how) => {
+    if (value !== null && value !== undefined && !handedOver(value)) {
+      found.push({
+        line: node.loc.start.line,
+        message: `${how} ${ROLLBACK_FLAG} to ${source.slice(value.start, value.end).replaceAll(/\s+/g, ' ')}; outside cli/ the flag is copied from a cycle's result, as an identifier or a member expression`,
+      });
+    }
+  };
+  walk(ast, (node, parent) => {
+    if (node.type === 'Property' && parent?.type === 'ObjectExpression' && propertyKey(node) === ROLLBACK_FLAG)
+      inspect(node, node.value, 'sets');
+    if (
+      node.type === 'AssignmentExpression' &&
+      ((node.left.type === 'MemberExpression' && memberKey(node.left) === ROLLBACK_FLAG) || isIdentifier(node.left, ROLLBACK_FLAG))
+    ) {
+      inspect(node, node.right, 'assigns');
+    }
+    if (
+      node.type === 'AssignmentPattern' &&
+      (isIdentifier(node.left, ROLLBACK_FLAG) || (parent?.type === 'Property' && propertyKey(parent) === ROLLBACK_FLAG))
+    ) {
+      inspect(node, node.right, 'defaults');
+    }
+    if (node.type === 'VariableDeclarator' && isIdentifier(node.id, ROLLBACK_FLAG)) inspect(node, node.init, 'binds');
+  });
+  return found;
+}
+
+/** The modules a controlled-mutation probe's cycle runs through; a file that requires one of them can state the flag. */
+const ROLLBACK_MODULE = /(?:probe|mutation|test-design)-qualification|oracle-arm|qualification-suite/;
+const ROLLBACK_REQUIRE = new RegExp(String.raw`require\(\s*['"][^'"]*\/(?:${ROLLBACK_MODULE.source})(?:\.js)?['"]\s*\)`);
+
+/**
+ * The files outside `cli/` the rollback rules scan: the cycle's modules, every file under `tools/` and `test/` that requires one of
+ * them, and the generator. Derived, so a builder moved to a new file (or a new corpus adapter) is scanned the day it requires the cycle.
+ */
+function rollbackCheckedFiles() {
+  const skipped = /[\\/](?:fixtures|replay|evaluations|results|eval-artifacts|node_modules)[\\/]/;
+  const candidates = ['tools', 'test'].flatMap((directory) => filesUnder(path.join(PROJECT_ROOT, directory)).files);
+  return candidates
+    .filter((file) => file.endsWith('.js') && !skipped.test(file))
+    .filter((file) => ROLLBACK_MODULE.test(path.basename(file)) || ROLLBACK_REQUIRE.test(fs.readFileSync(file, 'utf8')))
+    .map((file) => path.relative(PROJECT_ROOT, file).split(path.sep).join('/'))
+    .sort();
+}
 
 function checkRollbackLiteralOutsideCli() {
   const scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-boundaries-rollback-'));
@@ -2303,12 +2356,59 @@ function checkRollbackLiteralOutsideCli() {
     const planted = path.join(scratchRoot, 'planted.js');
     fs.writeFileSync(planted, 'module.exports = { rollbackVerified: true };\n');
     check(rollbackLiteralsIn(planted).length === 1, 'the rollback-literal walker missed a planted literal outside cli/');
+    // A claim minted without the literal `true`, and the forms that only hand a result on.
+    const valued = path.join(scratchRoot, 'valued.js');
+    const mints = [
+      ['a negated zero property', 'module.exports = { rollbackVerified: !0 };'],
+      ['a double negation', 'module.exports = { rollbackVerified: !!1 };'],
+      ['a number', "module.exports = { 'rollbackVerified': 1 };"],
+      ['a string', 'module.exports = { rollbackVerified: "yes" };'],
+      ['a comparison', 'const a = 1;\nmodule.exports = { rollbackVerified: a === 1 };'],
+      ['a conjunction', 'const a = 1;\nmodule.exports = { rollbackVerified: a && 1 };'],
+      ['a call', 'module.exports = { rollbackVerified: Boolean(1) };'],
+      ['a computed key', "module.exports = { ['rollbackVerified']: !0 };"],
+      ['an assignment', 'const evidence = {};\nevidence.rollbackVerified = !0;'],
+      ['a bracket assignment', "const evidence = {};\nevidence['rollbackVerified'] = 1;"],
+      ['a binding', 'const rollbackVerified = !0;\nmodule.exports = { rollbackVerified };'],
+      ['a default', 'function f({ rollbackVerified = !0 }) {\n  return rollbackVerified;\n}\nmodule.exports = { f };'],
+      ['a renamed default', 'function f({ rollbackVerified: verified = 1 }) {\n  return verified;\n}\nmodule.exports = { f };'],
+    ];
+    for (const [what, source] of mints) {
+      fs.writeFileSync(valued, `${source}\n`);
+      check(rollbackValueViolationsIn(valued).length === 1, `the rollback-value walker missed ${what} outside cli/`);
+    }
+    const handed = [
+      'const performed = { rollbackVerified: false };\nmodule.exports = { rollbackVerified: performed.rollbackVerified };',
+      'const performances = [{ rollbackVerified: false }];\nmodule.exports = { rollbackVerified: performances[0]?.rollbackVerified };',
+      'const rollbackVerified = false;\nmodule.exports = { rollbackVerified };',
+      'module.exports = { rollbackVerified: false };',
+      'function f({ rollbackVerified }) {\n  return rollbackVerified === true;\n}\nmodule.exports = { f };',
+    ];
+    for (const source of handed) {
+      fs.writeFileSync(valued, `${source}\n`);
+      check(rollbackValueViolationsIn(valued).length === 0, `the rollback-value walker rejected a value a result handed over: ${source}`);
+    }
   } finally {
     fs.rmSync(scratchRoot, { recursive: true, force: true });
   }
-  for (const relative of ROLLBACK_CHECKED_FILES) {
-    for (const violation of rollbackLiteralsIn(path.join(PROJECT_ROOT, relative))) {
+  const checkedFiles = rollbackCheckedFiles();
+  for (const required of [
+    'test/lib/mutation-qualification.js',
+    'test/lib/oracle-arm.js',
+    'test/lib/probe-qualification.js',
+    'test/lib/qualification-suite.js',
+    'test/lib/test-design-qualification.js',
+    'tools/generate-probes.js',
+  ]) {
+    check(checkedFiles.includes(required), `${required} is not among the files the rollback rules scan: ${checkedFiles.join(', ')}`);
+  }
+  for (const relative of checkedFiles) {
+    const absolute = path.join(PROJECT_ROOT, relative);
+    for (const violation of rollbackLiteralsIn(absolute)) {
       check(false, `${relative}:${violation.line} [rollback-literal] ${violation.message}`);
+    }
+    for (const violation of rollbackValueViolationsIn(absolute)) {
+      check(false, `${relative}:${violation.line} [rollback-value] ${violation.message}`);
     }
   }
 }

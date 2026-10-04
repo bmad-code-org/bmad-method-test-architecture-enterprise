@@ -40,14 +40,18 @@ const path = require('node:path');
 
 const { verdictFor } = require('../../cli/lib/parse-report');
 const { qualifyStoredMutation } = require('./mutation-qualification');
-const { oracleArm } = require('./oracle-arm');
+const { oracleArm, witnessArm } = require('./oracle-arm');
 
 const CONTRACT_ROOT = path.join(__dirname, '..', 'contracts');
 
-/** A JSON artifact's text as an artifact, or `null` when it does not parse: an artifact nothing can read is no observation at all. */
+/**
+ * A JSON artifact's text as an artifact, or `null` when it does not parse or holds no object: an artifact nothing can read is no
+ * observation at all, and the arm reports `inconclusive` for it.
+ */
 function jsonArtifact(name, text) {
   try {
-    return { [name]: { kind: 'json', value: JSON.parse(text) } };
+    const value = JSON.parse(text);
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? { [name]: { kind: 'json', value } } : null;
   } catch {
     return null;
   }
@@ -104,6 +108,13 @@ function corpusArm({ corpus, contract, oracleId }) {
   return oracleArm({ contract, oracleId, operationId: shape.operationId, observationOf: shape.observationOf });
 }
 
+/** The arm one corpus runs for one probe's manifestation witness, resolved over the artifact the workspace holds. */
+function corpusWitnessArm({ corpus, contract, witness }) {
+  const shape = CORPORA[corpus];
+  if (shape === undefined) throw new Error(`no mutation cycle is defined for the ${corpus} corpus`);
+  return witnessArm({ contract, witness, operationId: shape.operationId, observationOf: shape.observationOf });
+}
+
 /**
  * Qualifies one controlled-mutation probe of the four corpora in a disposable copy.
  *
@@ -132,4 +143,4 @@ async function qualifyCorpusMutation({ corpus, contract, oracleId, mutationId, r
   });
 }
 
-module.exports = { CORPORA, corpusArm, loadCorpusContract, qualifyCorpusMutation };
+module.exports = { CORPORA, corpusArm, corpusWitnessArm, loadCorpusContract, qualifyCorpusMutation };

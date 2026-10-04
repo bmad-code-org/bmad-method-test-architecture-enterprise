@@ -8,9 +8,9 @@
     "behaviorId": "B-004",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
     "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
-    "artifactDigest": "sha256:fa166e986949a9612eaf2bd1e82eba250fcd92b982b3ca8b90f958a9d3b2070f",
+    "artifactDigest": "sha256:160f102baf7fd57258cd222ef13d6d978c7fabd1500108ac479032ce45880360",
     "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
-    "rationale": "performance is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.undefinedThresholdIsConcerns: A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met. The bundle is the plant, and O-004 is the oracle that has to see its consequence in the report the run wrote. The mutation (invent-performance-threshold) withholds that finding from the stored correct audit of the bundle.",
+    "rationale": "performance is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.undefinedThresholdIsConcerns: A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met. The bundle is the plant, and O-004 is the oracle that has to see its consequence in the report the run wrote. The mutation (invent-performance-threshold) withholds that finding from the stored correct audit of the bundle. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
@@ -30,9 +30,9 @@
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/gapped-performance-passed/test-artifacts/nfr/nfr-assessment-system.md",
+        "path": "test/fixtures/probe-mutants/nfr/performance/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:fa166e986949a9612eaf2bd1e82eba250fcd92b982b3ca8b90f958a9d3b2070f"
+        "digest": "sha256:160f102baf7fd57258cd222ef13d6d978c7fabd1500108ac479032ce45880360"
       },
       "rollbackVerified": true
     },
@@ -158,7 +158,7 @@
     "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "artifactDigest": "sha256:c3937f0d54d040cb4efb71e70ce544b86e99061883abb989656450c693172e5e",
     "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
-    "rationale": "reliability is FAIL on gapped-harbor-billing-ledger, under skillRuleCitations.failIsEvidenceBelowThreshold: FAIL is evidence that exists and does not meet the threshold. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote. The mutation (roll-up-reliability-as-concerns) withholds that finding from the stored correct audit of the bundle.",
+    "rationale": "reliability is FAIL on gapped-harbor-billing-ledger, under skillRuleCitations.failIsEvidenceBelowThreshold: FAIL is evidence that exists and does not meet the threshold. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote. The mutation (roll-up-reliability-as-concerns) withholds that finding from the stored correct audit of the bundle. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
@@ -331,9 +331,9 @@
     "behaviorId": "B-001",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
     "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
-    "artifactDigest": "sha256:76c289c9e7c52896142b67ba7715e5139d17c6f398d9378e459fab712e78c64f",
+    "artifactDigest": "sha256:5b97707d5501eb1b72a90725b82611f0a0b3f1973fb5ee51af22adc325d1361e",
     "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
-    "rationale": "maintainability is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.missingEvidenceIsConcerns: If evidence is missing for a category, mark that category as CONCERNS. The bundle is the plant, and O-001 is the oracle that has to see its consequence in the report the run wrote. The mutation (omit-maintainability-section) withholds that finding from the stored correct audit of the bundle.",
+    "rationale": "maintainability is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.missingEvidenceIsConcerns: If evidence is missing for a category, mark that category as CONCERNS. The bundle is the plant, and O-001 is the oracle that has to see its consequence in the report the run wrote. The mutation (omit-maintainability-section) withholds that finding from the stored correct audit of the bundle. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
@@ -353,9 +353,9 @@
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/gapped-domain-omitted/test-artifacts/nfr/nfr-assessment-system.md",
+        "path": "test/fixtures/probe-mutants/nfr/maintainability/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:76c289c9e7c52896142b67ba7715e5139d17c6f398d9378e459fab712e78c64f"
+        "digest": "sha256:5b97707d5501eb1b72a90725b82611f0a0b3f1973fb5ee51af22adc325d1361e"
       },
       "rollbackVerified": true
     },
@@ -391,42 +391,13 @@
             }
           },
           "relation": {
-            "op": "any",
+            "op": "regex",
             "operands": [
               {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-maintainability/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: 'FAIL'"
-                  }
-                ]
-              },
-              {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-maintainability/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: \"FAIL\""
-                  }
-                ]
-              },
-              {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-maintainability/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: FAIL"
-                  }
-                ]
+                "pointer": "/interactions/manifest-maintainability/artifact/report"
               }
-            ]
+            ],
+            "pattern": "^[\\s\\S]*# Maintainability Assessment\\n+### Test Coverage\\n+- \\*\\*Status:\\*\\* CONCERNS[\\s\\S]*$"
           }
         }
       }

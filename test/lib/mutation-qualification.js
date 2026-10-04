@@ -57,12 +57,13 @@ function linesOf(text) {
  *
  * The lines the two documents share at both ends are trimmed away. What is left is widened by whole lines
  * of context until it occurs in `original` exactly once, which the operator requires and which a pure
- * insertion (an empty `find`) needs before it has an anchor at all.
+ * insertion (an empty `find`) needs before it has an anchor at all. An operator that has to span the whole
+ * original is refused: it is the edit that turns any file into any other, and names no mutation.
  *
  * @param {string} original
  * @param {string} mutated
  * @returns {{find: string, replace: string}}
- * @throws {QualificationError} when the two documents are the same, or no operator reproduces `mutated`
+ * @throws {QualificationError} when the two documents are the same, or no operator narrower than the whole of `original` reproduces `mutated`
  */
 function deriveReplaceExact(original, mutated) {
   if (original === mutated) {
@@ -85,7 +86,17 @@ function deriveReplaceExact(original, mutated) {
   // Each pass widens by a line on either side, so a span that is still not unique after every line has been added never will be.
   for (let widened = 0; widened <= before.length; widened += 1) {
     const candidate = span();
-    if (countOccurrences(Buffer.from(original), Buffer.from(candidate.find)) === 1) return candidate;
+    if (countOccurrences(Buffer.from(original), Buffer.from(candidate.find)) === 1) {
+      // Any two files differ by "replace the whole reference", so an operator that spans every line proves no edit: a stored
+      // twin has to differ from its reference by a bounded one.
+      if (start === 0 && endBefore === before.length) {
+        throw new QualificationError(
+          QUALIFICATION_EXITS.authoring,
+          'the only exact operator over whole lines replaces the whole reference artifact, so the stored mutated artifact is not one edit of it',
+        );
+      }
+      return candidate;
+    }
     if (start > 0) start -= 1;
     if (endBefore < before.length) {
       endBefore += 1;

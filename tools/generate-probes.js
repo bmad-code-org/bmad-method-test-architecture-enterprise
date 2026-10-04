@@ -160,8 +160,23 @@ const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
 const NFR_FIXTURE_PREFIX = 'test/fixtures/nfr-eval/';
 const TEST_DESIGN_FIXTURE_PREFIX = 'test/fixtures/test-design-eval/';
 const TEST_DESIGN_REPLAY_PREFIX = 'test/replay/test-design/';
-/** The stored mutated artifacts the cycles of the test-review, trace and nfr corpora edit toward, one per plant. */
+/** The stored mutated artifacts the cycles of the test-review, trace, nfr and ci corpora edit toward, one per plant. */
 const PROBE_MUTANT_PREFIX = 'test/fixtures/probe-mutants/';
+
+/**
+ * What a test-review, trace or nfr probe's cycle direction says about its manifestation witness.
+ *
+ * The plant lives in the system's input (a spec file, a seeded set, a gapped bundle), so the witness reads the plant in a run that
+ * reports it, and it fires on the stored correct output the cycle's clean arm scores. Pre-flight needs exactly that: its fault leg
+ * replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs. The controlled
+ * mutation models the run that misses the plant, so its mutated artifact is the one the witness is silent on and the probe's oracle
+ * fails on. `npm run test:test-review-qualification`, `test:trace-qualification` and `test:nfr-qualification` read both directions off
+ * the committed probes and hold them to this sentence. The ci probes are the other way round: their defect is in the run's output, so
+ * the witness fires on the mutated pipeline.
+ */
+const PLANT_REPORTED_NOTE =
+  'The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores ' +
+  'and stays silent on the mutated artifact, which models a run that misses the plant.';
 
 /**
  * The Probe schema version this generator writes, read from the installed
@@ -382,10 +397,25 @@ function selector(bound) {
   };
 }
 
+/** A regular expression that matches `text` literally. */
+const escapeRegex = (text) => text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
+
+/**
+ * The relation that reads one report section's first criterion: the heading, then the criterion's own heading, then its status line.
+ * Single quantifiers only, because the evaluator refuses a pattern with a nested one.
+ */
+function sectionStatusRelation(pointer, heading, criterion) {
+  return {
+    op: 'regex',
+    operands: [{ pointer }],
+    // The Probe schema takes only an anchored pattern, so the section is found anywhere in the report.
+    pattern: `^[\\s\\S]*${escapeRegex(heading)}\\n+### ${escapeRegex(criterion.name)}\\n+- ${escapeRegex('**Status:**')} ${escapeRegex(criterion.expectedStatus)}[\\s\\S]*$`,
+  };
+}
+
 /** The basename pattern the contract's own oracles use, so a probe and an oracle read one file the same way. */
 function basenamePattern(basename) {
-  const escaped = basename.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
-  return `^(?:.*/|)${escaped}$`;
+  return `^(?:.*/|)${escapeRegex(basename)}$`;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,7 +500,7 @@ async function buildTestReviewProbes({ qualify = qualifyCorpusMutation } = {}) {
       rationale:
         `Registry row ${plant.row} was planted in ${plant.basename} at line ${plant.line}: ${plant.what}. ` +
         `${oracleId} is the oracle that catches it, and ${behaviorId} is the behavior it discharges. ` +
-        `The mutation withholds the finding for ${plant.row} from the stored review that reports every plant.`,
+        `The mutation withholds the finding for ${plant.row} from the stored review that reports every plant. ${PLANT_REPORTED_NOTE}`,
       qualification: {
         route: 'controlled-mutation',
         // The mutation is to the review a run writes, and a plant lives in a spec file only a reviewer can
@@ -656,21 +686,23 @@ async function buildTraceProbes({ qualify = qualifyCorpusMutation } = {}) {
   const gaps = seeded.criteria.filter((criterion) => criterion.trueCoverage !== 'FULL');
   assert(gaps.length > 0, 'the seeded trace set declares no coverage gap, so it seeds nothing');
 
-  // The oracle every seeded gap answers to is the one reading the summary's priority breakdown, which is
-  // the arithmetic a withheld gap moves. The gate does not serve: withholding AC-8 or AC-10 leaves the gate
-  // at FAIL, because AC-2 holds the P0 band at 50%, so no mutation of either gap alone fails it. Found by
-  // what it reads, as the nfr and ci builders find theirs, and it throws when none or several do.
-  const priorityOracles = contract.oracles.filter(
-    (oracle) =>
-      oracle.commentary.startsWith(`${seeded.id}:`) &&
-      pointersOf(oracle.check).some((pointer) => pointer.includes('/coverage/priority_breakdown/')),
-  );
-  assert(
-    priorityOracles.length === 1,
-    `${seeded.id}: ${priorityOracles.length} oracle(s) read the priority breakdown of the summary, and a probe needs exactly one`,
-  );
-  const priorityOracleId = priorityOracles[0].id;
-  const priorityBehaviorId = soleBehaviorFor(contract, priorityOracleId);
+  // The oracle a gap answers to depends on the band it sits in. The P0 gap answers to the gate: withholding it
+  // lifts the P0 band to 100% and the summary derives a PASS, so the gate oracle (`gate_status` equals FAIL)
+  // fails on the stored twin. The gate does not serve the lower bands: withholding AC-8 or AC-10 leaves the gate
+  // at FAIL, because AC-2 holds the P0 band at 50%, so no mutation of either gap alone fails it. Those two answer
+  // to the oracle reading the summary's priority breakdown, the arithmetic a withheld gap moves. Each is found by
+  // what it reads, as the nfr and ci builders find theirs, and the builder throws when none or several do.
+  const readingOracles = (what, pointerPart) => {
+    const found = contract.oracles.filter(
+      (oracle) =>
+        oracle.commentary.startsWith(`${seeded.id}:`) && pointersOf(oracle.check).some((pointer) => pointer.includes(pointerPart)),
+    );
+    assert(found.length === 1, `${seeded.id}: ${found.length} oracle(s) read ${what} of the summary, and a probe needs exactly one`);
+    return found[0].id;
+  };
+  const gateOracleId = readingOracles('the gate decision', '/gate_status');
+  const priorityOracleId = readingOracles('the priority breakdown', '/coverage/priority_breakdown/');
+  const oracleOfGap = (criterion) => (criterion.priority === 'P0' ? gateOracleId : priorityOracleId);
 
   // The reference of every gap's mutation: the stored correct summary of the seeded set, which the oracle
   // accepts. The mutation withholds one gap from its priority breakdown, so the criterion's band reads as
@@ -683,14 +715,14 @@ async function buildTraceProbes({ qualify = qualifyCorpusMutation } = {}) {
   for (const [index, criterion] of gaps.entries()) {
     performances.push(
       await performedCycle({
-        label: `${priorityOracleId} (${criterion.id})`,
+        label: `${oracleOfGap(criterion)} (${criterion.id})`,
         referencePath: seededSummary,
         mutatedPath: mutatedSummaries[index],
         qualify: () =>
           qualify({
             corpus: 'trace',
             contract,
-            oracleId: priorityOracleId,
+            oracleId: oracleOfGap(criterion),
             mutationId: `M-${pad(index + 1)}`,
             referencePath: path.join(PROJECT_ROOT, seededSummary),
             mutatedPath: path.join(PROJECT_ROOT, mutatedSummaries[index]),
@@ -705,24 +737,29 @@ async function buildTraceProbes({ qualify = qualifyCorpusMutation } = {}) {
     revisionCount: 0,
     probeId: `P-${pad(index + 1)}`,
     probeClass: 'defect',
-    behaviorId: priorityBehaviorId,
+    behaviorId: soleBehaviorFor(contract, oracleOfGap(criterion)),
     systemId: `tea-trace-${seeded.id}`,
     implementationDigest: corpusDigest,
     artifactDigest: digestOf([mutatedSummaries[index]]),
     commitDigest: corpusDigest,
     rationale:
       `${criterion.id} is ${criterion.priority} and its true coverage is ${criterion.trueCoverage}: ${criterion.text} ` +
-      `The gap is the plant, and ${priorityOracleId} is the oracle that has to see its consequence in the priority breakdown the summary derives. ` +
-      `The mutation withholds ${criterion.id} from the stored correct summary, so ${criterion.priority} reads as covered.`,
+      `The gap is the plant, and ${oracleOfGap(criterion)} is the oracle that has to see its consequence in the ${criterion.priority === 'P0' ? 'gate' : 'priority breakdown'} the summary derives. ` +
+      `The mutation withholds ${criterion.id} from the stored correct summary, so ${criterion.priority} reads as covered` +
+      `${criterion.priority === 'P0' ? ' and the gate the summary derives follows it' : ''}. ${PLANT_REPORTED_NOTE}`,
     qualification: {
       route: 'controlled-mutation',
       // The mutation is to the summary a run writes, so the stored correct summary is what the operator is named against.
       mutationSource: seededSummary,
       mutationOperator: `withhold-coverage-${criterion.id.toLowerCase()}`,
       targetArtifact: fileReference(seededSummary),
+      // What the stored twin carries, and nothing it does not: the inventory and the band of the gap read one more
+      // criterion covered, and a P0 twin also carries the gate the summary derives from that band. The gap buckets, the
+      // partial coverage items and the recommendations of every other band stay as the reference has them.
       expectedObservableFailure:
-        `The summary's priority breakdown reports ${criterion.priority} fully covered, so ${criterion.id}, which is ` +
-        `${criterion.trueCoverage}, no longer reaches ${criterion.trueCoverage === 'NONE' ? 'the gap buckets' : 'the partial coverage items'}.`,
+        `The summary's priority breakdown reports ${criterion.priority} fully covered and its inventory counts one more criterion covered, ` +
+        `so ${criterion.id}, which is ${criterion.trueCoverage}, reads as covered` +
+        `${criterion.priority === 'P0' ? `; the gate decision is ${clean.expectedGate.decision} and its gate criteria report the P0 band as met` : ''}.`,
       baselinePassEvidence: fileReference(seededSummary),
       mutatedFailEvidence: fileReference(mutatedSummaries[index]),
       // The cycle's own conjunction of the restored digest and the clean rerun, asserted true above; a
@@ -733,7 +770,7 @@ async function buildTraceProbes({ qualify = qualifyCorpusMutation } = {}) {
     defects: [
       {
         defectId: `D-${pad(index + 1)}`,
-        behaviorId: priorityBehaviorId,
+        behaviorId: soleBehaviorFor(contract, oracleOfGap(criterion)),
         summary: `${criterion.id} (${criterion.priority}) is covered ${criterion.trueCoverage}: ${criterion.text}`,
         severity: criterion.priority === 'P0' ? 'critical' : 'material',
         oracleEvidence: [fileReference(groundTruthPath)],
@@ -1420,12 +1457,13 @@ async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
   // The reference of every plant's mutation: the stored correct audit of the gapped bundle, which the
   // oracle each plant answers to accepts. Each mutation withholds one domain's finding from it.
   const correctAudit = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
-  const storedReport = (caseId) => `test/replay/nfr/${caseId}/test-artifacts/nfr/nfr-assessment-system.md`;
+  const mutantReport = (name) => `${PROBE_MUTANT_PREFIX}nfr/${name}/nfr-assessment-system.md`;
 
   const gappedOracles = nfrOraclesFor(contract, gapped.id);
   const unknownOracleId = nfrOracleReading(gappedOracles, NFR_UNKNOWN_TOKEN, gapped.id);
   const gateOracleId = nfrOracleReading(gappedOracles, `overall_status: '${gapped.expectedOverallStatus}'`, gapped.id);
-  const sectionOracleId = nfrOracleReading(gappedOracles, '# Maintainability Assessment', gapped.id);
+  const maintainabilityHeading = '# Maintainability Assessment';
+  const sectionOracleId = nfrOracleReading(gappedOracles, maintainabilityHeading, gapped.id);
 
   // What each planted domain's mutation is, and the oracle that reads the part of the report it edits. A
   // domain's plant is its status, and the contract states four document-level claims, so a plant that
@@ -1434,11 +1472,12 @@ async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
   // domain is therefore the withholding the contract can see.
   const mutations = {
     // The run supplies a response-time target the sources never state, which the workflow forbids, so
-    // the report stops recording the threshold as UNKNOWN. The stored twin is a run that did exactly that.
+    // the report stops recording the threshold as UNKNOWN. The stored twin writes an invented target on each
+    // of the four threshold lines that read UNKNOWN, and moves nothing else.
     performance: {
       operator: 'invent-performance-threshold',
       oracleId: unknownOracleId,
-      mutatedReport: storedReport('gapped-performance-passed'),
+      mutatedReport: mutantReport('performance'),
       failure: `The report records no threshold as ${NFR_UNKNOWN_TOKEN}, because the run supplied the performance target the sources never state.`,
     },
     // The run misses the reliability breach, so the Gate YAML rolls the four statuses up to CONCERNS.
@@ -1449,11 +1488,11 @@ async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
       failure: `The Gate YAML publishes overall_status CONCERNS, not ${gapped.expectedOverallStatus}, because the reliability breach is missing from it.`,
     },
     // The run leaves the maintainability section out, so one dispatched domain is never reported. The
-    // stored twin is that run.
+    // stored twin is the correct audit with that one section deleted, and moves nothing else.
     maintainability: {
       operator: 'omit-maintainability-section',
       oracleId: sectionOracleId,
-      mutatedReport: storedReport('gapped-domain-omitted'),
+      mutatedReport: mutantReport('maintainability'),
       failure: 'The report declares no Maintainability Assessment section, so one of the four dispatched domains is never reported.',
     },
   };
@@ -1508,7 +1547,7 @@ async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
       rationale:
         `${name} is ${domain.expectedStatus} on ${gapped.id}, under skillRuleCitations.${domain.rule}: ${citation.rule} ` +
         `The bundle is the plant, and ${oracleId} is the oracle that has to see its consequence in the report the run wrote. ` +
-        `The mutation (${mutations[name].operator}) withholds that finding from the stored correct audit of the bundle.`,
+        `The mutation (${mutations[name].operator}) withholds that finding from the stored correct audit of the bundle. ${PLANT_REPORTED_NOTE}`,
       qualification: {
         route: 'controlled-mutation',
         // The mutation is to the report a run writes, so the stored correct audit is what the operator is named against.
@@ -1549,13 +1588,18 @@ async function buildNfrProbes({ qualify = qualifyCorpusMutation } = {}) {
             // spells, not the bare word: a clean report may mention UNKNOWN in
             // prose (a gap it ruled out), and the relation would then fire on a
             // clean leg, which is the scoping failure preflight reports.
+            // The maintainability relation reads the section the oracle names, at the status the ground truth gives its first
+            // criterion. The heading alone would fire on the clean bundle's audit too, which also has the section, so the relation
+            // reads what the gapped bundle's section says under it.
             relation:
               oracleId === unknownOracleId
                 ? {
                     op: 'containment',
                     operands: [{ pointer: `/interactions/${legId}/artifact/report` }, { literal: `**Threshold:** ${NFR_UNKNOWN_TOKEN}` }],
                   }
-                : overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
+                : oracleId === sectionOracleId
+                  ? sectionStatusRelation(`/interactions/${legId}/artifact/report`, maintainabilityHeading, domain.criteria[0])
+                  : overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
           },
         },
       ],
@@ -1634,11 +1678,11 @@ function ciOracleReading(oracles, literal, setId) {
 /**
  * The probe corpus for the ci contract.
  *
- * Two plants and one control, all read out of `test/fixtures/ci-eval/ground-truth.json`
- * and each pointed at a real deviant workflow already stored under
- * `test/replay/ci/`: a requested element missing from the full project's
- * pipeline, and the full-request template written for the minimal project. The
- * clean control is the minimal project scaffolded correctly, because a suite
+ * Two plants and one control, all read out of `test/fixtures/ci-eval/ground-truth.json`.
+ * Each plant's mutated artifact is a twin of its project's stored correct pipeline under
+ * `test/fixtures/probe-mutants/ci/` that differs by the one named edit: a requested element
+ * missing from the full project's pipeline, and the template's burn-in job added to the minimal
+ * project's. The clean control is the minimal project scaffolded correctly, because a suite
  * that only rewarded catching an over-generous pipeline would be cleared by a
  * workflow that emits nothing at all.
  *
@@ -1682,7 +1726,7 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
       set: full,
       element: scheduleElement,
       oracleId: scheduleOracleId,
-      mutatedReport: 'test/replay/ci/full-trigger-schedule-missing/.github/workflows/test.yml',
+      mutatedReport: `${PROBE_MUTANT_PREFIX}ci/${scheduleElement.id}/test.yml`,
       baselineReport: baselineFullReport,
       summary: `${full.id}: the weekly schedule trigger is missing, under triggersConfigured. ${full.title} asked for it in as many words.`,
       expectedObservableFailure: `The workflow written for ${full.id} does not contain ${JSON.stringify(scheduleElement.contractToken)}.`,
@@ -1691,16 +1735,17 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
       set: full,
       element: permissionElement,
       oracleId: permissionOracleId,
-      mutatedReport: 'test/replay/ci/full-permissions-missing/.github/workflows/test.yml',
+      mutatedReport: `${PROBE_MUTANT_PREFIX}ci/${permissionElement.id}/test.yml`,
       baselineReport: baselineFullReport,
       summary: `${full.id}: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states.`,
       expectedObservableFailure: `The workflow written for ${full.id} does not contain ${JSON.stringify(permissionElement.contractToken)}.`,
     },
   ];
 
-  // Each plant's mutation edits the stored correct pipeline of its project into the stored deviant one:
-  // the requested element withheld, or (for the template probe below) the forbidden one added. The
-  // oracle each plant answers to accepts the first and rejects the second.
+  // Each plant's mutation edits the stored correct pipeline of its project into its stored twin: the
+  // requested element withheld, or (for the template probe below) the forbidden burn-in job added. The
+  // oracle each plant answers to accepts the first and rejects the second. The defect of these probes is in
+  // the run's output, so the manifestation witness fires on the twin and is silent on the correct pipeline.
   const cycle = (label, oracleId, index, referencePath, mutatedPath) =>
     performedCycle({
       label: `${oracleId} (${label})`,
@@ -1720,7 +1765,7 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
   for (const [index, plant] of plants.entries()) {
     performances.push(await cycle(plant.element.id, plant.oracleId, index, plant.baselineReport, plant.mutatedReport));
   }
-  const templateMutatedReport = 'test/replay/ci/minimal-template-copied/.github/workflows/test.yml';
+  const templateMutatedReport = `${PROBE_MUTANT_PREFIX}ci/template-copied/test.yml`;
   const templatePerformed = await cycle('template-copied', burnInOracleId, plants.length, baselineMinimalReport, templateMutatedReport);
 
   const probes = plants.map((plant, index) => {
@@ -2245,6 +2290,7 @@ if (require.main === module) {
 module.exports = {
   PROBE_SCHEMA_VERSION,
   GeneratorError,
+  digestOf,
   buildCiProbes,
   buildNfrProbes,
   buildTestDesignProbes,
