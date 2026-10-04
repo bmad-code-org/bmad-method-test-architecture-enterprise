@@ -89,6 +89,15 @@ function run(command, args) {
   assert.equal(result.status, 0, `${command} ${args.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`);
 }
 
+// The ci stage records the tiers the plan uses in evaluation.json (AD-11), as it records ci/ and baseline/, so a blind session did not author them.
+function authoredBytes(file, location) {
+  const bytes = fs.readFileSync(location);
+  if (file !== 'evaluation.json') return bytes;
+  const manifest = JSON.parse(bytes.toString('utf8'));
+  delete manifest.tiers;
+  return Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
+}
+
 function sameBytes(actual, expected, label) {
   assert.ok(fs.readFileSync(actual).equals(fs.readFileSync(expected)), `${label} differs from committed evidence`);
 }
@@ -219,7 +228,7 @@ function checkGapReport() {
     .filter((file) => {
       const left = path.join(before, file);
       const right = path.join(after, file);
-      return !fs.existsSync(left) || !fs.existsSync(right) || !fs.readFileSync(left).equals(fs.readFileSync(right));
+      return !fs.existsSync(left) || !fs.existsSync(right) || !authoredBytes(file, left).equals(authoredBytes(file, right));
     })
     .map((file) => `evaluation/${file}`)
     .sort();
