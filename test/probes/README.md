@@ -159,6 +159,36 @@ This corpus is generated, byte-checked and scored by the deterministic gate.
 `test/replay/test-design/`, which every probe cites, and `npm run test:probe-corpus` records the sixteen
 probes in `expected-strength.json`.
 
+## What a stored run's dispositions say
+
+The trace, nfr, test-design and ci records score a stored run as the correct run of its set or project.
+Each oracle's disposition comes from the scorer `tools/generate-contracts.js` pairs with it (the harness's `scoreRun` for trace, nfr and test-design, `workflowMentions` for ci), applied to the stored run the record carries for that oracle's own set.
+The test-review record measures its stored verdict: the registry-row and scope oracles from what the harness measured, the verdict-payload oracle from the fields the verdict carries, and the exit-code oracle from the exit code its recommendation maps to.
+The fragment selection and routing records read no stored run; they construct the answer they score.
+A record that carries no run of a set (a defect probe carries only the project it plants a defect on) leaves that set's oracles at `held`, since there is nothing to read.
+
+`test:probe-corpus` fails with the oracle that no longer holds when a stored run is not the correct one.
+It also holds every set and every oracle to a wrong run, so a disposition that stopped reading its run fails:
+
+- each leg reads the next leg's run in turn, and a set must lose an oracle that holds on its own run;
+- each leg reads every other stored case of its suite, one at a time, and every oracle must be violated by at least one wrong read (the three ci `run-measured` oracles, whose scorer reads no workflow, are listed in `WRONG_RUN_CANNOT_FAIL` in `test/test-probe-corpus.js` with the reason);
+- trace, nfr and test-design read a run the harness refuses to score, which fails every oracle of the set (test-design's projection-coherence oracle reads the projection alone and stays as it measures; a projection with a key dropped is what fails it);
+- a contract declaring an oracle the generator does not specify throws.
+
+The baseline cannot see a wrong `CI_CORRECT_RUNS` row.
+The clean control P-004 passes pre-flight and scores `CONCERNS` with exit 0, and the per-probe summary the baseline keeps carries only `probeId`, `state`, `severity` and `trialIndex` of each outcome, so a moved disposition or corroboration never reaches `expected-strength.json`.
+The oracle-level checks above are what see it.
+
+The contract's vocabulary reaches a workflow as one string, so a deviation that only a structure shows leaves every oracle held.
+Pointing a `CI_CORRECT_RUNS` row at a stored deviation fails `test:probe-corpus` for 11 of the 34 stored constructed ci deviations: `evaluation-plan-plan-not-detected`, `evaluation-plan-upload-wrong-path`, `full-e2e-command-replaced`, `full-not-a-workflow`, `full-permissions-missing`, `full-permissions-widened`, `full-trigger-schedule-missing`, `full-triggers-unscoped`, `minimal-artifact-added`, `minimal-retry-action-added` and `minimal-template-copied`.
+The other 23 pass through, each read through the row of its own project: `evaluation-plan-bare-invocation`, `evaluation-plan-chained-commands`, `evaluation-plan-continue-on-error`, `evaluation-plan-evaluation-node-below-floor`, `evaluation-plan-job-continue-on-error`, `evaluation-plan-job-continue-on-error-expression`, `evaluation-plan-marker-dropped`, `evaluation-plan-one-step-per-check`, `evaluation-plan-root-install-in-job`, `evaluation-plan-step-continue-on-error-expression`, `evaluation-plan-upload-negated`, `evaluation-plan-upload-on-failure-only`, `evaluation-plan-upload-wrapped-condition`, `full-artifact-unconditional`, `full-burn-in-missing`, `full-injection-in-run`, `full-lint-needs-undefined`, `full-node-version-hardcoded`, `full-node-version-literal`, `full-node-version-step-output`, `full-test-step-suppressed`, `full-unparseable` and `full-workflow-dispatch-added`.
+The oracle for the burn-in job (`burn-in`) is satisfied by the comment `# Weekly burn-in on Sundays`, which is why `full-burn-in-missing` passes through.
+The harness's `checkElement` reads these structures, and Story 1.123 applies it to each `CI_CORRECT_RUNS` workflow.
+
+Two ci oracles do not hold on the real capture of the evaluation-plan project: `command-evaluation-install` and `command-evaluation-ci-pr` search for the literal command, and the capture quotes the folder names for the shell.
+The engine already resolves both to false with corroboration `disagrees` on the stored run (the disposition used to be `held` against a false check; it is `violated` with no defect finding now, which the engine's `disposition-contradicts-evidence` rule reads the same way), and no verdict moves.
+`KNOWN_UNHELD` in `test/test-probe-corpus.js` lists exactly those two and fails when either one holds, so the list ends with the defect (Story 1.122).
+
 ## What the vocabulary cannot say
 
 Recorded here because a silent omission would read as a passing measurement.

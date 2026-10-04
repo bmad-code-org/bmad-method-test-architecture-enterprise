@@ -34,6 +34,18 @@
  * verdict. That is the same agreement `npm run test:contract-oracles` checks, read
  * through the scoring stage instead of the evaluator.
  *
+ * The trace, nfr, test-design and ci builders derive each disposition from the
+ * scorer `tools/generate-contracts.js` pairs with that oracle, applied to the
+ * stored run the record carries for the oracle's own set or project (Story
+ * 1.94). They used to fix every disposition at `held`, which is true of a
+ * correct run and of nothing else, so a replay case pointed at another set's run
+ * passed. The test-review builder measures each stored verdict: the registry rows
+ * and the scope oracles from what the harness measured, the verdict-payload oracle
+ * from the fields the verdict carries, and the exit-code oracle from the exit code
+ * the verdict maps to. The fragment selection builder states the exercised oracles
+ * from the expected selection it constructs, and the routing builder constructs
+ * the correct answer it scores, so none of them fixes `held` over a stored run.
+ *
  * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
  *
  * One call: the `readdirSync` in `suites()` that enumerates the fragment-selection
@@ -61,11 +73,16 @@ const { readJson: portReadJson, readText: portReadText } = require('./file-syste
 // tools/generate-contracts.js binds the same function's output as each trace plan
 // step's stdin literal. One function on both sides is the whole guard; `legs` in
 // traceEvidence says what a restated prompt would cost.
-const { buildPrompt: buildTracePrompt } = require('../eval-trace');
+const {
+  buildPrompt: buildTracePrompt,
+  parseMatrix: parseTraceMatrix,
+  scoreRun: scoreTraceRun,
+  summaryFromArtifact: traceSummaryFromArtifact,
+} = require('../eval-trace');
 // The same rule for the nfr contract, whose plan steps bind the same function's
 // output as their stdin literal; `legs` in nfrEvidence says what a restated prompt
 // would cost.
-const { buildPrompt: buildNfrPrompt } = require('../eval-nfr');
+const { buildPrompt: buildNfrPrompt, reportFromArtifact: nfrReportFromArtifact, scoreRun: scoreNfrRun } = require('../eval-nfr');
 // And the same for the ci contract, whose plan steps bind the same function's
 // output as their stdin literal; the tripwire below is what says so.
 const { buildPrompt: buildCiPrompt } = require('../eval-ci');
@@ -73,12 +90,19 @@ const { buildPrompt: buildCiPrompt } = require('../eval-ci');
 // trace evidence does: the plan binds standard input as a literal, so a described
 // prompt selects nothing and the record is scored against no evidence at all.
 const { buildPrompt: buildRoutingPrompt, correctRoutingAnswer } = require('../eval-bmad-tea-routing');
-const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
+const {
+  ROUTING_CONTRACTS,
+  ciOracleSpecs,
+  nfrOracleSpecs,
+  testDesignOracleSpecs,
+  traceOracleSpecs,
+} = require('../../tools/generate-contracts');
 const {
   buildPrompt: buildTestDesignPrompt,
   designArtifactPaths: testDesignArtifactPaths,
   readDesign: readTestDesign,
   scoredRiskProjection,
+  scoreRun: scoreTestDesignRun,
 } = require('../eval-test-design');
 const {
   evaluatorConfiguration,
@@ -139,6 +163,15 @@ const FORBIDDEN_INPUT_NOTE =
 // evidence: test-review
 // ---------------------------------------------------------------------------
 
+/**
+ * The replay case a leg reads, unchanged.
+ *
+ * Each of the five builders that score a stored run takes `{ storedCase }`, a function from the case a leg names to
+ * the case its record reads. `test/test-probe-corpus.js` passes one that reads another set's run, which is how it
+ * holds the dispositions to the run they read.
+ */
+const identity = (caseId) => caseId;
+
 async function reviewVerdict(caseId) {
   return stripComment(await readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'verdict.json')));
 }
@@ -193,7 +226,41 @@ function oracleIdsByRequirement(contract) {
   return byRequirement;
 }
 
-async function testReviewEvidence(contract) {
+/**
+ * Whether the verdict carries what the verdict-payload oracle reads: the four top-level fields, and on every finding the
+ * row, the file, the line and the severity. The oracle's `existence` operands ask whether the pointer resolves, so a
+ * field holding `null` is present and a key the verdict never wrote is not.
+ */
+function verdictPayloadPresent(verdict) {
+  return (
+    ['findings', 'violations', 'qualityScore', 'recommendation'].every((key) => verdict[key] !== undefined) &&
+    Array.isArray(verdict.findings) &&
+    verdict.findings.every((finding) => ['row', 'file', 'line', 'severity'].every((key) => finding[key] !== undefined))
+  );
+}
+
+/**
+ * The two oracles of the behavior that links `tea-cli-contract/verdict-payload`: the payload oracle and the exit-code
+ * oracle. Told apart by what each one reads (the exit code, or the verdict artifact), not by position in the list.
+ */
+function verdictOracleIds(contract) {
+  const behavior = contract.behaviors.find((entry) =>
+    entry.requirementLinks.some((link) => `${link.scheme}/${link.id}` === 'tea-cli-contract/verdict-payload'),
+  );
+  const targetsOf = (oracleId) => contract.oracles.find((oracle) => oracle.id === oracleId).direction.evidenceTargets;
+  const exitOracleIds = behavior.oracles.filter((oracleId) => targetsOf(oracleId).every((target) => target.endsWith('/exit-code')));
+  const payloadOracleIds = behavior.oracles.filter((oracleId) =>
+    targetsOf(oracleId).some((target) => target.includes('/artifact/verdict')),
+  );
+  if (exitOracleIds.length !== 1 || payloadOracleIds.length !== 1) {
+    throw new Error(
+      `${contract.contractId} links the verdict payload to oracles this builder cannot tell apart; read test-review's builder`,
+    );
+  }
+  return { exitOracleId: exitOracleIds[0], payloadOracleId: payloadOracleIds[0] };
+}
+
+async function testReviewEvidence(contract, { storedCase = identity, verdictOf = identity } = {}) {
   const step = contract.interactionPlan[0];
   const reviewedFiles = step.inputBinding.option.files.literal;
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval', 'ground-truth.json'));
@@ -209,8 +276,12 @@ async function testReviewEvidence(contract) {
   const oracleOfBehavior = new Map(
     contract.behaviors.filter((behavior) => behavior.oracles.length === 1).map((behavior) => [behavior.id, behavior.oracles[0]]),
   );
+  const { exitOracleId, payloadOracleId } = verdictOracleIds(contract);
 
   return {
+    // The oracles that read the stored verdict itself, which `test/test-probe-corpus.js` holds to a verdict that
+    // fails them.
+    verdictOracleIds: { exitOracleId, payloadOracleId },
     /**
      * The two witness legs differ in the file list they review, so the answer is
      * chosen the same way: a leg naming a seeded fixture gets the review that
@@ -232,8 +303,10 @@ async function testReviewEvidence(contract) {
       // The gameability probe is scored against the run that games the suite:
       // every planted row reported, plus one finding against a file nobody asked
       // the reviewer to look at.
-      const caseId = probe.probeClass === 'gameability' ? 'out-of-scope-finding' : 'full-recall';
-      const verdict = await reviewVerdict(caseId);
+      const caseId = storedCase(probe.probeClass === 'gameability' ? 'out-of-scope-finding' : 'full-recall');
+      // `verdictOf` is the stored verdict as the record carries it. Only `test/test-probe-corpus.js` passes one, to
+      // hand the payload oracle a verdict missing a field the harness would still score, which no stored case is.
+      const verdict = verdictOf(await reviewVerdict(caseId));
       const measured = await reviewExpectation(caseId);
       const observationId = 'review-corpus-run';
       const body = reviewBody(verdict);
@@ -252,7 +325,8 @@ async function testReviewEvidence(contract) {
       ];
 
       const oracleIds = contract.oracles.map((oracle) => oracle.id);
-      const missedRows = new Set(measured.misses);
+      // A verdict the harness refuses to score (no findings array) has no measurement, so no claim about it holds.
+      const missedRows = new Set(measured?.misses);
 
       // What the evaluator claims about this probe's own seeded defect. A
       // gameability probe claims the degenerate reply the scope oracle rejects; a
@@ -303,11 +377,19 @@ async function testReviewEvidence(contract) {
 
       const violated = new Set(findings.map((finding) => finding.oracleId));
       const held = (oracleId) => {
-        if (violated.has(oracleId)) return false;
+        if (violated.has(oracleId) || measured === null) return false;
+        // The verdict payload and the exit code are read off the verdict the record carries, the same way the oracles
+        // read them: the fields it holds, and the exit code `reviewBody` maps its recommendation to.
+        if (oracleId === payloadOracleId) return verdictPayloadPresent(verdict);
+        if (oracleId === exitOracleId) return body.exitCode === 1;
         if (oracleId === scopeOracleId) return measured.outOfScope === 0;
         if (oracleId === cleanOracleId) return measured.falsePositives - measured.outOfScope === 0;
         const row = rowOfOracle.get(oracleId);
-        return row === undefined ? true : !missedRows.has(row);
+        // Every oracle of the contract reads a registry row, the clean file, the scope control or the verdict itself,
+        // so an oracle none of those names is one this builder has no measurement for.
+        if (row === undefined)
+          throw new Error(`${contract.contractId} declares oracle ${oracleId}, which this builder measures nothing for`);
+        return !missedRows.has(row);
       };
 
       return {
@@ -324,6 +406,50 @@ async function testReviewEvidence(contract) {
       };
     },
   };
+}
+
+/**
+ * The disposition of every oracle of a contract over the stored runs one record carries.
+ *
+ * The four suites that score a stored correct run (trace, nfr, test-design and ci) used to fix every disposition at
+ * `held`, whatever run the record carried, so a replay case pointed at the wrong run or at a deviation still passed
+ * the corpus. Each oracle is paired in tools/generate-contracts.js with the scorer that answers the same question
+ * over the same evidence, and that scorer decides here.
+ *
+ * `answerOf` is that scorer applied to the stored run the record carries for the oracle's own project or set. It
+ * answers `false` where the run fails the claim and anything else where it holds or the harness does not score the
+ * claim. A set the record carries no run of (a defect probe carries the run of the project it plants a defect on
+ * alone) has nothing to read, so its oracles keep the `held` the record has always stated.
+ *
+ * An oracle is paired with its spec by identifier, and an identifier no spec states is refused. A contract variant
+ * that drops or rewrites oracles (`test:contract-oracles` scores several) keeps the identifiers it still has, so it
+ * is scored; a stale contract file whose identifiers the generator no longer issues is not, and
+ * `test:contract-sources` says so first.
+ *
+ * @param {object} contract
+ * @param {Array<{id: string, kind: string, setId: string, elementId?: string|null}>} specs The generator's oracle specs for this contract.
+ * @param {(spec: object) => boolean|undefined} answerOf
+ * @param {(oracle: object) => string} citedObservationId
+ */
+function scoredDispositions(contract, specs, answerOf, citedObservationId) {
+  const specOf = new Map(specs.map((spec) => [spec.id, spec]));
+  return contract.oracles.map((oracle) => {
+    const spec = specOf.get(oracle.id);
+    if (spec === undefined) {
+      throw new Error(
+        `${contract.contractId} declares oracle ${oracle.id}, which the generator does not specify; run node tools/generate-contracts.js`,
+      );
+    }
+    const held = answerOf(spec) !== false;
+    return {
+      oracleId: oracle.id,
+      disposition: held ? 'held' : 'violated',
+      observationIds: [citedObservationId(oracle)],
+      note: held
+        ? null
+        : `${spec.kind}${spec.elementId ? ` ${spec.elementId}` : ''} on ${spec.setId}: the stored run the record carries for it does not satisfy the scorer paired with this oracle`,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +491,7 @@ async function traceArtifacts(caseId) {
   };
 }
 
-async function traceEvidence(contract) {
+async function traceEvidence(contract, { storedCase = identity } = {}) {
   const [seededStep, cleanStep] = contract.interactionPlan;
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
 
@@ -392,6 +518,7 @@ async function traceEvidence(contract) {
       );
     }
     return {
+      set,
       caseId: seeded ? 'seeded-correct-run' : 'clean-correct-run',
       observationId: seeded ? 'trace-seeded-run' : 'trace-clean-run',
       projectRoot: set.projectRoot,
@@ -399,6 +526,7 @@ async function traceEvidence(contract) {
       prompt,
     };
   });
+  const specs = traceOracleSpecs(groundTruth);
 
   // The stored run each fixture set's project root names. A trace prompt is written
   // against one project root, and that root is the only thing in the request that
@@ -406,6 +534,8 @@ async function traceEvidence(contract) {
   const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
 
   return {
+    storedRunSpecs: specs,
+    storedRunLegs: legs.map((leg) => ({ setId: leg.set?.id ?? leg.setId, caseId: leg.caseId })),
     /**
      * Two things decide a leg's answer, and both are in its request. The project
      * root the prompt is written against says which fixture set was staged, so a
@@ -460,7 +590,8 @@ async function traceEvidence(contract) {
       // sit in the callback, so a record carrying both runs read each of them
       // once per leg.
       const artifactsByCase = new Map();
-      for (const caseId of new Set(selected.map((leg) => leg.caseId))) artifactsByCase.set(caseId, await traceArtifacts(caseId));
+      for (const caseId of new Set(selected.map((leg) => leg.caseId)))
+        artifactsByCase.set(caseId, await traceArtifacts(storedCase(caseId)));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -484,17 +615,40 @@ async function traceEvidence(contract) {
         const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
         return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
       };
+      // Each oracle reads the stored run of its own set, through the scorer
+      // `traceOracleSpecs` pairs with it: the harness's own `scoreRun` over the
+      // run's summary and matrix. A run the harness refuses to score answers
+      // `false` for every oracle of its set, since no claim about it holds.
+      // `undefined` is the harness skipping a waiver oracle whose gate did not
+      // match, which has no measurement to contradict.
+      const scoredBySet = new Map(
+        selected.map((leg) => {
+          const artifacts = artifactsByCase.get(leg.caseId);
+          const summary = traceSummaryFromArtifact(artifacts.summary);
+          const matrix = artifacts.matrix.kind === 'text' ? parseTraceMatrix(artifacts.matrix.value, leg.set) : null;
+          const scored =
+            summary.ok && matrix !== null
+              ? scoreTraceRun(leg.set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance)
+              : null;
+          return [leg.set.id, scored];
+        }),
+      );
       return {
         observations,
         findings: [],
-        // Every stored run in this record is recorded as scoring every check it was
-        // given, so every oracle held on the evidence the harness read.
-        oracleDispositions: contract.oracles.map((oracle) => ({
-          oracleId: oracle.id,
-          disposition: 'held',
-          observationIds: [citedObservationId(oracle)],
-          note: null,
-        })),
+        // Every stored run in this record is meant to be a correct one, so every
+        // oracle held on the evidence the harness read. A replay case that is not
+        // fails the oracles it no longer satisfies.
+        oracleDispositions: scoredDispositions(
+          contract,
+          specs,
+          (spec) => {
+            if (!scoredBySet.has(spec.setId)) return;
+            const scored = scoredBySet.get(spec.setId);
+            return scored === null ? false : spec.scorer(scored);
+          },
+          citedObservationId,
+        ),
         evaluatorRecommendation: 'PASS',
         conditionArm: clean ? 'clean-correct-run' : 'seeded-correct-run',
       };
@@ -544,7 +698,7 @@ function testDesignEvidenceChannels(text, designLevel, epicNum) {
  * both plan steps declare one operation, so a leg that could not be told apart
  * would let one set's oracles quantify over the other set's document.
  */
-async function testDesignEvidence(contract) {
+async function testDesignEvidence(contract, { storedCase = identity, projectionOf = identity } = {}) {
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'));
 
   const legs = groundTruth.fixtureSets.map((set, index) => {
@@ -560,6 +714,7 @@ async function testDesignEvidence(contract) {
       );
     }
     return {
+      set,
       caseId: set.materialRisks?.length > 0 ? 'seeded-correct-run' : 'clean-correct-run',
       observationId: `design-${set.id}-run`,
       projectRoot: set.projectRoot,
@@ -572,8 +727,12 @@ async function testDesignEvidence(contract) {
 
   const legByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg]));
   const designLevelOf = (prompt) => /`design_level`: `([a-z]+)`/.exec(prompt)?.[1] ?? 'full';
+  const specs = testDesignOracleSpecs(groundTruth);
+  const categories = new Set(groundTruth.riskCategories ?? []);
 
   return {
+    storedRunSpecs: specs,
+    storedRunLegs: legs.map((leg) => ({ setId: leg.set?.id ?? leg.setId, caseId: leg.caseId })),
     async answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
       const matched = [...legByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
@@ -599,7 +758,14 @@ async function testDesignEvidence(contract) {
       // case two legs share is read once. The Scope line each leg renders stays
       // per leg, because it is a function of that leg's own epic number.
       const designByCase = new Map();
-      for (const caseId of new Set(legs.map((leg) => leg.caseId))) designByCase.set(caseId, await storedDesign(caseId));
+      for (const caseId of new Set(legs.map((leg) => leg.caseId))) designByCase.set(caseId, await storedDesign(storedCase(caseId)));
+      // `projectionOf` is the runner's projection of the document as the record carries it. Only
+      // `test/test-probe-corpus.js` passes one, to hand the projection-coherence oracle a projection no stored
+      // document yields, since the runner derives it from the document and a stored case cannot break it.
+      const channelsByLeg = legs.map((leg) => {
+        const channels = testDesignEvidenceChannels(designByCase.get(leg.caseId), 'full', leg.epicNum);
+        return { ...channels, stdout: { ...channels.stdout, value: projectionOf(channels.stdout.value) } };
+      });
       const observations = legs.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -607,7 +773,7 @@ async function testDesignEvidence(contract) {
           interfaceId: leg.step.interfaceId,
           operationId: leg.step.operationId,
           callInputs: { option: { agent: 'claude', 'design-path': leg.designPath }, stdin: { prompt: leg.prompt } },
-          ...testDesignEvidenceChannels(designByCase.get(leg.caseId), 'full', leg.epicNum),
+          ...channelsByLeg[index],
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
         }),
@@ -618,17 +784,42 @@ async function testDesignEvidence(contract) {
         const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
         return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
       };
+      // Each oracle reads the stored design of its own set, through the scorer
+      // `testDesignOracleSpecs` pairs with it, over the projection and the
+      // document the observation above carries. A design the harness refuses to
+      // read has no scored run: only the projection-coherence oracle reads the
+      // projection alone, so it is still asked, and every other oracle of the
+      // set answers `false`.
+      const readBySet = new Map(
+        legs.map((leg, index) => {
+          const artifact = channelsByLeg[index].artifacts.design;
+          const projection = channelsByLeg[index].stdout.value;
+          const read = readTestDesign(artifact);
+          return [
+            leg.set.id,
+            { artifact, projection, read, scored: read.ok ? scoreTestDesignRun(leg.set, read.design, categories) : null },
+          ];
+        }),
+      );
       return {
         observations,
         findings: [],
-        // Both stored runs are the correct run of their set, so every oracle held on
-        // the evidence the harness read.
-        oracleDispositions: contract.oracles.map((oracle) => ({
-          oracleId: oracle.id,
-          disposition: 'held',
-          observationIds: [citedObservationId(oracle)],
-          note: null,
-        })),
+        // Both stored runs are meant to be the correct run of their set, so every
+        // oracle held on the evidence the harness read. A document that is not
+        // fails the oracles it no longer satisfies.
+        oracleDispositions: scoredDispositions(
+          contract,
+          specs,
+          (spec) => {
+            const own = readBySet.get(spec.setId);
+            if (own === undefined) return;
+            if (own.scored === null) {
+              return spec.kind === 'projection-coherence' ? spec.scorer(null, own.projection, own.artifact.value) : false;
+            }
+            return spec.scorer(own.scored, own.projection, own.artifact.value);
+          },
+          citedObservationId,
+        ),
         evaluatorRecommendation: 'PASS',
         conditionArm: 'correct-run',
       };
@@ -686,7 +877,7 @@ function withCustomCategories(report, categories) {
   ].join('\n');
 }
 
-async function nfrEvidence(contract) {
+async function nfrEvidence(contract, { storedCase = identity } = {}) {
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'));
 
   /**
@@ -716,6 +907,7 @@ async function nfrEvidence(contract) {
       );
     }
     return {
+      set,
       caseId: gapped ? 'gapped-correct-audit' : 'clean-correct-audit',
       observationId: gapped ? 'nfr-gapped-run' : 'nfr-clean-run',
       gapped,
@@ -730,8 +922,11 @@ async function nfrEvidence(contract) {
   // says which bundle the leg is asking for, so it is what the port stages against.
   const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
   const gappedCaseId = legs.find((leg) => leg.gapped).caseId;
+  const specs = nfrOracleSpecs(groundTruth);
 
   return {
+    storedRunSpecs: specs,
+    storedRunLegs: legs.map((leg) => ({ setId: leg.set?.id ?? leg.setId, caseId: leg.caseId })),
     /**
      * Two things decide a leg's answer, and both are in its request. The project
      * root the prompt is written against says which evidence bundle was staged, so
@@ -773,7 +968,7 @@ async function nfrEvidence(contract) {
       // Read above the map rather than inside it, so a stored audit two legs share
       // is read once.
       const reportByCase = new Map();
-      for (const caseId of new Set(selected.map((leg) => leg.caseId))) reportByCase.set(caseId, await storedNfrReport(caseId));
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) reportByCase.set(caseId, await storedNfrReport(storedCase(caseId)));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -797,19 +992,34 @@ async function nfrEvidence(contract) {
         const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
         return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
       };
+      // Each oracle reads the stored audit of its own bundle, through the scorer
+      // `nfrOracleSpecs` pairs with it: the harness's own `scoreRun` over the
+      // parsed report. A report the harness refuses to score answers `false` for
+      // every oracle of its bundle, since no claim about it holds.
+      const scoredBySet = new Map(
+        selected.map((leg) => {
+          const report = nfrReportFromArtifact(nfrArtifacts(reportByCase.get(leg.caseId)).report);
+          return [leg.set.id, report.ok ? scoreNfrRun(leg.set, report.report) : null];
+        }),
+      );
       return {
         observations,
         findings: [],
-        // Both stored audits are correct ones: four domain sections, the overall
-        // status their own sections roll up to, and the UNKNOWN spelling on the
-        // bundle that leaves a threshold unstated and nowhere else. Every oracle
-        // held on the evidence the harness read.
-        oracleDispositions: contract.oracles.map((oracle) => ({
-          oracleId: oracle.id,
-          disposition: 'held',
-          observationIds: [citedObservationId(oracle)],
-          note: null,
-        })),
+        // Both stored audits are meant to be correct ones: four domain sections,
+        // the overall status their own sections roll up to, and the UNKNOWN
+        // spelling on the bundle that leaves a threshold unstated and nowhere
+        // else. Every oracle held on the evidence the harness read, and an audit
+        // that is not fails the oracles it no longer satisfies.
+        oracleDispositions: scoredDispositions(
+          contract,
+          specs,
+          (spec) => {
+            if (!scoredBySet.has(spec.setId)) return;
+            const scored = scoredBySet.get(spec.setId);
+            return scored === null ? false : spec.scorer(scored);
+          },
+          citedObservationId,
+        ),
         evaluatorRecommendation: 'PASS',
         conditionArm: clean ? 'clean-correct-audit' : gappedCaseId,
       };
@@ -845,7 +1055,7 @@ const CI_CORRECT_RUNS = {
 /** The `ci_platform` value one assembled prompt carries. */
 const CI_PLATFORM_PATTERN = /`ci_platform`: `([^`]*)`/;
 
-async function ciEvidence(contract) {
+async function ciEvidence(contract, { storedCase = identity } = {}) {
   const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'));
 
   /**
@@ -888,8 +1098,11 @@ async function ciEvidence(contract) {
   // one project root, and that root is the only thing in the request that says
   // which project the leg is asking for, so it is what the port stages against.
   const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
+  const specs = ciOracleSpecs(groundTruth);
 
   return {
+    storedRunSpecs: specs,
+    storedRunLegs: legs.map((leg) => ({ setId: leg.set?.id ?? leg.setId, caseId: leg.caseId })),
     /**
      * Two things decide a leg's answer, and both are in its request. The project
      * root the prompt is written against says which project was staged, so a leg
@@ -927,7 +1140,8 @@ async function ciEvidence(contract) {
       // Read above the map rather than inside it, so a stored workflow two legs
       // share is read once.
       const workflowByCase = new Map();
-      for (const caseId of new Set(selected.map((leg) => leg.caseId))) workflowByCase.set(caseId, await storedCiWorkflow(caseId));
+      for (const caseId of new Set(selected.map((leg) => leg.caseId)))
+        workflowByCase.set(caseId, await storedCiWorkflow(storedCase(caseId)));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -947,18 +1161,25 @@ async function ciEvidence(contract) {
         const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
         return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
       };
+      // Each oracle reads the workflow of its own project's leg, through the
+      // scorer `ciOracleSpecs` pairs with it: `workflowMentions` over the
+      // literal the oracle checks. The run-measured oracle's scorer is a
+      // constant, and the claim it states is true by construction here: every
+      // observation above exits 0 and carries a workflow artifact.
+      const workflowBySet = new Map(selected.map((leg) => [leg.setId, workflowByCase.get(leg.caseId)]));
       return {
         observations,
         findings: [],
-        // Every stored workflow is a correct one: every requested element
-        // present, nothing unrequested, no rule violation. Every oracle held on
-        // the evidence the harness read.
-        oracleDispositions: contract.oracles.map((oracle) => ({
-          oracleId: oracle.id,
-          disposition: 'held',
-          observationIds: [citedObservationId(oracle)],
-          note: null,
-        })),
+        // Every stored workflow is meant to be a correct one: every requested
+        // element present, nothing unrequested, no rule violation. A row of
+        // CI_CORRECT_RUNS that names another project's workflow, or one that
+        // deviates, fails the oracle it no longer satisfies.
+        oracleDispositions: scoredDispositions(
+          contract,
+          specs,
+          (spec) => (workflowBySet.has(spec.setId) ? spec.scorer(workflowBySet.get(spec.setId)) : undefined),
+          citedObservationId,
+        ),
         evaluatorRecommendation: 'PASS',
         conditionArm: clean ? 'clean-correct-pipeline' : legs.find((leg) => probe.systemId === `tea-ci-${leg.setId}`)?.caseId,
       };

@@ -169,6 +169,262 @@ function diagnosticProblems(suiteId, entry) {
 }
 
 /**
+ * Oracles a stored correct run is known not to satisfy, each a defect of the oracle and not of the run.
+ *
+ * The real capture of the `evaluation-plan-quarry-grader` project quotes the folder names for the shell
+ * (`npm install --prefix 'evals'`), which the harness's structural check accepts and a substring oracle over the
+ * literal `npm install --prefix evals` cannot. Both oracles read a contract token from
+ * `test/fixtures/ci-eval/ground-truth.json`, whose digest `test/probes/ci.probes.json` records and
+ * `expected-strength.json` pins through the corpus digest, so closing the defect moves the baseline and is a story
+ * of its own (found in Story 1.94, filed with the coordinator).
+ *
+ * The entry is exact. A listed oracle must resolve as violated, and it stops being listed in the change that fixes it:
+ * a listed oracle that holds fails here, so the exception cannot outlive the defect.
+ */
+const KNOWN_UNHELD = [
+  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-install' },
+  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-ci-pr' },
+];
+
+/**
+ * The oracles a stored correct run no longer satisfies, one problem each.
+ *
+ * Four suites score a stored run as the correct one (trace, nfr, test-design and ci), and each states its oracle
+ * specs on `storedRunSpecs`. Their records derive every disposition from the scorer `tools/generate-contracts.js` pairs
+ * with the oracle (Story 1.94), so a replay case that is not the correct run of its project or set, or a row of
+ * `CI_CORRECT_RUNS` pointing at another project's workflow or at a deviation the substring vocabulary can state, reads
+ * here as the oracle that no longer holds. The baseline below would not say so: the clean control passes pre-flight
+ * and scores `CONCERNS`, and `comparableResultOf` keeps only `probeId`, `state`, `severity` and `trialIndex` of each
+ * outcome, so a moved disposition or corroboration reaches no field of the baseline.
+ */
+function storedRunProblems(suite, scored) {
+  const specs = suite.evidence.storedRunSpecs;
+  if (specs === undefined) return [];
+  const problems = [];
+  const known = KNOWN_UNHELD.filter((entry) => entry.suiteId === suite.id);
+  const seen = new Set();
+  for (const entry of scored) {
+    for (const disposition of entry.record.oracleDispositions) {
+      if (disposition.disposition === 'held') continue;
+      const spec = specs.find((candidate) => candidate.id === disposition.oracleId);
+      const listed = known.find((item) => item.setId === spec?.setId && item.elementId === spec?.elementId);
+      if (listed !== undefined) {
+        seen.add(listed);
+        continue;
+      }
+      problems.push(
+        `${suite.id} ${entry.probe.probeId}: oracle ${disposition.oracleId} no longer holds on the stored correct run (${disposition.note ?? disposition.disposition})`,
+      );
+    }
+  }
+  for (const item of known) {
+    if (!seen.has(item)) {
+      problems.push(`${suite.id}: ${item.elementId} on ${item.setId} holds now, so it no longer belongs in KNOWN_UNHELD`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Oracles no stored wrong run can fail, each with the reason, so the per-oracle check below states what it cannot reach.
+ *
+ * An entry is exact. Every oracle of its suite and kind must hold under every wrong read, and one a wrong read fails
+ * stops being listed in the change that makes it failable: the exception cannot outlive its reason.
+ */
+const WRONG_RUN_CANNOT_FAIL = [
+  {
+    suiteId: 'ci',
+    kind: 'run-measured',
+    why: 'its scorer reads no workflow: the claim is that the run exited clean and wrote one, which every stored read states by construction',
+  },
+];
+
+/**
+ * The refused read of each suite that scores a run the harness can refuse, through `storedCase`.
+ *
+ * `reads` is the correct run a leg names and `through` is the stored case the harness refuses to score (summary schema
+ * 0.2, a report with no domain sections, a register with no rows). Every oracle of that leg's set then answers
+ * `false`, which is the `scored === null ? false` branch of each builder. `measuresStill` lists the kinds that keep
+ * answering from what they read: test-design's projection-coherence reads the projection alone, so it measures.
+ * The ci scorer is a substring search over the workflow and refuses nothing.
+ */
+const REFUSED_READS = {
+  trace: { reads: 'seeded-correct-run', through: 'seeded-summary-schema-0-2', measuresStill: [] },
+  nfr: { reads: 'gapped-correct-audit', through: 'gapped-report-without-sections', measuresStill: [] },
+  'test-design': { reads: 'seeded-correct-run', through: 'seeded-register-absent', measuresStill: ['projection-coherence'] },
+  ci: null,
+};
+
+/** The oracles that resolve `violated` in the clean control's record when the suite's legs read the cases `storedCase` names. */
+async function violatedUnder(suite, probe, storedCase, options = {}) {
+  const evidence = await suite.evidenceFor(suite.contract, { storedCase, ...options });
+  const inputs = await evidence.recordInputs(probe);
+  return new Set(
+    inputs.oracleDispositions.filter((disposition) => disposition.disposition === 'violated').map((disposition) => disposition.oracleId),
+  );
+}
+
+/**
+ * Every set and every oracle of one suite held to a wrong stored run.
+ *
+ * `storedRunProblems` proves a correct row passes. Nothing in it fails when the derivation behind it is reverted to a
+ * constant `held`, since a constant also passes every correct row, so this is the revert check of Story 1.94: the
+ * evidence builder is asked for the same record with legs reading other runs through `storedCase`. Four reads:
+ *
+ * - Rotation. Leg i reads leg (i + 1) mod n, so every set reads a run other than its own. A set follows the run when
+ *   an oracle that holds on its own run is violated in the rotated one. The identity record leaves the oracles of
+ *   `KNOWN_UNHELD` out of that baseline, since the correct run already violates them.
+ * - One leg at a time through every other stored case of the suite. This is what a `CI_CORRECT_RUNS` row pointed at
+ *   another project's workflow or at a stored deviation looks like to the builder.
+ * - For test-design, a projection with its `design` key dropped, which only the projection-coherence oracles read.
+ * - The refused read of `REFUSED_READS`, which must fail every oracle of the set that read it.
+ *
+ * Every oracle that holds on its own run must be violated under at least one of the first three, or be listed in
+ * `WRONG_RUN_CANNOT_FAIL` with the reason a wrong run cannot fail it. Constant `held` on any oracle fails this.
+ */
+async function wrongRunProblems(suite) {
+  const legs = suite.evidence.storedRunLegs;
+  if (legs === undefined) return [];
+  const specs = suite.evidence.storedRunSpecs;
+  const probe = suite.probes.find((candidate) => candidate.expectedClean);
+  if (probe === undefined) {
+    return [`${suite.id}: the corpus has no clean control, so no record carries every set's run to read through another's`];
+  }
+  const caseIds = legs.map((leg) => leg.caseId);
+  const shared = [...new Set(caseIds.filter((caseId, index) => caseIds.indexOf(caseId) !== index))];
+  if (shared.length > 0) {
+    return [
+      `${suite.id}: more than one set reads the stored case ${shared.join(', ')}, so a read through another set's run cannot be told from the set's own`,
+    ];
+  }
+  if (legs.length < 2) return [`${suite.id}: one set is the only leg, so there is no other stored run to read it through`];
+
+  const problems = [];
+  const own = await violatedUnder(suite, probe, (caseId) => caseId);
+  const heldOnOwn = specs.filter((spec) => !own.has(spec.id));
+
+  const rotation = new Map(legs.map((leg, index) => [leg.caseId, legs[(index + 1) % legs.length].caseId]));
+  const rotated = await violatedUnder(suite, probe, (caseId) => rotation.get(caseId) ?? caseId);
+  for (const leg of legs) {
+    const followed = heldOnOwn.some((spec) => spec.setId === leg.setId && rotated.has(spec.id));
+    if (!followed) {
+      problems.push(
+        `${suite.id}: ${leg.setId} read the stored run of ${rotation.get(leg.caseId)} and no oracle that holds on its own run failed, so a replay case pointed at the wrong run passes the corpus`,
+      );
+    }
+  }
+
+  const failable = new Set(rotated);
+  const stored = fs
+    .readdirSync(path.join(__dirname, 'replay', suite.id), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  for (const leg of legs) {
+    for (const read of stored.filter((name) => name !== leg.caseId)) {
+      for (const oracleId of await violatedUnder(suite, probe, (caseId) => (caseId === leg.caseId ? read : caseId))) failable.add(oracleId);
+    }
+  }
+  // The runner derives its projection from the document, so no stored document yields a malformed one. The
+  // projection-coherence oracles read the projection alone, and the only wrong read that moves them is a projection
+  // with a key dropped.
+  if (suite.id === 'test-design') {
+    const malformed = await violatedUnder(suite, probe, (caseId) => caseId, { projectionOf: ({ design, ...rest }) => rest });
+    for (const oracleId of malformed) failable.add(oracleId);
+  }
+  for (const spec of heldOnOwn) {
+    const accepted = WRONG_RUN_CANNOT_FAIL.find((entry) => entry.suiteId === suite.id && entry.kind === spec.kind);
+    const where = `${spec.id} (${spec.kind}${spec.elementId ? ` ${spec.elementId}` : ''} on ${spec.setId})`;
+    if (accepted === undefined && !failable.has(spec.id)) {
+      problems.push(`${suite.id}: ${where} holds under every wrong stored run, so a constant held would pass the corpus`);
+    }
+    if (accepted !== undefined && failable.has(spec.id)) {
+      problems.push(
+        `${suite.id}: ${where} is listed in WRONG_RUN_CANNOT_FAIL and a wrong stored run fails it, so it no longer belongs there`,
+      );
+    }
+  }
+  for (const entry of WRONG_RUN_CANNOT_FAIL.filter((candidate) => candidate.suiteId === suite.id)) {
+    if (!specs.some((spec) => spec.kind === entry.kind)) {
+      problems.push(`${suite.id}: WRONG_RUN_CANNOT_FAIL lists ${entry.kind}, which no oracle of the suite has`);
+    }
+  }
+
+  const refusal = REFUSED_READS[suite.id];
+  if (refusal === undefined) return [...problems, `${suite.id}: REFUSED_READS states no refused read for this suite`];
+  const refusedLeg = refusal === null ? null : legs.find((leg) => leg.caseId === refusal.reads);
+  if (refusal !== null && refusedLeg === undefined) {
+    return [...problems, `${suite.id}: REFUSED_READS reads ${refusal.reads}, which is no leg of the suite`];
+  }
+  if (refusal !== null) {
+    const refused = await violatedUnder(suite, probe, (caseId) => (caseId === refusal.reads ? refusal.through : caseId));
+    for (const spec of specs.filter(
+      (candidate) => candidate.setId === refusedLeg.setId && !refusal.measuresStill.includes(candidate.kind),
+    )) {
+      if (!refused.has(spec.id)) {
+        problems.push(
+          `${suite.id}: ${spec.id} (${spec.kind}) on ${spec.setId} still held when the set read ${refusal.through}, which the harness refuses to score, so the refused-run branch answers nothing`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * An oracle the generator does not specify has to throw, and must never resolve `held`.
+ *
+ * A contract that declares an oracle identifier no spec states is a stale contract file, and a builder that answered
+ * `held` for it would score a claim nothing measured. Each of the four builders is asked for the clean control's record
+ * against the contract with one extra oracle.
+ */
+async function unknownOracleProblems(suite) {
+  if (suite.evidence.storedRunSpecs === undefined) return [];
+  const probe = suite.probes.find((candidate) => candidate.expectedClean);
+  if (probe === undefined) return [];
+  const contract = { ...suite.contract, oracles: [...suite.contract.oracles, { ...suite.contract.oracles[0], id: 'O-999' }] };
+  try {
+    await (await suite.evidenceFor(contract)).recordInputs(probe);
+  } catch (error) {
+    return /O-999.*does not specify/.test(error.message)
+      ? []
+      : [`${suite.id}: an unknown oracle threw ${error.message}, not the unspecified-oracle error`];
+  }
+  return [`${suite.id}: a contract declaring oracle O-999, which the generator does not specify, was scored without an error`];
+}
+
+/**
+ * The test-review record measures its stored verdict, including the two oracles of the verdict-payload behavior.
+ *
+ * Read through a verdict that exits 0 (`approved-with-no-findings`) the exit-code oracle must be violated, and read
+ * through the stored verdict with its `qualityScore` dropped (a verdict the harness still scores) the payload oracle
+ * must be, with the exit-code oracle still held. Both oracles hold on the stored verdict the record carries, so a
+ * builder that fixes either at `held` fails here.
+ */
+async function testReviewVerdictProblems(suite) {
+  if (suite.id !== 'test-review') return [];
+  const probe = suite.probes.find((candidate) => candidate.expectedClean);
+  const { exitOracleId, payloadOracleId } = suite.evidence.verdictOracleIds;
+  const problems = [];
+  const own = await violatedUnder(suite, probe, (caseId) => caseId);
+  for (const oracleId of [exitOracleId, payloadOracleId]) {
+    if (own.has(oracleId)) problems.push(`test-review: ${oracleId} is violated on the stored verdict the record carries`);
+  }
+  const exits0 = await violatedUnder(suite, probe, (caseId) => (caseId === 'full-recall' ? 'approved-with-no-findings' : caseId));
+  if (!exits0.has(exitOracleId)) {
+    problems.push(`test-review: ${exitOracleId} still held when the record read approved-with-no-findings, which exits 0`);
+  }
+  const noScore = await violatedUnder(suite, probe, (caseId) => caseId, { verdictOf: ({ qualityScore, ...rest }) => rest });
+  if (!noScore.has(payloadOracleId)) {
+    problems.push(`test-review: ${payloadOracleId} still held when the stored verdict carries no qualityScore`);
+  }
+  if (noScore.has(exitOracleId)) {
+    problems.push(`test-review: ${exitOracleId} was violated by a verdict that lost only its qualityScore`);
+  }
+  return problems;
+}
+
+/**
  * One suite's outcome in the shape the live harness reports, so the live
  * harness's baseline comparator can be driven from here.
  *
@@ -373,6 +629,12 @@ async function main() {
       problems.push(...diagnosticProblems(suite.id, entry));
     }
     for (const message of outcome.sealed.schemaProblems) problems.push(`${suite.id}: SealedEvaluatorBrief${message}`);
+    problems.push(
+      ...storedRunProblems(suite, outcome.scored),
+      ...(await wrongRunProblems(suite)),
+      ...(await unknownOracleProblems(suite)),
+      ...(await testReviewVerdictProblems(suite)),
+    );
 
     summary[suite.id] = suiteSummary(outcome, registries);
     liveShaped.push({ suiteId: suite.id, verdicts: liveShapedVerdicts(outcome, registries) });
