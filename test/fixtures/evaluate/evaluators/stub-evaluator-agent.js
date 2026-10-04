@@ -56,6 +56,10 @@
  *                      to <log>: whether the prompt is a calibration call, and
  *                      `allowed` or `refused <code>` (Story 1.31: a confined
  *                      run's agent holds the evaluation folder read-only)
+ *   --quote-observed-verdict
+ *                      a failing `verdict-accepted` row quotes the `verdict: <word>` line the call's stdout holds, where
+ *                      it otherwise quotes `verdict: rejected` (Story 1.79): a gameability arm's degenerate response
+ *                      prints `verdict: pending`, so the quotation is witnessed there and the arm is judged a failure
  *   --version-file <file> --version-read-counter <file> --version-flip-at-read <n>
  *                      report the file's version under --version as {"agentVersion":"<v>"} (a file value of
  *                      malformed, plain-dependency, dependency-only, bad-json, multi-line, invalid-version or
@@ -232,13 +236,16 @@ async function main() {
   }
   const observation = JSON.parse(answered.result.content[0].text);
   const accepted = mode === 'always-pass' || String(observation.stdout).includes('verdict: accepted');
+  // Story 1.79: with --quote-observed-verdict a failing row quotes the `verdict:` line the observation holds, which a
+  // gameability arm's degenerate response prints (`verdict: pending`), so the quotation is witnessed on that arm too.
+  const quoted = argv.includes('--quote-observed-verdict') ? /verdict: \S+/.exec(String(observation.stdout))?.[0] : undefined;
   const row = accepted
     ? { key: 'verdict-accepted', outcome: 'pass', observationIds: [observation.observationId], comment: 'It accepted.' }
     : {
         key: 'verdict-accepted',
         outcome: 'fail',
         observationIds: [observation.observationId],
-        quote: 'verdict: rejected',
+        quote: quoted ?? 'verdict: rejected',
         quoteChannel: 'stdout',
         confidence: 0.8,
         comment: 'It rejected a request it had to accept.',
