@@ -2,7 +2,7 @@
 title: "Story 1.84: Teach a Linux skill target's network declaration in the CI guide and rerun its live sessions"
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1daeb05a'

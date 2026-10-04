@@ -7027,6 +7027,167 @@ function probeGitReports(runDirectory) {
 }
 
 /**
+ * The git a confined target sees of a sparse-checkout project (Story 1.85), through the real CLI. The `probe-sparse` stub prints
+ * `git status --porcelain`, `git ls-files`, `git ls-files -t`, `git sparse-checkout list`, the sparse settings and the tracked
+ * files the checkout holds; `sparseView` asks the project for the same lines, so each is compared byte for byte. The
+ * evaluation folder is an empty tree to the target (Story 1.57), so its paths leave the project's lines.
+ */
+const SPARSE_CONE = ['bin', 'rules', 'evals'];
+const SPARSE_PATTERNS = ['/*', '!/docs/', '!/archive/', '!/src/'];
+
+/** A project with tracked files outside the directories its stub target needs, then sparse over the rest. */
+function sparseProject(label, { cone = true, sparse = true, index = false } = {}) {
+  return makeProject(label, {
+    toolchain: true,
+    edit: ({ project }) => {
+      for (const [file, text] of [
+        [path.join('docs', 'guide.md'), 'a guide\n'],
+        [path.join('archive', 'old', 'notes.txt'), 'old notes\n'],
+        [path.join('src', 'library.js'), 'module.exports = 1;\n'],
+      ]) {
+        fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
+        fs.writeFileSync(path.join(project, file), text);
+      }
+    },
+    history: ({ repository }) => {
+      if (!sparse) return;
+      git(
+        repository,
+        cone
+          ? ['sparse-checkout', 'set', ...(index ? ['--sparse-index'] : []), ...SPARSE_CONE]
+          : ['sparse-checkout', 'set', '--no-cone', ...SPARSE_PATTERNS],
+      );
+    },
+  });
+}
+
+/** What the `probe-sparse` stub prints, asked of the project itself, with the evaluation folder's paths left out. */
+function sparseView(directory) {
+  const ask = (...args) => spawnSync('git', args, { cwd: directory, env: GIT_ENV, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+  const answer = (result, keep = () => true) =>
+    result.status === 0 ? JSON.stringify(result.stdout.split('\n').filter(keep).join('\n')) : `exit ${result.status}`;
+  const configured = (key) => {
+    const value = ask('config', '--get', key);
+    return value.status === 0 ? value.stdout.trim() : 'unset';
+  };
+  const outsideFolder = (line) => !/^(. )?evals\/verdict\//.test(line);
+  // The stub's lines end with the newline of the last entry; a listing that filters lines keeps that newline.
+  const listing = (result) =>
+    result.status === 0 ? JSON.stringify(result.stdout.split('\n').filter(outsideFolder).join('\n')) : `exit ${result.status}`;
+  const onDisk = ask('ls-files')
+    .stdout.split('\n')
+    .filter((name) => name.length > 0 && outsideFolder(name) && fs.existsSync(path.join(directory, name)));
+  return {
+    status: listing(ask('status', '--porcelain')),
+    'ls-files': listing(ask('ls-files')),
+    'ls-files-t': listing(ask('ls-files', '-t')),
+    'sparse-list': answer(ask('sparse-checkout', 'list')),
+    'sparse-config': `${configured('core.sparseCheckout')}/${configured('core.sparseCheckoutCone')}`,
+    'files-on-disk': JSON.stringify(onDisk),
+  };
+}
+
+/** The stub's `probe-sparse` lines for the clean arm's first trial, with the evaluation folder's paths left out of the listings. */
+function sparseLines(project, { env = {} } = {}) {
+  const { ran, out, seen } = historyLines(project, { env, act: 'probe-sparse' });
+  const outsideFolder = (line) => !/^(. )?evals\/verdict\//.test(line);
+  for (const name of ['ls-files', 'ls-files-t']) {
+    if (typeof seen[name] === 'string' && seen[name].startsWith('"')) {
+      seen[name] = JSON.stringify(JSON.parse(seen[name]).split('\n').filter(outsideFolder).join('\n'));
+    }
+  }
+  if (typeof seen['files-on-disk'] === 'string' && seen['files-on-disk'].startsWith('[')) {
+    seen['files-on-disk'] = JSON.stringify(JSON.parse(seen['files-on-disk']).filter(outsideFolder));
+  }
+  return { ran, out, seen };
+}
+
+/** Each line the target printed equals the project's, and the project is the sparse one the case means to compare with. */
+function checkSparseLines({ what, project, seen, out, sparse }) {
+  const expected = sparseView(project.repository);
+  for (const name of Object.keys(expected)) {
+    check(
+      seen[name] === expected[name],
+      `a confined target's ${name} over ${what} printed ${seen[name]}; the project's prints ${expected[name]}`,
+    );
+  }
+  if (sparse) {
+    check(expected.status === '""', `the ${what} project's own status is not clean: ${expected.status}`);
+    check(
+      /\nS |^"S /.test(expected['ls-files-t'].replaceAll(String.raw`\n`, '\n')),
+      `the ${what} project has no skip-worktree entry, so the case proves nothing`,
+    );
+    check(
+      /docs\/guide\.md/.test(seen['ls-files'] ?? '') && !/docs\/guide\.md/.test(seen['files-on-disk'] ?? ''),
+      `a confined target's git over ${what} must list docs/guide.md, which the checkout does not hold\n${out}`,
+    );
+    check(
+      /^true\//.test(seen['sparse-config'] ?? '') && (seen['sparse-list'] ?? '').startsWith('"'),
+      `a confined target's git over ${what} reads sparse settings ${seen['sparse-config']} and a list of ${seen['sparse-list']}\n${out}`,
+    );
+  } else {
+    check(
+      seen['sparse-config'] === 'unset/unset' &&
+        seen['sparse-list'] === 'exit 128' &&
+        !/\nS |^"S /.test((seen['ls-files-t'] ?? '').replaceAll(String.raw`\n`, '\n')),
+      `a confined target's git over ${what} shows sparse settings ${seen['sparse-config']}, a list of ${seen['sparse-list']} or a skip-worktree entry\n${out}`,
+    );
+  }
+}
+
+async function checkSparseCheckout() {
+  // A cone-mode sparse project and one with a pattern list: the target's status is the project's (clean), its file list and
+  // its skip-worktree flags are the project's, and `git sparse-checkout list` reads the project's patterns.
+  for (const [label, cone, index] of [
+    ['cone', true, false],
+    ['pattern list', false, false],
+    ['cone with a sparse index', true, true],
+  ]) {
+    const project = sparseProject(`sparse-${label.replaceAll(' ', '-')}`, { cone, index });
+    if (index) {
+      check(
+        git(project.repository, ['ls-files', '--sparse'])
+          .toString('utf8')
+          .split('\n')
+          .some((name) => name.endsWith('/')),
+        "the project's index holds no sparse directory entry, so the sparse-index case proves nothing",
+      );
+    }
+    const { ran, out, seen } = sparseLines(project);
+    check(ran.status === 0, `a confined run over a sparse project (${label}) exited ${ran.status}; expected 0\n${ran.output}`);
+    if (ran.status === 0) checkSparseLines({ what: `a sparse project (${label})`, project, seen, out, sparse: true });
+  }
+
+  // A project that is not sparse keeps the index it has today: the target's lines equal the project's, and carry no sparse setting.
+  const plain = sparseProject('sparse-none', { sparse: false });
+  {
+    const { ran, out, seen } = sparseLines(plain);
+    check(ran.status === 0, `a confined run over a project that is not sparse exited ${ran.status}; expected 0\n${ran.output}`);
+    if (ran.status === 0) {
+      checkSparseLines({ what: 'a project that is not sparse', project: plain, seen, out, sparse: false });
+      check(
+        /docs\/guide\.md/.test(seen['files-on-disk'] ?? ''),
+        `a confined target's checkout of a project that is not sparse lacks docs/guide.md\n${out}`,
+      );
+    }
+  }
+
+  // A blob-less clone made with `--sparse` (Story 1.80's partial-clone shape): nothing fetches and the status is the project's.
+  if (hostSkipsLazyFetch()) {
+    const source = sparseProject('sparse-origin', { cone: true });
+    const partial = partialCloneOf(source, 'blob:none', 'sparse', { sparse: SPARSE_CONE });
+    check(missingObjectsOf(partial.repository).length > 0, 'the --sparse blob:none clone holds its whole history on disk');
+    const { ran, out, seen } = sparseLines(partial);
+    check(ran.status === 0, `a confined run over a --sparse blob:none clone exited ${ran.status}; expected 0\n${ran.output}`);
+    if (ran.status === 0) checkSparseLines({ what: 'a --sparse blob:none clone', project: partial, seen, out, sparse: true });
+    check(
+      !fs.existsSync(partial.fetchLog),
+      `a process fetched from the promisor remote of a --sparse clone:\n${fs.existsSync(partial.fetchLog) ? fs.readFileSync(partial.fetchLog, 'utf8') : ''}`,
+    );
+  }
+}
+
+/**
  * Every call that makes a target's port names the git access of the workspace it runs in and the user's private root
  * directory (Story 1.58), or its sandbox would withhold nothing.
  */
@@ -8012,7 +8173,7 @@ function reachProject(label, { drivers = false, tags = false } = {}) {
 }
 
 /** `project` cloned with `filter`, its remote logging every upload-pack it serves to `fetchLog`; the clone holds what a checkout needs. */
-function partialCloneOf(project, filter, label) {
+function partialCloneOf(project, filter, label, { sparse = null } = {}) {
   const root = path.dirname(project.repository);
   const origin = path.join(root, 'origin.git');
   const clone = path.join(root, `partial-${label}`);
@@ -8026,7 +8187,9 @@ function partialCloneOf(project, filter, label) {
     run(['-C', origin, 'config', 'uploadpack.allowFilter', 'true']);
     run(['-C', origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true']);
   }
-  run(['clone', '--quiet', `--filter=${filter}`, `file://${origin}`, clone]);
+  run(['clone', '--quiet', `--filter=${filter}`, ...(sparse === null ? [] : ['--sparse']), `file://${origin}`, clone]);
+  // The cone's blobs come from the remote now, before the remote logs what it serves.
+  if (sparse !== null) run(['-C', clone, 'sparse-checkout', 'set', ...sparse]);
   const wrapper = path.join(root, `upload-pack-${label}.sh`);
   fs.writeFileSync(wrapper, `#!/bin/sh\necho "$@" >> '${fetchLog}'\nexec git upload-pack "$@"\n`, { mode: 0o755 });
   run(['-C', clone, 'config', 'remote.origin.uploadpack', wrapper]);
@@ -8070,12 +8233,12 @@ function missingObjectsOf(repository) {
 }
 
 /** What the `probe-history` stub printed in the clean arm's first trial. */
-function historyLines(project, { env = {} } = {}) {
+function historyLines(project, { env = {}, act = 'probe-history' } = {}) {
   const ran = evaluate(['run', '--evaluation', project.folder], {
     ...project.env,
     ...env,
     VERDICT_WHEN: 'trial-clean-1',
-    VERDICT_DO: 'probe-history',
+    VERDICT_DO: act,
   });
   const out = ran.status === 0 ? trialStdout(runDirectoryOf(project.folder), 'clean', 1) : '';
   return { ran, out, seen: probeGitLines(out) };
@@ -8680,6 +8843,19 @@ function checkConfinementReference() {
       section.includes('a driver whose name holds a space and a `required` written with no value') &&
       section.includes('an older git makes a partial-clone project exit 12, with the way out named'),
     "the reference's confinement section does not say a promisor-remote project runs without a fetch, that the target's git lists the project's tags, that the history is read as a stream and that a filter driver's whole configuration is carried",
+  );
+  // Story 1.85: a sparse-checkout project shows the target the project's status.
+  check(
+    section.includes(
+      "(`git sparse-checkout set` in cone mode or with a pattern list, a sparse index, and a clone made with `--sparse`) shows the target the project's status",
+    ) &&
+      section.includes('the private repository carries `core.sparseCheckout` and `core.sparseCheckoutCone`') &&
+      section.includes('marks every tracked file outside the cone as skip-worktree') &&
+      section.includes(
+        "The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.",
+      ) &&
+      section.includes('A project that is not sparse keeps the index it has'),
+    "the reference's confinement section does not say a sparse-checkout project shows the target the project's status (no deletion, the files outside the cone listed, the cone's patterns) and that a project that is not sparse keeps its index",
   );
   // Story 1.59: the one private home a confined trial may write, and the variables that name it.
   check(
@@ -13098,6 +13274,7 @@ const CASES = [
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
   { name: "a confined target's git reach", body: checkWithheldHistoryReach, group: 'confinement' },
   { name: "the withheld git history's reach units", body: checkWithheldHistoryReachUnits, group: 'confinement' },
+  { name: "a confined target's sparse checkout", body: checkSparseCheckout, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
   { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
   { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },
