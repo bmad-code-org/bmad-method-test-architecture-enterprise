@@ -9824,7 +9824,7 @@ async function checkWithheldHistoryReachUnits() {
   const dying = tempDir('reach-unit-dying');
   fs.writeFileSync(
     path.join(dying, 'git'),
-    `#!/bin/sh\ncase " $* " in\n  *" rev-list "*)\n    if [ "$STUB_DIE" = list ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; exit 3; fi\n    if [ "$STUB_DIE" = listkill ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; kill -KILL $$; fi\n    exec awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'\n    ;;\n  *" cat-file "*)\n    if [ "$STUB_DIE" = ask ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; exit 4; fi\n    if [ "$STUB_DIE" = askkill ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; kill -KILL $$; fi\n    exec awk '{ printf "%040x tree 0\\n", NR }'\n    ;;\nesac\nexit 2\n`,
+    `#!/bin/sh\ncase " $* " in\n  *" rev-list "*)\n    if [ "$STUB_DIE" = list ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; exit 3; fi\n    if [ "$STUB_DIE" = listkill ]; then awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; kill -KILL $$; fi\n    if [ "$STUB_DIE" = askidle ]; then sleep 0.5; awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'; exit 0; fi\n    if [ "$STUB_DIE" = askshort ]; then awk 'BEGIN { for (i = 1; i <= 5; i++) printf "%040x\\n", i }'; exit 0; fi\n    if [ "$STUB_DIE" = askbg ]; then awk 'BEGIN { for (i = 1; i <= 200000; i++) printf "%040x\\n", i }' & exit 0; fi\n    if [ "$STUB_DIE" = askearly ] || [ "$STUB_DIE" = askzero ] || [ "$STUB_DIE" = askgone ]; then awk 'BEGIN { for (i = 1; i <= 200000; i++) printf "%040x\\n", i }'; exit 0; fi\n    exec awk 'BEGIN { for (i = 1; i <= 1000; i++) printf "%040x\\n", i }'\n    ;;\n  *" cat-file "*)\n    if [ "$STUB_DIE" = ask ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; exit 4; fi\n    if [ "$STUB_DIE" = askkill ]; then head -n 5 | awk '{ printf "%040x tree 0\\n", NR }'; kill -KILL $$; fi\n    if [ "$STUB_DIE" = askearly ] || [ "$STUB_DIE" = askbg ]; then sleep 0.3; exit 4; fi\n    if [ "$STUB_DIE" = askzero ] || [ "$STUB_DIE" = askshort ]; then sleep 0.3; exit 0; fi\n    if [ "$STUB_DIE" = askidle ] || [ "$STUB_DIE" = askgone ]; then exit 0; fi\n    exec awk '{ printf "%040x tree 0\\n", NR }'\n    ;;\nesac\nexit 2\n`,
     { mode: 0o755 },
   );
   for (const [who, expected, named] of [
@@ -9832,6 +9832,17 @@ async function checkWithheldHistoryReachUnits() {
     ['ask', 4, 'git cat-file exited 4'],
     ['listkill', 137, 'git rev-list was killed by SIGKILL'],
     ['askkill', 137, 'git cat-file was killed by SIGKILL'],
+    // The list prints more than the stage's input holds and the stage ends without reading it.
+    ['askearly', 4, 'git cat-file exited 4'],
+    // The list has exited and a process it started still holds its output, so the exit does not end the output.
+    ['askbg', 4, 'git cat-file exited 4'],
+    // The stage ends cleanly without answering every line it was sent: the history it answered for is a part.
+    ['askzero', 1, 'git cat-file ended before the commit list was handed to it'],
+    ['askshort', 1, 'git cat-file answered 0 of 5 lines'],
+    // The stage exits 0 at once, before the list has printed anything: nothing was counted yet, and the list is a long
+    // one that would pause for input nobody reads.
+    ['askidle', 1, 'git cat-file ended before the commit list was handed to it'],
+    ['askgone', 1, 'git cat-file ended before the commit list was handed to it'],
   ]) {
     const died = spawnSync(process.execPath, [reader], {
       encoding: 'utf8',
@@ -9890,6 +9901,9 @@ async function checkWithheldHistoryReachUnits() {
       'case " $* " in',
       '  *" rev-list "*)',
       '    if [ -n "$STUB_LIST_FAIL" ]; then echo "rev-list broke" >&2; exit 5; fi',
+      // A walk that has exited while a process it started still holds the pipe and prints into it later: the reader never sees
+      // the end of that output, and the job must still end on the stages' exits.
+      '    if [ -n "$STUB_LINGER" ]; then ( sleep 2; echo late ) 2>/dev/null & exit 0; fi',
       '    wc -l | tr -d " " >"$STUB_DIR/revs"',
       // The walk is about 82 MB and a pipe holds well under 1 MB, so a walk that finishes before the pack stage has read its
       // first line was held whole between the stages, in a string or in buffers a heap limit does not count.
@@ -9900,6 +9914,7 @@ async function checkWithheldHistoryReachUnits() {
       '  *" pack-objects "*)',
       '    if [ -n "$STUB_PACK_FAIL" ]; then echo "pack-objects broke" >&2; exit 3; fi',
       '    if [ -n "$STUB_PACK_KILL" ]; then kill -TERM $$; fi',
+      '    if [ -n "$STUB_LINGER" ]; then sleep 0.5; echo "pack-objects broke after the walk ended" >&2; exit 3; fi',
       '    IFS= read -r first || exit 7',
       '    : >"$STUB_DIR/streamed"',
       String.raw`    printf "PACK %s\n" "$(( $(wc -l | tr -d " ") + 1 ))"`,
@@ -9932,6 +9947,7 @@ async function checkWithheldHistoryReachUnits() {
     ['a walk that fails early', walked, { STUB_LIST_FAIL: '1' }, 5, 'git rev-list exited 5', ''],
     ['a pack that fails early', walked, { STUB_PACK_FAIL: '1' }, 3, 'git pack-objects exited 3', ''],
     ['a pack a signal kills', walked, { STUB_PACK_KILL: '1' }, 143, 'git pack-objects was killed by SIGTERM', ''],
+    ['a pack that fails after the walk ended with its output still open', walked, { STUB_LINGER: '1' }, 3, 'git pack-objects exited 3', ''],
     ['an index that fails after the pack is printed', walked, { STUB_INDEX_FAIL: '1' }, 4, 'git index-pack exited 4', ''],
     ['an index that fails after the pack is printed (two stages)', direct, { STUB_INDEX_FAIL: '1' }, 4, 'git index-pack exited 4', ''],
   ]) {

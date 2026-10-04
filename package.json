@@ -80,6 +80,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 '**/*.md'",
+    "loop:failing-pack": "node tools/loop-failing-pack.js",
     "prepare": "command -v husky >/dev/null 2>&1 && husky || exit 0",
     "prepublishOnly": "node tools/guard-publish.js",
     "regenerate:doc-claim-hash": "node tools/regenerate-doc-claim-hash.mjs",
