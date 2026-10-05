@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the run made the publish job wait for the release evaluation job and limited that job to pull requests, so on a published release the evaluation job is skipped and the publish job, which needs it, is skipped with it. The wait is present as text and the shipment never happens.",
+    "The file is the live capture (evaluation-gate-live-capture) with the evaluation-release job's guard changed from release to pull_request."
+  ],
+  "id": "evaluation-gate-release-job-on-pull-requests",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-gate-slate-publisher",
+    "scoringInputsDigest": "sha256:cd75807c765daa5aec217a1784c88b7235b8feb3af56f40cb8129a6fc6d0500b"
+  },
+  "derivation": [
+    "The file parses and actionlint reports nothing. The evaluation-release job runs on pull_request where release belongs, so the job element misses, and the publish job that needs it runs on no event, so the wait element misses; every other element is present, nothing is unrequested and no rule is violated."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-evaluation-floor": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": true,
+      "job-evaluation-release": false,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-release": true,
+      "preserved-job-test": true,
+      "wait-publish": false,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [
+      "job-evaluation-release: job evaluation-release runs on pull_request, expected release",
+      "wait-publish: job publish runs on no event, expected release"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

@@ -369,7 +369,8 @@ function checkCorpus(corpus, engine, failures) {
     'A floor with no eligible probe in a partition it is read on exits `ci --tier release` 2 with `no-eligible-probe`',
     'Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe',
     '`P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then',
-    '`tea-evaluate check` refuses a gameability probe beside a `partitionPlan`, so an evaluation that declares one holds no gameability floor',
+    'Under a `partitionPlan` each gameability probe answers the whole plan from two files (see the partition section)',
+    "under a `partitionPlan` the plan file's steps are answered in a second file (see the partition section)",
     "Each held-out seed changes an adopter-owned rule through its mutation (`P-006` through `M-001`, and the Workflow kind's `P-008` through `M-003`)",
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
@@ -820,7 +821,15 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'names every defect by path and ID without quoting the plan',
     '`tea-evaluate preflight --partition held-out`',
     'neither the plan file nor a held-out baseline under `baseline/`',
-    'beside a gameability probe, or beside a records evaluator and a rubric',
+    'refuses a `partitionPlan` beside a records evaluator and a rubric',
+    "A gameability probe's degenerate response follows the plan too",
+    '`corpus/held-out/gameability/<probeId>.json`, beside the plan, answers the steps of the plan file',
+    "the arm of each view answers only that view's steps",
+    'Give every gameability probe both files, each answering every step its own source declares',
+    "add an oracle on a shared step to `contract.json` for it, or keep that behavior's gameability probe in the development partition",
+    'and a held-out probe whose naive oracle reads a development-only step',
+    "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step",
+    'It names a gameability answer left out, misplaced or unreadable by probe and step ID',
     'has no designated oracle there',
     'selects with an `any` matcher',
     'witnesses with a non-private input',
@@ -993,6 +1002,25 @@ function checkPartitionPlanGuidance(corpus, failures) {
   if (!mappingViewProblems(mappingView(misplacedMapping)).some((problem) => /mappings\[0\] binds oracle O-002/.test(problem)))
     failures.push(
       'the partition plan check accepts a mapping row for a development-only oracle, so the mapping example check proves nothing',
+    );
+  // Story 1.109: the tagged held-out answers example meets the degenerate-response schema and answers exactly the steps of the plan
+  // example, so a file that answers a step of `contract.json` or leaves a plan step out is not the example the guide teaches.
+  const answerExamples = taggedExamples(body, 'held-out-gameability-response');
+  if (answerExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-gameability-response example; found ${answerExamples.length}`);
+    return;
+  }
+  const answersSchema = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'degenerate-response.schema.json')),
+  );
+  const validateAnswers = new Ajv({ strict: false, allErrors: true }).compile(answersSchema);
+  if (!validateAnswers(answerExamples[0]))
+    failures.push(`corpus.md held-out gameability answers fail the degenerate-response schema: ${JSON.stringify(validateAnswers.errors)}`);
+  const answered = Object.keys(answerExamples[0].steps ?? {}).sort();
+  const planned = plans[0].interactionPlan.map((step) => step.stepId).sort();
+  if (JSON.stringify(answered) !== JSON.stringify(planned))
+    failures.push(
+      `corpus.md held-out gameability answers answer ${JSON.stringify(answered)}, not the plan example's steps ${JSON.stringify(planned)}`,
     );
 }
 
@@ -3008,7 +3036,7 @@ function checkSystemPathsFragment(guide, failures) {
     JSON.stringify(paths) !== '["/opt/verdict-rules"]'
   )
     failures.push(
-      'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose names',
+      'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose describes',
     );
   if (fragment.confinement === false || fragment.registry?.[0]?.egress !== undefined)
     failures.push('harness.md systemPaths fragment must keep the default confinement and list no egress');
@@ -3136,7 +3164,7 @@ function checkHarnessGuidance(guide, failures) {
     "the workspace, the call's temp directory, the private home, the Node installation",
     'each free of double quotes, backslashes and control characters',
     'such as a language installation, a rules directory or a cache',
-    'This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system',
+    'This `evaluation.json` fragment declares the `verdict-rules` directory, the one directory the `verdict` target reads beyond the system',
     "Merge its `registry` entry into the evaluation's registry",
     'It lists no `egress` and runs confined',
     'then run `check` and rerun development',
@@ -3243,9 +3271,9 @@ function checkRunGuidance(guide, failures) {
   const confined = headingBody(guide, '## Run confined');
   for (const marker of [
     'confine every process they start, before any of them starts',
-    'Seatbelt through `/usr/bin/sandbox-exec` on macOS',
+    'Seatbelt through `sandbox-exec` on macOS',
     'Bubblewrap through `bwrap` on Linux (`apt-get install bubblewrap`)',
-    '`/usr/bin/log stream` on macOS',
+    '`log stream` on macOS',
     '`strace` on Linux (`apt-get install strace`, version 6.1 or later, which needs ptrace)',
     'a mechanism the host refuses (a kernel that forbids unprivileged user namespaces',
     'an observer that cannot confirm itself',
@@ -3369,7 +3397,7 @@ function checkIsolationViolationGuidance(guide, failures) {
     "A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels reaches a plain-HTTP gateway on the host's loopback that its entry lists",
     // Stories 1.82 and 1.87: a host service behind a socket file is out of a confined target's reach (Bubblewrap under either `network`, macOS Seatbelt), and the escape is the opt-out.
     'A confined target cannot reach a host service through a socket file:',
-    "a connection to the Docker socket (testcontainers) or to a database's Unix socket such as `/var/run/postgresql/.s.PGSQL.5432` answers `ECONNREFUSED` from a Bubblewrap target",
+    "a connection to the Docker socket (testcontainers) or to a database's Unix socket (a `.s.PGSQL.5432` file) answers `ECONNREFUSED` from a Bubblewrap target",
     "since the runtime mounts an empty device file over every socket file outside the call's own grants",
     "and `EPERM` from a macOS Seatbelt target, since its profile denies every connection to a socket path outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
@@ -3807,6 +3835,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
   for (const heading of [
     ...INSPECTIONS.map(([name]) => name),
     '## Place each check',
+    '## Gate the publish or deploy job',
     '## Keep the deterministic checks on pr',
     '## Place the live checks',
     '## Offer eval-quality-gates',
@@ -3885,6 +3914,21 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
   ])
     requireLine(live, line, 'ci.md live placement', failures);
   checkRetiredNetwork(guide, failures, 'ci.md');
+  const gate = headingBody(guide, '## Gate the publish or deploy job');
+  for (const line of [
+    'An evaluation job that no other job waits for reports and blocks nothing that ships.',
+    'When the release flow inspection found a publish or deploy job that must not run before the evaluation passes, set `gates` on a check of the tier whose evaluation job should stop it, with the job\'s id from its workflow file: `"gates": ["publish"]` for a job `publish` in `release.yml`.',
+    "The `release` tier is the usual home, since its event is the one that starts the repository's release or deploy workflow.",
+    "Name in the `trigger` of every check on the gating tier each event that starts the gated job's workflow.",
+    "When that workflow also starts on `workflow_dispatch`, as a nightly `deploy.yml` does, list `manual-dispatch` beside `release`, since the CI skill refuses a gate whose job already ran on an event where the tier's evaluation job is skipped.",
+    "The jobs a tier gates are the union of `gates` over the checks the plan places on that tier, so name a job once, on any check of the tier, and a name repeated across the tier's checks is merged.",
+    '`check` accepts a job id and reports any other name under rule `gates`; it cannot tell whether the repository holds that job, which `bmad-testarch-ci` answers when it renders the wait.',
+    "The wait holds best when the job lives in the workflow file the CI skill edits, which holds the evaluation jobs too: the job then waits through `needs`, and the step refuses the plan when the job already ran in a run where the tier's evaluation job is skipped, such as a deploy on every `push` beside an evaluation job guarded to tags, or when the evaluation job runs on a run the job did not run on before, such as a `workflow_dispatch` the plan adds to a tag-push release file, while a run the render adds that the evaluation job skips is skipped through the wait and is no conflict.",
+    'A job in another workflow file waits through a `workflow_run` trigger, which the step refuses for a pull request tier, for a tier whose evaluation job carries a ref or cron guard, and for a job with its own `needs`, `if:` or ref and event contexts, so hand the CI skill the workflow file that holds the job when you can.',
+    'Leave `gates` out when the inspection found no such job or the adopter declined the gate, and say which in the `reason` of the release entries.',
+    "The field creates no event: a tier whose only event another tier took still has no event of its own, and the CI skill's summary names it.",
+  ])
+    requireLine(gate, line, 'ci.md gating', failures);
   const gates = headingBody(guide, '## Offer eval-quality-gates');
   for (const marker of [
     'is opt-in',
@@ -3912,6 +3956,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'Delete the checks the evaluation cannot run',
     '`judge-calibration` when the contract declares no rubric and `gameability` when no probe takes the gameability route, which pass as no-ops',
     'Keep the one `preflight-live` set that fits',
+    'set `gates` as `Gate the publish or deploy job` says',
     '`api-conformance` for an evaluation that declares no HTTP target, which `check` reports as an `applicability` finding',
     'edit it in place',
     'Show the adopter the placement table with each deviation and its reason before the hand-off.',
@@ -3938,13 +3983,16 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'or in create mode when the inspection found no pipeline file',
     'the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`',
     'Name in the request the concrete event of this repository for each tier it should render',
-    'Gating an existing publish or deploy job on the evaluation job is outside what that step does',
+    'That step renders each `gates` entry as a wait of the named job on the evaluation job of the tier',
+    'its summary reports the edit to the job, a name that matches no job and a conflicting gate',
+    'so relay that report to the adopter',
+    'When the plan gates a job, invoke it on the workflow file that holds that job.',
     "give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record",
     'a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage',
     'Stage 12 is complete when the plan passes `check`',
     'the secrets the live tiers need',
     'every tier that exited non-zero with the stage that owns its repair',
-    "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
+    'each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason',
   ])
     requireText(handoff, marker, 'ci.md hand-off', failures);
   for (const marker of [
@@ -3974,6 +4022,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
         "or the deploy workflow's own trigger, a nightly one included",
         'A repository with none of these gets a published release from step-03b, and the reason says so.',
         'A `scheduled` run gates nothing unless the deploy waits for it.',
+        'Record each publish or deploy job by the id of the job and the workflow file that holds it, since the plan names a job to gate by that id.',
       ],
     ],
     [
@@ -3995,7 +4044,9 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
       '## Place the live checks',
       [
         'Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.',
+        'and `release` for `release`, with `manual-dispatch` beside it when the gated workflow starts on `workflow_dispatch`.',
         'places the live set twice at its defaults: on `scheduled` for `.github/workflows/nightly.yml`, and on `release` for the trigger of the deploy workflow in `.github/workflows/deploy.yml`',
+        'That workflow also starts on `workflow_dispatch`, so the release checks list `manual-dispatch` beside `release`.',
       ],
     ],
     [
@@ -4069,7 +4120,8 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     const found = plan.planFindings(example);
     if (found.length > 0) failures.push(`ci.md ci-plan example ${index + 1} fails the runtime: ${JSON.stringify(found)}`);
     for (const entry of example.checks ?? []) {
-      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`)) failures.push(problem);
+      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`, { subsetTriggers: index === 1 }))
+        failures.push(problem);
       if ((entry.placement?.reason?.match(CI_FILE_TOKEN) ?? []).length === 0)
         failures.push(`ci.md ci-plan example ${index + 1} gives ${entry.id} a reason that cites no file`);
     }
@@ -4104,6 +4156,18 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     failures.push('ci.md second ci-plan example moves a check off its default, where the text says it keeps the defaults');
   if (plans[0] && plans[1] && JSON.stringify(plans[0]) === JSON.stringify(plans[1]))
     failures.push('ci.md two ci-plan examples are identical, so the guide does not show a placement that differs');
+  // The first example gates a job the release workflow holds, by the id the runtime accepts, on one check of the release tier.
+  const gated = (plans[0]?.checks ?? []).filter((entry) => entry.gates !== undefined);
+  if (gated.length !== 1 || gated[0].placement?.tier !== 'release' || JSON.stringify(gated[0].gates) !== JSON.stringify(['publish']))
+    failures.push('ci.md first ci-plan example does not gate the publish job on one check of the release tier');
+  if (gated[0] !== undefined && !/publish job of \.github\/workflows\/release\.yml/.test(gated[0].placement?.reason ?? ''))
+    failures.push('ci.md first ci-plan example gives the gated check a reason that does not name the job and its workflow');
+  if (!plans[1]?.checks?.some((entry) => entry.placement?.tier === 'release' && entry.trigger?.includes('manual-dispatch')))
+    failures.push(
+      'ci.md second ci-plan example does not list manual-dispatch beside release for a deploy workflow that starts on workflow_dispatch',
+    );
+  if (plans[1]?.checks?.some((entry) => entry.gates !== undefined))
+    failures.push('ci.md second ci-plan example gates a job, where the text leaves the nightly deploy ungated');
 
   // The credential keys sit in a registry entry the runtime accepts.
   const registries = taggedExamples(guide, 'ci-registry');
@@ -4545,6 +4609,64 @@ async function main() {
         'corpus',
         checkPartitionPlanGuidance,
         (text) => text.replace("A records harness's records name only the oracles, behaviors and criteria of the run's view.", ''),
+      ],
+      [
+        'corpus partition plan gameability answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace("A gameability probe's degenerate response follows the plan too.", ''),
+      ],
+      [
+        'corpus partition plan held-out answers file placed in the development corpus',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            '`corpus/held-out/gameability/<probeId>.json`, beside the plan,',
+            '`corpus/gameability/<probeId>.json`, beside the plan,',
+          ),
+      ],
+      [
+        'corpus partition plan held-out answers example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-gameability-response -->', ''),
+      ],
+      [
+        'corpus partition plan held-out answers example answering a contract step',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"held-out-run": { "stdout": "verdict: pending', '"shared-run": { "stdout": "verdict: pending'),
+      ],
+      [
+        'corpus partition plan every-step answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'Give every gameability probe both files, each answering every step its own source declares (the steps of `contract.json` in the first, the steps of the plan file in the second), because the both view runs each probe over both.',
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan naive oracle sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step, since the held-out view drops the others.",
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan gameability check sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "It names a gameability answer left out, misplaced or unreadable by probe and step ID, and a held-out step by its ID only when the ID has the schema's shape, and a held-out probe whose naive oracle reads a development-only step. ",
+            '',
+          ),
       ],
       [
         'run partition plan preflight removal',
@@ -5107,6 +5229,194 @@ async function main() {
         'ci',
         ciCheck,
         (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
+      ],
+      ['ci gating section removal', 'ci', ciCheck, (text) => text.replace('## Gate the publish or deploy job', '## Something else')],
+      [
+        'ci gating union sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The jobs a tier gates are the union of `gates` over the checks the plan places on that tier, so name a job once, on any check of the tier, and a name repeated across the tier's checks is merged.",
+            '',
+          ),
+      ],
+      [
+        'ci gating rule sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '`check` accepts a job id and reports any other name under rule `gates`; it cannot tell whether the repository holds that job, which `bmad-testarch-ci` answers when it renders the wait.',
+            '',
+          ),
+      ],
+      [
+        'ci gating same-file sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The wait holds best when the job lives in the workflow file the CI skill edits, which holds the evaluation jobs too: the job then waits through `needs`, and the step refuses the plan when the job already ran in a run where the tier's evaluation job is skipped, such as a deploy on every `push` beside an evaluation job guarded to tags, or when the evaluation job runs on a run the job did not run on before, such as a `workflow_dispatch` the plan adds to a tag-push release file, while a run the render adds that the evaluation job skips is skipped through the wait and is no conflict.",
+            '',
+          ),
+      ],
+      [
+        'ci gating cross-file sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'A job in another workflow file waits through a `workflow_run` trigger, which the step refuses for a pull request tier, for a tier whose evaluation job carries a ref or cron guard, and for a job with its own `needs`, `if:` or ref and event contexts, so hand the CI skill the workflow file that holds the job when you can.',
+            '',
+          ),
+      ],
+      [
+        'ci hand-off job file sentence removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace('When the plan gates a job, invoke it on the workflow file that holds that job.\n', ''),
+      ],
+      [
+        'ci gating trigger sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace("Name in the `trigger` of every check on the gating tier each event that starts the gated job's workflow.\n", ''),
+      ],
+      [
+        'ci gating dispatch sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "When that workflow also starts on `workflow_dispatch`, as a nightly `deploy.yml` does, list `manual-dispatch` beside `release`, since the CI skill refuses a gate whose job already ran on an event where the tier's evaluation job is skipped.\n",
+            '',
+          ),
+      ],
+      [
+        'ci live placement loses the dispatch mapping',
+        'ci',
+        ciCheck,
+        (text) => text.replace(', with `manual-dispatch` beside it when the gated workflow starts on `workflow_dispatch`', ''),
+      ],
+      [
+        'ci nightly example loses manual-dispatch on release',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"trigger": ["release", "manual-dispatch"],', '"trigger": ["release"],'),
+        'does not list manual-dispatch beside release',
+      ],
+      [
+        'ci nightly example lead-in loses the dispatch sentence',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '\nThat workflow also starts on `workflow_dispatch`, so the release checks list `manual-dispatch` beside `release`.',
+            '',
+          ),
+      ],
+      [
+        'ci gating leave-out sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'Leave `gates` out when the inspection found no such job or the adopter declined the gate, and say which in the `reason` of the release entries.',
+            '',
+          ),
+      ],
+      [
+        'ci gating no-event sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The field creates no event: a tier whose only event another tier took still has no event of its own, and the CI skill's summary names it.",
+            '',
+          ),
+      ],
+      [
+        'ci gating sentence widened on its line',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'An evaluation job that no other job waits for reports and blocks nothing that ships.',
+            'An evaluation job that no other job waits for reports and blocks nothing that ships. Name every job of the pipeline.',
+          ),
+        'ci.md gating lacks the whole line',
+      ],
+      ['ci hand-off wait relay removal', 'ci', ciCheck, (text) => text.replace(', so relay that report to the adopter', '')],
+      [
+        'ci hand-off left the gate to the adopter again',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason',
+            "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
+          ),
+      ],
+      [
+        'ci release inspection job id removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '\nRecord each publish or deploy job by the id of the job and the workflow file that holds it, since the plan names a job to gate by that id.',
+            '',
+          ),
+      ],
+      [
+        'ci write the plan gates pointer removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace(', set `gates` as `Gate the publish or deploy job` says', ''),
+      ],
+      [
+        'ci example gates removed',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],\n', ''),
+        'does not gate the publish job',
+      ],
+      [
+        'ci example gates a name that is no job id',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],', '      "gates": ["publish job"],'),
+        'fails the runtime',
+      ],
+      [
+        'ci example gate reason loses the job and its workflow',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'The publish job of .github/workflows/release.yml ships the tag and shares that file with the evaluation jobs, so it waits for this tier.',
+            'The tag ships from the registry workflow.',
+          ),
+        'gated check a reason that does not name the job and its workflow',
+      ],
+      [
+        'ci second example gates the nightly deploy',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '"enforcement": "warn",\n      "evidence": ["runs/<invocationId>/checks/twin-run/stdout"],',
+            '"enforcement": "warn",\n      "gates": ["deploy"],\n      "evidence": ["runs/<invocationId>/checks/twin-run/stdout"],',
+          ),
+        'second ci-plan example gates a job',
+      ],
+      [
+        'ci example gates two jobs',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],', '      "gates": ["publish", "deploy"],'),
+        'does not gate the publish job',
       ],
       [
         'ci create mode removal',

@@ -92,7 +92,7 @@
  *
  * ONE PROJECT PER RUN
  *
- * The five projects are five services with five requests. Each is its own
+ * The six projects are six services with six requests. Each is its own
  * workspace, its own agent call, and its own case.
  *
  * EDIT SETS
@@ -106,6 +106,11 @@
  * holds and compares it with the job in the edited file, and `checkpoint` digests a project
  * file and compares it with the file after the run. A stored edit case keeps that file
  * beside the workflow.
+ *
+ * A job the plan gates is the one job of the pipeline the edit may change: the `wait` element
+ * names the job, the exact `needs` list it must end with (the entries it had, then the
+ * evaluation job's id), the events it still runs on, and the digest of its source with its
+ * `needs` lines removed, so the wait is present and nothing else of the job moved.
  *
  * THREE MODES
  *
@@ -275,7 +280,7 @@ const ACTIONLINT = {
 const LINT_TIMEOUT_MS = 30_000;
 
 /** The kinds an expected element may declare, and what each one is checked with. */
-const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job', 'preserved', 'checkpoint'];
+const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job', 'preserved', 'checkpoint', 'wait'];
 
 /** The two modes a fixture set runs the skill in: create writes the pipeline, edit changes the pipeline the project already has. */
 const SET_MODES = ['create', 'edit'];
@@ -394,12 +399,12 @@ const THRESHOLDS = {
   // an untrusted input interpolated into a script, a syntax error. Each is a
   // workflow that fails on its first push.
   maxLintFindings: 0,
-  // Sixty-three requested elements across the five projects: thirteen, five, ten, twenty-three and twelve. 0.96 admits two
-  // misses in the corpus, the width of a defensible disagreement about how an element is spelled in the two projects
-  // whose requests state their elements in prose. A project whose ground truth sets `requireEveryElement` is held to
-  // every one of its elements on its own, whatever this ratio says: the three evaluation projects' elements each read
+  // Seventy-eight requested elements across the six projects: thirteen, five, ten, twenty-three, twelve and fifteen. 0.97
+  // admits two misses in the corpus, the width of a defensible disagreement about how an element is spelled in the two
+  // projects whose requests state their elements in prose. A project whose ground truth sets `requireEveryElement` is held
+  // to every one of its elements on its own, whatever this ratio says: the four evaluation projects' elements each read
   // one property the skill's step prescribes, so a single miss is a deviation and must not hide in the aggregate.
-  requestedElementRecall: 0.96,
+  requestedElementRecall: 0.97,
   // The trigger elements on their own. A workflow whose triggers are
   // wrong never runs on the event the team asked for, so nothing else in it
   // matters, and the one disagreement the recall admits can never be a trigger.
@@ -1018,6 +1023,40 @@ async function validateCorpus(groundTruth) {
             else if (sha256Of(block) !== element.sha256) {
               problems.push(
                 `${elementLabel}: the staged job ${element.jobId} digests to ${sha256Of(block)}, which is not the declared sha256`,
+              );
+            }
+          }
+          break;
+        }
+        case 'wait': {
+          if (typeof element.jobId !== 'string' || element.jobId.trim().length === 0) {
+            problems.push(`${elementLabel}: wait declares no jobId`);
+          }
+          if (
+            !Array.isArray(element.needs) ||
+            element.needs.length === 0 ||
+            element.needs.some((id) => typeof id !== 'string' || id.trim().length === 0)
+          ) {
+            problems.push(`${elementLabel}: wait declares no needs list of job ids`);
+          }
+          if (
+            element.runsOn !== undefined &&
+            (!Array.isArray(element.runsOn) || element.runsOn.length === 0 || element.runsOn.some((event) => typeof event !== 'string'))
+          ) {
+            problems.push(`${elementLabel}: runsOn is declared and is not a non-empty list of events`);
+          }
+          if (set.mode !== 'edit') {
+            problems.push(`${elementLabel}: a wait gates a job the pipeline already has, so it belongs to an edit set`);
+          }
+          if (typeof element.sha256 !== 'string' || !SHA256_HEX.test(element.sha256)) {
+            problems.push(`${elementLabel}: wait declares no sha256 of the job's bytes without its needs`);
+          } else if (setRoot && typeof element.jobId === 'string') {
+            const staged = await readText(path.join(setRoot, set.editTarget ?? WORKFLOW_PATH));
+            const block = staged.present ? jobBlockOf(staged.text, element.jobId) : null;
+            if (block === null) problems.push(`${elementLabel}: the staged pipeline carries no job ${element.jobId}`);
+            else if (sha256Of(withoutNeeds(block)) !== element.sha256) {
+              problems.push(
+                `${elementLabel}: the staged job ${element.jobId} digests to ${sha256Of(withoutNeeds(block))} without its needs, which is not the declared sha256`,
               );
             }
           }
@@ -1741,6 +1780,23 @@ function jobBlockOf(text, jobId) {
 }
 
 /**
+ * A job's source without its `needs` key: the `needs:` line at the job's own depth and the deeper lines that continue it
+ * (a block list), so a job that gained an entry in `needs` digests as the job it was.
+ */
+function withoutNeeds(block) {
+  const lines = String(block).split('\n');
+  const kept = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^ {4}needs:/.test(lines[index])) {
+      while (index + 1 < lines.length && /^(?: {5,}\S| {4}- )/.test(lines[index + 1])) index += 1;
+      continue;
+    }
+    kept.push(lines[index]);
+  }
+  return kept.join('\n');
+}
+
+/**
  * The ids of the jobs that carry `marker` as a comment line, in the order the file lists them. A re-render that left
  * a job under an old id beside the new one shows here as two.
  */
@@ -2116,6 +2172,41 @@ function checkElement(element, set, workflow, text = '', aux = {}) {
       if (sha256Of(block) !== element.sha256)
         return { present: false, detail: `job ${element.jobId} was changed: its bytes are not the ones the pipeline held` };
       return { present: true, detail: `job ${element.jobId} is byte for byte as it was` };
+    }
+    case 'wait': {
+      const job = jobs.find(([jobId]) => jobId === element.jobId)?.[1];
+      if (job === undefined) return { present: false, detail: `job ${element.jobId} is gone from the pipeline` };
+      // The wait is the evaluation job's id appended to the entries the job already waited for, in that order.
+      const unknown = element.needs.filter((id) => !jobs.some(([jobId]) => jobId === id));
+      if (unknown.length > 0) {
+        return { present: false, detail: `job ${element.jobId} waits for ${unknown.join(', ')}, which the workflow does not hold` };
+      }
+      if (needsOf(job).join(',') !== element.needs.join(',')) {
+        return {
+          present: false,
+          detail: `job ${element.jobId} waits for [${needsOf(job).join(', ')}], expected [${element.needs.join(', ')}]`,
+        };
+      }
+      // Nothing else of the job moved: its `if:`, steps and settings are the bytes the pipeline held.
+      const block = jobBlockOf(text, element.jobId);
+      if (block === null || sha256Of(withoutNeeds(block)) !== element.sha256) {
+        return {
+          present: false,
+          detail: `job ${element.jobId} was changed beyond its needs: its other bytes are not the ones the pipeline held`,
+        };
+      }
+      // The gated job still starts on the events it started on, so a wait on a job its event skips is a miss.
+      if (element.runsOn !== undefined) {
+        const events = eventsRunBy(workflow, job);
+        if (events === null) return { present: false, detail: `the if of job ${element.jobId} cannot be read as an event guard` };
+        if ([...events].sort().join(',') !== [...element.runsOn].sort().join(',')) {
+          return {
+            present: false,
+            detail: `job ${element.jobId} runs on ${events.join(', ') || 'no event'}, expected ${element.runsOn.join(', ')}`,
+          };
+        }
+      }
+      return { present: true, detail: `job ${element.jobId} waits for [${element.needs.join(', ')}] and is otherwise as it was` };
     }
     case 'checkpoint': {
       const written = aux.files?.[element.file];
@@ -3048,6 +3139,7 @@ module.exports = {
   guardHolds,
   jobBlockOf,
   sha256Of,
+  withoutNeeds,
   unrequestedElements,
   workflowRuleViolations,
   scoreRun,

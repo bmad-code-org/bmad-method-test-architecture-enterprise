@@ -105,7 +105,7 @@
  * whether they handle real agent output correctly. Almost every case produces a number and
  * almost every one of those is constructed. The cases that carry captured bytes come
  * from the ATDD fixture corpus, from the CLI parser fixtures and from live eval:ci
- * runs over the evaluation-plan, evaluation-tiers and evaluation-edit projects; the corpus counts live in
+ * runs over the evaluation-plan, evaluation-tiers and evaluation-edit projects (the evaluation-gate project holds a constructed correct run until its live capture is stored); the corpus counts live in
  * test/lib/doc-count-sources.js, which counts the cases and their origins. The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
  * reviewer that named nothing. The routing replay corpus also preserves all four

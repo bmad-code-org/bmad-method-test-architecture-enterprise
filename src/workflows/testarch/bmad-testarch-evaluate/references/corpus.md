@@ -16,12 +16,12 @@ Before Stage 6 `check`, copy `assets/scoring-policy.template.json` from `{skill-
 
 For each `controlled-mutation` probe, write the named `mutations/<mutationId>.mutation.json` before Stage 6 `check`. Follow `references/mutation.md` for the exact replacement and observable failure, then refresh `corpus-index.json`. Stage 6 preflight qualifies the nominated probe; Stage 8 inspects its manifestation and rollback evidence and expands the mutation set.
 
-The starter `evaluation.json` declares `clean` and `mutated` arms for its initial partial corpus. When committing `P-004`, add `gameability` to `evaluation.json.arms`. Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe: `P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then. `tea-evaluate check` refuses a gameability probe beside a `partitionPlan`, so an evaluation that declares one holds no gameability floor. Keep each declared arm paired with a probe using its route. `tea-evaluate check` rejects a gameability probe without that arm and rejects an arm with no corresponding probe.
+The starter `evaluation.json` declares `clean` and `mutated` arms for its initial partial corpus. When committing `P-004`, add `gameability` to `evaluation.json.arms`. Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe: `P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then. Under a `partitionPlan` each gameability probe answers the whole plan from two files (see the partition section), and the floor reads the partition its probes sit in as it does with no plan. Keep each declared arm paired with a probe using its route. `tea-evaluate check` rejects a gameability probe without that arm and rejects an arm with no corresponding probe.
 
 The clean negative and malformed controls expect a valid refusal. Each held-out seed changes an adopter-owned rule through its mutation (`P-006` through `M-001`, and the Workflow kind's `P-008` through `M-003`); qualify its baseline pass, mutated fail and rollback. Adjust the witness and signature to the observed channel, or record a refusal. Keep held-out fixture content outside the gap loop.
 
 The command examples below assume one JSON object on stdout; eval-quality parses JSON-shaped stdout before following a `/stdout/...` pointer. The HTTP example returns JSON with a JSON content type. Match these shapes to the inspected target before copying a signature.
-The gameability response blocks use one illustrative `decide` step. After Story 1.13 writes the interaction plan, make each `corpus/gameability/<probeId>.json` answer every actual plan step with the same step ID and interface kind.
+The gameability response blocks use one illustrative `decide` step. After the interaction plan is authored, make each `corpus/gameability/<probeId>.json` answer every actual step of `contract.json`'s plan with the same step ID and interface kind; under a `partitionPlan` the plan file's steps are answered in a second file (see the partition section).
 
 ## Isolate held-out steps from the development plan
 
@@ -161,7 +161,25 @@ A step ID of the form `call-<n>` is refused by `check` under a plan, because its
 }
 ```
 
-`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside a gameability probe, or beside a records evaluator and a rubric, and `mappings` beside an evaluator that reads none. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It names a plan mapping row by its place in `mappings`: a key another row has, an oracle or criterion the held-out view does not declare or another key already binds, and a held-out criterion no key binds. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
+A gameability probe's degenerate response follows the plan too.
+`corpus/gameability/<probeId>.json` answers the steps of `contract.json`, shared and development-only, and `corpus/held-out/gameability/<probeId>.json`, beside the plan, answers the steps of the plan file in the same shape.
+The development and both views answer from the first file, and the held-out and both views also from the second, which a development run never opens, so the arm of each view answers only that view's steps.
+Give every gameability probe both files, each answering every step its own source declares (the steps of `contract.json` in the first, the steps of the plan file in the second), because the both view runs each probe over both.
+Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step, since the held-out view drops the others.
+When every oracle another behavior has reads a development-only step, add an oracle on a shared step to `contract.json` for it, or keep that behavior's gameability probe in the development partition.
+
+<!-- example:held-out-gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "held-out-run": { "stdout": "verdict: pending\n", "stderr": "", "exitCode": 0 }
+  }
+}
+```
+
+`tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside a records evaluator and a rubric, and `mappings` beside an evaluator that reads none. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It names a gameability answer left out, misplaced or unreadable by probe and step ID, and a held-out step by its ID only when the ID has the schema's shape, and a held-out probe whose naive oracle reads a development-only step. It names a plan mapping row by its place in `mappings`: a key another row has, an oracle or criterion the held-out view does not declare or another key already binds, and a held-out criterion no key binds. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out or both preflight. A behavior with two oracles in the both view has no designated oracle there, so its probes are not caught in a run with no `--partition`; run and score the partitions apart.
 
 ## Agent
 

@@ -264,11 +264,11 @@
     },
     {
       "$comment": [
-        "Five projects, five written requests, each its own service: a full request, a minimal one, and three",
-        "evaluation projects (a plan with pr checks, a plan with pr, merge, scheduled and release checks, and an edit of a pipeline that",
-        "already holds a marker job and a hand-written job).",
+        "Six projects, six written requests, each its own service: a full request, a minimal one, and four",
+        "evaluation projects (a plan with pr checks, a plan with pr, merge, scheduled and release checks, an edit of a pipeline that",
+        "already holds a marker job and a hand-written job, and an edit of a pipeline whose publish job waits for the release checks).",
         "",
-        "`fixtures` is the five projects plus their request files. `groundTruth` is the oracle, which the",
+        "`fixtures` is the six projects plus their request files. `groundTruth` is the oracle, which the",
         "harness searches every assembled prompt and every staged file for before it spends a call, the",
         "same guard every sibling suite applies.",
         "",
@@ -334,14 +334,24 @@
         "test/fixtures/ci-eval/evaluation-edit/package.json",
         "test/fixtures/ci-eval/evaluation-edit/src/ledger.js",
         "test/fixtures/ci-eval/evaluation-edit/test-artifacts/ci/ci-pipeline-progress.md",
-        "test/fixtures/ci-eval/evaluation-edit/tests/ledger.test.js"
+        "test/fixtures/ci-eval/evaluation-edit/tests/ledger.test.js",
+        "test/fixtures/ci-eval/evaluation-gate/.github/workflows/test.yml",
+        "test/fixtures/ci-eval/evaluation-gate/.nvmrc",
+        "test/fixtures/ci-eval/evaluation-gate/docs/ci-requirements.md",
+        "test/fixtures/ci-eval/evaluation-gate/evals/notes/ci/evaluation-ci-plan.json",
+        "test/fixtures/ci-eval/evaluation-gate/evals/package.json",
+        "test/fixtures/ci-eval/evaluation-gate/package-lock.json",
+        "test/fixtures/ci-eval/evaluation-gate/package.json",
+        "test/fixtures/ci-eval/evaluation-gate/src/notes.js",
+        "test/fixtures/ci-eval/evaluation-gate/test-artifacts/ci/ci-pipeline-progress.md",
+        "test/fixtures/ci-eval/evaluation-gate/tests/notes.test.js"
       ],
       "groundTruth": ["test/fixtures/ci-eval/ground-truth.json"],
       "contracts": ["test/contracts/ci.contract.json"],
       "thresholds": {
         "maxParseFailures": 0,
         "maxLintFindings": 0,
-        "requestedElementRecall": 0.96,
+        "requestedElementRecall": 0.97,
         "triggerAccuracy": 1,
         "maxUnrequestedElements": 0,
         "maxWorkflowRuleViolations": 0,
@@ -349,7 +359,7 @@
         "maxFixtureMutations": 0
       },
       "repetitions": 2,
-      "caseCount": 5,
+      "caseCount": 6,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
     },

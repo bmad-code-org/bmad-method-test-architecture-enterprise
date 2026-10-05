@@ -7983,6 +7983,128 @@ function checkLayerGitDirectoryUnits() {
 }
 
 /**
+ * A reading with `sealed` directories (Story 1.109): a development run under a partition plan takes the `lstat` size, modification
+ * time and mode of the files under `corpus/held-out/` and reads the bytes of none, in a repository and outside one. A file nobody may open still
+ * reads, an edit still moves the reading, and a path outside the sealed directory is hashed as before.
+ */
+function checkAdopterTreeSealed() {
+  const project = makeProject('tree-sealed');
+  const repository = fs.realpathSync.native(project.repository);
+  const sealed = path.join(repository, 'evals', 'sealed-case', 'corpus', 'held-out');
+  const secret = path.join(sealed, 'answers.json');
+  const open = path.join(repository, 'evals', 'sealed-case', 'corpus', 'open.json');
+  fs.mkdirSync(sealed, { recursive: true });
+  fs.writeFileSync(secret, 'aaaa\n');
+  fs.writeFileSync(open, 'bbbb\n');
+  const read = (directory, options) => JSON.stringify(adopterTreeState(directory, { sharedState: false, ...options }));
+  const held = () => read(repository, { sealed: [sealed] });
+  const settled = held();
+  const later = new Date(Date.now() + 60_000);
+  fs.writeFileSync(secret, 'cccc\n');
+  fs.utimesSync(secret, later, later);
+  check(held() !== settled, 'an edit of a sealed file of the same size left a sealed reading unchanged');
+  const edited = held();
+  fs.writeFileSync(secret, 'a longer answer\n');
+  check(held() !== edited, 'a longer sealed file left a sealed reading unchanged');
+  fs.writeFileSync(secret, 'aaaa\n');
+  fs.utimesSync(secret, later, later);
+  const rewritten = held();
+  fs.writeFileSync(open, 'dddd\n');
+  check(held() !== rewritten, 'an edit outside the sealed directory left a sealed reading unchanged, so it was no longer hashed');
+  fs.writeFileSync(open, 'bbbb\n');
+  // Root opens what its mode denies, so the unopenable cases prove nothing there.
+  const deniesOwner = process.platform !== 'win32' && typeof process.getuid === 'function' && process.getuid() !== 0;
+  if (deniesOwner) {
+    fs.chmodSync(secret, 0);
+    try {
+      let refused = null;
+      try {
+        read(repository, {});
+      } catch (error) {
+        refused = error;
+      }
+      check(refused !== null, 'the control reading opened a file nobody may open, so the sealed case proves nothing');
+      // The sealed reading must not open it: a throw here is the failure.
+      held();
+    } finally {
+      fs.chmodSync(secret, 0o644);
+    }
+    // A directory spelled in another case is the sealed one on a case-insensitive file system, so the sealed set holds for either
+    // spelling: a plan nobody may open under `corpus/Held-Out/` reads by its metadata beside a sealed `corpus/held-out`.
+    const variantRoot = path.join(repository, 'evals', 'variant-case', 'corpus');
+    const variantPlan = path.join(variantRoot, 'Held-Out', 'plan.json');
+    fs.mkdirSync(path.dirname(variantPlan), { recursive: true });
+    fs.writeFileSync(variantPlan, 'plan\n');
+    fs.chmodSync(variantPlan, 0);
+    try {
+      let refused = null;
+      try {
+        read(repository, {});
+      } catch (error) {
+        refused = error;
+      }
+      check(refused !== null, 'the control reading opened a case-variant plan nobody may open, so the variant case proves nothing');
+      check(
+        typeof read(repository, { sealed: [path.join(variantRoot, 'held-out')] }) === 'string',
+        'a sealed directory did not seal its case-variant spelling',
+      );
+    } finally {
+      fs.chmodSync(variantPlan, 0o644);
+    }
+    // Outside a repository the reading is the tree digest, which lists the sealed directory and takes `lstat` metadata alone: one
+    // nobody may list reads by its mode, and one that can be listed and not entered (0o444) reads by the error of each `lstat`.
+    const bare = fs.realpathSync.native(tempDir('tree-sealed-bare'));
+    const bareSealed = path.join(bare, 'corpus', 'held-out');
+    fs.mkdirSync(path.join(bareSealed, 'gameability'), { recursive: true });
+    fs.writeFileSync(path.join(bareSealed, 'plan.json'), 'plan\n');
+    fs.writeFileSync(path.join(bareSealed, 'gameability', 'P-001.json'), 'answers\n');
+    fs.writeFileSync(path.join(bare, 'corpus', 'open.json'), 'open\n');
+    const bareRead = () => read(bare, { sealed: [bareSealed] });
+    const bareSettled = bareRead();
+    fs.writeFileSync(path.join(bareSealed, 'plan.json'), 'plan, edited\n');
+    check(bareRead() !== bareSettled, 'an edit of a sealed file outside a repository left the reading unchanged');
+    for (const [target, denied] of [
+      [path.join(bareSealed, 'plan.json'), 0],
+      [path.join(bareSealed, 'gameability'), 0],
+      [path.join(bareSealed, 'gameability'), 0o444],
+    ]) {
+      const mode = fs.lstatSync(target).mode & 0o7777;
+      fs.chmodSync(target, denied);
+      try {
+        let thrown = null;
+        try {
+          bareRead();
+        } catch (error) {
+          thrown = error;
+        }
+        check(
+          thrown === null,
+          `a sealed path at mode ${denied.toString(8)} (${path.basename(target)}) ended a reading outside a repository: ${thrown?.message}`,
+        );
+      } finally {
+        fs.chmodSync(target, mode);
+      }
+    }
+    // The case-variant spelling outside a repository: the tree digest folds the sealed directory's case the same way.
+    const bareVariant = path.join(bare, 'variant', 'corpus', 'Held-Out', 'plan.json');
+    fs.mkdirSync(path.dirname(bareVariant), { recursive: true });
+    fs.writeFileSync(bareVariant, 'plan\n');
+    fs.chmodSync(bareVariant, 0);
+    try {
+      let thrown = null;
+      try {
+        read(bare, { sealed: [path.join(bare, 'variant', 'corpus', 'held-out')] });
+      } catch (error) {
+        thrown = error;
+      }
+      check(thrown === null, `a sealed directory did not seal its case-variant spelling outside a repository: ${thrown?.message}`);
+    } finally {
+      fs.chmodSync(bareVariant, 0o644);
+    }
+  }
+}
+
+/**
  * The two readings of the adopter's tree (Story 1.112): a confined run (`sharedState: false`) reads the checkout's own `HEAD`,
  * the status and the content of the paths it names, and where the checkout's git commands read their repository from (the git
  * directory it resolves to, its `.git` file, the `core.hooksPath` directory's presence), and no shared git state, so what another
@@ -17653,6 +17775,7 @@ const CASES = [
   { name: 'the shared git state across sessions', body: checkSharedStateAcrossSessions, group: 'confinement' },
   { name: "the evaluation layer's git directory", body: checkLayerGitDirectoryUnits, group: 'confinement' },
   { name: 'the adopter-tree readings of the shared git state', body: checkAdopterTreeModes, group: 'confinement' },
+  { name: 'the adopter-tree reading of a sealed directory', body: checkAdopterTreeSealed, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
   { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
   { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },

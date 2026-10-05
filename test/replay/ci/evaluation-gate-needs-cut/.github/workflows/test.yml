@@ -1,0 +1,143 @@
+# Pipeline for slate-publisher.
+# The test and publish jobs are maintained by the release team. Do not regenerate them.
+
+name: Release Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Maintained by the release team
+    name: 'Unit tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The release team pins Node through .nvmrc on purpose.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: 'Install dependencies'
+        run: npm ci
+
+      - name: 'Run unit tests'
+        run: npm test
+
+  evaluation-pr:
+    # tea-evaluation-plan: evals/notes/ci/evaluation-ci-plan.json
+    name: 'Evaluation (pr)'
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Node version
+        id: node-version
+        run: |
+          floor=22.20.0
+          value=24
+          if [ -f .nvmrc ]; then
+            pinned="$(tr -d 'v \r\n' < .nvmrc)"
+            if printf '%s' "$pinned" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' && [ "$(printf '%s\n' "$floor" "$pinned" | sort -V | head -n 1)" = "$floor" ]; then value="$pinned"; fi
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node-version.outputs.value }}
+
+      - name: Install evaluation tooling
+        run: |
+          npm install --prefix 'evals'
+
+      - name: 'check, compile, seal, replay'
+        run: |
+          npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/notes' --tier pr
+
+      - name: Upload evaluation runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-pr-runs
+          path: evals/notes/runs/
+          if-no-files-found: warn
+          retention-days: 30
+
+  evaluation-release:
+    # tea-evaluation-plan: evals/notes/ci/evaluation-ci-plan.json
+    name: 'Evaluation (release)'
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Node version
+        id: node-version
+        run: |
+          floor=22.20.0
+          value=24
+          if [ -f .nvmrc ]; then
+            pinned="$(tr -d 'v \r\n' < .nvmrc)"
+            if printf '%s' "$pinned" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' && [ "$(printf '%s\n' "$floor" "$pinned" | sort -V | head -n 1)" = "$floor" ]; then value="$pinned"; fi
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node-version.outputs.value }}
+
+      - name: Install evaluation tooling
+        run: |
+          npm install --prefix 'evals'
+
+      - name: 'twin-run, held-out'
+        run: |
+          npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/notes' --tier release
+
+      - name: Upload evaluation runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-release-runs
+          path: evals/notes/runs/
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    # Maintained by the release team
+    name: 'Publish to the registry'
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 'Publish the package'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -90,4 +90,4 @@ List what the target legitimately reads in its registry entry's `systemPaths`: a
 }
 ```
 
-This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system. It lists no `egress` and runs confined. Merge its `registry` entry into the evaluation's registry, then run `check` and rerun development.
+This `evaluation.json` fragment declares the `verdict-rules` directory, the one directory the `verdict` target reads beyond the system. It lists no `egress` and runs confined. Merge its `registry` entry into the evaluation's registry, then run `check` and rerun development.
