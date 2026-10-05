@@ -877,6 +877,41 @@ async function validateCorpus(groundTruth) {
       if (element.contractToken !== null && (typeof element.contractToken !== 'string' || element.contractToken.trim().length === 0)) {
         problems.push(`${elementLabel}: contractToken is neither null nor a non-empty string`);
       }
+      // A contract pattern is the quote-tolerant form of the token.
+      // It is the regex source the contract's oracle reads over the workflow, and the paired scorer tests it with `new RegExp(source)`.
+      // The contract's regex operator accepts only a pattern that begins with ^ and ends with $, so this check refuses any other before compile does.
+      // The pattern states the same claim as its token and its command, so it has to match both.
+      if (element.contractPattern !== undefined) {
+        const pattern = element.contractPattern;
+        if (typeof pattern !== 'string' || pattern.trim().length === 0) {
+          problems.push(`${elementLabel}: contractPattern is declared and is not a non-empty string`);
+        } else if (element.contractToken === null) {
+          problems.push(`${elementLabel}: declares a contractPattern and no contractToken, so there is no literal for it to agree with`);
+        } else if (!pattern.startsWith('^') || !pattern.endsWith('$')) {
+          problems.push(
+            `${elementLabel}: contractPattern is not anchored, and the contract's regex operator accepts only a pattern that begins with ^ and ends with $`,
+          );
+        } else {
+          let compiled = null;
+          try {
+            compiled = new RegExp(pattern);
+          } catch {
+            problems.push(`${elementLabel}: contractPattern is not a regular expression`);
+          }
+          if (compiled !== null) {
+            if (!compiled.test(element.contractToken)) {
+              problems.push(
+                `${elementLabel}: contractPattern does not match its own contractToken ${JSON.stringify(element.contractToken)}`,
+              );
+            }
+            if (typeof element.command === 'string' && !compiled.test(element.command)) {
+              problems.push(
+                `${elementLabel}: contractPattern does not match the command ${JSON.stringify(element.command)} the element requests`,
+              );
+            }
+          }
+        }
+      }
       switch (element.kind) {
         case 'trigger': {
           if (typeof element.event !== 'string' || element.event.length === 0) problems.push(`${elementLabel}: trigger declares no event`);
@@ -1614,8 +1649,8 @@ async function readWorkflow(directory) {
 /**
  * Whether the workflow, read as one string, carries a literal.
  *
- * This is the document-global predicate the ci contract's oracles are paired
- * with. The contract's vocabulary addresses a text artifact as one string, so a
+ * This is the document-global predicate the ci contract's `containment` oracles are paired
+ * with (`workflowHoldsToken` chooses it or `workflowMatches` for each element). The contract's vocabulary addresses a text artifact as one string, so a
  * `containment` oracle can ask whether the document mentions `npm test` and
  * cannot ask whether a run: block invokes it. The harness scores the second
  * question through checkElement; this function answers the first, and
@@ -1627,6 +1662,37 @@ async function readWorkflow(directory) {
  */
 function workflowMentions(text, literal) {
   return String(text).includes(literal);
+}
+
+/**
+ * Whether the workflow, read as one string, matches a `contractPattern` source.
+ *
+ * The contract renders the same source with the vocabulary's `regex` operator.
+ * The operator reads it with no flags, so this reads it with `new RegExp(source)` and none.
+ *
+ * @param {string} text
+ * @param {string} source
+ * @returns {boolean}
+ */
+function workflowMatches(text, source) {
+  return new RegExp(source).test(String(text));
+}
+
+/**
+ * Whether the workflow holds the claim the contract's oracle states for one requested element: its
+ * `contractPattern` where the element has one, else its `contractToken` as a literal.
+ *
+ * A real run quotes folder names and tiers for the shell.
+ * An element whose command a run may quote states a pattern, and its literal stays the unquoted spelling the pattern must also match.
+ *
+ * @param {string} text
+ * @param {{contractToken: string, contractPattern?: string}} element
+ * @returns {boolean}
+ */
+function workflowHoldsToken(text, element) {
+  return typeof element.contractPattern === 'string'
+    ? workflowMatches(text, element.contractPattern)
+    : workflowMentions(text, element.contractToken);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3134,6 +3200,8 @@ module.exports = {
   readWorkflow,
   workflowFromArtifact,
   workflowMentions,
+  workflowMatches,
+  workflowHoldsToken,
   checkElement,
   checkpointFilesOf,
   guardHolds,

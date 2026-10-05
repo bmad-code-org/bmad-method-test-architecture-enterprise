@@ -612,6 +612,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The two ci command oracles hold on the real capture of the evaluation-plan project (Story 1.122, CAP-12).
+  The capture quotes its folder and tier for the shell (`npm install --prefix 'evals'`, `tea-evaluate ci --evaluation 'evals/grader' --tier pr`), and the `containment` oracles of `command-evaluation-install` and `command-evaluation-ci-pr` searched for the unquoted literals.
+  The stored correct run therefore violated both with corroboration `disagrees`, and `KNOWN_UNHELD` in `test/test-probe-corpus.js` listed them.
+  Each element now states a `contractPattern` beside its `contractToken` in `test/fixtures/ci-eval/ground-truth.json`, a fully anchored regular expression that tolerates one pair of single or double quotes and pins the folder and the tier.
+  `tools/generate-contracts.js` renders it with the vocabulary's `regex` operator over the workflow, and the paired scorer `workflowHoldsToken` tests the same source with `new RegExp(source)` and no flags.
+  A workflow that runs `--tier nightly` or `--tier prod`, installs under another prefix, names another evaluation folder or omits either command fails its oracle.
+  `test:contract-oracles` scores nineteen such forms through eval-quality and through the scorer, and `test:evaluate-ci-render` holds the `contractPattern` field to being non-empty, anchored, a regular expression and a match for its own token and command.
+  The clean control P-004 now scores `held` with corroboration `agrees` on both oracles, and `test:probe-corpus` fails a clean control outcome that is anything else.
+  `KNOWN_UNHELD` is empty and its check stays: a listed oracle that holds fails, and the check runs over an empty list on every run.
+  `test/probes/expected-strength.json` moves in the ci corpus digest only; `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated.
 - A development `preflight` or `run` under a `partitionPlan` no longer opens the held-out files while it reads the adopter's tree (Story 1.109, Story 1.112).
   The tree reading that brackets a run hashed every path `git status` named, so a held-out plan or answers file an author was editing (modified or untracked) was opened and a path nobody may open ended the run with exit 12 and an `EACCES` stack.
   Those files now enter the reading by `lstat` size, modification time and mode, so an edit still moves the reading and no byte is read.

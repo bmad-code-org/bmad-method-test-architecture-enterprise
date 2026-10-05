@@ -2534,6 +2534,9 @@ So that a leg that points at the wrong workflow is caught where it is added (CAP
 **Dependencies:** 2.3.
 **Gate:** `test:probe-corpus`, `test:probe-sources`, `test:contract-sources`, `npm test`.
 
+Amended 2026-10-05 in Story 1.122's build: the two oracles hold on the real capture, so every stored correct workflow satisfies every oracle of its set and `KNOWN_UNHELD` is empty.
+`test:probe-corpus` keeps the check that fails a listed oracle which holds and exercises it on every run.
+
 ### Story 1.95: Gate the replay totals, the story count and the lane lists
 
 Added 2026-10-01 in Story 2.3's second review. Several totals that Story 2.3 and its review changed are hand-written and gated by nothing (the stored-output number once printed on the `npm run test:eval-replay` line of `README.md` and the adoption guide was a drift magnet, so Story 2.3's round 4 removed it): the replay corpus counts in `test/README.md` and the header of `test/test-eval-replay.js` (cases, cases that produce a number, constructed cases, captured cases), the story count in the overview of `epics.md` (its intro and the range of appended stories), and the stories listed in the five lane sequences of the same file against the `parallel_lanes` of `sprint-status.yaml` (the 2026-10-03 rebalance and the 2026-10-04 five-lane split moved stories between lanes, so all five lists must hold). The replay counts were stale at the base commit and a count was wrong again after Story 2.3's first push, and no check noticed either time.
@@ -3231,6 +3234,13 @@ So that every stored correct workflow satisfies every oracle of its set and `KNO
 
 **Dependencies:** 1.94.
 **Gate:** `test:probe-corpus`, `test:probe-sources` (which runs `node tools/generate-probes.js --check`), `test:contract-sources`, `test:contract-oracles`, then `npm test`.
+
+Amended 2026-10-05 in Story 1.122's build: the paired scorer is `workflowHoldsToken` in `test/eval-ci.js`, which is `workflowMentions` over a literal `contractToken` and `workflowMatches` (`new RegExp(source)`, no flags) over a `contractPattern`.
+`validateCorpus` refuses a `contractPattern` that is empty, has no `contractToken`, does not begin with `^` and end with `$`, is not a regular expression, or fails to match its own token or its element's command.
+The other three projects' command elements keep their literal tokens (`npm install --prefix`, `--tier pr`), which hold on their stored captures.
+`test:contract-oracles` scores nineteen forms of the two commands through the engine and the scorer.
+`KNOWN_UNHELD` is the empty list, and `knownUnheldProblems` in `test:probe-corpus` exercises the check that fails a listed oracle which holds, so the list can be refilled.
+`cleanControlProblems` holds the third criterion: every engine outcome of a clean control of the four stored-run suites is `held` with corroboration `agrees`.
 
 ### Story 1.123: Score each ci project's stored workflow structurally as well as by its substring oracles
 

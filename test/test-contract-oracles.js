@@ -2993,7 +2993,155 @@ function ciArtifactsOf(directory, expected) {
 }
 
 /**
- * `checkCiOracles`'s oracles are paired with `workflowMentions`, the harness's
+ * The two command oracles of the evaluation-plan project over the forms a run writes them in.
+ *
+ * The real capture quotes the folder and the tier for the shell.
+ * The contract's `regex` oracles therefore tolerate one pair of single or double quotes and still pin the folder and the tier.
+ * Each row here is the capture with its two command lines rewritten (or a whole workflow of one line, to reach the end-of-text branch).
+ * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
+ * A pattern that no longer tolerates a quote, one that matches a deviation, one that matches anything,
+ * and a literal token restored over the pattern all fail here by name.
+ */
+async function checkCiCommandOraclesOnQuotedForms(evaluator) {
+  console.log('\nci.contract.json command oracles over the quoted and the deviating forms of the evaluation-plan capture');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'ci.contract.json'), 'the ci contract');
+  const groundTruth = await loadCiGroundTruth();
+  if (!groundTruth) unreadable('the ci ground truth is missing or not valid JSON');
+  const specs = ciOracleSpecs(groundTruth);
+  const setId = 'evaluation-plan-quarry-grader';
+  const specOf = (elementId) => specs.find((spec) => spec.setId === setId && spec.elementId === elementId);
+  const install = specOf('command-evaluation-install');
+  const ciPr = specOf('command-evaluation-ci-pr');
+  assert(install !== undefined && ciPr !== undefined, `${setId} states both command oracles`);
+  if (install === undefined || ciPr === undefined) return;
+
+  const item = findCases().find((entry) => entry.suite === 'ci' && entry.id === 'ci/evaluation-plan-live-capture');
+  if (item === undefined) unreadable('test/replay/ci holds no evaluation-plan-live-capture');
+  const capture = fs.readFileSync(path.join(item.directory, '.github', 'workflows', 'test.yml'), 'utf8');
+  const installLine = "npm install --prefix 'evals'";
+  const ciPrLine = "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr";
+  assert(
+    capture.includes(installLine) && capture.includes(ciPrLine),
+    'the capture still holds the two command lines these rows rewrite',
+    'a row over a line the capture no longer holds would compare the capture with itself',
+  );
+  const withLines = (installText, ciPrText) => capture.replace(installLine, installText).replace(ciPrLine, ciPrText);
+
+  const rows = [
+    { label: 'the capture as stored (single-quoted)', text: capture, install: true, ciPr: true },
+    {
+      label: 'double-quoted folders and tier',
+      text: withLines(
+        'npm install --prefix "evals"',
+        'npm exec --prefix "evals" -- tea-evaluate ci --evaluation "evals/grader" --tier "pr"',
+      ),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'unquoted folders and tier',
+      text: withLines('npm install --prefix evals', 'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr'),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'a single-quoted tier',
+      text: withLines(installLine, "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier 'pr'"),
+      install: true,
+      ciPr: true,
+    },
+    { label: 'the install command at the end of the file', text: 'run: npm install --prefix evals', install: true, ciPr: false },
+    {
+      label: 'the ci command at the end of the file',
+      text: 'run: tea-evaluate ci --evaluation evals/grader --tier pr',
+      install: false,
+      ciPr: true,
+    },
+    { label: 'no install command', text: withLines('npm ci', ciPrLine), install: false, ciPr: true },
+    { label: 'no ci command', text: withLines(installLine, 'npm test'), install: true, ciPr: false },
+    { label: 'neither command', text: withLines('npm ci', 'npm test'), install: false, ciPr: false },
+    { label: 'another install prefix', text: withLines('npm install --prefix other', ciPrLine), install: false, ciPr: true },
+    { label: 'another quoted install prefix', text: withLines("npm install --prefix 'other'", ciPrLine), install: false, ciPr: true },
+    {
+      label: 'an install prefix that continues the folder name',
+      text: withLines('npm install --prefix evals-other', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'the nightly tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier nightly"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the prod tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier prod"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the quoted prod tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'prod'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an upper-case tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier PR"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the merge tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier merge"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'another evaluation folder',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'other/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an evaluation folder that continues the name',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader2' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+  ];
+
+  const stepId = ciStepId({ id: setId });
+  let evaluated = 0;
+  for (const row of rows) {
+    const results = evaluateOracles(evaluator, contract, {
+      [stepId]: observation({ operationId: CI_OPERATION, exitCode: 0, artifacts: { workflow: { kind: 'text', value: row.text } } }),
+    });
+    for (const [spec, expected, name] of [
+      [install, row.install, 'command-evaluation-install'],
+      [ciPr, row.ciPr, 'command-evaluation-ci-pr'],
+    ]) {
+      const scorer = spec.scorer(row.text);
+      const result = results.get(spec.id);
+      assert(
+        scorer === expected,
+        `${row.label}: the scorer of ${spec.id} (${name}) says ${expected ? 'pass' : 'fail'}`,
+        `scorer says ${scorer}`,
+      );
+      assert(
+        result?.resolution === (expected ? 'true' : 'false'),
+        `${row.label}: ${spec.id} (${name}) resolves ${expected ? 'true' : 'false'}`,
+        `oracle ${describe(result)}`,
+      );
+      evaluated += 1;
+    }
+  }
+  console.log(`  ${colors.dim}${evaluated} oracle evaluation(s) across ${rows.length} forms of the two commands${colors.reset}`);
+}
+
+/**
+ * `checkCiOracles`'s oracles are paired with `workflowHoldsToken`, the harness's
  * document-global predicate, rather than with the row-scored `checkElement`
  * result: see the correspondence comment beside `ciOracleSpecs` in
  * `tools/generate-contracts.js` for why. This reads the workflow text off the
@@ -3060,8 +3208,8 @@ async function checkCiOracles(evaluator) {
         if (scorer === false) seenFalse.add(spec.id);
         assert(
           agrees(result, scorer),
-          `${label}: ${spec.id} (${spec.kind}) agrees with workflowMentions`,
-          `workflowMentions says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+          `${label}: ${spec.id} (${spec.kind}) agrees with workflowHoldsToken`,
+          `workflowHoldsToken says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
         );
         evaluated += 1;
       }
@@ -3166,6 +3314,7 @@ async function main() {
   await checkNfrOracles(evaluator);
   checkNfrUnknownWitness(evaluator);
   await checkCiOracles(evaluator);
+  await checkCiCommandOraclesOnQuotedForms(evaluator);
   checkAtddOracles(evaluator);
 
   console.log('');

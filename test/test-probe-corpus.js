@@ -169,22 +169,19 @@ function diagnosticProblems(suiteId, entry) {
 }
 
 /**
- * Oracles a stored correct run is known not to satisfy, each a defect of the oracle and not of the run.
+ * Oracles a stored correct run is known not to satisfy, each a defect of the oracle.
  *
- * The real capture of the `evaluation-plan-quarry-grader` project quotes the folder names for the shell
- * (`npm install --prefix 'evals'`), which the harness's structural check accepts and a substring oracle over the
- * literal `npm install --prefix evals` cannot. Both oracles read a contract token from
- * `test/fixtures/ci-eval/ground-truth.json`, whose digest `test/probes/ci.probes.json` records and
- * `expected-strength.json` pins through the corpus digest, so closing the defect moves the baseline and is a story
- * of its own (found in Story 1.94, filed with the coordinator).
+ * The list is empty.
+ * Story 1.122 closed its two entries.
+ * The real capture of the `evaluation-plan-quarry-grader` project quotes the folder names for the shell (`npm install --prefix 'evals'`).
+ * The oracles of `command-evaluation-install` and `command-evaluation-ci-pr` now read the quote-tolerant `contractPattern` of `test/fixtures/ci-eval/ground-truth.json`, which holds on it.
  *
- * The entry is exact. A listed oracle must resolve as violated, and it stops being listed in the change that fixes it:
- * a listed oracle that holds fails here, so the exception cannot outlive the defect.
+ * The machinery stays.
+ * An entry is `{ suiteId, setId, elementId }`, exact: a listed oracle must resolve as violated.
+ * It stops being listed in the change that fixes it, since a listed oracle that holds fails `storedRunProblems`, so an exception cannot outlive its defect.
+ * `knownUnheldProblems` exercises both branches on every run, so the check cannot be removed while the list is empty.
  */
-const KNOWN_UNHELD = [
-  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-install' },
-  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-ci-pr' },
-];
+const KNOWN_UNHELD = [];
 
 /**
  * The suites whose evidence builder scores a stored run as the correct one (Story 1.94), and so must expose the oracle
@@ -229,11 +226,11 @@ function storedRunExposureProblems(suite) {
  * The `KNOWN_UNHELD` check runs whatever the builder exposes: a builder with no specs resolves everything `held`,
  * which `storedRunExposureProblems` reports and which also trips every "holds now" entry here.
  */
-function storedRunProblems(suite, scored) {
+function storedRunProblems(suite, scored, unheld = KNOWN_UNHELD) {
   if (!STORED_RUN_SUITES.has(suite.id)) return [];
   const specs = suite.evidence.storedRunSpecs ?? [];
   const problems = [];
-  const known = KNOWN_UNHELD.filter((entry) => entry.suiteId === suite.id);
+  const known = unheld.filter((entry) => entry.suiteId === suite.id);
   const seen = new Set();
   for (const entry of scored) {
     for (const disposition of entry.record.oracleDispositions) {
@@ -254,6 +251,75 @@ function storedRunProblems(suite, scored) {
       problems.push(`${suite.id}: ${item.elementId} on ${item.setId} holds now, so it no longer belongs in KNOWN_UNHELD`);
     }
   }
+  return problems;
+}
+
+/**
+ * The outcomes the engine scored for a clean control that are not `held` with corroboration `agrees`, one problem each.
+ *
+ * A record's disposition is the scorer's answer, and the engine resolves the oracle's check over the same stored run.
+ * A disposition that the check does not bear out reads `disagrees`, and a `violated` oracle with no defect finding trips the engine's `disposition-contradicts-evidence` rule.
+ * Both are diagnostic and move no verdict, so the baseline never shows them.
+ * Before Story 1.122 the two command oracles of the evaluation-plan project read `disagrees` here.
+ * The oracles of `KNOWN_UNHELD` are exempt, since a listed oracle is violated by definition.
+ */
+function cleanControlProblems(suite, scored, unheld = KNOWN_UNHELD) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const known = unheld.filter((entry) => entry.suiteId === suite.id);
+  const problems = [];
+  for (const entry of scored.filter((candidate) => candidate.probe.expectedClean)) {
+    for (const outcome of entry.result.artifact.outcomes) {
+      if (outcome.disposition === 'held' && outcome.corroboration === 'agrees') continue;
+      const spec = specs.find((candidate) => candidate.id === outcome.oracleId);
+      if (known.some((item) => item.setId === spec?.setId && item.elementId === spec?.elementId)) continue;
+      problems.push(
+        `${suite.id} ${entry.probe.probeId}: oracle ${outcome.oracleId} scored ${outcome.disposition} with corroboration ${outcome.corroboration} on the clean control, which the stored correct run should hold`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * `storedRunProblems` held to both of its `KNOWN_UNHELD` branches over this suite's own records, whatever the list holds.
+ *
+ * The list is empty, so neither branch would run otherwise and a change that removed one would pass.
+ * One oracle of the suite is listed against the records as they are (every oracle holds, so the entry must be reported as holding now).
+ * Then the same oracle is flipped to `violated` in one record, which must be reported when unlisted and silent when listed.
+ */
+function knownUnheldProblems(suite, scored) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const first = scored[0]?.record.oracleDispositions.find((disposition) => specs.some((spec) => spec.id === disposition.oracleId));
+  const spec = specs.find((candidate) => candidate.id === first?.oracleId);
+  if (spec === undefined)
+    return [`${suite.id}: no scored record carries an oracle of storedRunSpecs, so the KNOWN_UNHELD branches cannot be exercised`];
+  const listed = [{ suiteId: suite.id, setId: spec.setId, elementId: spec.elementId }];
+  const flipped = scored.map((entry, index) =>
+    index === 0
+      ? {
+          ...entry,
+          record: {
+            ...entry.record,
+            oracleDispositions: entry.record.oracleDispositions.map((disposition) =>
+              disposition.oracleId === spec.id ? { ...disposition, disposition: 'violated' } : disposition,
+            ),
+          },
+        }
+      : entry,
+  );
+  const problems = [];
+  const holds = storedRunProblems(suite, scored, listed);
+  if (!holds.some((problem) => problem.includes('holds now'))) {
+    problems.push(`${suite.id}: an oracle listed in KNOWN_UNHELD that holds on every stored run was not reported`);
+  }
+  const unlisted = storedRunProblems(suite, flipped, []);
+  if (!unlisted.some((problem) => problem.includes(`oracle ${spec.id} no longer holds`))) {
+    problems.push(`${suite.id}: a violated oracle absent from KNOWN_UNHELD was not reported`);
+  }
+  const exempt = storedRunProblems(suite, flipped, listed).filter((problem) => problem.includes(`oracle ${spec.id} `));
+  if (exempt.length > 0) problems.push(`${suite.id}: a violated oracle listed in KNOWN_UNHELD was reported: ${exempt.join('; ')}`);
   return problems;
 }
 
@@ -281,7 +347,7 @@ const WRONG_RUN_CANNOT_FAIL = [
  * kinds that keep answering from what they read: test-design's projection-coherence reads the projection alone, so it
  * measures. It holds with the projection intact and is violated when the read is repeated with the projection's
  * `design` key dropped, so the branch is held in both directions. The ci scorer is a
- * substring search over the workflow and refuses nothing, so its entry is `null`.
+ * substring or pattern search over the workflow and refuses nothing, so its entry is `null`.
  *
  * A leg without an entry fails: the run-measured oracle of a set is failed only by a refusal of that set's run, so
  * every leg needs one for its oracle to stay pinned.
@@ -335,7 +401,7 @@ async function violatedUnder(suite, probe, storedCase, options = {}) {
  *
  * - Rotation. Leg i reads leg (i + 1) mod n, so every set reads a run other than its own. A set follows the run when
  *   an oracle that holds on its own run is violated in the rotated one. The identity record leaves the oracles of
- *   `KNOWN_UNHELD` out of that baseline, since the correct run already violates them.
+ *   `KNOWN_UNHELD` (none today) out of that baseline, since the correct run already violates them.
  * - One leg at a time through every other stored case of the suite. This is what a `CI_CORRECT_RUNS` row pointed at
  *   another project's workflow or at a stored deviation looks like to the builder.
  * - For test-design, a projection with its `design` key dropped, which only the projection-coherence oracles read.
@@ -953,6 +1019,8 @@ async function main() {
     for (const message of outcome.sealed.schemaProblems) problems.push(`${suite.id}: SealedEvaluatorBrief${message}`);
     problems.push(
       ...storedRunProblems(suite, outcome.scored),
+      ...cleanControlProblems(suite, outcome.scored),
+      ...knownUnheldProblems(suite, outcome.scored),
       ...storedRunExposureProblems(suite),
       ...(await wrongRunProblems(suite)),
       ...(await unknownOracleProblems(suite)),

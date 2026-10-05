@@ -1303,6 +1303,10 @@ The operator also accepts only a fully anchored pattern (`AnchoredPattern` in `e
 | A loosened pattern does not pass a workflow without it       | A scratch copy of a workflow that omits the install command fails O-031 through the paired scorer                                                                                                                                                    | Corpus | P1  | A pattern that matches any workflow leaves the omitted command passing    |
 | P-004's record carries no `disposition-contradicts-evidence` | Score the clean control; O-031 and O-032 resolve `held` with corroboration `agrees` and the record names no contradiction                                                                                                                            | Corpus | P1  | Leaving the dispositions `violated` with no defect finding trips the rule |
 
+Amended 2026-10-05 in Story 1.122's build: the second row is the table of nineteen forms in `test:contract-oracles` (`checkCiCommandOraclesOnQuotedForms`), each resolved by the engine and by the paired scorer, and `validateCorpus` guards the `contractPattern` field (`checkCorpusGuards` in `test:evaluate-ci-render`).
+The fourth row holds as `test:probe-corpus` failing a listed oracle that holds, which `knownUnheldProblems` exercises over an empty list, so a leftover entry fails and the check cannot be removed unseen.
+The sixth row is `cleanControlProblems` in `test:probe-corpus`: every engine outcome of a clean control of the four stored-run suites is `held` with corroboration `agrees`.
+
 ### Story 1.123: Score each ci project's stored workflow structurally as well as by its substring oracles
 
 Added 2026-10-03 in Story 1.94's review. Levels: corpus, static. Files: `test/lib/probe-scoring.js` (`ciEvidence`), `test/test-probe-corpus.js`, `test/eval-ci.js` (`scoreRun`, `checkElement`), `tools/generate-contracts.js` (the burn-in token), `test/probes/README.md`.
@@ -1580,6 +1584,8 @@ Amended 2026-10-03 in Story 1.94: the work covers the trace, nfr, test-design an
 | A wrong `CI_CORRECT_RUNS` row fails                       | `storedRunProblems` names the oracle that no longer holds; observed with the third project's row at another project's workflow in a scratch copy                                                                                                 | Replay | P0  | The unchanged leg passes the wrong row, which the case observes                                                              |
 | `expected-strength.json` is unchanged                     | `test:probe-corpus` over the committed file; two oracles the real capture fails are listed in `KNOWN_UNHELD` and fail the check once they hold                                                                                                   | Static | P1  | A scorer that disagrees with a correct workflow fails `storedRunProblems`                                                    |
 | Other suites' builders read a stored run through a scorer | Search `test/lib/probe-scoring.js` for fixed dispositions over a stored run; trace, nfr and test-design are scored, test-review measures its stored verdicts (payload and exit code included), fragment selection and routing read no stored run | Static | P2  | A builder left on a constant fails its `wrongRunProblems` case                                                               |
+
+Amended 2026-10-05 in Story 1.122's build: no oracle is listed in `KNOWN_UNHELD` any more, and `knownUnheldProblems` exercises the check that fails a listed oracle which holds.
 
 ### Story 1.95: Gate the replay totals, the story count and the lane lists
 

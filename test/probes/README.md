@@ -166,7 +166,7 @@ probes in `expected-strength.json`.
 ## What a stored run's dispositions say
 
 The trace, nfr, test-design and ci records score a stored run as the correct run of its set or project.
-Each oracle's disposition comes from the scorer `tools/generate-contracts.js` pairs with it (the harness's `scoreRun` for trace, nfr and test-design, `workflowMentions` for ci), applied to the stored run the record carries for that oracle's own set.
+Each oracle's disposition comes from the scorer `tools/generate-contracts.js` pairs with it (the harness's `scoreRun` for trace, nfr and test-design, `workflowHoldsToken` for ci: `workflowMentions` over a literal token, `workflowMatches` over an element's `contractPattern`), applied to the stored run the record carries for that oracle's own set.
 The test-review record measures its stored verdict: the registry-row and scope oracles from what the harness measured, the verdict-payload oracle from the fields the verdict carries, and the exit-code oracle from the exit code its recommendation maps to.
 The fragment selection and routing records read no stored run; they construct the answer they score, and the routing record applies the whole-body scorer to the answer it constructed.
 A record that carries no run of a set (a defect probe carries only the project it plants a defect on) leaves that set's oracles at `held`, since there is nothing to read.
@@ -200,9 +200,11 @@ The other 35 pass through, each read through the row of its own project: `evalua
 The oracle for the burn-in job (`burn-in`) is satisfied by the comment `# Weekly burn-in on Sundays`, which is why `full-burn-in-missing` passes through.
 The harness's `checkElement` reads these structures, and Story 1.123 applies it to each `CI_CORRECT_RUNS` workflow.
 
-Two ci oracles do not hold on the real capture of the evaluation-plan project: `command-evaluation-install` and `command-evaluation-ci-pr` search for the literal command, and the capture quotes the folder names for the shell.
-The engine already resolves both to false with corroboration `disagrees` on the stored run (the disposition used to be `held` against a false check; it is `violated` with no defect finding now, which the engine's `disposition-contradicts-evidence` rule reads the same way), and no verdict moves.
-`KNOWN_UNHELD` in `test/test-probe-corpus.js` lists exactly those two and fails when either one holds, so the list ends with the defect (Story 1.122).
+The real capture of the evaluation-plan project quotes its folder names and its tier for the shell (`npm install --prefix 'evals'`, `tea-evaluate ci --evaluation 'evals/grader' --tier pr`).
+The oracles of `command-evaluation-install` and `command-evaluation-ci-pr` therefore state a `contractPattern` beside the `contractToken` in `test/fixtures/ci-eval/ground-truth.json`, rendered with the vocabulary's `regex` operator and tested by the paired scorer with `new RegExp(source)`.
+Each pattern tolerates one pair of single or double quotes around the folder and the tier and pins both: `--tier nightly`, `--tier prod`, another folder, another prefix and an omitted command fail their oracle.
+`test:contract-oracles` scores nineteen forms of the two commands through eval-quality and through the scorer, and every stored correct workflow satisfies every oracle of its set.
+`KNOWN_UNHELD` in `test/test-probe-corpus.js` is empty, and `storedRunProblems` fails a listed oracle that holds, a check `test:probe-corpus` exercises on every run so the list can be refilled.
 
 ## What the vocabulary cannot say
 
@@ -246,7 +248,7 @@ because performance states no target. `tools/generate-probes.js` points that pro
 and says so, and the harness is where that domain's status is actually scored.
 
 The ci contract reaches the same shape from the request side. Its oracles are one substring claim per
-requested or forbidden element, so each of the three planted probes (a missing trigger, a missing
+requested or forbidden element (two of the evaluation-plan project's are quote-tolerant regex claims), so each of the three planted probes (a missing trigger, a missing
 permission, the full-request template copied onto the minimal project) has an oracle of its own that a
 run producing the plant would violate directly; nothing here needed the gate-oracle workaround nfr's
 third plant does, because a missing element and a forbidden one are each their own claim rather than a
