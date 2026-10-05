@@ -68,7 +68,8 @@ The baseline records the three pre-flights as `passed`.
 ## Code Map
 
 - `tools/generate-probes.js`: the three ci manifestation witnesses in `buildCiProbes`, the ci rationales (each ends with `PLANT_REPORTED_NOTE`), the cycle comment, and the note above `PLANT_REPORTED_NOTE`.
-- `test/test-ci-qualification.js`: declares `plant-reported`, resolves each witness over an absent workflow and over the full project's correct pipeline, and states the direction in its header.
+- `test/test-ci-qualification.js`: declares `plant-reported`, resolves each witness over an absent workflow and P-003's over the full project's correct pipeline (the emitted probes and the committed file, each required to resolve `silent`), and states the direction in its header.
+  `test:ci-qualification` also resolves each ci witness over an absent workflow, and P-003's over the full project's correct pipeline, which pre-flight drops for P-001 and P-002 because their fault leg sends the `witness-github-actions` request; so those shapes are held without a leg cache.
 - `test/lib/qualification-suite.js`: the `gap-read` label and its branch are gone; the direction check holds a corpus to `plant-reported`.
 - Regenerated: `test/probes/ci.probes.json`, `test/probes/expected-strength.json` (the three ci pre-flight records, their `basis`, the ci corpus digest). `test/contracts/ci.contract.json` is byte-identical, since the witnesses live on the probes.
 - `docs/explanation/eval-quality-command-adapter.md`, `test/probes/README.md`, `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `ARCHITECTURE-SPINE.md`, `sprint-status.yaml` (row 1.121 `review`).
@@ -87,7 +88,8 @@ The baseline records the three pre-flights as `passed`.
 
 1. **The leg cache came from the ci stub agent.**
    The worktree had no `test/eval-artifacts/preflight-cache`, and this build runs no live session.
-   A scratch driver (under the scratchpad, never committed) ran each pre-flight leg of the ci suite through `cachingPort` with the ci stub agent (`test/fixtures/ci-runner/stub-agent.js`, the replay corpus's correct run) as a `custom` agent, and `nothing` mode for the alternate-platform leg, which is the observation a real run gives (the declared artifact `absent`).
+   A scratch driver under the scratchpad ran each pre-flight leg of the ci suite through `cachingPort` with the ci stub agent (`test/fixtures/ci-runner/stub-agent.js`, the replay corpus's correct run) as a `custom` agent, and `nothing` mode for the alternate-platform leg, which is the observation a real run gives (the declared artifact `absent`).
+   The repository does not hold the driver or the cache.
    The cache keys are taken before the agent is merged into the request, so they equal the live keys.
    On the untouched tree the stub-built cache reproduces the recorded baseline exactly (see Reproduction), which is what makes it a fair stand-in for the live cache.
    The first attempt, with the correct run on both witness legs, failed `input-sensitivity` as well, because the two witness legs then answered alike; the real alternate-platform leg writes nothing, so the driver does too.
@@ -119,9 +121,11 @@ The baseline records the three pre-flights as `passed`.
    The kit's check reads each committed witness over both stored artifacts and fails any witness that does not fire on the clean arm and stay silent on the mutated one, so a witness that reads the other direction fails the suite with the two resolutions in the message.
 7. **A static read of the two clean legs.**
    The pre-flight verdict needs a leg cache that only a live run fills, so nothing in `npm test` would fail if P-003's positive operand were removed (the kit's direction check cannot tell the flipped `not` from the final shape: both fire on the correct pipeline and are silent on the twin).
-   `test:ci-qualification` resolves each emitted witness over an `absent` workflow observation and, for each probe whose fault-leg request differs from the contract's `witness-github-actions` request, over the full project's correct pipeline, and fails when it fires on either.
+   `test:ci-qualification` resolves each witness over an `absent` workflow observation and, for each probe whose fault-leg request differs from the contract's `witness-github-actions` request, over the full project's correct pipeline, and fails when either resolution is anything but `silent`.
+   The reads run over the probes the builder emits and over the committed `test/probes/ci.probes.json`, since pre-flight reads the committed file and a hand edit of it would otherwise pass.
    P-001 and P-002 send that request, so pre-flight drops the leg as having answered alike and the read is skipped for them; the skip is keyed on the deep equality of the two requests, so a prompt that drifts runs the read.
    Those are the two clean legs `seeded-faults-scoped` examines, so the check fails on the same witnesses pre-flight fails them on.
+   P-003's silence on the `witness-github-actions` leg rests on the full project's run keeping its requested burn-in job, which the full project's own oracle requires; a witness with more `not` operands over other forbidden tokens would harden a case that the full project's contract oracles fail first, so the witness stays as it is.
 8. **`expected-strength.json` moves a little further than the brief's list: the `basis` line.**
    The three records drop `"pre-flight verdict did not pass"` from `basis`, a consequence of the pre-flight passing and inside the three ci pre-flight records.
    Every other field of the three records, and every field of every other record, is unchanged.
@@ -148,29 +152,32 @@ After the change the same command prints `passed` for all four, the verdicts and
 
 Each revert was applied once to a scratch copy of the final tree (the committed tree exported with `git archive`, a scratch git repository for the suite's status guard, the leg cache copied in, `node_modules` linked) under the scratchpad directory, the named check run, the failure recorded and the file restored.
 
-| Revert (the one edit)                                                             | Check run                                           | Observed                                                                                                     |
-| --------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| the `not` restored in P-001's witness (committed probe file)                      | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-001: pre-flight failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                |
-|                                                                                   | `test:ci-qualification`                             | 1 of 456 checks fail: P-001's witness is silent on the clean arm and fires on the mutated artifact           |
-| the `not` restored in P-002's witness                                             | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-002: ... failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                       |
-|                                                                                   | `test:ci-qualification`                             | 1 of 456 checks fail: the same direction failure                                                             |
-| P-003's old witness (containment of `burn-in`)                                    | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: ... failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                       |
-|                                                                                   | `test:ci-qualification`                             | 1 of 456 checks fail: the direction failure                                                                  |
-| P-003's flipped containment (`not` over `burn-in`)                                | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: pre-flight failed: seeded-faults-scoped, recorded passed`                                    |
-| P-003 without its `not` (containment of `npm test` alone)                         | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: pre-flight failed: seeded-faults-scoped`                                                     |
-|                                                                                   | `test:ci-qualification`                             | 1 of 456 checks fail: the witness fires on the clean arm and on the mutated artifact                         |
-| all three old witnesses (the `gap-read` set)                                      | `test:ci-qualification`                             | 3 of 456 checks fail, one per probe, each naming the direction and the declared `plant-reported`             |
-| the generator's P-001 and P-002 with the `not` restored                           | `test:ci-qualification`                             | 2 of 456 fail: both witnesses fire when the run wrote no workflow                                            |
-|                                                                                   | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                 |
-| the generator's P-003 without the `npm test` operand                              | `test:ci-qualification`                             | 1 of 456 fails: the witness fires when the run wrote no workflow                                             |
-|                                                                                   | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                 |
-| the generator's P-001 and P-002 fault-leg prompt changed by one character         | `test:ci-qualification`                             | 2 of 458 fail: both witnesses fire on the full project's correct pipeline, which the read now covers         |
-| the generator's P-003 as a bare containment of `burn-in`                          | `test:ci-qualification`                             | 1 of 456 fails: the witness fires on the full project's correct pipeline                                     |
-|                                                                                   | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                 |
-| `expected-strength.json` with the three ci pre-flight records as on `origin/main` | `eval-contract-strength.js --suite ci --from-cache` | exit 2: three pre-flight outcomes moved, `passed` against `failed: seeded-fault-fired, seeded-faults-scoped` |
-|                                                                                   | `test:probe-corpus`                                 | fails on the ci `corpusDigest` (recorded `fa5c71f8`, measured `4358c3a1`)                                    |
+| Revert (the one edit)                                                                          | Check run                                           | Observed                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the `not` restored in the committed P-001 witness (generator untouched)                        | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-001: pre-flight failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                                                                        |
+|                                                                                                | `test:ci-qualification`                             | 2 of 459 checks fail: P-001's direction check, and `P-001 (committed): the witness is not silent when the run wrote no workflow`                                     |
+| the `not` restored in the committed P-002 witness                                              | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-002: ... failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                                                                               |
+|                                                                                                | `test:ci-qualification`                             | 2 of 459 fail: the direction check and `P-002 (committed): ... when the run wrote no workflow`                                                                       |
+| the committed P-003 witness as the old containment of `burn-in`                                | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: ... failed: seeded-fault-fired, seeded-faults-scoped, recorded passed`                                                                               |
+|                                                                                                | `test:ci-qualification`                             | 2 of 459 fail: the direction check and `P-003 (committed): the witness is not silent on the full project's correct pipeline`                                         |
+| the committed P-003 witness hand-edited to `not(containment burn-in)`, generator untouched     | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: pre-flight failed: seeded-faults-scoped, recorded passed`                                                                                            |
+|                                                                                                | `test:ci-qualification`                             | 1 of 459 fails: `P-003 (committed): the witness is not silent when the run wrote no workflow`; the direction check passes, since the shape is silent on the twin     |
+| the committed P-003 witness as a containment of `npm test` alone                               | `eval-contract-strength.js --suite ci --from-cache` | exit 2: `P-003: pre-flight failed: seeded-faults-scoped`                                                                                                             |
+|                                                                                                | `test:ci-qualification`                             | 2 of 459 fail: the direction check (fires on both artifacts) and `P-003 (committed): ... not silent on the full project's correct pipeline`                          |
+| all three committed witnesses as the old `gap-read` set                                        | `test:ci-qualification`                             | 6 of 459 fail: one direction failure and one committed clean-leg failure per probe                                                                                   |
+| the generator's P-001 and P-002 with the `not` restored                                        | `test:ci-qualification`                             | 2 of 459 fail: `P-001 (emitted)` and `P-002 (emitted)` are not silent when the run wrote no workflow                                                                 |
+|                                                                                                | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                                                                         |
+| the generator's P-003 without the `npm test` operand                                           | `test:ci-qualification`                             | 1 of 459 fails: `P-003 (emitted)` is not silent when the run wrote no workflow                                                                                       |
+|                                                                                                | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                                                                         |
+| the generator's P-003 as a bare containment of `burn-in`                                       | `test:ci-qualification`                             | 1 of 459 fails: `P-003 (emitted)` is not silent on the full project's correct pipeline                                                                               |
+|                                                                                                | `test:probe-sources`                                | fails: `test/probes/ci.probes.json differs from its sources`                                                                                                         |
+| the generator's P-001 and P-002 fault-leg prompt changed by one character                      | `test:ci-qualification`                             | 2 of 461 fail: both emitted witnesses are not silent on the full project's correct pipeline, which the read now covers                                               |
+| the absent-workflow read given an observation the arm resolves `inconclusive` (all six probes) | `test:ci-qualification`                             | 6 of 459 fail (three emitted, three committed): not silent when the run wrote no workflow; the same scratch file with the comparison `!== 'fires'` passes 459 of 459 |
+| `expected-strength.json` with the three ci pre-flight records as on `origin/main`              | `eval-contract-strength.js --suite ci --from-cache` | exit 2: three pre-flight outcomes moved, `passed` against `failed: seeded-fault-fired, seeded-faults-scoped`                                                         |
+|                                                                                                | `test:probe-corpus`                                 | fails on the ci `corpusDigest` (recorded `fa5c71f8`, measured `4358c3a1`)                                                                                            |
 
-Without the added clean-leg reads, the flipped containment of `burn-in` (row 4) passes `test:ci-qualification`, which is why those reads exist (decision 7); the rows against the generator are the ones that exercise them.
+The flipped containment of `burn-in` in the committed file passes the direction check, so the clean-leg reads over the committed probes are what fail it (row 4); before the reads covered the committed file, only a hand edit of the generator was caught.
+The inconclusive row is a scratch edit of the test's own observation, since no witness shape the vocabulary offers resolves `inconclusive` over an absent artifact (containment, regex, equality, existence and `not` of each resolve `silent` or `fires` there); it shows that the comparison is strict.
 
 ## Gates
 
@@ -179,12 +186,12 @@ No full local `npm test`: the hook and CI carry the chain.
 Local, macOS, on the final tree:
 
 - `node test/eval-contract-strength.js --suite ci --from-cache`: matches the recorded outcomes.
-- `test:ci-qualification` (456 checks), `test:probe-corpus`, `test:probe-sources` (15 corpus files), `test:contract-sources` (16 contracts), `test:contracts`, `test:contract-oracles` (9,184 checks), `test:eval-ci-data`, `test:eval-replay` (185 passed, 0 moved).
+- `test:ci-qualification` (459 checks), `test:probe-corpus`, `test:probe-sources` (15 corpus files), `test:contract-sources` (16 contracts), `test:contracts`, `test:contract-oracles` (9,184 checks), `test:eval-ci-data`, `test:eval-replay` (185 passed, 0 moved).
 - `git diff -- package.json package-lock.json` is empty.
 
 ## Build review
 
-One pass of a general-purpose review subagent over the commit, read only, in place of `/bmad-code-review`.
+One pass of a general-purpose review subagent over the commit, read only.
 It found the acceptance criteria met and the witness shapes correct against eval-quality's pre-flight reducer, and four items:
 
 | Finding                                                                                                            | Verdict | Route                                                                                                                                        |
@@ -195,3 +202,10 @@ It found the acceptance criteria met and the witness shapes correct against eval
 | The record ended on a placeholder                                                                                  | valid   | Fixed here: this section                                                                                                                     |
 
 The planning documents keep their Story 1.99 paragraphs as history, each followed by the dated 2026-10-04 amendment.
+
+Fix round 1 (coordinator review and CodeRabbit):
+
+- The clean-leg reads now run over the committed `ci.probes.json` as well as the emitted probes, and both require `silent`.
+- Prose that said every witness is read over the full project's pipeline now says P-003's is, and why P-001 and P-002 are not.
+- The CHANGELOG entry, the Story 1.99 entry and the amendments split into one sentence per line.
+- P-003's witness is unchanged: its silence on the `witness-github-actions` leg rests on the full project's run keeping its requested burn-in job (decision 7).

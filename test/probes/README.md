@@ -69,7 +69,8 @@ The `all` carries the positive containment because the alternate-platform leg wr
 A bare containment of `burn-in` is silent on the minimal project's correct run and fires on the full project's, so it fails `seeded-fault-fired` and `seeded-faults-scoped`.
 The ci pre-flight of all four probes passes in `expected-strength.json`, and the verdict and exit code of every probe are as they were.
 The qualification suites resolve each committed probe's witness over both stored artifacts and hold each corpus to `plant-reported`.
-`test:ci-qualification` also resolves the ci witnesses over the two clean legs pre-flight reads (no workflow written, and the full project's correct pipeline), so the shapes above are held without a leg cache.
+`test:ci-qualification` also resolves each ci witness over an absent workflow, and P-003's over the full project's correct pipeline, which pre-flight drops for P-001 and P-002 because their fault leg sends the `witness-github-actions` request; so those shapes are held without a leg cache.
+The reads run over the probes the builder emits and over the committed probe file, which is the one pre-flight reads.
 `npm run test:test-design-qualification`, `test:test-review-qualification`, `test:trace-qualification`, `test:nfr-qualification` and `test:ci-qualification` plant each failing step.
 
 ## The routing corpora carry no defect probe

@@ -25,8 +25,11 @@
  *   element the twin gets wrong, fails this suite.
  * - Pre-flight's `seeded-faults-scoped` also reads the witness over the legs that answered another question than the fault leg: the
  *   alternate-platform leg writes no workflow (the artifact is absent), and the full project's leg writes the full project's correct
- *   pipeline. The witness must be silent on both, so a `not` over a containment (true on an absent artifact) or a bare containment of the
- *   forbidden job (true on the full pipeline) fails here the way it fails pre-flight, which needs a leg cache a live run fills.
+ *   pipeline. The witness must be silent on the absent workflow for every probe, and on the full project's correct pipeline for P-003,
+ *   whose request differs from that leg's (P-001 and P-002 send the same request, so pre-flight drops the leg). A `not` over a containment
+ *   (true on an absent artifact) or a bare containment of the forbidden job (true on the full pipeline) fails here the way it fails
+ *   pre-flight, which needs a leg cache a live run fills. The reads run over the probes the builder emits and over the committed
+ *   `ci.probes.json`, the file pre-flight reads.
  *
  * Usage: node test/test-ci-qualification.js
  */
@@ -75,6 +78,34 @@ async function ownElement({ check, contract, corpusArm, probes }) {
       /^\n {2}burn-in:\n(?: {4,}[^\n]*\n)+$/.test(twin.slice(reference.length)),
   };
   const fullCorrectPipeline = fs.readFileSync(WORKFLOW('full-correct-pipeline'), 'utf8');
+  // The legs of the operation that did not receive the fault leg's request: no workflow written, and the full project's correct run.
+  // Pre-flight reads the committed probe file, so the reads run over it as well as over what the builder emits.
+  const witnessLeg = contract.permittedInterfaces
+    .flatMap((iface) => iface.operations)
+    .flatMap((operation) => operation.sensitivityWitness?.legs ?? [])
+    .find((leg) => leg.legId === 'witness-github-actions');
+  check(witnessLeg !== undefined, 'the contract declares no witness-github-actions leg');
+  const checkCleanLegs = (label, probe) => {
+    const witnessOn = (observationOf) =>
+      witnessArm({
+        contract,
+        witness: probe.defects[0].manifestationWitness,
+        operationId: CORPORA.ci.operationId,
+        observationOf,
+      })({ text: '' });
+    check(
+      witnessOn(() => ({ exitCode: 0, artifacts: { workflow: { kind: 'absent' } } })) === 'silent',
+      `${label}: the witness is not silent when the run wrote no workflow, which is the alternate-platform leg's observation`,
+    );
+    // A probe whose fault leg sends the request of the `witness-github-actions` leg is dropped from the clean legs by pre-flight (it answered
+    // alike), so only a probe with another request has that leg read against its witness.
+    if (!isDeepStrictEqual(probe.defects[0].manifestationWitness.inputs, witnessLeg?.inputs)) {
+      check(
+        witnessOn(() => ({ exitCode: 0, artifacts: { workflow: { kind: 'text', value: fullCorrectPipeline } } })) === 'silent',
+        `${label}: the witness is not silent on the full project's correct pipeline, which is a clean leg of the same operation`,
+      );
+    }
+  };
   check(probes.length === 3, `the builder emitted ${probes.length} controlled-mutation probe(s) for the three plants`);
   for (const probe of probes) {
     const { baselinePassEvidence, mutatedFailEvidence, mutationOperator } = probe.qualification;
@@ -94,36 +125,17 @@ async function ownElement({ check, contract, corpusArm, probes }) {
       `the twin of ${probe.probeId} (${mutationOperator}) differs from ${baselinePassEvidence.path} as ${JSON.stringify(difference)}; the named edit is another`,
     );
     const designated = contract.behaviors.find((behavior) => behavior.id === probe.behaviorId)?.oracles[0];
-    // The legs of the operation that did not receive the fault leg's request: no workflow written, and the full project's correct run.
-    const witnessOn = (observationOf) =>
-      witnessArm({
-        contract,
-        witness: probe.defects[0].manifestationWitness,
-        operationId: CORPORA.ci.operationId,
-        observationOf,
-      })({ text: '' });
-    check(
-      witnessOn(() => ({ exitCode: 0, artifacts: { workflow: { kind: 'absent' } } })) !== 'fires',
-      `${probe.probeId}: the witness fires when the run wrote no workflow, which is the alternate-platform leg's observation`,
-    );
-    // A probe whose fault leg sends the request of the `witness-github-actions` leg is dropped from the clean legs by pre-flight (it answered
-    // alike), so only a probe with another request has that leg read against its witness.
-    const witnessLeg = contract.permittedInterfaces
-      .flatMap((iface) => iface.operations)
-      .flatMap((operation) => operation.sensitivityWitness?.legs ?? [])
-      .find((leg) => leg.legId === 'witness-github-actions');
-    check(witnessLeg !== undefined, `${probe.probeId}: the contract declares no witness-github-actions leg`);
-    if (!isDeepStrictEqual(probe.defects[0].manifestationWitness.inputs, witnessLeg?.inputs)) {
-      check(
-        witnessOn(() => ({ exitCode: 0, artifacts: { workflow: { kind: 'text', value: fullCorrectPipeline } } })) !== 'fires',
-        `${probe.probeId}: the witness fires on the full project's correct pipeline, which is a clean leg of the same operation`,
-      );
-    }
+    checkCleanLegs(`${probe.probeId} (emitted)`, probe);
     // The stored correct pipeline holds every oracle of its project, so the twin's one failure is the edit's.
     for (const id of projectOf(designated)) {
       check(arm(id)({ text: reference }).verdict === 'held', `${id} does not hold on ${baselinePassEvidence.path}`);
     }
   }
+  const committed = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'probes', 'ci.probes.json'), 'utf8')).filter(
+    (probe) => probe.qualification?.route === 'controlled-mutation',
+  );
+  check(committed.length === 3, `the committed probe file holds ${committed.length} controlled-mutation probe(s) for the three plants`);
+  for (const probe of committed) checkCleanLegs(`${probe.probeId} (committed)`, probe);
 }
 
 exitWith(

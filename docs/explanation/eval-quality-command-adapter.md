@@ -146,7 +146,8 @@ fault leg's own request, `trace`'s three plants stopped failing pre-flight when 
 moved off the seeded set, and `ci`'s three plants stopped failing it when their witnesses moved to the
 request the run reports (the weekly schedule, the `contents: read` grant, the requested test command
 with the forbidden burn-in job absent), which is what the fault leg's replay of the correct run needs.
-All three are `seeded-fault-fired` or `seeded-faults-scoped`, and both are below. Fourteen of
+The test-review and trace moves are `seeded-faults-scoped`, and both are below; the ci move cleared
+`seeded-fault-fired` and `seeded-faults-scoped` together, and `test/probes/README.md` records it. Fourteen of
 `test-design`'s sixteen probes still fail pre-flight on `seeded-fault-fired`, and every probe in the
 other fourteen corpora pre-flights, so what is left unscored elsewhere is the qualification gate alone.
 
