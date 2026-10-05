@@ -164,19 +164,16 @@ const TEST_DESIGN_REPLAY_PREFIX = 'test/replay/test-design/';
 const PROBE_MUTANT_PREFIX = 'test/fixtures/probe-mutants/';
 
 /**
- * What a test-review, trace or nfr probe's cycle direction says about its manifestation witness.
+ * What a probe's cycle direction says about its manifestation witness.
  *
- * The plant lives in the system's input (a spec file, a seeded set, a gapped bundle), so the witness reads the plant in a run that
- * reports it, and it fires on the stored correct output the cycle's clean arm scores. Pre-flight needs exactly that: its fault leg
- * replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs. The controlled
- * mutation models the run that misses the plant, so its mutated artifact is the one the witness is silent on and the probe's oracle
- * fails on. `npm run test:test-review-qualification`, `test:trace-qualification` and `test:nfr-qualification` read both directions off
- * the committed probes and hold them to this sentence. The ci probes read the other way round by the witness's wording alone: it reads the
- * element the run gets wrong (the weekly schedule and the `contents: read` grant a run misses, the burn-in job a run adds), so it fires on
- * the mutated pipeline and is silent on the correct one. Their plant is the request in the project's docs, like the fifteen above, so
- * their fault leg replays the correct run and finds the witness silent: the three pre-flights have recorded
- * `failed: seeded-fault-fired, seeded-faults-scoped` since before Story 1.99. Fixing the witnesses moves those outcomes, which that story
- * keeps; Story 1.121 makes them read the element the run reports.
+ * The plant lives in the system's input (a spec file, a seeded set, a gapped bundle, the request in a project's docs), so the witness reads
+ * the plant in a run that reports it, and it fires on the stored correct output the cycle's clean arm scores. Pre-flight needs exactly
+ * that: its fault leg replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs.
+ * The controlled mutation models the run that misses the plant, so its mutated artifact is the one the witness is silent on and the
+ * probe's oracle fails on. `npm run test:test-review-qualification`, `test:trace-qualification`, `test:nfr-qualification` and
+ * `test:ci-qualification` read the direction off the committed probes and hold them to this sentence. The ci witnesses read the requested
+ * element in the workflow the run wrote (the weekly schedule, the `contents: read` grant), or for the minimal project the requested test
+ * command with the forbidden burn-in job absent, so each fires on the correct pipeline and is silent on its twin.
  */
 const PLANT_REPORTED_NOTE =
   'The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores ' +
@@ -1748,9 +1745,9 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
 
   // Each plant's mutation edits the stored correct pipeline of its project into its stored twin: the
   // requested element withheld, or (for the template probe below) the forbidden burn-in job added. The
-  // oracle each plant answers to accepts the first and rejects the second. The manifestation witness reads
-  // the element the run gets wrong, so it fires on the twin and is silent on the correct pipeline (Story 1.121
-  // changes that, and with it the pre-flight outcome these three probes record).
+  // oracle each plant answers to accepts the correct pipeline and rejects the twin. The manifestation witness
+  // reads the request in the workflow the run wrote, so it fires on the correct pipeline and is silent on the
+  // twin, which is the direction pre-flight's fault leg needs (it replays the correct run on the planted input).
   const cycle = (label, oracleId, index, referencePath, mutatedPath) =>
     performedCycle({
       label: `${oracleId} (${label})`,
@@ -1787,7 +1784,7 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
       implementationDigest: corpusDigest,
       artifactDigest: digestOf([plant.mutatedReport]),
       commitDigest: corpusDigest,
-      rationale: `${plant.summary} ${plant.oracleId} is the oracle that has to see its consequence in the workflow the run wrote.`,
+      rationale: `${plant.summary} ${plant.oracleId} is the oracle that has to see its consequence in the workflow the run wrote. ${PLANT_REPORTED_NOTE}`,
       qualification: {
         route: 'controlled-mutation',
         // The mutation is to the workflow a run writes, so the stored correct pipeline is what the operator is named against.
@@ -1821,13 +1818,8 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
               stdin: { kind: 'text', value: buildCiPrompt(plant.set) },
             },
             relation: {
-              op: 'not',
-              operands: [
-                {
-                  op: 'containment',
-                  operands: [{ pointer: `/interactions/${legId}/artifact/workflow` }, { literal: plant.element.contractToken }],
-                },
-              ],
+              op: 'containment',
+              operands: [{ pointer: `/interactions/${legId}/artifact/workflow` }, { literal: plant.element.contractToken }],
             },
           },
         },
@@ -1866,7 +1858,7 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
     implementationDigest: corpusDigest,
     artifactDigest: digestOf([templateMutatedReport]),
     commitDigest: corpusDigest,
-    rationale: `${minimal.id}'s request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. ${burnInOracleId} is the oracle that has to see the template's burn-in job in the workflow the run wrote.`,
+    rationale: `${minimal.id}'s request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. ${burnInOracleId} is the oracle that has to see the template's burn-in job in the workflow the run wrote. ${PLANT_REPORTED_NOTE}`,
     qualification: {
       route: 'controlled-mutation',
       mutationSource: baselineMinimalReport,
@@ -1897,8 +1889,22 @@ async function buildCiProbes({ qualify = qualifyCorpusMutation } = {}) {
             stdin: { kind: 'text', value: buildCiPrompt(minimal) },
           },
           relation: {
-            op: 'containment',
-            operands: [{ pointer: '/interactions/manifest-template-copied/artifact/workflow' }, { literal: 'burn-in' }],
+            op: 'all',
+            operands: [
+              {
+                op: 'containment',
+                operands: [{ pointer: '/interactions/manifest-template-copied/artifact/workflow' }, { literal: 'npm test' }],
+              },
+              {
+                op: 'not',
+                operands: [
+                  {
+                    op: 'containment',
+                    operands: [{ pointer: '/interactions/manifest-template-copied/artifact/workflow' }, { literal: 'burn-in' }],
+                  },
+                ],
+              },
+            ],
           },
         },
       },

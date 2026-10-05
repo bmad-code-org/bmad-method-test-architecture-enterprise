@@ -22,7 +22,7 @@
  *   reports a rollback it did not verify. The builder's source states no claim as a literal.
  * - The committed probes. Each one's artifacts carry the digests the probe records, its manifestation witness
  *   has the direction its corpus declares (`plant-reported`: the witness fires on the clean arm's correct run and is
- *   silent on the mutated artifact; `gap-read`: the other way round, the witness reads the element the mutated run gets wrong), and the oracles that flip between its
+ *   silent on the mutated artifact, so a witness that reads the other way round fails the suite), and the oracles that flip between its
  *   reference and its twin are the ones the corpus names, every one from held to violated.
  *   `extra` receives the probes the builder emitted, so a corpus holds the twins they cite to their named edit.
  */
@@ -154,10 +154,10 @@ function changedJsonPaths(reference, twin, prefix = '') {
  * @param {(options: {qualify: Function}) => Promise<object[]>} options.build the corpus's builder in `tools/generate-probes.js`
  * @param {string} options.probesFile absolute path of the committed probe file
  * @param {{oracleId: string, referencePath: string, mutatedPath: string}} options.sample one real mutation of the corpus, with absolute paths
- * @param {'plant-reported'|'gap-read'} options.witnessDirection which of the two stored artifacts the probes' manifestation witness fires on:
+ * @param {'plant-reported'} options.witnessDirection which of the two stored artifacts the probes' manifestation witness fires on:
  *   `plant-reported` fires on the clean arm's correct run and is silent on the mutated artifact (the witness reads the plant in a run that
- *   reports it, and the mutation models a run that misses it); `gap-read` is silent on the clean arm and fires on the mutated artifact (the
- *   witness reads the element the mutated run gets wrong, one it misses or adds, which is the reverse by the witness's wording alone)
+ *   reports it, and the mutation models a run that misses it), which is what pre-flight's fault leg needs. Every corpus declares it; a witness
+ *   that fires on the mutated artifact and is silent on the clean arm, or on neither or both, fails the suite
  * @param {{byProject: boolean, expected?: (probe: object, designated: string) => string[]}} [options.flips] the oracles whose verdict flips between a
  *   probe's reference and its twin: those of the probe's own project (`byProject`, read off each oracle's commentary) or of the whole contract,
  *   and the ones expected to flip (the probe's designated oracle by default)
@@ -748,13 +748,11 @@ async function runQualificationSuite({
         const direction =
           onClean === 'fires' && onMutated === 'silent'
             ? 'plant-reported'
-            : onClean === 'silent' && onMutated === 'fires'
-              ? 'gap-read'
-              : `unreadable (witness ${onClean} on the clean arm, ${onMutated} on the mutated artifact)`;
+            : `other (witness ${onClean} on the clean arm, ${onMutated} on the mutated artifact)`;
         check(
           direction === witnessDirection,
-          `${probe.probeId}: the witness has direction ${direction}, and this corpus declares ${witnessDirection} ` +
-            `(plant-reported fires on the clean arm and is silent on the mutated artifact; gap-read is the reverse)`,
+          `${probe.probeId}: the witness has direction ${direction}; this corpus declares ${witnessDirection} ` +
+            `(plant-reported fires on the clean arm and is silent on the mutated artifact)`,
         );
       }
 

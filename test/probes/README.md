@@ -59,14 +59,18 @@ That reading is why some probes name an oracle other than the gate: withholding 
 Each twin under `test/fixtures/probe-mutants/` is its reference with the one named edit, and the suites assert it: they list the lines or JSON paths that differ and the oracles that flip between reference and twin, each from held to violated.
 The derived operator may not span the whole reference.
 
-The direction of the cycle's witness differs between the corpora.
-For the test-review, trace and nfr probes the plant is in the system's input, so the manifestation witness fires on the correct run the clean arm scores and is silent on the mutated artifact, which models a run that misses the plant.
+The direction of the cycle's witness is the same for every corpus that has a controlled mutation.
+The plant is in the system's input (a spec file, a seeded set, a gapped bundle, the request in a project's docs), so the manifestation witness fires on the correct run the clean arm scores and is silent on the mutated artifact, which models a run that misses the plant.
 Pre-flight needs that: its fault leg replays the correct run on the planted input, and the witness has to fire there and stay silent on the clean legs.
-The three ci probes read the other way round by the witness's wording alone: it reads the element the run gets wrong (the weekly schedule and the `contents: read` grant a run misses, the burn-in job a run adds), so it fires on the mutated pipeline and is silent on the correct one.
-Their plant is the request in the project's docs, as for the other fifteen, so their fault leg replays the correct run and finds the witness silent.
-That is why the pre-flight of all three records `failed: seeded-fault-fired, seeded-faults-scoped` in `expected-strength.json`, which it did before the cycle moved their mutation.
-Fixing the witnesses moves those outcomes, so it is filed as Story 1.121 and not done with the mutation cycle.
-The qualification suites resolve each committed probe's witness over both stored artifacts and hold each corpus to its direction.
+The three ci witnesses read the request in the workflow the run wrote.
+P-001 and P-002 are a containment of the requested element (`0 2 * * 0`, `contents: read`).
+P-003 is the requested `npm test` with the forbidden `burn-in` job absent, in an `all`.
+The `all` carries the positive containment because the alternate-platform leg writes no workflow, and a `not` over a containment of an absent artifact is true: the flipped containment of `burn-in` fires on that clean leg and fails `seeded-faults-scoped`.
+A bare containment of `burn-in` is silent on the minimal project's correct run and fires on the full project's, so it fails `seeded-fault-fired` and `seeded-faults-scoped`.
+The ci pre-flight of all four probes passes in `expected-strength.json`, and the verdict and exit code of every probe are as they were.
+The qualification suites resolve each committed probe's witness over both stored artifacts and hold each corpus to `plant-reported`.
+`test:ci-qualification` also resolves each ci witness over an absent workflow, and P-003's over the full project's correct pipeline, which pre-flight drops for P-001 and P-002 because their fault leg sends the `witness-github-actions` request; so those shapes are held without a leg cache.
+The reads run over the probes the builder emits and over the committed probe file, which is the one pre-flight reads.
 `npm run test:test-design-qualification`, `test:test-review-qualification`, `test:trace-qualification`, `test:nfr-qualification` and `test:ci-qualification` plant each failing step.
 
 ## The routing corpora carry no defect probe
@@ -228,9 +232,9 @@ is the same command shape and its three plant probes are refused the same way, o
 for the same reason: every completed audit exits 0 whatever it wrote, so the one channel that would
 qualify would separate nothing. `tea-ci-runner`'s three plant probes are refused for the same reason
 again: a scaffold that wrote an incomplete or over-generous pipeline still exits 0, so no channel
-besides the artifact one carries the truth, and it is the one AD-9 refuses. Unlike `tea-nfr-runner`'s,
-all three also fail pre-flight on `seeded-fault-fired` and exit 3 before a verdict exists at all: the
-manifestation witness fires on a leg the contract calls clean, the same blocker `test-design` carries.
+besides the artifact one carries the truth, and it is the one AD-9 refuses. Like `tea-nfr-runner`'s,
+all three clear pre-flight, because each manifestation witness reads the request in the workflow the
+run wrote and fires on the correct run its fault leg replays.
 
 **A document-level oracle reaches a domain only through the rollup.** The nfr contract addresses one
 markdown report, which is one string to this vocabulary, so its claims are about the document: the
