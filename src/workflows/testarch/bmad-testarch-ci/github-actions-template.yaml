@@ -283,6 +283,42 @@ jobs:
 # ============================================================================
 
 # ============================================================================
+# EVALUATION GATE BLOCK (steps-c/step-03b-render-evaluation-plans.md, item 10)
+# ============================================================================
+# Used only when a tier of an evaluation plan gates a job that lives in another
+# workflow file than the one holding the evaluation jobs. Inside one file the
+# wait is the gated job's `needs`, and no block is needed. Across files a job
+# cannot `needs` a job of another workflow run, so the gated workflow starts
+# from the completion of the evaluation workflow. Merge the block into the
+# gated workflow: add `workflow_run` to its `on:`, keeping the triggers already
+# there, add the `if:` to the gated job and the `ref` to each of its checkout
+# steps, and change nothing else of the job. A workflow_run job checks out the
+# default branch unless it names the commit, and the run triggers whatever
+# event started the evaluation workflow, so the `if:` names the tier's event and
+# the pipeline file, so another workflow named alike cannot start the job.
+#
+#   PIPELINE_NAME: the `name:` of the workflow file that holds the evaluation jobs, its file path when it has none
+#   GATED_JOB_ID:  the id of the job the tier gates
+#   TIER_EVENT:    the GitHub event that starts the tier's evaluation job
+#   PIPELINE_PATH: the repository-relative path of the workflow file that holds the evaluation jobs
+#
+# evaluation-gate:begin
+# on:
+#   workflow_run:
+#     workflows: [PIPELINE_NAME]
+#     types: [completed]
+#
+# jobs:
+#   GATED_JOB_ID:
+#     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'TIER_EVENT' && github.event.workflow_run.path == 'PIPELINE_PATH'
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.event.workflow_run.head_sha }}
+# evaluation-gate:end
+# ============================================================================
+
+# ============================================================================
 # EXTENSION PATTERNS — Script Injection Prevention
 # ============================================================================
 # When extending this template into reusable workflows, manual dispatch

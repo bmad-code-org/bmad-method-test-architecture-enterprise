@@ -302,11 +302,11 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every constructed case that produces a number was written by hand to be parsed, so a
 green run proves the scorers are deterministic and reproduce history. It proves nothing
-about whether they handle real agent output correctly. One hundred forty-nine of the one
-hundred fifty-five cases produce a number and one hundred thirty-two of those are constructed.
-Seventeen carry captured bytes: twelve from the ATDD fixture corpus, two from
-`fixtures/test-review-cli/` and three from live `eval:ci` runs, one over each of the `evaluation-plan`,
-`evaluation-tiers` and `evaluation-edit` projects. The two test-review captures score zero recall because their reports document no
+about whether they handle real agent output correctly. One hundred fifty-two of the one
+hundred fifty-eight cases produce a number and one hundred thirty-four of those are constructed.
+Eighteen carry captured bytes: twelve from the ATDD fixture corpus, two from
+`fixtures/test-review-cli/` and four from live `eval:ci` runs, one over each of the `evaluation-plan`,
+`evaluation-tiers`, `evaluation-edit` and `evaluation-gate` projects. The two test-review captures score zero recall because their reports document no
 finding. Stored routing replays include all four successful
 clarification branches, and every `bmad-tea-routing` replay remains constructed. The
 live Story 1.3 routing evidence is validated separately by `test:eval-routing-evidence`.
@@ -385,8 +385,8 @@ repetitions; it has not been calibrated against `codex` or `gemini`.
 ## ci eval suite
 
 `eval-ci.js` measures `bmad-testarch-ci` against the corpus under
-`fixtures/ci-eval/`. Five Node projects, `full/`, `minimal/`, `evaluation-plan/`,
-`evaluation-tiers/` and `evaluation-edit/`, each carrying a written pipeline request at
+`fixtures/ci-eval/`. Six Node projects, `full/`, `minimal/`, `evaluation-plan/`,
+`evaluation-tiers/`, `evaluation-edit/` and `evaluation-gate/`, each carrying a written pipeline request at
 `docs/ci-requirements.md`. They are never scaffolded in one run: each project is its own
 workspace, its own agent call, and its own case. The `evaluation-plan/` project holds a copy
 of the Story 1.10 fixture's `ci/evaluation-ci-plan.json` and a request that never names it,
@@ -403,8 +403,12 @@ edit-mode set: its pipeline already carries a hand-written job and an evaluation
 plan's marker, and the case measures that the second run replaces the marker job under the id the
 rules give now, leaves the hand-written job byte for byte and leaves the create run's checkpoint
 untouched. Its prompt chooses `[E] Edit`, and the stored case keeps the checkpoint the run left
-beside the workflow. The stored replay of each of the three evaluation projects is a real capture;
-the deterministic half is `test:evaluate-ci-render`.
+beside the workflow. The `evaluation-gate/` project is a second edit-mode set: its pipeline holds a
+hand-written test job and a hand-written publish job that `needs` the test job and runs on a published
+release, its plan gates the publish job on the release tier, and the case measures that the run appends the
+release evaluation job to the publish job's `needs` after the entry it had and changes nothing else of the job.
+The stored replay of each of the four evaluation projects is a real capture.
+The deterministic half is `test:evaluate-ci-render`.
 
 The suite exists to parse and lint the pipeline the skill generates, which is what
 its deferred entry said never happened. The full project's request names thirteen

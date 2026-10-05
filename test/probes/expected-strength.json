@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:8a5f4f0244b40b44dcf7842e969fa60fc36d5fc5885068de8c1e0822ac19a7a9",
+    "corpusDigest": "sha256:fa5c71f858ad1cab6e184af5f12d3a24f4e23604646ce5130f5d64a55f099586",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -324,6 +324,84 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",

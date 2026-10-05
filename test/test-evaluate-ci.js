@@ -860,6 +860,111 @@ async function checkDerivableFields() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The gated jobs of a plan (Story 1.97): the optional `gates` list of a check
+
+/** The jobs of `gates` entries `check` and `ci` accept, and the shapes and names they refuse with a `gates` finding. */
+function checkGatedJobs() {
+  // A job id is accepted wherever the plan places a check (revert: dropping `gates` from the schema fails every valid case below).
+  for (const [label, gates] of [
+    ['a plain id', ['publish']],
+    ['an id with a hyphen and an underscore', ['deploy-to_prod']],
+    ['an id that starts with an underscore', ['_deploy']],
+    ['an id in upper case with digits', ['Deploy2']],
+    ['two ids', ['publish', 'deploy']],
+  ]) {
+    derivedValid(label, { plan: (value) => (value.checks[0].gates = gates) });
+  }
+
+  // A name that is no job id exits 10 from both commands with the `gates` rule and no other (revert: removing the pattern from the
+  // schema passes every name below; reporting the violation as `schema` fails the rule assertion).
+  for (const name of [
+    '',
+    '1deploy',
+    '-deploy',
+    'deploy prod',
+    'deploy.prod',
+    'deploy/prod',
+    'deploy;rm',
+    'deploy\n',
+    '${{ matrix.job }}',
+    'déploy',
+  ]) {
+    const folder = copyFixture('mcp', 'gates');
+    const message = derivedProblem(`the name ${JSON.stringify(name)}`, 'gates', {
+      folder,
+      plan: (value) => (value.checks[2].gates = ['publish', name]),
+    });
+    assert.match(
+      message,
+      /checks\[2\]\.gates\[1\] is .*, which is not a job id; name the id of a job in one of the repository's workflow files/,
+      JSON.stringify(name),
+    );
+    assert.deepEqual(rulesOf(folder), ['gates'], `the name ${JSON.stringify(name)} reports the gates rule alone`);
+  }
+
+  // The list itself: a non-empty list of distinct strings (revert: dropping minItems, uniqueItems or the item type passes the case).
+  for (const [label, gates, expected] of [
+    ['a name outside a list', 'publish', /checks\[0\]\.gates must be array/],
+    ['an empty list', [], /checks\[0\]\.gates must NOT have fewer than 1 items/],
+    ['a repeated name in one check', ['publish', 'publish'], /checks\[0\]\.gates must NOT have duplicate items/],
+    ['a number', [5], /checks\[0\]\.gates\[0\] must be string/],
+  ]) {
+    const folder = copyFixture('mcp', 'gates');
+    const message = derivedProblem(label, 'gates', { folder, plan: (value) => (value.checks[0].gates = gates) });
+    assert.match(message, expected, label);
+    assert.deepEqual(rulesOf(folder), ['gates'], label);
+  }
+
+  // A violation elsewhere in the plan keeps the rule `schema` (revert: mapping every schema error to `gates` fails this).
+  {
+    const folder = copyFixture('mcp', 'gates');
+    derivedProblem('a schema violation next to a gate', 'schema', {
+      folder,
+      plan: (value) => {
+        value.checks[0].gates = ['publish'];
+        value.checks[1].enforcement = 'optional';
+      },
+    });
+    assert.deepEqual(rulesOf(folder), ['schema']);
+  }
+
+  // The jobs a tier gates are the union over its checks: a name on two checks of one tier is merged and no finding, and a name
+  // on checks of two tiers is valid (revert: reading a repeat across checks as a duplicate fails the first two cases).
+  derivedValid('one job named on two checks of a tier', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks[1].gates = ['publish'];
+    },
+  });
+  derivedValid('different jobs on the checks of a tier', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks[1].gates = ['deploy'];
+      value.checks[2].gates = ['publish', 'deploy'];
+    },
+  });
+  derivedValid('one job on checks of two tiers', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks.push({ ...entry('twin-run', 'release'), gates: ['publish'] });
+    },
+  });
+  // A gate check takes the list too, and the plan alone validates it (the guide's tagged examples are held to `planFindings`).
+  derivedValid('a gate check naming a job', {
+    plan: (value) =>
+      value.checks.push({
+        ...entry('lockfile-age', 'pr', { kind: 'gate', command: ['eval-quality-gates', 'lockfile-age'] }),
+        gates: ['publish'],
+      }),
+  });
+  assert.deepEqual(planModule.planFindings({ schemaVersion: 1, checks: [{ ...entry('check', 'pr'), gates: ['publish'] }] }), []);
+  assert.deepEqual(
+    planModule.planFindings({ schemaVersion: 1, checks: [{ ...entry('check', 'pr'), gates: ['not a job'] }] }).map((found) => found.rule),
+    ['gates'],
+  );
+}
+
 function checkWiring() {
   const folder = copyFixture('mcp', 'wiring');
   // A tier with no checks is not an error: nothing runs, and the invocation still leaves its summary.
@@ -2886,7 +2991,7 @@ function planProblems(name, plan, repository, required, folder) {
   if (liveTiers.has('release') && !events.release) problems.push(`${name}: a release tier without a release or deploy workflow`);
   for (const item of plan.checks) {
     const where = `${name}: ${item.id} on ${item.placement.tier}`;
-    problems.push(...planEntryShapeProblems(item, name));
+    problems.push(...planEntryShapeProblems(item, name, { subsetTriggers: true }));
     if (folder !== undefined && item.kind === 'evaluate' && item.command[3] !== folder)
       problems.push(`${where} runs another evaluation folder`);
     const reason = item.placement.reason?.trim() ?? '';
@@ -4163,6 +4268,7 @@ async function main() {
     ['the committed plans and baselines', checkFixturePlans],
     ['the placement rules', checkPlacementRules],
     ['the derivable fields', checkDerivableFields],
+    ['the gated jobs', checkGatedJobs],
     ['wiring', checkWiring],
     ['the AD-10 table', checkEnforcementTable],
     ['tier membership', checkTierMembership],

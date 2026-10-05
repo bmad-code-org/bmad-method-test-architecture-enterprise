@@ -23,6 +23,7 @@ Worked example. `CONTRIBUTING.md` says "Merges go through the merge queue, which
 ## Inspect the release flow
 
 Read how the adopter ships: tag-triggered publish workflows, deploy workflows, release branches, the cadence and who approves. The event of the `release` tier is whatever starts the repository's release or deploy workflow: a tag push, a published release, or the deploy workflow's own trigger, a nightly one included. A repository with none of these gets a published release from step-03b, and the reason says so. A `scheduled` run gates nothing unless the deploy waits for it.
+Record each publish or deploy job by the id of the job and the workflow file that holds it, since the plan names a job to gate by that id.
 
 Worked example. `.github/workflows/release.yml` runs on `push` of tags matching `v*`, publishes with `NPM_TOKEN` and holds no model key. `docs/RELEASING.md` says "The tag is the release gate." The evaluated feature is a checked-in rules engine, which needs no model call or secret. The tag push is the `release` event, and with no schedule anywhere in the repository it is also the only home for the live set.
 
@@ -39,13 +40,27 @@ Start every check at AD-10's default tier, then move it only for a recorded reas
 
 Every check records `placement`: the chosen `tier`, the `defaultTier` and a `reason`. Write the `reason` for every check, default placements included, and name the file or the adopter's answer the placement came from, such as `.github/workflows/nightly.yml has a schedule trigger and passes RESERVATION_MODEL_KEY`. Record `defaultTier` as the tier AD-10 gives the check for this adopter. For a target that needs no secret, `preflight-live` defaults to `merge` on every entry the plan keeps, one moved to `release` included. Every other check, and `preflight-live` for a target that needs a secret, has the tier of its own entry as its default, and a check the plan keeps on two tiers has one entry per tier. A placement outside that default, such as `preflight-live` on `release` for a target that needs no secret, is a deviation: the runtime refuses it without a reason, and the closing summary lists every deviation with its reason so the adopter can overrule it.
 
+## Gate the publish or deploy job
+
+An evaluation job that no other job waits for reports and blocks nothing that ships.
+When the release flow inspection found a publish or deploy job that must not run before the evaluation passes, set `gates` on a check of the tier whose evaluation job should stop it, with the job's id from its workflow file: `"gates": ["publish"]` for a job `publish` in `release.yml`.
+The `release` tier is the usual home, since its event is the one that starts the repository's release or deploy workflow.
+Name in the `trigger` of every check on the gating tier each event that starts the gated job's workflow.
+When that workflow also starts on `workflow_dispatch`, as a nightly `deploy.yml` does, list `manual-dispatch` beside `release`, since the CI skill refuses a gate whose job already ran on an event where the tier's evaluation job is skipped.
+The jobs a tier gates are the union of `gates` over the checks the plan places on that tier, so name a job once, on any check of the tier, and a name repeated across the tier's checks is merged.
+`check` accepts a job id and reports any other name under rule `gates`; it cannot tell whether the repository holds that job, which `bmad-testarch-ci` answers when it renders the wait.
+The wait holds best when the job lives in the workflow file the CI skill edits, which holds the evaluation jobs too: the job then waits through `needs`, and the step refuses the plan when the job already ran in a run where the tier's evaluation job is skipped, such as a deploy on every `push` beside an evaluation job guarded to tags, or when the evaluation job runs on a run the job did not run on before, such as a `workflow_dispatch` the plan adds to a tag-push release file, while a run the render adds that the evaluation job skips is skipped through the wait and is no conflict.
+A job in another workflow file waits through a `workflow_run` trigger, which the step refuses for a pull request tier, for a tier whose evaluation job carries a ref or cron guard, and for a job with its own `needs`, `if:` or ref and event contexts, so hand the CI skill the workflow file that holds the job when you can.
+Leave `gates` out when the inspection found no such job or the adopter declined the gate, and say which in the `reason` of the release entries.
+The field creates no event: a tier whose only event another tier took still has no event of its own, and the CI skill's summary names it.
+
 ## Keep the deterministic checks on pr
 
 Place the gameability arm (`gameability`), contract-source freshness (part of `check`) and oracle-versus-scorer agreement (`oracle-agreement`) on `pr`, with the rest of the deterministic set. They need no secret and call no model, so CAP-11 requires them on every pull request and the runtime refuses a plan that places one elsewhere. No inspection moves them. Every check that reads `baseline/` (`replay`, `gameability`, `oracle-agreement`, and `twin-run` and `strength-comparison` on the live tiers) exits 64 until the adopter accepts a clean run with `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare --evaluation <evaluation-folder> --accept` in a reviewed change, so tell the adopter the first baseline is part of finishing the stage.
 
 ## Place the live checks
 
-Put the live checks where the inspection found a secret and an event: a live `preflight-live` on `merge` when the target needs no secret and the merge flow allows its run time, the held-out partition (`held-out`) on `scheduled` and `release`, judge calibration (`judge-calibration`) on `scheduled` and `release` whenever the contract declares a rubric, and `twin-run` and `strength-comparison` with them. Never place a live check on `pr`. A skill or agent target always needs the runner's model credentials, so its live tiers are `scheduled`, `release` and manual dispatch only; its `trigger` lists `schedule` and `manual-dispatch` for `scheduled` and `release` for `release`. Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.
+Put the live checks where the inspection found a secret and an event: a live `preflight-live` on `merge` when the target needs no secret and the merge flow allows its run time, the held-out partition (`held-out`) on `scheduled` and `release`, judge calibration (`judge-calibration`) on `scheduled` and `release` whenever the contract declares a rubric, and `twin-run` and `strength-comparison` with them. Never place a live check on `pr`. A skill or agent target always needs the runner's model credentials, so its live tiers are `scheduled`, `release` and manual dispatch only; its `trigger` lists `schedule` and `manual-dispatch` for `scheduled` and `release` for `release`, with `manual-dispatch` beside it when the gated workflow starts on `workflow_dispatch`. Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.
 
 Declare the runner's credential keys as `permittedEnvironmentKeys` through the target's registry `environmentKeys`, which Stage 6 scaffolds and the runtime compiles into the authorization: read them, and add a key name only when a live check needs a credential the registry omits. Keys carry names alone. The plan carries no credential and `bmad-testarch-ci` wires none, so give the adopter the same names as the CI secrets to add for the live tiers.
 
@@ -79,6 +94,9 @@ An entry that lists no `egress` reaches no host, and macOS ignores the field.
 Keep the template's `enforcement` values. The runtime refuses `warn` where AD-10 allows none.
 
 Worked example, a repository that releases on tags with no model key in CI; the plan shows two of its entries. The evaluated feature needs no secret and no workflow has a schedule, so the live checks sit on `release`, the one event the repository offers.
+The CI skill edits `release.yml`, the file that holds the `publish` job, so the evaluation jobs and `publish` share it.
+The `twin-run` entry names `publish` in `gates`.
+The tag then reaches the registry only after the release tier passes.
 
 <!-- example:ci-plan -->
 
@@ -108,10 +126,11 @@ Worked example, a repository that releases on tags with no model key in CI; the 
       "command": ["tea-evaluate", "ci", "--evaluation", "evals/reservation-review", "--tier", "release"],
       "enforcement": "block",
       "evidence": ["runs/<invocationId>/checks/twin-run/stdout"],
+      "gates": ["publish"],
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so no scheduled entry exists, and docs/RELEASING.md names the tag push as the release gate."
+        "reason": "No workflow has a schedule trigger, so no scheduled entry exists, and docs/RELEASING.md names the tag push as the release gate. The publish job of .github/workflows/release.yml ships the tag and shares that file with the evaluation jobs, so it waits for this tier."
       }
     }
   ]
@@ -119,6 +138,7 @@ Worked example, a repository that releases on tags with no model key in CI; the 
 ```
 
 The same evaluation in a repository that deploys nightly, with the key on its scheduled runs, places the live set twice at its defaults: on `scheduled` for `.github/workflows/nightly.yml`, and on `release` for the trigger of the deploy workflow in `.github/workflows/deploy.yml`.
+That workflow also starts on `workflow_dispatch`, so the release checks list `manual-dispatch` beside `release`.
 
 <!-- example:ci-plan -->
 
@@ -143,7 +163,7 @@ The same evaluation in a repository that deploys nightly, with the key on its sc
     {
       "id": "twin-run",
       "tier": "release",
-      "trigger": ["release"],
+      "trigger": ["release", "manual-dispatch"],
       "kind": "evaluate",
       "command": ["tea-evaluate", "ci", "--evaluation", "evals/reservation-review", "--tier", "release"],
       "enforcement": "block",
@@ -151,7 +171,7 @@ The same evaluation in a repository that deploys nightly, with the key on its sc
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": ".github/workflows/deploy.yml ships main to production on its own schedule, and that trigger is the release event."
+        "reason": ".github/workflows/deploy.yml ships main to production on its own schedule and on a manual dispatch, and those triggers are the release event."
       }
     }
   ]
@@ -215,7 +235,7 @@ A contract that declares a rubric keeps `judge-calibration` on every live tier t
 Keep the one `preflight-live` set that fits: the `merge` entry when the target needs no secret, the `scheduled` and `release` entries when it does (a skill or agent target is always this case), or a single entry moved off its default, as the first worked example shows.
 
 Set `defaultTier` on each kept entry by the rule in `Place each check`.
-Move the checks the inspection moved, fill every `reason` and add the adopted gates.
+Move the checks the inspection moved, fill every `reason`, set `gates` as `Gate the publish or deploy job` says and add the adopted gates.
 Keep the evidence paths relative to the evaluation folder.
 
 Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>` and repair every `ci-plan` finding before going on.
@@ -229,4 +249,7 @@ With no accepted baseline, skip the tier runs and record that in the `## CI` sec
 
 ## Hand the plan to the CI skill
 
-Invoke `bmad-testarch-ci` in edit mode on the adopter's pipeline file, naming the plan's path, or in create mode when the inspection found no pipeline file. Its steps detect `ci/evaluation-ci-plan.json` and validate it, and the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`. Name in the request the concrete event of this repository for each tier it should render, such as `release`: the push of `v*` tags that starts `.github/workflows/release.yml`. Gating an existing publish or deploy job on the evaluation job is outside what that step does for a job it did not write, so tell the adopter. When that skill is not installed, give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record. Stage 12 is complete when the plan passes `check` and the hand-off is made; a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage. Finish with the closing summary: the placement table, the deviations and their reasons, the secrets the live tiers need (the names from `environmentKeys`), the gates adopted, the baseline still to accept, every tier that exited non-zero with the stage that owns its repair, and whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire.
+Invoke `bmad-testarch-ci` in edit mode on the adopter's pipeline file, naming the plan's path, or in create mode when the inspection found no pipeline file. Its steps detect `ci/evaluation-ci-plan.json` and validate it, and the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`. Name in the request the concrete event of this repository for each tier it should render, such as `release`: the push of `v*` tags that starts `.github/workflows/release.yml`.
+That step renders each `gates` entry as a wait of the named job on the evaluation job of the tier, and its summary reports the edit to the job, a name that matches no job and a conflicting gate, so relay that report to the adopter.
+When the plan gates a job, invoke it on the workflow file that holds that job.
+When that skill is not installed, give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record. Stage 12 is complete when the plan passes `check` and the hand-off is made; a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage. Finish with the closing summary: the placement table, the deviations and their reasons, the secrets the live tiers need (the names from `environmentKeys`), the gates adopted, the baseline still to accept, every tier that exited non-zero with the stage that owns its repair, and each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason.

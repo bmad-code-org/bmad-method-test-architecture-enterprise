@@ -57,9 +57,10 @@
  *   10  also ci: a plan that fails its schema or its placement rules (a check with no non-blank reason, a trigger its
  *       tier does not use, a <evaluation-folder> left in a command or an evidence path, a preflight-live default that
  *       disagrees with the registry, evaluation.json tiers that differ from the plan's, an api-conformance check over
- *       an evaluation with no HTTP target, a rubric with no judge-calibration on a live tier the plan uses, a
- *       deterministic check that needs no secret placed off pr, a live check on pr, a command not led by its tool, a
- *       warn enforcement where AD-10 gives no warn) or that sits in a ci/ directory that is a link; a baseline that
+ *       an evaluation with no HTTP target, a rubric with no judge-calibration on a live tier the plan uses, a gates
+ *       list that is empty, repeats a name or holds a name that is no job id, a deterministic check that needs no
+ *       secret placed off pr, a live check on pr, a command not led by its tool, a warn enforcement where AD-10
+ *       gives no warn) or that sits in a ci/ directory that is a link; a baseline that
  *       fails its schema, holds anything in scores/ besides the accepted score invocation, or holds a probe or
  *       contract that is not JSON; a check's own exit 10 (a check finding, a conformance run that exits 1) passes through
  *   10  also run: a trial request the registry denies, no probe or no scoring policy, a clean control whose

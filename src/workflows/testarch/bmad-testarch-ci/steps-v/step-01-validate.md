@@ -82,7 +82,12 @@ Scan all generated YAML workflow files for unsafe interpolation patterns inside 
 
 ### 3b. Evaluation Plan Check
 
-When the repository holds `ci/evaluation-ci-plan.json` files, check the pipeline against each one: a job per tier the plan holds with the `# tea-evaluation-plan:` marker named in `steps-c/step-03b-render-evaluation-plans.md`, one standalone `tea-evaluate ci` step per tier (the `merge` job runs the `pr` tier's step first), the install run with `--prefix` on the evaluations folder, no `continue-on-error` on an evaluation step or job, and an upload of the evaluation folder's `runs/` that runs whatever the result (`if: always()` on GitHub Actions). A plan with no matching job is **FAIL**. A repository with no plan skips this section.
+When the repository holds `ci/evaluation-ci-plan.json` files, check the pipeline against each one: a job per tier the plan holds with the `# tea-evaluation-plan:` marker named in `steps-c/step-03b-render-evaluation-plans.md`, one standalone `tea-evaluate ci` step per tier (the `merge` job runs the `pr` tier's step first), the install run with `--prefix` on the evaluations folder, no `continue-on-error` on an evaluation step or job, and an upload of the evaluation folder's `runs/` that runs whatever the result (`if: always()` on GitHub Actions).
+Each job a tier gates (`gates` in the plan) waits for the tier's evaluation job.
+In the pipeline file the wait is `needs`, and in another file it is a `workflow_run` trigger with an `if:` on `github.event.workflow_run.conclusion`, `github.event.workflow_run.event` and `github.event.workflow_run.path`.
+A gate whose job has no such wait is **FAIL**.
+A plan with no matching job is **FAIL**.
+A repository with no plan skips this section.
 
 ### 4. Write Report
 

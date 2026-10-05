@@ -14,7 +14,8 @@
  * against it. The workflows are the replay corpus's own correct runs,
  * test/replay/ci/full-correct-pipeline, test/replay/ci/minimal-correct-pipeline and
  * the real captures test/replay/ci/evaluation-plan-live-capture,
- * test/replay/ci/evaluation-tiers-live-capture and test/replay/ci/evaluation-edit-live-capture,
+ * test/replay/ci/evaluation-tiers-live-capture, test/replay/ci/evaluation-edit-live-capture
+ * and test/replay/ci/evaluation-gate-live-capture,
  * which `npm run test:eval-replay` already pins to a scored result; a second copy
  * here would be a second thing to keep in step with the ground truth.
  *
@@ -90,6 +91,7 @@ const correctRuns = [
   [/quarry/, 'evaluation-plan-live-capture'],
   [/granite/, 'evaluation-tiers-live-capture'],
   [/ember/, 'evaluation-edit-live-capture'],
+  [/slate/, 'evaluation-gate-live-capture'],
 ];
 // A one-element deviation of the evaluation-plan project's correct run: the tier step repeated once per check.
 const deviations = [[/quarry/, 'evaluation-plan-one-step-per-check']];

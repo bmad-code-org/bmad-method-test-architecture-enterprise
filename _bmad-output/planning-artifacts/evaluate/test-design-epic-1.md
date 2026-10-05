@@ -1308,6 +1308,8 @@ Added 2026-10-03 in Story 1.94's review. Levels: corpus, static. Files: `test/li
 | The burn-in token does not match a comment                | A workflow carrying `burn-in` only in the comment `# Weekly burn-in on Sundays` fails the burn-in oracle                                 | Corpus | P1  | The substring token leaves `full-burn-in-missing` passing                   |
 | `expected-strength.json` moves only where the record says | Regenerate, then compare with `origin/main`                                                                                              | Corpus | P1  | A record that moved without a line in the story record fails the comparison |
 
+Amended 2026-10-04 in Story 1.97's build: the second row reads 35 pass-through deviations, adding `evaluation-gate-needs-cut` and `evaluation-gate-release-job-on-pull-requests`.
+
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 
 Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
@@ -1605,6 +1607,17 @@ Added 2026-10-01 in Story 2.4's first review. Levels: static, contract, replay. 
 | The plan field is validated                  | `test:evaluate-ci` accepts a job id and refuses a name that is not one                             | Contract | P1  | Removing the schema rule passes the bad name       |
 | A missing or conflicting job renders nothing | A plan naming no job; two plans gating one job                                                     | Static   | P1  | Rendering anyway fails the case                    |
 | A live rendering holds                       | An `evaluation-plan` case of the `ci` behavioral suite, captured by hand through `npm run eval:ci` | Replay   | P0  | `test:eval-replay` holds the capture to the scorer |
+
+Amended 2026-10-04 in Story 1.97's build: the live rendering is the `evaluation-gate` set of the `ci` behavioral suite, an edit set whose ground truth holds a `wait` element (the exact `needs` list the gated job ends with, the events it still runs on and the digest of its source without its `needs` lines).
+The files also include `test/test-evaluate-guidance.js`, the `ci.md` gating section and the template's gate block.
+`test:evaluate-ci` holds the field in the case `the gated jobs` (a job id accepted, each name that is no job id refused with rule `gates` by both commands, the union over a tier's checks and over two tiers).
+`test:evaluate-ci-render` pins the step's sentences for the resolution, the two forms of the wait, the re-render and the summary, parses the template's gate block for the cross-file form, and scores one edit of the stored live capture per way a wait can go wrong (the entry cut, reordered or replaced, the wrong evaluation job, the job's own `if:` or steps changed, the evaluation job on another event or removed).
+Two constructed deviations are stored beside the live capture, each one edit of it, one that misses the wait alone (`evaluation-gate-needs-cut`) and one that misses the release job and the wait (`evaluation-gate-release-job-on-pull-requests`): two cases that miss the same elements must carry the same detail, so the other single edits are scored in `test:evaluate-ci-render`.
+The `evaluation-gate-live-capture` case is the real capture of the set; `test:eval-replay` holds it to the scorer.
+
+Amended 2026-10-04 in Story 1.97's round 1: the step's resolution rules are pinned sentence by sentence in `test:evaluate-ci-render`: a gate conflicts when the gated job can run where its tier's evaluation job is skipped (events and ref or cron guards compared), when its `if:` calls a status function, and, across files, for a pull request or fork tier, an evaluation job behind a ref or cron guard, a workflow that already follows another workflow, a job gated twice, and a job with its own `needs`, `if:`, `uses:` or ref and event contexts.
+The gate block of the template and its parse test carry the workflow path beside the conclusion and the event.
+The stored live capture is held to rule C by `test:evaluate-ci-render` (every event the publish job's `if:` lets through is one the release evaluation job's `if:` lets through), and the test's own helper applies section 2 and items 7 and 10 to the two committed live repositories (the `needs` wait, the guards, the widened triggers, and the conflicts and refusals from edits of them), and the `wait` element holds the events the gated job still runs on.
 
 ### Story 1.98: The AI-feature evaluation passes its own CI tiers
 

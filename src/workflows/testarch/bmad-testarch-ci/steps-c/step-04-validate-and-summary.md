@@ -55,7 +55,7 @@ Report:
 - CI platform and config path
 - Key stages enabled
 - Artifacts and notifications
-- Evaluation plans rendered, refused or not validated, and the credentials their live tiers need
+- Evaluation plans rendered, refused or not validated, the jobs they gate, and the credentials their live tiers need
 - Next steps (set secrets, run pipeline)
 
 ---

@@ -1,0 +1,57 @@
+# Pipeline for slate-publisher.
+# The test and publish jobs are maintained by the release team. Do not regenerate them.
+
+name: Release Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Maintained by the release team
+    name: 'Unit tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The release team pins Node through .nvmrc on purpose.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: 'Install dependencies'
+        run: npm ci
+
+      - name: 'Run unit tests'
+        run: npm test
+
+  publish:
+    # Maintained by the release team
+    name: 'Publish to the registry'
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 'Publish the package'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

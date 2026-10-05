@@ -1,0 +1,9 @@
+{
+  "name": "slate-publisher",
+  "version": "1.4.0",
+  "description": "Release note builder for the Slate documentation suite",
+  "main": "src/notes.js",
+  "scripts": {
+    "test": "node --test tests"
+  }
+}
