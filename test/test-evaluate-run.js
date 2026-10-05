@@ -230,6 +230,8 @@ const {
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
+const { STAGING } = require('../cli/lib/evaluate/recorded-paths');
+const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-argv');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -449,9 +451,8 @@ function latestScoreDirectory(runDirectory) {
 }
 
 /** `eval-quality score` run directly on the argv a `tea-evaluate score` call persisted, with its own `--out`. */
-function directScore(record, out) {
-  const argv = [...record.argv];
-  argv[argv.indexOf('--out') + 1] = out;
+function directScore(record, out, scoreDirectory) {
+  const argv = runnableArgv(record.argv, { ...scoreContext(scoreDirectory), out });
   const cli = engineCliPath(BASE_ENV);
   const result = spawnSync(process.execPath, [cli, ...argv], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
   return { status: result.status, bytes: fs.existsSync(out) ? fs.readFileSync(out) : null };
@@ -463,7 +464,7 @@ function checkDirectRerun(label, scoreDirectory) {
     const record = written(path.join(scoreDirectory, probeId, 'score.json'), `${label}, ${probeId}'s score call`);
     if (record === null) continue;
     const persisted = path.join(scoreDirectory, probeId, 'evidence-artifact.json');
-    const direct = directScore(record, path.join(tempDir(`${label.replaceAll(' ', '-')}-direct`), 'evidence.json'));
+    const direct = directScore(record, path.join(tempDir(`${label.replaceAll(' ', '-')}-direct`), 'evidence.json'), scoreDirectory);
     check(
       direct.status === record.exitCode,
       `${label}: eval-quality score run directly on ${probeId}'s inputs exited ${direct.status}; tea-evaluate recorded ${record.exitCode}`,
@@ -476,9 +477,8 @@ function checkDirectRerun(label, scoreDirectory) {
 }
 
 /** `eval-quality aggregate-strength` run directly on the argv a `tea-evaluate score` invocation persisted, with its own `--out`. */
-function directAggregate(record, out) {
-  const argv = [...record.argv];
-  argv[argv.indexOf('--out') + 1] = out;
+function directAggregate(record, out, scoreDirectory) {
+  const argv = runnableArgv(record.argv, { ...scoreContext(scoreDirectory), out });
   const cli = engineCliPath(BASE_ENV);
   const result = spawnSync(process.execPath, [cli, ...argv], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
   return { status: result.status, bytes: fs.existsSync(out) ? fs.readFileSync(out) : null };
@@ -496,15 +496,22 @@ function checkAggregateRerun(label, { engine, runDirectory, scoreDirectory, prob
     check(false, `${label}: the invocation copied no strength aggregate`);
     return null;
   }
-  const direct = directAggregate(call, path.join(tempDir(`${label.replaceAll(' ', '-')}-aggregate`), 'strength-aggregate.json'));
+  const direct = directAggregate(
+    call,
+    path.join(tempDir(`${label.replaceAll(' ', '-')}-aggregate`), 'strength-aggregate.json'),
+    scoreDirectory,
+  );
   check(direct.status === 0 && direct.bytes !== null, `${label}: eval-quality aggregate-strength run directly exited ${direct.status}`);
   const bytes = fs.readFileSync(copied);
   check(
     direct.bytes?.equals(bytes) === true,
     `${label}: the copied aggregate is not byte-identical to a direct eval-quality aggregate-strength`,
   );
-  const value = (flag) => call.argv[call.argv.indexOf(flag) + 1];
-  const evidenceFlags = call.argv.flatMap((argument, at) => (argument === '--evidence' ? [call.argv[at + 1]] : []));
+  // The record states the call in neutral forms: the files of the run by their path below the evaluation folder, the score
+  // invocation as a placeholder and the private staging file as `<staging>/<name>`.
+  const resolved = runnableArgv(call.argv, { ...scoreContext(scoreDirectory), out: '<staging-out>' });
+  const value = (flag) => resolved[resolved.indexOf(flag) + 1];
+  const evidenceFlags = resolved.flatMap((argument, at) => (argument === '--evidence' ? [resolved[at + 1]] : []));
   check(
     JSON.stringify(evidenceFlags) ===
       JSON.stringify(probeIds.map((probeId) => path.join(scoreDirectory, probeId, 'evidence-artifact.json'))) &&
@@ -513,13 +520,10 @@ function checkAggregateRerun(label, { engine, runDirectory, scoreDirectory, prob
       call.argv[0] === 'aggregate-strength',
     `${label}: the aggregate call carried ${JSON.stringify(call.argv)}`,
   );
-  const out = value('--out');
   check(
-    typeof out === 'string' &&
-      path.basename(out) === 'strength-aggregate.json' &&
-      path.basename(path.dirname(out)).startsWith('tea-evaluate-aggregate-') &&
-      !fs.existsSync(path.dirname(out)),
-    `${label}: the aggregate call names --out ${out}, which is not a removed staging file`,
+    call.argv[call.argv.indexOf('--out') + 1] === `${STAGING}/strength-aggregate.json` &&
+      call.argv.every((argument) => !path.isAbsolute(argument)),
+    `${label}: the aggregate call names --out ${call.argv[call.argv.indexOf('--out') + 1]} or an absolute path in ${JSON.stringify(call.argv)}`,
   );
   const aggregate = JSON.parse(bytes.toString('utf8'));
   for (const input of aggregate.inputs) {
@@ -783,29 +787,23 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
     );
     const call = written(path.join(scoreDirectory, probeId, 'score.json'), `${probeId}'s score call`) ?? { argv: [] };
     const set = index.trialSets.find((candidate) => candidate.probeId === probeId);
-    const value = (flag) => call.argv[call.argv.indexOf(flag) + 1];
+    // The record states the call in neutral forms (`recorded-paths.js`); resolved, the argv names the run directory's own files.
+    const resolved = runnableArgv(call.argv, { ...scoreContext(scoreDirectory), out: '<staging-out>' });
+    const value = (flag) => resolved[resolved.indexOf(flag) + 1];
     check(
-      JSON.stringify(call.argv.flatMap((argument, at) => (argument === '--record' ? [call.argv[at + 1]] : []))) ===
+      JSON.stringify(resolved.flatMap((argument, at) => (argument === '--record' ? [resolved[at + 1]] : []))) ===
         JSON.stringify(set.records.map((relative) => path.join(runDirectory, relative))) &&
         value('--isolation-manifest') === path.join(runDirectory, set.isolationManifest) &&
         value('--evaluator-configuration') === path.join(runDirectory, 'evaluator-configuration.json') &&
         value('--probe') === path.join(runDirectory, set.probe),
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
-    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
-    // parent beneath the user's private root in `/tmp`, whatever the run's temp directory is (Story 1.58), and gone once the call was copied in.
-    const out = value('--out');
+    // `--out` is the private staging file, which the record states as `<staging>/<name>`; no argument of the record is an absolute path.
+    // The staging file's real place is checked against the argv a shim logs (`checkShimmedScore`).
+    const recordedOut = call.argv[call.argv.indexOf('--out') + 1];
     check(
-      typeof out === 'string' &&
-        path.basename(out) === 'evidence-artifact.json' &&
-        path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
-        path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
-        /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
-        ['/tmp', fs.realpathSync('/tmp')].includes(path.dirname(path.dirname(path.dirname(path.dirname(out))))) &&
-        !fs.existsSync(path.dirname(path.dirname(out))) &&
-        !out.startsWith(`${folder}${path.sep}`) &&
-        !fs.existsSync(path.dirname(out)),
-      `${probeId}'s score call names --out ${out}, which is not a removed staging file in the private root`,
+      recordedOut === `${STAGING}/evidence-artifact.json` && call.argv.every((argument) => !path.isAbsolute(argument)),
+      `${probeId}'s score call names --out ${recordedOut} or an absolute path in ${JSON.stringify(call.argv)}`,
     );
   }
   checkDirectRerun('the passing run', scoreDirectory);
@@ -893,10 +891,25 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
     );
     const call = written(path.join(scoreDirectory, set.probeId, 'score.json'), `${set.probeId}'s shimmed score call`);
     if (call === null) continue;
-    // The recorded argv is the argv that ran, the staging path in `--out` included.
+    // The recorded argv is the argv that ran, in the neutral forms the record states.
     check(
-      JSON.stringify(call.argv) === JSON.stringify(argv),
+      JSON.stringify(call.argv) === JSON.stringify(recordedArgv(argv, scoreContext(scoreDirectory))),
       `${set.probeId}'s persisted argv ${JSON.stringify(call.argv)} is not the argv the engine was called with, ${JSON.stringify(argv)}`,
+    );
+    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
+    // parent beneath the user's private root in `/tmp`, whatever the run's temp directory is (Story 1.58), and gone once the call was copied in.
+    const out = argv[argv.indexOf('--out') + 1];
+    check(
+      typeof out === 'string' &&
+        path.basename(out) === 'evidence-artifact.json' &&
+        path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
+        path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
+        /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
+        ['/tmp', fs.realpathSync('/tmp')].includes(path.dirname(path.dirname(path.dirname(path.dirname(out))))) &&
+        !fs.existsSync(path.dirname(path.dirname(out))) &&
+        !out.startsWith(`${folder}${path.sep}`) &&
+        !fs.existsSync(path.dirname(out)),
+      `${set.probeId}'s score call ran with --out ${out}, which is not a removed staging file in the private root`,
     );
     const probeFile = `${set.probeId}.probe.json`;
     const code = set.probeId === 'P-001' ? 0 : 3;
@@ -2996,7 +3009,7 @@ function checkUnverifiedEvidence() {
       if (call === null) continue;
       const logged = calls.find((argv) => argv[argv.indexOf('--probe') + 1]?.endsWith(`${probeId}.probe.json`));
       check(
-        JSON.stringify(call.argv) === JSON.stringify(logged),
+        JSON.stringify(call.argv) === JSON.stringify(recordedArgv(logged, scoreContext(scoreDirectory))),
         `${mode}, ${probeId}: the persisted argv ${JSON.stringify(call.argv)} is not the argv the engine ran with, ${JSON.stringify(logged)}`,
       );
       const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
@@ -3226,16 +3239,17 @@ async function checkHeldInputs() {
     );
     const call = written(path.join(secondDirectory, probeId, 'score.json'), `${probeId}'s repeated score call`);
     if (call === null) continue;
-    // The recorded argv names the run directory's own files; only `--out` names the private staging file.
+    // The recorded argv names the run directory's own files by their path below the evaluation folder; only `--out` names the private staging file.
     const named = call.argv.filter((argument, position) =>
       /^--(record|contract|probe|preflight-verdict|policy|isolation-manifest|evaluator-configuration)$/.test(call.argv[position - 1] ?? ''),
     );
+    const runPrefix = `runs/${path.basename(runDirectory)}/`;
     check(
-      named.length >= 7 && named.every((file) => file.startsWith(`${runDirectory}${path.sep}`)),
+      named.length >= 7 && named.every((file) => file.startsWith(runPrefix)),
       `${probeId}: the recorded argv names a path outside the run directory: ${JSON.stringify(named)}`,
     );
     const out = call.argv[call.argv.indexOf('--out') + 1];
-    check(!out.startsWith(runDirectory) && path.basename(out) === 'evidence-artifact.json', `${probeId}: the recorded --out is ${out}`);
+    check(out === `${STAGING}/evidence-artifact.json`, `${probeId}: the recorded --out is ${out}`);
   }
   checkDirectRerun('the normal score', firstDirectory);
   checkDirectRerun('the repeated score', secondDirectory);
@@ -10117,8 +10131,8 @@ async function checkSubscriptionLogin() {
   check(filedRun?.confinement === CONFINEMENT, `the login-file run recorded confinement ${filedRun?.confinement}; expected ${CONFINEMENT}`);
   check(
     JSON.stringify(filedRun?.logins) ===
-      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: null, file: realFile }]),
-    `the login-file run recorded the logins ${JSON.stringify(filedRun?.logins)}; expected the credentials file by path and no variable`,
+      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: null, file: '<credentials-file>' }]),
+    `the login-file run recorded the logins ${JSON.stringify(filedRun?.logins)}; expected the credentials file as <credentials-file> and no variable`,
   );
   const filedOut = trialStdout(filed.directory, 'clean', 1);
   check(
@@ -10156,12 +10170,14 @@ async function checkSubscriptionLogin() {
   checkMounts(plainMounts(filed.directory), [], "the login file's audit of the plain trials");
   const filedManifest = written(path.join(filed.directory, 'trial-sets', 'P-001', 'isolation-manifest.json'), 'the login-file manifest');
   check(
-    filedManifest?.allowedMounts?.includes(`read-only login ${realFile}`),
+    filedManifest?.allowedMounts?.includes('read-only login <credentials-file>'),
     `the isolation manifest's allowed mounts ${JSON.stringify(filedManifest?.allowedMounts)} do not name the login file read-only`,
   );
   const filedNote = Object.values(filedManifest?.forbiddenInputAccounting ?? {})[0]?.note ?? '';
   check(
-    filedNote.includes(`the file ${realFile}, read-only`) && !filedNote.includes('the environment variable'),
+    filedNote.includes('the file <credentials-file>, read-only') &&
+      !filedNote.includes(realFile) &&
+      !filedNote.includes('the environment variable'),
     `the isolation manifest's note does not name the granted file alone: ${filedNote}`,
   );
   check(
@@ -10213,8 +10229,8 @@ async function checkSubscriptionLogin() {
   );
   const configuredRun = written(path.join(configured.directory, 'run.json'), 'the CLAUDE_CONFIG_DIR run');
   check(
-    configuredRun?.logins?.[0]?.file === fs.realpathSync(kept),
-    `the CLAUDE_CONFIG_DIR run recorded ${configuredRun?.logins?.[0]?.file}; expected the real path of the file the link names, ${fs.realpathSync(kept)}`,
+    configuredRun?.logins?.[0]?.file === '<credentials-file>' && !JSON.stringify(configuredRun).includes(kept),
+    `the CLAUDE_CONFIG_DIR run recorded ${configuredRun?.logins?.[0]?.file}; expected <credentials-file>, and no path of the file the link names, ${kept}`,
   );
   check(
     loginField(trialStdout(configured.directory, 'clean', 1), 'login-file') === sha(credentials),
@@ -10894,13 +10910,14 @@ async function checkSubscriptionLoginUnits() {
   const plainProfile = sandboxFor('seatbelt', []).wrap(process.execPath, ['-e', '']).args[1];
   check(!plainProfile.includes(file), 'a Seatbelt profile with no linked file names one');
 
-  // The manifest's note names the variable and the path and holds no value.
+  // The manifest's note names the variable and the file as `<credentials-file>`, and holds no value and no path.
   const noteOf = (logins) => forbiddenInputNote({ mode: CONFINEMENT }, [], logins);
   const given = noteOf([{ interfaceId: 'agent', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file }]);
   check(
     given.includes('The registry entry "agent" declares "login": "claude"') &&
       given.includes('the environment variable CLAUDE_CODE_OAUTH_TOKEN and the file') &&
-      given.includes(`${file}, read-only`) &&
+      given.includes('<credentials-file>, read-only') &&
+      !given.includes(file) &&
       given.includes("no record holds the variable's value or a string of the file"),
     `the note for a granted login reads ${given}`,
   );

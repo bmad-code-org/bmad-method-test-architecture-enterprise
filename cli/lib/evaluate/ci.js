@@ -35,8 +35,10 @@
  *     verdict and the per-probe evidence artifacts, strength aggregate and floors file are compared byte for byte with
  *     the baseline's. The stage exits pass through; when they are 0 or 2 and
  *     a file differs, is missing or is extra, the check exits 13 (evaluation evidence drift). Every file `score`
- *     writes under `scores/<id>/` is compared except its call records (`score.json` and `aggregate-strength.json`),
- *     which hold the argv of each engine call with the private staging paths and the invocation id of this replay.
+ *     writes under `scores/<id>/` is compared, the call records (each probe's `score.json` and `aggregate-strength.json`)
+ *     included, since they record neutral path forms (`recorded-paths.js`) that a replay of the same records writes
+ *     again. The one file left out is the invocation's own `scores/<id>/score.json` summary, which names this replay's
+ *     invocation id.
  *   - `gameability` scores the gameability arm of every gameability probe through `score` over the baseline's records;
  *     no target launches.
  *   - `oracle-agreement` reads the `corroboration` the engine recorded on each oracle outcome of the baseline evidence.
@@ -112,8 +114,8 @@ const POLICY_NAME = 'policy/scoring-policy.json';
 const CONFORMANCE_FILE = 'adapter/http-probe-port.conformance.mjs';
 const SCRATCH_PREFIX = 'tea-evaluate-replay-';
 const OWNER_NAME = '.tea-evaluate-ci-owner.json';
-/** What a replay leaves out of its comparison: the call records of `score`, which hold each engine call's argv, private staging paths and invocation id. */
-const CALL_RECORDS = new Set(['score.json', 'aggregate-strength.json']);
+/** What a replay leaves out of its comparison: the invocation's own summary, which names the invocation id of this replay. */
+const SUMMARY_RECORD = 'score.json';
 /**
  * What a child (a gate, the conformance run) may print and how long it may run. A child that prints more than
  * `MAX_OUTPUT_BYTES` (64 MiB, both streams together) is killed and the check exits 12 with what was captured; a gate
@@ -610,6 +612,7 @@ function engineStageCheck(context, entry, stage, produced) {
   const output = path.join(staging, produced);
   const called = runEngineStage(stage, ['--in', path.join(context.folder, CONTRACT_NAME), '--out', output], {
     runDirectory: context.writer.root,
+    folder: context.folder,
     recordPath: `checks/${entry.id}/engine.json`,
     writer: context.writer,
     env: context.env,
@@ -799,6 +802,7 @@ function staleBaseline(context, baseline) {
     if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);
     const stage = runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
       runDirectory: context.writer.root,
+      folder: context.folder,
       recordPath: 'baseline-staleness/engine.json',
       writer: context.writer,
       env: context.env,
@@ -859,7 +863,7 @@ async function tierBaseline(context) {
 
 // --- the replay
 
-/** Every regular file under `root/relative` as `path below relative -> bytes`, call records left out; null with findings when a link is met. */
+/** Every regular file under `root/relative` as `path below relative -> bytes`, the invocation's summary left out; null with findings when a link is met. */
 function evidenceFiles(root, relative) {
   const files = new Map();
   const findings = [];
@@ -868,7 +872,7 @@ function evidenceFiles(root, relative) {
     relative,
     (child) => {
       const name = child.slice(relative.length + 1);
-      if (CALL_RECORDS.has(path.posix.basename(name))) return;
+      if (name === SUMMARY_RECORD) return;
       files.set(name, regularFileBytes(path.join(root, ...child.split('/'))));
     },
     findings,
@@ -943,6 +947,7 @@ function replayPreflight(context, baseline) {
       ],
       {
         runDirectory: context.writer.root,
+        folder: scratch.folder,
         recordPath: 'replay/engine/preflight.json',
         writer: context.writer,
         env: context.env,
@@ -983,7 +988,7 @@ function replayScore(context, baseline) {
     if (scoreId !== null) {
       const relative = `scores/${scoreId}`;
       ({ files: produced } = evidenceFiles(scratch.runDirectory, relative));
-      // Everything the score wrote is kept as evidence, its call records included; the comparison leaves those out.
+      // Everything the score wrote is kept as evidence, its summary included; the comparison leaves the summary out.
       const everything = new Map();
       walkRegular(
         scratch.runDirectory,
@@ -1409,4 +1414,4 @@ const EVALUATE_CHECKS = Object.fromEntries([
   ['strength-comparison', strengthComparisonCheck],
 ]);
 
-module.exports = { CALL_RECORDS, CiOutcome, EVALUATE_CHECKS, MAX_OUTPUT_BYTES, confine, runCiCommand };
+module.exports = { SUMMARY_RECORD, CiOutcome, EVALUATE_CHECKS, MAX_OUTPUT_BYTES, confine, runCiCommand };

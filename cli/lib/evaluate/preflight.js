@@ -110,6 +110,7 @@ const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle 
 const { PartitionPlanError, committedProbes, loadContractView, selectPartition, unknownPartition } = require('./partition');
 const { createArtifactValidator } = require('./records');
 const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
+const { CREDENTIALS_FILE, REPOSITORY, workspaceDirectory } = require('./recorded-paths');
 const { registryFromEvaluation } = require('./registry');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const {
@@ -242,7 +243,7 @@ function legFileName(sequence, legId) {
  * label and working directory the leg ran in.
  *
  * @param {object} options
- * @param {{label: string, cwd: string, port: object}} options.pristine
+ * @param {{label: string, cwd: string, port: object}} options.pristine `cwd` is the recorded form of the working directory (`recorded-paths.js`)
  * @param {Map<string, {label: string, cwd: string, port: object}>} [options.routes] by leg identifier
  * @param {object} options.registry
  * @param {RunDirectory} options.writer the run directory, which holds `observations/` and `faults/`
@@ -819,7 +820,8 @@ async function runInWorkspaces({
       treeDigest: pristine.treeDigest,
       dirty: pristine.dirty,
     },
-    workspaces: { pristine: pristine.root },
+    // Where each workspace sat is the machine's own: the run records its neutral form (`recorded-paths.js`), and the label names the workspace.
+    workspaces: { pristine: workspaceDirectory(pristine) },
     // seatbelt, bubblewrap or opt-out (Story 1.31).
     confinement: confinement.mode,
     // The entries that authorize hosts (`egress`) and the `host:port` items each lists; under Bubblewrap those are the only hosts
@@ -827,8 +829,8 @@ async function runInWorkspaces({
     egress: registry.egressEntries.map((entry) => ({ interfaceId: entry.interfaceId, hosts: [...entry.hosts] })),
     // The entries that declare a `login` and what each was given: the variable's name and the credentials file's path, with no value (Story 1.113).
     // `scrubFile` is the host's file an opted-out run reads only to scrub, and no record holds it.
-    logins: registry.logins.map(({ scrubFile, ...login }) => login),
-    adopterTree: { repository: before.repository, unchanged: null },
+    logins: registry.logins.map(({ scrubFile, ...login }) => ({ ...login, file: login.file === null ? null : CREDENTIALS_FILE })),
+    adopterTree: { repository: before.repository === null ? null : REPOSITORY, unchanged: null },
     refused: [],
   };
   state.run = run;
@@ -847,7 +849,7 @@ async function runInWorkspaces({
     const staging = makeScratchDirectory(scratch, 'tea-evaluate-engine-');
     try {
       const produced = path.join(staging, output);
-      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, writer, env, log });
+      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
       if (fs.existsSync(produced)) writer.copyIn(output, produced);
       return result;
     } finally {
@@ -1116,7 +1118,7 @@ async function runInWorkspaces({
   let settled = false;
   try {
     const recorder = recordingPort({
-      pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
+      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: pristineAdapter },
       routes,
       registry,
       writer,
@@ -1314,7 +1316,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
     privateRoot: registry.privateRoot,
   });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
-  return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
+  return { label: `mutated:${mutation.mutationId}`, cwd: workspaceDirectory(workspace), port };
 }
 
 /**

@@ -33,20 +33,21 @@ The tier needs no secret, no model call and no target launch, so its time is the
 ## Baselines
 
 Each baseline came through `compare --accept` from a clean run of both partitions in a disposable copy with a unique directory name under the session scratch directory (a git repository holding one commit, the packages `eval-quality` and the TeA package linked above it), so every `run.json` records `dirty: false`, `workspace.kind: copy` and `completed: true`.
-The MCP and API baselines are the ones Story 1.104 re-recorded on 7.1.0; the other seven are new.
-`run.json` records the copy's `/private/tmp` root and its `/private/var/folders` workspaces, and each `scores/<invocation>/` call record carries the copy's `/private/tmp` argv and the eval-quality CLI path of the recording checkout under `/Users/`.
+Story 1.91 accepted all nine again from fresh runs on 7.1.0 (the runs and invocations below are the new ones), together with the other three committed baselines (the CI repositories and the `verdict-ci` fixture), so that no baseline names the recording machine.
+`run.json` records `<workspace>` and `<repository>` for the copy's workspaces and repository, each observation records `<workspace>` as its `cwd`, and each `scores/<invocation>/` call record carries the argv below the evaluation folder (`runs/<run>/...`), `<staging>/<file name>` for its `--out` and `eval-quality/dist/cli/main.js` for the executable.
+The contract verdicts and coverage-rule counts are the ones the earlier baselines recorded.
 
 | Evaluation  | Accepted run                   | Score invocation               | Probes | Contract verdict            |
 | ----------- | ------------------------------ | ------------------------------ | ------ | --------------------------- |
-| mcp         | `20261004T124642952Z-9a9c88f5` | `20261004T124645495Z-a4eddad9` | 2      | CONCERNS (4 coverage rules) |
-| api         | `20261004T124711002Z-f2997476` | `20261004T124715430Z-9131950a` | 2      | CONCERNS (5 coverage rules) |
-| workflow    | `20261004T191316166Z-bc619555` | `20261004T191320390Z-3da3cda9` | 2      | CONCERNS (6 coverage rules) |
-| tool-use    | `20261004T191335891Z-0ce3e7fd` | `20261004T191343779Z-a84c452d` | 2      | CONCERNS (4 coverage rules) |
-| promptfoo   | `20261004T191353878Z-cbee24f1` | `20261004T191406606Z-a7a40fad` | 2      | CONCERNS (4 coverage rules) |
-| ai-feature  | `20261004T191446599Z-3e9d14bf` | `20261004T191642924Z-d9a16f31` | 15     | PASS                        |
-| test-review | `20261004T191657799Z-2abe4791` | `20261004T191803168Z-89b098e2` | 17     | PASS                        |
-| gap-loop    | `20261004T192119203Z-1fa663d9` | `20261004T192224143Z-77271974` | 16     | PASS                        |
-| learn       | `20261004T191416879Z-8cc331b3` | `20261004T191429352Z-98099778` | 6      | PASS                        |
+| mcp         | `20261005T002637506Z-c07ad017` | `20261005T002640548Z-f865198c` | 2      | CONCERNS (4 coverage rules) |
+| api         | `20261005T002653577Z-ef22f04c` | `20261005T002658491Z-0e79935d` | 2      | CONCERNS (5 coverage rules) |
+| workflow    | `20261005T002700231Z-2a847f02` | `20261005T002704270Z-060cb355` | 2      | CONCERNS (6 coverage rules) |
+| tool-use    | `20261005T003519483Z-09aa2413` | `20261005T003526622Z-1bb66c7f` | 2      | CONCERNS (4 coverage rules) |
+| promptfoo   | `20261005T003528438Z-a2899e78` | `20261005T003538994Z-bbfda810` | 2      | CONCERNS (4 coverage rules) |
+| ai-feature  | `20261005T003059220Z-94afbbcd` | `20261005T003245693Z-b6fda3d0` | 15     | PASS                        |
+| test-review | `20261005T003249653Z-94a4d2b7` | `20261005T003354745Z-4c12b1dc` | 17     | PASS                        |
+| gap-loop    | `20261005T003359218Z-a24b1481` | `20261005T003504334Z-a4e8f573` | 16     | PASS                        |
+| learn       | `20261005T003540834Z-9af645f6` | `20261005T003551497Z-8eae1cbc` | 6      | PASS                        |
 
 The five two-probe protocol fixtures (a clean control and one seeded defect each) record CONCERNS; `ci` reports it as a warning and exits 0, as AD-10 gives it.
 The four suites authored through Evaluate score PASS.
@@ -54,19 +55,20 @@ The four suites authored through Evaluate score PASS.
 ### Replay digests
 
 The replay re-runs eval-quality's `preflight` over the baseline's contract, probes and observations and `score` over its records, then compares the produced files with the baseline's byte for byte.
+Since Story 1.91 the comparison covers each probe's `score.json` and `aggregate-strength.json`, because the call records hold neutral path forms; only the invocation's own `score.json` summary stays out.
 The produced and baseline digests of the verdict and the strength aggregate for each evaluation, equal in every row:
 
 | Evaluation  | `preflight-verdict.json`                                                  | `strength-aggregate.json`                                                 |
 | ----------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| mcp         | `sha256:5276d2247079eda69490b2d259cb93866a810f30299d2be3ec2a57c74481b15b` | `sha256:d86eed4497c8b5af85e87b430ac16dd72001dad77398731b48d2e5cb259136ca` |
-| api         | `sha256:fda9ee7512195ae1c61e46403fd2b3a1abe57c4ff4bae3e13af04294b707f743` | `sha256:fdc106963384e83b49cac4f11046fd3a0f7e7df1bdde6adf857903ec004d96f8` |
-| workflow    | `sha256:f7db600be7353ebd20683ac0edf4f1f8c22e3b3e886c2c3a256d9110255c45b6` | `sha256:81d4cb97dc59957b79b68855355cb2001fac39d09dfa24087d32afc2eea8f0e9` |
-| tool-use    | `sha256:5920deb4fa4b259978e147cc6d1391262d68b18d2782f365e8ab850679d1daf0` | `sha256:c22fb4313872567a181a85652f0ccc25965b5f3f75194bef32a47a90c8d2c369` |
-| promptfoo   | `sha256:93fad916e18129174da39fa519c2e086208afb635049f347a136720cf3211ca5` | `sha256:6b00ebb045dac3ff531b1d256ec3f51f17fc96ae49c17785bd41c1741e66214a` |
-| ai-feature  | `sha256:b11fd6cca7d4ded69028879d9c2f618851b1b4bec1730eb053fed9342beabd2d` | `sha256:4fc3279bcd4ca631fad91f718e2abae1f0bf6e86cabd6f19fe71a3f4db819e07` |
-| test-review | `sha256:203d20eac3cc9e355baad73899f72fcb4f90e8acc725d743e31b61f2e38e376d` | `sha256:83007b82b3abdf0bd3f907606f3d7a6fdd58d4ff446448cd4f5a097ee9772859` |
-| gap-loop    | `sha256:3a286900b5250b44d9f2b93afd93e073975adc48617fd75b27edbb33df5bf9ed` | `sha256:f013bc14c9d957608c23a5efdbb8e94af39bcb3405fc1b78953633a513cffd36` |
-| learn       | `sha256:12e1fa8ad6686a2117b015bb2149bd27a6ba789b87c82db9f28ff7265c1d6f32` | `sha256:144cbae24f44c2772800567452101964b91c08280409d71bd09ef1aa36e33b59` |
+| mcp         | `sha256:c25e68c6b6d2bd5d549e17ad544bd57ee8b85804cdc560bc404e9c6caed2ea5e` | `sha256:26b476a636af4146d11374ac3c30e00f6fa162dde73ca58cc2ccf94d576fbd2a` |
+| api         | `sha256:e752c9cadbcd4433519f9cb25432a6b6675586ee17069979a7c8d784ccb5f12f` | `sha256:dcecb8aaf28acd2ba2e05639667177ae8fab36a282fde91d6f662dddc23b5e00` |
+| workflow    | `sha256:d7e793e814134f010d991b6882518d02bbebb2bdd56a3c1bde63061400153446` | `sha256:0d6015661e2f810a4709c5340614f93f8e45f65972727ffb69dcc932cd85de16` |
+| tool-use    | `sha256:bb0e4923a802f0faee1ba1e4b99653177dbadbfddcc8f756e4cb90095011da17` | `sha256:b1b29f0b6fd185c5512d67f27551b4fdb761e5c061514e0550bc5b0790c95345` |
+| promptfoo   | `sha256:3b2780965324a7f63bcb432103af1a42ab98f5ecc7f65b64346ecac2a91c4f51` | `sha256:4420dd8f86d2e9395a1718b419b4fea1c77a8f978139d83550fddfd8609ebe7f` |
+| ai-feature  | `sha256:502f43594ca6f1d33d7a729d28c71cd6aa1350bddae9e6d6e849f1844f2e0165` | `sha256:856850f9edd1be72ca9bcdd371f59f44f5d1cf8c5ade43748500c4c6ccbe4ce3` |
+| test-review | `sha256:34c8188dbe81c9177cbeb960e4fada7040cc1bfe9363637f1d305fb892d96caf` | `sha256:ac31ae6c41ff5f9c1de4b1a443cebde35c71d5647d45519bed304c4e897c53ff` |
+| gap-loop    | `sha256:7bc4e6fe6794ba68238c35980ec2ca0e633fffd3b656a79a643cf991169c7a1a` | `sha256:4a397cf8bdf25d75efadcc1638918a64e1568e6989180ab89ff64aeaa580f80f` |
+| learn       | `sha256:d46affe2db69cc54c8bda4aa28cda19af52130b454ec92e77a5d27dcbecebd4c` | `sha256:51ebb70caf8379550e957a66c6528b87d707be5939c0963bf91b01417e5afa27` |
 
 The gameability arm ran for `ai-feature` (P-009, P-015), `test-review` (P-009, P-015, P-017) and `gap-loop` (P-009, P-017), each through `score` over the baseline's records with no target launch.
 `oracle-agreement` read `0 oracle outcome(s) that disagree or cannot be evaluated` in every evaluation.

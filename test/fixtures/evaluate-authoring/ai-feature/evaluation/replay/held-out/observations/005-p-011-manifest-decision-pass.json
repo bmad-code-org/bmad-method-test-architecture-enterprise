@@ -2,7 +2,7 @@
   "legId": "p-011-manifest-decision-pass",
   "sequence": 5,
   "workspace": "mutated:M-005",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-5544ea58-7df3-4cc9-90ee-e6781fec6bd2/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-011-manifest-decision-pass",
     "interfaceId": "answer-grade",

@@ -318,6 +318,7 @@ module.exports = {
   canonicalAddress,
   digestScannedJson,
   engineCliPath,
+  enginePackageRoot,
   engineSchemaPath,
   engineVersion,
   expectedSchemaVersion,

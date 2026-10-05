@@ -2,7 +2,7 @@
   "legId": "manifest-shadow",
   "sequence": 7,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-1d916f78-cd32-4bc4-a9bf-74e606ae3a90/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-shadow",
     "interfaceId": "records",
@@ -31,9 +31,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-9a81b089-6bc3-4092-82f9-44e8e5990368",
+        "id": "rec-081989d5-0a35-4e52-a5cf-50d4eb612bb7",
         "title": "Ship the workflow",
-        "path": "store/rec-43f68e52-26ac-4d2d-8ffc-1e77678c90b1.json"
+        "path": "store/rec-d2830e90-3612-444b-b873-7c76bff62451.json"
       }
     },
     "stderr": {

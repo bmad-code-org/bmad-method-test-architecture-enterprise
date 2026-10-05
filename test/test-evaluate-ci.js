@@ -20,9 +20,9 @@
  *    another engine measured (`refused`, informational).
  *
  * The replay's determinism, measured here and recorded in the story: the produced preflight verdict, each probe's
- * `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json` equal the baseline's byte for byte; the
- * call records of `score` (`score.json` per probe and in total, and `aggregate-strength.json`) name each call's private
- * staging paths and the invocation id, so they differ by construction and are the only files the comparison leaves out.
+ * `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json` equal the baseline's byte for byte, and so do
+ * the call records of `score` (each probe's `score.json` and `aggregate-strength.json`), which hold neutral path forms; the
+ * invocation's own `score.json` summary names the replay's invocation id and is the one file the comparison leaves out.
  */
 
 const assert = require('node:assert/strict');
@@ -1480,7 +1480,7 @@ function checkPrReplay() {
 
   // A clean baseline: every pr check runs, in plan order, and exactly those (a hard-coded list would diverge from a plan that omits one).
   const log = path.join(path.dirname(folder), 'shim.log');
-  const clean = ci(folder, 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_RUN_REAL: '1' }));
+  const clean = ci(folder, 'pr');
   assert.equal(clean.status, 0, clean.output);
   const { directory, json } = latestCi(folder);
   assert.deepEqual(
@@ -1531,14 +1531,33 @@ function checkPrReplay() {
     'the replay did not reproduce the preflight verdict',
   );
   assert.deepEqual(treeDigest(path.join(folder, 'baseline')), baselineBefore, 'ci wrote under baseline/');
-  // The call records of score are the files the comparison leaves out: they differ by construction.
-  for (const name of ['score.json', 'aggregate-strength.json']) {
+  // The call records of score hold neutral path forms (`recorded-paths.js`), so the replay writes the baseline's bytes again and the
+  // comparison covers them; the invocation's own summary names this replay's invocation id and is the one file left out.
+  for (const name of ['P-001/score.json', 'P-002/score.json', 'aggregate-strength.json']) {
     assert.equal(
       fs.readFileSync(path.join(directory, 'replay', 'scores', name)).equals(fs.readFileSync(path.join(baselineScores, name))),
-      false,
-      `${name} is deterministic after all`,
+      true,
+      `the replay did not reproduce the call record ${name}`,
     );
   }
+  assert.equal(
+    fs
+      .readFileSync(path.join(directory, 'replay', 'scores', 'score.json'))
+      .equals(fs.readFileSync(path.join(baselineScores, 'score.json'))),
+    false,
+    'the invocation summary is deterministic after all',
+  );
+
+  // The same replay through the logging shim, which runs the real CLI beneath. The call records say the engine was substituted
+  // (`substituted` and the executable differ from the baseline's), so those three files are the only drift, and the evidence is the
+  // baseline's byte for byte.
+  const shimmed = ci(copyFixture('verdict', 'pr-shim'), 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_RUN_REAL: '1' }));
+  assert.equal(shimmed.status, 13, shimmed.output);
+  assert.deepEqual([...shimmed.stdout.matchAll(/replay: \[drift\] (\S+): the replay produced/g)].map((match) => match[1]).sort(), [
+    'scores/P-001/score.json',
+    'scores/P-002/score.json',
+    'scores/aggregate-strength.json',
+  ]);
 
   // The stage exits are the engine's: the direct CLI over the same inputs exits as the replay says, and the replay
   // re-ran preflight and score through the engine (the shim log) with no --strict anywhere.
@@ -1778,23 +1797,27 @@ function flipByte(file) {
 }
 
 function checkReplayComparisonSet() {
-  // The comparison set is five files over the verdict fixture: the preflight verdict, two evidence artifacts, the strength
-  // aggregate and its floors. A clean replay reads all five.
+  // The comparison set is eight files over the verdict fixture: the preflight verdict, two evidence artifacts, the strength
+  // aggregate and its floors, and the three call records (each probe's `score.json` and `aggregate-strength.json`), which hold
+  // neutral path forms. A clean replay reads all eight.
   const clean = copyFixture('verdict', 'comparison-set');
   const ok = ci(clean, 'pr');
   assert.equal(ok.status, 0, ok.output);
   assert.match(
     fs.readFileSync(path.join(latestCi(clean).directory, 'checks', 'replay', 'stdout'), 'utf8'),
-    /5 baseline file\(s\) compared, 0 difference\(s\)/,
+    /8 baseline file\(s\) compared, 0 difference\(s\)/,
   );
-  // One byte of the baseline's strength aggregate, and one byte of its floors (a space become a tab: the floors still
-  // parse, so the replay scores under them, and the file score writes from them differs from the baseline's bytes): each is
-  // drift, named (revert: leaving either file out of the comparison passes its case).
+  // One byte of the baseline's strength aggregate, one byte of its floors (a space become a tab: the floors still
+  // parse, so the replay scores under them, and the file score writes from them differs from the baseline's bytes), and one byte
+  // of a probe's call record and of the aggregate's: each is drift, named (revert: leaving any of these files out of the
+  // comparison passes its case, so the case fails).
   for (const [name, edit] of [
     ['strength-aggregate.json', (file) => flipByte(file)],
+    ['P-001/score.json', (file) => flipByte(file)],
+    ['aggregate-strength.json', (file) => flipByte(file)],
     ['strength-floors.json', (file) => fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(': ', ':\t'))],
   ]) {
-    const folder = copyFixture('verdict', `comparison-${name}`);
+    const folder = copyFixture('verdict', `comparison-${name.replaceAll('/', '-')}`);
     const file = path.join(scoreDirectory(folder), name);
     const before = fs.readFileSync(file);
     edit(file);

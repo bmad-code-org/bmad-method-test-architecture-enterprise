@@ -2,7 +2,7 @@
   "legId": "manifest-p-005",
   "sequence": 5,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-97caf148-fc6c-4b8c-ae01-be28a6836564/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-p-005",
     "interfaceId": "review-cli",

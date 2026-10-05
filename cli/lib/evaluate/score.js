@@ -625,6 +625,8 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     let stageFailed = false;
     try {
       const result = runEngineStage('score', args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(recordRelative),
         writer,
@@ -903,6 +905,8 @@ async function strengthAggregateStep({
     let result;
     try {
       result = runEngineStage(AGGREGATE_STAGE, args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(callRelative),
         writer,

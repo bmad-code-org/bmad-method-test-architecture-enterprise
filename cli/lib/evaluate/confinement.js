@@ -164,6 +164,7 @@ const crypto = require('node:crypto');
 const { startEgress } = require('./confinement-egress');
 const { signedStatus } = require('./confinement-status.cjs');
 const { loadEngine } = require('./engine');
+const { CREDENTIALS_FILE } = require('./recorded-paths');
 const { BUBBLEWRAP_ARGUMENT_LIMIT, isSocketFile, listHostSockets, socketBudget } = require('./host-sockets');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -1985,18 +1986,18 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
  *
  * @param {object|null} confinement
  * @param {Array<{ interfaceId: string, hosts: string[] }>} [egress] the registry entries that authorize hosts, with their `host:port` items (Story 1.83)
- * @param {Array<{ interfaceId: string, login: string, variable: string|null, file: string|null }>} [logins] the entries that declare a login and what each was given, by the variable's name and the file's path (Story 1.113)
+ * @param {Array<{ interfaceId: string, login: string, variable: string|null, file: string|null }>} [logins] the entries that declare a login and what each was given, by the variable's name and `<credentials-file>` for the file (Story 1.113)
  * @returns {string}
  */
 function forbiddenInputNote(confinement, egress = [], logins = []) {
   const handed =
     "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial.";
-  // What each entry's `login` hands its processes, named by the variable and the path, with no value (Story 1.113).
+  // What each entry's `login` hands its processes, named by the variable and the file's neutral form (`recorded-paths.js`), with no value (Story 1.113).
   const given = logins
     .map((login) => {
       const sources = [
         ...(login.variable === null ? [] : [`the environment variable ${login.variable}`]),
-        ...(login.file === null ? [] : [`the file ${login.file}, read-only`]),
+        ...(login.file === null ? [] : [`the file ${CREDENTIALS_FILE}, read-only`]),
       ];
       return sources.length === 0
         ? ''

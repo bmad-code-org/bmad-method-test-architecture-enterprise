@@ -9,6 +9,11 @@
  * call's argv, exit code, stdout and stderr are written under the run's
  * `engine/` directory, so a verdict and its diagnostics can be read back
  * after the run (AD-12).
+ *
+ * The record holds neutral path forms (`recorded-paths.js`): a file inside the
+ * evaluation folder by its path below it, a staging file as `<staging>/<name>`,
+ * and the executable below the engine package, so a record published with a
+ * baseline or a CI artifact names no machine path.
  */
 
 'use strict';
@@ -17,7 +22,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { ENGINE_CLI_ENV, engineCliPath } = require('./engine');
+const { ENGINE_CLI_ENV, engineCliPath, enginePackageRoot } = require('./engine');
+const { pathRecorder, recordedEngineCli } = require('./recorded-paths');
 
 const NODE_SCRIPT = /\.(?:c|m)?js$/;
 
@@ -69,6 +75,8 @@ const DOCUMENTED_EXITS = new Map([
  * @param {string[]} args
  * @param {object} options
  * @param {string} options.runDirectory `runs/<invocationId>/`; the record goes to `engine/<stage>.json` in it
+ * @param {string} options.folder the evaluation folder the call runs over, which the record's argv names files below
+ * @param {string|null} [options.scoreInvocation] the score invocation the call belongs to, which the record's argv names as `<score-invocation>`
  * @param {string} [options.recordPath] where the record goes instead, for a stage called more than once in a run (`score`, once per probe, and `aggregate-strength`, in the score directory)
  * @param {{ write: (file: string, bytes: string) => string }} [options.writer] the run directory's writer, which writes the record as a new file and holds its digest (`run-directory.js`)
  * @param {NodeJS.ProcessEnv} [options.env]
@@ -76,7 +84,12 @@ const DOCUMENTED_EXITS = new Map([
  * @returns {{ exitCode: number, stdout: string, stderr: string, recordPath: string }}
  * @throws {EngineStageError} when the stage cannot start, is killed by a signal, or exits with an undocumented code
  */
-function runEngineStage(stage, args, { runDirectory, recordPath: recordAt = null, writer = null, env = process.env, log = () => {} }) {
+function runEngineStage(
+  stage,
+  args,
+  { runDirectory, folder, scoreInvocation = null, recordPath: recordAt = null, writer = null, env = process.env, log = () => {} },
+) {
+  if (typeof folder !== 'string' || folder === '') throw new TypeError('runEngineStage needs the evaluation folder the call runs over');
   const cli = engineCliPath(env);
   const substituted = typeof env[ENGINE_CLI_ENV] === 'string' && env[ENGINE_CLI_ENV].length > 0;
   if (substituted) log(`${ENGINE_CLI_ENV} substitutes ${cli} for the eval-quality CLI`);
@@ -85,16 +98,19 @@ function runEngineStage(stage, args, { runDirectory, recordPath: recordAt = null
   const result = spawnSync(command, commandArgs, { encoding: 'utf8', env, maxBuffer: MAX_STAGE_OUTPUT_BYTES });
   const exitCode = result.status;
   const recordPath = recordAt ?? path.join(runDirectory, 'engine', `${stage}.json`);
+  const recorder = pathRecorder({ folder, scoreInvocation });
+  // The argv is recorded first: the output's paths are read back through the forms the argv gave.
+  const recordedArgv = argv.map((argument) => recorder.argument(argument));
   const record = {
     stage,
-    cli,
+    cli: recordedEngineCli(cli, { substituted, packageRoot: enginePackageRoot }),
     substituted,
-    argv,
+    argv: recordedArgv,
     exitCode,
     signal: result.signal,
-    error: result.error?.message ?? null,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
+    error: recorder.text(result.error?.message ?? null),
+    stdout: recorder.text(result.stdout ?? ''),
+    stderr: recorder.text(result.stderr ?? ''),
   };
   if (writer === null) {
     fs.mkdirSync(path.dirname(recordPath), { recursive: true });
@@ -113,7 +129,8 @@ function runEngineStage(stage, args, { runDirectory, recordPath: recordAt = null
       `eval-quality ${stage} exited ${exitCode}, which is no exit the CLI documents for ${stage}; its output is in ${recordPath}`,
     );
   }
-  return { exitCode, stdout: record.stdout, stderr: record.stderr, recordPath };
+  // The caller reads what the stage printed; only the record states it in the neutral forms.
+  return { exitCode, stdout: result.stdout ?? '', stderr: result.stderr ?? '', recordPath };
 }
 
 module.exports = { DOCUMENTED_EXITS, EngineStageError, runEngineStage };

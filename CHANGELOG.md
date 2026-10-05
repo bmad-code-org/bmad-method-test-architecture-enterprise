@@ -354,6 +354,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate` records neutral path forms, so a committed baseline names no machine (Story 1.91, AD-12).
+  `compare --accept` copied every file byte for byte, and `run.json`, the observations and the score call records carried the workspace paths, the repository path, the evaluation checkout's path and the private staging path of the machine that produced the run.
+  The runtime now writes `<workspace>`, `<repository>` and `<credentials-file>` in `run.json`, the observations and the isolation manifests, and each engine call record states its executable as `eval-quality/<path below the package>` and its argv with the evaluation folder's files by their path below the folder, the staging file as `<staging>/<file name>` and the score invocation's directory as `<score-invocation>`.
+  Every digest is taken over those bytes, so `compare --accept` still copies the run unchanged and each digest `run.json` anchors holds.
+  A recorded argv reruns by hand from the evaluation folder.
+  The `pr` replay's comparison set now covers each probe's `score.json` and `aggregate-strength.json`, which Story 2.2 left out because of those paths, so a changed call record is drift and exits 13.
+  Only the invocation's own `score.json` summary stays out, because it names the replay's invocation id.
+  A baseline accepted before this release holds absolute paths in those call records, so its `pr` replay reports drift (exit 13) until `compare --accept` records it again.
+  The twelve committed fixture baselines are accepted again from fresh runs, and the gap-loop, AI-feature and test-review replay bundles hold the same forms.
+  A `test:evaluate-compare` case accepts a run made under a distinctive project path and temporary directory and scans every file under `baseline/` for them, the home directory and the temporary roots, a second case scans every committed `baseline/` under `test/fixtures/` and `test/evaluations/`, and a `test:evaluate-ci` case flips one byte of each call record and expects exit 13.
+  The reference describes the forms under "Paths in the records".
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).
