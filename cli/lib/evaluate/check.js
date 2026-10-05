@@ -173,7 +173,7 @@ const { answeredKind, degenerateResponsePath } = require('./gameability');
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
 const {
-  HELD_OUT_ANSWERS_DIRECTORY,
+  HELD_OUT_DIRECTORY,
   PROBE_ID,
   PartitionPlanError,
   STEP_ID,
@@ -2480,7 +2480,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   try {
     const planFile = evaluation.partitionPlan?.heldOutPlan;
     const stale = await corpusIndexProblem(folder, {
-      unread: openPlan || typeof planFile !== 'string' ? [] : [planFile, HELD_OUT_ANSWERS_DIRECTORY],
+      unread: openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY],
     });
     if (stale !== null) report.add(INDEX_NAME, 'stale-index', stale);
   } catch (error) {

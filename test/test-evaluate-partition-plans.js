@@ -31,7 +31,7 @@
  * the steps of `contract.json` from `corpus/gameability/<probeId>.json` and the held-out plan's steps from
  * `corpus/held-out/gameability/<probeId>.json`, beside the plan, so
  *  - each partition's and the both view's gameability arm answers only its own view's steps (an arm that answers the whole plan puts
- *    a held-out step in a development artifact), and a development run never opens the held-out answers,
+ *    a held-out step in a development artifact), and a development run reads no byte of the held-out answers,
  *  - `check` names a missing, misplaced or unreadable answer by probe and step ID, and a step of the held-out plan by an ID only when
  *    it has the schema's shape, and never by a byte of the sealed file.
  */
@@ -3618,12 +3618,16 @@ try {
     }
   }
   // The held-out files are sealed from a development run: whatever sits at their paths, a link, a FIFO or a path nobody may open, a
-  // development run neither lists, opens nor refuses it (the corpus index leaves it out and the tree reading takes its metadata), and
-  // a held-out run, a both run and `check` refuse it by path with no stack. A mode that denies the owner proves nothing for root.
+  // development run refuses none of it (the corpus index comparison neither lists nor opens it, and the tree reading lists the folder
+  // and takes `lstat` metadata alone), and a held-out run, a both run and `check` refuse it by path with no stack. A mode that denies
+  // the owner proves nothing for root.
   const answersDirectory = path.join(gamed.folder, HELD_OUT_ANSWERS_DIR);
   const answersPath = (probeId) => path.join(gamed.folder, answersFile(probeId, true));
   const planPath = path.join(gamed.folder, PLAN_FILE);
-  const deniesOwner = typeof process.getuid !== 'function' || process.getuid() !== 0;
+  // Whatever sits directly under `corpus/held-out/`, outside `gameability/` and not the plan, is sealed the same way: a development
+  // run's index comparison and tree reading decide the whole folder by its path.
+  const heldOutDirectory = path.join(gamed.folder, 'corpus', 'held-out');
+  const deniesOwner = process.platform !== 'win32' && typeof process.getuid === 'function' && process.getuid() !== 0;
   const ownerHolds = (file, mode) => () => fs.chmodSync(file, mode);
   const sealedCases = [
     [
@@ -3651,8 +3655,37 @@ try {
       },
       /corpus\/held-out\/gameability\/P-005\.json/,
     ],
+    [
+      'a link directly under the held-out folder',
+      () => fs.symlinkSync(path.join(elsewhereAnswers, 'P-006.json'), path.join(heldOutDirectory, 'link.json')),
+      /corpus\/held-out\/link\.json/,
+      undefined,
+      'corpus/held-out/link.json',
+    ],
+    [
+      'a FIFO directly under the held-out folder',
+      () => {
+        const made = spawnSync('mkfifo', [path.join(heldOutDirectory, 'pipe.json')]);
+        assert.equal(made.status, 0, `mkfifo failed: ${made.stderr}`);
+      },
+      /corpus\/held-out\/pipe\.json/,
+      undefined,
+      'corpus/held-out/pipe.json',
+    ],
+    [
+      'an edited file directly under the held-out folder',
+      () => {
+        write(path.join(heldOutDirectory, 'other.json'), { schemaVersion: 1 });
+        assert.equal(cli(gamed, 'digest').status, 0);
+        fs.appendFileSync(path.join(heldOutDirectory, 'other.json'), '\n');
+      },
+      /corpus-index\.json is stale.*corpus\/held-out\/other\.json changed or added/,
+      undefined,
+      'corpus/held-out/other.json',
+    ],
   ];
   if (deniesOwner) {
+    const notesDirectory = path.join(heldOutDirectory, 'notes');
     sealedCases.push(
       [
         'an answers directory nobody may open',
@@ -3667,16 +3700,27 @@ try {
         ownerHolds(answersPath('P-005'), 0o644),
       ],
       ['a held-out plan nobody may open', () => fs.chmodSync(planPath, 0), /corpus\/held-out\/plan\.json/, ownerHolds(planPath, 0o644)],
+      [
+        'a directory directly under the held-out folder nobody may list',
+        () => {
+          fs.mkdirSync(notesDirectory);
+          write(path.join(notesDirectory, 'a.json'), { schemaVersion: 1 });
+          fs.chmodSync(notesDirectory, 0);
+        },
+        /corpus\/held-out\/notes/,
+        ownerHolds(notesDirectory, 0o755),
+        'corpus/held-out/notes',
+      ],
     );
   }
-  for (const [name, edit, pattern, cleanup] of sealedCases) {
+  for (const [name, edit, pattern, cleanup, place = 'corpus/held-out/gameability'] of sealedCases) {
     for (const command of ['preflight', 'run']) {
       const before = launchCount(gamed);
       const development = gameRan(edit, { command, ...onDevelopment(), stale: true, cleanup });
       assert.equal(development.status, 0, `${name}: a development ${command} read the sealed path\n${development.output}`);
       assert.ok(launchesSince(gamed, before).length > 0, `${name}: the development ${command} launched nothing`);
       assert.equal(
-        development.output.includes('corpus/held-out/gameability'),
+        development.output.includes(place),
         false,
         `${name}: a development ${command} named a sealed path\n${development.output}`,
       );
@@ -3717,6 +3761,43 @@ try {
     const refused = gameRan(variantSpelling, { command, args, stale: true });
     assert.equal(refused.status, 10, `a case-variant answers directory, ${command} ${args.join(' ')}: ${refused.output}`);
     assert.match(refused.output, variantPattern, `a case-variant answers directory, ${command} ${args.join(' ')}`);
+  }
+  // The plan's directory spelled in another case is no folder the plan sits in: the on-disk spelling decides for `check` and a held-out
+  // or both run, which refuse `corpus/held-out/plan.json` by path, and a development run leaves the variant directory sealed, so a
+  // file under it that nobody may open changes nothing for it (a mode that denies the owner proves nothing for root).
+  const variantDirectory = path.join(gamed.folder, 'corpus', 'Held-Out');
+  const variantPlanDirectory = () => {
+    fs.renameSync(heldOutDirectory, `${heldOutDirectory}-moving`);
+    fs.renameSync(`${heldOutDirectory}-moving`, variantDirectory);
+  };
+  const variantPlanDenied = () => {
+    variantPlanDirectory();
+    fs.chmodSync(path.join(variantDirectory, 'plan.json'), 0);
+  };
+  const variantPlanCleanup = ownerHolds(path.join(variantDirectory, 'plan.json'), 0o644);
+  for (const [name, edit, cleanup] of [
+    ['a case-variant plan directory', variantPlanDirectory, undefined],
+    ...(deniesOwner ? [['a case-variant plan directory holding a plan nobody may open', variantPlanDenied, variantPlanCleanup]] : []),
+  ]) {
+    for (const command of ['preflight', 'run']) {
+      const development = gameRan(edit, { command, ...onDevelopment(), stale: true, cleanup });
+      assert.equal(development.status, 0, `${name} reached a development ${command}\n${development.output}`);
+      assert.equal(development.output.includes('Held-Out'), false, development.output);
+    }
+  }
+  for (const [command, args] of [
+    ['preflight', ['--partition', 'held-out']],
+    ['preflight', []],
+    ['check', []],
+  ]) {
+    const refused = gameRan(variantPlanDirectory, { command, args, stale: true });
+    assert.equal(refused.status, 10, `a case-variant plan directory, ${command} ${args.join(' ')}: ${refused.output}`);
+    assert.match(refused.output, /corpus\/held-out\/plan\.json/, `a case-variant plan directory, ${command} ${args.join(' ')}`);
+    assert.doesNotMatch(
+      refused.output,
+      /\n\s+at \S+ \(|node:internal/,
+      `a case-variant plan directory, ${command}: a stack\n${refused.output}`,
+    );
   }
   const staleAnswers = () => fs.appendFileSync(path.join(gamed.folder, answersFile('P-006', true)), '\n');
   const developmentStale = gameRan(staleAnswers, { command: 'preflight', args: ['--partition', 'development'], stale: true });

@@ -889,8 +889,9 @@ function sealedUnder(root, sealed) {
  * by path: each contributes its POSIX path and kind; directories and files
  * also contribute their mode, a file its SHA-256 bytes and a link its target.
  * A path in `exclude` (absolute) is left out with everything under it. A file
- * under a directory in `sealed` contributes `sealedContent` and is never
- * opened, and a sealed directory that cannot be listed contributes its mode.
+ * under a directory in `sealed` contributes `sealedContent` (its `lstat` metadata) and its bytes are never read, a sealed
+ * directory that cannot be listed contributes the error code of the listing, and a sealed entry `lstat` cannot reach contributes
+ * the error code of that call.
  *
  * @param {string} root
  * @param {object} [options]
@@ -915,13 +916,30 @@ function treeDigest(root, { exclude = [], sealed = [] } = {}) {
       const full = path.join(directory, entry.name);
       if (excluded.has(full)) continue;
       const relative = posix(path.relative(root, full));
-      if (entry.isSymbolicLink()) parts.push(relative, 'link', fs.readlinkSync(full));
-      else if (entry.isDirectory()) {
-        parts.push(relative, 'directory', fs.lstatSync(full).mode & 0o7777);
-        visit(full);
+      const sealedEntry = isSealed(relative);
+      // A sealed directory that can be listed and not entered (mode 0o444) names entries `lstat` and `readlink` cannot reach: the
+      // reading records that, and an entry outside a sealed directory that fails is still a refusal.
+      const statted = (read) => {
+        try {
+          return read(full);
+        } catch (error) {
+          if (!sealedEntry) throw error;
+          parts.push(relative, 'unstatted', error.code ?? 'error');
+          return null;
+        }
+      };
+      if (entry.isSymbolicLink()) {
+        const target = statted(fs.readlinkSync);
+        if (target !== null) parts.push(relative, 'link', target);
+      } else if (entry.isDirectory()) {
+        const stats = statted(fs.lstatSync);
+        if (stats !== null) {
+          parts.push(relative, 'directory', stats.mode & 0o7777);
+          visit(full);
+        }
       } else if (entry.isFile()) {
-        const stats = fs.lstatSync(full);
-        parts.push(relative, 'file', stats.mode & 0o7777, isSealed(relative) ? sealedContent(stats) : fileDigest(full));
+        const stats = statted(fs.lstatSync);
+        if (stats !== null) parts.push(relative, 'file', stats.mode & 0o7777, sealedEntry ? sealedContent(stats) : fileDigest(full));
       }
     }
   };
@@ -1074,7 +1092,7 @@ function repositoryOf(directory) {
 
 /**
  * What a path in the tree holds, for a digest: a file's SHA-256, a link's target, or a marker for anything else or nothing. A
- * `sealed` file holds its `lstat` metadata instead and is never opened.
+ * `sealed` file holds its `lstat` metadata instead, and its bytes are never read.
  */
 function contentOf(file, sealed = false) {
   let stats;
@@ -1173,7 +1191,7 @@ function repositoryRedirects(repository) {
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
  * @param {boolean} [options.sharedState] whether to read the shared git state (Story 1.112): `true` for a run whose targets can write it, `false` for a confined run, whose processes the layer denial keeps out of it
- * @param {string[]} [options.sealed] absolute directories whose files enter the reading by `lstat` metadata and are never opened (a
+ * @param {string[]} [options.sealed] absolute directories whose files enter the reading by `lstat` metadata, and no byte of one is read (a
  *   development run's `corpus/held-out/`, Story 1.109): a change to one still moves the reading
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer

@@ -18,11 +18,16 @@ const HELD_OUT_PLAN_VERSION = 1;
 const STEP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PROBE_ID = /^P-[0-9]{3,}$/;
 /**
- * Where a gameability probe's answers to the held-out plan's steps are committed (Story 1.109), one `<probeId>.json` per probe in
- * the shape of `corpus/gameability/<probeId>.json`. It sits beside the held-out plan under `corpus/held-out/`, which is sealed from
- * a development run: that run never opens it, and `corpus-index.js` leaves it out of a development run's staleness comparison.
+ * The folder the held-out plan and the held-out answers sit in, sealed from a development run: the held-out plan is a file
+ * directly under it, and `corpus-index.js` leaves everything below it out of a development run's staleness comparison.
  */
-const HELD_OUT_ANSWERS_DIRECTORY = 'corpus/held-out/gameability/';
+const HELD_OUT_DIRECTORY = 'corpus/held-out/';
+/**
+ * Where a gameability probe's answers to the held-out plan's steps are committed (Story 1.109), one `<probeId>.json` per probe in
+ * the shape of `corpus/gameability/<probeId>.json`. It sits beside the held-out plan under `HELD_OUT_DIRECTORY`: a development run
+ * opens none of it.
+ */
+const HELD_OUT_ANSWERS_DIRECTORY = `${HELD_OUT_DIRECTORY}gameability/`;
 const ORACLE_ID = /^O-[0-9]{3,}$/;
 const BEHAVIOR_ID = /^B-[0-9]{3,}$/;
 const RUBRIC_ID = /^R-[0-9]{3,}$/;
@@ -717,7 +722,7 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
 }
 
 module.exports = {
-  HELD_OUT_ANSWERS_DIRECTORY,
+  HELD_OUT_DIRECTORY,
   HELD_OUT_PLAN_VERSION,
   PARTITIONS,
   PROBE_ID,

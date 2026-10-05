@@ -2,7 +2,7 @@
 title: 'Story 1.109: Partition gameability degenerate responses'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'a12914a012325b6bd1c3fdfea1839cfd47aebaad'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -59,7 +59,7 @@ What the code and the engine hold, read before the design.
 - **What `check` does today for a missing answer.** `checkGameability` names it by file and step ID (`answers no response for interaction plan step <id>, so the gameability arm cannot run the plan`), exit 10. Under a plan, `checkPartitionPlan` refused any gameability probe (`is a gameability probe; its degenerate response answers one plan, so a partitionPlan does not partition gameability probes yet`), the only place that refused it: `preflight`, `run`, `ci` and `score` ignored the combination.
 - **Engine.** No engine change. `qualifyProbe` takes the candidate and its home operation, and a gameability probe has none; the both view's gameability arm is answered and qualified (both oracles of B-002 must be violated), then scored `caught: false` by eval-quality, which designates an oracle only for a behavior that names exactly one (Story 1.110's gap, as for the defect probes of B-002).
 
-AC amendments, recorded in `epics.md` and `test-design-epic-1.md`: the Given and Then named a response "the folder keeps beside the plan for its partition" and a `check` that names a missing answer by step ID. The development `check` never opens the plan, so it cannot name a held-out step; `tea-evaluate check` has no `--partition` and opens the plan, and a held-out or both `preflight` and `run` run the same check. The criterion now states the two files, the allowlist per view, that a development run never opens the held-out answers, and where each missing answer is named.
+AC amendments, recorded in `epics.md` and `test-design-epic-1.md`: the Given and Then named a response "the folder keeps beside the plan for its partition" and a `check` that names a missing answer by step ID. The development `check` never opens the plan, so it cannot name a held-out step; `tea-evaluate check` has no `--partition` and opens the plan, and a held-out or both `preflight` and `run` run the same check. The criterion now states the two files, the allowlist per view, that a development run reads no byte of the held-out answers, and where each missing answer is named.
 
 What the arm answers per view:
 
@@ -75,7 +75,7 @@ What the arm answers per view:
 - `cli/lib/evaluate/gameability.js` -- `answersForView` (the allowlist: the view's steps, in the view's order, from the two answer sets) and `responseRecord` (the response file's path and digest, and the held-out answers' under the held-out and both views); `qualifyGameabilityProbes` takes `heldOut` per probe.
 - `cli/lib/evaluate/preflight.js` -- `gameabilityProbes(folder, { view, selectedProbeIds })` filters to the selected probes before reading, reads the held-out answers only for a view that holds a plan declaring a step, and hands each arm `answersForView`.
 - `cli/lib/evaluate/corpus-index.js` -- `unread` takes a directory form (a trailing `/`), so a development comparison leaves out `corpus/held-out/gameability/`; `filesUnder` decides each entry against the skipped set by its path before any listing, type check or read (case-folded, so another spelling of a sealed path on a case-insensitive file system stays unread), and a directory or file the process cannot open is a refusal naming the path, never an uncaught `EACCES`.
-- `cli/lib/evaluate/workspace.js`, `cli/lib/evaluate/preflight.js` -- `adopterTreeState` and `treeDigest` take `sealed` directories, whose files enter a tree reading by `lstat` size, modification time and mode and are never opened; a development run under a plan seals `corpus/held-out/` of its folder.
+- `cli/lib/evaluate/workspace.js`, `cli/lib/evaluate/preflight.js` -- `adopterTreeState` and `treeDigest` take `sealed` directories, whose files enter a tree reading by `lstat` size, modification time and mode with no byte read, a path `lstat` cannot reach by its error code; a development run under a plan seals `corpus/held-out/` of its folder.
 - `cli/lib/evaluate/check.js` -- the 1.51 refusal is gone; `checkAnswers` (one rule set for both files, named by `wording` and `name`), `checkGameability` over `contract.json`'s steps, `checkHeldOutAnswers` over the held-out plan's steps for a check that opens a sound plan, the held-out naive-oracle rule, `plainSchemaFindings` takes a rule, the development index comparison leaves out the answers.
 - `test/test-evaluate-partition-plans.js` -- `gameabilityLayer` (probes P-005, development, and P-006, held-out, both on B-002 with naive oracle O-001, and their answer files), `planProject` takes the layer, the pure `answersForView` cases, the `check` cases, the development-never-opens cases, and the run, score and replay flow in all three views. `test/test-evaluate-guidance.js` -- markers and five mutants for the corpus guide.
 - `docs/reference/tea-evaluate-cli.md`, skill `references/corpus.md`, `CHANGELOG.md`, `epics.md`, `ARCHITECTURE-SPINE.md` (AD-22), `test-design-epic-1.md`, `sprint-status.yaml`.
@@ -92,7 +92,7 @@ What the arm answers per view:
 
 **Acceptance Criteria:**
 
-- Given a gameability probe in each partition and a held-out plan step, when each partition and the both view run the gameability arm, then the arm answers the steps of its view and no other, a development run never opens the held-out answers, and no development file, run artifact, `check` output or `preflight` output of a development run holds a held-out step ID.
+- Given a gameability probe in each partition and a held-out plan step, when each partition and the both view run the gameability arm, then the arm answers the steps of its view and no other, a development run reads no byte of the held-out answers, and no development file, run artifact, `check` output or `preflight` output of a development run holds a held-out step ID.
 - Given a missing, misplaced or unreadable answer, when `check` runs, then it names the probe and the step ID (a held-out step by its ID only when shaped), never quotes the sealed file, and no longer refuses a gameability probe beside a `partitionPlan`.
 - Given any committed fixture, baseline or replay with no `partitionPlan`, then no byte changes.
 
@@ -101,9 +101,9 @@ What the arm answers per view:
 - The held-out answers are required for every gameability probe, whichever partition it belongs to, because the both view runs each probe over the whole plan and a probe of the development partition needs an answer to the held-out step there. A held-out probe's `contract.json` file answers the development-only steps for the same reason.
 - A held-out probe's `naiveOracle` is an oracle of `contract.json` (the probe file is a development file, so the plan's oracle IDs stay out of it) that the held-out view keeps. An oracle that reads a development-only step leaves that view and the arm's resolve would throw, so `check` names it; the rule needs no plan and holds in every partition.
 - `answersForView` filters by the view's step IDs, so a file that holds a step the view does not declare hands none of it on. The allowlist is a defense, since `check` already refuses a step a file should not hold; the pure case holds it.
-- A development comparison of the corpus index leaves out `corpus/held-out/gameability/` as a directory, not file by file, because a development check cannot list what a probe's held-out answers are called without reading the probes' IDs, and the directory is sealed as one.
-- The skipped set is an allowlist decided by path before the walk looks at an entry, so a development run neither lists nor refuses what a sealed directory holds, and the held-out and both runs and `check` walk it and refuse a link, a FIFO or an unopenable path by name.
-- The adopter-tree reading that brackets a run opens every path `git status` names, so a development run seals `corpus/held-out/` there too: the held-out plan and the answers enter the reading by `lstat` metadata, which an edit still moves, and no byte is opened.
+- A development comparison of the corpus index leaves out the whole `corpus/held-out/` directory, not file by file, because a development check cannot list what a probe's held-out answers are called without reading the probes' IDs, the schema puts the plan directly under it, and the directory is sealed as one (round 2: round 1 skipped the plan and `gameability/` alone, so a link or an unlistable directory beside them still stopped a development run).
+- The skipped set is an allowlist decided by path before the walk looks at an entry, so the development comparison neither lists nor opens what the sealed directory holds and a development run refuses none of it, and the held-out and both runs and `check` walk it and refuse a link, a FIFO or an unopenable path by name.
+- The adopter-tree reading that brackets a run opens every path `git status` names, so a development run seals `corpus/held-out/` there too: the held-out plan and the answers enter the reading by `lstat` metadata, which an edit still moves, and no byte is read. The reading lists the sealed directory, since the tree digest walks it, and records the error code of a path it cannot list or `lstat` (a directory at mode 0o444 lists and cannot be entered).
   Nothing the reading holds is recorded beyond `adopterTree.unchanged`, so no replay byte changes.
 - The response record carries the held-out answers as `heldOut: { path, digest }` inside `degenerateResponse`, so every site that writes the record is unchanged and a run with no plan writes the record it always did.
 

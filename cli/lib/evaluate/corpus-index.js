@@ -97,8 +97,8 @@ function byPath(left, right) {
  *
  * @param {string} folder
  * @param {object} [options]
- * @param {Iterable<string>} [options.unread] paths relative to the folder that are left out and never opened (the held-out plan and
- *   the held-out gameability answers, for a development run's staleness check); a path that ends in `/` leaves out every file
+ * @param {Iterable<string>} [options.unread] paths relative to the folder that are left out, neither listed nor opened (the held-out
+ *   folder `corpus/held-out/`, for a development run's staleness check); a path that ends in `/` leaves out every file
  *   below that directory. The index `tea-evaluate digest` writes never leaves one out
  * @returns {Promise<Array<{ path: string, sha256: string }>>}
  */
@@ -182,7 +182,7 @@ async function writeCorpusIndex(folder) {
  * @param {string} folder
  * @param {object} [options]
  * @param {Iterable<string>} [options.unread] paths relative to the folder that this comparison neither opens nor compares, so a
- *   development run never reads the held-out plan (Story 1.51) or the held-out gameability answers (Story 1.109); a path that ends
+ *   development run never reads the held-out plan (Story 1.51) or anything else under `corpus/held-out/` (Story 1.109); a path that ends
  *   in `/` stands for every file below that directory. The full comparison is `check`'s and a held-out run's
  * @returns {Promise<string|null>}
  */
