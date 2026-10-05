@@ -14,6 +14,7 @@
  * evaluation folder by its path below it, a staging file as `<staging>/<name>`,
  * and the executable below the engine package, so a record published with a
  * baseline or a CI artifact names no machine path.
+ * The messages of an `EngineStageError` name the executable and the record in the same forms, since callers write them into records.
  */
 
 'use strict';
@@ -101,9 +102,10 @@ function runEngineStage(
   const recorder = pathRecorder({ folder, scoreInvocation });
   // The argv is recorded first: the output's paths are read back through the forms the argv gave.
   const recordedArgv = argv.map((argument) => recorder.argument(argument));
+  const recordedCli = recordedEngineCli(cli, { substituted, packageRoot: enginePackageRoot });
   const record = {
     stage,
-    cli: recordedEngineCli(cli, { substituted, packageRoot: enginePackageRoot }),
+    cli: recordedCli,
     substituted,
     argv: recordedArgv,
     exitCode,
@@ -119,14 +121,16 @@ function runEngineStage(
     writer.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
   }
   if (result.error) {
-    throw new EngineStageError(`could not run eval-quality ${stage} at ${cli}: ${result.error.message}`, { cause: result.error });
+    throw new EngineStageError(`could not run eval-quality ${stage} at ${recordedCli}: ${recorder.text(result.error.message)}`, {
+      cause: result.error,
+    });
   }
   // A stage killed by a signal has no exit code of its own, and none is made up
   // for it here.
   if (exitCode === null) throw new EngineStageError(`eval-quality ${stage} was killed by ${result.signal} and reported no exit code`);
   if (!DOCUMENTED_EXITS.get(stage)?.has(exitCode)) {
     throw new EngineStageError(
-      `eval-quality ${stage} exited ${exitCode}, which is no exit the CLI documents for ${stage}; its output is in ${recordPath}`,
+      `eval-quality ${stage} exited ${exitCode}, which is no exit the CLI documents for ${stage}; its output is in ${recorder.argument(recordPath)}`,
     );
   }
   // The caller reads what the stage printed; only the record states it in the neutral forms.

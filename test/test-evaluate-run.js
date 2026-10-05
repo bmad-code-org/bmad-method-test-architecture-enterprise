@@ -300,6 +300,18 @@ function checkMounts(observed, expected, what) {
   checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
 }
 
+/**
+ * An observed mount as the isolation manifest records it: below the host's home as `<home>/...` and below the evaluation folder
+ * as `<evaluation-folder>/...` (`recorded-paths.js`), any other path as it is. `home` is the `HOME` the run's process had.
+ */
+function recordedMount(real, { home = null, folder = null }) {
+  const below = (root, form) => {
+    const base = fs.realpathSync(root);
+    return real === base || real.startsWith(`${base}${path.sep}`) ? `${form}${real.slice(base.length)}` : null;
+  };
+  return (home !== null && below(home, '<home>')) || (folder !== null && below(folder, '<evaluation-folder>')) || real;
+}
+
 function tempDir(label) {
   return scratch.make(label);
 }
@@ -4067,12 +4079,14 @@ async function checkConfinedEvaluationFolder() {
   const realFolder = fs.realpathSync(probed.folder);
   const probedMounts = observedMountsOf(probedDirectory, 'P-001') ?? [];
   checkReport(
-    [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')].every((entry) => probedMounts.includes(entry)),
+    [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')]
+      .map((entry) => recordedMount(entry, { folder: probed.folder }))
+      .every((entry) => probedMounts.includes(entry)),
     `the audit did not report the evaluation folder's paths the target reached for: ${JSON.stringify(probedMounts)}`,
   );
   const probedScore = evaluate(['score', '--evaluation', probed.folder], probed.env);
   checkReport(
-    probedScore.status === 3 && probedScore.output.includes(`mount outside allowlist: ${path.join(realFolder, 'contract.json')}`),
+    probedScore.status === 3 && probedScore.output.includes('mount outside allowlist: <evaluation-folder>/contract.json'),
     `score over a target that reached for the contract exited ${probedScore.status}; expected 3 with the isolation violation\n${probedScore.output}`,
   );
   check(
@@ -5119,7 +5133,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(withheld.directory, 'P-001'),
-    [path.join(fs.realpathSync(withheld.folder), 'contract.json')],
+    [recordedMount(path.join(fs.realpathSync(withheld.folder), 'contract.json'), { folder: withheld.folder })],
     "a shell target's read of the evaluation folder's contract",
   );
 }
@@ -5812,7 +5826,7 @@ async function checkEvaluatorSwap() {
       );
       check(record.findings?.length === 0, `a confined run's clean control carries findings: ${JSON.stringify(record.findings)}`);
       // The row-converting evaluator's trials carry the audit's observed mounts too: the refused swap is one.
-      const swapped = path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js');
+      const swapped = recordedMount(path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js'), { folder: project.folder });
       const mounts = observedMountsOf(runDirectory, 'P-001') ?? [];
       checkReport(
         namespaced || mounts.includes(swapped),
@@ -10213,7 +10227,7 @@ async function checkSubscriptionLogin() {
       widened.ran.status === 0,
       `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
     );
-    const realSecond = fs.realpathSync(second);
+    const realSecond = recordedMount(fs.realpathSync(second), { home });
     checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
@@ -10365,12 +10379,16 @@ async function checkSubscriptionLogin() {
   );
   checkMounts(
     actMounts(stood.directory),
-    [fs.realpathSync(keychain), `${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`],
+    [
+      recordedMount(fs.realpathSync(keychain), { home: keychainHome }),
+      recordedMount(`${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`, { home: keychainHome }),
+    ],
     "a confined target's keychain read and sidecar write",
   );
   const stoodScore = evaluate(['score', '--evaluation', stood.folder], { ...stood.env, ...noLogin });
   checkReport(
-    stoodScore.status === 3 && stoodScore.output.includes(`mount outside allowlist: ${fs.realpathSync(keychain)}`),
+    stoodScore.status === 3 &&
+      stoodScore.output.includes(`mount outside allowlist: ${recordedMount(fs.realpathSync(keychain), { home: keychainHome })}`),
     `score over a target that read the host's keychain exited ${stoodScore.status}; expected 3\n${stoodScore.output}`,
   );
 

@@ -243,6 +243,38 @@ function checkMachinePaths() {
   }
 }
 
+/**
+ * A `score` whose engine stage exits a code the CLI does not document (a shim that exits 1) records the failure in each probe's
+ * `score.json`, and the failure names the executable and the call record in the neutral forms. The run directory, which `runs/`
+ * uploads, holds no path of this machine after it.
+ */
+function checkEngineStageErrorHoldsNoMachinePath() {
+  const canary = test.project('machine-path-canary-engine-2c9f');
+  const run = baselines.runAndScore(test, canary);
+  const shimLog = path.join(canary.directory, 'shim.log');
+  const env = {
+    ...canary.env,
+    TEA_EVALUATE_ENGINE_CLI: path.join(__dirname, 'fixtures', 'evaluate', 'engine-shim.js'),
+    TEA_EVALUATE_SHIM_LOG: shimLog,
+    TEA_EVALUATE_SHIM_EXIT_SCORE: '1',
+  };
+  const scored = test.cli(canary.folder, 'score', ['--run', path.basename(run)], env);
+  assert.equal(scored.status, 12, scored.output);
+  const scoreDirectory = path.join(run, 'scores', latestScore(run));
+  const call = read(path.join(scoreDirectory, 'P-001', 'score.json'));
+  assert.equal(call.cli, 'engine-shim.js');
+  assert.equal(call.substituted, true);
+  const summary = read(path.join(scoreDirectory, 'score.json'));
+  const failure = summary.scores.find((entry) => entry.probeId === 'P-001').failure;
+  assert.match(
+    failure,
+    /^eval-quality score exited 1, which is no exit the CLI documents for score; its output is in runs\/[^/]+\/scores\/[^/]+\/P-001\/score\.json$/,
+  );
+  const needles = baselines.machinePaths({ project: canary });
+  assert.deepEqual(baselines.machinePathHits(run, needles), [], 'a file of the run directory names a path of this machine');
+  assert.deepEqual(baselines.machinePathHits(run), [], 'a file of the run directory holds a path of a Unix or macOS host');
+}
+
 /** Every `baseline/` committed under `test/fixtures/` and `test/evaluations/` names no path of a Unix or macOS host. */
 function checkCommittedBaselinesHoldNoMachinePath() {
   const root = path.join(__dirname, '..');
@@ -278,6 +310,10 @@ async function main() {
   try {
     checkWorkingTreeCopy();
     checkCommittedBaselinesHoldNoMachinePath();
+    if (process.argv.includes('--engine-error-only')) {
+      checkEngineStageErrorHoldsNoMachinePath();
+      return;
+    }
     if (process.argv.includes('--machine-paths-only')) {
       checkMachinePaths();
       return;
@@ -414,6 +450,7 @@ async function main() {
     // Machine paths: a run made under a distinctive project path and a distinctive temporary directory is accepted, and no file under
     // baseline/ holds that path, the home directory, the temporary root or the user's private root of runs (Story 1.91, AD-12).
     checkMachinePaths();
+    checkEngineStageErrorHoldsNoMachinePath();
 
     // Revert check: a baseline without its isolation manifests replays as Invalid, exit 3.
     {

@@ -957,23 +957,26 @@ Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` i
 
 ### Paths in the records
 
-A record the runtime writes names no path of the machine that produced it, so `runs/` can be uploaded as a CI artifact and `baseline/` committed to a public repository without publishing a home directory, a temporary directory or a checkout location.
+The paths the runtime itself writes into a record are recorded in neutral forms, so `runs/` can be uploaded as a CI artifact and `baseline/` committed to a public repository without publishing a home directory, a temporary directory or a checkout location.
 The runtime writes these forms where a path would be:
 
-| Where                                                                                             | Form                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.json` `workspaces`, and `cwd` in each `observations/` and `faults/` record                   | `<workspace>`, or `<workspace>/<path>` when `launch.root` sits below the workspace's top; the record's `workspace` label tells which workspace it was     |
-| `run.json` `adopterTree.repository`                                                               | `<repository>` when your project sits in a git repository, `null` otherwise                                                                               |
-| `run.json` `logins[].file`, and the login entries of a manifest or its note                       | `<credentials-file>`                                                                                                                                      |
-| `cli` in each engine call record                                                                  | `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted                                            |
-| a file of your evaluation folder in an engine call's `argv`                                       | its path below the evaluation folder, for example `runs/<invocationId>/scoring-policy.json`                                                               |
-| the private staging file in an engine call's `argv` (`--out`)                                     | `<staging>/<file name>`                                                                                                                                   |
-| the score invocation's directory in the `argv` of the aggregate call                              | `<score-invocation>`, because each `score` writes an invocation id of its own                                                                             |
-| the output of an `evaluate` check of `ci` (`checks/<id>/stdout` and `stderr`, warnings and notes) | the evaluation folder as `<evaluation-folder>`, the private root as `<private-root>`, the temporary directory as `<tmp>`, your home directory as `<home>` |
+| Where                                                                                                 | Form                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.json` `workspaces`, and `cwd` in each `observations/` and `faults/` record                       | `<workspace>`, or `<workspace>/<path>` when `launch.root` sits below the workspace's top; the record's `workspace` label tells which workspace it was                                                                   |
+| `run.json` `adopterTree.repository`                                                                   | `<repository>` when your project sits in a git repository, `null` otherwise                                                                                                                                             |
+| `run.json` `logins[].file`, and the login entries of a manifest or its note                           | `<credentials-file>`                                                                                                                                                                                                    |
+| `cli` in each engine call record                                                                      | `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted                                                                                                          |
+| a file of your evaluation folder in an engine call's `argv`                                           | its path below the evaluation folder, for example `runs/<invocationId>/scoring-policy.json`                                                                                                                             |
+| the private staging file in an engine call's `argv` (`--out`)                                         | `<staging>/<file name>`                                                                                                                                                                                                 |
+| the score invocation's directory in the `argv` of the aggregate call                                  | `<score-invocation>`, because each `score` writes an invocation id of its own                                                                                                                                           |
+| `observedMounts` in an isolation manifest (host paths the audit saw a target open)                    | the path with your home directory as `<home>`, the temporary directory as `<tmp>`, the private root as `<private-root>` and the evaluation folder as `<evaluation-folder>`, so the entry still says which file was read |
+| `failure` and `reason` in a `score` summary, and `baseline.reasons` and `baseline.error` in `ci.json` | the same substitution as the output of a `ci` check below                                                                                                                                                               |
+| the output of an `evaluate` check of `ci` (`checks/<id>/stdout` and `stderr`, warnings and notes)     | the evaluation folder as `<evaluation-folder>`, the private root as `<private-root>`, the temporary directory as `<tmp>`, your home directory as `<home>`                                                               |
 
 A recorded argv reruns by hand from the evaluation folder: the relative paths resolve there, `<score-invocation>` is the name of the invocation's directory under `scores/`, and `--out` takes a fresh file.
 Every digest a record carries is taken over the bytes with these forms in them, so nothing is rewritten after a run and `compare --accept` copies the files as they are.
 A `gate` check of `ci` records the output of your command as it printed it, so a path it prints stays in `checks/<id>/stdout`.
+A target's printed output is recorded as received, so a target that prints its working directory, its home directory or a stack trace puts that text in its observation.
 
 ### Gameability probes
 
@@ -1429,7 +1432,8 @@ Nothing is staged inside the committed evaluation folder, so an accept that is i
 
 Nothing under `engine/`, `faults/`, `refused/` or `evaluator-qualification/`, no other file under `trials/`, and none of the derived views (`gap-view.json`, `interpretation.json`, `partitions.json`) is copied, and no probe's bytes or evidence paths are rewritten, since the probe digests `run.json` anchors would stop matching.
 Omitting any of these inputs makes the replay fail: without the isolation manifests, `score` reads each trial set as Invalid and exits 3.
-`run.json`, the observations and the score call records are copied as they are, and they hold the neutral forms of [Paths in the records](#paths-in-the-records), so the baseline names no workspace, repository, staging directory, checkout or home directory of the machine that accepted it.
+`run.json`, the observations and the score call records are copied as they are, and they hold the neutral forms of [Paths in the records](#paths-in-the-records), so the baseline names no workspace, repository, staging directory, checkout or home directory that the runtime wrote.
+The text a target printed is part of each observation as received.
 `baseline.json` meets the runtime's own schema (`cli/lib/evaluate/schemas/baseline.schema.json`).
 
 ## ci

@@ -866,10 +866,12 @@ async function tierBaseline(context) {
   const baseline = locateBaseline(context);
   if (baseline.absent === true || baseline.problem !== undefined) return null;
   try {
-    const reasons = await staleBaseline(context, baseline);
+    // `ci.json` records the reasons in the neutral forms, as each check's warning does, so the tier's warning is the same text.
+    const neutral = textNeutralizer({ folder: context.folder });
+    const reasons = (await staleBaseline(context, baseline)).map(neutral);
     return { stale: reasons.length > 0, reasons };
   } catch (error) {
-    return { stale: false, reasons: [], error: String(error?.message ?? error) };
+    return { stale: false, reasons: [], error: textNeutralizer({ folder: context.folder })(String(error?.message ?? error)) };
   }
 }
 

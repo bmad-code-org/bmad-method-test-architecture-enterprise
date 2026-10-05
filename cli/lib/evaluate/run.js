@@ -115,7 +115,7 @@ const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
-const { CREDENTIALS_FILE } = require('./recorded-paths');
+const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
@@ -1562,7 +1562,8 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
     workspaceIdentity: `${evaluation.evaluationId} ${conditionArm}`,
     allowedMounts: trials.flatMap((trial) => trial.mounts),
     // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
-    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts))].sort(),
+    // The audit's host paths in the neutral forms (`recorded-paths.js`): the manifest is a record `compare --accept` copies and `runs/` uploads, and a path below the home or temp directory still says which file the target read.
+    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts).map(textNeutralizer({ folder })))].sort(),
     toolAllowlist: tools,
     observedToolCalls: [...new Set(trials.flatMap((trial) => trial.toolCalls))].sort(),
     resourceCeilings: {

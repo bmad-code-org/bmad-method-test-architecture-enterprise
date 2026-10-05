@@ -36,6 +36,7 @@ const yaml = require('js-yaml');
 const { engineCliPath, engineVersion, loadEngine } = require('../cli/lib/evaluate/engine');
 const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { MAX_OUTPUT_BYTES, confine } = require('../cli/lib/evaluate/ci');
+const { textNeutralizer } = require('../cli/lib/evaluate/recorded-paths');
 const planModule = require('../cli/lib/evaluate/ci-plan');
 const { principalMappingProblems } = require('../cli/lib/evaluate/registry');
 const { EXIT_CODES } = require('../cli/evaluate');
@@ -1509,6 +1510,99 @@ function checkCiRunHoldsNoMachinePath() {
     );
     fs.writeFileSync(target, original);
   }
+}
+
+/**
+ * `textNeutralizer` over strings and Buffers: the evaluation folder, the private root, the temporary directory and the home
+ * directory become their forms where a path stands alone, and a path that only ends or starts like one is left as it is
+ * (`/var/tmp/x` and `build/tmp/x` under a temporary directory of `/tmp`, a sibling folder of the evaluation folder). A Buffer
+ * keeps every byte outside a substituted path, UTF-8 or not.
+ */
+function checkTextNeutralizer() {
+  const saved = process.env.TMPDIR;
+  process.env.TMPDIR = '/tmp';
+  try {
+    const folder = path.join(path.parse(process.cwd()).root, 'Users', 'ci', 'work', 'evals', 'grader');
+    const neutral = textNeutralizer({ folder });
+    const cases = [
+      ['/var/tmp/eval', '/var/tmp/eval'],
+      ['build/tmp/out.json', 'build/tmp/out.json'],
+      ['/tmpfoo/x', '/tmpfoo/x'],
+      [`${folder}-other/x`, `${folder}-other/x`],
+      [`${folder}/runs/1`, '<evaluation-folder>/runs/1'],
+      ['file:///tmp/port.mjs:24', 'file://<tmp>/port.mjs:24'],
+      [
+        'at run (/tmp/a/b.js:1:2) and "/tmp/c" and path=/tmp/d and /tmp.bak',
+        'at run (<tmp>/a/b.js:1:2) and "<tmp>/c" and path=<tmp>/d and /tmp.bak',
+      ],
+      [`open '${folder}/policy/p.json'`, "open '<evaluation-folder>/policy/p.json'"],
+    ];
+    for (const [input, expected] of cases) assert.equal(neutral(input), expected, `neutralizing ${JSON.stringify(input)}`);
+    const bytes = Buffer.concat([
+      Buffer.from('caf\u00E9 '),
+      Buffer.from([0xff, 0xfe, 0x00]),
+      Buffer.from(` at file:///tmp/port.mjs:24 ${folder}/x\n`),
+    ]);
+    const recorded = neutral(bytes);
+    assert.ok(Buffer.isBuffer(recorded));
+    assert.deepEqual(
+      recorded,
+      Buffer.concat([
+        Buffer.from('caf\u00E9 '),
+        Buffer.from([0xff, 0xfe, 0x00]),
+        Buffer.from(' at file://<tmp>/port.mjs:24 <evaluation-folder>/x\n'),
+      ]),
+    );
+    assert.equal(neutral(7), 7);
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved;
+  }
+}
+
+/**
+ * A failing HTTP port conformance (the adopter's file throws, so its stack names the file) and a stale baseline whose reason
+ * names a file under the evaluation folder leave run directories with no path of this machine: the check's streams are Buffers
+ * of the child's output, and the tier records the stale reasons in `ci.json` and in its one warning.
+ */
+function checkCiRunHoldsNoMachinePathOnFailure() {
+  const api = copyFixture('api', 'machine-path-canary-api-3e0d');
+  fs.writeFileSync(path.join(api, 'adapter', 'http-probe-port.conformance.mjs'), "throw new Error('the port answers wrongly');\n");
+  const failed = ci(api, 'pr');
+  assert.notEqual(failed.status, 0, failed.output);
+  const conformance = latestCi(api).directory;
+  assert.match(fs.readFileSync(path.join(conformance, 'checks', 'api-conformance', 'stderr'), 'utf8'), /http-probe-port\.conformance\.mjs/);
+  assert.deepEqual(
+    baselines.machinePathHits(conformance),
+    [],
+    'a failing conformance port left a path of this machine in the ci run directory',
+  );
+  assert.deepEqual(
+    baselines.machinePathHits(
+      conformance,
+      baselines.machinePaths({
+        project: { folder: api, repository: path.resolve(api, '..', '..'), directory: path.dirname(path.resolve(api, '..', '..')) },
+      }),
+    ),
+    [],
+  );
+
+  const stale = copyFixture('verdict', 'machine-path-canary-stale-8a15');
+  fs.renameSync(path.join(stale, 'policy', 'scoring-policy.json'), path.join(path.dirname(stale), 'moved-policy.json'));
+  ci(stale, 'pr');
+  const { directory, json } = latestCi(stale);
+  assert.equal(json.baseline.stale, true);
+  assert.deepEqual(json.baseline.reasons, [
+    "the scoring policy cannot be read (ENOENT: no such file or directory, open '<evaluation-folder>/policy/scoring-policy.json')",
+  ]);
+  const staleWarnings = json.warnings.filter((line) => line.startsWith('the baseline is stale'));
+  assert.equal(
+    staleWarnings.length,
+    1,
+    `the tier warns ${staleWarnings.length} times about the stale baseline: ${JSON.stringify(json.warnings)}`,
+  );
+  assert.ok(staleWarnings[0].includes('<evaluation-folder>/policy/scoring-policy.json'));
+  assert.deepEqual(baselines.machinePathHits(directory), [], 'a stale baseline left a path of this machine in the ci run directory');
 }
 
 function checkPrReplay() {
@@ -4235,7 +4329,9 @@ async function main() {
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
     ['the pr replay', checkPrReplay],
+    ['the text neutralizer', checkTextNeutralizer],
     ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],
+    ['the ci run directory after a failing port and a stale baseline', checkCiRunHoldsNoMachinePathOnFailure],
     ['the replay comparison set', checkReplayComparisonSet],
     ['a replay stage that exits 2', checkReplayStageExit],
     ['baseline integrity', checkBaselineIntegrity],

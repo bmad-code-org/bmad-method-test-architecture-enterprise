@@ -95,18 +95,22 @@ function pathRecorder({ folder, scoreInvocation = null }) {
 }
 
 /**
- * The substitution an `evaluate` check's recorded output goes through.
- * The progress lines of a live command and the messages of a failure name the workspaces, the run directory and the private staging the command used, and the check's streams are uploaded with `runs/`.
- * A gate's own output is the gate's and is recorded as it printed it.
+ * The substitution recorded output goes through, for a string or a Buffer.
+ * The progress lines of a live command, the messages of a failure and the stack a failing port prints name the workspaces, the run directory and the private staging the command used, and `runs/` is uploaded.
+ * A Buffer is read as latin1, so every byte that is not part of a substituted path comes back as it was, UTF-8 or not.
+ * A path matches when no word character, dot or dash stands on either side of it, so `/var/tmp/x` and `build/tmp/x` keep their `tmp` when the temporary directory is `/tmp`.
  *
- * @param {{ folder: string }} options the evaluation folder the check ran over
- * @returns {(text: string) => string}
+ * @param {object} options
+ * @param {string} options.folder the evaluation folder the check ran over
+ * @param {Array<[string, string]>} [options.extra] further directories and the form each is recorded as
+ * @returns {(value: string|Buffer) => string|Buffer}
  */
-function textNeutralizer({ folder }) {
+function textNeutralizer({ folder, extra = [] }) {
   const spellings = (directory) => [...new Set([directory, realOrSelf(directory)])];
   const uid = typeof process.getuid === 'function' ? process.getuid() : null;
   const privateRoots = uid === null ? [] : [`/tmp/tea-evaluate-p${uid}`, path.join(os.tmpdir(), `tea-evaluate-p${uid}`)];
   const substitutions = [
+    ...extra.map(([directory, form]) => [spellings(directory), form]),
     [spellings(path.resolve(folder)), EVALUATION_FOLDER],
     [privateRoots.flatMap(spellings), '<private-root>'],
     [spellings(os.tmpdir()), '<tmp>'],
@@ -116,8 +120,16 @@ function textNeutralizer({ folder }) {
     .filter(([directory]) => directory.length > 3 && directory !== path.sep)
     .sort(([left], [right]) => right.length - left.length);
   const escaped = (value) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
-  const patterns = substitutions.map(([directory, form]) => [new RegExp(`${escaped(directory)}(?![\\w.-])`, 'g'), form]);
-  return (text) => (typeof text === 'string' ? patterns.reduce((current, [pattern, form]) => current.replace(pattern, form), text) : text);
+  const patterns = (view) =>
+    substitutions.map(([directory, form]) => [new RegExp(`(?<![\\w.-])${escaped(view(directory))}(?![\\w.-])`, 'g'), form]);
+  const text = patterns((directory) => directory);
+  const bytes = patterns((directory) => Buffer.from(directory, 'utf8').toString('latin1'));
+  const apply = (value, list) => list.reduce((current, [pattern, form]) => current.replace(pattern, form), value);
+  return (value) => {
+    if (typeof value === 'string') return apply(value, text);
+    if (Buffer.isBuffer(value)) return Buffer.from(apply(value.toString('latin1'), bytes), 'latin1');
+    return value;
+  };
 }
 
 /**
