@@ -216,12 +216,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The actionlint version this installs floats to latest rather than pinned:
-      # test/eval-ci.js's own pre-flight enforces the minimum version its flags
-      # were written against, so a newer release only ever adds coverage. The
-      # installer script itself is pinned by commit and checksummed before it
-      # runs, because "main" is mutable and a script that ends in `sudo mv` is
-      # not something to pipe from a branch nobody reviews on every run.
+      # tools/install-actionlint.sh installs actionlint. The version floats to
+      # latest: the installer resolves the latest release tag itself, because
+      # the pinned download script's own `latest` keyword downloads the version
+      # built into it. test/eval-ci.js's own pre-flight enforces the minimum
+      # version its flags were written against, so a newer release only ever
+      # adds coverage. The download script is pinned by commit and checksummed
+      # before it runs, because "main" is mutable and a script that ends in
+      # `sudo mv` is not something to pipe from a branch nobody reviews on every
+      # run. The installer retries every download up to seven times with waits of
+      # 2, 4, 8, 16, 32 and 64 seconds, which rides out a GitHub outage of about
+      # two minutes, and checks the release tarball (`gzip -t`, then its
+      # checksum) before the pinned script's `tar` reads it. The worst case of a
+      # run is about 274 seconds, inside the step's 5 minute timeout.
       #
       # Every shard installs actionlint, bubblewrap and strace, whichever
       # scripts the weights put on it. test:eval-ci-data, test:eval-replay,
@@ -237,11 +244,10 @@ jobs:
       # of the three fails those scripts on the missing dependency, and a new
       # weight can move any of them to any shard.
       - name: Install actionlint
+        timeout-minutes: 5
         run: |
-          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
-          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
-          bash download-actionlint.bash
-          sudo mv ./actionlint /usr/local/bin/
+          bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"
+          sudo mv "$RUNNER_TEMP/actionlint-bin/actionlint" /usr/local/bin/
 
       # bubblewrap is tea-atdd-red-check's linux isolation backend and
       # tea-evaluate's linux file-system confinement (Story 1.31: preflight and

@@ -602,6 +602,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The corpus-index comparison of a development run likewise stopped at a link, a FIFO or a directory nobody may open under `corpus/held-out/gameability/`, and printed the name of a sealed entry; it now decides each entry by its path before any `lstat` or listing.
   A held-out or both run and `check` refuse such an entry by path with exit 10 where an unreadable directory used to end the command with an uncaught `EACCES` stack.
 
+- CI: the actionlint install retries and verifies its download, and resolves the latest version (Story 1.130).
+  The pinned download script runs `curl -L "$url" | tar xvz` with no retry and no status check, so a GitHub 503 handed an error page to `tar` and failed the whole chain shard with `gzip: stdin: not in gzip format` before any test ran (PR #321, shard 1).
+  The `Install actionlint` step of `quality.yaml` and of `publish.yaml` now runs `tools/install-actionlint.sh`, which keeps the download script pinned by commit and checked against its sha256.
+  The installer resolves the latest release tag from the redirect of `/releases/latest`, since the script's own `latest` keyword downloads the version built into it, and passes that version to the script.
+  The release tarball comes through a `curl` in front of `PATH` that tries up to seven times with a wait of 2, 4, 8, 16, 32 and 64 seconds (126 seconds in all, across every download of the run, which rides out a GitHub outage of about two minutes), counts a transient `curl` error, a non-2xx status, a truncated body and a body that is no gzip file as a failed attempt, runs `gzip -t`, compares the sha256 with the release's checksum file, and gives the script's `tar` the verified file only.
+  A run stops retrying after 170 seconds, so a hung network ends in a message that names the attempts inside the step's 5 minute timeout (the worst case is about 274 seconds).
+  A final failure names the attempts, the last HTTP status and whether the body was a gzip file.
+  `test:install-actionlint` runs the installer against a stub server for a 503 and then a tarball, an outage of six 503s and then a tarball, an HTML body, a truncated tarball, a cut connection, a wrong checksum, a missing checksum file, the latest-version resolution and a wrong script digest.
+  `test:ci-coverage` fails when either workflow stops calling the installer or the installer drops the retry, the `gzip -t` check, the checksum check, the version resolution or the commit-pinned, hash-checked script, and `test:ci-coverage-filters` holds each of those as a case.
+
 - The four evaluations that commit a `pr`-only plan declare `pr` as their only tier (Story 1.96, Story 2.5).
   `tea-evaluate check` now holds `evaluation.json` `tiers` to the tiers the plan places a check on, and the Evaluate dogfood evaluation, the AI-feature and test-review authoring evaluations and the gap-loop `after` evaluation still listed `scheduled` and `release` beside a plan that holds `pr` checks only, so `test:evaluate-dogfood` and the `pr` suites of those evaluations exited 10 on `main`.
   The gap-loop test treats `tiers` as recorded by the ci stage, like `ci/` and `baseline/`, when it compares `before` with `after`.
