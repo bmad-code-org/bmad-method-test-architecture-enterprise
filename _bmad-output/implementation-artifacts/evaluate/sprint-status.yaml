@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 10-04-2026 17:45
+last_updated: 10-04-2026 22:52
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -121,7 +121,7 @@ development_status:
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: done
   1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
-  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: backlog
+  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: done
   1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent: backlog
   1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository: done
   1-90-verify-the-baseline-manifests-file-digests: done

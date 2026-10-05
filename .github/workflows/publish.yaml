@@ -88,18 +88,20 @@ jobs:
       # that confinement's audit under bubblewrap, Story 1.60), and none of
       # them was installed here.
       #
-      # The actionlint version installed floats to latest rather than
-      # pinned, for the same reason quality.yaml's own Install actionlint
-      # steps give: test/eval-ci.js's own pre-flight enforces the minimum
-      # version its flags were written against, so a newer release only ever
-      # adds coverage. The installer script itself is pinned by commit and
-      # checksummed before it runs.
+      # tools/install-actionlint.sh installs actionlint, the same installer
+      # quality.yaml's Install actionlint step runs. The version floats to
+      # latest, for the reason that step's comment gives: the installer resolves
+      # the latest release tag, and test/eval-ci.js's own pre-flight enforces
+      # the minimum version its flags were written against. The download script
+      # is pinned by commit and checksummed before it runs, and the installer
+      # retries every download up to seven times (waits of 2, 4, 8, 16, 32 and
+      # 64 seconds, inside the step's 5 minute timeout) and checks the release
+      # tarball before it is unpacked.
       - name: Install actionlint
+        timeout-minutes: 5
         run: |
-          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
-          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
-          bash download-actionlint.bash
-          sudo mv ./actionlint /usr/local/bin/
+          bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"
+          sudo mv "$RUNNER_TEMP/actionlint-bin/actionlint" /usr/local/bin/
 
       - name: Install bubblewrap and strace (the linux isolation backend of tea-atdd-red-check and tea-evaluate, and the observer of tea-evaluate's audit)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
