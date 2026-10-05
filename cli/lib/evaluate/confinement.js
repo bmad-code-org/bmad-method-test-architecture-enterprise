@@ -112,8 +112,8 @@
  *                mounts the call's own command leaves room for; a call whose
  *                room cannot hold the first three ranks is refused (exit 12),
  *                and what the room cut is recorded in `run.json`
- *                (`hostSocketTruncation`). A socket bound after the call
- *                started stays reachable for that call, and Seatbelt hides none.
+ *                (`hostSocketTruncation`).
+ *                A socket bound after the call started stays reachable for that call and the audit lists a connection to it (Story 1.86), and Seatbelt hides none.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -149,8 +149,10 @@
  *                writes the mechanism refuses; not metadata probes, not the
  *                execution of a binary, not an `io_uring` request, and, under
  *                Seatbelt, not a read made after the trial's last read of the
- *                log. The enforcement is the mechanism above; the audit
- *                reports.
+ *                log.
+ *                Under Bubblewrap it also sees a connection, or a datagram sent, to a Unix socket file outside the grants that the kernel did not refuse (`connect`, `sendto`, `sendmsg`, `sendmmsg`), listed by the socket file's real path (Story 1.86).
+ *                Under Bubblewrap `strace` fails `io_uring_setup` with `ENOSYS`, so no request goes through a ring (Story 1.86).
+ *                The enforcement is the mechanism above; the audit reports.
  *
  * `TEA_EVALUATE_CONFINEMENT_PLATFORM` names the platform the mechanism is
  * chosen for, in place of the host's, so a case can stand in for a platform
@@ -539,6 +541,15 @@ const EGRESS_SOCKET_PATH_BYTES = 100;
 
 /** The directories the vector replaces with mounts of its own (`--dev /dev`, `--proc /proc`), so a socket in them needs no mount and takes no budget. */
 const SOCKET_REPLACED_DIRECTORIES = Object.freeze(['/dev', '/proc']);
+
+/**
+ * The directories the sandbox mounts empty and writable for the call (`--dev /dev`, `--tmpfs /run/user`).
+ * A socket there is one the call's own processes bound, so a connection to it is no route to the host and the audit does not list it (Story 1.86).
+ * A link made there leads where it leads, and the audit follows the links the trace shows.
+ */
+function sandboxOwnDirectories() {
+  return ['/dev', ...(fs.existsSync('/run/user') ? ['/run/user'] : [])];
+}
 
 /**
  * Where a call's socket mounts reach Bubblewrap (Story 1.82): a file of NUL-separated arguments the launcher opens as this
@@ -1314,11 +1325,20 @@ function targetSandbox({
           file,
           marker: { program: process.execPath, text: path.basename(statusFile) },
           grants: {
-            // The egress proxy's directory is no grant: the shim's `connect()` to its socket opens no path the trace holds.
+            // The egress proxy's directory is no read grant: the shim only connects to its socket, which `connect` below covers.
             read: readRoots([...grants, ...readable, statusMount]),
             requested: REQUESTED_ROOTS.flatMap(spellings),
             // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
             write: [workspace, ...grants, ...(home === null ? [] : [home]), statusMount, ...ownGitEntries()].flatMap(spellings),
+            // A connection to a socket file in these places is the call's own (Story 1.86).
+            // They are its workspace, its private directories (the bridge's among them), its home, the sandbox's own empty mounts and the egress proxy's directory, which the shim connects to.
+            connect: [
+              workspace,
+              ...grants,
+              ...(home === null ? [] : [home]),
+              ...(egress === null ? [] : [egress.mount]),
+              ...sandboxOwnDirectories(),
+            ].flatMap(spellings),
             withheld: withheldRoots(),
             withheldExcept: withheldExcept(),
             // Only a run with a login grant carries the key, so every other run's grants are what they were.
