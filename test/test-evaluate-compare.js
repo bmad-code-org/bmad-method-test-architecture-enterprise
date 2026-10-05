@@ -273,6 +273,27 @@ function checkEngineStageErrorHoldsNoMachinePath() {
   const needles = baselines.machinePaths({ project: canary });
   assert.deepEqual(baselines.machinePathHits(run, needles), [], 'a file of the run directory names a path of this machine');
   assert.deepEqual(baselines.machinePathHits(run), [], 'a file of the run directory holds a path of a Unix or macOS host');
+  // An engine that cannot start: the spawn error names the command it tried. A missing program, and a missing script that Node is asked to run.
+  for (const missing of ['no-such-engine-rv191', 'no-such-engine-rv191.js']) {
+    const lost = test.cli(canary.folder, 'score', ['--run', path.basename(run)], {
+      ...canary.env,
+      TEA_EVALUATE_ENGINE_CLI: path.join(canary.directory, missing),
+    });
+    assert.equal(lost.status, 12, `${missing}: ${lost.output}`);
+    const lostDirectory = path.join(run, 'scores', latestScore(run));
+    const lostSummary = read(path.join(lostDirectory, 'score.json'));
+    assert.ok(
+      lostSummary.scores.every((entry) => entry.failure !== null),
+      `${missing}: ${JSON.stringify(lostSummary.scores)}`,
+    );
+    if (!missing.endsWith('.js')) {
+      const failure = lostSummary.scores[0].failure;
+      assert.match(failure, /^could not run eval-quality score at no-such-engine-rv191: spawnSync no-such-engine-rv191 ENOENT$/);
+      assert.match(read(path.join(lostDirectory, 'P-001', 'score.json')).error, /^spawnSync no-such-engine-rv191 ENOENT$/);
+    }
+    assert.deepEqual(baselines.machinePathHits(run, needles), [], `${missing}: a file of the run directory names a path of this machine`);
+    assert.deepEqual(baselines.machinePathHits(run), [], `${missing}: a file of the run directory holds a path of a Unix or macOS host`);
+  }
 }
 
 /** Every `baseline/` committed under `test/fixtures/` and `test/evaluations/` names no path of a Unix or macOS host. */

@@ -24,7 +24,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath, enginePackageRoot } = require('./engine');
-const { pathRecorder, recordedEngineCli } = require('./recorded-paths');
+const { pathRecorder, recordedEngineCli, textNeutralizer } = require('./recorded-paths');
 
 const NODE_SCRIPT = /\.(?:c|m)?js$/;
 
@@ -103,6 +103,12 @@ function runEngineStage(
   // The argv is recorded first: the output's paths are read back through the forms the argv gave.
   const recordedArgv = argv.map((argument) => recorder.argument(argument));
   const recordedCli = recordedEngineCli(cli, { substituted, packageRoot: enginePackageRoot });
+  // A spawn error names the command it tried, which is the Node executable for a script engine: the record and the thrown message name the program by its recorded form.
+  const neutral = textNeutralizer({ folder });
+  const spawnError =
+    result.error === undefined
+      ? null
+      : neutral(recorder.text(result.error.message.split(command).join(NODE_SCRIPT.test(cli) ? path.basename(command) : recordedCli)));
   const record = {
     stage,
     cli: recordedCli,
@@ -110,9 +116,9 @@ function runEngineStage(
     argv: recordedArgv,
     exitCode,
     signal: result.signal,
-    error: recorder.text(result.error?.message ?? null),
-    stdout: recorder.text(result.stdout ?? ''),
-    stderr: recorder.text(result.stderr ?? ''),
+    error: spawnError,
+    stdout: neutral(recorder.text(result.stdout ?? '')),
+    stderr: neutral(recorder.text(result.stderr ?? '')),
   };
   if (writer === null) {
     fs.mkdirSync(path.dirname(recordPath), { recursive: true });
@@ -121,9 +127,7 @@ function runEngineStage(
     writer.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
   }
   if (result.error) {
-    throw new EngineStageError(`could not run eval-quality ${stage} at ${recordedCli}: ${recorder.text(result.error.message)}`, {
-      cause: result.error,
-    });
+    throw new EngineStageError(`could not run eval-quality ${stage} at ${recordedCli}: ${spawnError}`, { cause: result.error });
   }
   // A stage killed by a signal has no exit code of its own, and none is made up
   // for it here.

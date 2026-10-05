@@ -3,9 +3,9 @@ title: 'Story 1.91: Keep machine paths out of a committed baseline'
 type: 'feature'
 created: '2026-10-04'
 baseline_commit: '4eb03c69'
-status: 'review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 3
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 1.91)'
   - '_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md (Story 1.91)'
@@ -78,6 +78,7 @@ eval-quality reads none of these records back: it is handed the real paths in th
   Review found `checks/check/stdout` and the live check's log lines naming the folder and the workspaces in the `runs/` directory the `chain` job uploads (ten hits after the ten `pr` scripts).
   A gate's output is the gate's own and is recorded as it printed it.
   `textNeutralizer` reads a string or a Buffer (a Buffer through a latin1 view, so bytes outside a substituted path stay as they were) and matches a path only where no word character, dot or dash stands on either side, so `/var/tmp/x` and `build/tmp/x` keep their `tmp` when the temporary directory is `/tmp`.
+  A spawn error (an engine that cannot start) is recorded and thrown with the executable in its recorded form (`node` for a script engine) and the rest of the message through the substitution, and the record's `stdout` and `stderr` go through it too.
   `tierBaseline` records the stale-baseline reasons and `error` of `ci.json` through the same substitution, so the tier's one warning and each check's warning are the same text.
   An `EngineStageError` names the executable in its recorded form and the call record by its path below the folder, since `score.js` writes the message into `score.json` as `failure` and `reason`; a refused aggregate's `reason` goes through the substitution too.
   The isolation manifest's `observedMounts` go through it at `sealProbeTrials`: a path below the home or temporary directory or the evaluation folder keeps the rest of its path, so the entry still says which file the target read, and eval-quality's `mount outside allowlist` reasons carry the same forms.
@@ -98,6 +99,7 @@ eval-quality reads none of these records back: it is handed the real paths in th
     The case also asserts `check` exits 0 on the accepted baseline, the recorded forms in `run.json`, an observation and a score call, and that a project path planted into each baseline file in turn is found.
   - The existing replay block now also asserts that each probe's `score.json` and `aggregate-strength.json` of the replay equal the accepted bytes.
   - `checkEngineStageErrorHoldsNoMachinePath` runs a project, then `score` through a `TEA_EVALUATE_ENGINE_CLI` shim whose `score` exits 1, and asserts the call record (`cli` `engine-shim.js`, `substituted: true`), the summary's `failure` (`... its output is in runs/<run>/scores/<id>/P-001/score.json`) and that the whole run directory holds no path of this machine.
+    It then scores with `TEA_EVALUATE_ENGINE_CLI` naming a missing program and a missing script under the canary directory, asserts `failure` (`could not run eval-quality score at no-such-engine-rv191: spawnSync no-such-engine-rv191 ENOENT`) and the record's `error`, and scans the run directory again.
   - `checkCommittedBaselinesHoldNoMachinePath` scans every `baseline/` under `test/fixtures/` and `test/evaluations/` (fourteen folders, 1412 files, listed by name so a vanished folder fails) for those host paths.
 - `test/test-evaluate-ci.js`: the replay comparison set is eight files, and its case flips one byte of the strength aggregate, of the floors, of `P-001/score.json`, of `P-002/score.json` and of `aggregate-strength.json` in turn (exit 13, the drift named).
   The `pr replay` case asserts the replay reproduces the call records, and that a replay through the logging shim, which records the substitution, differs in those three files alone.
@@ -148,16 +150,17 @@ Nothing else digests the replay, and `test:evaluate-gap-loop` and `test:evaluate
 ## Gates
 
 Run serially, one evaluate suite at a time.
-After review round 2 the suites below ran over the final tree, and the others ran over the tree of the first push, which round 2 changed only in `textNeutralizer`, `engine-cli.js` error messages, `score.js` summary reasons and `run.js` observed mounts.
+The build and each review round pushed one tree, and each suite below names the tree it ran over.
+Round 1 (`fd4aea7a`) added the run-directory scans to `test-evaluate-pr-tier.js` and `test-evaluate-ci-repositories.js`.
+Round 2 (`c0dc730c`) changed `textNeutralizer`, `engine-cli.js` error messages, `score.js` summary reasons, `run.js` observed mounts and `ci.js` `tierBaseline`.
+Round 3 changed the spawn error text in `engine-cli.js`.
 
-- `test:evaluate-compare` passes (75 s) with the three new cases (`checkMachinePaths`, `checkEngineStageErrorHoldsNoMachinePath`, `checkCommittedBaselinesHoldNoMachinePath`) and the extended replay block.
-- `test:evaluate-check` passes (all 1290 checks).
-- `test:evaluate-ci` passes (288 s), including the replay comparison set of eight files, the shim replay, `checkTextNeutralizer` and the two run-directory cases.
-- `test:evaluate-run`, `-aggregate`, `-held-inputs`, `-confinement` (the observed mounts in the neutral forms), `-evaluators`, `-agents`, `-records`, `-private`, `-held-attempts` and `-preflight`: exit 0.
-- Over the tree of the first push, all exit 0: the ten `test:evaluate-pr-*` scripts, the seven `test:evaluate-ci-repositories:<adopter>-<tier>` scripts, `-arms`, `-mutation`, `-authoring`, `-gap-loop`, `-dogfood`, `-learned-framework`, `-mcp`, `-api`, `-workflow`, `-tool-use`, `-promptfoo`, `-partitions`, `-partition-plans`, `-interpret`, `-calibration`, `-ci-render` and `-boundaries`.
-  No committed baseline byte moved in round 2, and CI runs them again over the final tree.
-- `test:doc-counts`, `test:doc-claims`, `test:release-metadata`, `docs:validate-links`, `lint`, `lint:md` and `format:check`: pass.
-- Not run here: the full `npm test` chain, which CI carries.
+- The build tree (`15d3844e`): `test:evaluate-arms`, `-mutation`, `-authoring`, `-gap-loop`, `-learned-framework`, `-mcp`, `-api`, `-workflow`, `-tool-use`, `-promptfoo`, `-partitions`, `-partition-plans`, `-interpret`, `-calibration`, all exit 0.
+- Round 1 (`fd4aea7a`): `test:evaluate-check` (all 1290 checks), the ten `test:evaluate-pr-*` scripts, the seven `test:evaluate-ci-repositories:<adopter>-<tier>` scripts, `-boundaries` (500 checks), `-ci-render` and `-dogfood`, all exit 0.
+- Round 2 (`c0dc730c`): `test:evaluate-ci` (288 s, including the replay comparison set of eight files, the shim replay, `checkTextNeutralizer` and the two run-directory cases), `-check`, `-confinement` (the observed mounts in the neutral forms), `-run`, `-aggregate`, `-held-inputs`, `-evaluators`, `-agents`, `-records`, `-private`, `-held-attempts` and `-preflight`, all exit 0.
+- Round 3 (the final tree): `test:evaluate-compare` passes (75 s) with the three new cases (`checkMachinePaths`, `checkEngineStageErrorHoldsNoMachinePath`, `checkCommittedBaselinesHoldNoMachinePath`) and the extended replay block, and `node test/test-evaluate-compare.js --engine-error-only` passes with the missing-engine cases.
+- `test:doc-counts`, `test:doc-claims`, `test:release-metadata`, `docs:validate-links`, `lint`, `lint:md` and `format:check`: pass over the final tree.
+- No committed baseline byte moved after the build, and CI runs the full chain over the final tree.
 
 Two suites failed once and are fixed.
 
@@ -188,6 +191,8 @@ Each mutation was applied in a scratch copy of the tree (`mut-r91-7c2f` under th
 | The distinctive `TMPDIR` dropped from the run's environment                                           | compare (`--machine-paths-only`): `the run made its workspace at /private/var/folders/.../tea-evaluate-pristine-.../worktree; expected a directory under the distinctive temporary directory`.                                                |
 | `runCheck` stops neutralizing an `evaluate` check's output (a `ci --tier pr` over the canary project) | `test:evaluate-ci --only="holds no machine path"`: `a file of the ci run directory names a path of this machine`.                                                                                                                             |
 | The same, over the live `merge` tier of `nightly-deploy`                                              | `test:evaluate-ci-repositories --only=nightly-deploy:merge`: `runs/<id> names a path of this machine` (the live check's stderr names the workspace).                                                                                          |
+| The substitution at `sealProbeTrials` removed (`observedMounts` as the audit saw them)                | `test:evaluate-run --group=confinement`: 14 of 2013 checks fail, in 5 cases (the shell target's read of the contract, the swap, the second file beside the login file and in its directory, the keychain read).                               |
+| The spawn error recorded as Node reported it (the absolute command)                                   | compare (`--engine-error-only`): `could not run eval-quality score at no-such-engine-rv191: spawnSync no-such-engine-rv191 ENOENT` no longer matches.                                                                                         |
 | The text neutralizer leaves Buffers as they are                                                       | `test:evaluate-ci --only="after a failing port"`: `a failing conformance port left a path of this machine in the ci run directory`.                                                                                                           |
 | The stale-baseline reasons recorded raw in `ci.json`                                                  | the same case: the reasons differ from the neutral list (and the tier warns twice).                                                                                                                                                           |
 | `EngineStageError` names the absolute call record again                                               | compare (`--engine-error-only`): the `failure` no longer matches `its output is in runs/<run>/scores/<id>/P-001/score.json`.                                                                                                                  |
