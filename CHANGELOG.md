@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-evaluate check` and `compare` verify the baseline's file digests (Story 1.90, AD-12).
+  `compare --accept` records a `files` map of every baseline file's `digestBytes` in `baseline/baseline.json`, and nothing read it back, so a baseline file edited by hand passed both commands.
+  `check` now reports a `baseline-digest` finding and exits 10 for each file of `baseline/` whose bytes differ from the map, each listed file that is missing and each file other than `baseline.json` that the map does not list.
+  `check` also reports the finding when the manifest cannot be read, when it lists a path outside `baseline/` or one the file system cannot examine, and when `baseline/` holds anything but authored qualification evidence (`probes/`, `qualification/`, a placeholder `README.md`) with no manifest.
+  A plain `compare` refuses a baseline that fails the same check with exit 10 and no verdict, before it reads any of the baseline's evidence.
+  One module, `cli/lib/evaluate/baseline-digests.js`, holds the verification for both commands.
+  A `test:evaluate-check` case and a `test:evaluate-compare` case accept a baseline through the real CLI, pass it, and fail it for a one-byte edit, a missing listed file and an unlisted file.
+  The reference lists the `baseline-digest` rule in its `check` rule list and its `compare` section, and a static test fails when either mention is removed.
 - TeA's own pull requests run the `pr` tier of every evaluation it keeps (Story 2.5, AD-11, CAP-11, CAP-12).
   Each of the nine fixture evaluations (the stdio MCP and HTTP API graders, the workflow, tool-use, promptfoo and learned-framework evaluations, the AI-feature and test-review authoring suites, and the gap-loop `after` evaluation) and the Evaluate-authored suite is a script of the `npm test` chain, `test:evaluate-pr-<key>`, which the `chain` matrix runs.
   `test/test-evaluate-pr-tier.js <key>` runs `tea-evaluate ci --tier pr` over the committed folder with no secret and no model call, and fails when the folder's plan omits a `pr` check its probes or interface call for (the gameability arm, the HTTP port conformance), when its baseline was recorded on another eval-quality release than the installed one, holds a dirty or incomplete run, a non-copy workspace, a manifest `acceptedRun` that names another run, or a partition other than both, or when the evaluation's `evaluation.json` declares a non-copy workspace, or when `ci` exits non-zero, runs other checks than the plan places or reads a stale baseline.
@@ -33,6 +41,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `partition-plan` refusal of a gameability probe is gone.
   Making the arm answer the whole plan puts a held-out step in a development artifact and fails the isolation case, a development run that opens the held-out answers fails the case that makes them unreadable, and a missing answer that passes `check` fails its case.
   With no `partitionPlan`, every committed fixture, baseline and replay is byte-identical.
+- The Linux audit lists a connection to a Unix socket file outside the grants as an observed mount (Story 1.86, AD-7, AD-8).
+  Story 1.82 mounts an empty device file over each path-based socket the host lists when a call starts, and a socket a host process binds after the call started stayed reachable and unlisted, because the audit traced file syscalls and a `connect()` is none.
+  The trace now also reports `connect` and the sends that carry an address (`sendto`, `sendmsg`, `sendmmsg`), so a datagram socket is covered as a stream socket is.
+  A call the kernel did not refuse is listed by the socket file's real path (a link in the workspace to the socket resolves to the file the kernel reached), and `score` exits 3 with eval-quality's isolation violation naming it.
+  A connection the mounts refused (`ECONNREFUSED`), a path with nothing behind it, a socket file the process may not open, an abstract address, a TCP or UDP address and a send with no address list nothing.
+  A socket in the workspace, in a private directory or the home of the call (the bridge's included), in the sandbox's own `/dev` and `/run/user`, or the egress proxy's directory is the call's own and lists nothing.
+  A call the end of the call cut short (strace prints its return value as `= ?`) is listed, and so is a connection through a link the target made and removed afterwards, whether the link was copied by a hard link, moved with its directory, exchanged by `RENAME_EXCHANGE`, made through a link to a directory or made in the sandbox's own `/dev`.
+  A connection through a path the target removes, renames or replaces afterwards, or whose directory it does, is listed by the path as given unless the call bound that socket itself and its name has stood since the bind, because a link your project held and the target removed leaves the host nothing to read.
+  A bind mount whose source lies outside the grants (`mount`, `open_tree` and `move_mount` are traced) is listed by its source, whatever the source holds, so a target that runs a nested sandbox which bind-mounts system paths gets `score` exit 3, and `strace` fails `io_uring_setup` with `ENOSYS`, so no `io_uring` request carries a connection past the trace.
+  A connection through the destination of a bind mount is judged by the source it leads to, whichever spelling of the destination's directory the connection uses, and a `..` after a link in the path of a connection goes to the parent of the directory the link leads to.
+  A link a `..` passed that the target then removes, renames or replaces lists the connection by the path as given, and a socket the call bound under one spelling of its directory is the call's own only while neither spelling was replaced after the bind.
+  A call that names no Unix socket file holds nothing in the reader, whether it finished or another process's output split it, so a target that makes a million `send` calls costs no memory.
+  The reader replays link changes and removals in time linear in the trace, a rename of a directory that holds tens of thousands of links included, so a target that makes tens of thousands of links, renames and removals adds seconds to the audit.
+  The CLI reference's `### File-system confinement` names the connection in the audit passage and the sentence on a late socket points to it.
+  `test:evaluate-confinement` runs `the socket connection units` on every host over trace lines written by hand in strace 6's spelling, and the Linux cases (`the socket connection route`, `the socket connection run`) run in the ubuntu CI job and are skipped elsewhere with their reason named.
 - An evaluator mapping follows the contract view under a `partitionPlan` (Story 1.107, AD-9, AD-21, AD-22).
   Story 1.51 refused a `partitionPlan` beside any evaluator but the deterministic one, because a `command` or `sealed-brief-agent` evaluator binds oracles and rubric criteria through `evaluator/mapping.json` and a `records` evaluator's records name them too.
   A command evaluator, a sealed-brief agent and a records evaluator now run beside a plan, and the refusal is gone.

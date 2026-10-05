@@ -547,7 +547,9 @@
       "-s",
       "4096",
       "-e",
-      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?fchdir,?clone,?clone3,?fork,?vfork",
+      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?fchdir,?clone,?clone3,?fork,?vfork,?connect,?sendto,?sendmsg,?sendmmsg,?bind,?mount,?open_tree,?move_mount,?io_uring_setup",
+      "-e",
+      "inject=?io_uring_setup:error=ENOSYS",
       "-o",
       "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-audit-AbCdEf/trace-1-<token>.txt",
       "--",
@@ -659,6 +661,16 @@
           "<status>/status-1-<token>.json",
           "/proj/.git/worktrees/tea-workspace"
         ],
+        "connect": [
+          "/var/folders/ab/cd/T/tea-workspace",
+          "/private/var/folders/ab/cd/T/tea-workspace",
+          "/var/folders/ab/cd/T/tea-private",
+          "/private/var/folders/ab/cd/T/tea-private",
+          "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/dev",
+          "/run/user"
+        ],
         "withheld": [
           "/proj/evaluations/demo",
           "/proj/.git",
@@ -684,7 +696,9 @@
       "-s",
       "4096",
       "-e",
-      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?fchdir,?clone,?clone3,?fork,?vfork",
+      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?fchdir,?clone,?clone3,?fork,?vfork,?connect,?sendto,?sendmsg,?sendmmsg,?bind,?mount,?open_tree,?move_mount,?io_uring_setup",
+      "-e",
+      "inject=?io_uring_setup:error=ENOSYS",
       "-o",
       "<status>/owned-root/run-501-AbCdEf/tea-evaluate-audit-AbCdEf/trace-1-<token>.txt",
       "--",
@@ -793,6 +807,15 @@
           "<status>/owned-root/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
           "/dev/status-1-<token>.json",
           "/proj/.git/worktrees/tea-workspace"
+        ],
+        "connect": [
+          "/var/folders/ab/cd/T/tea-workspace",
+          "/private/var/folders/ab/cd/T/tea-workspace",
+          "/var/folders/ab/cd/T/tea-private",
+          "/private/var/folders/ab/cd/T/tea-private",
+          "<status>/owned-root/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/dev",
+          "/run/user"
         ],
         "withheld": [
           "/proj/evaluations/demo",

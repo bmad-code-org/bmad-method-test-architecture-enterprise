@@ -118,6 +118,10 @@
  *                           `gate-release` file beside it, so a case can act on the
  *                           project or its repository while the run is in flight
  *                           (Story 1.112)
+ *   hold-connect            answer as usual, then hold as `hold-gate` does and, once released, connect from processes of its own (Story 1.86).
+ *                           It connects to a socket in the workspace, one in the temp directory, one in the home, an abstract one and a loopback port, each served by the same process.
+ *                           Then it connects to each entry of VERDICT_TOUCH (comma separated, an entry `link:<path>` reached through a link made in the workspace).
+ *                           It prints `own <name>: <how>` and `outside <entry>: <how>`, each `connected` or `refused <code>`.
  *   update-ref              answer as usual, then run `git update-ref
  *                           refs/heads/written-by-target HEAD` in the working
  *                           directory, printing `ref write: exit <code>`
@@ -590,10 +594,58 @@ if (act === 'probe-egress') {
   }
 }
 if (act === 'hold-egress') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000);
-if (act === 'hold-gate') {
+const holdGate = () => {
   // Write `gate-started` in the working directory, then wait for the case to write `gate-release` beside it (a minute at most).
   fs.writeFileSync('gate-started', '');
   for (let waited = 0; waited < 60_000 && !fs.existsSync('gate-release'); waited += 50) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+};
+if (act === 'hold-gate') holdGate();
+if (act === 'hold-connect') {
+  holdGate();
+  // Each attempt is a process of its own, as another process of the target's would be.
+  const serveAndConnect = `
+    const net = require('node:net');
+    const os = require('node:os');
+    // The temp directory's and the home's paths are too long for a socket address, so each socket is named relative to the directory the process moves to.
+    const start = process.cwd();
+    const cases = [
+      ['workspace', { path: 'own-workspace.sock' }],
+      ['temp', { path: 'own-temp.sock' }, os.tmpdir()],
+      ['home', { path: 'own-home.sock' }, process.env.HOME],
+      ['abstract', { path: '\\0tea-evaluate-own' }],
+      ['tcp', { host: '127.0.0.1', port: 0 }],
+    ];
+    (async () => {
+      for (const [name, where, directory] of cases) {
+        process.chdir(directory ?? start);
+        await new Promise((resolve) => {
+          const server = net.createServer((client) => client.end());
+          server.on('error', (error) => { console.log('own ' + name + ': listen ' + error.code); resolve(); });
+          server.listen(where, () => {
+            const client = net.connect(name === 'tcp' ? { host: where.host, port: server.address().port } : where);
+            client.on('connect', () => { console.log('own ' + name + ': connected'); client.destroy(); server.close(resolve); });
+            client.on('error', (error) => { console.log('own ' + name + ': refused ' + error.code); server.close(resolve); });
+          });
+        });
+      }
+    })();`;
+  const connectTo = `
+    const net = require('node:net');
+    const client = net.connect({ path: process.argv[1] });
+    client.on('connect', () => { console.log('connected'); client.destroy(); });
+    client.on('error', (error) => console.log('refused ' + error.code));
+    client.setTimeout(10000, () => { console.log('timeout'); client.destroy(); });`;
+  process.stdout.write(spawnSync(process.execPath, ['-e', serveAndConnect], { encoding: 'utf8', timeout: 30_000 }).stdout ?? '');
+  for (const entry of (process.env.VERDICT_TOUCH ?? '').split(',').filter(Boolean)) {
+    let target = entry;
+    if (entry.startsWith('link:')) {
+      target = 'via-link.sock';
+      fs.rmSync(target, { force: true });
+      fs.symlinkSync(entry.slice('link:'.length), target);
+    }
+    const how = spawnSync(process.execPath, ['-e', connectTo, target], { encoding: 'utf8', timeout: 20_000 }).stdout?.trim();
+    process.stdout.write(`outside ${entry}: ${how || 'no answer'}\n`);
+  }
 }
 if (act === 'update-ref' || act === 'write-config') {
   // The git state a worktree shares with its repository: a ref, or the repository's own configuration.

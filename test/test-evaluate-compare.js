@@ -267,6 +267,11 @@ async function main() {
     }
     result = test.cli(project.folder, 'check');
     assert.equal(result.status, 0, result.output);
+    // A freshly accepted baseline passes the digest check in `compare` too: the run it was accepted from compares with it.
+    result = test.cli(project.folder, 'compare', ['--run', firstId]);
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /compared: /);
+    assert.doesNotMatch(result.output, /baseline-digest/);
 
     // The reviewed pull request commits the baseline; an uncommitted one would make every later run dirty.
     commitAll(project.repository, 'accept the baseline');
@@ -411,6 +416,100 @@ async function main() {
       assert.doesNotMatch(result.output, /compared: |refused: |first-run: /);
     }
 
+    // A baseline that is not the bytes its manifest lists is refused, exit 10, with no verdict (Story 1.90, AD-12). The edited
+    // evidence artifact would otherwise reach a verdict, and the one that is off its schema would be an `engine-schema` finding,
+    // so neither the verdict nor that finding may appear: the digest check runs before any of the baseline's evidence is read.
+    {
+      const evidenceFile = (folder) =>
+        path.join(folder, 'baseline', 'scores', manifest.scoreInvocationId, 'P-001', 'evidence-artifact.json');
+      const refusedBaseline = (name, plant, expected) => {
+        const folder = copyOf(project);
+        plant(folder);
+        const outcome = test.cli(folder, 'compare', ['--run', secondId]);
+        assert.equal(outcome.status, 10, `${name}: ${outcome.output}`);
+        assert.match(outcome.output, expected, name);
+        assert.doesNotMatch(outcome.output, /compared: |refused: |first-run: |\[engine-schema\]|\[baseline-file\]/, name);
+        assert.match(outcome.output, /no verdict was given/, name);
+        // The same baseline through `check` reports the same finding.
+        const checked = test.cli(folder, 'check');
+        assert.equal(checked.status, 10, `${name}: check ${checked.output}`);
+        assert.match(checked.output, expected, `${name}: check`);
+      };
+      // One byte appended to an evidence artifact that still parses and still meets its schema.
+      refusedBaseline(
+        'a baseline file edited by one byte',
+        (folder) => fs.appendFileSync(evidenceFile(folder), '\n'),
+        /baseline\/scores\/[^/]+\/P-001\/evidence-artifact\.json: \[baseline-digest\] digests to sha256:[0-9a-f]{64}; baseline\.json records sha256:[0-9a-f]{64}/,
+      );
+      // Weaker evidence that still meets its schema, the edit a baseline pull request would hide.
+      refusedBaseline(
+        'a baseline whose evidence was weakened by hand',
+        (folder) => writeJson(evidenceFile(folder), weakened(read(evidenceFile(folder)))),
+        /baseline\/scores\/[^/]+\/P-001\/evidence-artifact\.json: \[baseline-digest\]/,
+      );
+      // Evidence off the engine schema, so that reading it would be an `engine-schema` finding.
+      refusedBaseline(
+        'a baseline evidence artifact off its schema',
+        (folder) => {
+          const artifact = read(evidenceFile(folder));
+          delete artifact.comparabilityKey;
+          writeJson(evidenceFile(folder), artifact);
+        },
+        /baseline\/scores\/[^/]+\/P-001\/evidence-artifact\.json: \[baseline-digest\]/,
+      );
+      refusedBaseline(
+        'a file the manifest lists, deleted',
+        (folder) => fs.rmSync(path.join(folder, 'baseline', 'observations.json')),
+        /baseline\/observations\.json: \[baseline-digest\] baseline\.json lists this file and it is missing/,
+      );
+      refusedBaseline(
+        'a file the manifest does not list',
+        (folder) => fs.writeFileSync(path.join(folder, 'baseline', 'probes', 'extra.probe.json'), '{}\n'),
+        /baseline\/probes\/extra\.probe\.json: \[baseline-digest\] .*does not list it/,
+      );
+      const longName = `${'a'.repeat(300)}.json`;
+      refusedBaseline(
+        'a manifest entry with a name past the file system limit',
+        (folder) => {
+          const file = path.join(folder, 'baseline', 'baseline.json');
+          const manifest = read(file);
+          manifest.files[longName] = manifest.files['run.json'];
+          writeJson(file, manifest);
+        },
+        new RegExp(`baseline/a{300}\\.json: \\[baseline-digest\\] cannot be examined: ENAMETOOLONG`),
+      );
+      refusedBaseline(
+        'a baseline with no manifest',
+        (folder) => fs.rmSync(path.join(folder, 'baseline', 'baseline.json')),
+        /baseline\/baseline\.json: \[baseline-digest\] is absent/,
+      );
+      refusedBaseline(
+        'a baseline with neither manifest nor run.json',
+        (folder) => {
+          fs.rmSync(path.join(folder, 'baseline', 'baseline.json'));
+          fs.rmSync(path.join(folder, 'baseline', 'run.json'));
+        },
+        /baseline\/baseline\.json: \[baseline-digest\] is absent/,
+      );
+      // Every defect is listed, none stops the others.
+      const folder = copyOf(project);
+      fs.appendFileSync(evidenceFile(folder), '\n');
+      fs.rmSync(path.join(folder, 'baseline', 'observations.json'));
+      fs.writeFileSync(path.join(folder, 'baseline', 'notes.txt'), 'by hand\n');
+      const outcome = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(outcome.status, 10, outcome.output);
+      for (const name of ['evidence-artifact.json', 'observations.json', 'notes.txt'])
+        assert.ok(
+          outcome.output.split('\n').some((line) => line.startsWith('baseline/') && line.includes(`${name}: [baseline-digest]`)),
+          `no baseline-digest finding names ${name}\n${outcome.output}`,
+        );
+      // `--accept` replaces the baseline wholesale from the run, so an edited baseline is no obstacle to a reviewed re-accept.
+      const accepted = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(accepted.status, 0, accepted.output);
+      assert.equal(test.cli(folder, 'check').status, 0);
+      assert.match(test.cli(folder, 'compare', ['--run', secondId]).output, /compared: /);
+    }
+
     // A run with a link among its members is refused, naming the entry, with the old baseline untouched.
     {
       const folder = copyOf(project);
@@ -442,6 +541,7 @@ async function main() {
     for (const text of ['null', '[]', '7']) {
       const folder = copyOf(project);
       fs.writeFileSync(path.join(folder, 'baseline', 'run.json'), `${text}\n`);
+      baselines.resealBaseline(folder, engine);
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 10, `${text}: ${result.output}`);
       assert.match(result.output, /baseline\/run\.json: \[baseline-file\] does not hold a JSON object/);
@@ -455,6 +555,7 @@ async function main() {
       const artifact = read(evidence);
       delete artifact.comparabilityKey;
       writeJson(evidence, artifact);
+      baselines.resealBaseline(folder, engine);
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 10, result.output);
       assert.match(result.output, /baseline\/scores\/.*\/P-001\/evidence-artifact\.json: \[engine-schema\]/);
@@ -468,6 +569,7 @@ async function main() {
       const index = read(indexFile);
       index.trialSets = index.trialSets.filter((set) => set.probeId !== 'P-002');
       writeJson(indexFile, index);
+      baselines.resealBaseline(folder, engine);
       assert.equal(
         read(path.join(folder, 'baseline', 'run.json')).partition,
         read(path.join(folder, 'runs', secondId, 'run.json')).partition,
@@ -493,6 +595,7 @@ async function main() {
         const folder = copyOf(project);
         const root = side === 'run' ? path.join(folder, 'runs', secondId) : path.join(folder, 'baseline');
         writeJson(path.join(root, 'scores', latestScore(root), 'P-002', 'evidence-artifact.json'), weak);
+        if (side === 'baseline') baselines.resealBaseline(folder, engine);
         result = test.cli(folder, 'compare', ['--run', secondId]);
         assert.equal(result.status, 0, result.output);
         assert.match(result.output, new RegExp(`P-002: ${expected} \\(a is the baseline, b is run ${secondId}\\)`), `${side} weakened`);

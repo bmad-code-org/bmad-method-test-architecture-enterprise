@@ -48,6 +48,12 @@
  *   - `compared`: one engine relation per probe, the baseline as `a` and the run
  *     as `b`.
  *
+ * A `baseline/` that is not the bytes `baseline/baseline.json` lists is none of
+ * the three: before any of its evidence is read, `compare` exits 10 with one
+ * `baseline-digest` finding for each file whose `digestBytes` differs from the
+ * `files` map, each listed file that is missing and each unlisted file other
+ * than `baseline.json` (`baseline-digests.js`, which `check` calls too).
+ *
  * With `--accept` it replaces `baseline/` wholesale with a byte-identical
  * snapshot of the run. `baseline/` mirrors the run directory's relative paths,
  * so every digest `run.json` recorded still matches. The sealed records name
@@ -117,6 +123,7 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
+const { baselineDigestFindings } = require('./baseline-digests');
 const { loadEngine } = require('./engine');
 const { createArtifactValidator } = require('./records');
 const { inputFindings, phaseSnapshotProblems, runDirectoryFor } = require('./score');
@@ -559,6 +566,18 @@ async function compareWithBaseline({ folder, resolved, validate }) {
   }
   const tree = baselineTreeFindings(folder);
   if (tree.length > 0) return stopped({ findings: tree, runDirectory });
+
+  // A baseline that is not the bytes `baseline.json` lists is refused before any of its evidence is read (`baseline-digest`, AD-12).
+  const engine = await loadEngine();
+  const digests = baselineDigestFindings({ folder, digestBytes: engine.digestBytes });
+  if (digests.length > 0) {
+    return new CompareOutcome({
+      exitCode: AUTHORING,
+      findings: digests,
+      runDirectory,
+      message: `${BASELINE}/ fails ${BASELINE_MANIFEST}'s file digests (${digests.length} problem(s)); no verdict was given and nothing was read of its evidence or written`,
+    });
+  }
 
   const baselineRecord = readBaselineJson(baselinePath, 'run.json', findings);
   if (baselineRecord === null) return stopped({ findings, runDirectory });
