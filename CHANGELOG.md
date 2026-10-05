@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A macOS Seatbelt target has no route to the host's path-based Unix sockets (Story 1.87, AD-8).
+  The target profile started from `(allow default)` and refused a `connect()` to a socket under the user's private root only, so a confined process could connect to `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names or an agent socket under `/private/tmp` and ask the service behind it to run a job outside the sandbox.
+  The profile now denies every `connect()` to a socket path and allows back the workspace, the call's private directories, the home and two system services: the resolver at `/var/run/mDNSResponder`, which every name lookup of the C library asks, and the BSD log socket at `/var/run/syslog`.
+  Every other socket of `/var/run` stays closed, the privileged helper of Docker Desktop among them.
+  The rule names a path, so a socket a host process binds after the call started is refused too, which Bubblewrap's mounts cannot do.
+  A connection answers `EPERM`, and a link to a socket outside the grants is refused since Seatbelt matches the socket's real path.
+  `the Seatbelt path socket route` connects from a real Seatbelt call to a socket under the temp directory, links to it, the host's Docker sockets and the one `SSH_AUTH_SOCK` names, and to a socket bound after the call started, and finds each refused, then finds each reached with the denial taken out of the profile; it connects to a socket in the workspace, in a private directory and in the home, resolves the host's own `.local` name, and fails both under a profile that denies every socket.
+  `the Seatbelt path socket units` read the profile's text on every host.
+  The reference's macOS sentence on host sockets names what the profile closes and what it reaches, and the isolation golden gains the rule in its eight Seatbelt target profiles.
+  The run guide and the gaps guide name both answers a confined target gets from a socket file of the host (Bubblewrap `ECONNREFUSED`, macOS Seatbelt `EPERM`), and `test:evaluate-guidance` fails when either guide names Bubblewrap alone.
 - `tea-evaluate check` and `compare` verify the baseline's file digests (Story 1.90, AD-12).
   `compare --accept` records a `files` map of every baseline file's `digestBytes` in `baseline/baseline.json`, and nothing read it back, so a baseline file edited by hand passed both commands.
   `check` now reports a `baseline-digest` finding and exits 10 for each file of `baseline/` whose bytes differ from the map, each listed file that is missing and each file other than `baseline.json` that the map does not list.

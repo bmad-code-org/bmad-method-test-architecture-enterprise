@@ -36,7 +36,7 @@ Set `"confinement": false` in `evaluation.json` to run the targets unconfined. `
 On Linux an entry runs its processes in a network namespace of their own with a loopback and nothing else, and an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns, provided the service listens on `127.0.0.1` or `::1`, since any other address stops the call.
 An entry that lists hosts in `egress` also gets, for each call, a proxy the runtime owns that tunnels a request for a listed host and port and refuses every other, so the target reaches those hosts and nothing else, and no entry reaches the host's abstract Unix sockets.
 macOS Seatbelt ignores the field.
-A Bubblewrap target cannot connect to a socket file of the host, so a target that needs a host service through one opts out with `"confinement": false`.
+A confined target cannot connect to a socket file of the host (Bubblewrap answers `ECONNREFUSED`, macOS Seatbelt `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`.
 
 `run.json` records what the targets ran under. `confinement` is `seatbelt`, `bubblewrap` or `opt-out`. `egress` lists each entry that lists hosts with its `host:port` items and is `[]` when none does.
 Read both before reading a verdict, and tell the adopter which hosts each entry may reach.
