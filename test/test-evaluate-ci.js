@@ -1472,6 +1472,45 @@ function checkEngineStageExits() {
   assert.equal(odd.status, 12, odd.output);
 }
 
+/**
+ * `ci --tier pr` over a project under a distinctive path leaves a run directory that names no path of this machine: the
+ * project's own paths, the temporary and home directories and the private root, and any path of a Unix or macOS host, are
+ * absent from every file of `runs/<invocationId>/` (the directory the `chain` job uploads). The scan finds a project path
+ * planted in each file in turn, so it cannot pass over a directory that holds one.
+ */
+function checkCiRunHoldsNoMachinePath() {
+  const folder = copyFixture('verdict', 'machine-path-canary-ci-6b3e');
+  const repository = path.resolve(folder, '..', '..');
+  const project = { folder, repository, directory: path.dirname(repository) };
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 0, result.output);
+  const { directory } = latestCi(folder);
+  const needles = baselines.machinePaths({ project });
+  assert.ok(
+    needles.some((needle) => needle.includes('machine-path-canary-ci-6b3e')),
+    `the scan does not look for the project's path: ${JSON.stringify(needles)}`,
+  );
+  assert.deepEqual(baselines.machinePathHits(directory, needles), [], 'a file of the ci run directory names a path of this machine');
+  assert.deepEqual(baselines.machinePathHits(directory), [], 'a file of the ci run directory holds a path of a Unix or macOS host');
+  assert.match(
+    fs.readFileSync(path.join(directory, 'checks', 'check', 'stdout'), 'utf8'),
+    /^tea-evaluate check: <evaluation-folder> has no authoring defects$/m,
+  );
+  const planted = path.join(path.dirname(directory), 'planted-ci-run');
+  fs.cpSync(directory, planted, { recursive: true });
+  for (const file of baselines.filesUnder(planted)) {
+    const target = path.join(planted, file);
+    const original = fs.readFileSync(target);
+    fs.appendFileSync(target, repository);
+    assert.deepEqual(
+      baselines.machinePathHits(planted, needles).map((hit) => hit.file),
+      [file],
+      `${file}: a planted project path is not found`,
+    );
+    fs.writeFileSync(target, original);
+  }
+}
+
 function checkPrReplay() {
   const folder = copyFixture('verdict', 'pr');
   const baselineBefore = treeDigest(path.join(folder, 'baseline'));
@@ -1809,11 +1848,12 @@ function checkReplayComparisonSet() {
   );
   // One byte of the baseline's strength aggregate, one byte of its floors (a space become a tab: the floors still
   // parse, so the replay scores under them, and the file score writes from them differs from the baseline's bytes), and one byte
-  // of a probe's call record and of the aggregate's: each is drift, named (revert: leaving any of these files out of the
+  // of each probe's call record and of the aggregate's: each is drift, named (revert: leaving any of these files out of the
   // comparison passes its case, so the case fails).
   for (const [name, edit] of [
     ['strength-aggregate.json', (file) => flipByte(file)],
     ['P-001/score.json', (file) => flipByte(file)],
+    ['P-002/score.json', (file) => flipByte(file)],
     ['aggregate-strength.json', (file) => flipByte(file)],
     ['strength-floors.json', (file) => fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(': ', ':\t'))],
   ]) {
@@ -4195,6 +4235,7 @@ async function main() {
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
     ['the pr replay', checkPrReplay],
+    ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],
     ['the replay comparison set', checkReplayComparisonSet],
     ['a replay stage that exits 2', checkReplayStageExit],
     ['baseline integrity', checkBaselineIntegrity],

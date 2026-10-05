@@ -942,21 +942,23 @@ Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` i
 
 ### Paths in the records
 
-A record names no path of the machine that produced it, so `runs/` can be uploaded as a CI artifact and `baseline/` committed to a public repository without publishing a home directory, a temporary directory or a checkout location.
+A record the runtime writes names no path of the machine that produced it, so `runs/` can be uploaded as a CI artifact and `baseline/` committed to a public repository without publishing a home directory, a temporary directory or a checkout location.
 The runtime writes these forms where a path would be:
 
-| Where                                                                           | Form                                                                                                                                                  |
-| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.json` `workspaces`, and `cwd` in each `observations/` and `faults/` record | `<workspace>`, or `<workspace>/<path>` when `launch.root` sits below the workspace's top; the record's `workspace` label tells which workspace it was |
-| `run.json` `adopterTree.repository`                                             | `<repository>` when your project sits in a git repository, `null` otherwise                                                                           |
-| `run.json` `logins[].file`, and the login entries of a manifest or its note     | `<credentials-file>`                                                                                                                                  |
-| `cli` in each engine call record                                                | `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted                                        |
-| a file of your evaluation folder in an engine call's `argv`                     | its path below the evaluation folder, for example `runs/<invocationId>/scoring-policy.json`                                                           |
-| the private staging file in an engine call's `argv` (`--out`)                   | `<staging>/<file name>`                                                                                                                               |
-| the score invocation's directory in the `argv` of the aggregate call            | `<score-invocation>`, because each `score` writes an invocation id of its own                                                                         |
+| Where                                                                                             | Form                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.json` `workspaces`, and `cwd` in each `observations/` and `faults/` record                   | `<workspace>`, or `<workspace>/<path>` when `launch.root` sits below the workspace's top; the record's `workspace` label tells which workspace it was     |
+| `run.json` `adopterTree.repository`                                                               | `<repository>` when your project sits in a git repository, `null` otherwise                                                                               |
+| `run.json` `logins[].file`, and the login entries of a manifest or its note                       | `<credentials-file>`                                                                                                                                      |
+| `cli` in each engine call record                                                                  | `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted                                            |
+| a file of your evaluation folder in an engine call's `argv`                                       | its path below the evaluation folder, for example `runs/<invocationId>/scoring-policy.json`                                                               |
+| the private staging file in an engine call's `argv` (`--out`)                                     | `<staging>/<file name>`                                                                                                                                   |
+| the score invocation's directory in the `argv` of the aggregate call                              | `<score-invocation>`, because each `score` writes an invocation id of its own                                                                             |
+| the output of an `evaluate` check of `ci` (`checks/<id>/stdout` and `stderr`, warnings and notes) | the evaluation folder as `<evaluation-folder>`, the private root as `<private-root>`, the temporary directory as `<tmp>`, your home directory as `<home>` |
 
 A recorded argv reruns by hand from the evaluation folder: the relative paths resolve there, `<score-invocation>` is the name of the invocation's directory under `scores/`, and `--out` takes a fresh file.
 Every digest a record carries is taken over the bytes with these forms in them, so nothing is rewritten after a run and `compare --accept` copies the files as they are.
+A `gate` check of `ci` records the output of your command as it printed it, so a path it prints stays in `checks/<id>/stdout`.
 
 ### Gameability probes
 
@@ -1485,10 +1487,12 @@ Each exit has the AD-10 class and action: eval-quality's 2 (target behavior fail
 A gate exit outside that table passes through as an undocumented exit, blocking, ranked after 1.
 A `gate` check runs as a child process in a process group of its own, with the plan's argv, no shell and stdin closed. It ends at its plan check's `timeoutMs` (600000 when absent): the group gets SIGTERM, then SIGKILL after two seconds, and the check exits 12. It ends the same way, with the bytes up to the bound kept, when it prints more than 64 MiB; exactly 64 MiB passes. Whatever the gate left running in its process group, a descendant that holds no stream included, is killed when the gate exits. A SIGINT or SIGTERM to `ci` reaches the group, which is killed half a second later, before `ci` ends; only a SIGKILL of `ci` itself leaves the gate running. What the gate printed is persisted whatever the exit.
 
-`runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, whatever the exit; the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
+`runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` as the check printed them, whatever the exit (an `evaluate` check in the path forms of [Paths in the records](#paths-in-the-records), a `gate` as your command printed it); the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
 Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result. `bmad-testarch-ci` renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
 
-The baselines TeA's own fixtures commit, the two repositories of the CI stage included, were recorded by real `compare --accept` runs over clean copy-workspace runs from a temporary directory. They hold the neutral path forms of [Paths in the records](#paths-in-the-records), so they name no workspace, repository, staging directory or home directory. A baseline accepted before those forms existed holds absolute paths in its call records, so its replay reports drift until `compare --accept` records it again.
+The baselines TeA's own fixtures commit, the two repositories of the CI stage included, were recorded by real `compare --accept` runs over clean copy-workspace runs from a temporary directory.
+They hold the neutral path forms of [Paths in the records](#paths-in-the-records), so they name no workspace, repository, staging directory or home directory.
+A baseline accepted before those forms existed holds absolute paths in its call records, so its replay reports drift until `compare --accept` records it again.
 
 ## tea-skill-runner
 

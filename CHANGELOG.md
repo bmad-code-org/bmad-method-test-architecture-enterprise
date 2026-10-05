@@ -363,7 +363,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Only the invocation's own `score.json` summary stays out, because it names the replay's invocation id.
   A baseline accepted before this release holds absolute paths in those call records, so its `pr` replay reports drift (exit 13) until `compare --accept` records it again.
   The twelve committed fixture baselines are accepted again from fresh runs, and the gap-loop, AI-feature and test-review replay bundles hold the same forms.
-  A `test:evaluate-compare` case accepts a run made under a distinctive project path and temporary directory and scans every file under `baseline/` for them, the home directory and the temporary roots, a second case scans every committed `baseline/` under `test/fixtures/` and `test/evaluations/`, and a `test:evaluate-ci` case flips one byte of each call record and expects exit 13.
+  `tea-evaluate ci` records what an `evaluate` check printed and logged in the same forms: the evaluation folder is `<evaluation-folder>`, the private root `<private-root>`, the temporary directory `<tmp>` and the home directory `<home>`.
+  A gate's own output stays as the gate printed it.
+  A `test:evaluate-compare` case accepts a run made under a distinctive project path and temporary directory, checks from the run's own log that it used that directory, and scans every file under `baseline/` for them, the home directory and the temporary roots.
+  A second case scans every committed `baseline/` under `test/fixtures/` and `test/evaluations/`.
+  A `test:evaluate-ci` case flips one byte of each probe's `score.json` and of `aggregate-strength.json` and expects exit 13.
+  Another case runs `ci --tier pr` over a project under a distinctive path and scans the whole run directory.
+  The ten `test:evaluate-pr-*` scripts and every tier of the two CI repositories scan the run directories they leave.
   The reference describes the forms under "Paths in the records".
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.

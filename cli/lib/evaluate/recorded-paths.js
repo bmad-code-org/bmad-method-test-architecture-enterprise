@@ -12,6 +12,8 @@
  * - A login's credentials file is `<credentials-file>`.
  * - An engine call's argv names a file inside the evaluation folder by its path below the folder (`runs/<run>/scoring-policy.json`), so a call reruns by hand from the evaluation folder.
  * - Any other absolute path in an argv is a private staging file, recorded as `<staging>/<file name>`.
+ * - In the output an `evaluate` check of `ci` records (what it printed and logged, its warnings and notes), the evaluation folder is `<evaluation-folder>`.
+ * - In the same output, the private root of runs is `<private-root>`, the temporary directory `<tmp>` and the home directory `<home>`.
  * - The score invocation's own directory name is `<score-invocation>`, because an invocation id is random and a replay of the same records writes another one.
  * - The engine executable is `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted.
  *
@@ -21,6 +23,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const WORKSPACE = '<workspace>';
@@ -28,6 +31,7 @@ const REPOSITORY = '<repository>';
 const CREDENTIALS_FILE = '<credentials-file>';
 const STAGING = '<staging>';
 const SCORE_INVOCATION = '<score-invocation>';
+const EVALUATION_FOLDER = '<evaluation-folder>';
 
 const posix = (relative) => relative.split(path.sep).join('/');
 
@@ -91,6 +95,32 @@ function pathRecorder({ folder, scoreInvocation = null }) {
 }
 
 /**
+ * The substitution an `evaluate` check's recorded output goes through.
+ * The progress lines of a live command and the messages of a failure name the workspaces, the run directory and the private staging the command used, and the check's streams are uploaded with `runs/`.
+ * A gate's own output is the gate's and is recorded as it printed it.
+ *
+ * @param {{ folder: string }} options the evaluation folder the check ran over
+ * @returns {(text: string) => string}
+ */
+function textNeutralizer({ folder }) {
+  const spellings = (directory) => [...new Set([directory, realOrSelf(directory)])];
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const privateRoots = uid === null ? [] : [`/tmp/tea-evaluate-p${uid}`, path.join(os.tmpdir(), `tea-evaluate-p${uid}`)];
+  const substitutions = [
+    [spellings(path.resolve(folder)), EVALUATION_FOLDER],
+    [privateRoots.flatMap(spellings), '<private-root>'],
+    [spellings(os.tmpdir()), '<tmp>'],
+    [spellings(os.homedir()), '<home>'],
+  ]
+    .flatMap(([directories, form]) => directories.map((directory) => [directory, form]))
+    .filter(([directory]) => directory.length > 3 && directory !== path.sep)
+    .sort(([left], [right]) => right.length - left.length);
+  const escaped = (value) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
+  const patterns = substitutions.map(([directory, form]) => [new RegExp(`${escaped(directory)}(?![\\w.-])`, 'g'), form]);
+  return (text) => (typeof text === 'string' ? patterns.reduce((current, [pattern, form]) => current.replace(pattern, form), text) : text);
+}
+
+/**
  * The recorded executable of an engine call.
  *
  * @param {string} cli the path the stage ran
@@ -105,11 +135,13 @@ function recordedEngineCli(cli, { substituted, packageRoot }) {
 
 module.exports = {
   CREDENTIALS_FILE,
+  EVALUATION_FOLDER,
   REPOSITORY,
   SCORE_INVOCATION,
   STAGING,
   WORKSPACE,
   pathRecorder,
   recordedEngineCli,
+  textNeutralizer,
   workspaceDirectory,
 };

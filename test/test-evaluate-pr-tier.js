@@ -14,6 +14,7 @@
  *  - `ci` exits non-zero, runs other checks than the plan places, or finds the baseline stale.
  *
  * The invocation leaves `runs/<invocationId>/` in the evaluation folder, which the `chain` job uploads as a build artifact.
+ * The script also scans every file of that directory for a path of this machine (`machinePathHits`).
  * The Evaluate-authored suite (`suite`) has no baseline yet: its `check`, `compile` and `seal` run now.
  */
 
@@ -22,6 +23,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { engineVersion } = require('../cli/lib/evaluate/engine');
+const { machinePathHits } = require('./lib/evaluate-baseline');
 const { EVALUATIONS, ROOT, folderProblems, resultProblems } = require('./lib/evaluate-pr-tier');
 
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
@@ -79,6 +81,14 @@ function main(key) {
   const failures = resultProblems(entry, run.status, ciJson, plan);
   if (failures.length > 0) {
     console.error(failures.join('\n'));
+    return 1;
+  }
+  // The directory the `chain` job uploads names no path of this machine.
+  const hits = machinePathHits(path.join(runs, invocation));
+  if (hits.length > 0) {
+    console.error(
+      `test-evaluate-pr-tier: ${key}: runs/${invocation} names a path of this machine in ${hits.map((hit) => hit.file).join(', ')}`,
+    );
     return 1;
   }
   console.log(

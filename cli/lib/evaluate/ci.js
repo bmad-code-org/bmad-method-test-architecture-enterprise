@@ -87,6 +87,7 @@ const { PartitionPlanError, loadContractView } = require('./partition');
 const { calibrationShortfalls } = require('./calibration');
 const { ensureRunsDirectory, newInvocationId, readJson, runPreflightCommand } = require('./preflight');
 const { createArtifactValidator } = require('./records');
+const { textNeutralizer } = require('./recorded-paths');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { runRunCommand } = require('./run');
 const { runScoreCommand } = require('./score');
@@ -356,6 +357,17 @@ async function runCheck(context, entry) {
     outcome = result(INFRASTRUCTURE, { stderr: `${escapeUnprintable(String(error?.message ?? error))}\n`, source: 'tea-evaluate' });
   }
   if (outcome.stderr === '' && logged.length > 0) outcome.stderr = `${logged.map((line) => escapeUnprintable(line)).join('\n')}\n`;
+  // What an `evaluate` check printed and logged is uploaded with `runs/`, so it is recorded in the neutral forms; a gate's output is the gate's own.
+  if (entry.kind === 'evaluate') {
+    const neutral = textNeutralizer({ folder: context.folder });
+    outcome = {
+      ...outcome,
+      stdout: neutral(outcome.stdout),
+      stderr: neutral(outcome.stderr),
+      warnings: outcome.warnings.map(neutral),
+      notes: outcome.notes.map(neutral),
+    };
+  }
   // The action comes from AD-10's table alone; the plan's `enforcement` records the class and changes nothing here.
   const classified = classify(entry.kind, outcome.exitCode, outcome.source);
   let { action } = classified;

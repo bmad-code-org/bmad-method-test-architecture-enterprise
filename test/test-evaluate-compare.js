@@ -179,16 +179,28 @@ function checkWorkingTreeCopy() {
 
 /**
  * An accept over a project under a distinctive absolute path, run with a distinctive temporary directory, writes a `baseline/` that
- * names neither. The scan reads every file's bytes for the project's own paths, the run's temporary directory, the host's, the home
- * directory and the private root of runs, in both spellings of each, and for any path of a Unix or macOS host at all. The scan itself
- * is held to its job: a path planted in a copy of the baseline, in any one of the files, is found.
+ * names neither. The run's own log names the workspace it made, which must sit under the distinctive temporary directory (so the
+ * run really used it and the scan has something to miss). The scan reads every file's bytes for the project's own paths, the run's
+ * temporary directory, the host's, the home directory and the private root of runs, in both spellings of each, and for any path
+ * of a Unix or macOS host at all. The scan itself is held to its job: a path planted in a copy of the baseline, in any one of the
+ * files, is found.
  */
 function checkMachinePaths() {
   const canary = test.project('machine-path-canary-4d7a');
   const tempRoot = path.join(canary.directory, 'distinctive-temp-root-9e21');
   fs.mkdirSync(tempRoot);
   canary.env = { ...canary.env, TMPDIR: tempRoot };
-  const run = runAndScore(canary);
+  const ran = test.cli(canary.folder, 'run', [], canary.env);
+  assert.equal(ran.status, 0, ran.output);
+  const logged = /pristine workspace, [^:\n]+: (\/\S+)/.exec(ran.output)?.[1];
+  assert.ok(
+    logged !== undefined &&
+      baselines.spellingsOf(tempRoot).some((spelling) => logged.startsWith(`${spelling}${path.sep}tea-evaluate-pristine-`)),
+    `the run made its workspace at ${logged}; expected a directory under the distinctive temporary directory ${tempRoot}`,
+  );
+  const run = test.latest(canary.folder);
+  const scored = test.cli(canary.folder, 'score', ['--run', path.basename(run)], canary.env);
+  assert.equal(scored.status, 0, scored.output);
   const accepted = test.cli(canary.folder, 'compare', ['--accept', '--run', path.basename(run)], canary.env);
   assert.equal(accepted.status, 0, accepted.output);
   const baseline = path.join(canary.folder, 'baseline');
@@ -203,7 +215,7 @@ function checkMachinePaths() {
   );
   assert.deepEqual(baselines.machinePathHits(baseline, needles), [], 'a file of baseline/ names a path of this machine');
   assert.deepEqual(baselines.machinePathHits(baseline), [], 'a file of baseline/ holds a path of a Unix or macOS host');
-  // The run itself used the distinctive directories: a workspace was made under the temporary directory the run was given.
+  // The recorded forms: run.json and an observation name the workspace as <workspace>, and the score call names no absolute path.
   const recorded = read(path.join(run, 'run.json'));
   assert.deepEqual(recorded.workspaces, { pristine: '<workspace>', 'mutated:M-001': '<workspace>' });
   const observed = read(path.join(baseline, 'observations', fs.readdirSync(path.join(baseline, 'observations')).sort()[0]));

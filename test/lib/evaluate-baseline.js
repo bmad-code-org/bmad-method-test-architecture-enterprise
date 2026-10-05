@@ -202,6 +202,7 @@ module.exports = {
   committedBaselines,
   copyOf,
   filesUnder,
+  spellingsOf: spellings,
   machinePathHits,
   machinePaths,
   placeBaseline,
