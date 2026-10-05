@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-evaluate",
-  "sourceSpecDigest": "sha256:79298cd4fee0627785ac1e20dbac5870d5396b4d579c33a092692018e5839e62",
+  "sourceSpecDigest": "sha256:266c9d3c4e7cb0d7de33c4f45ec0a04bd1c5438e7ec6ae0402d1de52cdbf3b59",
   "behaviors": [
     {
       "id": "B-001",
@@ -57,9 +57,9 @@
     },
     {
       "id": "B-003",
-      "description": "Stage 11 lists every exit the gaps guide's AD-10 table holds, with a class from the table's vocabulary on each record, and drops none, so a missing row leaves an adopter with no class for that source and exit.",
+      "description": "Stage 11 lists every exit the gaps guide's AD-10 table holds, with the class its row gives on each record, and drops none, so a missing row leaves an adopter with no class for that source and exit and a swapped class sends the adopter to the wrong repair.",
       "severity": "material",
-      "observableSuccessCriterion": "Asked for the complete exit table, the runner prints one JSON object whose status is \"answered\" and whose exits array covers each of the table's thirteen ids exactly once, each record carrying a class the table uses.",
+      "observableSuccessCriterion": "Asked for the complete exit table, the runner prints one JSON object whose status is \"answered\" and whose exits array covers each of the table's thirteen ids exactly once, each record carrying the class its row gives that id.",
       "requirementLinks": [
         {
           "scheme": "tea-evaluate-spec",
@@ -74,6 +74,10 @@
         {
           "scheme": "tea-evaluate-requirements",
           "id": "exit-table-row-dropped"
+        },
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "exit-table-class-swap"
         }
       ],
       "oracles": [
@@ -214,15 +218,17 @@
     {
       "id": "O-003",
       "polarity": "expects-hold",
-      "commentary": "The exit table holds thirteen rows, and the reply lists them as records. The oracle reconciles the records against the declared reference set by id, so a dropped or invented row fails, and it tests each record on its own for a class the table uses.",
+      "commentary": "The exit table holds thirteen rows, and the reply lists them as records. The oracle reconciles the records against the declared reference set by id, so a dropped or invented row fails. It also holds each record to the class its row gives that id, one alternative per row that pairs the id with the class, so a reply that swaps two classes fails with both ids still covered and both classes still in the vocabulary. The records of tea-evaluate 11 and tea-evaluate 12 compare their class with the answer the classify-exits step gave for the same exit, which O-001 holds to the table, so one seeded edit of either row moves O-001 alone.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The status claim and the exits array of the JSON object the list-exit-table step prints on stdout, with each record's class.",
-        "negativeDomain": "A reply whose status is not \"answered\", whose exits array drops a table row, repeats one or adds one the table lacks, or holds a record whose class is not one the table uses.",
+        "scope": "The status claim and the exits array of the JSON object the list-exit-table step prints on stdout, with each record's id and class, and the exit11 and exit12 answers of the classify-exits step.",
+        "negativeDomain": "A reply whose status is not \"answered\", whose exits array drops a table row, repeats one or adds one the table lacks, or holds a record whose class is anything but the one its row gives that id, including a reply that swaps the classes of two rows. For tea-evaluate 11 and tea-evaluate 12 the class to match is the one the classify-exits step answered for that exit.",
         "evidenceTargets": [
           "/interactions/list-exit-table/stdout/status",
-          "/interactions/list-exit-table/stdout/exits"
+          "/interactions/list-exit-table/stdout/exits",
+          "/interactions/classify-exits/stdout/exit11",
+          "/interactions/classify-exits/stdout/exit12"
         ]
       },
       "check": {
@@ -258,24 +264,357 @@
               "pointer": "/interactions/list-exit-table/stdout/exits"
             },
             "predicate": {
-              "op": "set-membership",
+              "op": "any",
               "operands": [
                 {
-                  "pointer": "@/class"
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 0"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "pass or CONCERNS"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
-                  "literal": [
-                    "pass or CONCERNS",
-                    "target behavior failure or evidence integrity",
-                    "infrastructure or integrity",
-                    "contract authoring defect",
-                    "runtime fault",
-                    "wiring defect",
-                    "authoring defect",
-                    "evaluation weakness",
-                    "infrastructure",
-                    "evaluation evidence drift",
-                    "repository policy violation"
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 2"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "target behavior failure or evidence integrity"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 3"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "infrastructure or integrity"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 4"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "contract authoring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 5"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "runtime fault"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 10"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "authoring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 11"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "pointer": "/interactions/classify-exits/stdout/exit11"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 12"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "pointer": "/interactions/classify-exits/stdout/exit12"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 13"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "evaluation evidence drift"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality-gates 1"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "repository policy violation"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality-gates 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
                   ]
                 }
               ]
