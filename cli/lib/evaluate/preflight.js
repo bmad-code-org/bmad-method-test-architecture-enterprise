@@ -94,7 +94,7 @@ const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
-const { degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
+const { answersForView, degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
 const {
   deploymentPair,
   deploymentRoute,
@@ -107,7 +107,14 @@ const {
   routeIdentity,
 } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
-const { PartitionPlanError, committedProbes, loadContractView, selectPartition, unknownPartition } = require('./partition');
+const {
+  PartitionPlanError,
+  committedProbes,
+  loadContractView,
+  readHeldOutResponse,
+  selectPartition,
+  unknownPartition,
+} = require('./partition');
 const { createArtifactValidator } = require('./records');
 const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
 const { registryFromEvaluation } = require('./registry');
@@ -195,21 +202,37 @@ function writeJson(file, value) {
 }
 
 /**
- * Every committed gameability probe, sorted by file name, parsed, each with
- * its degenerate response's bytes and steps, read before anything runs.
+ * The committed gameability probes a run qualifies, sorted by file name, parsed, each with its degenerate response's bytes and the
+ * answers to the steps of the view it runs, read before anything runs (`answersForView`, Story 1.109). The held-out and both views
+ * also read, for a probe, the held-out answers beside the held-out plan when the plan declares a step; a development run opens
+ * neither the plan nor those answers.
+ *
+ * @param {string} folder
+ * @param {object} options
+ * @param {{ contract: object, heldOutPlan: object|null }} options.view the contract the run compiles, and the held-out plan it was derived from
+ * @param {Set<string>|null} options.selectedProbeIds the probes the partition selects; every probe when null
  */
-function gameabilityProbes(folder) {
+function gameabilityProbes(folder, { view, selectedProbeIds }) {
   const directory = path.join(folder, 'probes');
   if (!fs.existsSync(directory)) return [];
+  const stepIds = (view.contract.interactionPlan ?? []).map((step) => step.stepId);
+  const readsHeldOut = (view.heldOutPlan?.interactionPlan?.length ?? 0) > 0;
   return fs
     .readdirSync(directory)
     .filter((name) => PROBE_FILE.test(name))
     .sort()
     .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }))
     .filter(({ probe }) => probe.qualification?.route === 'gameability')
+    .filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId))
     .map((entry) => {
       const bytes = fs.readFileSync(path.join(folder, ...degenerateResponsePath(entry.probe.probeId).split('/')));
-      return { ...entry, bytes, steps: JSON.parse(bytes.toString('utf8')).steps };
+      const heldOut = readsHeldOut ? readHeldOutResponse(folder, entry.probe.probeId) : undefined;
+      const steps = answersForView({
+        steps: JSON.parse(bytes.toString('utf8')).steps,
+        heldOutSteps: heldOut?.response.steps,
+        stepIds,
+      });
+      return { ...entry, bytes, ...(heldOut === undefined ? {} : { heldOut: { path: heldOut.path, bytes: heldOut.bytes } }), steps };
     });
 }
 
@@ -653,7 +676,7 @@ async function pipeline(
     reclaimDeadPrivateParents({ folder, root, journal, log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
-    const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
+    const gameability = gameabilityProbes(folder, { view, selectedProbeIds });
     if (refused !== null) return refused;
     // A confined run reads the working tree, the checkout's own HEAD and where the checkout's git commands read their repository
     // from (the resolved git directory, the .git file, the hooks directory's presence): every process of it is denied a write to
@@ -661,7 +684,13 @@ async function pipeline(
     // a digest of the git directory could fire on other sessions' work alone. An opted-out run keeps the full comparison, refs
     // and shared state included (Story 1.112).
     const sharedState = !confines(confinement);
-    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState });
+    // A development run under a partition plan reads no byte of the held-out files, so the tree reading lists the held-out folder and
+    // takes only `lstat` metadata (Story 1.109): a file it cannot open still reads, and a change to one still moves the reading.
+    const sealed =
+      partition === 'development' && evaluation.partitionPlan !== undefined
+        ? [path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')]
+        : [];
+    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState, sealed });
     const before = readTree();
     const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one

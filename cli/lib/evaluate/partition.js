@@ -16,6 +16,18 @@ const PARTITIONS = ['development', 'held-out'];
 /** The held-out plan's format version, which `schemas/held-out-plan.schema.json` holds the same. */
 const HELD_OUT_PLAN_VERSION = 1;
 const STEP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PROBE_ID = /^P-[0-9]{3,}$/;
+/**
+ * The folder the held-out plan and the held-out answers sit in, sealed from a development run: the held-out plan is a file
+ * directly under it, and `corpus-index.js` leaves everything below it out of a development run's staleness comparison.
+ */
+const HELD_OUT_DIRECTORY = 'corpus/held-out/';
+/**
+ * Where a gameability probe's answers to the held-out plan's steps are committed (Story 1.109), one `<probeId>.json` per probe in
+ * the shape of `corpus/gameability/<probeId>.json`. It sits beside the held-out plan under `HELD_OUT_DIRECTORY`: a development run
+ * opens none of it.
+ */
+const HELD_OUT_ANSWERS_DIRECTORY = `${HELD_OUT_DIRECTORY}gameability/`;
 const ORACLE_ID = /^O-[0-9]{3,}$/;
 const BEHAVIOR_ID = /^B-[0-9]{3,}$/;
 const RUBRIC_ID = /^R-[0-9]{3,}$/;
@@ -184,7 +196,7 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
   const file = path.join(folder, ...relative.split('/'));
   let bytes;
   try {
-    if (fs.realpathSync(path.dirname(file)) !== path.join(fs.realpathSync(folder), 'corpus', 'held-out')) {
+    if (fs.realpathSync.native(path.dirname(file)) !== path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')) {
       throw new PartitionPlanError(`${relative} is not directly under corpus/held-out/ of the evaluation folder`);
     }
     if (!fs.lstatSync(file).isFile()) throw new PartitionPlanError(`${relative} is not a regular file`);
@@ -213,6 +225,52 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
     );
   }
   return plan;
+}
+
+/** Where one gameability probe's answers to the held-out plan's steps are committed, relative to the evaluation folder. */
+const heldOutResponsePath = (probeId) => `${HELD_OUT_ANSWERS_DIRECTORY}${probeId}.json`;
+
+/**
+ * One gameability probe's answers to the held-out plan's steps (Story 1.109): the file's bytes, which a run digests, and its parsed
+ * content, whose `steps` answer the held-out plan's steps. Only the held-out and both views read it, so a development run never
+ * opens it. The file is a regular file directly under `corpus/held-out/gameability/` of the evaluation folder, reached through no
+ * link, and a refusal names the path and never a byte of the file.
+ *
+ * @param {string} folder
+ * @param {string} probeId a probe ID of the form `P-NNN`
+ * @returns {{ path: string, bytes: Buffer, response: object }}
+ * @throws {PartitionPlanError} `absent` is true when the file does not exist
+ */
+function readHeldOutResponse(folder, probeId) {
+  if (typeof probeId !== 'string' || !PROBE_ID.test(probeId)) {
+    throw new PartitionPlanError('a gameability probe answers the held-out plan from a file named by its probe ID, of the form P-NNN');
+  }
+  const relative = heldOutResponsePath(probeId);
+  const file = path.join(folder, ...relative.split('/'));
+  let bytes;
+  try {
+    // The native real path spells the directory as the disk does, on a case-insensitive file system too, so a case-variant
+    // `corpus/held-out/Gameability/` is refused here and no other spelling than the sealed one is read.
+    if (
+      fs.realpathSync.native(path.dirname(file)) !==
+      path.join(fs.realpathSync.native(folder), ...HELD_OUT_ANSWERS_DIRECTORY.split('/').filter(Boolean))
+    ) {
+      throw new PartitionPlanError(`${relative} is not directly under ${HELD_OUT_ANSWERS_DIRECTORY} of the evaluation folder`);
+    }
+    if (!fs.lstatSync(file).isFile()) throw new PartitionPlanError(`${relative} is not a regular file`);
+    bytes = fs.readFileSync(file);
+  } catch (error) {
+    if (error instanceof PartitionPlanError) throw error;
+    const refusal = new PartitionPlanError(`${relative} cannot be read (${error.code ?? 'error'})`);
+    refusal.absent = error.code === 'ENOENT';
+    throw refusal;
+  }
+  try {
+    return { path: relative, bytes, response: JSON.parse(bytes.toString('utf8')) };
+  } catch {
+    // The parser's own message quotes the bytes, which stay out of every finding.
+    throw new PartitionPlanError(`${relative} does not parse as JSON`);
+  }
 }
 
 /**
@@ -664,17 +722,23 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
 }
 
 module.exports = {
+  HELD_OUT_DIRECTORY,
   HELD_OUT_PLAN_VERSION,
   PARTITIONS,
+  PROBE_ID,
   PartitionPlanError,
+  STEP_ID,
   committedProbes,
   contractView,
+  heldOutResponsePath,
   loadContractView,
   mappingView,
   mappingViewProblems,
+  named,
   partitionPlanProblems,
   planCriterionName,
   readHeldOutPlan,
+  readHeldOutResponse,
   selectPartition,
   stepsReadBy,
   unknownPartition,
