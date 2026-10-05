@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A macOS Seatbelt target has no route to the host's path-based Unix sockets (Story 1.87, AD-8).
+  The target profile started from `(allow default)` and refused a `connect()` to a socket under the user's private root only, so a confined process could connect to `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names or an agent socket under `/private/tmp` and ask the service behind it to run a job outside the sandbox.
+  The profile now denies every `connect()` to a socket path and allows back the workspace, the call's private directories, the home and two system services: the resolver at `/var/run/mDNSResponder`, which every name lookup of the C library asks, and the BSD log socket at `/var/run/syslog`.
+  Every other socket of `/var/run` stays closed, the privileged helper of Docker Desktop among them.
+  The rule names a path, so a socket a host process binds after the call started is refused too, which Bubblewrap's mounts cannot do.
+  A connection answers `EPERM`, and a link to a socket outside the grants is refused since Seatbelt matches the socket's real path.
+  `the Seatbelt path socket route` connects from a real Seatbelt call to a socket under the temp directory, links to it, the host's Docker sockets and the one `SSH_AUTH_SOCK` names, and to a socket bound after the call started, and finds each refused, then finds each reached with the denial taken out of the profile; it connects to a socket in the workspace, in a private directory and in the home, resolves the host's own `.local` name, and fails both under a profile that denies every socket.
+  `the Seatbelt path socket units` read the profile's text on every host.
+  The reference's macOS sentence on host sockets names what the profile closes and what it reaches, and the isolation golden gains the rule in its eight Seatbelt target profiles.
+  The run guide and the gaps guide name both answers a confined target gets from a socket file of the host (Bubblewrap `ECONNREFUSED`, macOS Seatbelt `EPERM`), and `test:evaluate-guidance` fails when either guide names Bubblewrap alone.
 - `tea-evaluate check` and `compare` verify the baseline's file digests (Story 1.90, AD-12).
   `compare --accept` records a `files` map of every baseline file's `digestBytes` in `baseline/baseline.json`, and nothing read it back, so a baseline file edited by hand passed both commands.
   `check` now reports a `baseline-digest` finding and exits 10 for each file of `baseline/` whose bytes differ from the map, each listed file that is missing and each file other than `baseline.json` that the map does not list.
@@ -25,6 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `chain` job uploads each evaluation's `runs/<invocationId>/` as the build artifact `evaluate-runs-<shard>` with `if: always()`, so a red run leaves its evidence bundle.
   A `test:evaluate-ci` case parses `quality.yaml` and fails when the upload step, its `always()`, its shard-qualified name or any evaluation's path is missing, when a script leaves the `npm test` chain, and when any of the eight `eval-quality-gates` leaves its job: `test:lockfile-age` and `test:licences` stay in `supply-chain`, `test:direction`, `test:boundary` and `test:lineage` in `layering-boundary-lineage`, and `test:doc-invocations`, `test:doc-counts` and `test:doc-claims` in the chain.
   The case also carries a revert case for each folder rule, each wiring rule and each result rule.
+- The Linux audit lists a connection to a Unix socket file outside the grants as an observed mount (Story 1.86, AD-7, AD-8).
+  Story 1.82 mounts an empty device file over each path-based socket the host lists when a call starts, and a socket a host process binds after the call started stayed reachable and unlisted, because the audit traced file syscalls and a `connect()` is none.
+  The trace now also reports `connect` and the sends that carry an address (`sendto`, `sendmsg`, `sendmmsg`), so a datagram socket is covered as a stream socket is.
+  A call the kernel did not refuse is listed by the socket file's real path (a link in the workspace to the socket resolves to the file the kernel reached), and `score` exits 3 with eval-quality's isolation violation naming it.
+  A connection the mounts refused (`ECONNREFUSED`), a path with nothing behind it, a socket file the process may not open, an abstract address, a TCP or UDP address and a send with no address list nothing.
+  A socket in the workspace, in a private directory or the home of the call (the bridge's included), in the sandbox's own `/dev` and `/run/user`, or the egress proxy's directory is the call's own and lists nothing.
+  A call the end of the call cut short (strace prints its return value as `= ?`) is listed, and so is a connection through a link the target made and removed afterwards, whether the link was copied by a hard link, moved with its directory, exchanged by `RENAME_EXCHANGE`, made through a link to a directory or made in the sandbox's own `/dev`.
+  A connection through a path the target removes, renames or replaces afterwards, or whose directory it does, is listed by the path as given unless the call bound that socket itself and its name has stood since the bind, because a link your project held and the target removed leaves the host nothing to read.
+  A bind mount whose source lies outside the grants (`mount`, `open_tree` and `move_mount` are traced) is listed by its source, whatever the source holds, so a target that runs a nested sandbox which bind-mounts system paths gets `score` exit 3, and `strace` fails `io_uring_setup` with `ENOSYS`, so no `io_uring` request carries a connection past the trace.
+  A connection through the destination of a bind mount is judged by the source it leads to, whichever spelling of the destination's directory the connection uses, and a `..` after a link in the path of a connection goes to the parent of the directory the link leads to.
+  A link a `..` passed that the target then removes, renames or replaces lists the connection by the path as given, and a socket the call bound under one spelling of its directory is the call's own only while neither spelling was replaced after the bind.
+  A call that names no Unix socket file holds nothing in the reader, whether it finished or another process's output split it, so a target that makes a million `send` calls costs no memory.
+  The reader replays link changes and removals in time linear in the trace, a rename of a directory that holds tens of thousands of links included, so a target that makes tens of thousands of links, renames and removals adds seconds to the audit.
+  The CLI reference's `### File-system confinement` names the connection in the audit passage and the sentence on a late socket points to it.
+  `test:evaluate-confinement` runs `the socket connection units` on every host over trace lines written by hand in strace 6's spelling, and the Linux cases (`the socket connection route`, `the socket connection run`) run in the ubuntu CI job and are skipped elsewhere with their reason named.
 - An evaluator mapping follows the contract view under a `partitionPlan` (Story 1.107, AD-9, AD-21, AD-22).
   Story 1.51 refused a `partitionPlan` beside any evaluator but the deterministic one, because a `command` or `sealed-brief-agent` evaluator binds oracles and rubric criteria through `evaluator/mapping.json` and a `records` evaluator's records name them too.
   A command evaluator, a sealed-brief agent and a records evaluator now run beside a plan, and the refusal is gone.
@@ -371,6 +396,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Another case runs `ci --tier pr` over a project under a distinctive path and scans the whole run directory.
   The ten `test:evaluate-pr-*` scripts and every tier of the two CI repositories scan the run directories they leave.
   The reference describes the forms under "Paths in the records".
+- The dogfood suite's O-003 holds each exit's class against its row of the AD-10 table (Story 1.116, CAP-10, AD-15).
+  The oracle reconciled the `/exits` records against the reference set by id and tested each class against the table's vocabulary, so a complete listing that swapped the classes of `tea-evaluate 11` and `tea-evaluate 12` passed.
+  Its `for-all` predicate is now an `any` of one `all` pair of `@/id` and `@/class` per table row.
+  The two rows M-001 and M-002 edit compare their class with the answer the `classify-exits` step gave for the same exit, which O-001 holds to the table, so each seeded probe still violates one oracle and every oracle outcome reads `agrees`.
+  `test:evaluate-dogfood` holds the predicate equal to the table, replays a listing that swaps the two classes and a class changed in `references/gaps.md` with no contract edit, and a class vocabulary test alone passes both, so the cases fail it.
+  The contract digest changes, so the recorded live PASS of Story 1.46 is superseded.
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).

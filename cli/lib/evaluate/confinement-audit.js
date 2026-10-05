@@ -31,6 +31,7 @@
  *                signal the tracer or write its trace file. The trace is read
  *                once the call ends, which ends every process the call left
  *                running (their process-id namespace goes with it).
+ *                The trace holds the file syscalls, the calls that name a Unix socket file (`connect`, `sendto`, `sendmsg`, `sendmmsg`) and the bind mounts that could carry one, so a connection to a socket outside the grants is listed (Story 1.86).
  *
  * An audit that cannot confirm itself is a failure the run reports (exit 12):
  * an empty list of observed mounts is never what a broken observer returns.
@@ -525,7 +526,11 @@ function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE }) {
 
 // -- Bubblewrap -------------------------------------------------------------------------------------------------------
 
-/** The syscalls `strace` reports: the ones that take a path to open, write or read a link, and `execve` for the start of the target. */
+/**
+ * The syscalls `strace` reports: the ones that take a path to open, write or read a link, `execve` for the start of the target.
+ * Story 1.86 adds the ones that name the address of a socket (`connect`, and the sends that carry an address), since a connection to a Unix socket file is no file syscall.
+ * It adds `bind` (the sockets the call made itself), `mount`, `open_tree` and `move_mount` (a bind mount of a socket file into a place the grants cover) and `io_uring_setup` (denied by `straceCommand`).
+ */
 const TRACE_SYSCALLS = Object.freeze([
   'execve',
   'execveat',
@@ -565,7 +570,19 @@ const TRACE_SYSCALLS = Object.freeze([
   'clone3',
   'fork',
   'vfork',
+  'connect',
+  'sendto',
+  'sendmsg',
+  'sendmmsg',
+  'bind',
+  'mount',
+  'open_tree',
+  'move_mount',
+  'io_uring_setup',
 ]);
+
+/** The qualifier that makes the kernel's answer to a request for an `io_uring` ring `ENOSYS`, the answer of a kernel without one (the `?` prefix is the one the `trace=` list uses). */
+const IO_URING_DENIAL = 'inject=?io_uring_setup:error=ENOSYS';
 
 /**
  * The `strace` arguments before the command it traces: follow every process,
@@ -576,6 +593,8 @@ const TRACE_SYSCALLS = Object.freeze([
  * name a child's pid as strace sees it (`--decode-pids=pidns`: a namespace's
  * `clone` returns the namespace's number), keep full paths and write the trace
  * to `output`.
+ * The `inject` qualifier fails `io_uring_setup` with `ENOSYS` (Story 1.86), so no target holds a ring through which `IORING_OP_CONNECT` could reach a socket file the trace cannot see.
+ * `--seccomp-bpf` stops only the syscalls `trace=` names, so `io_uring_setup` is in that list as well.
  *
  * @param {string} executable
  * @param {string} output
@@ -593,6 +612,8 @@ function straceCommand(executable, output) {
     '4096',
     '-e',
     `trace=${TRACE_SYSCALLS.map((name) => `?${name}`).join(',')}`,
+    '-e',
+    IO_URING_DENIAL,
     '-o',
     output,
     '--',
@@ -601,6 +622,9 @@ function straceCommand(executable, output) {
 
 /** The syscalls that create a process. */
 const CLONES = new Set(['clone', 'clone3', 'fork', 'vfork']);
+
+/** The error name of a socket call the trace shows begun and never finished: the process waited on a listener and the call ended it. */
+const UNFINISHED = 'UNFINISHED';
 
 const OPEN_WRITE = /\bO_(?:WRONLY|RDWR|CREAT|TRUNC|APPEND|TMPFILE)\b/;
 
@@ -746,6 +770,76 @@ function annotatedPath(token) {
 }
 
 /**
+ * The calls that make, copy, remove or move a name, with the arguments that name the paths: what a connect through a link led to must outlive the link.
+ * A hard link to a link (`link`, and `linkat` without `AT_SYMLINK_FOLLOW`) is another name for the link, and a rename moves everything beneath the old name or swaps two subtrees (`RENAME_EXCHANGE`).
+ */
+const LINK_CHANGES = Object.freeze({
+  symlink: { op: 'set', target: 0, to: { path: 1 } },
+  symlinkat: { op: 'set', target: 0, to: { dir: 1, path: 2 } },
+  link: { op: 'copy', from: { path: 0 }, to: { path: 1 } },
+  linkat: { op: 'copy', from: { dir: 0, path: 1 }, to: { dir: 2, path: 3 }, flags: 4 },
+  unlink: { op: 'remove', from: { path: 0 } },
+  unlinkat: { op: 'remove', from: { dir: 0, path: 1 } },
+  rename: { op: 'move', from: { path: 0 }, to: { path: 1 } },
+  renameat: { op: 'move', from: { dir: 0, path: 1 }, to: { dir: 2, path: 3 } },
+  renameat2: { op: 'move', from: { dir: 0, path: 1 }, to: { dir: 2, path: 3 }, flags: 4 },
+});
+
+/**
+ * The calls that can put a socket file a bind mount reaches under a name the grants cover (`unshare(CLONE_NEWUSER|CLONE_NEWNS)` lets a target mount in its own namespace where the host allows it), with the place of the source, the place of the destination and the flag that makes the call a bind.
+ * `mount` binds with `MS_BIND` (and does not remount), `open_tree` clones a mount with `OPEN_TREE_CLONE` and has no destination, and `move_mount` moves a mount from the path it names (or the descriptor an `open_tree` returned) to its destination.
+ * `fsmount` attaches a file system built from a context and names no host path, so no bind comes from it.
+ */
+const MOUNT_SOURCES = Object.freeze({
+  mount: { from: { path: 0 }, to: { path: 1 }, flags: 3, bind: /\bMS_BIND\b/, without: /\bMS_REMOUNT\b/ },
+  open_tree: { from: { dir: 0, path: 1 }, flags: 2, bind: /\bOPEN_TREE_CLONE\b/ },
+  move_mount: { from: { dir: 0, path: 1 }, to: { dir: 2, path: 3 }, flags: 4 },
+});
+
+/** The syscalls that name the address of a socket: a connection and the sends that carry an address (a datagram socket needs none to connect). */
+const SOCKET_CALLS = new Set(['connect', 'sendto', 'sendmsg', 'sendmmsg']);
+
+/**
+ * How a socket call ended, read from the end of its line: the return value and the error name (`= -1 ECONNREFUSED (Connection refused)`, `= ? ERESTARTSYS (To be restarted if SA_RESTART is set)`, `= 0`).
+ * The tail alone is read, so nothing the call's own data holds can stand in for it.
+ */
+const SOCKET_RESULT = /\)\s+=\s+(-?\d+|\?)(?:\s+([A-Z][A-Z0-9_]*))?(?:\s+\([^)]*\))?\s*$/;
+
+/**
+ * The Unix socket path addresses a socket call's text names (`sun_path="/run/x.sock"`), in the order they appear.
+ * Each comes with the message it belongs to (`sendmmsg` carries several, one `msg_name=` each) and whether it is abstract (`sun_path=@"name"`, or a leading NUL in the older spelling).
+ * A quoted string is read whole and skipped, so a payload that holds the text of an address names none.
+ * A backslash outside a string (an escape in a descriptor's annotation) skips the character after it.
+ *
+ * @param {string} text the call's text up to its return value
+ * @returns {Array<{ message: number, abstract: boolean, name: string }>}
+ */
+function socketAddresses(text) {
+  const found = [];
+  let message = 0;
+  let named = false;
+  for (let at = 0; at < text.length; at += 1) {
+    const character = text[at];
+    if (character === '\\') {
+      at += 1;
+    } else if (character === '"') {
+      let end = at + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === '\\' ? 2 : 1;
+      const path = /\bsun_path=(@?)$/.exec(text.slice(Math.max(0, at - 14), at));
+      const value = path === null ? null : decodeString(text.slice(at, end + 1));
+      if (value !== null) found.push({ message, abstract: path[1] === '@' || value.startsWith('\0'), name: value });
+      at = end;
+    } else if (text.startsWith('msg_name=', at)) {
+      // The first `msg_name=` is message 0 and each later one starts the next message.
+      if (named) message += 1;
+      named = true;
+      at += 'msg_name='.length - 1;
+    }
+  }
+  return found;
+}
+
+/**
  * Reads the trace `strace -f -y --decode-pids=pidns` writes, a line at a time,
  * and reports each path access of the traced command: `onAccess({ kind:
  * 'read'|'write', path, real, ok, errno })`, `real` being the path an opened
@@ -814,6 +908,125 @@ function throughProcessLink(raw, { exec = false } = {}) {
   return { walked, reentry: walked.crossed || (kernel && dotdot) || (exec && walked.atLink), kernel };
 }
 
+/** Whether a socket address names a file: a path address that is neither abstract nor empty. */
+const namesFile = (address) => !address.abstract && address.name !== '';
+
+/** Each directory above an absolute path, the nearest first and the root last. */
+function* directoriesAbove(name) {
+  let current = name;
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current) return;
+    yield parent;
+    current = parent;
+  }
+}
+
+/** The place a call's path argument names: the text and the directory it is relative to (the descriptor's annotation), `null` for an empty path or a descriptor strace could not name. */
+function placeOf(args, reference) {
+  const text = decodeString(args[reference.path]);
+  if (text === null || text === '') return null;
+  if (reference.dir === undefined || args[reference.dir] === 'AT_FDCWD') return { path: text };
+  const base = annotatedPath(args[reference.dir]);
+  return base === undefined ? null : { path: text, base };
+}
+
+/** The components of an absolute path. */
+const componentsOf = (name) => name.split('/').filter((part) => part !== '');
+
+/**
+ * The names the trace made (links and bind mount destinations) as a tree of directory nodes, each with its children by name and an optional target.
+ * A rename detaches the node at the old name and attaches it at the new one, so it costs the depth of the two names whatever lies beneath them.
+ */
+class LinkTable {
+  constructor() {
+    this.root = { target: undefined, children: new Map() };
+  }
+
+  /** The target of the link at `name`, `undefined` when there is none. */
+  get(name) {
+    let node = this.root;
+    for (const part of componentsOf(name)) {
+      node = node.children.get(part);
+      if (node === undefined) break;
+    }
+    return node?.target;
+  }
+
+  /** Makes `name` a link to `target`, keeping the names beneath it. */
+  set(name, target) {
+    let node = this.root;
+    for (const part of componentsOf(name)) {
+      if (!node.children.has(part)) node.children.set(part, { target: undefined, children: new Map() });
+      node = node.children.get(part);
+    }
+    node.target = target;
+  }
+
+  /** Removes the link at `name`, keeping the names beneath it. */
+  delete(name) {
+    const parts = componentsOf(name);
+    const nodes = this.trail(parts);
+    if (nodes === null) return;
+    nodes.at(-1).target = undefined;
+    this.prune(parts, nodes);
+  }
+
+  /** The nodes from the root down the components, `null` when one is missing. */
+  trail(parts) {
+    const nodes = [this.root];
+    for (const part of parts) {
+      const child = nodes.at(-1).children.get(part);
+      if (child === undefined) return null;
+      nodes.push(child);
+    }
+    return nodes;
+  }
+
+  /** Drops the nodes the components lead through that hold neither a link nor a child, the deepest first. */
+  prune(parts, nodes) {
+    for (let depth = parts.length; depth > 0; depth -= 1) {
+      const node = nodes[depth];
+      if (node.target !== undefined || node.children.size > 0) return;
+      nodes[depth - 1].children.delete(parts[depth - 1]);
+    }
+  }
+
+  /** Takes the node at the components out of the tree with everything beneath it, `null` when there is none. */
+  detach(parts) {
+    const nodes = this.trail(parts);
+    if (nodes === null || parts.length === 0) return null;
+    nodes[parts.length - 1].children.delete(parts.at(-1));
+    this.prune(parts.slice(0, -1), nodes);
+    return nodes[parts.length];
+  }
+
+  /** Puts a node at the components, replacing what lay there. */
+  attach(parts, node) {
+    let parent = this.root;
+    for (const part of parts.slice(0, -1)) {
+      if (!parent.children.has(part)) parent.children.set(part, { target: undefined, children: new Map() });
+      parent = parent.children.get(part);
+    }
+    parent.children.set(parts.at(-1), node);
+  }
+
+  /**
+   * Moves the link at `from` and every name beneath it to `to`, replacing what lay at or beneath `to`, or swaps the two subtrees (`RENAME_EXCHANGE`).
+   * A name moved into its own subtree, or a subtree into its name, is a call the kernel refuses, so it changes nothing.
+   */
+  move(from, to, exchange) {
+    const source = componentsOf(from);
+    const destination = componentsOf(to);
+    const shared = Math.min(source.length, destination.length);
+    if (source.slice(0, shared).join('/') === destination.slice(0, shared).join('/')) return;
+    const moved = this.detach(source);
+    const replaced = this.detach(destination);
+    if (moved !== null) this.attach(destination, moved);
+    if (exchange && replaced !== null) this.attach(source, replaced);
+  }
+}
+
 class TraceReader {
   /**
    * @param {object} options
@@ -834,6 +1047,16 @@ class TraceReader {
     // working directory. `finish()` replays them, so a thread's directory follows its parent's wherever they interleave.
     this.timeline = [];
     this.pendingClones = new Map();
+    // The socket calls still in flight when their process's line was split, by pid.
+    // The call's outcome is settled when it resumes, and one that never does (the call ended while the process waited on a listener's full queue) stays unfinished.
+    this.hung = new Map();
+    // The symbolic links the target made or removed and the bind mounts it made, by the physical path of the directory that holds them and their name, in the order the trace replays them.
+    // A connect is resolved through the links it found, so a link removed after the connection cannot hide the file it led to.
+    this.links = new LinkTable();
+    // What the replay of `finish()` learns: the latest step at which each name (in both spellings) was removed, renamed or replaced, and the step at which the call bound each socket it made itself.
+    this.removedAt = new Map();
+    this.standing = new Map();
+    this.canonicals = new Map();
   }
 
   /** Whether the line of the target's own start has been read. */
@@ -853,10 +1076,24 @@ class TraceReader {
       if (stored === undefined) return;
       this.pending.delete(pid);
       text = `${stored}${resumed[1]}`;
+      const waiting = this.hung.get(pid);
+      if (waiting !== undefined) {
+        this.hung.delete(pid);
+        const result = this.settleSocketCall(waiting, text);
+        // A `sendmmsg` prints its messages only when it returns, so the entry of a split call may hold none: the joined text names them.
+        if (result !== null) waiting.addresses = socketAddresses(text.slice(text.indexOf('(') + 1, result.index));
+        return;
+      }
     } else if (text.endsWith(' <unfinished ...>')) {
       const name = /^(\w+)\(/.exec(text)?.[1];
       if (name !== undefined) this.pending.set(pid, text.slice(0, -' <unfinished ...>'.length));
       if (CLONES.has(name) && this.started) this.timeline.push(this.cloneEvent(pid, text));
+      if (SOCKET_CALLS.has(name) && this.started) {
+        const outcome = { name, ok: false, errno: UNFINISHED, limit: 1 };
+        this.hung.set(pid, outcome);
+        // A split `connect`, `sendto` or `sendmsg` printed its address at entry, so it stays only when the entry names a socket file; a `sendmmsg` prints its messages on the resumed line, so it always stays.
+        this.noteSocketCall(pid, text.slice(text.indexOf('(') + 1, -' <unfinished ...>'.length), outcome, name === 'sendmmsg');
+      }
       return;
     }
     const call = /^(\w+)\(([^]*)$/.exec(text);
@@ -864,6 +1101,17 @@ class TraceReader {
     const name = call[1];
     if (name === 'execve' && this.noteExecve(text)) return;
     if (!this.started) return;
+    if (SOCKET_CALLS.has(name) || name === 'bind') {
+      const outcome = { name, ok: false, errno: UNFINISHED, limit: 1 };
+      const result = this.settleSocketCall(outcome, call[2]);
+      if (result === null) return;
+      const addressed = call[2].slice(0, result.index);
+      // A socket the call bound itself is its own, whatever happens to the file after.
+      if (name === 'bind') {
+        if (outcome.ok) this.noteBind(pid, addressed);
+      } else this.noteSocketCall(pid, addressed, outcome, false);
+      return;
+    }
     const { args, rest } = splitArguments(call[2]);
     const result = /^\s*=\s*(-?\d+|\?)(?:<([^]*?)>)?(?=\s|$)(?:\s+([A-Z][A-Z0-9_]*))?(?:[^]*?\/\* (\d+) in strace's PID NS \*\/)?/.exec(
       rest,
@@ -889,6 +1137,8 @@ class TraceReader {
       if (ok && child > 0) event.child = child;
       return;
     }
+    if (ok && LINK_CHANGES[name] !== undefined) this.noteLinkChange(pid, name, args);
+    if (ok && MOUNT_SOURCES[name] !== undefined) this.noteMount(pid, name, args);
     const syscall = SYSCALLS[name];
     if (syscall === undefined) return;
     const flags = syscall.flags === undefined ? '' : (args[syscall.flags] ?? '');
@@ -963,9 +1213,250 @@ class TraceReader {
   }
 
   /**
+   * Reads how a socket call ended from the end of its text into `outcome` (`ok`, the error name, and how many of a `sendmmsg`'s messages were sent).
+   * Returns the match, and `null` when the text ends in no return value.
+   */
+  settleSocketCall(outcome, text) {
+    const result = SOCKET_RESULT.exec(text);
+    if (result === null) return null;
+    const returned = result[1] === '?' ? Number.NaN : Number(result[1]);
+    outcome.ok = Number.isFinite(returned) && returned >= 0;
+    // A return value strace could not print (`= ?`) belongs to a call the process never left, which the end of the call cut short.
+    outcome.errno = outcome.ok ? null : (result[2] ?? (result[1] === '?' ? UNFINISHED : null));
+    outcome.limit = outcome.name === 'sendmmsg' && outcome.ok ? returned : 1;
+    return result;
+  }
+
+  /**
+   * Keeps a socket call that names a Unix socket file for the replay of `finish()`, where its directory is known.
+   * A call that names none (every `send` of a datagram client, a TCP connection) holds nothing, whether it finished or was split by another process.
+   * A split `sendmmsg` stays whatever its text holds, since its addresses arrive on the resumed line.
+   */
+  noteSocketCall(pid, text, outcome, split) {
+    const addresses = socketAddresses(text);
+    if (!split && !addresses.some(namesFile)) return;
+    outcome.addresses = addresses;
+    this.timeline.push({ kind: 'socket', pid, outcome });
+  }
+
+  /** Keeps the Unix socket files a successful `bind` named: the sockets the target made itself, whose files it may remove when it is done. */
+  noteBind(pid, text) {
+    const addresses = socketAddresses(text).filter(namesFile);
+    if (addresses.length > 0) this.timeline.push({ kind: 'bind', pid, addresses });
+  }
+
+  /**
+   * Keeps a successful bind mount for the replay of `finish()`: its source is judged as a connection is, and its destination becomes a name that leads to the source.
+   * A socket file bound into a place the grants cover is reached by a path the trace cannot judge, so the source is listed when it lies outside the grants and the destination is followed to it afterwards.
+   * A `move_mount` from the descriptor an `open_tree` returned (`MOVE_MOUNT_F_EMPTY_PATH`) takes its source from the descriptor's annotation and lists nothing of its own, since the `open_tree` listed it.
+   */
+  noteMount(pid, name, args) {
+    const spec = MOUNT_SOURCES[name];
+    const flags = args[spec.flags] ?? '';
+    if (spec.bind !== undefined && !spec.bind.test(flags)) return;
+    if (spec.without?.test(flags)) return;
+    const source = decodeString(args[spec.from.path]);
+    if (source === null) return;
+    let base;
+    if (spec.from.dir !== undefined && args[spec.from.dir] !== 'AT_FDCWD') {
+      base = annotatedPath(args[spec.from.dir]);
+      if (base === undefined || !path.isAbsolute(base)) return;
+    }
+    // A mount cloned or moved from a descriptor (`AT_EMPTY_PATH` for `open_tree`, `MOVE_MOUNT_F_EMPTY_PATH` for `move_mount`) names no path of its own: the descriptor's annotation is the file or directory it was opened on.
+    if (source === '' && base === undefined) return;
+    const named = base === undefined ? source : path.resolve(base, source);
+    const listed = !(name === 'move_mount' && source === '');
+    const to = spec.to === undefined ? null : placeOf(args, spec.to);
+    if (!listed && to === null) return;
+    const outcome = { name, ok: true, errno: null, limit: 1, addresses: [{ message: 0, abstract: false, name: named }] };
+    this.timeline.push({ kind: 'mount', pid, source: named, to, outcome: listed ? outcome : null });
+  }
+
+  /**
+   * The accesses a socket call makes once the directory of its process is known.
+   * `path` is the path as given, resolved, and `real` is the file the kernel connected to: the path followed through the links the trace shows the target made (a link removed or retargeted since the connection still led where it led then), then resolved on the host, where a socket file that has gone by the time the trace is read keeps its directory's real path.
+   * A path through a process's own links is listed as it stands, and an abstract address, an unnamed one and every other family name no file.
+   * `subject` is the path the call reached by the trace's own account, which `finish()` checks against the names the target removed later, and `passed` the paths a `..` was resolved against on the host, which it checks the same way.
+   */
+  socketAccesses(outcome, cell) {
+    const accesses = [];
+    for (const address of outcome.addresses) {
+      if (!namesFile(address) || address.message >= outcome.limit) continue;
+      const raw = path.isAbsolute(address.name) ? address.name : `${cell.cwd}/${address.name}`;
+      const absolute = path.resolve(raw);
+      // The paths a `..` was resolved against on the host, which the target may remove or retarget after the call.
+      const passed = [];
+      const followed = this.followTraceLinks(raw, passed);
+      const subject = path.resolve(followed ?? raw);
+      const given = throughProcessLink(raw);
+      const through = throughProcessLink(followed ?? raw);
+      // A path that ends at a process link (`/dev/fd/5` for a descriptor on a socket file) leads anywhere the process can reach too.
+      const reentry = given.reentry || given.walked.atLink || through.reentry || through.walked.atLink || cell.crossed;
+      accesses.push({
+        subject,
+        passed,
+        access: {
+          kind: 'connect',
+          path: absolute,
+          real: reentry ? absolute : through.kernel ? subject : this.socketRealPath(subject),
+          ok: outcome.ok,
+          errno: outcome.errno,
+          annotated: false,
+          dotdot: raw.split('/').includes('..'),
+          reentry,
+        },
+      });
+    }
+    return accesses;
+  }
+
+  /** The file a path reached on the host: a socket file that has gone by the time the trace is read keeps its directory's real path, and a path whose directory is gone too stays as it is. */
+  socketRealPath(start) {
+    const resolved = this.resolveReal(start);
+    if (resolved !== null) return resolved;
+    const parent = this.resolveReal(path.dirname(start));
+    return parent === null ? start : path.join(parent, path.basename(start));
+  }
+
+  /** `candidate` with its directory resolved on the host (a link in the directory leads where it leads now), or `candidate` when the directory has gone. */
+  canonical(candidate) {
+    const directory = path.dirname(candidate);
+    if (!this.canonicals.has(directory)) this.canonicals.set(directory, this.resolveReal(directory));
+    const real = this.canonicals.get(directory);
+    return real === null ? candidate : path.join(real, path.basename(candidate));
+  }
+
+  /** The step at which the name, or a directory above it, was last removed, renamed or replaced in the replay so far, `0` when it was not. */
+  latestRemoval(name) {
+    let latest = this.removedAt.get(name) ?? 0;
+    for (const directory of directoriesAbove(name)) latest = Math.max(latest, this.removedAt.get(directory) ?? 0);
+    return latest;
+  }
+
+  /** Whether the call bound the socket at `subject` and no removal, rename or replacement of its name, in either spelling, or a directory above it came since. */
+  standsBound(subject) {
+    const forms = [subject, this.canonical(subject)];
+    const latest = Math.max(...forms.map((form) => this.latestRemoval(form)));
+    return forms.some((form) => (this.standing.get(form) ?? 0) > latest);
+  }
+
+  /**
+   * Whether the target removed, renamed or replaced the name a call reached, or a directory above it, after the call, and did not bind the socket itself (`own`, settled when the call was made).
+   * The file the kernel reached may then have been a link the trace did not make (one the project holds, which the target removed after the connection), and the host can no longer say where it led.
+   * A path a `..` was resolved against (`passed`) counts as the name does, since the parent the kernel went to was the parent of what that path led to then.
+   */
+  vanished(subject, at, own, passed = []) {
+    if (own) return false;
+    return [subject, this.canonical(subject), ...passed].some((form) => this.latestRemoval(form) > at);
+  }
+
+  /**
+   * `raw` with each link the trace made replaced by its target, or `null` when it passes none and no `..` changed it.
+   * A relative target resolves against the directory of the link, an absolute one from the root, and `..` pops the path so far.
+   * A `..` first replaces the path so far with its real path on the host, since the kernel goes to the parent of the directory a link the trace did not make leads to, and that path is added to `passed`.
+   */
+  followTraceLinks(raw, passed = []) {
+    let queue = raw.split('/').filter((part) => part !== '' && part !== '.');
+    let resolved = [];
+    let follows = 0;
+    let changed = false;
+    while (queue.length > 0) {
+      const [part, ...rest] = queue;
+      queue = rest;
+      if (part === '..') {
+        const prefix = `/${resolved.join('/')}`;
+        const real = kernelFs(prefix) ? null : this.resolveReal(prefix);
+        if (!kernelFs(prefix)) passed.push(prefix);
+        if (real !== null && real !== prefix) {
+          resolved = real.split('/').filter((piece) => piece !== '');
+          changed = true;
+        }
+        resolved.pop();
+        continue;
+      }
+      const target = this.links.get(`/${[...resolved, part].join('/')}`);
+      if (target === undefined) {
+        resolved.push(part);
+        continue;
+      }
+      follows += 1;
+      // A cycle of links ends where the kernel's limit does: the path is left as it stands.
+      if (follows > 40) return null;
+      if (path.isAbsolute(target)) resolved.length = 0;
+      queue = [...target.split('/').filter((piece) => piece !== '' && piece !== '.'), ...queue];
+    }
+    return follows === 0 && !changed ? null : `/${resolved.join('/')}`;
+  }
+
+  /** Keeps the effect of a successful call that makes, copies, removes or moves a name, in the timeline's order. */
+  noteLinkChange(pid, name, args) {
+    const spec = LINK_CHANGES[name];
+    const place = (reference) => placeOf(args, reference);
+    const event = {
+      kind: 'link',
+      pid,
+      op: spec.op,
+      target: spec.target === undefined ? null : decodeString(args[spec.target]),
+      from: spec.from === undefined ? null : place(spec.from),
+      to: spec.to === undefined ? null : place(spec.to),
+      flags: spec.flags === undefined ? '' : (args[spec.flags] ?? ''),
+    };
+    if (event.from !== null || event.to !== null) this.timeline.push(event);
+  }
+
+  /**
+   * The physical name a reference gives a link: the directory above it followed through the links the trace made (a link made through a directory link is made in the directory it leads to), and the last component as given.
+   * A name that ends in `.` or `..` is a directory and holds no link.
+   */
+  linkKey(reference, cwd) {
+    const raw = path.isAbsolute(reference.path) ? reference.path : `${reference.base ?? cwd}/${reference.path}`;
+    const trimmed = raw.replace(/\/+$/, '');
+    const name = path.basename(trimmed);
+    if (name === '' || name === '.' || name === '..') return null;
+    const directory = path.dirname(trimmed);
+    return path.join(this.followTraceLinks(directory) ?? path.resolve(directory), name);
+  }
+
+  /**
+   * Applies a name change to `links` against the directory its process had at the call, and notes the names it removed or replaced once a socket call or a bind came before.
+   * A rename moves the node of the old name with every link beneath it, replaces whatever lay at or beneath the new one, and swaps the two subtrees for `RENAME_EXCHANGE`.
+   */
+  applyLinkChange(event, cwd, at, track) {
+    const from = event.from === null ? null : this.linkKey(event.from, cwd);
+    const to = event.to === null ? null : this.linkKey(event.to, cwd);
+    const removed = (...names) => {
+      if (!track && this.standing.size === 0) return;
+      for (const name of names) if (name !== null) for (const form of [name, this.canonical(name)]) this.removedAt.set(form, at);
+    };
+    switch (event.op) {
+      case 'set': {
+        if (to !== null && event.target !== null) this.links.set(to, event.target);
+        break;
+      }
+      case 'copy': {
+        // A hard link to a link is another name for the link, unless `linkat` followed the link to the file it leads to.
+        const linked = from === null ? undefined : this.links.get(from);
+        if (to !== null && !/\bAT_SYMLINK_FOLLOW\b/.test(event.flags) && linked !== undefined) this.links.set(to, linked);
+        break;
+      }
+      case 'remove': {
+        if (from !== null) this.links.delete(from);
+        removed(from);
+        break;
+      }
+      default: {
+        if (from === null || to === null || from === to) break;
+        this.links.move(from, to, /\bRENAME_EXCHANGE\b/.test(event.flags));
+        removed(from, to);
+      }
+    }
+  }
+
+  /**
    * Replays the timeline: a process starts in the directory the target started in, a `chdir` changes its own (a thread's too, when
    * they share it), a forked child copies its parent's at the call and a thread shares it; each access that waited for a
    * directory resolves against its process's at that point.
+   * The links the trace made, the bind mounts it made and the names it removed are replayed in the same order, and a connection is reported once the whole trace is read, since the names removed after it decide whether the host can still say what it reached.
    */
   finish() {
     const cells = new Map();
@@ -973,27 +1464,76 @@ class TraceReader {
       if (!cells.has(pid)) cells.set(pid, { cwd: this.cwd, crossed: false });
       return cells.get(pid);
     };
+    const connections = [];
+    let at = 0;
     for (const event of this.timeline) {
-      if (event.kind === 'chdir') {
-        const cell = cellOf(event.pid);
-        const absolute = path.isAbsolute(event.target);
-        const raw = absolute ? event.target : `${cell.cwd}/${event.target}`;
-        const through = throughProcessLink(raw);
-        // A directory reached through a process link (`/proc/self/cwd/..`) is no directory the grants can judge by name: what is
-        // read relative to it afterwards is listed, until a `chdir` to an absolute path leaves it.
-        cell.crossed = (absolute ? false : cell.crossed) || through.reentry;
-        cell.cwd = through.walked.collapsed;
-      } else if (event.kind === 'clone') {
-        if (event.child !== null) {
-          const parent = cellOf(event.pid);
-          cells.set(event.child, event.shares ? parent : { cwd: parent.cwd, crossed: parent.crossed });
+      at += 1;
+      switch (event.kind) {
+        case 'chdir': {
+          const cell = cellOf(event.pid);
+          const absolute = path.isAbsolute(event.target);
+          const raw = absolute ? event.target : `${cell.cwd}/${event.target}`;
+          const through = throughProcessLink(raw);
+          // A directory reached through a process link (`/proc/self/cwd/..`) is no directory the grants can judge by name.
+          // What is read relative to it afterwards is listed, until a `chdir` to an absolute path leaves it.
+          cell.crossed = (absolute ? false : cell.crossed) || through.reentry;
+          cell.cwd = through.walked.collapsed;
+          break;
         }
-      } else {
-        const cell = cellOf(event.pid);
-        event.emit(cell.cwd, cell.crossed);
+        case 'link': {
+          this.applyLinkChange(event, cellOf(event.pid).cwd, at, connections.length > 0);
+          break;
+        }
+        case 'socket': {
+          for (const connection of this.socketAccesses(event.outcome, cellOf(event.pid))) {
+            connections.push({ ...connection, at, own: this.standsBound(connection.subject) });
+          }
+          break;
+        }
+        case 'mount': {
+          const cell = cellOf(event.pid);
+          if (event.outcome !== null) {
+            for (const connection of this.socketAccesses(event.outcome, cell)) connections.push({ ...connection, at, own: false });
+          }
+          // The destination now leads to the source as the trace follows it at this step, so a name made beneath either reaches the other.
+          const raw = path.isAbsolute(event.source) ? event.source : `${cell.cwd}/${event.source}`;
+          const source = path.resolve(this.followTraceLinks(raw) ?? raw);
+          const destination = event.to === null ? null : this.linkKey(event.to, cell.cwd);
+          // The kernel follows a link the project holds to the directory above the destination, which the trace cannot see, so the name leads to the source in both spellings.
+          if (destination !== null) {
+            for (const form of new Set([destination, this.canonical(destination)])) if (form !== source) this.links.set(form, source);
+          }
+          break;
+        }
+        case 'bind': {
+          const cell = cellOf(event.pid);
+          for (const address of event.addresses) {
+            const raw = path.isAbsolute(address.name) ? address.name : `${cell.cwd}/${address.name}`;
+            const bound = path.resolve(this.followTraceLinks(raw) ?? raw);
+            this.standing.set(bound, at);
+            this.standing.set(this.canonical(bound), at);
+          }
+          break;
+        }
+        case 'clone': {
+          if (event.child !== null) {
+            const parent = cellOf(event.pid);
+            cells.set(event.child, event.shares ? parent : { cwd: parent.cwd, crossed: parent.crossed });
+          }
+          break;
+        }
+        default: {
+          const cell = cellOf(event.pid);
+          event.emit(cell.cwd, cell.crossed);
+        }
       }
     }
+    for (const { access, subject, own, passed, at: calledAt } of connections) {
+      this.onAccess(access.reentry ? access : { ...access, vanished: this.vanished(subject, calledAt, own, passed) });
+    }
     this.timeline = [];
+    this.removedAt = new Map();
+    this.standing = new Map();
   }
 
   /**
@@ -1036,6 +1576,34 @@ async function readTrace(file, options) {
 }
 
 /**
+ * The error names that leave a connection (or a datagram sent to an address) not refused by the kernel.
+ * The socket file was a listener, whose queue was full (`EAGAIN`) or whose wait a signal ended (`EINTR` and the restart codes), or the call began and never finished.
+ * Every other error refused it: a path that does not exist, a file that is no socket (`ECONNREFUSED`, which is also what the empty device file of a mount answers), a socket nothing listens on, a socket of another type and a socket file the process may not open.
+ */
+const SOCKET_NOT_REFUSED = Object.freeze([
+  'EAGAIN',
+  'EINTR',
+  'ERESTARTSYS',
+  'ERESTARTNOINTR',
+  'ERESTARTNOHAND',
+  'ERESTART_RESTARTBLOCK',
+  UNFINISHED,
+]);
+
+/**
+ * The decision for a socket call (Story 1.86): the socket file is listed, by its real path, when the kernel did not refuse the call and the file lies outside the places a connection is no access.
+ * Those places are `grants.connect`: the workspace, the private directories of the call (the bridge's directory among them), the sandbox's own `/dev` and `/run/user` and the egress proxy's directory.
+ * A path through a process's own links is listed, since it leads anywhere the process can reach.
+ * A path the target removed, renamed or replaced after the call is listed as it was given unless the call bound that socket itself or the trace's own links lead it, since a link the project held and the target removed leaves the host no way to say where it led.
+ */
+function connectDecision({ path: absolute, real, ok, errno, reentry = false, vanished = false }, grants) {
+  if (!ok && !SOCKET_NOT_REFUSED.includes(errno)) return null;
+  if (reentry) return absolute;
+  if (!(grants.connect ?? []).some((root) => isInside(root, real))) return real;
+  return vanished ? absolute : null;
+}
+
+/**
  * Whether an access is an observed mount, and the path to list for it, or
  * `null` (the same decision for every access of a Bubblewrap call).
  *
@@ -1045,12 +1613,14 @@ async function readTrace(file, options) {
  * covers (a read of a path that does not exist reached nothing). A write the
  * mechanism did not refuse landed in a place the sandbox may write; a refused
  * one is reported when its path is withheld or outside what the sandbox may write.
+ * A connection (or a datagram sent to an address) the kernel did not refuse is reported when the socket file lies outside `grants.connect`.
  *
  * @param {object} access `TraceReader`'s access
- * @param {{ read: string[], write: string[], withheld: string[], withheldExcept: string[], linked?: string[] }} grants
+ * @param {{ read: string[], write: string[], withheld: string[], withheldExcept: string[], linked?: string[], connect?: string[] }} grants
  * @returns {string|null}
  */
 function traceDecision(access, grants) {
+  if (access.kind === 'connect') return connectDecision(access, grants);
   const { kind, path: absolute, real, ok, errno, dotdot = false, reentry = false } = access;
   // A login file the home links to (Story 1.113) is opened by its path in the home and resolves outside it, and it is the one file that may.
   const linked = (grants.linked ?? []).includes(real);
@@ -1137,6 +1707,7 @@ module.exports = {
   SYSTEM_ROOTS,
   TRACE_CLONES: CLONES,
   TRACE_PATH_SYSCALLS: SYSCALLS,
+  TRACE_SOCKET_CALLS: SOCKET_CALLS,
   TRACE_SYSCALLS,
   TraceReader,
   auditToken,
@@ -1148,6 +1719,7 @@ module.exports = {
   probeTrace,
   readTrace,
   sentinelProfile,
+  socketAddresses,
   splitArguments,
   straceCommand,
   traceDecision,

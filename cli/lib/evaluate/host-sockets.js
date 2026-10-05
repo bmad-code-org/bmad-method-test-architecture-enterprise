@@ -47,6 +47,7 @@
  * one whose name is no UTF-8, one of another user's beyond the budget or beyond the bound of directories (`SCAN_DIRECTORIES`),
  * and a second path to the same socket file through another mount or a hard link.
  * The confinement hides what the list names for the call it was read for, and the CLI reference says so.
+ * A connection to any of those sockets succeeds, and the audit lists it as an observed mount (`confinement-audit.js`, Story 1.86).
  */
 
 'use strict';
