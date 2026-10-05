@@ -69,7 +69,6 @@ The baseline records the three pre-flights as `passed`.
 
 - `tools/generate-probes.js`: the three ci manifestation witnesses in `buildCiProbes`, the ci rationales (each ends with `PLANT_REPORTED_NOTE`), the cycle comment, and the note above `PLANT_REPORTED_NOTE`.
 - `test/test-ci-qualification.js`: declares `plant-reported`, resolves each witness over an absent workflow and P-003's over the full project's correct pipeline (the emitted probes and the committed file, each required to resolve `silent`), and states the direction in its header.
-  `test:ci-qualification` also resolves each ci witness over an absent workflow, and P-003's over the full project's correct pipeline, which pre-flight drops for P-001 and P-002 because their fault leg sends the `witness-github-actions` request; so those shapes are held without a leg cache.
 - `test/lib/qualification-suite.js`: the `gap-read` label and its branch are gone; the direction check holds a corpus to `plant-reported`.
 - Regenerated: `test/probes/ci.probes.json`, `test/probes/expected-strength.json` (the three ci pre-flight records, their `basis`, the ci corpus digest). `test/contracts/ci.contract.json` is byte-identical, since the witnesses live on the probes.
 - `docs/explanation/eval-quality-command-adapter.md`, `test/probes/README.md`, `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `ARCHITECTURE-SPINE.md`, `sprint-status.yaml` (row 1.121 `done`).
