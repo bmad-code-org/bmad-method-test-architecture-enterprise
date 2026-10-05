@@ -31,22 +31,34 @@ class CorpusIndexError extends Error {
   }
 }
 
-/** Every regular file below `directory`, as absolute paths. A symbolic link is refused: the index digests bytes the folder owns. */
-function filesUnder(directory, folder) {
+/** `error`'s code as the index reports it, for a file the process cannot open or list. */
+const unreadable = (relative, error) =>
+  new CorpusIndexError(
+    relative,
+    `${relative} cannot be read (${error.code ?? 'error'}); ${INDEX_NAME} indexes only bytes the evaluation folder holds and this process can open`,
+  );
+
+/**
+ * Every regular file below `directory`, as absolute paths, except what `skipped` names. A skipped entry is decided by its path
+ * alone, before any lstat, listing or type check, so a development comparison neither lists nor refuses what a sealed path holds.
+ * A symbolic link and an entry that is neither a file nor a directory are refused: the index digests bytes the folder owns.
+ */
+function filesUnder(directory, folder, skipped) {
   let entries;
   try {
     entries = fs.readdirSync(directory, { withFileTypes: true });
   } catch (error) {
     if (error.code === 'ENOENT') return [];
-    throw error;
+    throw unreadable(path.relative(folder, directory).split(path.sep).join('/'), error);
   }
   const files = [];
   for (const entry of entries) {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...filesUnder(absolute, folder));
+    const relative = path.relative(folder, absolute).split(path.sep).join('/');
+    if (skipped.has(relative)) continue;
+    if (entry.isDirectory()) files.push(...filesUnder(absolute, folder, skipped));
     else if (entry.isFile()) files.push(absolute);
     else {
-      const relative = path.relative(folder, absolute).split(path.sep).join('/');
       throw new CorpusIndexError(
         relative,
         `${relative} is not a regular file or directory; ${INDEX_NAME} indexes only bytes the evaluation folder holds, so replace a symbolic link with the file itself`,
@@ -56,13 +68,20 @@ function filesUnder(directory, folder) {
   return files;
 }
 
-/** The paths a comparison leaves unread: each file named, and every file below a directory named with a trailing `/`. */
+/**
+ * The paths a comparison leaves unread: each file named, and everything below a directory named with a trailing `/`. Spelling is
+ * compared in lower case, so a case-variant spelling of a sealed path that a case-insensitive file system resolves to the same
+ * place stays unread too.
+ */
 function unreadPaths(unread) {
-  const entries = [...unread];
+  const entries = [...unread].map((entry) => entry.toLowerCase());
   return {
     size: entries.length,
-    has: (relative) =>
-      typeof relative === 'string' && entries.some((entry) => (entry.endsWith('/') ? relative.startsWith(entry) : relative === entry)),
+    has: (relative) => {
+      if (typeof relative !== 'string') return false;
+      const folded = relative.toLowerCase();
+      return entries.some((entry) => (entry.endsWith('/') ? `${folded}/`.startsWith(entry) : folded === entry));
+    },
   };
 }
 
@@ -101,10 +120,15 @@ async function buildCorpusIndex(folder, { unread = [] } = {}) {
         `${root} is ${stats.isSymbolicLink() ? 'a symbolic link' : 'not a directory'}; ${INDEX_NAME} indexes only a directory the evaluation folder holds`,
       );
     }
-    for (const absolute of filesUnder(path.join(folder, root), folder)) {
+    for (const absolute of filesUnder(path.join(folder, root), folder, skipped)) {
       const relative = path.relative(folder, absolute).split(path.sep).join('/');
-      if (skipped.has(relative)) continue;
-      const digest = engine.digestBytes(fs.readFileSync(absolute));
+      let bytes;
+      try {
+        bytes = fs.readFileSync(absolute);
+      } catch (error) {
+        throw unreadable(relative, error);
+      }
+      const digest = engine.digestBytes(bytes);
       entries.push({ path: relative, sha256: digest.slice(DIGEST_PREFIX.length) });
     }
   }

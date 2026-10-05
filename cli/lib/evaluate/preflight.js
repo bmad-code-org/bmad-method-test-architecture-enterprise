@@ -684,7 +684,13 @@ async function pipeline(
     // a digest of the git directory could fire on other sessions' work alone. An opted-out run keeps the full comparison, refs
     // and shared state included (Story 1.112).
     const sharedState = !confines(confinement);
-    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState });
+    // A development run under a partition plan never opens the held-out files, so the tree reading takes their `lstat` metadata
+    // and no bytes (Story 1.109): a file it cannot open still reads, and a change to one still moves the reading.
+    const sealed =
+      partition === 'development' && evaluation.partitionPlan !== undefined
+        ? [path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')]
+        : [];
+    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState, sealed });
     const before = readTree();
     const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one

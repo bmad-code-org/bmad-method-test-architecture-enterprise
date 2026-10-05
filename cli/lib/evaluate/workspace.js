@@ -858,21 +858,59 @@ function fileDigest(file) {
 }
 
 /**
+ * What a path under a sealed directory contributes to a tree reading: its size, modification time and mode, taken from `lstat` and
+ * never from the file's bytes, so a file the process cannot open still reads and a change to it still moves the reading.
+ */
+const sealedContent = (stats) => `<sealed>${stats.size}:${stats.mtimeMs}:${stats.mode & 0o7777}`;
+
+/**
+ * Whether a path sits under one of the sealed directories, as a test over its POSIX path relative to `root`. The directories are
+ * absolute and compared by their real path from `root`'s own, in lower case, so a case-insensitive file system's other spelling of
+ * the same place is sealed too. A directory outside `root` seals nothing.
+ *
+ * @param {string} root
+ * @param {string[]} sealed absolute directories
+ * @returns {(relative: string) => boolean}
+ */
+function sealedUnder(root, sealed) {
+  const native = fs.realpathSync.native(root);
+  const prefixes = sealed
+    .map((directory) => posix(path.relative(native, directory)).toLowerCase())
+    .filter((relative) => relative.length > 0 && relative !== '..' && !relative.startsWith('../'))
+    .map((relative) => `${relative}/`);
+  return (relative) => {
+    const folded = `${relative.toLowerCase()}/`;
+    return prefixes.some((prefix) => folded.startsWith(prefix));
+  };
+}
+
+/**
  * A digest over every directory, file and symbolic link under `root`, sorted
  * by path: each contributes its POSIX path and kind; directories and files
  * also contribute their mode, a file its SHA-256 bytes and a link its target.
- * A path in `exclude` (absolute) is left out with everything under it.
+ * A path in `exclude` (absolute) is left out with everything under it. A file
+ * under a directory in `sealed` contributes `sealedContent` and is never
+ * opened, and a sealed directory that cannot be listed contributes its mode.
  *
  * @param {string} root
  * @param {object} [options]
  * @param {string[]} [options.exclude]
+ * @param {string[]} [options.sealed] absolute directories whose files are read by `lstat` alone
  * @returns {string} `sha256:<hex>`
  */
-function treeDigest(root, { exclude = [] } = {}) {
+function treeDigest(root, { exclude = [], sealed = [] } = {}) {
   const excluded = new Set(exclude);
+  const isSealed = sealed.length === 0 ? () => false : sealedUnder(root, sealed);
   const parts = ['.', 'directory', fs.lstatSync(root).mode & 0o7777];
   const visit = (directory) => {
-    const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    } catch (error) {
+      if (!isSealed(posix(path.relative(root, directory)))) throw error;
+      parts.push(posix(path.relative(root, directory)), 'unlisted', error.code ?? 'error');
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(directory, entry.name);
       if (excluded.has(full)) continue;
@@ -881,7 +919,10 @@ function treeDigest(root, { exclude = [] } = {}) {
       else if (entry.isDirectory()) {
         parts.push(relative, 'directory', fs.lstatSync(full).mode & 0o7777);
         visit(full);
-      } else if (entry.isFile()) parts.push(relative, 'file', fs.lstatSync(full).mode & 0o7777, fileDigest(full));
+      } else if (entry.isFile()) {
+        const stats = fs.lstatSync(full);
+        parts.push(relative, 'file', stats.mode & 0o7777, isSealed(relative) ? sealedContent(stats) : fileDigest(full));
+      }
     }
   };
   visit(root);
@@ -1031,8 +1072,11 @@ function repositoryOf(directory) {
   return { top: resolvedTop, gitDirectory, commit: id, tree: tree.ok ? tree.stdout.trim() : null };
 }
 
-/** What a path in the tree holds, for a digest: a file's SHA-256, a link's target, or a marker for anything else or nothing. */
-function contentOf(file) {
+/**
+ * What a path in the tree holds, for a digest: a file's SHA-256, a link's target, or a marker for anything else or nothing. A
+ * `sealed` file holds its `lstat` metadata instead and is never opened.
+ */
+function contentOf(file, sealed = false) {
   let stats;
   try {
     stats = fs.lstatSync(file);
@@ -1040,7 +1084,7 @@ function contentOf(file) {
     return '<absent>';
   }
   if (stats.isSymbolicLink()) return `<link>${fs.readlinkSync(file)}`;
-  if (stats.isFile()) return `<file>${fileDigest(file)}`;
+  if (stats.isFile()) return sealed ? sealedContent(stats) : `<file>${fileDigest(file)}`;
   return '<not a file>';
 }
 
@@ -1129,14 +1173,16 @@ function repositoryRedirects(repository) {
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
  * @param {boolean} [options.sharedState] whether to read the shared git state (Story 1.112): `true` for a run whose targets can write it, `false` for a confined run, whose processes the layer denial keeps out of it
+ * @param {string[]} [options.sealed] absolute directories whose files enter the reading by `lstat` metadata and are never opened (a
+ *   development run's `corpus/held-out/`, Story 1.109): a change to one still moves the reading
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer
  */
-function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) {
+function adopterTreeState(directory, { exclude = [], sharedState = true, sealed = [] } = {}) {
   const repository = repositoryOf(directory);
   if (repository === null) {
     try {
-      return { repository: null, treeDigest: treeDigest(directory, { exclude }) };
+      return { repository: null, treeDigest: treeDigest(directory, { exclude, sealed }) };
     } catch (error) {
       throw new WorkspaceRefusal(`could not read the state of the adopter's project at ${directory}: ${error.message}`);
     }
@@ -1160,6 +1206,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
   ]);
   if (!status.ok) failed(status);
   const parts = [];
+  const isSealed = sealed.length === 0 ? () => false : sealedUnder(repository.top, sealed);
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
@@ -1169,7 +1216,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
       index += 1;
       paths.push(records[index]);
     }
-    for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
+    for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative), isSealed(relative)));
   }
   const state = {
     repository: repository.top,

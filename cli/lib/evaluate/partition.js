@@ -191,7 +191,7 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
   const file = path.join(folder, ...relative.split('/'));
   let bytes;
   try {
-    if (fs.realpathSync(path.dirname(file)) !== path.join(fs.realpathSync(folder), 'corpus', 'held-out')) {
+    if (fs.realpathSync.native(path.dirname(file)) !== path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')) {
       throw new PartitionPlanError(`${relative} is not directly under corpus/held-out/ of the evaluation folder`);
     }
     if (!fs.lstatSync(file).isFile()) throw new PartitionPlanError(`${relative} is not a regular file`);
@@ -244,8 +244,11 @@ function readHeldOutResponse(folder, probeId) {
   const file = path.join(folder, ...relative.split('/'));
   let bytes;
   try {
+    // The native real path spells the directory as the disk does, on a case-insensitive file system too, so a case-variant
+    // `corpus/held-out/Gameability/` is refused here and no other spelling than the sealed one is read.
     if (
-      fs.realpathSync(path.dirname(file)) !== path.join(fs.realpathSync(folder), ...HELD_OUT_ANSWERS_DIRECTORY.split('/').filter(Boolean))
+      fs.realpathSync.native(path.dirname(file)) !==
+      path.join(fs.realpathSync.native(folder), ...HELD_OUT_ANSWERS_DIRECTORY.split('/').filter(Boolean))
     ) {
       throw new PartitionPlanError(`${relative} is not directly under ${HELD_OUT_ANSWERS_DIRECTORY} of the evaluation folder`);
     }

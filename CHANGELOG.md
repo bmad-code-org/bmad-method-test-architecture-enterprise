@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `preflight` and `run` answer each arm from the steps its view declares (`answersForView`): the development view reads the first file, the held-out view takes the shared steps from the first and its own from the second, and the both view takes every step from both.
   Every gameability probe answers every step of the plan, because the both view runs each probe over the whole plan whichever partition the probe belongs to.
   A development `preflight`, `run` and corpus-index comparison never open `corpus/held-out/gameability/`, so an answers file a development run cannot read stops only a held-out or both run and `check`.
+  A development run neither lists, opens nor refuses anything under `corpus/held-out/`: the corpus-index comparison decides each entry by its path before any `lstat` or listing, and the adopter-tree reading that brackets a run takes the size, modification time and mode of those files and never their bytes.
+  So a link, a FIFO or a path nobody may open there, in the answers or the plan, stops only a held-out or both run and `check`, which refuse it by path with exit 10 and no stack.
+  `check` and a held-out or both run refuse a directory spelled in another case (`corpus/held-out/Gameability/`) by path on every file system, because both readers compare the native real path, which spells the directory as the disk does; a development run leaves it out of its comparison like the sealed spelling.
   The qualification and trial evidence of a held-out or both run records the held-out answers' path and digest beside the response file's, and a development run's record is the response file alone.
   `check` holds the held-out answers to the rules of the response file over the held-out plan's steps (required when the plan declares a step) and names a missing, misplaced or unreadable answer by probe and step ID, naming a held-out step by its ID only when it has the schema's shape and never quoting the sealed file.
   A held-out probe's `naiveOracle` that reads a development-only step is a finding, because the held-out view drops it.
@@ -529,6 +532,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The three FUTURE output-folder keys `test_design_output`, `test_review_output`, and `trace_output` are removed from `src/module.yaml`, so install no longer prompts for them. No workflow ever read them, and the folder rule above replaces them. The installer saved them as relative paths without `{project-root}`, upstream BMAD has since dropped the `result:` processing that wrote them, and a configurable folder per workflow would multiply the places cross-workflow readers search. A `_bmad/tea/config.yaml` that still carries them is harmless. `risk_threshold` is now the one FUTURE key, and the README and configuration reference claims about FUTURE keys are rebound to checks that prove them.
 
 ### Fixed
+
+- A development `preflight` or `run` under a `partitionPlan` no longer opens the held-out files while it reads the adopter's tree (Story 1.109, Story 1.112).
+  The tree reading that brackets a run hashed every path `git status` named, so a held-out plan or answers file an author was editing (modified or untracked) was opened and a path nobody may open ended the run with exit 12 and an `EACCES` stack.
+  Those files now enter the reading by `lstat` size, modification time and mode, so an edit still moves the reading and no byte is read.
+  The corpus-index comparison of a development run likewise stopped at a link, a FIFO or a directory nobody may open under `corpus/held-out/gameability/`, and printed the name of a sealed entry; it now decides each entry by its path before any `lstat` or listing.
+  A held-out or both run and `check` refuse such an entry by path with exit 10 where an unreadable directory used to end the command with an uncaught `EACCES` stack.
 
 - The four evaluations that commit a `pr`-only plan declare `pr` as their only tier (Story 1.96, Story 2.5).
   `tea-evaluate check` now holds `evaluation.json` `tiers` to the tiers the plan places a check on, and the Evaluate dogfood evaluation, the AI-feature and test-review authoring evaluations and the gap-loop `after` evaluation still listed `scheduled` and `release` beside a plan that holds `pr` checks only, so `test:evaluate-dogfood` and the `pr` suites of those evaluations exited 10 on `main`.

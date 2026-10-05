@@ -3326,6 +3326,20 @@ try {
     { ...mainAnswers, ...heldOutAnswers },
   );
   assert.deepEqual(answersForView({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: [] }), {});
+  // A step ID has the shape `constructor` admits, so an answer is looked up as an own key and never as what every object inherits.
+  assert.deepEqual(
+    answersForView({ steps: mainAnswers, heldOutSteps: { constructor: HELD_OUT_ANSWER }, stepIds: ['constructor'] }),
+    { constructor: HELD_OUT_ANSWER },
+    'a held-out step named constructor was not answered from its own key',
+  );
+  assert.deepEqual(answersForView({ steps: { constructor: DEVELOPMENT_ANSWER }, heldOutSteps: {}, stepIds: ['constructor'] }), {
+    constructor: DEVELOPMENT_ANSWER,
+  });
+  assert.deepEqual(
+    answersForView({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['constructor', 'toString'] }),
+    {},
+    'a step named after an inherited member was answered with it',
+  );
 
   // `check` over a folder with gameability probes: the 1.51 refusal is gone, and every answer has a home.
   const gamed = planProject('plan-gameability-check', null, null, null, {});
@@ -3348,13 +3362,17 @@ try {
   };
   const answersFile = (probeId, heldOut) => `${heldOut ? HELD_OUT_ANSWERS_DIR : 'corpus/gameability'}/${probeId}.json`;
   const changeAnswers = (probeId, heldOut, edit) => changeGame(answersFile(probeId, heldOut), (value) => edit(value.steps));
-  /** A command over an edited copy of the gameability folder, restored afterwards; the corpus index follows the edit unless `stale`. */
-  const gameRan = (edit, { command = 'check', args = [], stale = false } = {}) => {
+  /**
+   * A command over an edited copy of the gameability folder, restored afterwards; the corpus index follows the edit unless `stale`.
+   * `cleanup` runs first, for an edit that leaves a path the restore could not remove (a mode that denies the owner).
+   */
+  const gameRan = (edit, { command = 'check', args = [], stale = false, cleanup = () => {} } = {}) => {
     try {
       edit();
       if (!stale) assert.equal(cli(gamed, 'digest').status, 0);
       return cli(gamed, command, args);
     } finally {
+      cleanup();
       restoreGame();
     }
   };
@@ -3362,6 +3380,8 @@ try {
   assert.equal(gamePristine.status, 0, `check refused a gameability probe beside a partitionPlan\n${gamePristine.output}`);
   assert.doesNotMatch(gamePristine.output, /does not partition gameability probes/);
   const ghostKey = 'canary-/interactions/free text';
+  // A key of lower-case letters, digits and hyphens that still fails the step ID's shape (a trailing hyphen) is free text too.
+  const hyphenKey = 'canary-';
   const gameFindings = [];
   for (const probeId of GAME_PROBES) {
     // P-005 comes first and P-006 last in the folder, so a rule that reads only the first or the last probe passes one of each pair.
@@ -3428,6 +3448,19 @@ try {
       /corpus\/held-out\/gameability\/P-006\.json.*answers step steps entry 1, which the held-out plan does not declare/,
     ],
     [
+      'an off-shape step of lower-case letters, digits and hyphens in the held-out answers',
+      () => changeAnswers('P-006', true, (steps) => (steps[hyphenKey] = HELD_OUT_ANSWER)),
+      /corpus\/held-out\/gameability\/P-006\.json.*answers step steps entry 1, which the held-out plan does not declare/,
+    ],
+    [
+      'a held-out plan step named constructor that no answer covers',
+      () =>
+        changeGame(PLAN_FILE, (plan) => {
+          plan.interactionPlan.push({ ...structuredClone(plan.interactionPlan[0]), stepId: 'constructor' });
+        }),
+      /answers no response for held-out plan step constructor, so the gameability arm cannot run the held-out and both views/,
+    ],
+    [
       'a held-out answer off its schema',
       () => changeAnswers('P-005', true, (steps) => (steps['held-out-run'] = { stdout: 'canary-schema-text' })),
       /corpus\/held-out\/gameability\/P-005\.json: \[gameability\] \/steps\/\* must/,
@@ -3442,6 +3475,18 @@ try {
       () => {
         changeGame('contract.json', (contract) => {
           const oracle = structuredClone(contract.oracles.find((candidate) => candidate.id === 'O-002'));
+          contract.oracles.push({ ...oracle, id: 'O-003' });
+        });
+        changeGame('probes/P-006.probe.json', (probe) => (probe.qualification.naiveOracle = 'O-003'));
+      },
+      /probes\/P-006\.probe\.json.*qualification\.naiveOracle O-003 reads a development-only step, so the held-out view this held-out probe runs in drops it/,
+    ],
+    [
+      'the naive oracle of a held-out probe that reads a development-only step through its evidence targets alone',
+      () => {
+        changeGame('contract.json', (contract) => {
+          const oracle = structuredClone(contract.oracles.find((candidate) => candidate.id === 'O-001'));
+          oracle.direction.evidenceTargets.push('/interactions/development-run/stdout');
           contract.oracles.push({ ...oracle, id: 'O-003' });
         });
         changeGame('probes/P-006.probe.json', (probe) => (probe.qualification.naiveOracle = 'O-003'));
@@ -3571,6 +3616,107 @@ try {
       );
       assert.equal(refused.output.includes('canary-garbage'), false, refused.output);
     }
+  }
+  // The held-out files are sealed from a development run: whatever sits at their paths, a link, a FIFO or a path nobody may open, a
+  // development run neither lists, opens nor refuses it (the corpus index leaves it out and the tree reading takes its metadata), and
+  // a held-out run, a both run and `check` refuse it by path with no stack. A mode that denies the owner proves nothing for root.
+  const answersDirectory = path.join(gamed.folder, HELD_OUT_ANSWERS_DIR);
+  const answersPath = (probeId) => path.join(gamed.folder, answersFile(probeId, true));
+  const planPath = path.join(gamed.folder, PLAN_FILE);
+  const deniesOwner = typeof process.getuid !== 'function' || process.getuid() !== 0;
+  const ownerHolds = (file, mode) => () => fs.chmodSync(file, mode);
+  const sealedCases = [
+    [
+      'a linked answers file',
+      () => {
+        fs.rmSync(answersPath('P-005'));
+        fs.symlinkSync(path.join(elsewhereAnswers, 'P-006.json'), answersPath('P-005'));
+      },
+      /corpus\/held-out\/gameability\/P-005\.json/,
+    ],
+    [
+      'a linked answers directory',
+      () => {
+        fs.rmSync(answersDirectory, { recursive: true });
+        fs.symlinkSync(elsewhereAnswers, answersDirectory);
+      },
+      /corpus\/held-out\/gameability/,
+    ],
+    [
+      'a FIFO in place of an answers file',
+      () => {
+        fs.rmSync(answersPath('P-005'));
+        const made = spawnSync('mkfifo', [answersPath('P-005')]);
+        assert.equal(made.status, 0, `mkfifo failed: ${made.stderr}`);
+      },
+      /corpus\/held-out\/gameability\/P-005\.json/,
+    ],
+  ];
+  if (deniesOwner) {
+    sealedCases.push(
+      [
+        'an answers directory nobody may open',
+        () => fs.chmodSync(answersDirectory, 0),
+        /corpus\/held-out\/gameability/,
+        ownerHolds(answersDirectory, 0o755),
+      ],
+      [
+        'an answers file nobody may open',
+        () => fs.chmodSync(answersPath('P-005'), 0),
+        /corpus\/held-out\/gameability\/P-005\.json/,
+        ownerHolds(answersPath('P-005'), 0o644),
+      ],
+      ['a held-out plan nobody may open', () => fs.chmodSync(planPath, 0), /corpus\/held-out\/plan\.json/, ownerHolds(planPath, 0o644)],
+    );
+  }
+  for (const [name, edit, pattern, cleanup] of sealedCases) {
+    for (const command of ['preflight', 'run']) {
+      const before = launchCount(gamed);
+      const development = gameRan(edit, { command, ...onDevelopment(), stale: true, cleanup });
+      assert.equal(development.status, 0, `${name}: a development ${command} read the sealed path\n${development.output}`);
+      assert.ok(launchesSince(gamed, before).length > 0, `${name}: the development ${command} launched nothing`);
+      assert.equal(
+        development.output.includes('corpus/held-out/gameability'),
+        false,
+        `${name}: a development ${command} named a sealed path\n${development.output}`,
+      );
+    }
+    for (const [command, args] of [
+      ['preflight', ['--partition', 'held-out']],
+      ['preflight', []],
+      ['check', []],
+    ]) {
+      const refused = gameRan(edit, { command, args, stale: true, cleanup });
+      assert.equal(refused.status, 10, `${name}, ${command} ${args.join(' ')}: ${refused.output}`);
+      assert.match(refused.output, pattern, `${name}, ${command} ${args.join(' ')}`);
+      assert.doesNotMatch(
+        refused.output,
+        /\n\s+at \S+ \(|node:internal|scandir/,
+        `${name}, ${command}: the refusal is a stack\n${refused.output}`,
+      );
+    }
+  }
+  // A directory spelled in another case is no folder the answers sit in: a case-insensitive file system resolves its path to the same
+  // place, so the on-disk spelling decides, and a case-sensitive one has no such directory. Either way `check` and a held-out or both
+  // run refuse the file by path, and a development run leaves the directory alone.
+  const variantSpelling = () => {
+    fs.renameSync(answersDirectory, `${answersDirectory}-moving`);
+    fs.renameSync(`${answersDirectory}-moving`, path.join(path.dirname(answersDirectory), 'Gameability'));
+  };
+  const variantPattern = /corpus\/held-out\/gameability\/P-005\.json.*(is not directly under|is absent)/;
+  for (const command of ['preflight', 'run']) {
+    const development = gameRan(variantSpelling, { command, ...onDevelopment(), stale: true });
+    assert.equal(development.status, 0, `a case-variant answers directory reached a development ${command}\n${development.output}`);
+    assert.equal(development.output.includes('Gameability'), false, development.output);
+  }
+  for (const [command, args] of [
+    ['preflight', ['--partition', 'held-out']],
+    ['preflight', []],
+    ['check', []],
+  ]) {
+    const refused = gameRan(variantSpelling, { command, args, stale: true });
+    assert.equal(refused.status, 10, `a case-variant answers directory, ${command} ${args.join(' ')}: ${refused.output}`);
+    assert.match(refused.output, variantPattern, `a case-variant answers directory, ${command} ${args.join(' ')}`);
   }
   const staleAnswers = () => fs.appendFileSync(path.join(gamed.folder, answersFile('P-006', true)), '\n');
   const developmentStale = gameRan(staleAnswers, { command: 'preflight', args: ['--partition', 'development'], stale: true });
