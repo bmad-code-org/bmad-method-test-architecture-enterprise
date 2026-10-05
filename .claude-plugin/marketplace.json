@@ -36,17 +36,18 @@
         "name": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison"
       },
       "skills": [
-        "./src/agents/bmad-tea",
-        "./src/workflows/testarch/bmad-testarch-atdd",
-        "./src/workflows/testarch/bmad-testarch-automate",
-        "./src/workflows/testarch/bmad-testarch-ci",
-        "./src/workflows/testarch/bmad-testarch-evaluate",
-        "./src/workflows/testarch/bmad-testarch-framework",
-        "./src/workflows/testarch/bmad-testarch-nfr",
-        "./src/workflows/testarch/bmad-testarch-test-design",
-        "./src/workflows/testarch/bmad-testarch-test-review",
-        "./src/workflows/testarch/bmad-testarch-trace",
-        "./src/workflows/testarch/bmad-teach-me-testing"
+        "./skills/bmod-tea",
+        "./skills/bmad-tea",
+        "./skills/bmad-testarch-atdd",
+        "./skills/bmad-testarch-automate",
+        "./skills/bmad-testarch-ci",
+        "./skills/bmad-testarch-evaluate",
+        "./skills/bmad-testarch-framework",
+        "./skills/bmad-testarch-nfr",
+        "./skills/bmad-testarch-test-design",
+        "./skills/bmad-testarch-test-review",
+        "./skills/bmad-testarch-trace",
+        "./skills/bmad-teach-me-testing"
       ]
     }
   ]

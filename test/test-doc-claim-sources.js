@@ -8,8 +8,8 @@
  * `doc-claims` section reads. `npm run test:doc-claims` proves the module's
  * values agree with the published pages today; it proves nothing about
  * whether the module's own derivation logic is correct, and this file is
- * where that logic lives: `FUTURE_KEYS` is parsed out of `module.yaml`'s
- * comment markers rather than hand-listed, `atLeast()` does its own semver
+ * where that logic lives: `SETUP_KEYS` is parsed out of `bmod.toml`'s config
+ * questions rather than hand-listed, `atLeast()` does its own semver
  * comparison, and `keyIsUnread()` decides what counts as "referenced." A shape
  * copied from `test/lib/doc-count-sources.js` (Story 4.1), which reads it
  * independently of the module under test rather than re-running the module's
@@ -38,16 +38,16 @@ function check(name, fn) {
 }
 
 // keyIsUnread's word-boundary check (below) needs a real reference staged
-// under src/workflows/ before doc-claim-sources.js is first required: its
+// inside a workflow skill folder before doc-claim-sources.js is first required: its
 // workflowFileBodies cache memoizes at the first call inside that module,
 // triggered at module load by RISK_THRESHOLD_UNREAD's own computation, so
 // calling keyIsUnread afterward would only ever see the directory listing
 // from before this file existed. Cleanup runs once at the very end of this
 // file, guarded by SIGINT/SIGTERM handlers so an interrupted run doesn't
-// leave the probe file behind under src/workflows -- the same lifecycle
+// leave the probe file behind in the skill folder -- the same lifecycle
 // test/test-clock-port.js uses around its own probe skill.
-const workflowsRoot = path.join(__dirname, '..', 'src', 'workflows');
-const stagingFile = path.join(workflowsRoot, `doc-claim-sources-test-${process.pid}.md`);
+const stagingRoot = path.join(__dirname, '..', 'skills', 'bmad-testarch-atdd');
+const stagingFile = path.join(stagingRoot, `doc-claim-sources-test-${process.pid}.md`);
 const probeKey = `probe_key_${process.pid}`;
 fs.writeFileSync(stagingFile, `if ${probeKey} is set, do the thing\n`);
 const removeStagingFile = () => fs.rmSync(stagingFile, { force: true });
@@ -71,16 +71,7 @@ check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of 
   // predicate strings production already uses, which would prove only that
   // calling one function twice is deterministic, not that the parser or the
   // predicate itself reads the right column.
-  const registryPath = path.join(
-    __dirname,
-    '..',
-    'src',
-    'workflows',
-    'testarch',
-    'bmad-testarch-test-review',
-    'steps-c',
-    'criteria-registry.md',
-  );
+  const registryPath = path.join(__dirname, '..', 'skills', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md');
   const mobileIds = [];
   const playwrightUtilsIds = [];
   for (const line of fs.readFileSync(registryPath, 'utf8').split('\n')) {
@@ -144,28 +135,11 @@ check('SKIP_SCHEMA requires every SKIP_KEYS.always key and rejects an undeclared
   assert.strictEqual(source.SKIP_SCHEMA.safeParse({ ...base, notARealKey: 1 }).success, false);
 });
 
-check('FUTURE_KEYS matches an independent walk of module.yaml’s "⏭️ FUTURE" marker positions', () => {
-  const text = fs.readFileSync(path.join(__dirname, '..', 'src', 'module.yaml'), 'utf8');
-  const parsed = require('yaml').parse(text);
-  const promptedKeys = new Set(
-    Object.keys(parsed).filter((key) => typeof parsed[key] === 'object' && parsed[key] !== null && 'prompt' in parsed[key]),
-  );
-  const lines = text.split('\n');
-  const expected = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/⏭️\s*FUTURE/.test(lines[index])) continue;
-    // A marker's group runs through every consecutive prompted key that
-    // follows it, not only the first one.
-    for (const candidate of lines.slice(index + 1)) {
-      if (/⏭️\s*FUTURE/.test(candidate)) break;
-      const match = candidate.match(/^([A-Za-z_][A-Za-z0-9_-]*):/);
-      if (match === null) continue;
-      if (!promptedKeys.has(match[1])) break;
-      expected.push(match[1]);
-    }
-  }
-  assert.ok(expected.length > 0, 'fixture setup: expected at least one "⏭️ FUTURE" marker in module.yaml');
-  assert.deepStrictEqual(source.FUTURE_KEYS, expected);
+check('SETUP_KEYS matches an independent parse of bmod.toml’s [[bmod.config_questions]]', () => {
+  const parsed = require('smol-toml').parse(fs.readFileSync(path.join(__dirname, '..', 'skills', 'bmod-tea', 'bmod.toml'), 'utf8'));
+  const expected = parsed.bmod.config_questions.map((question) => question.key);
+  assert.ok(expected.length > 0, 'fixture setup: expected at least one config question in bmod.toml');
+  assert.deepStrictEqual(source.SETUP_KEYS, expected);
 });
 
 check('atLeast() compares a real version correctly and refuses a version it cannot parse', () => {
@@ -189,7 +163,7 @@ check('keyIsUnread reports a genuinely referenced key as read, not just an injec
   // (an easy mistake, `.every()` is used one line below on a sibling array in
   // production) cannot silently make every `*_UNREAD` export stay `true`
   // forever with this file still green. tea_use_playwright_utils is
-  // confirmed referenced under src/workflows/ by direct grep, so this needs
+  // confirmed referenced in the workflow skills by direct grep, so this needs
   // no staged fixture.
   assert.strictEqual(source.keyIsUnread('tea_use_playwright_utils'), false);
 });
@@ -204,7 +178,7 @@ check('keyIsUnread’s word-boundary check finds a real bare-word reference, not
 });
 
 check('misplacedOutputs flags a flat output path and leaves inputs and legacy paths alone', () => {
-  // A staged fixture skill outside src/workflows, so the real tree's current
+  // A staged fixture skill outside skills/, so the real tree's current
   // state cannot make this pass or fail: one output inside the skill's own
   // folder, one flat at the root (the misplacement), one `_input` key and one
   // `legacy*` frontmatter key that are both flat on purpose.
@@ -299,13 +273,12 @@ check('declaredOutputPaths refuses step frontmatter that is not valid YAML, nami
   }
 });
 
-check('ELEVEN_WIRED_ONE_FUTURE agrees with a literal list of the eleven wired keys and risk_threshold as the FUTURE one', () => {
-  // Literal on purpose: recomputing the lists with the module's own helpers would
-  // agree with the module whatever module.yaml said. A key added, removed or
-  // re-marked in module.yaml has to be restated here to pass.
-  const WIRED = [
+check('every setup key in a literal list is wired, so no FUTURE key remains and the eleven-plus-one claim no longer holds', () => {
+  // Literal on purpose: recomputing the list with the module's own helpers would
+  // agree with the module whatever bmod.toml said. A setup key added, removed or
+  // left unread has to be restated here to pass.
+  const SETUP = [
     'test_artifacts',
-    'tea_evaluations_folder',
     'tea_use_playwright_utils',
     'tea_use_pactjs_utils',
     'tea_pact_mcp',
@@ -313,19 +286,15 @@ check('ELEVEN_WIRED_ONE_FUTURE agrees with a literal list of the eleven wired ke
     'tea_execution_mode',
     'tea_capability_probe',
     'test_stack_type',
-    'ci_platform',
     'test_framework',
   ];
-  const parsed = require('yaml').parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'module.yaml'), 'utf8'));
-  const prompted = Object.keys(parsed).filter((key) => typeof parsed[key] === 'object' && parsed[key] !== null && 'prompt' in parsed[key]);
-  assert.deepStrictEqual(source.FUTURE_KEYS, ['risk_threshold']);
-  assert.deepStrictEqual(
-    prompted.filter((key) => key !== 'risk_threshold'),
-    WIRED,
-  );
-  for (const key of WIRED) assert.strictEqual(source.keyIsUnread(key), false, `${key} is wired, so some workflow file reads it`);
-  assert.strictEqual(source.keyIsUnread('risk_threshold'), true, 'risk_threshold is FUTURE, so no workflow file reads it');
-  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, true);
+  assert.deepStrictEqual(source.SETUP_KEYS, SETUP);
+  for (const key of SETUP) assert.strictEqual(source.keyIsUnread(key), false, `${key} is wired, so some workflow file reads it`);
+  assert.deepStrictEqual(source.FUTURE_KEYS, []);
+  assert.strictEqual(source.EVERY_SETUP_KEY_WIRED, true);
+  assert.strictEqual(source.ONE_FUTURE_KEY_UNREAD, false);
+  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, false);
+  assert.strictEqual(source.keyIsUnread('risk_threshold'), true, 'risk_threshold was dropped, so no workflow file reads it');
 });
 
 check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {

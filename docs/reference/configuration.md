@@ -7,26 +7,40 @@ description: Complete reference for TEA configuration options and file locations
 
 Every TEA (Test Engineering Architect) configuration key, its default, and the workflows it changes.
 
-## Configuration File Locations
+## Where Configuration Lives
 
-**Your project:** `_bmad/tea/config.yaml`. The BMad installer writes it from your answers. Edit it to change TEA behavior. Typically gitignored, since values are user-specific.
+`bmad setup tea` asks TEA's setup questions and writes the answers to the `[modules.tea]` table of `_bmad/config.toml`. The `bmad` skill from BMad Method core runs setup; TEA's questions come from `skills/bmod-tea/bmod.toml`. If a TEA skill finds no `[modules.tea]` table, it tells you to run `bmad setup tea` and stops.
 
-**The schema:** `src/module.yaml` in the [BMAD TEA repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise). It defines the available keys, their defaults, and the installer prompts. It does not ship into your project; reference it only when contributing to BMAD.
+Skills read the config through `_bmad/scripts/resolve_config.py`, which merges three layers, later files winning:
 
-TEA reads `_bmad/tea/config.yaml` once at workflow start. After editing it, start a fresh chat before running a workflow.
+| File                            | Holds                                           |
+| ------------------------------- | ----------------------------------------------- |
+| `_bmad/config.toml`             | The setup answers                               |
+| `_bmad/custom/config.toml`      | Team overrides, committed with the project      |
+| `_bmad/custom/config.user.toml` | Personal overrides, kept out of version control |
+
+Setup answers are strings. A boolean key holds `"true"` or `"false"`, and skills read those as booleans.
+
+To change an answer, run `bmad setup tea` again: it shows each answer with its value and the file it lives in, and changes the ones you name. You can also edit the TOML directly. Skills read the config once at activation, so start a fresh chat after a change.
+
+Two settings that only one workflow reads are not setup questions. They live in that workflow's customization file, described in [Per-Workflow Settings](#per-workflow-settings).
 
 ## Recommended Configuration
 
-```yaml
-# _bmad/tea/config.yaml
-project_name: my-project
-output_folder: _bmad-output
-tea_use_playwright_utils: true # production-ready fixtures and utilities
-tea_use_pactjs_utils: true # pactjs-utils is the implementation whenever contract tests are written
-tea_pact_mcp: 'mcp' # use a broker when one is reachable; skipped automatically when it is not
-tea_browser_automation: 'auto' # smart CLI/MCP selection with fallback
-tea_execution_mode: 'auto' # capability-aware orchestration
-tea_capability_probe: true # fall back safely when a mode is unsupported
+The setup defaults are the recommended values:
+
+```toml
+# _bmad/config.toml
+[modules.tea]
+test_artifacts = "{project-root}/_bmad-output/test-artifacts"
+tea_use_playwright_utils = "true"   # production-ready fixtures and utilities
+tea_use_pactjs_utils = "true"       # pactjs-utils is the implementation whenever contract tests are written
+tea_pact_mcp = "mcp"                # use a broker when one is reachable; skipped automatically when it is not
+tea_browser_automation = "auto"     # smart CLI/MCP selection with fallback
+tea_execution_mode = "auto"         # capability-aware orchestration
+tea_capability_probe = "true"       # fall back safely when a mode is unsupported
+test_stack_type = "auto"
+test_framework = "auto"
 ```
 
 ```bash
@@ -38,32 +52,22 @@ npm install -g @playwright/cli@latest  # needed for 'cli' and 'auto' browser mod
 
 ---
 
-## TEA Configuration Options
+## Setup Questions
+
+Each key below is asked by `bmad setup tea` and stored under `[modules.tea]`.
 
 ### test_artifacts
 
 Base output folder for TEA-generated artifacts (test designs, reports, traceability).
 
-**Type:** `string` · **Default:** `{output_folder}/test-artifacts`
+**Type:** `string` · **Default:** `{project-root}/_bmad-output/test-artifacts`
 
-Resolves to `{project-root}/{value}`, so it can live outside the core BMM output folder. Each workflow writes into its own folder under it, as described in [Output Layout](#output-layout).
+**Setup question:** `Where should test artifacts be stored? (test plans, coverage reports, quality audits)`
 
-```yaml
-test_artifacts: docs/testing-artifacts
-```
+Skills replace `{project-root}` in the value with the project root, so it can live outside the core output folder. Each workflow writes into its own folder under it, as described in [Output Layout](#output-layout).
 
----
-
-### tea_evaluations_folder
-
-Base folder for Evaluate (`bmad-testarch-evaluate`) evaluation folders.
-
-**Type:** `string` · **Default:** `evals`
-
-Resolves to `{project-root}/{value}`, independent of `test_artifacts`.
-
-```yaml
-tea_evaluations_folder: evals
+```toml
+test_artifacts = "{project-root}/docs/testing-artifacts"
 ```
 
 ---
@@ -74,7 +78,7 @@ Enable Playwright Utils integration for production-ready fixtures and utilities.
 
 **Type:** `boolean` · **Default:** `true`
 
-**Installer prompt:** `Enable Playwright Utils integration?`
+**Setup question:** `Use Playwright Utils (@seontechnologies/playwright-utils) as the default implementation for Playwright tests?`
 
 **What `true` means.** Not "the library is available if you ask for it." It makes `@seontechnologies/playwright-utils` the default implementation for every capability it covers, in generation and in review, without the user naming a utility. The binding rule is the `playwright-utils-mandate` knowledge fragment: `interceptNetworkCall` instead of `page.route`, `apiRequest` instead of the raw `request` fixture, `recurse` instead of `page.waitForTimeout`, `log` instead of `console.log`, and `test` imported from the project's merged fixtures rather than from `@playwright/test`. A vanilla Playwright equivalent still ships when the utility genuinely does not cover the case, but it carries a `// playwright-utils deviation: <reason>` comment and appears in the workflow's output summary.
 
@@ -95,8 +99,8 @@ The mandate applies only to JavaScript/TypeScript suites on the Playwright runne
 
 The `trace` and `nfr-assess` workflows do not read this key.
 
-```yaml
-tea_use_playwright_utils: true # false generates from scratch instead
+```toml
+tea_use_playwright_utils = "true" # "false" generates from scratch instead
 ```
 
 **Prerequisites:**
@@ -118,7 +122,7 @@ Enable Pact.js Utils integration for consumer-driven contract testing utilities.
 
 **Type:** `boolean` · **Default:** `true`
 
-**Installer prompt:** `Enable Pact.js Utils for consumer-driven contract testing?`
+**Setup question:** `Use Pact.js Utils (@seontechnologies/pactjs-utils) when contract tests are written?`
 
 **What `true` means, and what it does not.** It makes `@seontechnologies/pactjs-utils` the default implementation for every Pact artifact TEA writes, the same way `tea_use_playwright_utils` does for Playwright. The binding rule is the `pactjs-utils-mandate` knowledge fragment: `createProviderState` instead of a hand-cast `.given()`, `buildVerifierOptions` instead of a literal `VerifierOptions` object, `createRequestFilter` instead of bespoke auth middleware, `setJsonContent` / `setJsonBody` instead of repeated PactV4 builder lambdas. Raw Pact still ships where the utilities do not reach, with a `// pactjs-utils deviation: <reason>` comment and an entry in the workflow's summary.
 
@@ -139,8 +143,8 @@ The determinism rules never relax under the mandate: one `addInteraction()` per 
 
 **Use this when:** you want TEA to write Pact well. Set it to `false` only if you deliberately want raw `@pact-foundation/pact` output.
 
-```yaml
-tea_use_pactjs_utils: true # false generates raw Pact from scratch instead
+```toml
+tea_use_pactjs_utils = "true" # "false" generates raw Pact from scratch instead
 ```
 
 **Prerequisites:**
@@ -166,7 +170,7 @@ Pact MCP strategy for broker interaction during contract testing workflows.
 
 **Type:** `string` · **Default:** `"mcp"` · **Options:** `"mcp"` | `"none"`
 
-**Installer prompt:** `Enable SmartBear MCP for PactFlow/Pact Broker? Used when a broker is reachable; skipped automatically when it is not.`
+**Setup question:** `Use the SmartBear MCP for PactFlow or a Pact Broker?`
 
 Controls whether TEA can use SmartBear MCP tools for provider-state discovery, Pact test review assistance, and can-i-deploy/matrix guidance.
 
@@ -176,8 +180,8 @@ Controls whether TEA can use SmartBear MCP tools for provider-state discovery, P
 
 **Set it to `none` when:** you want TEA never to attempt a broker call at all — an air-gapped environment, or a policy against outbound calls from the agent's session.
 
-```yaml
-tea_pact_mcp: 'mcp' # 'none' disables all broker/MCP integration
+```toml
+tea_pact_mcp = "mcp" # "none" disables all broker/MCP integration
 ```
 
 **Prerequisites:**
@@ -205,7 +209,7 @@ Browser automation strategy. Controls how TEA interacts with live browsers durin
 
 **Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"cli"` | `"mcp"` | `"none"`
 
-**Installer prompt:** `How should TEA interact with browsers during test generation?`
+**Setup question:** `How should TEA drive live browsers while generating tests?`
 
 | Mode   | Behavior                                                                                 |
 | ------ | ---------------------------------------------------------------------------------------- |
@@ -234,8 +238,8 @@ playwright-cli install --skills   # run from project root; Node.js 18+
 #   playwright-test   -> npx playwright run-test-mcp-server
 ```
 
-```yaml
-tea_browser_automation: 'auto' # 'cli' | 'mcp' | 'none'
+```toml
+tea_browser_automation = "auto" # "cli" | "mcp" | "none"
 ```
 
 **Migration from the old flag:**
@@ -258,7 +262,7 @@ Execution strategy for orchestration-capable TEA workflows.
 
 **Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"subagent"` | `"agent-team"` | `"sequential"`
 
-**Installer prompt:** `How should TEA orchestrate multi-step generation and evaluation?`
+**Setup question:** `How should TEA run multi-step generation and evaluation?`
 
 Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `test-design`, and `trace`. `teach-me-testing` does not use this setting.
 
@@ -287,12 +291,12 @@ Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `
 **Resolution order:**
 
 1. Normalize an explicit run-level request when one is present: `agent team` / `agent teams` / `agentteam` become `agent-team`; `subagent` / `subagents` / `sub agent` / `sub agents` become `subagent`; `sequential` and `auto` pass through.
-2. With no explicit override, use `tea_execution_mode` from `_bmad/tea/config.yaml`.
+2. With no explicit override, use `tea_execution_mode` from `[modules.tea]`.
 3. With `tea_capability_probe: true`, detect runtime support for `agent-team` and `subagent`.
 4. Resolve: `auto` walks `agent-team` then `subagent` then `sequential`; an explicit `agent-team` or `subagent` falls back only when probing is enabled; `sequential` is always sequential.
 
-```yaml
-tea_execution_mode: 'auto' # 'sequential' forces deterministic single-threaded runs
+```toml
+tea_execution_mode = "auto" # "sequential" forces deterministic single-threaded runs
 ```
 
 ---
@@ -303,10 +307,12 @@ Whether TEA probes runtime capabilities before resolving the execution mode.
 
 **Type:** `boolean` · **Default:** `true`
 
+**Setup question:** `Check what the tool supports before choosing an execution mode, and fall back when it is missing?`
+
 When enabled, TEA checks whether `agent-team` or `subagent` execution is actually supported and falls back safely. When disabled, TEA honors the configured mode strictly and fails if it is unsupported.
 
-```yaml
-tea_capability_probe: true # false honors tea_execution_mode strictly
+```toml
+tea_capability_probe = "true" # "false" honors tea_execution_mode strictly
 ```
 
 ---
@@ -317,7 +323,7 @@ Detected or configured project stack type. Controls CI pipeline generation and f
 
 **Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"frontend"` | `"backend"` | `"fullstack"` | `"mobile"`
 
-**Installer prompt:** `What type of project is this?`
+**Setup question:** `What type of project is this?`
 
 | Stack type  | Behavior                                                                                                                              |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -338,28 +344,8 @@ Detection checks mobile first: a React Native or Expo project carries `package.j
 - `atdd` picks stack-appropriate failing-test patterns
 - `test-review` applies stack-appropriate review criteria
 
-```yaml
-test_stack_type: 'fullstack'
-```
-
----
-
-### ci_platform
-
-CI/CD platform for pipeline generation.
-
-**Type:** `string` · **Default:** `"auto"`
-
-**Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
-
-**Installer prompt:** `Which CI/CD platform do you use?`
-
-Controls which CI template the `ci` workflow uses and where it writes. With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, and `.circleci/config.yml`, then falls back to inferring from the git remote. Installations predating this key default to `"auto"`.
-
-**Affects workflows:** `ci` only.
-
-```yaml
-ci_platform: 'github-actions'
+```toml
+test_stack_type = "fullstack"
 ```
 
 ---
@@ -372,48 +358,81 @@ Detected or configured test framework preference.
 
 **Options:** `"auto"` | `"playwright"` | `"cypress"` | `"jest"` | `"vitest"` | `"pytest"` | `"junit"` | `"go-test"` | `"dotnet-test"` | `"rspec"` | `"maestro"` | `"other"`
 
-**Installer prompt:** `Which test framework are you using?`
+**Setup question:** `Which test framework does the project use?`
 
 Controls which framework patterns TEA uses for code generation. With `"auto"`, TEA detects from project configuration files and manifests.
 
 **Affects workflows:** `framework` (scaffold generation), `ci` (test commands in the pipeline), `atdd` and `automate` (test code generation patterns).
 
-```yaml
-test_framework: 'playwright'
+```toml
+test_framework = "playwright"
 ```
 
 ---
 
-## Core BMM Configuration (Inherited by TEA)
+## Per-Workflow Settings
 
-The installer copies these core values into `_bmad/tea/config.yaml`. Every TEA `workflow.yaml` reads `user_name`, `output_folder`, `test_artifacts`, `communication_language`, and `document_output_language` from that file at startup.
+These two settings are read by one workflow each, so they live in that workflow's customization file under `[workflow]` rather than in `[modules.tea]`. `bmad setup tea` does not ask for them. Put a team value in `_bmad/custom/<skill>.toml` and a personal one in `_bmad/custom/<skill>.user.toml`; the `bmad-customize` skill can write either file for you.
+
+### evaluations_folder
+
+Base folder for Evaluate (`bmad-testarch-evaluate`) evaluation folders.
+
+**Type:** `string` · **Default:** `evals` · **File:** `_bmad/custom/bmad-testarch-evaluate.toml`
+
+Resolves to `{project-root}/{value}`, independent of `test_artifacts`. Earlier releases named this key `tea_evaluations_folder` and stored it with the module config; a value there is no longer read.
+
+```toml
+# _bmad/custom/bmad-testarch-evaluate.toml
+[workflow]
+evaluations_folder = "quality/evals"
+```
+
+### ci_platform
+
+CI/CD platform for pipeline generation.
+
+**Type:** `string` · **Default:** `"auto"` · **File:** `_bmad/custom/bmad-testarch-ci.toml`
+
+**Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
+
+Controls which CI template the `ci` workflow uses and where it writes. With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, and `.circleci/config.yml`, then falls back to inferring from the git remote. Any other value skips detection. Earlier releases stored this key with the module config; a value there is no longer read.
+
+**Affects workflows:** `ci` only.
+
+```toml
+# _bmad/custom/bmad-testarch-ci.toml
+[workflow]
+ci_platform = "github-actions"
+```
+
+---
+
+## Core Configuration (Read by TEA)
+
+Every TEA skill also reads the `[core]` table of the same config layers. `bmad setup` writes `project_name` and `output_folder` there. The other keys below are optional; set them under `[core]` yourself, in `_bmad/custom/config.user.toml` for personal values such as your name.
 
 ### output_folder
 
-**Type:** `string` · **Default:** `_bmad-output`
+**Type:** `string` · **Default:** `{project-root}/_bmad-output`
 
-Base output folder for core BMM artifacts. TEA writes its own artifacts under `test_artifacts`, which defaults to `{output_folder}/test-artifacts`.
+Base output folder for core BMad artifacts. TEA writes its own artifacts under `test_artifacts`, which defaults to `{project-root}/_bmad-output/test-artifacts`.
 
-```yaml
-output_folder: _bmad-output
-```
-
-In a monorepo, give each package its own `_bmad/tea/config.yaml` with a relative `output_folder` so artifacts land in one place:
-
-```yaml
-# apps/api/_bmad/tea/config.yaml
-project_name: api-service
-output_folder: ../../_bmad-output/api
+```toml
+[core]
+output_folder = "{project-root}/_bmad-output"
 ```
 
 ### user_name
 
-**Type:** `string` · **Default:** set during installation
+**Type:** `string` · **Default:** none
 
-Your name. Every TEA `workflow.yaml` pulls it from `_bmad/tea/config.yaml`, and `teach-me-testing` uses it to name your progress and session-notes files.
+Your name. Skills greet you with it, and `teach-me-testing` uses it to name your progress and session-notes files.
 
-```yaml
-user_name: Jane Doe
+```toml
+# _bmad/custom/config.user.toml
+[core]
+user_name = "Jane Doe"
 ```
 
 ### project_name
@@ -422,51 +441,50 @@ user_name: Jane Doe
 
 Used in report headers, documentation titles, CI configuration comments, and the `test-design` handoff filename `{test_artifacts}/test-design/{project_name}-handoff.md`.
 
-```yaml
-project_name: my-awesome-app
+```toml
+[core]
+project_name = "my-awesome-app"
 ```
 
 ### communication_language
 
-**Type:** `string` · **Default:** `english`
+**Type:** `string` · **Default:** none (the skill answers in your language)
 
 Language for TEA chat responses. Any language works.
 
-```yaml
-communication_language: english
+```toml
+[core]
+communication_language = "english"
 ```
 
 ### document_output_language
 
-**Type:** `string` · **Default:** `english`
+**Type:** `string` · **Default:** none
 
 Language for TEA-generated documents (test designs, reports). It can differ from `communication_language`: chat in Spanish, generate docs in English.
 
-```yaml
-document_output_language: english
+```toml
+[core]
+document_output_language = "english"
 ```
 
 ---
 
-## Declared but Not Yet Wired
+## Removed Keys
 
-`src/module.yaml` declares one more key and marks it FUTURE. The installer prompts for it and writes it to `_bmad/tea/config.yaml`, but no workflow reads it yet. Setting it changes nothing today:
+TEA no longer uses the classic installer, so `_bmad/tea/config.yaml`, `src/module.yaml`, and `src/module-help.csv` are gone. A `_bmad/tea/config.yaml` left by an earlier install is not read by any skill; move its values into `[modules.tea]` with `bmad setup tea`, then delete the file. The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working. See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
 
-| Key              | Prompted default | Intended purpose                     |
-| ---------------- | ---------------- | ------------------------------------ |
-| `risk_threshold` | `p1`             | Risk level requiring mandatory tests |
+The `risk_threshold` key was never read by a workflow and is no longer asked at setup. `tea_evaluations_folder` and `ci_platform` moved to [Per-Workflow Settings](#per-workflow-settings).
 
 Earlier releases also declared three FUTURE output-folder keys: `test_design_output`, `test_review_output`, and `trace_output`. No workflow ever read them, and they are removed. Every workflow now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
 
-Wiring the three keys was turned down for two reasons. First, the installer cannot carry them reliably. It fills `{test_artifacts}` inside a `result:` template from the raw install answer, so the key is saved as a relative path without `{project-root}`. Upstream BMAD's main branch has since dropped `result:` processing. Second, a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
-
-A `_bmad/tea/config.yaml` written by an earlier install can still carry the three keys. Nothing reads them, so they are safe to delete.
+Wiring the three keys was turned down because a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
 
 ---
 
 ## Output Layout
 
-Outputs land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`. The folder names are fixed, and no configuration key moves them. `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`tea_evaluations_folder`](#tea_evaluations_folder).
+Outputs land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`. The folder names are fixed, and no configuration key moves them. `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`evaluations_folder`](#evaluations_folder).
 
 Earlier releases wrote every output flat into the root of `{test_artifacts}` with fixed names. That layout was a placeholder carried over from the module migration. Per-workflow folders with scoped file names are the recommended layout at any project size, from one story to a monorepo with dozens of epics. Commit the outputs to version control to keep a history per scope: each scope's files change only when that scope is re-run.
 
@@ -629,18 +647,20 @@ env:
 
 ## Verify Your Configuration
 
+Ask the `bmad` skill for `bmad setup tea`. It reports the module's state and shows every answer with the file it lives in. From a shell:
+
 ```bash
-# 1. Confirm the file exists and print the TEA keys you set
-grep -E '^(tea_|test_|ci_platform|project_name|output_folder|user_name)' _bmad/tea/config.yaml
+# 1. Print the TEA answers bmad setup wrote
+sed -n '/^\[modules.tea\]/,/^\[/p' _bmad/config.toml
 
-# 2. Confirm the YAML parses (prints the parsed object, or the syntax error)
-npx --yes js-yaml _bmad/tea/config.yaml
+# 2. Print the merged config a skill sees, all three layers applied
+uv run _bmad/scripts/resolve_config.py --project-root . --key core --key modules.tea
 
-# 3. Confirm playwright-utils is installed when tea_use_playwright_utils is true
+# 3. Confirm playwright-utils is installed when tea_use_playwright_utils is "true"
 npm ls @seontechnologies/playwright-utils
 ```
 
-A key you set that does not appear in step 1 is misspelled. Compare it against the key list on this page: `_bmad/tea/config.yaml` holds your values, and the schema that names the valid keys lives in the BMAD repository, not in your project.
+A key you set that does not appear in step 2 is misspelled or in the wrong table. Compare it against the key list on this page.
 
 For anything that stays broken, see the [Troubleshooting guide](/docs/reference/troubleshooting.md).
 

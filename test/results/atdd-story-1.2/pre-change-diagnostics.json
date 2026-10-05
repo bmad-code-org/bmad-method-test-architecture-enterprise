@@ -14,11 +14,11 @@
     "protectedInputs": [
       {
         "path": "test/fixtures/atdd-eval/ground-truth.json",
-        "sha256": "60b409daa9c98e2881bbda463daee8327f88303ffccab9cb433a4353d65d41ca"
+        "sha256": "34cb7a5cbc49475d3ae6624f1ce0f24ca8049e970a3a6b99eb0f30affab6cb3e"
       },
       {
         "path": "test/contracts/atdd.contract.json",
-        "sha256": "b27799e977324c54f2f653f547d459af5d130d6bf63dcaa02a801d9b572487db"
+        "sha256": "ce888f9858f9412831f378ff305bcdbbc7b5f2449736fbb1adbd7690953caed2"
       }
     ],
     "diagnosticWitnesses": [

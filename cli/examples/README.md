@@ -23,7 +23,7 @@ on:
 jobs:
   review:
     # ...same steps as pr-test-review.yml's `review` job...
-    run: tea-test-review --base "$BASE_REF" --min-score ${{ inputs.min_score }} --agent claude --skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review" --output test-review.md --json test-review.json
+    run: tea-test-review --base "$BASE_REF" --min-score ${{ inputs.min_score }} --agent claude --skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review" --output test-review.md --json test-review.json
 ```
 
 ```yaml
@@ -49,5 +49,5 @@ The two don't compete. Check whether the bot's config sets a required commit sta
 Adjust flags to your layout, for example a monorepo with tests outside the default directory:
 
 ```yaml
-run: tea-test-review --base "$BASE_REF" --test-dir playwright --min-score 80 --agent claude --skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review" --output test-review.md --json test-review.json
+run: tea-test-review --base "$BASE_REF" --test-dir playwright --min-score 80 --agent claude --skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review" --output test-review.md --json test-review.json
 ```

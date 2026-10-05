@@ -1240,7 +1240,7 @@ async function checkValidFixture() {
  */
 async function checkRequirementsStatement() {
   const engine = await loadEngine();
-  const assets = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
+  const assets = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-evaluate', 'assets');
   const starter = JSON.parse(fs.readFileSync(path.join(assets, 'evaluation.json'), 'utf8'));
   const starterBytes = fs.readFileSync(path.join(assets, 'requirements-statement.md'));
   const validateStarter = new Ajv({ strict: false, allErrors: true }).compile(

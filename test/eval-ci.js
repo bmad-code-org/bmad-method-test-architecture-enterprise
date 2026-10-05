@@ -188,6 +188,7 @@ const { failureClassForExit } = require('../cli/ci-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const {
   digest,
   digestFiles,
@@ -220,7 +221,7 @@ const { readBytes, readJson, readText, writeText } = require('./lib/file-system-
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'ci-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-ci');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-ci');
 const SUITE_ID = 'ci';
 
 // A complete CI run reads four step files, the template, several knowledge
@@ -1155,28 +1156,33 @@ function ciArtifactPaths(set) {
 }
 
 /** The resolved TEA config the staged run reads its placeholders from. */
-function configYaml(set) {
-  return [
-    '# Written by test/eval-ci.js for one staged project.',
-    '# test_artifacts points inside this workspace only, so the progress file the run writes',
-    '# lands beside the project it scaffolded and nowhere else.',
-    'user_name: tea-eval-harness',
-    `project_name: ${set.projectRoot}`,
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    '# Both library flags are off. Neither project carries the packages, and with a flag on',
-    '# step-01 would route the run to the framework workflow instead of scaffolding the',
-    '# plain pipeline the request asks for.',
-    'tea_use_playwright_utils: false',
-    'tea_use_pactjs_utils: false',
-    '# Sequential keeps the step-02 workers in this process. A subagent mode would have them',
-    '# write under /tmp, outside the workspace the capability declaration scopes the run to.',
-    'tea_execution_mode: sequential',
-    'tea_capability_probe: false',
-    '',
-  ].join('\n');
+function configToml(set) {
+  return teaConfigToml({
+    header: [
+      '# Written by test/eval-ci.js for one staged project.',
+      '# test_artifacts points inside this workspace only, so the progress file the run writes',
+      '# lands beside the project it scaffolded and nowhere else.',
+    ],
+    core: [
+      ['user_name', 'tea-eval-harness'],
+      ['project_name', set.projectRoot],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [
+      ['test_artifacts', 'test-artifacts'],
+      '# Both library flags are off. Neither project carries the packages, and with a flag on',
+      '# step-01 would route the run to the framework workflow instead of scaffolding the',
+      '# plain pipeline the request asks for.',
+      ['tea_use_playwright_utils', 'false'],
+      ['tea_use_pactjs_utils', 'false'],
+      '# Sequential keeps the step-02 workers in this process. A subagent mode would have them',
+      '# write under /tmp, outside the workspace the capability declaration scopes the run to.',
+      ['tea_execution_mode', 'sequential'],
+      ['tea_capability_probe', 'false'],
+    ],
+  });
 }
 
 /**
@@ -1217,9 +1223,10 @@ async function writeMinimalGitDirectory(projectDir, set) {
  *
  * Layout, with the workspace itself as the agent's working directory:
  *
- *   <projectRoot>/   the project, plus a resolved _bmad/tea/config.yaml, an empty
+ *   <projectRoot>/   the project, plus a resolved _bmad/config.toml, an empty
  *                    test-artifacts/, and the minimal .git/ above
  *   skill/           the bmad-testarch-ci workflow, copied verbatim
+ *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * The project root is the set's own, so the prompt that names it says which
  * project the run scaffolds. The skill sits outside the project root on purpose:
@@ -1250,8 +1257,8 @@ async function stageIntoWorkspace(dir, set) {
   }
 
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(set));
+  fs.mkdirSync(path.join(projectDir, '_bmad'), { recursive: true });
+  await writeText(path.join(projectDir, TEA_CONFIG_RELATIVE_PATH), configToml(set));
   await writeMinimalGitDirectory(projectDir, set);
 
   for (const relative of filesUnder(SKILL_ROOT)) {
@@ -1259,6 +1266,7 @@ async function stageIntoWorkspace(dir, set) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   // The project files the run must leave alone: exactly what the corpus
   // shipped, which validateCorpus holds equal to `projectFiles`. Everything the
@@ -1342,9 +1350,10 @@ function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
     'Resolve the workflow placeholders and variables to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`ci_platform\`: \`${ciPlatform}\``,
     `- \`test_dir\`: \`${root}/tests\``,
     '',
@@ -1388,9 +1397,10 @@ function buildEditPrompt(set, { ciPlatform = PLATFORM } = {}) {
     'Resolve the workflow placeholders and variables to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`ci_platform\`: \`${ciPlatform}\``,
     `- \`test_dir\`: \`${root}/tests\``,
     '',

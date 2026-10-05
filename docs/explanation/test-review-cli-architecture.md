@@ -61,7 +61,7 @@ The report then has to say what it had. Exactly one `**Context Basis**: none | p
 
 If a branch input isn't in the prompt, the agent decides it itself, and can decide differently next run. A human answers the same lazy config question consistently; a headless agent gets no such guarantee.
 
-The early version stated `tea_browser_automation` and `tea_execution_mode`, but not the three keys that pick knowledge fragments. `_bmad/tea/config.yaml` never exists in CI, so two runs on identical files could load different knowledge, and a contract-testing repo could silently get the generic fragment.
+The early version stated `tea_browser_automation` and `tea_execution_mode`, but not the three keys that pick knowledge fragments. A project's TEA config usually does not exist in CI, so two runs on identical files could load different knowledge, and a contract-testing repo could silently get the generic fragment.
 
 Fix: a precedence chain, resolved once, stated in full.
 
@@ -69,7 +69,7 @@ Fix: a precedence chain, resolved once, stated in full.
 2. Project's config file
 3. Module default
 
-The CLI hardcodes the module defaults (mirroring `src/module.yaml`) so it can state them when no config file exists. A test asserts the two stay equal; drift fails the gate instead of silently changing what CI reviews.
+The CLI hardcodes the module defaults (mirroring `skills/bmod-tea/bmod.toml`) so it can state them when no config file exists. A test asserts the two stay equal; drift fails the gate instead of silently changing what CI reviews.
 
 ### The rule outlives the prompt
 
@@ -129,7 +129,7 @@ From a clone of this repo, the skill isn't installed under `_bmad/`, so point `-
 `--agent none` builds the prompt, prints it, exits. No subprocess, no API cost:
 
 ```bash
-node cli/test-review.js --agent none --files test/test-test-review-cli.js --skill-root src/workflows/testarch/bmad-testarch-test-review
+node cli/test-review.js --agent none --files test/test-test-review-cli.js --skill-root skills/bmad-testarch-test-review
 ```
 
 Add a second file and `review_scope` flips from `single` to `directory`.
@@ -138,7 +138,7 @@ With a real agent, same flags, swap in `--agent claude` and export `ANTHROPIC_AP
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-node cli/test-review.js --agent claude --files test/test-test-review-cli.js --skill-root src/workflows/testarch/bmad-testarch-test-review --output test-review.md
+node cli/test-review.js --agent claude --files test/test-test-review-cli.js --skill-root skills/bmad-testarch-test-review --output test-review.md
 ```
 
 Once the package is installed in a consuming repo, the bare `tea-test-review` binary resolves the skill on its own; drop `--skill-root`.

@@ -78,7 +78,7 @@ const GATE_JOBS = Object.freeze({
       { name: 'Checkout', uses: 'actions/checkout@v5', with: { 'persist-credentials': false } },
       { name: 'Setup Node', uses: 'actions/setup-node@v6', with: { 'node-version-file': '.nvmrc', cache: 'npm' } },
       { name: 'Install dependencies', run: 'npm ci' },
-      { name: 'Report import-direction violations over cli/, tools/, test/ and src/**/*.cjs', run: 'npm run test:direction' },
+      { name: 'Report import-direction violations over cli/, tools/, test/ and skills/**/*.cjs', run: 'npm run test:direction' },
       { name: 'Hold the published tree to the package boundary', run: 'npm run test:boundary' },
       { name: 'Hold schemaVersion to its two generators', run: 'npm run test:lineage' },
       {

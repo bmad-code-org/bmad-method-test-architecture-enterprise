@@ -460,17 +460,23 @@ function main() {
     .option('--no-isolate', 'disable filesystem isolation (default: isolated when CI is set, otherwise off)')
     .option(
       '--use-playwright-utils',
-      'force tea_use_playwright_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)',
+      'force tea_use_playwright_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
     )
-    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding _bmad/tea/config.yaml')
-    .option('--use-pactjs-utils', 'force tea_use_pactjs_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)')
-    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding _bmad/tea/config.yaml')
-    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: mcp)`)
+    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option(
+      '--use-pactjs-utils',
+      'force tea_use_pactjs_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
+    )
+    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option(
+      '--pact-mcp <mode>',
+      `force tea_pact_mcp, overriding [modules.tea] in _bmad/config.toml (${PACT_MCP_VALUES.join('|')}; default: mcp)`,
+    )
     .option(
       '--execution-mode <mode>',
-      `force tea_execution_mode, overriding _bmad/tea/config.yaml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
+      `force tea_execution_mode, overriding [modules.tea] in _bmad/config.toml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
     )
-    .option('--capability-probe', 'force tea_capability_probe on, overriding _bmad/tea/config.yaml (default: true)')
+    .option('--capability-probe', 'force tea_capability_probe on, overriding [modules.tea] in _bmad/config.toml (default: true)')
     .option('--no-capability-probe', 'force tea_capability_probe off, so the requested execution mode is honored strictly');
 
   program.exitOverride();
@@ -619,7 +625,7 @@ function main() {
   }
 
   // Every config key step-01 branches on is resolved here (flag, then the
-  // project's config.yaml, then the module default) and stated in the prompt.
+  // project's [modules.tea] config, then the module default) and stated in the prompt.
   // An unstated key is one the agent decides per run.
   let teaConfig;
   let installedPackages;

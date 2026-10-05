@@ -181,6 +181,7 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const { contractVersionsFor } = require('./lib/contract-versions');
 const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
@@ -216,7 +217,7 @@ const {
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'trace-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-trace');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-trace');
 const SUITE_ID = 'trace';
 
 // A complete trace run reads five step files, the whole fixture set, and writes two
@@ -1361,19 +1362,22 @@ async function digestTree(root, relativePaths) {
 }
 
 /** The resolved TEA config the staged run reads its placeholders from. */
-function configYaml() {
-  return [
-    '# Written by test/eval-trace.js for one staged fixture set.',
-    '# test_artifacts points at this workspace only, so the seeded set reads its own',
-    '# live verification file and waiver register and the clean set reads neither.',
-    'user_name: tea-eval-harness',
-    'project_name: tidewater-support-desk',
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    '',
-  ].join('\n');
+function configToml() {
+  return teaConfigToml({
+    header: [
+      '# Written by test/eval-trace.js for one staged fixture set.',
+      '# test_artifacts points at this workspace only, so the seeded set reads its own',
+      '# live verification file and waiver register and the clean set reads neither.',
+    ],
+    core: [
+      ['user_name', 'tea-eval-harness'],
+      ['project_name', 'tidewater-support-desk'],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [['test_artifacts', 'test-artifacts']],
+  });
 }
 
 /**
@@ -1381,8 +1385,9 @@ function configYaml() {
  *
  * Layout, with the workspace itself as the agent's working directory:
  *
- *   <projectRoot>/   the fixture set, plus a resolved _bmad/tea/config.yaml
+ *   <projectRoot>/   the fixture set, plus a resolved _bmad/config.toml
  *   skill/           the bmad-testarch-trace workflow, copied verbatim
+ *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * The project root is the set's own, so the prompt that names it says which set the
  * run traces. See projectRootOf for what that buys and why the names carry no role.
@@ -1422,14 +1427,15 @@ async function stageInto(dir, set) {
   // The workflow writes its two artifacts here. The seeded set brought its own inputs
   // with it; the clean set gets the directory empty, which is what it must have.
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml());
+  fs.mkdirSync(path.join(projectDir, '_bmad'), { recursive: true });
+  await writeText(path.join(projectDir, TEA_CONFIG_RELATIVE_PATH), configToml());
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   // The corpus files the run must leave alone. test-artifacts and _bmad are excluded
   // because the run legitimately writes into the first and the harness wrote the second.
@@ -1539,11 +1545,12 @@ function buildPrompt(set, { allowGate = true } = {}) {
     'Resolve the workflow placeholders to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     `- \`{test_dir}\`: \`${root}/tests\``,
     `- \`{source_dir}\`: \`${root}/src\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     '- `gate_type`: `epic`',
     '- `decision_mode`: `deterministic`',
     '- `collection_mode`: `contract_static`',

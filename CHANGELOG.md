@@ -379,6 +379,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TEA is a bmod: `bmad setup tea` sets it up, replacing the classic installer.
+  `skills/bmod-tea/` holds the module's `bmod.toml` with nine setup questions, `roster.toml` with Murat, and `help/` for the `bmad` help agent; each skill has a member `bmod.toml`.
+  Every skill reads its settings as `modules.tea.<key>` through `resolve_config.py` instead of `_bmad/tea/config.yaml`, and tells the user to run `bmad setup tea` when TEA is not set up.
+  Answers in an existing `_bmad/tea/config.yaml` are not carried over, so `bmad setup tea` asks again.
+  Two settings that only one skill reads moved to that skill's `customize.toml`: `evaluations_folder` (was `tea_evaluations_folder`) in `bmad-testarch-evaluate`, and `ci_platform` in `bmad-testarch-ci`.
+  The installer's post-install notes are in `help/integrations.md`.
+- The skills moved from `src/agents/` and `src/workflows/testarch/` to root `skills/`, and `bmod-tea` is `skills/bmod-tea/`.
+- The knowledge base is one copy in `skills/bmod-tea/knowledge/` instead of nine copies in each skill's `resources/`.
+  `tea-index.csv` paths are relative to that folder.
+  A skill that uses the knowledge base checks that `bmod-tea` is installed beside it and offers to install it when it is not.
+
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).
@@ -540,6 +551,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `src/module.yaml` and `src/module-help.csv`.
+- The `risk_threshold` setup question, which no workflow read.
 - The registry field `network` and its `"host"` value are removed (Story 1.83, AD-8).
   `"network": "host"` gave a confined Linux target the host's whole network and with it a route to the host's abstract Unix sockets, so the targets that run an agent kept the gap Story 1.63 closed for every other entry.
   `check` now refuses an entry that declares `network`, naming the entry and pointing at `egress`, and `run.json`'s `hostNetwork` is replaced by `egress`.

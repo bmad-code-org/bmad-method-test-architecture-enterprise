@@ -1,8 +1,8 @@
 /**
  * Validate TEA workflow description quote style for Gemini compatibility.
  *
- * Rules for TEA workflow definitions under src/workflows/testarch/<workflow>/workflow.yaml
- * and teach-me-testing frontmatter in src/workflows/testarch/bmad-teach-me-testing/SKILL.md:
+ * Rules for TEA workflow definitions under skills/<workflow>/workflow.yaml
+ * and teach-me-testing frontmatter in skills/bmad-teach-me-testing/SKILL.md:
  * - `description:` must be a single-line YAML scalar on one line
  * - the raw YAML scalar must be wrapped in single quotes
  * - parsed description text must not contain single-quote characters
@@ -85,7 +85,11 @@ function validateFile(filePath, projectRoot) {
  * @returns {Promise<string[]>}
  */
 async function collectFiles(projectRoot) {
-  const workflowDirs = await glob('src/workflows/testarch/*/', { cwd: projectRoot, absolute: true });
+  // The bmad-tea agent and the bmod-* module records are not workflows.
+  const workflowDirs = (await glob('skills/*/', { cwd: projectRoot, absolute: true })).filter((dir) => {
+    const name = path.basename(dir);
+    return name !== 'bmad-tea' && !name.startsWith('bmod-');
+  });
   const files = [];
   for (const dir of workflowDirs) {
     const workflowYamlPath = path.join(dir, 'workflow.yaml');
@@ -99,7 +103,7 @@ async function main(customProjectRoot) {
   const files = await collectFiles(projectRoot);
 
   if (files.length === 0) {
-    console.error('No TEA workflow definitions found under src/workflows/testarch/');
+    console.error('No TEA workflow definitions found under skills/');
     process.exit(1);
   }
 

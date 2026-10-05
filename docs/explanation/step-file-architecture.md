@@ -25,10 +25,11 @@ Layout in the repository, per workflow skill:
 
 ```text
 bmad-testarch-automate/
-├── workflow.yaml        # Metadata, config source, variables, output paths
-├── instructions.md      # Entry point
+├── SKILL.md             # Entry point: loads config and customization, picks the mode
+├── workflow.yaml        # Metadata, variables, output paths
+├── instructions.md      # Workflow summary and operator notes
 ├── checklist.md         # Validation checklist
-├── resources/           # tea-index.csv + knowledge/ fragments
+├── resources/           # example outputs
 ├── steps-c/             # Create mode, one file per step
 ├── steps-e/             # Edit mode
 └── steps-v/             # Validate mode
@@ -94,7 +95,7 @@ A worker step is the same shape with two differences: its exit condition ends th
 
 ### Loading knowledge fragments from a step
 
-Step frontmatter declares `knowledgeIndex: './resources/tea-index.csv'`, resolved from the skill root, and the step body names the fragments it wants:
+Step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`. `{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside the workflow, and the step body names the fragments it wants:
 
 ```markdown
 Use `{knowledgeIndex}` to load:
@@ -146,11 +147,11 @@ With `tea_capability_probe: true` (the default), TEA falls back safely: `auto` t
 
 In `agent-team` and `subagent` modes, the runtime decides concurrency and timing. TEA imposes no parallel worker limit of its own.
 
-Recommended configuration:
+Recommended configuration, under `[modules.tea]` in `_bmad/config.toml`:
 
-```yaml
-tea_execution_mode: 'auto'
-tea_capability_probe: true
+```toml
+tea_execution_mode = "auto"
+tea_capability_probe = "true"
 ```
 
 Choose `sequential` when you need strict single-threaded execution or debugging clarity. Choose `agent-team` or `subagent` explicitly only when you want that mode specifically and know your runtime supports it.

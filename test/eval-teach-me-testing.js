@@ -130,6 +130,7 @@ const { failureClassForExit } = require('../cli/transcript-runner');
 const { runTranscript } = require('./lib/transcript-harness');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const {
   digestFiles,
   repositoryState,
@@ -151,7 +152,7 @@ const { readJson, readText, writeText } = require('./lib/file-system-port');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'teach-me-testing-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-teach-me-testing');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-teach-me-testing');
 const SUITE_ID = 'teach-me-testing';
 const CASE_ID = 'session-01-first-run-then-fresh-continuation';
 
@@ -509,19 +510,22 @@ function filesUnder(root) {
  * from (SKILL.md's "On Activation" Step 4): user_name, project_name,
  * communication_language, test_artifacts.
  */
-function configYaml(groundTruth) {
-  return [
-    '# Written by test/eval-teach-me-testing.js for one staged, persistent workspace.',
-    '# test_artifacts points inside this workspace only, so the progress file and session notes the run',
-    '# writes land here and nowhere else, across both turns of this session.',
-    `user_name: ${groundTruth.userName}`,
-    'project_name: teach-me-testing-eval',
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    '',
-  ].join('\n');
+function configToml(groundTruth) {
+  return teaConfigToml({
+    header: [
+      '# Written by test/eval-teach-me-testing.js for one staged, persistent workspace.',
+      '# test_artifacts points inside this workspace only, so the progress file and session notes the run',
+      '# writes land here and nowhere else, across both turns of this session.',
+    ],
+    core: [
+      ['user_name', groundTruth.userName],
+      ['project_name', 'teach-me-testing-eval'],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [['test_artifacts', 'test-artifacts']],
+  });
 }
 
 /**
@@ -529,7 +533,8 @@ function configYaml(groundTruth) {
  * workspace itself as the agent's working directory:
  *
  *   skill/                    the bmad-teach-me-testing workflow, copied verbatim
- *   _bmad/tea/config.yaml     the resolved config
+ *   bmod-tea/                 the shared TEA knowledge base the skill reads as {tea-knowledge}
+ *   _bmad/config.toml         the resolved config
  *   test-artifacts/           empty; the run writes its progress file and session notes here
  *
  * There is no separate "project root" the way `test/eval-nfr.js` stages one
@@ -547,10 +552,11 @@ async function stageWorkspace(groundTruth) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   fs.mkdirSync(path.join(dir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(dir, '_bmad', 'tea'), { recursive: true });
-  await writeText(path.join(dir, '_bmad', 'tea', 'config.yaml'), configYaml(groundTruth));
+  fs.mkdirSync(path.join(dir, '_bmad'), { recursive: true });
+  await writeText(path.join(dir, TEA_CONFIG_RELATIVE_PATH), configToml(groundTruth));
 
   return dir;
 }
@@ -587,9 +593,10 @@ function turn1Prompt(groundTruth) {
     '',
     '- `{project-root}`: `.`',
     '- `{skill-root}`: `skill`',
-    '- `_bmad/tea/config.yaml` in the current working directory carries `user_name`, `project_name`,',
-    '  `communication_language`, and `test_artifacts`; load it and resolve every config-derived placeholder',
-    '  from it.',
+    TEA_KNOWLEDGE_PROMPT_LINE,
+    '- `_bmad/config.toml` in the current working directory carries `user_name`, `project_name` and',
+    '  `communication_language` under `[core]`, and `test_artifacts` under `[modules.tea]`; load it and resolve',
+    '  every config-derived placeholder from it.',
     '',
     'If Step 1 of `skill/SKILL.md`\'s "On Activation" sequence names a script or a file that is not present',
     '(there is no `_bmad/scripts/` or `_bmad/custom/` here), that is the documented "script fails" / "any',
@@ -663,8 +670,9 @@ function turn2Prompt(groundTruth) {
     '',
     '- `{project-root}`: `.`',
     '- `{skill-root}`: `skill`',
-    '- `_bmad/tea/config.yaml` in the current working directory carries `user_name`, `project_name`,',
-    '  `communication_language`, and `test_artifacts`.',
+    TEA_KNOWLEDGE_PROMPT_LINE,
+    '- `_bmad/config.toml` in the current working directory carries `user_name`, `project_name` and',
+    '  `communication_language` under `[core]`, and `test_artifacts` under `[modules.tea]`.',
     '',
     'Enter mode "create". Do not assume anything about prior progress -- discover it, or its absence, the',
     "way the workflow's own `skill/steps-c/step-01-init.md` instructs: by checking whether this working",
@@ -1249,7 +1257,7 @@ module.exports = {
   loadGroundTruth,
   validateCorpus,
   stageWorkspace,
-  configYaml,
+  configToml,
   makeBuildTurnPrompt,
   turn1Prompt,
   turn2Prompt,

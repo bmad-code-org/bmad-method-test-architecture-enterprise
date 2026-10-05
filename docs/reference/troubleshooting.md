@@ -7,60 +7,64 @@ description: Diagnose and resolve common issues when using TEA
 
 ## Installation Issues
 
-### TEA Module Not Found After Installation
+TEA installs as skills. `npx skills add` copies each one into your host's skills folder, such as `.claude/skills/` or `.agents/skills/`. The commands below use `.claude/skills/`; substitute your host's folder.
 
-**Symptom**: after `npx bmad-method install`, the TEA agent is not available.
+### TEA Skills Not Found After Installation
 
-**Cause**: TEA was not selected at the module prompt, or the install failed silently and `_bmad/tea/` was never created.
+**Symptom**: after `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, the TEA agent or workflows are not available.
+
+**Cause**: the install did not finish, it went to a different scope (project or global) than the one your host reads, or the host was started before the skills existed.
 
 ```bash
-ls -la _bmad/tea/                 # should show agents/, workflows/, config.yaml
-npx bmad-method install           # select "Test Architect (TEA)" at the module prompt
-npx bmad-method install --debug   # if it fails again, this surfaces the installer error
+ls .claude/skills/ | grep -E 'bmad-tea|bmad-testarch|bmad-teach|bmod-tea'
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise   # re-run to add what is missing
 ```
 
-### Module Installation Hangs
+Expect `bmad-tea`, `bmad-teach-me-testing`, nine `bmad-testarch-*` workflows, and `bmod-tea`. Restart the host or start a fresh chat after installing.
 
-**Symptom**: the installer hangs or times out.
+### Install Hangs or Cannot Reach GitHub
 
-**Cause**: network connectivity, an npm registry timeout, or no disk space.
+**Symptom**: `npx skills add` hangs, times out, or cannot fetch the repository.
+
+**Cause**: network connectivity, an npm registry timeout, or a firewall that blocks GitHub.
 
 ```bash
 ping registry.npmjs.org
-df -h                                              # installs need room for the module tree
-npm cache clean --force && npx bmad-method install # retry on a clean cache
-npm config set registry https://registry.npmjs.org/ # if a proxy rewrote the registry
+npm cache clean --force                              # retry on a clean cache
+npm config set registry https://registry.npmjs.org/  # if a proxy rewrote the registry
 ```
 
-### Installer Cannot Reach GitHub
+If GitHub itself is blocked, see [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
 
-The installer starts but cannot fetch the Test Architect module. See [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
+### TEA Says It Is Not Set Up
+
+**Symptom**: a TEA skill stops and asks you to run `bmad setup tea`.
+
+**Cause**: `_bmad/config.toml` is missing or has no `[modules.tea]` table. Installing the skills does not answer the setup questions.
+
+**Fix**: run `bmad setup tea` in the assistant chat. It needs the `bmad` skill from BMad Method core; if that is missing, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad`.
+
+### TEA Offers to Install the Knowledge Base
+
+**Symptom**: a TEA skill says the knowledge base is not installed and offers to install `bmod-tea`.
+
+**Cause**: the `bmod-tea` skill is missing from the folder the TEA skills sit in. Skills find the knowledge base at `../bmod-tea/knowledge` from their own folder, so `bmod-tea` must be installed beside them, in the same scope.
+
+**Fix**: accept the offer, or run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea` yourself.
 
 ## Agent Loading Issues
-
-### "Agent Not Found" Error
-
-**Symptom**: `Error: Agent '_bmad/tea' not found` or `Agent 'tea' could not be loaded`.
-
-**Cause**: TEA is not installed, or the install is incomplete.
-
-```bash
-ls -la _bmad/tea/agents/bmad-tea/SKILL.md   # the agent entrypoint
-```
-
-If the file is missing or the tree looks partial, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
 
 ### TEA Loads But Commands Don't Work
 
 **Symptom**: the TEA agent loads, but workflow codes (TF, TD, AT, and the rest) do not execute.
 
-**Cause**: workflow directories are missing from the install.
+**Cause**: workflow skills are missing from the install.
 
 ```bash
-ls _bmad/tea/workflows/testarch/   # all nine must be present
-# bmad-teach-me-testing   bmad-testarch-framework   bmad-testarch-test-design
-# bmad-testarch-atdd      bmad-testarch-nfr         bmad-testarch-test-review
-# bmad-testarch-automate  bmad-testarch-ci          bmad-testarch-trace
+ls .claude/skills/ | grep bmad-testarch   # all nine must be present
+# bmad-testarch-atdd       bmad-testarch-evaluate    bmad-testarch-nfr
+# bmad-testarch-automate   bmad-testarch-framework   bmad-testarch-test-design
+# bmad-testarch-ci         bmad-testarch-test-review bmad-testarch-trace
 ```
 
 Then invoke the workflow by its skill name instead of the two-letter code:
@@ -70,7 +74,7 @@ Then invoke the workflow by its skill name instead of the two-letter code:
 $bmad-testarch-test-design    # Codex
 ```
 
-If a directory is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
+If a skill is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
 
 ### Custom TEA Workflow Does Not Appear
 
@@ -78,7 +82,7 @@ If a directory is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-st
 
 **Cause**: TEA is a standalone module. Custom workflows are not merged into TEA core automatically.
 
-**Fix**: package the workflow as custom content or a custom module, attach it to `bmad-tea` through the generated customization file under `_bmad/_config/agents/`, then re-run `npx bmad-method install` so the customization and workflow registration are refreshed. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
+**Fix**: install the workflow as its own skill, add it to the `bmad-tea` menu with an `[[agent.menu]]` entry in `_bmad/custom/bmad-tea.toml`, then start a fresh chat. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Workflow Execution Issues
 
@@ -97,7 +101,7 @@ If a directory is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-st
 **Cause**: the output directory is missing or not writable, `test_artifacts` is misconfigured, or the run stopped before its output step.
 
 ```bash
-grep test_artifacts _bmad/tea/config.yaml   # default: _bmad-output/test-artifacts
+grep test_artifacts _bmad/config.toml   # default: {project-root}/_bmad-output/test-artifacts
 mkdir -p _bmad-output/test-artifacts
 chmod -R u+w _bmad-output/test-artifacts
 ```
@@ -112,7 +116,7 @@ If the directory is correct and writable, read the agent's final message for a c
 
 ```bash
 # 1. The subagent step files must exist
-ls _bmad/tea/workflows/testarch/bmad-testarch-automate/steps-c/step-03*.md
+ls .claude/skills/bmad-testarch-automate/steps-c/step-03*.md
 # step-03-generate-tests.md plus step-03a-*, step-03b-*, step-03c-aggregate.md
 
 # 2. Workers hand off through one JSON file per suite in /tmp
@@ -120,75 +124,75 @@ ls /tmp | grep '^tea-'
 # e.g. tea-automate-api-tests-1763049600.json, tea-automate-e2e-tests-1763049600.json
 
 # 3. Check which orchestration mode was selected
-grep -E "tea_execution_mode|tea_capability_probe" _bmad/tea/config.yaml
+grep -E "tea_execution_mode|tea_capability_probe" _bmad/config.toml _bmad/custom/config*.toml
 ```
 
-If the runtime cannot launch parallel workers, force the deterministic path in `_bmad/tea/config.yaml`:
+If the runtime cannot launch parallel workers, force the deterministic path under `[modules.tea]`, with `bmad setup tea` or by editing `_bmad/config.toml`:
 
-```yaml
-tea_execution_mode: 'sequential'
-tea_capability_probe: true
+```toml
+[modules.tea]
+tea_execution_mode = "sequential"
+tea_capability_probe = "true"
 ```
 
 ### Knowledge Fragments Not Loading
 
 **Symptom**: the workflow runs but never references knowledge base patterns such as `test-quality` or `network-first`.
 
-**Cause**: `tea-index.csv` is missing or truncated, or fragment files are missing.
+**Cause**: the `bmod-tea` skill is missing or not beside the other TEA skills, or `tea-index.csv` or fragment files are missing.
 
 ```bash
-wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 60 (header + 59 fragments)
-ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 59
-head -1 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
+wc -l < .claude/skills/bmod-tea/knowledge/tea-index.csv      # 60 (header + 59 fragments)
+ls .claude/skills/bmod-tea/knowledge/*.md | wc -l             # 59
+head -1 .claude/skills/bmod-tea/knowledge/tea-index.csv
 # id,name,description,tags,tier,fragment_file
 
 # Workflows load knowledge through a `knowledgeIndex` key in step-file frontmatter,
 # so workflow.yaml never mentions fragments
-grep -r knowledgeIndex _bmad/tea/workflows/testarch/bmad-testarch-test-design/steps-c/
-# knowledgeIndex: './resources/tea-index.csv'
+grep -r knowledgeIndex .claude/skills/bmad-testarch-test-design/steps-c/
+# knowledgeIndex: '{tea-knowledge}/tea-index.csv'
 ```
+
+`{tea-knowledge}` is `../bmod-tea/knowledge` from the workflow's own folder.
 
 ## Configuration Issues
 
-### Variables Not Prompting During Installation
+### Setup Questions Were Never Asked
 
-**Symptom**: installation completes without asking for TEA configuration (`test_artifacts`, Playwright Utils, and the rest).
+**Symptom**: TEA runs with defaults you did not choose, or you want to change an answer.
 
-**Cause**: the installer ran with `-y`/`--yes`, which accepts defaults and skips prompts.
+**Cause**: installing the skills does not ask the setup questions. `bmad setup tea` does.
 
-```bash
-npx bmad-method install                    # prompting is the default; omit --yes
-npx bmad-method install --list-options tea # every key and its allowed values
-npx bmad-method install --set tea.test_artifacts=_bmad-output/test-artifacts
-vi _bmad/tea/config.yaml                   # or edit the installed values directly
-```
+**Fix**: run `bmad setup tea` in the assistant chat. On an existing setup it shows each answer with its value and file, and changes the ones you name.
 
 ### Config Values Ignored
 
-**Symptom**: TEA uses defaults instead of the values in `config.yaml`, or keeps using old values after you edited the file.
+**Symptom**: TEA uses defaults instead of the values you set, or keeps using old values after you edited the config.
 
-**Cause**: the file is in the wrong place, the YAML does not parse, a key is misspelled, or the chat started before the edit. TEA reads config once at workflow start and does not reload mid-chat.
+**Cause**: the value is in the wrong file or table, the TOML does not parse, a key is misspelled, a later layer overrides it, or the chat started before the edit. TEA reads config once at activation and does not reload mid-chat.
 
 ```bash
-ls -la _bmad/tea/config.yaml              # must be at the project root, under _bmad/tea/
-npx --yes js-yaml _bmad/tea/config.yaml   # prints the parsed object, or the syntax error
+ls -la _bmad/config.toml _bmad/custom/config.toml _bmad/custom/config.user.toml
+uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea   # the merged values a skill sees
 ```
 
-If it parses and the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the workflow.
+TEA keys belong under `[modules.tea]`. `_bmad/custom/config.user.toml` wins over `_bmad/custom/config.toml`, which wins over `_bmad/config.toml`. `evaluations_folder` and `ci_platform` are not module keys; they go in `_bmad/custom/bmad-testarch-evaluate.toml` and `_bmad/custom/bmad-testarch-ci.toml` under `[workflow]`. A `_bmad/tea/config.yaml` from an earlier install is not read by any skill.
+
+If the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the workflow.
 
 ### Playwright Utils Integration Not Working
 
 **Symptom**: workflows produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
 
 ```bash
-grep tea_use_playwright_utils _bmad/tea/config.yaml   # should show: true
-grep -ic playwright-utils _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 21
+grep tea_use_playwright_utils _bmad/config.toml       # should show: "true"
+grep -ic playwright-utils .claude/skills/bmod-tea/knowledge/tea-index.csv   # 21
 npm ls @seontechnologies/playwright-utils              # the package must actually be installed
 ```
 
 Confirm the workflow integrates Playwright Utils at all. Framework (TF), Test Design (TD), ATDD (AT), Automate (TA), Test Review (RV), and CI all do. Trace and NFR Evidence Audit do not.
 
-The same three checks apply to Pact.js Utils, which is also on by default: `grep tea_use_pactjs_utils _bmad/tea/config.yaml`, `npm ls @seontechnologies/pactjs-utils`, and `ls _bmad/tea/agents/bmad-tea/resources/knowledge/pactjs-utils-mandate.md`.
+The same three checks apply to Pact.js Utils, which is also on by default: `grep tea_use_pactjs_utils _bmad/config.toml`, `npm ls @seontechnologies/pactjs-utils`, and `ls .claude/skills/bmod-tea/knowledge/pactjs-utils-mandate.md`.
 
 **If a flag is `true` and its package is missing**, that is the usual cause, and it applies to both integrations independently: `tea_use_playwright_utils` needs `@seontechnologies/playwright-utils`, `tea_use_pactjs_utils` needs `@seontechnologies/pactjs-utils`. Either one can be active while the other is not. Generation will not scaffold imports against a package the project does not have, and Test Review closes the `M9` gate rather than deducting. Run the Framework (TF) workflow, or install it directly:
 
@@ -199,8 +203,8 @@ npm install -D @seontechnologies/playwright-utils
 **If the package is installed and output is still vanilla**, the mandate fragment did not load. Check that `playwright-utils-mandate.md` is present next to the other fragments and indexed in `tea-index.csv`:
 
 ```bash
-ls _bmad/tea/agents/bmad-tea/resources/knowledge/playwright-utils-mandate.md
-grep playwright-utils-mandate _bmad/tea/agents/bmad-tea/resources/tea-index.csv
+ls .claude/skills/bmod-tea/knowledge/playwright-utils-mandate.md
+grep playwright-utils-mandate .claude/skills/bmod-tea/knowledge/tea-index.csv
 ```
 
 Then start a fresh chat: fragment selection happens at step 01, so a run that already loaded the vanilla profile keeps it for the rest of the run.
@@ -214,8 +218,8 @@ Then start a fresh chat: fragment selection happens at step 01, so a run that al
 **Cause**: `test_artifacts` resolves against the project root, so a misconfigured value or a shell sitting in a subdirectory moves the target.
 
 ```bash
-grep test_artifacts _bmad/tea/config.yaml   # default: _bmad-output/test-artifacts
-                                            # edit config.yaml to change it
+grep test_artifacts _bmad/config.toml   # default: {project-root}/_bmad-output/test-artifacts
+                                        # change it with bmad setup tea
 pwd                                         # must be the project root
 ```
 
@@ -267,10 +271,10 @@ import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 **Cause**: `tea_pact_mcp` defaults to `"mcp"`, so TEA probes for the SmartBear MCP tools on any contract-testing step. Without a broker, that probe fails and the workflow degrades on purpose.
 
-**This is not an error.** The run completed; it just used a lower-authority source for provider states. To silence the probe entirely:
+**This is not an error.** The run completed; it just used a lower-authority source for provider states. To silence the probe entirely, set this under `[modules.tea]`:
 
-```yaml
-tea_pact_mcp: 'none'
+```toml
+tea_pact_mcp = "none"
 ```
 
 To make the probe succeed instead, configure the server and its credentials:
@@ -299,7 +303,7 @@ TEA never blocks on the broker and never presents inferred provider states as br
 playwright-cli --version                          # cli mode; install: npm i -g @playwright/cli@latest
 npx playwright install                            # both modes need the browser binaries
 npx @playwright/mcp@latest --version              # mcp mode; confirms the server is reachable
-grep tea_browser_automation _bmad/tea/config.yaml # confirm the mode you think you set
+grep tea_browser_automation _bmad/config.toml     # confirm the mode you think you set
 ```
 
 For MCP mode, add the server to your tool's MCP config, then restart the IDE:
@@ -334,25 +338,24 @@ The first workflow run in a session loads knowledge fragments from disk and is s
 
 ### Reset TEA to a Fresh State
 
-This clears a partial or corrupted install and is the fallback for every "missing file" symptom above.
+This clears a partial or corrupted install and is the fallback for every "missing file" symptom above. Your setup answers live in `_bmad/config.toml` and are not touched.
 
 ```bash
-cp _bmad/tea/config.yaml /tmp/tea-config-backup.yaml   # back up your answers first
-rm -rf _bmad/tea/
-npx bmad-method install                                # select "Test Architect (TEA)"
-cp /tmp/tea-config-backup.yaml _bmad/tea/config.yaml   # only if the prompts lost a value
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise   # re-adds every TEA skill and bmod-tea
 ```
+
+Then run `bmad setup tea` in the assistant chat. It checks the install, reports anything missing or duplicated, and offers to repair it.
 
 ### Collecting Diagnostic Information
 
 Include all of this when reporting an issue, plus the full error message and the exact commands that trigger it:
 
 ```bash
-npx bmad-method status                                # BMAD and module versions
-grep -A6 'test-architecture' _bmad/_config/manifest.yaml   # TEA channel and sha
+grep -A3 '^\[bmod\]' .claude/skills/bmod-tea/bmod.toml   # TEA version
+sed -n '/^\[modules.tea\]/,/^\[/p' _bmad/config.toml    # your TEA answers
+ls .claude/skills/                                        # installed skills
 node --version
 uname -a
-tree -L 2 _bmad/tea/
 ```
 
 ### Support Channels

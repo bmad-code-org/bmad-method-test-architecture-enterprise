@@ -1,6 +1,6 @@
 # Corpus: bmad-testarch-evaluate
 
-The target is TeA's Evaluate skill, run by the generic skill runner over `src/workflows/testarch/bmad-testarch-evaluate/` with the read-only capability. Each request asks one stage one question and holds the reply to one JSON object through claude's `--json-schema` flag, passed by the runner's `--agent-arg`. The answer fields are what the oracles read; the free-text `basis` field is declared volatile. The `status` field is the skill's claim to have answered or refused, and every oracle reads it beside the answer fields.
+The target is TeA's Evaluate skill, run by the generic skill runner over `skills/bmad-testarch-evaluate/` with the read-only capability. Each request asks one stage one question and holds the reply to one JSON object through claude's `--json-schema` flag, passed by the runner's `--agent-arg`. The answer fields are what the oracles read; the free-text `basis` field is declared volatile. The `status` field is the skill's claim to have answered or refused, and every oracle reads it beside the answer fields.
 
 ## Probes
 

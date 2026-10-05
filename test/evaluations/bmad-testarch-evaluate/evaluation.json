@@ -3,7 +3,7 @@
   "evaluationId": "bmad-testarch-evaluate",
   "requirements": {
     "path": "requirements.md",
-    "digest": "sha256:79298cd4fee0627785ac1e20dbac5870d5396b4d579c33a092692018e5839e62"
+    "digest": "sha256:53fee5dd7b9c60ad7157d73378c6be370d11f58fb9907a31e1b541b1ebc5f9d1"
   },
   "targetKind": "skill",
   "interface": "cli",
@@ -47,7 +47,7 @@
   ],
   "launch": {
     "root": "../../..",
-    "skillRoot": "src/workflows/testarch/bmad-testarch-evaluate"
+    "skillRoot": "skills/bmad-testarch-evaluate"
   },
   "workspace": {
     "kind": "git",

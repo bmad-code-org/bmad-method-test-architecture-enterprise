@@ -42,7 +42,7 @@
  *                                 the whole verdict.
  *
  *   test/eval-trace.js            Nothing scripted, only logged. Staging a
- *                                 workspace writes `_bmad/tea/config.yaml`, and
+ *                                 workspace writes `_bmad/config.toml`, and
  *                                 that write must appear in the log.
  *
  *   test/eval-test-review.js      The review corpus's own ground truth is
@@ -278,16 +278,8 @@ const STORED_NFR_REPORT = path.join(
 // eval-quality's own published schema, read once per kind and cached: scoring
 // any probe at all validates an isolation manifest against it.
 const ISOLATION_MANIFEST_SCHEMA = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'schemas', 'isolation-manifest.schema.json');
-const SELECTION_CONTEXT = path.join(
-  PROJECT_ROOT,
-  'src',
-  'workflows',
-  'testarch',
-  'bmad-testarch-atdd',
-  'steps-c',
-  'step-01-preflight-and-context.md',
-);
-const TEA_MENU = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea', 'customize.toml');
+const SELECTION_CONTEXT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'steps-c', 'step-01-preflight-and-context.md');
+const TEA_MENU = path.join(PROJECT_ROOT, 'skills', 'bmad-tea', 'customize.toml');
 
 /**
  * The bytes every scripted case hands back.
@@ -417,7 +409,7 @@ async function traceHarnessCases() {
     assert(staged.status === 0, 'the harness validates its real corpus under the scripted filesystem', `exit ${staged.status}`);
     const writes = staged.calls.filter((line) => line.startsWith('write '));
     assert(
-      writes.some((line) => line.endsWith(path.join('_bmad', 'tea', 'config.yaml'))),
+      writes.some((line) => line.endsWith(path.join('_bmad', 'config.toml'))),
       "the staged workspace's config write is logged as a port call",
       `${writes.length} write(s) logged: ${writes.slice(0, 3).join(', ')}`,
     );

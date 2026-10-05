@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-evaluate",
-  "sourceSpecDigest": "sha256:79298cd4fee0627785ac1e20dbac5870d5396b4d579c33a092692018e5839e62",
+  "sourceSpecDigest": "sha256:53fee5dd7b9c60ad7157d73378c6be370d11f58fb9907a31e1b541b1ebc5f9d1",
   "behaviors": [
     {
       "id": "B-001",
@@ -456,7 +456,7 @@
                     "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
                     "capability": "read-only",
                     "model": "claude-sonnet-5",
-                    "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+                    "skill-root": "skills/bmad-testarch-evaluate",
                     "timeout-ms": "300000"
                   },
                   "environment": {},
@@ -475,7 +475,7 @@
                     "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
                     "capability": "read-only",
                     "model": "claude-sonnet-5",
-                    "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+                    "skill-root": "skills/bmad-testarch-evaluate",
                     "timeout-ms": "300000"
                   },
                   "environment": {},
@@ -599,7 +599,7 @@
             "literal": "claude-sonnet-5"
           },
           "skill-root": {
-            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+            "literal": "skills/bmad-testarch-evaluate"
           },
           "timeout-ms": {
             "literal": "300000"
@@ -635,7 +635,7 @@
             "literal": "claude-sonnet-5"
           },
           "skill-root": {
-            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+            "literal": "skills/bmad-testarch-evaluate"
           },
           "timeout-ms": {
             "literal": "300000"
@@ -671,7 +671,7 @@
             "literal": "claude-sonnet-5"
           },
           "skill-root": {
-            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+            "literal": "skills/bmad-testarch-evaluate"
           },
           "timeout-ms": {
             "literal": "300000"
@@ -707,7 +707,7 @@
             "literal": "claude-sonnet-5"
           },
           "skill-root": {
-            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+            "literal": "skills/bmad-testarch-evaluate"
           },
           "timeout-ms": {
             "literal": "300000"

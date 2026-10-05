@@ -56,13 +56,14 @@ npm install -D @seontechnologies/playwright-utils
 
 ### Step 2: Enable in TEA Config
 
-Edit `_bmad/tea/config.yaml`:
+Set it under `[modules.tea]` in `_bmad/config.toml`, by running `bmad setup tea` or by editing the file:
 
-```yaml
-tea_use_playwright_utils: true
+```toml
+[modules.tea]
+tea_use_playwright_utils = "true"
 ```
 
-**Note:** If you enabled this during BMad installation, it's already set.
+**Note:** `"true"` is the setup default, so if you accepted it during `bmad setup tea`, it's already set.
 
 ### Step 3: Verify Installation
 
@@ -71,14 +72,14 @@ tea_use_playwright_utils: true
 npm list @seontechnologies/playwright-utils
 
 # Check TEA config
-grep tea_use_playwright_utils _bmad/tea/config.yaml
+grep tea_use_playwright_utils _bmad/config.toml
 ```
 
 Should show (4.4.0 is the current release; yours may be newer):
 
 ```text
 └── @seontechnologies/playwright-utils@4.4.0
-tea_use_playwright_utils: true
+tea_use_playwright_utils = "true"
 ```
 
 ## What Changes When Enabled
@@ -816,9 +817,9 @@ npm install -D @seontechnologies/playwright-utils
 
 ```bash
 # Check config
-grep tea_use_playwright_utils _bmad/tea/config.yaml
+grep tea_use_playwright_utils _bmad/config.toml
 
-# Should show: tea_use_playwright_utils: true
+# Should show: tea_use_playwright_utils = "true"
 
 # Start fresh chat (TEA loads config at start)
 ```

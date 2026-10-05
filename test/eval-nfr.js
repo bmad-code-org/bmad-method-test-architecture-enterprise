@@ -178,6 +178,7 @@ const { failureClassForExit } = require('../cli/nfr-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const {
   digest,
   digestFiles,
@@ -211,7 +212,7 @@ const { readBytes, readJson, readText, writeText } = require('./lib/file-system-
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'nfr-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-nfr');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-nfr');
 const SUITE_ID = 'nfr';
 
 // A complete NFR run reads six step files, the whole evidence bundle, and writes
@@ -1030,26 +1031,31 @@ function nfrArtifactPaths(set) {
 }
 
 /** The resolved TEA config the staged run reads its placeholders from. */
-function configYaml(set) {
-  return [
-    '# Written by test/eval-nfr.js for one staged evidence bundle.',
-    '# test_artifacts points inside this workspace only, so the report the run writes',
-    '# lands beside the bundle it audited and nowhere else.',
-    'user_name: tea-eval-harness',
-    `project_name: ${set.projectRoot}`,
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    '# The browser-evidence branch in step-03 is off: this audit reads the bundle it was given and',
-    '# collects nothing live, which is what makes two runs of one bundle comparable.',
-    'tea_browser_automation: none',
-    '# Sequential keeps the four domain workers in this process. A subagent mode would have them write',
-    '# under /tmp, outside the workspace the capability declaration scopes the run to.',
-    'tea_execution_mode: sequential',
-    'tea_capability_probe: false',
-    '',
-  ].join('\n');
+function configToml(set) {
+  return teaConfigToml({
+    header: [
+      '# Written by test/eval-nfr.js for one staged evidence bundle.',
+      '# test_artifacts points inside this workspace only, so the report the run writes',
+      '# lands beside the bundle it audited and nowhere else.',
+    ],
+    core: [
+      ['user_name', 'tea-eval-harness'],
+      ['project_name', set.projectRoot],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [
+      ['test_artifacts', 'test-artifacts'],
+      '# The browser-evidence branch in step-03 is off: this audit reads the bundle it was given and',
+      '# collects nothing live, which is what makes two runs of one bundle comparable.',
+      ['tea_browser_automation', 'none'],
+      '# Sequential keeps the four domain workers in this process. A subagent mode would have them write',
+      '# under /tmp, outside the workspace the capability declaration scopes the run to.',
+      ['tea_execution_mode', 'sequential'],
+      ['tea_capability_probe', 'false'],
+    ],
+  });
 }
 
 /**
@@ -1057,8 +1063,9 @@ function configYaml(set) {
  *
  * Layout, with the workspace itself as the agent's working directory:
  *
- *   <projectRoot>/   the bundle, plus a resolved _bmad/tea/config.yaml
+ *   <projectRoot>/   the bundle, plus a resolved _bmad/config.toml
  *   skill/           the bmad-testarch-nfr workflow, copied verbatim
+ *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * The project root is the set's own, so the prompt that names it says which
  * bundle the run audits. The skill sits outside the project root on purpose: its
@@ -1090,14 +1097,15 @@ async function stageIntoWorkspace(dir, set) {
   }
 
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(set));
+  fs.mkdirSync(path.join(projectDir, '_bmad'), { recursive: true });
+  await writeText(path.join(projectDir, TEA_CONFIG_RELATIVE_PATH), configToml(set));
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   // The bundle files the run must leave alone. test-artifacts and _bmad are
   // excluded because the run legitimately writes into the first and the harness
@@ -1189,9 +1197,10 @@ function buildPrompt(set, { customCategories = [] } = {}) {
     'Resolve the workflow placeholders to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`custom_nfr_categories\`: \`${customCategories.join(',')}\``,
     '',
     `The NFR requirements and the thresholds for this service are stated under \`${root}/docs/\`. The`,

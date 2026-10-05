@@ -15,7 +15,7 @@ Which agent ran, and which model: e.g. Claude Code / Claude Opus 4.6, Cursor / G
 The file and the section inside it. Examples:
 
 - `criteria-registry.md`, row H3
-- `resources/knowledge/network-first.md`, the "declare the intercept before navigating" section
+- `skills/bmod-tea/knowledge/network-first.md`, the "declare the intercept before navigating" section
 - a step file such as `steps-c/step-03-generate-tests.md`
 
 **Which workflow was running**

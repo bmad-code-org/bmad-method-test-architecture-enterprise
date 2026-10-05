@@ -136,7 +136,10 @@ const { readText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVAL_ROOT = path.join(__dirname, 'evals');
-const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills');
+// The one knowledge base every workflow reads as {tea-knowledge}.
+const KNOWLEDGE_DIR = path.join(WORKFLOW_ROOT, 'bmod-tea', 'knowledge');
+const KNOWLEDGE_INDEX = path.join(KNOWLEDGE_DIR, 'tea-index.csv');
 const SUITE_ID = 'fragment-selection';
 
 const RUN_TIMEOUT_MS = 5 * 60_000;
@@ -474,7 +477,7 @@ async function validateSuites(suites) {
 
     const workflowDir = path.join(WORKFLOW_ROOT, suite.dir);
     if (!fs.existsSync(workflowDir)) {
-      problems.push(`${label}: no workflow at src/workflows/testarch/${suite.dir}`);
+      problems.push(`${label}: no workflow at skills/${suite.dir}`);
       continue;
     }
 
@@ -496,21 +499,19 @@ async function validateSuites(suites) {
       for (const problem of selectionInstructionProblems(selectionContext)) problems.push(`${label}: ${problem}`);
     }
 
-    const knowledgeDir = path.join(workflowDir, 'resources', 'knowledge');
-    const indexPath = path.join(workflowDir, 'resources', 'tea-index.csv');
     let indexed = new Set();
     // The existence check that used to guard this read is gone; the read answers
     // absence, and the "ships no index" problem is raised off that answer.
-    const indexRead = await readText(indexPath);
+    const indexRead = await readText(KNOWLEDGE_INDEX);
     if (indexRead.present) {
       try {
         const records = parse(indexRead.text, { columns: true, skip_empty_lines: true });
-        indexed = new Set(records.map((record) => String(record.fragment_file || '').replace(/^knowledge\//, '')));
+        indexed = new Set(records.map((record) => String(record.fragment_file || '')));
       } catch (error) {
-        problems.push(`${label}: ${path.relative(workflowDir, indexPath)} does not parse: ${error.message}`);
+        problems.push(`${label}: ${path.relative(PROJECT_ROOT, KNOWLEDGE_INDEX)} does not parse: ${error.message}`);
       }
     } else {
-      problems.push(`${label}: the workflow ships no resources/tea-index.csv`);
+      problems.push(`${label}: ${path.relative(PROJECT_ROOT, KNOWLEDGE_INDEX)} is missing`);
     }
 
     if (!Array.isArray(cases) || cases.length === 0) {
@@ -540,12 +541,12 @@ async function validateSuites(suites) {
       if (mustLoad.length === 0) problems.push(`${caseLabel}: mustLoad is empty; a case that requires nothing measures nothing`);
 
       for (const fragment of [...mustLoad, ...mustNotLoad]) {
-        if (!fs.existsSync(path.join(knowledgeDir, fragment))) {
-          problems.push(`${caseLabel}: ${fragment} is not in ${suite.dir}/resources/knowledge/`);
+        if (!fs.existsSync(path.join(KNOWLEDGE_DIR, fragment))) {
+          problems.push(`${caseLabel}: ${fragment} is not in skills/bmod-tea/knowledge/`);
           continue;
         }
         if (indexed.size > 0 && !indexed.has(fragment)) {
-          problems.push(`${caseLabel}: ${fragment} is not indexed in ${suite.dir}/resources/tea-index.csv, so it can never be selected`);
+          problems.push(`${caseLabel}: ${fragment} is not indexed in skills/bmod-tea/knowledge/tea-index.csv, so it can never be selected`);
         }
         if (mustLoad.includes(fragment) && selectionContext && !selectionContext.includes(fragment)) {
           problems.push(`${caseLabel}: ${fragment} is not named by a contextFile, so the oracle is not derived from the workflow step`);
@@ -589,7 +590,7 @@ async function buildPrompt(suite, item) {
     sections.push(`----- ${relative} -----\n${await promptPart(path.join(workflowDir, relative))}`);
   }
   const context = sections.join('\n\n');
-  const index = await promptPart(path.join(workflowDir, 'resources', 'tea-index.csv'));
+  const index = await promptPart(KNOWLEDGE_INDEX);
 
   return [
     `You are running the TEA workflow \`${suite.data.workflow}\`. Below are the workflow's own knowledge-loading rules and its fragment index.`,
@@ -599,7 +600,7 @@ async function buildPrompt(suite, item) {
     '',
     context,
     '',
-    '----- resources/tea-index.csv -----',
+    '----- {tea-knowledge}/tea-index.csv -----',
     index,
     '',
     '----- the run -----',
@@ -614,7 +615,7 @@ async function buildPrompt(suite, item) {
     '----- output -----',
     'Reply with JSON only, no prose and no code fence:',
     '{"fragments": ["one-fragment-file-name.md", "..."]}',
-    'Use the fragment file names exactly as they appear in the index, without the `knowledge/` prefix.',
+    "Use the fragment file names exactly as they appear in the index's fragment_file column.",
   ].join('\n');
 }
 

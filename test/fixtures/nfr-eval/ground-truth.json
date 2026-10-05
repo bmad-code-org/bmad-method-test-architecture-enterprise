@@ -46,35 +46,35 @@
   ],
   "skillRuleCitations": {
     "fourAuditedDomains": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04-evaluate-and-score.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/step-04-evaluate-and-score.md",
       "section": "3. Dispatch 4 NFR Workers",
       "lines": "150-193",
       "rule": "Step 4 dispatches exactly four domain workers: Security, Performance, Reliability, and Maintainability. A report missing one of the four has left a dispatched worker's domain unreported.",
       "requiredPhrase": "step-04d-subagent-maintainability.md"
     },
     "markUnknownThreshold": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-02-define-thresholds.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/step-02-define-thresholds.md",
       "section": "2. Define Thresholds",
       "lines": "116",
       "rule": "If a threshold is still unknown after checking all sources, mark it UNKNOWN and plan to report CONCERNS.",
       "requiredPhrase": "mark it **UNKNOWN** and plan to report **CONCERNS**"
     },
     "undefinedThresholdIsConcerns": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
       "section": "Default Rule for Undefined Thresholds",
       "lines": "38-43",
       "rule": "A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met.",
       "requiredPhrase": "the finding must be **CONCERNS**, never PASS"
     },
     "undecidableDowngradeEnforced": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04e-aggregate-nfr.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/step-04e-aggregate-nfr.md",
       "section": "1a. Enforce the Undefined-Threshold Default",
       "lines": "44-71",
       "rule": "Aggregation downgrades a worker's PASS to CONCERNS for any domain whose threshold was UNKNOWN at Step 2, so the rule is checked rather than merely stated.",
       "requiredPhrase": "finding.status = 'CONCERNS'"
     },
     "missingEvidenceIsConcerns": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-03-gather-evidence.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/step-03-gather-evidence.md",
       "section": "3. Evidence Gaps",
       "lines": "138",
       "rule": "If evidence is missing for a category, mark that category as CONCERNS.",
@@ -82,49 +82,49 @@
       "requiredPhrase": "If evidence is missing for a category, mark that category as **CONCERNS**"
     },
     "passNeedsEvidenceMeetingThreshold": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "PASS Criteria Verified",
       "lines": "165-168",
       "rule": "PASS requires evidence that exists, meets or exceeds the threshold, flags no concerns, and is of acceptable quality.",
       "requiredPhrase": "Evidence meets or exceeds threshold"
     },
     "failIsEvidenceBelowThreshold": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "FAIL Criteria Verified",
       "lines": "179-182",
       "rule": "FAIL is evidence that exists and does not meet the threshold.",
       "requiredPhrase": "Evidence exists BUT does not meet threshold"
     },
     "noThresholdGuessing": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "No Threshold Guessing",
       "lines": "186-188",
       "rule": "Every threshold is either defined or marked UNKNOWN, no threshold is guessed or inferred, and every UNKNOWN threshold results in CONCERNS.",
       "requiredPhrase": "No thresholds were guessed or inferred"
     },
     "domainStatusIsWorstFinding": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
+      "file": "skills/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
       "section": "Domain Status",
       "lines": "32-34",
       "rule": "A domain's status is the worst status among its findings: FAIL when any finding is FAIL, CONCERNS when any is CONCERNS and none is FAIL, PASS otherwise, and N/A only when every finding is N/A. The gate artifact's audited_domains block and the domain's assessment section both carry that one value.",
       "requiredPhrase": "the worst status among its findings: **FAIL** when any finding is FAIL, **CONCERNS** when any finding is CONCERNS and none is FAIL, **PASS** otherwise"
     },
     "releaseBlockerOnFail": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "Release Blocker (FAIL)",
       "lines": "328-330",
       "rule": "A release blocker is flagged when a critical NFR has FAIL status, so an audit carrying a FAIL domain reports FAIL overall.",
       "requiredPhrase": "Release blocker flagged if critical NFR has FAIL status"
     },
     "warningOnConcerns": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "Warning (CONCERNS)",
       "lines": "340-342",
       "rule": "Any NFR with CONCERNS status is flagged, so an audit whose worst domain is CONCERNS reports CONCERNS overall.",
       "requiredPhrase": "Any NFR with CONCERNS status flagged"
     },
     "passWhenAllPass": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "file": "skills/bmad-testarch-nfr/checklist.md",
       "section": "Pass (PASS)",
       "lines": "346-348",
       "rule": "PASS requires every NFR to have PASS status and no blockers or concerns to exist.",

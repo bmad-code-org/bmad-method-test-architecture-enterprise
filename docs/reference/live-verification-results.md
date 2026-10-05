@@ -46,7 +46,7 @@ The file sits at the root of `{test_artifacts}`, outside the `trace/` folder whe
 }
 ```
 
-A longer example covering a passing record, a blocked one, and one recorded against an older commit ships with the workflow at `src/workflows/testarch/bmad-testarch-trace/resources/live-verification-results.example.json`.
+A longer example covering a passing record, a blocked one, and one recorded against an older commit ships with the workflow at `skills/bmad-testarch-trace/resources/live-verification-results.example.json`.
 
 The tables below distinguish **Enforced** fields, whose absence stops a record or the whole file from counting, from **Recorded** fields, which are carried into the report but never rejected. Getting an enforced field wrong changes your coverage; getting a recorded field wrong only makes the report less useful.
 

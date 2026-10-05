@@ -45,13 +45,13 @@
     "tea-transcript-runner": "cli/transcript-runner.js"
   },
   "files": [
-    "src",
+    "skills",
     "cli",
     ".claude-plugin",
     "README.md",
     "LICENSE",
-    "!src/workflows/testarch/*/.memlog.md",
-    "!src/workflows/testarch/*/.analysis/**"
+    "!skills/*/.memlog.md",
+    "!skills/*/.analysis/**"
   ],
   "scripts": {
     "docs:build": "node tools/build-docs.js",
@@ -251,7 +251,7 @@
     "include": [
       "cli/**",
       "tools/**",
-      "src/workflows/testarch/bmad-testarch-framework/resources/hooks/**"
+      "skills/bmad-testarch-framework/resources/hooks/**"
     ],
     "lines": 78,
     "reporter": [
@@ -273,6 +273,7 @@
     "markdown-it": "^14.3.0",
     "ora": "^5.4.1",
     "semver": "^7.6.3",
+    "smol-toml": "^1.6.0",
     "wrap-ansi": "^7.0.0",
     "xml2js": "^0.6.2",
     "yaml": "^2.7.0"

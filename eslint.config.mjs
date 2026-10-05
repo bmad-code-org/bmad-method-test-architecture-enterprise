@@ -97,7 +97,7 @@ export default [
   // actually relied on the suppression. Reviewed and reactivated rather
   // than left off (TEA Story 4.8).
   {
-    files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js', 'src/workflows/**/resources/hooks/*.cjs'],
+    files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js', 'skills/**/resources/hooks/*.cjs'],
     rules: {
       // Allow CommonJS patterns for Node CLI scripts
       'unicorn/prefer-module': 'off',
@@ -142,7 +142,7 @@ export default [
   // runs both templates from a folder whose install provides it. Every other
   // import is still held to resolve.
   {
-    files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/*.mjs'],
+    files: ['skills/bmad-testarch-evaluate/assets/*.mjs'],
     rules: {
       'n/no-missing-import': ['error', { allowModules: ['bmad-method-test-architecture-enterprise'] }],
     },
@@ -151,7 +151,7 @@ export default [
   // Evaluator starters become executable files in the adopter's evaluation
   // folder, where their framework dependencies are installed.
   {
-    files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/evaluators/*.mjs'],
+    files: ['skills/bmad-testarch-evaluate/assets/evaluators/*.mjs'],
     rules: {
       'n/hashbang': 'off',
       'n/no-unpublished-import': 'off',

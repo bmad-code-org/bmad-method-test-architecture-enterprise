@@ -318,7 +318,7 @@ function filesBelow(root, base) {
 function corpusMembers() {
   const contextFiles = fragmentSelectionWorkflows().flatMap((workflow) => {
     const evals = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, workflow, 'evals.json'), 'utf8'));
-    return (evals.contextFiles ?? []).map((file) => repositoryPath('src', 'workflows', 'testarch', workflow, file));
+    return (evals.contextFiles ?? []).map((file) => repositoryPath('skills', workflow, file));
   });
   return [
     // Whole trees rather than named fixture directories, so a suite that brings
@@ -334,8 +334,8 @@ function corpusMembers() {
     // fragment-selection case cites, and the agent definition the routing probes
     // digest.
     ...contextFiles,
-    repositoryPath('src', 'agents', 'bmad-tea', 'SKILL.md'),
-    repositoryPath('src', 'agents', 'bmad-tea', 'customize.toml'),
+    repositoryPath('skills', 'bmad-tea', 'SKILL.md'),
+    repositoryPath('skills', 'bmad-tea', 'customize.toml'),
   ];
 }
 
@@ -1953,7 +1953,7 @@ function buildFragmentSelectionProbes(workflow) {
   const first = evals.cases[0];
   assert(first, `${workflow}: evals.json carries no case`);
 
-  const contextFiles = evals.contextFiles.map((file) => repositoryPath('src', 'workflows', 'testarch', workflow, file));
+  const contextFiles = evals.contextFiles.map((file) => repositoryPath('skills', workflow, file));
   const corpusDigest = digestOf([evalsPath, ...contextFiles]);
   const containmentOracleId = 'O-001';
   const exclusionOracleId = 'O-002';
@@ -2059,7 +2059,7 @@ function routingOracleFor(contract, caseId, field) {
  *
  * There are no defect probes. A defect probe needs a controlled mutation of the
  * system under test with baseline and mutated evidence, and the system here is
- * `src/agents/bmad-tea/SKILL.md`, which this suite must not edit: a mutation of
+ * `skills/bmad-tea/SKILL.md`, which this suite must not edit: a mutation of
  * the skill to prove the eval catches it is an edit to the thing being measured.
  * The fragment-selection corpora ship the same two classes for the same reason.
  */
@@ -2068,8 +2068,8 @@ async function buildRoutingProbes(spec) {
   const corpus = JSON.parse(fs.readFileSync(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const intentsPath = repositoryPath('test', 'fixtures', 'tea-routing-eval', 'intents.json');
   const groundTruthPath = repositoryPath('test', 'fixtures', 'tea-routing-eval', 'ground-truth.json');
-  const skillPath = repositoryPath('src', 'agents', 'bmad-tea', 'SKILL.md');
-  const menuPath = repositoryPath('src', 'agents', 'bmad-tea', 'customize.toml');
+  const skillPath = repositoryPath('skills', 'bmad-tea', 'SKILL.md');
+  const menuPath = repositoryPath('skills', 'bmad-tea', 'customize.toml');
   const corpusDigest = digestOf([skillPath, menuPath, intentsPath, groundTruthPath]);
 
   const first = contract.interactionPlan[0].stepId;
@@ -2131,7 +2131,7 @@ async function buildRoutingProbes(spec) {
         baselinePassEvidence: fileReference(groundTruthPath),
         revisionCommitDigest: corpusDigest,
         noKnownDefectStatement:
-          `${first}'s expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and ` +
+          `${first}'s expected answer is derived from skills/bmad-tea/SKILL.md and its menu, and ` +
           'node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml.',
       },
       expectedClean: true,

@@ -367,9 +367,9 @@ jobs:
       - name: Seed one violation per gate and watch it fail
         run: npm run test:supply-chain
 
-  # dependency-direction holds cli/, tools/, test/ and src/**/*.cjs to a declared
+  # dependency-direction holds cli/, tools/, test/ and skills/**/*.cjs to a declared
   # layer graph and stays report-only until two eval-quality limits are fixed
-  # upstream. package-boundary holds the published src/, cli/ and .claude-plugin/
+  # upstream. package-boundary holds the published skills/, cli/ and .claude-plugin/
   # trees against dev-only path references. field-ownership holds schemaVersion
   # to the two generators that stamp it. test:guard-publish seeds a token-present,
   # workflow-absent environment and watches the publish guard refuse it.
@@ -390,7 +390,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Report import-direction violations over cli/, tools/, test/ and src/**/*.cjs
+      - name: Report import-direction violations over cli/, tools/, test/ and skills/**/*.cjs
         run: npm run test:direction
 
       - name: Hold the published tree to the package boundary

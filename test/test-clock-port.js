@@ -127,7 +127,7 @@ function main() {
 
   // Heals a tree where an earlier run was killed between creating the probe skill
   // and removing it. Nothing else creates this path.
-  fs.rmSync(path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'tea-clock-port-probe'), { recursive: true, force: true });
+  fs.rmSync(path.join(PROJECT_ROOT, 'skills', 'tea-clock-port-probe'), { recursive: true, force: true });
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-clock-port-'));
   try {
@@ -218,11 +218,11 @@ function main() {
     // because every other route spawns one child process per suite and that is a
     // whole eval run. Its unaccounted-skills branch writes a full run summary,
     // with a port duration and a port stamp, and exits before spawning anything.
-    // A TEA skill is a directory under `src/workflows/testarch` or `src/agents`,
+    // A TEA skill is a directory under `skills/` (bmod-* records aside),
     // so an empty directory the manifest does not account for reaches that branch
     // and nothing else. Git does not track an empty directory, so a crash between
     // the two calls below leaves the working tree clean.
-    const probeSkill = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'tea-clock-port-probe');
+    const probeSkill = path.join(PROJECT_ROOT, 'skills', 'tea-clock-port-probe');
     // A `finally` covers a throw and covers no signal. A run killed during the
     // spawn below would leave a directory that `git status` cannot show, because
     // git does not track an empty one, and the next `npm run test:eval-schemas`

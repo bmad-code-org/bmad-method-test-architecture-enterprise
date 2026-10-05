@@ -4,23 +4,35 @@
  *
  * Precedence, highest first:
  *   1. An explicit CLI flag (--use-playwright-utils / --no-use-pactjs-utils / ...)
- *   2. The consuming project's _bmad/tea/config.yaml, written by the installer
- *   3. The module default declared in src/module.yaml
+ *   2. The consuming project's `[modules.tea]` table, merged from
+ *      _bmad/config.toml, _bmad/custom/config.toml and
+ *      _bmad/custom/config.user.toml (later files win), as `bmad setup tea`
+ *      writes it. Only when _bmad/config.toml does not exist is a v6
+ *      _bmad/tea/config.yaml read instead, so older installs keep working in CI.
+ *   3. The module default declared in skills/bmod-tea/bmod.toml
  *
  * Step 01 of the workflow branches on these keys (Playwright Utils loading
- * profile, the pactjs-utils fragment set, Pact MCP). When the file is absent and
- * nothing states them, the agent picks per run and two runs over identical files
- * can review against different knowledge. Every run states all three.
+ * profile, the pactjs-utils fragment set, Pact MCP). When no config states them,
+ * the agent picks per run and two runs over identical files can review against
+ * different knowledge. Every run states all of them.
  *
- * MODULE_DEFAULTS mirrors src/module.yaml. The test suite asserts they are equal,
- * so changing one side without the other fails the gate rather than drifting.
+ * MODULE_DEFAULTS mirrors skills/bmod-tea/bmod.toml. The test suite asserts they are
+ * equal, so changing one side without the other fails the gate rather than drifting.
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
+const TOML = require('smol-toml');
 
-const CONFIG_RELATIVE_PATH = path.join('_bmad', 'tea', 'config.yaml');
+/** The central config layers, lowest precedence first. Only the first is required. */
+const CONFIG_LAYER_RELATIVE_PATHS = [
+  path.join('_bmad', 'config.toml'),
+  path.join('_bmad', 'custom', 'config.toml'),
+  path.join('_bmad', 'custom', 'config.user.toml'),
+];
+const CONFIG_RELATIVE_PATH = CONFIG_LAYER_RELATIVE_PATHS[0];
+const LEGACY_CONFIG_RELATIVE_PATH = path.join('_bmad', 'tea', 'config.yaml');
 
 const MODULE_DEFAULTS = {
   tea_use_playwright_utils: true,
@@ -51,15 +63,16 @@ function configError(message) {
 }
 
 /**
- * Coerce a config-file boolean. The installer writes real booleans, but
- * hand-edited files often carry the quoted form, and module.yaml calls the
- * boolean type out as CRITICAL. Accept both spellings, reject anything else.
+ * Coerce a config boolean. `bmad setup` writes the strings "true"/"false", a v6
+ * config.yaml or a hand-edited TOML file may carry real booleans. Accept both
+ * spellings, reject anything else.
  *
- * @param {unknown} value - Raw value from config.yaml.
+ * @param {unknown} value - Raw config value.
  * @param {string} key - Config key name, for the error message.
+ * @param {string} source - Where the value came from, for the error message.
  * @returns {boolean}
  */
-function coerceBoolean(value, key) {
+function coerceBoolean(value, key, source = CONFIG_RELATIVE_PATH) {
   if (typeof value === 'boolean') {
     return value;
   }
@@ -72,13 +85,13 @@ function coerceBoolean(value, key) {
       return false;
     }
   }
-  throw configError(`${key} in ${CONFIG_RELATIVE_PATH} must be true or false, got ${JSON.stringify(value)}`);
+  throw configError(`${key} in ${source} must be true or false, got ${JSON.stringify(value)}`);
 }
 
 /**
- * Coerce the tea_pact_mcp string enum.
+ * Coerce the tea_execution_mode string enum.
  *
- * @param {unknown} value - Raw value from config.yaml.
+ * @param {unknown} value - Raw config value.
  * @returns {string}
  */
 function coerceExecutionMode(value, source = CONFIG_RELATIVE_PATH) {
@@ -94,7 +107,7 @@ function coerceExecutionMode(value, source = CONFIG_RELATIVE_PATH) {
 /**
  * Coerce the tea_pact_mcp string enum.
  *
- * @param {unknown} value - Raw value from config.yaml.
+ * @param {unknown} value - Raw config value.
  * @returns {string}
  */
 function coercePactMcp(value, source = CONFIG_RELATIVE_PATH) {
@@ -107,52 +120,123 @@ function coercePactMcp(value, source = CONFIG_RELATIVE_PATH) {
   throw configError(`tea_pact_mcp from ${source} must be one of ${PACT_MCP_VALUES.join(' | ')}, got ${JSON.stringify(value)}`);
 }
 
-/**
- * Read the three keys this CLI cares about out of the project's TEA config.
- * A missing file is normal (CI installs the skill without running the
- * installer); unreadable or unparseable content is a configuration error.
- *
- * @param {string} projectRoot - Consuming project root.
- * @returns {{present: boolean, path: string, values: object}}
- */
-function readTeaConfigFile(projectRoot) {
-  const configPath = path.join(projectRoot, CONFIG_RELATIVE_PATH);
-  if (!fs.existsSync(configPath)) {
-    return { present: false, path: configPath, values: {} };
-  }
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
+}
 
+/** Merge tables recursively; any other value from the later layer replaces the earlier one. */
+function mergeTables(base, override) {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    result[key] = isPlainObject(result[key]) && isPlainObject(value) ? mergeTables(result[key], value) : value;
+  }
+  return result;
+}
+
+/** Coerce the keys this CLI cares about out of a raw TEA config table. */
+function pickTeaValues(table, source) {
+  const values = {};
+  if ('tea_use_playwright_utils' in table) {
+    values.tea_use_playwright_utils = coerceBoolean(table.tea_use_playwright_utils, 'tea_use_playwright_utils', source);
+  }
+  if ('tea_use_pactjs_utils' in table) {
+    values.tea_use_pactjs_utils = coerceBoolean(table.tea_use_pactjs_utils, 'tea_use_pactjs_utils', source);
+  }
+  if ('tea_pact_mcp' in table) {
+    values.tea_pact_mcp = coercePactMcp(table.tea_pact_mcp, source);
+  }
+  if ('tea_execution_mode' in table) {
+    values.tea_execution_mode = coerceExecutionMode(table.tea_execution_mode, source);
+  }
+  if ('tea_capability_probe' in table) {
+    values.tea_capability_probe = coerceBoolean(table.tea_capability_probe, 'tea_capability_probe', source);
+  }
+  return values;
+}
+
+/**
+ * Merge the central TOML layers and return the `[modules.tea]` table.
+ *
+ * @param {string} projectRoot
+ * @returns {object}
+ */
+function readCentralTeaTable(projectRoot) {
+  let merged = {};
+  for (const relativePath of CONFIG_LAYER_RELATIVE_PATHS) {
+    const layerPath = path.join(projectRoot, relativePath);
+    if (!fs.existsSync(layerPath)) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = TOML.parse(fs.readFileSync(layerPath, 'utf8'));
+    } catch (error) {
+      throw configError(`Failed to parse ${layerPath}: ${error.message}`);
+    }
+    merged = mergeTables(merged, parsed);
+  }
+  const modules = merged.modules;
+  if (modules === undefined) {
+    return {};
+  }
+  if (!isPlainObject(modules) || (modules.tea !== undefined && !isPlainObject(modules.tea))) {
+    throw configError(`[modules.tea] in ${path.join(projectRoot, CONFIG_RELATIVE_PATH)} must be a table of config keys`);
+  }
+  return modules.tea || {};
+}
+
+/**
+ * Read a v6 _bmad/tea/config.yaml, used only when _bmad/config.toml is absent.
+ *
+ * @param {string} configPath
+ * @returns {object}
+ */
+function readLegacyTeaTable(configPath) {
   let parsed;
   try {
     parsed = yaml.load(fs.readFileSync(configPath, 'utf8'));
   } catch (error) {
     throw configError(`Failed to parse ${configPath}: ${error.message}`);
   }
-
   if (parsed === null || parsed === undefined) {
-    return { present: true, path: configPath, values: {} };
+    return {};
   }
-  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (!isPlainObject(parsed)) {
     throw configError(`${configPath} must contain a YAML mapping of config keys`);
   }
+  return parsed;
+}
 
-  const values = {};
-  if ('tea_use_playwright_utils' in parsed) {
-    values.tea_use_playwright_utils = coerceBoolean(parsed.tea_use_playwright_utils, 'tea_use_playwright_utils');
-  }
-  if ('tea_use_pactjs_utils' in parsed) {
-    values.tea_use_pactjs_utils = coerceBoolean(parsed.tea_use_pactjs_utils, 'tea_use_pactjs_utils');
-  }
-  if ('tea_pact_mcp' in parsed) {
-    values.tea_pact_mcp = coercePactMcp(parsed.tea_pact_mcp);
-  }
-  if ('tea_execution_mode' in parsed) {
-    values.tea_execution_mode = coerceExecutionMode(parsed.tea_execution_mode);
-  }
-  if ('tea_capability_probe' in parsed) {
-    values.tea_capability_probe = coerceBoolean(parsed.tea_capability_probe, 'tea_capability_probe');
+/**
+ * Read the keys this CLI cares about out of the project's TEA config.
+ * A missing config is normal (CI installs the skill without running setup);
+ * unreadable or unparseable content is a configuration error.
+ *
+ * @param {string} projectRoot - Consuming project root.
+ * @returns {{present: boolean, path: string, format: 'toml'|'yaml'|null, values: object}}
+ */
+function readTeaConfigFile(projectRoot) {
+  const centralPath = path.join(projectRoot, CONFIG_RELATIVE_PATH);
+  if (fs.existsSync(centralPath)) {
+    return {
+      present: true,
+      path: centralPath,
+      format: 'toml',
+      values: pickTeaValues(readCentralTeaTable(projectRoot), CONFIG_RELATIVE_PATH),
+    };
   }
 
-  return { present: true, path: configPath, values };
+  const legacyPath = path.join(projectRoot, LEGACY_CONFIG_RELATIVE_PATH);
+  if (fs.existsSync(legacyPath)) {
+    return {
+      present: true,
+      path: legacyPath,
+      format: 'yaml',
+      values: pickTeaValues(readLegacyTeaTable(legacyPath), LEGACY_CONFIG_RELATIVE_PATH),
+    };
+  }
+
+  return { present: false, path: centralPath, format: null, values: {} };
 }
 
 /**
@@ -210,7 +294,7 @@ const KEY_TO_INSTALLED_FIELD = {
  * @param {string} options.projectRoot - Consuming project root.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
- * @returns {{values: object, sources: object, installed: object, configPath: string, configPresent: boolean}}
+ * @returns {{values: object, sources: object, installed: object, configPath: string, configPresent: boolean, configFormat: string|null}}
  *   `installed` carries one boolean per library gate, read from the project
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
@@ -248,7 +332,7 @@ function resolveTeaConfig({ projectRoot, flags = {} }) {
     installed[KEY_TO_INSTALLED_FIELD[key]] = isPackageInstalled(projectRoot, packageName);
   }
 
-  return { values, sources, installed, configPath: file.path, configPresent: file.present };
+  return { values, sources, installed, configPath: file.path, configPresent: file.present, configFormat: file.format };
 }
 
 module.exports = {
@@ -261,5 +345,7 @@ module.exports = {
   EXECUTION_MODE_VALUES,
   PACT_MCP_VALUES,
   CONFIG_RELATIVE_PATH,
+  CONFIG_LAYER_RELATIVE_PATHS,
+  LEGACY_CONFIG_RELATIVE_PATH,
   FLAG_TO_KEY,
 };

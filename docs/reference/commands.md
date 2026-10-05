@@ -7,7 +7,7 @@ description: Quick reference for all 9 TEA workflows - inputs, outputs, and link
 
 ## Invoking a TEA Workflow
 
-Everything below assumes BMad Method is installed with the TEA module: `npx bmad-method install`.
+Everything below assumes TEA is installed with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` and set up with `bmad setup tea`.
 
 Three surfaces reach the same workflow. The skill name is identical on every platform; only the sigil differs.
 

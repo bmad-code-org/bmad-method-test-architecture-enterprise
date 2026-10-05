@@ -17,6 +17,7 @@ const fs = require('node:fs/promises');
 const { execFileSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
+const TOML = require('smol-toml');
 const { packedPaths: readPackedPaths } = require('./lib/pack-listing');
 
 async function pathExists(filePath) {
@@ -73,36 +74,46 @@ async function runTests() {
   const projectRoot = path.join(__dirname, '..');
 
   // ============================================================
-  // Test 1: Module.yaml Structure
+  // Test 1: bmod.toml Structure
   // ============================================================
   console.log(`${colors.yellow}Test Suite 1: Module Configuration${colors.reset}\n`);
 
   try {
-    const moduleYamlPath = path.join(projectRoot, 'src/module.yaml');
-    const moduleYaml = yaml.load(await fs.readFile(moduleYamlPath, 'utf8'));
+    const bmodToml = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/bmod.toml'), 'utf8'));
+    const bmod = bmodToml.bmod || {};
+    const questions = Object.fromEntries((bmod.config_questions || []).map((question) => [question.key, question]));
 
-    assert(moduleYaml.code === 'tea', 'module.yaml has correct code: tea');
-    assert(moduleYaml.name === 'Test Architect', 'module.yaml has correct name');
-    assert(typeof moduleYaml.description === 'string' && moduleYaml.description.length > 0, 'module.yaml has description');
-    assert(typeof moduleYaml.default_selected === 'boolean', 'module.yaml has boolean default_selected');
-    assert(moduleYaml.tea_use_playwright_utils.default === true, 'module.yaml defaults Playwright Utils to true');
-    assert(moduleYaml.tea_use_pactjs_utils.default === true, 'module.yaml defaults Pact.js Utils to true');
-    assert(moduleYaml.tea_pact_mcp.default === 'mcp', 'module.yaml defaults Pact MCP to mcp');
-    assert(moduleYaml.tea_evaluations_folder.default === 'evals', 'module.yaml defaults tea_evaluations_folder to evals');
+    assert(bmod.code === 'tea', 'bmod.toml has correct code: tea');
+    assert(typeof bmod.version === 'string' && bmod.version.length > 0, 'bmod.toml has a version');
+    assert(Array.isArray(bmod.skills) && bmod.skills.includes('bmad-tea'), 'bmod.toml lists the bmad-tea skill');
     assert(
-      moduleYaml.tea_evaluations_folder.result === '{project-root}/{value}',
-      'module.yaml resolves tea_evaluations_folder as {project-root}/{value}',
+      (bmod.config_questions || []).every((question) => typeof question.default === 'string'),
+      'bmod.toml config_questions defaults are all strings',
+    );
+    assert(questions.tea_use_playwright_utils?.default === 'true', 'bmod.toml defaults Playwright Utils to "true"');
+    assert(questions.tea_use_pactjs_utils?.default === 'true', 'bmod.toml defaults Pact.js Utils to "true"');
+    assert(questions.tea_pact_mcp?.default === 'mcp', 'bmod.toml defaults Pact MCP to mcp');
+    assert(!('tea_evaluations_folder' in questions), 'bmod.toml does not ask for tea_evaluations_folder (it is evaluate customization)');
+    assert(
+      questions.tea_use_pactjs_utils?.prompt.includes('no consumer-provider boundary'),
+      'bmod.toml Pact.js Utils prompt says it never adds contract tests without a consumer-provider boundary',
     );
     assert(
-      moduleYaml.tea_use_pactjs_utils.prompt.includes('consumer-driven contract testing'),
-      'module.yaml Pact.js Utils prompt explains CDC intent',
-    );
-    assert(
-      moduleYaml.tea_pact_mcp.prompt.includes('skipped automatically when it is not'),
-      'module.yaml Pact MCP prompt states the no-broker degradation',
+      questions.tea_pact_mcp?.prompt.includes('skipped automatically when no broker is reachable'),
+      'bmod.toml Pact MCP prompt states the no-broker degradation',
     );
   } catch (error) {
-    assert(false, 'module.yaml loads and validates', error.message);
+    assert(false, 'bmod.toml loads and validates', error.message);
+  }
+
+  try {
+    const evaluateCustomize = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-evaluate/customize.toml'), 'utf8'));
+    assert(
+      evaluateCustomize.workflow?.evaluations_folder === 'evals',
+      'bmad-testarch-evaluate customize.toml defaults evaluations_folder to evals',
+    );
+  } catch (error) {
+    assert(false, 'bmad-testarch-evaluate customize.toml loads', error.message);
   }
 
   console.log('');
@@ -113,7 +124,7 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 2: TEA Agent Native Skill Structure${colors.reset}\n`);
 
   try {
-    const skillDir = path.join(projectRoot, 'src/agents/bmad-tea');
+    const skillDir = path.join(projectRoot, 'skills/bmad-tea');
     const skillMdPath = path.join(skillDir, 'SKILL.md');
     const customizePath = path.join(skillDir, 'customize.toml');
 
@@ -143,7 +154,7 @@ async function runTests() {
       assert(!skillContent.includes('_bmad/bmm/'), 'SKILL.md has no _bmad/bmm/ references');
       assert(!skillContent.includes('module: bmm'), 'SKILL.md has no module: bmm references');
     } else {
-      assert(false, 'SKILL.md exists', 'src/agents/bmad-tea/SKILL.md not found');
+      assert(false, 'SKILL.md exists', 'skills/bmad-tea/SKILL.md not found');
     }
 
     // Validate customize.toml carries the agent essence + menu in the new [agent] namespace.
@@ -181,28 +192,24 @@ async function runTests() {
         const codePattern = new RegExp(`\\[\\[agent\\.menu]]\\s*\\ncode\\s*=\\s*"${code}"`);
         assert(codePattern.test(customizeContent), `customize.toml has [[agent.menu]] entry for code ${code}`);
         assert(customizeContent.includes(`skill = "${skill}"`), `customize.toml menu ${code} dispatches to ${skill}`);
-        const workflowDir = path.join(projectRoot, `src/workflows/testarch/${skill}`);
+        const workflowDir = path.join(projectRoot, `skills/${skill}`);
         assert(await pathExists(workflowDir), `Capability skill ${skill} has matching workflow directory`);
       }
     } else {
-      assert(false, 'customize.toml exists', 'src/agents/bmad-tea/customize.toml not found');
+      assert(false, 'customize.toml exists', 'skills/bmad-tea/customize.toml not found');
     }
 
-    // module.yaml must declare the agent essence for the BMM central config roster
-    const moduleYamlPath = path.join(projectRoot, 'src/module.yaml');
-    const moduleYaml = yaml.load(await fs.readFile(moduleYamlPath, 'utf8'));
-    assert(Array.isArray(moduleYaml.agents), 'module.yaml has agents: array');
-    const teaAgentEntry = (moduleYaml.agents || []).find((entry) => entry && entry.code === 'bmad-tea');
-    assert(teaAgentEntry !== undefined, 'module.yaml agents: contains bmad-tea entry');
+    // roster.toml must declare the agent essence for the bmad roster
+    const rosterToml = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/roster.toml'), 'utf8'));
+    assert(Array.isArray(rosterToml.members), 'roster.toml has [[members]]');
+    const teaAgentEntry = (rosterToml.members || []).find((entry) => entry && entry.code === 'bmad-tea');
+    assert(teaAgentEntry !== undefined, 'roster.toml members contains bmad-tea entry');
     if (teaAgentEntry) {
-      assert(teaAgentEntry.name === 'Murat', 'module.yaml bmad-tea entry has name: Murat');
-      assert(teaAgentEntry.title && teaAgentEntry.title.length > 0, 'module.yaml bmad-tea entry has a title');
-      assert(teaAgentEntry.icon === '🧪', 'module.yaml bmad-tea entry has icon 🧪');
-      assert(teaAgentEntry.team === 'software-development', 'module.yaml bmad-tea entry has team: software-development');
-      assert(
-        typeof teaAgentEntry.description === 'string' && teaAgentEntry.description.length > 0,
-        'module.yaml bmad-tea entry has a description',
-      );
+      assert(teaAgentEntry.skill === 'bmad-tea', 'roster.toml bmad-tea entry has skill: bmad-tea');
+      assert(teaAgentEntry.name === 'Murat', 'roster.toml bmad-tea entry has name: Murat');
+      assert(teaAgentEntry.title && teaAgentEntry.title.length > 0, 'roster.toml bmad-tea entry has a title');
+      assert(teaAgentEntry.icon === '🧪', 'roster.toml bmad-tea entry has icon 🧪');
+      assert(typeof teaAgentEntry.persona === 'string' && teaAgentEntry.persona.length > 0, 'roster.toml bmad-tea entry has a persona');
     }
 
     // Old-pattern files must be gone
@@ -226,8 +233,8 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 3: Knowledge Base${colors.reset}\n`);
 
   try {
-    const teaIndexPath = path.join(projectRoot, 'src/agents/bmad-tea/resources/tea-index.csv');
-    const knowledgeDir = path.join(projectRoot, 'src/agents/bmad-tea/resources/knowledge');
+    const teaIndexPath = path.join(projectRoot, 'skills/bmod-tea/knowledge/tea-index.csv');
+    const knowledgeDir = path.join(projectRoot, 'skills/bmod-tea/knowledge');
 
     if (await pathExists(teaIndexPath)) {
       const csvContent = await fs.readFile(teaIndexPath, 'utf8');
@@ -270,11 +277,11 @@ async function runTests() {
   ];
 
   for (const dirName of workflowDirs) {
-    const workflowDir = path.join(projectRoot, `src/workflows/testarch/${dirName}`);
-    const skillMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/SKILL.md`);
-    const customizeTomlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/customize.toml`);
-    const workflowYamlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.yaml`);
-    const instructionsMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/instructions.md`);
+    const workflowDir = path.join(projectRoot, `skills/${dirName}`);
+    const skillMdPath = path.join(projectRoot, `skills/${dirName}/SKILL.md`);
+    const customizeTomlPath = path.join(projectRoot, `skills/${dirName}/customize.toml`);
+    const workflowYamlPath = path.join(projectRoot, `skills/${dirName}/workflow.yaml`);
+    const instructionsMdPath = path.join(projectRoot, `skills/${dirName}/instructions.md`);
     let workflowKnowledgeIndexValidated = false;
 
     if (await pathExists(skillMdPath)) {
@@ -300,7 +307,7 @@ async function runTests() {
         assert(false, `${dirName}/SKILL.md validates`, error.message);
       }
     } else {
-      assert(false, `${dirName}/SKILL.md exists`, `src/workflows/testarch/${dirName}/SKILL.md not found`);
+      assert(false, `${dirName}/SKILL.md exists`, `skills/${dirName}/SKILL.md not found`);
     }
 
     if (await pathExists(customizeTomlPath)) {
@@ -319,11 +326,11 @@ async function runTests() {
         assert(false, `${dirName}/customize.toml validates`, error.message);
       }
     } else {
-      assert(false, `${dirName}/customize.toml exists`, `src/workflows/testarch/${dirName}/customize.toml not found`);
+      assert(false, `${dirName}/customize.toml exists`, `skills/${dirName}/customize.toml not found`);
     }
 
     // workflow.md was folded into SKILL.md and removed (PR: workflow customization rollout).
-    const legacyWorkflowMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.md`);
+    const legacyWorkflowMdPath = path.join(projectRoot, `skills/${dirName}/workflow.md`);
     assert(!(await pathExists(legacyWorkflowMdPath)), `${dirName}/workflow.md is removed (content lives in SKILL.md)`);
 
     if (await pathExists(workflowYamlPath)) {
@@ -355,7 +362,7 @@ async function runTests() {
     }
 
     for (const stepDir of ['steps-c', 'steps-e', 'steps-v']) {
-      const stepDirPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/${stepDir}`);
+      const stepDirPath = path.join(projectRoot, `skills/${dirName}/${stepDir}`);
       if (!(await pathExists(stepDirPath))) continue;
 
       const stepFiles = (await fs.readdir(stepDirPath)).filter((fileName) => fileName.endsWith('.md'));
@@ -435,16 +442,19 @@ async function runTests() {
             assert(Boolean(knowledgeIndexMatch), `${stepLabel} declares a parseable knowledgeIndex`);
 
             const knowledgeIndexReference = knowledgeIndexMatch ? knowledgeIndexMatch[1] : '';
-            const knowledgeIndexPath = path.resolve(workflowDir, knowledgeIndexReference);
-            const expectedKnowledgeIndexPath = path.join(workflowDir, 'resources', 'tea-index.csv');
-
-            assert(knowledgeIndexPath === expectedKnowledgeIndexPath, `${stepLabel} uses the workflow-local knowledge index`);
+            assert(
+              knowledgeIndexReference === '{tea-knowledge}/tea-index.csv',
+              `${stepLabel} uses the shared knowledge index`,
+              `found ${knowledgeIndexReference}`,
+            );
+            // {tea-knowledge} is {skill-root}/../bmod-tea/knowledge: the bmod-tea skill installed beside this one.
+            const knowledgeIndexPath = path.join(workflowDir, '..', 'bmod-tea', 'knowledge', 'tea-index.csv');
             assert(await pathExists(knowledgeIndexPath), `${stepLabel} knowledgeIndex target exists`);
 
             if (!workflowKnowledgeIndexValidated && (await pathExists(knowledgeIndexPath))) {
               const records = parse(await fs.readFile(knowledgeIndexPath, 'utf8'), { columns: true, skip_empty_lines: true });
-              const workflowKnowledgeDir = path.join(path.dirname(knowledgeIndexPath), 'knowledge');
-              const workflowKnowledgeFiles = (await fs.readdir(workflowKnowledgeDir)).filter((name) => name.endsWith('.md'));
+              const sharedKnowledgeDir = path.dirname(knowledgeIndexPath);
+              const sharedKnowledgeFiles = (await fs.readdir(sharedKnowledgeDir)).filter((name) => name.endsWith('.md'));
               const missingFragments = [];
 
               for (const record of records) {
@@ -453,18 +463,18 @@ async function runTests() {
                   continue;
                 }
 
-                const fragmentPath = path.resolve(path.dirname(knowledgeIndexPath), record.fragment_file);
+                const fragmentPath = path.resolve(sharedKnowledgeDir, record.fragment_file);
                 if (!(await pathExists(fragmentPath))) {
                   missingFragments.push(record.fragment_file);
                 }
               }
 
               assert(
-                records.length === workflowKnowledgeFiles.length,
-                `${dirName}/resources/tea-index.csv line count matches workflow-local fragments`,
-                `Found ${records.length} records for ${workflowKnowledgeFiles.length} fragments`,
+                records.length === sharedKnowledgeFiles.length,
+                'bmod-tea/knowledge/tea-index.csv line count matches the shared fragments',
+                `Found ${records.length} records for ${sharedKnowledgeFiles.length} fragments`,
               );
-              assert(missingFragments.length === 0, `${dirName}/resources/tea-index.csv fragment files exist`, missingFragments.join(', '));
+              assert(missingFragments.length === 0, 'bmod-tea/knowledge/tea-index.csv fragment files exist', missingFragments.join(', '));
 
               workflowKnowledgeIndexValidated = true;
             }
@@ -476,10 +486,7 @@ async function runTests() {
     }
   }
 
-  const frameworkScaffoldStepPath = path.join(
-    projectRoot,
-    'src/workflows/testarch/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md',
-  );
+  const frameworkScaffoldStepPath = path.join(projectRoot, 'skills/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md');
   try {
     const frameworkScaffoldStep = await fs.readFile(frameworkScaffoldStepPath, 'utf8');
     assert(frameworkScaffoldStep.includes('recurse.md'), 'framework scaffold step loads recurse.md when Playwright Utils is enabled');
@@ -515,7 +522,7 @@ async function runTests() {
   }
 
   try {
-    const teachMeDir = path.join(projectRoot, 'src/workflows/testarch/bmad-teach-me-testing');
+    const teachMeDir = path.join(projectRoot, 'skills/bmad-teach-me-testing');
     assert(!(await isLeanSkill(teachMeDir)), 'bmad-teach-me-testing (no workflow.yaml, has steps-c/) classifies as house');
 
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tea-lean-shape-'));
@@ -535,14 +542,14 @@ async function runTests() {
   }
 
   // The discriminator has to decide set membership itself, not just prove
-  // correct in isolation: every directory under src/workflows/testarch/ is
-  // classified and checked against the two expected lists, so a new skill
+  // correct in isolation: every workflow directory under skills/ (all but the
+  // bmad-tea agent and the bmod-* module records) is classified and checked against the two expected lists, so a new skill
   // directory nobody added to either list shows up as a mismatch here
   // instead of silently getting no shape assertions at all.
   try {
-    const testarchRoot = path.join(projectRoot, 'src/workflows/testarch');
+    const testarchRoot = path.join(projectRoot, 'skills');
     const allSkillDirs = (await fs.readdir(testarchRoot, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && entry.name !== 'bmad-tea' && !entry.name.startsWith('bmod-'))
       .map((entry) => entry.name);
     const computedLean = [];
     const computedHouse = [];
@@ -552,18 +559,18 @@ async function runTests() {
     }
     assert(
       computedLean.sort().join(',') === [...LEAN_SKILL_DIRS].sort().join(','),
-      `lean classification of src/workflows/testarch/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
+      `lean classification of skills/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
     );
     assert(
       computedHouse.sort().join(',') === [...workflowDirs].sort().join(','),
-      `house classification of src/workflows/testarch/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
+      `house classification of skills/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
     );
   } catch (error) {
-    assert(false, 'every src/workflows/testarch/* directory lands on exactly one expected set', error.message);
+    assert(false, 'every skills/* directory lands on exactly one expected set', error.message);
   }
 
   for (const dirName of LEAN_SKILL_DIRS) {
-    const workflowDir = path.join(projectRoot, `src/workflows/testarch/${dirName}`);
+    const workflowDir = path.join(projectRoot, `skills/${dirName}`);
     try {
       assert(await isLeanSkill(workflowDir), `${dirName} classifies as lean`);
       for (const required of LEAN_REQUIRED) {
@@ -579,7 +586,11 @@ async function runTests() {
         `${dirName}/SKILL.md resolves the workflow customization block`,
       );
       assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
-      assert(skillContent.includes('_bmad/tea/config.yaml'), `${dirName}/SKILL.md loads TEA config`);
+      assert(
+        skillContent.includes('resolve_config.py --project-root {project-root} --key core --key modules.tea') &&
+          skillContent.includes('bmad setup tea'),
+        `${dirName}/SKILL.md loads TEA config through resolve_config.py and points at bmad setup tea`,
+      );
 
       const customizeContent = await fs.readFile(path.join(workflowDir, 'customize.toml'), 'utf8');
       assert(/^\s*persistent_facts\s*=\s*\[\s*\]/m.test(customizeContent), `${dirName}/customize.toml ships persistent_facts empty`);
@@ -590,37 +601,29 @@ async function runTests() {
 
     try {
       const marketplaceContent = await fs.readFile(path.join(projectRoot, '.claude-plugin/marketplace.json'), 'utf8');
-      assert(marketplaceContent.includes(`./src/workflows/testarch/${dirName}`), `.claude-plugin/marketplace.json lists ${dirName}`);
+      assert(marketplaceContent.includes(`./skills/${dirName}`), `.claude-plugin/marketplace.json lists ${dirName}`);
     } catch (error) {
       assert(false, `${dirName} marketplace registration validates`, error.message);
     }
   }
 
-  // Nothing else in test/ or tools/ reads src/module-help.csv, so its own
-  // catalog row needs its own assertion; without one, deleting the row still
-  // leaves npm test green.
+  // Nothing else in test/ or tools/ reads the module help, so the evaluate
+  // entry needs its own assertion; without one, deleting it still leaves
+  // npm test green.
   try {
-    const csvContent = await fs.readFile(path.join(projectRoot, 'src/module-help.csv'), 'utf8');
-    const rows = parse(csvContent, { columns: true, skip_empty_lines: true });
-    const evaluateRow = rows.find((row) => row.skill === 'bmad-testarch-evaluate');
-    assert(evaluateRow !== undefined, 'src/module-help.csv has a bmad-testarch-evaluate row');
-    if (evaluateRow) {
-      assert(evaluateRow['display-name'] === 'Evaluate', 'bmad-testarch-evaluate row has display-name Evaluate');
-      assert(evaluateRow['menu-code'] === 'EV', 'bmad-testarch-evaluate row has menu-code EV');
-      assert(evaluateRow.phase === '4-implementation', 'bmad-testarch-evaluate row has phase 4-implementation');
-      assert(evaluateRow['followed-by'] === 'bmad-testarch-ci', 'bmad-testarch-evaluate row has followed-by bmad-testarch-ci');
-      assert(
-        evaluateRow['output-location'] === 'tea_evaluations_folder',
-        'bmad-testarch-evaluate row has output-location tea_evaluations_folder',
-      );
-    }
+    const helpContent = await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/help/help.md'), 'utf8');
+    assert(helpContent.includes('`bmad-testarch-evaluate`:'), 'skills/bmod-tea/help/help.md describes bmad-testarch-evaluate');
+    assert(
+      helpContent.includes('evaluations_folder') && helpContent.includes('`evals/`'),
+      'skills/bmod-tea/help/help.md says where evaluate writes (evals/ by default, evaluations_folder to change it)',
+    );
   } catch (error) {
-    assert(false, 'src/module-help.csv bmad-testarch-evaluate row validates', error.message);
+    assert(false, 'skills/bmod-tea/help/help.md bmad-testarch-evaluate entry validates', error.message);
   }
 
   // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside
   // the skill directory it is working on; neither belongs in a published
-  // package. `package.json`'s `files` array lists `src` as a directory entry,
+  // package. `package.json`'s `files` array lists `skills` as a directory entry,
   // and npm includes everything under a directory entry regardless of
   // `.gitignore` or `.npmignore` (verified live: both left these artifacts
   // packed), so the exclusion has to be a negated pattern in `files` itself.
@@ -631,8 +634,8 @@ async function runTests() {
     // skill directory (its own memlog and analysis reports live here by
     // design), so this only creates what does not already exist and only
     // removes what it created.
-    const plantedMemlog = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.memlog.md');
-    const plantedAnalysisDir = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.analysis');
+    const plantedMemlog = path.join(projectRoot, 'skills/bmad-testarch-evaluate/.memlog.md');
+    const plantedAnalysisDir = path.join(projectRoot, 'skills/bmad-testarch-evaluate/.analysis');
     const plantedReport = path.join(plantedAnalysisDir, `tea-pack-probe-${process.pid}.md`);
     const memlogPreexisted = await pathExists(plantedMemlog);
     const analysisDirPreexisted = await pathExists(plantedAnalysisDir);
@@ -718,10 +721,7 @@ async function runTests() {
   const ONCE_PER_PROJECT_DELIVERABLES = new Set(['test-design-architecture.md', 'test-design-qa.md', '{project_name}-handoff.md']);
 
   async function stepFrontmatter(workflow, stepsDir, fileName) {
-    const text = await fs.readFile(
-      path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, stepsDir, fileName),
-      'utf8',
-    );
+    const text = await fs.readFile(path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, stepsDir, fileName), 'utf8');
     return yaml.load(extractFrontmatter(text)) ?? {};
   }
 
@@ -729,7 +729,7 @@ async function runTests() {
     const folder = `{test_artifacts}/${workflow}/`;
     const carriesScope = (value) => typeof value === 'string' && value.startsWith(folder) && tokens.some((token) => value.includes(token));
     try {
-      const stepsCDir = path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, 'steps-c');
+      const stepsCDir = path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, 'steps-c');
       const stepFiles = (await fs.readdir(stepsCDir)).filter((name) => name.endsWith('.md')).sort();
       let outputSteps = 0;
       for (const fileName of stepFiles) {
@@ -756,7 +756,7 @@ async function runTests() {
       assert(outputSteps > 0, `${workflow} declares at least one create-mode outputFile under {test_artifacts}`);
 
       const workflowYaml = yaml.load(
-        await fs.readFile(path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, 'workflow.yaml'), 'utf8'),
+        await fs.readFile(path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, 'workflow.yaml'), 'utf8'),
       );
       const deliverables = [
         ...Object.entries(workflowYaml)

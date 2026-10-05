@@ -171,7 +171,7 @@ The same fragment holds the checklist for adding the next library, so a new inte
 Production-ready fixtures and utilities that enhance TEA workflows.
 
 - Install: `npm install -D @seontechnologies/playwright-utils`
-  > Playwright Utils is enabled via the installer. Only set `tea_use_playwright_utils` in `_bmad/tea/config.yaml` if you need to override the installer choice.
+  > `bmad setup tea` asks whether to enable Playwright Utils. Run it again, or edit `tea_use_playwright_utils` under `[modules.tea]` in `_bmad/config.toml`, to change the answer.
 - Impacts: `framework`, `atdd`, `automate`, `test-review`, `ci`
 - Utilities: api-request, auth-session, network-recorder, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor, fixtures-composition
 
@@ -192,10 +192,10 @@ CLI and MCP are complementary. Auto mode uses each where it shines and lets you 
 - **Playwright CLI** (`@playwright/cli`): token-efficient shell commands. The agent opens a page, takes a snapshot, and gets back concise element references instead of full DOM trees (~93% fewer tokens than MCP). Best for stateless work: page discovery, selector verification, screenshot capture.
 - **Playwright MCP**: stateful automation over MCP servers with full accessibility trees. Best for multi-step wizards, self-healing mode, and deep DOM introspection.
 
-**Configuration** (`_bmad/tea/config.yaml`):
+**Configuration** (`[modules.tea]` in `_bmad/config.toml`):
 
-```yaml
-tea_browser_automation: 'auto' # auto | cli | mcp | none
+```toml
+tea_browser_automation = "auto" # auto | cli | mcp | none
 ```
 
 | Mode   | What happens                                                                                                                          |
@@ -218,10 +218,10 @@ tea_browser_automation: 'auto' # auto | cli | mcp | none
 
 Optional design-time broker interaction for contract testing workflows.
 
-**Configuration** (`_bmad/tea/config.yaml`):
+**Configuration** (`[modules.tea]` in `_bmad/config.toml`):
 
-```yaml
-tea_pact_mcp: 'mcp' # none | mcp (default "mcp")
+```toml
+tea_pact_mcp = "mcp" # none | mcp (default "mcp")
 ```
 
 | Mode   | What happens                                                                                                                                                                                                            |

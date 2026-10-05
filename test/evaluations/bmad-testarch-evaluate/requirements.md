@@ -10,7 +10,7 @@ The skill runner's stdout and exit code are admissible. Each request holds the r
 
 ## Interfaces and resources in scope
 
-Use TeA's generic skill runner over `src/workflows/testarch/bmad-testarch-evaluate/`, run from a disposable copy of this repository with `_bmad/` and `node_modules/` provisioned read-only. The agent may read the skill and the repository copy and may not write, run commands or reach any other service. The evaluation folder stays out of the copy.
+Use TeA's generic skill runner over `skills/bmad-testarch-evaluate/`, run from a disposable copy of this repository with `_bmad/` and `node_modules/` provisioned read-only. The agent may read the skill and the repository copy and may not write, run commands or reach any other service. The evaluation folder stays out of the copy.
 
 ## Boundary conditions
 

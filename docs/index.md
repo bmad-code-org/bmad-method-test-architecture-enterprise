@@ -22,9 +22,10 @@ Risk assessment, test design, NFR planning, traceability, and release gates appl
 ## Quick Install
 
 ```bash
-npx bmad-method install
-# Select: Test Architect (TEA)
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
+
+Then type `bmad setup tea` in your assistant chat to answer TEA's setup questions. Setup needs the `bmad` skill from BMad Method core; add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad` if you do not have it.
 
 Then run a workflow. Each one has a command you can type in a fresh session:
 

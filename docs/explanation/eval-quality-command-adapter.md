@@ -408,7 +408,7 @@ that fixed the witness passes, and the fix cost the twelve minutes of the first 
 repository-relative path, name no project root, and write a bare `verdict.json`, so all three resolve
 against the policy's `cwd`. A run directory holding only the fixtures fails before the agent starts,
 because `cli/lib/resolve-skill.js` probes four candidates under the project root and finds none. The
-run directory is given the skill at `src/workflows/testarch/bmad-testarch-test-review`, which is the
+run directory is given the skill at `skills/bmad-testarch-test-review`, which is the
 fourth candidate and the one a checkout of this repository satisfies.
 
 ### The witness legs were not runnable, and now they are

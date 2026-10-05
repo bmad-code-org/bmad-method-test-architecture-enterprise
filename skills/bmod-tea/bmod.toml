@@ -1,0 +1,72 @@
+# Everything true of the whole tea module. Unknown keys and tables are ignored.
+
+[bmod]
+code = "tea"
+version = "1.27.2"
+update_source = "github:bmad-code-org/bmad-method-test-architecture-enterprise/skills"
+skills = [
+  "bmad-tea",
+  "bmad-teach-me-testing",
+  "bmad-testarch-atdd",
+  "bmad-testarch-automate",
+  "bmad-testarch-ci",
+  "bmad-testarch-evaluate",
+  "bmad-testarch-framework",
+  "bmad-testarch-nfr",
+  "bmad-testarch-test-design",
+  "bmad-testarch-test-review",
+  "bmad-testarch-trace",
+]
+required_skills = [{ skill = "bmad", version = "6.13.0-next", source = "github:bmad-code-org/BMAD-METHOD/skills" }]
+pre_install_message = ""
+post_install_message = '''
+TEA is ready. Talk to Murat (bmad-tea) or start with Test Design (bmad-testarch-test-design).
+
+Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-testarch-framework) installs the utils packages; ask bmad how to set up the rest.
+'''
+
+# Asked by `bmad setup` in this order. Members read each answer as modules.tea.<key>.
+[[bmod.config_questions]]
+key = "test_artifacts"
+prompt = "Where should test artifacts be stored? (test plans, coverage reports, quality audits)"
+default = "{project-root}/_bmad-output/test-artifacts"
+
+[[bmod.config_questions]]
+key = "tea_use_playwright_utils"
+prompt = "Use Playwright Utils (@seontechnologies/playwright-utils) as the default implementation for Playwright tests? true (recommended) or false to generate from scratch."
+default = "true"
+
+[[bmod.config_questions]]
+key = "tea_use_pactjs_utils"
+prompt = "Use Pact.js Utils (@seontechnologies/pactjs-utils) when contract tests are written? true (recommended) or false to generate raw Pact. This never adds contract tests to a project that has no consumer-provider boundary."
+default = "true"
+
+[[bmod.config_questions]]
+key = "tea_pact_mcp"
+prompt = "Use the SmartBear MCP for PactFlow or a Pact Broker? mcp (recommended; skipped automatically when no broker is reachable) or none."
+default = "mcp"
+
+[[bmod.config_questions]]
+key = "tea_browser_automation"
+prompt = "How should TEA drive live browsers while generating tests? auto (recommended), cli (Playwright CLI), mcp (Playwright MCP servers) or none."
+default = "auto"
+
+[[bmod.config_questions]]
+key = "tea_execution_mode"
+prompt = "How should TEA run multi-step generation and evaluation? auto (recommended; picks the best mode the tool supports), subagent, agent-team or sequential."
+default = "auto"
+
+[[bmod.config_questions]]
+key = "tea_capability_probe"
+prompt = "Check what the tool supports before choosing an execution mode, and fall back when it is missing? true (recommended) or false to use the configured mode strictly."
+default = "true"
+
+[[bmod.config_questions]]
+key = "test_stack_type"
+prompt = "What type of project is this? auto (recommended; detected from project files), frontend, backend, fullstack or mobile."
+default = "auto"
+
+[[bmod.config_questions]]
+key = "test_framework"
+prompt = "Which test framework does the project use? auto (recommended; detected from project files), playwright, cypress, jest, vitest, pytest, junit, go-test, dotnet-test, rspec, maestro or other."
+default = "auto"

@@ -448,7 +448,7 @@ async function main() {
 
   const skills = teaSkills(PROJECT_ROOT);
   if (skills.length === 0) {
-    console.error('❌ no TEA skills found under src/workflows/testarch or src/agents; the coverage check cannot run');
+    console.error('❌ no TEA skills found under skills/; the coverage check cannot run');
     process.exit(2);
   }
 

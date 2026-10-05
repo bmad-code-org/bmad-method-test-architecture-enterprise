@@ -1,11 +1,11 @@
 /**
  * Agent Schema Validator CLI
  *
- * Scans for agent definitions in src/agents/:
+ * Scans for agent definitions in skills/:
  * - Legacy format: *.agent.yaml (validated against Zod schema)
  * - Native skill format: {name}/bmad-skill-manifest.yaml + SKILL.md
- * - BMM native format: {name}/customize.toml + SKILL.md, with the agent's
- *   essence declared under the top-level agents: array in src/module.yaml
+ * - bmod native format: {name}/customize.toml + SKILL.md, with the agent's
+ *   essence declared as a [[members]] entry in skills/bmod-tea/roster.toml
  *
  * Usage: node tools/validate-agent-schema.js [project_root]
  * Exit codes: 0 = success, 1 = validation failures
@@ -16,6 +16,7 @@
 
 const { glob } = require('glob');
 const yaml = require('yaml');
+const TOML = require('smol-toml');
 const fs = require('node:fs');
 const path = require('node:path');
 const { validateAgentFile } = require('./schema/agent.js');
@@ -32,35 +33,39 @@ async function main(customProjectRoot) {
 
   // Find all agent files
   // TEA module supports both legacy (*.agent.yaml) and native skill format (*/bmad-skill-manifest.yaml)
-  const agentFiles = await glob('src/agents/*.agent.yaml', {
+  const agentFiles = await glob('skills/*.agent.yaml', {
     cwd: project_root,
     absolute: true,
   });
 
   // Always check for native skill manifests (supports mixed-mode repos)
-  const skillManifests = await glob('src/agents/*/bmad-skill-manifest.yaml', {
+  const skillManifests = await glob('skills/*/bmad-skill-manifest.yaml', {
     cwd: project_root,
     absolute: true,
   });
 
-  // BMM-native agents: customize.toml + SKILL.md, with essence in module.yaml agents: array
-  const bmmAgents = await glob('src/agents/*/customize.toml', {
-    cwd: project_root,
-    absolute: true,
-  });
+  // bmod-native agents: customize.toml + SKILL.md, with essence in roster.toml [[members]]
+  // Workflows carry a customize.toml too; only an [agent] table makes the skill an agent.
+  const bmmAgents = (
+    await glob('skills/*/customize.toml', {
+      cwd: project_root,
+      absolute: true,
+    })
+  ).filter((customizePath) => /^\[agent\]/m.test(fs.readFileSync(customizePath, 'utf8')));
 
   // If no legacy agents and no manifest-style agents, fall through to BMM-native validation
   if (agentFiles.length === 0 && skillManifests.length === 0 && bmmAgents.length > 0) {
-    console.log(`Found ${bmmAgents.length} BMM-native agent(s) (customize.toml + SKILL.md + module.yaml agents:)\n`);
+    console.log(`Found ${bmmAgents.length} bmod-native agent(s) (customize.toml + SKILL.md + roster.toml [[members]])\n`);
 
-    const moduleYamlPath = path.join(project_root, 'src/module.yaml');
-    let moduleAgents = [];
-    if (fs.existsSync(moduleYamlPath)) {
+    const rosterRelativePath = 'skills/bmod-tea/roster.toml';
+    const rosterPath = path.join(project_root, rosterRelativePath);
+    let rosterMembers = [];
+    if (fs.existsSync(rosterPath)) {
       try {
-        const parsed = yaml.parse(fs.readFileSync(moduleYamlPath, 'utf8'));
-        if (parsed && Array.isArray(parsed.agents)) moduleAgents = parsed.agents;
+        const parsed = TOML.parse(fs.readFileSync(rosterPath, 'utf8'));
+        if (parsed && Array.isArray(parsed.members)) rosterMembers = parsed.members;
       } catch (error) {
-        console.log(`❌ Failed to parse src/module.yaml: ${error.message}`);
+        console.log(`❌ Failed to parse ${rosterRelativePath}: ${error.message}`);
         process.exit(1);
       }
     }
@@ -81,16 +86,16 @@ async function main(customProjectRoot) {
         issues.push({ message: 'customize.toml must declare an [agent] section' });
       }
 
-      const rosterEntry = moduleAgents.find((entry) => entry && entry.code === agentCode);
+      const rosterEntry = rosterMembers.find((entry) => entry && entry.code === agentCode);
       if (rosterEntry) {
-        const requiredRosterFields = ['name', 'title', 'icon', 'description', 'team'];
+        const requiredRosterFields = ['skill', 'name', 'title', 'icon', 'persona'];
         const missing = requiredRosterFields.filter((f) => !rosterEntry[f]);
         if (missing.length > 0) {
-          issues.push({ message: `src/module.yaml agents: entry for "${agentCode}" missing fields: ${missing.join(', ')}` });
+          issues.push({ message: `${rosterRelativePath} [[members]] entry for "${agentCode}" missing fields: ${missing.join(', ')}` });
         }
       } else {
         issues.push({
-          message: `No matching entry in src/module.yaml agents: for code "${agentCode}" — the BMM central config roster won't pick this agent up on install`,
+          message: `No matching [[members]] entry in ${rosterRelativePath} for code "${agentCode}" — the bmad roster won't offer this agent`,
         });
       }
 
@@ -110,7 +115,7 @@ async function main(customProjectRoot) {
       process.exit(1);
     }
 
-    console.log(`\n✨ All ${bmmAgents.length} BMM-native agent(s) passed validation!\n`);
+    console.log(`\n✨ All ${bmmAgents.length} bmod-native agent(s) passed validation!\n`);
     process.exit(0);
   }
 
@@ -175,7 +180,7 @@ async function main(customProjectRoot) {
     }
 
     console.log('❌ No agent files found. This likely indicates a configuration error.');
-    console.log('   Expected to find *.agent.yaml files or native skill manifests in src/agents/');
+    console.log('   Expected to find *.agent.yaml files or native skill manifests in skills/');
     process.exit(1);
   }
 

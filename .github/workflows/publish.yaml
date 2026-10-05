@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/**"
+      - "skills/**"
       - "package.json"
       - "package-lock.json"
   workflow_dispatch:

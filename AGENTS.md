@@ -2,7 +2,7 @@
 
 ## Project Shape
 
-- Core TEA module content lives in `src/`.
+- TEA skills and the `bmod-tea` module record live in `skills/`; the knowledge base is `skills/bmod-tea/knowledge/`.
 - Public documentation lives in `docs/`; the Starlight site consumes it through `website/`.
 - GitHub Actions workflows live in `.github/workflows/`.
 - Release metadata must stay synchronized across `package.json`, `package-lock.json`, and `.claude-plugin/marketplace.json`.

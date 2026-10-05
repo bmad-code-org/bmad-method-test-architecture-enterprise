@@ -14,11 +14,11 @@ const SKILL_CANDIDATES = [
   path.join('_bmad', 'tea', 'workflows', 'testarch', SKILL_NAME),
   path.join('.claude', 'skills', SKILL_NAME),
   path.join('.agents', 'skills', SKILL_NAME),
-  path.join('src', 'workflows', 'testarch', SKILL_NAME),
+  path.join('skills', SKILL_NAME),
 ];
 
 const INSTALL_REMEDIATION =
-  'Install the TEA module with: npx bmad-method install (select the Test Architect module), then re-run tea-test-review.';
+  'Install TEA with: npx skills add bmad-code-org/bmad-method-test-architecture-enterprise, then re-run tea-test-review.';
 
 /**
  * Find the skill root directory (the folder containing SKILL.md).

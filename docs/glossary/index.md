@@ -102,7 +102,7 @@ Terminology reference for Test Architect (TEA).
 | **Story**               | Single unit of implementable work with clear acceptance criteria, typically 2-8 hours of effort. Grouped into epics.                       |
 | **Story Context**       | Implementation guidance embedded in story files during create-story, referencing existing patterns and approaches.                         |
 | **Story File**          | Markdown file containing story description, acceptance criteria, technical notes, and testing requirements.                                |
-| **Track Selection**     | Automatic analysis by `bmad-help` suggesting appropriate track based on complexity indicators. User can override.                          |
+| **Track Selection**     | Automatic analysis by `bmad` suggesting appropriate track based on complexity indicators. User can override.                               |
 
 ## Game Development Terms
 

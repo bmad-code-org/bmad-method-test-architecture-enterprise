@@ -6,11 +6,11 @@
  * source this repository already keeps:
  *
  *   - test/fixtures/test-review-eval/ground-truth.json for test-review.contract.json,
- *   - src/workflows/testarch/bmad-testarch-test-review/steps-c/criteria-registry.md
+ *   - skills/bmad-testarch-test-review/steps-c/criteria-registry.md
  *     for the severity of each planted row and for that contract's sourceSpecDigest,
  *   - test/evals/<workflow>/evals.json for each fragment-selection contract,
  *   - each workflow's deciding step file for that contract's sourceSpecDigest,
- *   - each workflow's resources/tea-index.csv for the selection cardinality bound, and
+ *   - skills/bmod-tea/knowledge/tea-index.csv for the selection cardinality bound, and
  *   - cli/test-review.js's VERDICT_KEYS for the verdict response descriptor's key
  *     sets and types, and its DEFAULT_AGENT for the sensitivity-witness legs, and
  *   - cli/fragment-selection-runner.js's SELECTION_REQUEST_KEYS for the request
@@ -144,7 +144,7 @@ const {
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
-const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills');
 const FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const GROUND_TRUTH_PATH = path.join(FIXTURE_ROOT, 'ground-truth.json');
 const FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
@@ -1328,7 +1328,7 @@ async function buildFragmentSelectionContract(spec) {
 
   // The selection can never name more fragments than the index offers, so the
   // cardinality bound is counted from the index.
-  const indexRows = parse(fs.readFileSync(path.join(workflowDir, 'resources', 'tea-index.csv'), 'utf8'), {
+  const indexRows = parse(fs.readFileSync(path.join(WORKFLOW_ROOT, 'bmod-tea', 'knowledge', 'tea-index.csv'), 'utf8'), {
     columns: true,
     skip_empty_lines: true,
   });
@@ -1438,8 +1438,8 @@ async function buildFragmentSelectionContract(spec) {
     forbiddenInputs: FORBIDDEN_INPUTS,
     testData: {
       setup:
-        `Every case runs against the checked-in ${workflow} workflow: its step file or files named in requirementLinks, and its ` +
-        `resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, ` +
+        `Every case runs against the checked-in ${workflow} workflow: its step file or files named in requirementLinks, and the shared ` +
+        `{tea-knowledge}/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, ` +
         `and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This ` +
         `contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that ` +
         `produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.`,
@@ -1459,7 +1459,7 @@ async function buildFragmentSelectionContract(spec) {
     safetyLimits: [
       'The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.',
       'No credential value appears in a prompt, in a selection, or in a result file.',
-      'The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run.',
+      'The runner writes nothing. The workflow step files, {tea-knowledge}/tea-index.csv, and the eval data are read-only for the whole run.',
     ],
     requiredEvidence: [
       'The JSON object the runner printed on standard output for every case, in full.',
@@ -2637,7 +2637,7 @@ function buildTraceContract() {
     testData: {
       setup:
         `Each plan step stages one fixture set from test/fixtures/trace-eval/ into a disposable workspace: the set's files under its own project root ` +
-        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml whose test_artifacts points inside that ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/config.toml whose test_artifacts points inside that ` +
         `workspace, and the bmad-testarch-trace workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries ` +
         `its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root ` +
         `and skill/ and resolves every placeholder against them. The project root is the one fact about the set the prompt carries, and it carries the epic the ` +
@@ -3143,7 +3143,7 @@ function buildNfrContract() {
     testData: {
       setup:
         `Each plan step stages one evidence bundle from test/fixtures/nfr-eval/ into a disposable workspace: the bundle's files under its own project root ` +
-        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml whose test_artifacts points inside that ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/config.toml whose test_artifacts points inside that ` +
         `workspace, and the bmad-testarch-nfr workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries ` +
         `its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root ` +
         `and skill/ and resolves every placeholder against them. The project root is the one fact about the bundle the prompt carries, and it names the service ` +
@@ -3631,7 +3631,7 @@ function buildCiContract() {
     testData: {
       setup:
         `Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root ` +
-        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/config.toml, a minimal .git/ directory, and ` +
         `the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
         `bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the ` +
         `project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt ` +
@@ -3852,7 +3852,7 @@ function buildAtddContract() {
     testData: {
       setup:
         'The one plan step stages the reservations fixture project into a disposable workspace: its files under ' +
-        `${groundTruth.projectRoot}/, a resolved _bmad/tea/config.yaml, an empty ${groundTruth.testDir}/, and the ` +
+        `${groundTruth.projectRoot}/, a resolved _bmad/config.toml, an empty ${groundTruth.testDir}/, and the ` +
         'bmad-testarch-atdd workflow under skill/. ground-truth.json is never staged, and the harness asserts that ' +
         'no staged file carries its bytes or its keys before the run. The prompt names the one path generation must ' +
         `write, ${groundTruth.testDir}/${ATDD_SCAFFOLD_RELATIVE_PATH}, which is what makes the scaffold addressable ` +
@@ -3888,7 +3888,7 @@ function buildAtddContract() {
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 const ROUTING_INTENTS_PATH = path.join(ROUTING_FIXTURE_ROOT, 'intents.json');
 const ROUTING_GROUND_TRUTH_PATH = path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json');
-const TEA_AGENT_ROOT = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea');
+const TEA_AGENT_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-tea');
 const TEA_SKILL_PATH = path.join(TEA_AGENT_ROOT, 'SKILL.md');
 const TEA_MENU_PATH = path.join(TEA_AGENT_ROOT, 'customize.toml');
 
@@ -4316,7 +4316,7 @@ async function buildRoutingContract(spec) {
   const cases = corpus.cases.filter((item) => spec.actions.includes(item.expected.expectedAction));
   assert(cases.length > 0, `${spec.contractId}: the corpus carries no ${spec.actions.join(' or ')} case`);
   const menu = await routingMenuItems();
-  assert(menu.length > 0, 'src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item');
+  assert(menu.length > 0, 'skills/bmad-tea/customize.toml declares no [[agent.menu]] item');
 
   const specs = routingOracleSpecs(cases, menu);
   const oracles = specs.map((oracleSpec) => ({
@@ -4401,7 +4401,7 @@ async function buildRoutingContract(spec) {
     testData: {
       setup:
         `${spec.setupLead} The intent comes from test/fixtures/tea-routing-eval/intents.json and is wrapped in the bmad-tea skill as it ships: ` +
-        `src/agents/bmad-tea/SKILL.md and src/agents/bmad-tea/customize.toml, read off disk and placed in the prompt whole. Nothing is staged and ` +
+        `skills/bmad-tea/SKILL.md and skills/bmad-tea/customize.toml, read off disk and placed in the prompt whole. Nothing is staged and ` +
         `nothing is installed, because a routing decision needs no workspace. The run happens in an empty disposable directory that is also the ` +
         `authorization's working directory. test/fixtures/tea-routing-eval/ground-truth.json is never shown: the harness searches every assembled ` +
         `prompt for each of its ground-truth-only keys and for its own bytes before a call is spent, and that check runs in --validate-only too. ` +
@@ -4974,11 +4974,11 @@ function buildTestDesignContract() {
     testData: {
       setup:
         `Each plan step stages one fixture set from test/fixtures/test-design-eval/ into a disposable workspace: the set's epic under its own project ` +
-        `root (${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), an empty test-artifacts/, a resolved _bmad/tea/config.yaml whose ` +
-        `test_artifacts points inside that workspace, and the bmad-testarch-test-design workflow under skill/. The skill sits outside the project root ` +
+        `root (${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), an empty test-artifacts/, a resolved _bmad/config.toml whose ` +
+        `test_artifacts points inside that workspace, and the bmad-testarch-test-design workflow under skill/ with the bmod-tea knowledge base beside it. Both sit outside the project root ` +
         `because three of its files carry worked risk registers with their own R-001 rows and a fourth carries one numbered from R-002 ` +
         `(test-design-template.md, checklist.md, resources/test-design-epic-3.example.md and ` +
-        `resources/knowledge/adr-quality-readiness-checklist.md), and a source tree containing them would let a run lift its register from ` +
+        `{tea-knowledge}/adr-quality-readiness-checklist.md), and a source tree containing them would let a run lift its register from ` +
         `the worked example and still read as an analysis of the epic. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
         `bytes or its keys before the run and again on --validate-only. The prompt on standard input names the project root and skill/ and pins the mode, ` +
         `the epic number and the run key, because step-01 halts to ask for each of them and a headless run that halts is an environment failure rather ` +
