@@ -118,7 +118,7 @@ development_status:
   1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions: done
   1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it: done
   1-86-list-a-connection-to-a-hosts-path-based-unix-socket-outside-the-grants-as-an-observed-mount: done
-  1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: backlog
+  1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: in-progress
   1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
   1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: backlog
