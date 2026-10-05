@@ -44,6 +44,12 @@
  * scores each exit 10; a rubric under each non-deterministic kind with no
  * judge exits 0.
  *
+ * Story 1.90 adds the `baseline-digest` rule (AD-12): a baseline accepted through the real CLI checks clean, and a baseline
+ * file edited by one byte, a file its manifest lists deleted, a file the manifest does not list, an entry that is not a
+ * regular file, a manifest that lost its `files` map, a snapshot that lost its manifest, a snapshot that lost its manifest and
+ * its `run.json`, a directory of listed files replaced by a file, an entry that climbs out of `baseline/`, an entry with a
+ * name past the file system's limit and an entry through a link loop each exit 10 naming the file; the reference documents the rule in its `check` rule list and its `compare` section.
+ *
  * Usage: node test/test-evaluate-check.js
  */
 
@@ -66,6 +72,8 @@ const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/
 const { digest, digestFiles, redactArgs, redactSecrets } = require('../cli/lib/evaluate/digest');
 const { isDateTime } = require('../cli/lib/evaluate/formats');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
+const baselines = require('./lib/evaluate-baseline');
+const { suite } = require('./lib/evaluate-story-121');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -4879,8 +4887,177 @@ function checkPackedInstall() {
   check(modules.status === 0, `the runtime modules do not load from the packed install (exit ${modules.status})\n${modules.stderr}`);
 }
 
+// ---------------------------------------------------------------------------
+// Story 1.90: the baseline's file digests
+
+/** A baseline accepted through the real CLI over a scored clean run, committed as the pull request that accepts it is. */
+function acceptedBaselineProject(test) {
+  const project = test.project('baseline-digest');
+  const run = baselines.runAndScore(test, project);
+  const accepted = test.cli(project.folder, 'compare', ['--accept', '--run', path.basename(run)], project.env);
+  check(accepted.status === 0, `compare --accept exited ${accepted.status}; expected 0\n${accepted.output}`);
+  baselines.commitAll(project.repository, 'accept the baseline');
+  return project;
+}
+
+/** `baseline/baseline.json` edited in place. */
+function editManifest(folder, edit) {
+  const file = path.join(folder, 'baseline', 'baseline.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  edit(manifest);
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+/** The cases: a baseline defect, the file the finding names, and what it says. */
+const BASELINE_DIGEST_CASES = [
+  {
+    name: 'a baseline file edited by one byte',
+    file: 'baseline/scoring-policy.json',
+    says: /digests to sha256:[0-9a-f]{64}; baseline\.json records sha256:[0-9a-f]{64}/,
+    plant: (folder) => fs.appendFileSync(path.join(folder, 'baseline', 'scoring-policy.json'), '\n'),
+  },
+  {
+    name: 'a file the manifest lists, deleted',
+    file: 'baseline/observations.json',
+    says: /baseline\.json lists this file and it is missing/,
+    plant: (folder) => fs.rmSync(path.join(folder, 'baseline', 'observations.json')),
+  },
+  {
+    name: 'a file the manifest does not list',
+    file: 'baseline/notes.txt',
+    says: /does not list it/,
+    plant: (folder) => fs.writeFileSync(path.join(folder, 'baseline', 'notes.txt'), 'added by hand\n'),
+  },
+  {
+    name: 'a manifest entry that is a directory',
+    file: 'baseline/probes',
+    says: /not a regular file/,
+    plant: (folder) => editManifest(folder, (manifest) => (manifest.files.probes = manifest.files['probes.json'])),
+  },
+  {
+    name: 'a listed file replaced by a link to a file with the same bytes',
+    file: 'baseline/probes.json',
+    says: /not a regular file|is a symbolic link/,
+    plant: (folder) => {
+      const file = path.join(folder, 'baseline', 'probes.json');
+      const outside = path.join(tempDir('outside-baseline'), 'probes.json');
+      fs.copyFileSync(file, outside);
+      fs.rmSync(file);
+      fs.symlinkSync(outside, file);
+    },
+  },
+  {
+    name: 'a directory of listed files replaced by a file',
+    file: 'baseline/probes/P-001.probe.json',
+    says: /baseline\.json lists this file and it is missing/,
+    plant: (folder) => {
+      fs.rmSync(path.join(folder, 'baseline', 'probes'), { recursive: true });
+      fs.writeFileSync(path.join(folder, 'baseline', 'probes'), 'not a directory\n');
+    },
+  },
+  {
+    name: 'a manifest entry that climbs out of baseline/',
+    file: 'baseline/baseline.json',
+    says: /not a path inside baseline\//,
+    plant: (folder) => editManifest(folder, (manifest) => (manifest.files['../run.json'] = manifest.files['run.json'])),
+  },
+  {
+    name: 'a manifest with no files map',
+    file: 'baseline/baseline.json',
+    says: /holds no files map/,
+    plant: (folder) => editManifest(folder, (manifest) => delete manifest.files),
+  },
+  {
+    name: 'a snapshot whose manifest was deleted',
+    file: 'baseline/baseline.json',
+    says: /is absent while baseline\/ holds .* does not hold/,
+    plant: (folder) => fs.rmSync(path.join(folder, 'baseline', 'baseline.json')),
+  },
+  {
+    // The escape hatch the exemption must not be: with `baseline.json` and `run.json` gone, one edited evidence byte still fails.
+    name: 'a snapshot whose manifest and run.json were deleted and whose evidence was edited by one byte',
+    file: 'baseline/baseline.json',
+    says: /is absent while baseline\/ holds .* does not hold/,
+    plant: (folder) => {
+      const baseline = path.join(folder, 'baseline');
+      const scores = path.join(baseline, 'scores');
+      const [scoreId] = fs.readdirSync(scores);
+      fs.appendFileSync(path.join(scores, scoreId, 'P-001', 'evidence-artifact.json'), '\n');
+      fs.rmSync(path.join(baseline, 'baseline.json'));
+      fs.rmSync(path.join(baseline, 'run.json'));
+    },
+  },
+  {
+    name: 'a manifest entry with a name past the file system limit',
+    file: `baseline/${'a'.repeat(300)}.json`,
+    says: /cannot be examined: ENAMETOOLONG/,
+    plant: (folder) => editManifest(folder, (manifest) => (manifest.files[`${'a'.repeat(300)}.json`] = manifest.files['run.json'])),
+  },
+  {
+    name: 'a manifest entry through a link loop',
+    file: 'baseline/loop/entry.json',
+    says: /cannot be examined: ELOOP/,
+    also: ['baseline/loop: [baseline-file]'],
+    plant: (folder) => {
+      fs.symlinkSync('loop', path.join(folder, 'baseline', 'loop'));
+      editManifest(folder, (manifest) => (manifest.files['loop/entry.json'] = manifest.files['run.json']));
+    },
+  },
+];
+
+async function checkBaselineDigest() {
+  const test = suite('tea-evaluate-check-baseline');
+  const copies = [];
+  try {
+    const project = acceptedBaselineProject(test);
+    const fresh = test.cli(project.folder, 'check', [], project.env);
+    check(fresh.status === 0, `check over a freshly accepted baseline exited ${fresh.status}; expected 0\n${fresh.output}`);
+    check(!fresh.output.includes('[baseline-digest]'), `check over a freshly accepted baseline reported baseline-digest\n${fresh.output}`);
+    for (const testCase of BASELINE_DIGEST_CASES) {
+      const folder = baselines.copyOf(project, copies);
+      testCase.plant(folder);
+      const result = test.cli(folder, 'check', [], project.env);
+      const label = `${testCase.name}: `;
+      check(result.status === 10, `${label}check exited ${result.status}; expected 10\n${result.output}`);
+      const line = result.output.split('\n').find((candidate) => candidate.startsWith(`${testCase.file}: [baseline-digest]`));
+      check(line !== undefined, `${label}no baseline-digest finding names ${testCase.file}\n${result.output}`);
+      check(line === undefined || testCase.says.test(line), `${label}the finding does not say ${testCase.says}\n${line}`);
+      for (const other of testCase.also ?? []) check(result.output.includes(other), `${label}no finding ${other}\n${result.output}`);
+      check(!result.output.includes('Error:') && result.status !== 1, `${label}check threw\n${result.output}`);
+    }
+    // Each defect is reported alone and every one of several is listed: one edited, one deleted and one added file.
+    const several = baselines.copyOf(project, copies);
+    for (const testCase of BASELINE_DIGEST_CASES.slice(0, 3)) testCase.plant(several);
+    const listed = test.cli(several, 'check', [], project.env);
+    check(listed.status === 10, `three planted defects: check exited ${listed.status}; expected 10\n${listed.output}`);
+    for (const testCase of BASELINE_DIGEST_CASES.slice(0, 3)) {
+      check(
+        listed.output.includes(`${testCase.file}: [baseline-digest]`),
+        `three planted defects: ${testCase.file} is not listed\n${listed.output}`,
+      );
+    }
+  } finally {
+    test.cleanup();
+    for (const copy of copies) fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+/** The reference names `baseline-digest` in its `check` rule list and in its `compare` section. */
+function checkBaselineDigestDocumented() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const section = (heading) => reference.split(`\n## ${heading}\n`)[1]?.split('\n## ')[0] ?? '';
+  const rules = section('check');
+  check(
+    rules.split('\n').some((line) => line.startsWith('| `baseline-digest`')),
+    "the reference's check rule list has no `baseline-digest` row",
+  );
+  check(section('compare').includes('`baseline-digest`'), "the reference's compare section does not name the `baseline-digest` rule");
+}
+
 async function main() {
   try {
+    checkBaselineDigestDocumented();
+    await checkBaselineDigest();
     await checkValidFixture();
     await checkRequirementsStatement();
     await checkEveryEvaluationHasItsStatement();

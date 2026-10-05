@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-evaluate check` and `compare` verify the baseline's file digests (Story 1.90, AD-12).
+  `compare --accept` records a `files` map of every baseline file's `digestBytes` in `baseline/baseline.json`, and nothing read it back, so a baseline file edited by hand passed both commands.
+  `check` now reports a `baseline-digest` finding and exits 10 for each file of `baseline/` whose bytes differ from the map, each listed file that is missing and each file other than `baseline.json` that the map does not list.
+  `check` also reports the finding when the manifest cannot be read, when it lists a path outside `baseline/` or one the file system cannot examine, and when `baseline/` holds anything but authored qualification evidence (`probes/`, `qualification/`, a placeholder `README.md`) with no manifest.
+  A plain `compare` refuses a baseline that fails the same check with exit 10 and no verdict, before it reads any of the baseline's evidence.
+  One module, `cli/lib/evaluate/baseline-digests.js`, holds the verification for both commands.
+  A `test:evaluate-check` case and a `test:evaluate-compare` case accept a baseline through the real CLI, pass it, and fail it for a one-byte edit, a missing listed file and an unlisted file.
+  The reference lists the `baseline-digest` rule in its `check` rule list and its `compare` section, and a static test fails when either mention is removed.
 - TeA's own pull requests run the `pr` tier of every evaluation it keeps (Story 2.5, AD-11, CAP-11, CAP-12).
   Each of the nine fixture evaluations (the stdio MCP and HTTP API graders, the workflow, tool-use, promptfoo and learned-framework evaluations, the AI-feature and test-review authoring suites, and the gap-loop `after` evaluation) and the Evaluate-authored suite is a script of the `npm test` chain, `test:evaluate-pr-<key>`, which the `chain` matrix runs.
   `test/test-evaluate-pr-tier.js <key>` runs `tea-evaluate ci --tier pr` over the committed folder with no secret and no model call, and fails when the folder's plan omits a `pr` check its probes or interface call for (the gameability arm, the HTTP port conformance), when its baseline was recorded on another eval-quality release than the installed one, holds a dirty or incomplete run, a non-copy workspace, a manifest `acceptedRun` that names another run, or a partition other than both, or when the evaluation's `evaluation.json` declares a non-copy workspace, or when `ci` exits non-zero, runs other checks than the plan places or reads a stale baseline.

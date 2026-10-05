@@ -1590,7 +1590,11 @@ function checkPrReplay() {
     const row = rowOf(latestCi(mutated).json, 'replay');
     assert.deepEqual([row.exit, row.class, row.action], [13, 'evaluation evidence drift', 'block']);
     assert.match(result.stdout, /replay: \[drift\] scores\/P-001\/evidence-artifact\.json: the replay produced sha256:/);
-    for (const other of latestCi(mutated).json.checks.filter((candidate) => !['replay'].includes(candidate.id)))
+    // `check` reads the same edit as a `baseline-digest` finding (Story 1.90): the baseline's bytes are no longer the ones its
+    // manifest lists. The replay's drift is the other check that sees it.
+    assert.equal(rowOf(latestCi(mutated).json, 'check').exit, 10, 'check after one flipped evidence byte');
+    assert.match(result.stdout, /check: exit 10 \(authoring defect\), block\n\s+baseline\/[^\n]*\[baseline-digest\]/);
+    for (const other of latestCi(mutated).json.checks.filter((candidate) => !['replay', 'check'].includes(candidate.id)))
       assert.equal(other.exit, 0, `${other.id} after one flipped evidence byte`);
     // A missing baseline file and an extra one are drift as well.
     const missing = copyFixture('verdict', 'pr-missing');
@@ -2256,7 +2260,7 @@ const FLOOR_DEFECT_ONLY = ({ folder }) => {
   write(file, evaluation);
 };
 
-function checkLiveTiers() {
+async function checkLiveTiers() {
   const reason = 'AD-10 default';
   const project = liveProject('tiers', {
     edit: FLOOR_DEFECT_ONLY,
@@ -2345,6 +2349,9 @@ function checkLiveTiers() {
   const run = read(recorded);
   run.evalQualityVersion = '0.0.0';
   write(recorded, run);
+  // Another engine's sealed baseline: its manifest lists the bytes it holds (Story 1.90 refuses one that does not).
+  const engine = await loadEngine();
+  baselines.resealBaseline(project.folder, engine);
   const refused = ci(project.folder, 'scheduled', project.env);
   assert.equal(refused.status, 0, refused.output);
   const refusedRow = rowOf(latestCi(project.folder).json, 'strength-comparison');
@@ -2359,6 +2366,7 @@ function checkLiveTiers() {
     JSON.stringify(refusedRow.notes),
   );
   write(recorded, { ...run, evalQualityVersion: engineVersion() });
+  baselines.resealBaseline(project.folder, engine);
 
   // A check's own non-zero exit keeps the stale rule in the final exit. With P-002 missed the twin run breaches the class floor, which
   // is exit 2 on release, so a fresh baseline gives 2 and a stale one 11, which outranks it; each row carries the stale
