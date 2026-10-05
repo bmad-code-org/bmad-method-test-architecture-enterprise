@@ -90,7 +90,7 @@
  *                listens, on the host, where the server's caller expects it
  *                (`confinement-status.cjs`, `confinement-relay.js`,
  *                `http-target.js`). A command target and a tool server have no
- *                bridge. Seatbelt has no abstract sockets and is unchanged.
+ *                bridge. Seatbelt has no abstract sockets.
  *                An entry that authorizes hosts (`egress`, Story 1.83) gives each
  *                of its calls one route out, the mirror of the bridge: the
  *                runtime serves an HTTP `CONNECT` proxy on a Unix socket in a
@@ -113,7 +113,9 @@
  *                room cannot hold the first three ranks is refused (exit 12),
  *                and what the room cut is recorded in `run.json`
  *                (`hostSocketTruncation`).
- *                A socket bound after the call started stays reachable for that call and the audit lists a connection to it (Story 1.86), and Seatbelt hides none.
+ *                A socket bound after the call started stays reachable for that call and the audit lists a connection to it (Story 1.86).
+ *                A Seatbelt profile denies every `connect()` to a path-based socket and allows back the workspace, the call's private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
+ *                So no socket outside them is reachable, one bound after the call started included, since the rule names a path.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -252,6 +254,15 @@ const SEATBELT_DEVICE_WRITES = [
   '(literal "/dev/dtracehelper")',
   '(subpath "/dev/fd")',
 ];
+
+/**
+ * The two system services a toolchain reaches over a path-based Unix socket on macOS, the only sockets a target may connect to outside its grants (Story 1.87).
+ * `/private/var/run/mDNSResponder` answers every name lookup of the C library (`getaddrinfo`, so `dns.lookup`, `curl`, `ssh` and `python` resolve through it).
+ * `/private/var/run/syslog` takes the datagrams of the BSD syslog protocol, which a Go or Python logging client writes.
+ * Seatbelt matches the real path of the socket a `connect()` reaches, so each is named by its real path under `/private`.
+ * Every other socket of `/private/var/run` stays closed: `com.docker.vmnetd.sock` is the root helper of Docker Desktop, `usbmuxd` reaches attached devices and `cupsd` the print service.
+ */
+const SEATBELT_SYSTEM_SOCKETS = ['/private/var/run/mDNSResponder', '/private/var/run/syslog'];
 
 /** Thrown for a path no profile or argument vector can carry, or a confinement asked of a port without a workspace. */
 class ConfinementError extends Error {
@@ -395,6 +406,8 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
  * The user's private root directory is denied reads and writes and a `connect()`
  * to a unix socket under it (a denied read does not stop a connection), after
  * every allowance.
+ * A `connect()` to a path-based unix socket is refused anywhere but the workspace, the private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
+ * The rule names a path, so it holds for a socket bound after the call started.
  *
  * With `audit` (`{ token, exempt }`), the kernel reports what the profile
  * allows or refuses: every file rule that denies carries the sandbox's token
@@ -409,6 +422,12 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  // Seatbelt matches the real path of the socket a `connect()` reaches, and `spellings` names the real path of each grant beside its given one.
+  const socketRoutes = (candidates) => candidates.map((entry) => `(remote unix-socket ${entry})`).join('\n  ');
+  const socketRules = [
+    '(deny network-outbound (remote unix-socket))',
+    `(allow network-outbound\n  ${socketRoutes([...allowed, ...SEATBELT_SYSTEM_SOCKETS.map((entry) => `(literal "${entry}")`)])})`,
+  ];
   const tagged = audit === null ? '' : ` (with message "${audit.token}")`;
   // Seatbelt decides an operation by the rules that name it before the rules that name its wildcard, so the report rule
   // (which names `file-read-data`) would override every later `file-read*` rule, whatever their order; an audited profile
@@ -465,6 +484,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
       : [
           `(allow ${reads} file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
           `(allow file-read-metadata\n  ${homeAncestors.flatMap(literals).join('\n  ')})`,
+          `(allow network-outbound\n  ${socketRoutes(subpaths(rootHome))})`,
         ];
   // What the sandbox may read is not reported; every other read the profile allows is (macOS reports by real path, so both spellings are named).
   const reportRule =
@@ -487,6 +507,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     '(allow default)',
     `(deny file-write*${tagged})`,
     `(allow file-write*\n  ${[...allowed, ...SEATBELT_DEVICE_WRITES].join('\n  ')})`,
+    ...socketRules,
     ...reportRule,
     ...gitRules,
     ...privateRules,

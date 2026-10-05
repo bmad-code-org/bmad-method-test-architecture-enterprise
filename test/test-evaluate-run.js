@@ -8240,8 +8240,11 @@ async function checkPrivateRootAcrossRuns() {
         path.dirname(secondParent) === first.privateRoot && secondParent !== firstParent,
         `${what}: the second run's parent is not beneath the first run's root`,
       );
-      const attempt = (sandbox) => {
+      // A Seatbelt profile refuses every socket outside its grants (Story 1.87).
+      // The control takes that denial out to see what the root alone withholds.
+      const attempt = (sandbox, { withoutSocketDenial = false } = {}) => {
         const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
+        if (withoutSocketDenial && confinement.mode === 'seatbelt') wrapped.args[1] = mutatedSocketProfile(wrapped.args[1], 'no-rule');
         const result = spawnSync(wrapped.target, wrapped.args, {
           cwd: workspace,
           encoding: 'utf8',
@@ -8265,7 +8268,7 @@ async function checkPrivateRootAcrossRuns() {
         `${what}: a sandbox built for one run connected to the socket of another run: ${JSON.stringify(seen.socket)}; expected a refusal`,
       );
       // The control: a sandbox over the first run's parent alone reaches the second run's files, so the case sees what the root withholds.
-      const narrow = attempt(sandboxes.parentOnly);
+      const narrow = attempt(sandboxes.parentOnly, { withoutSocketDenial: true });
       check(
         narrow.token === 'token' && narrow.socket === 'allowed',
         `${what}: a sandbox over one run's parent alone ended ${JSON.stringify(narrow)} on another run's files; expected the token read and the socket connected`,
@@ -16882,11 +16885,23 @@ function checkBridgeReference() {
       ['the path socket units'],
     ],
     [
-      "macOS Seatbelt hides no host socket apart from the ones under the user's private root, so a macOS target can connect to a path-based socket outside that root.",
-      ['the Seatbelt network and Mach services'],
+      "A macOS Seatbelt target cannot connect to a path-based Unix socket of the host outside its grants: `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names, an agent socket under `/tmp` and every other socket file answer `EPERM`, since the profile denies every `connect()` to a socket path and then allows the grants back.",
+      ['the Seatbelt path socket units', 'the Seatbelt path socket route'],
     ],
     [
-      'macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.',
+      "A socket inside the target's workspace, a private directory of the call or its home stays connectable, and so do the two system services a toolchain needs: `/var/run/mDNSResponder`, which every name lookup of the C library asks, and `/var/run/syslog`, the BSD log socket.",
+      ['the Seatbelt path socket units', 'the Seatbelt path socket route'],
+    ],
+    [
+      'Every other socket of `/var/run` stays closed on macOS, the privileged helper of Docker Desktop among them.',
+      ['the Seatbelt path socket units'],
+    ],
+    [
+      'The rule names a path, so a socket a host process binds after the call started is refused too, and so is a link to a socket outside the grants, whether the link lies in the workspace or beside the socket, since Seatbelt matches the real path of the socket; a target cannot hard-link a socket outside its grants into its workspace.',
+      ['the Seatbelt path socket units', 'the Seatbelt path socket route'],
+    ],
+    [
+      'macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.',
       ['the Seatbelt network and Mach services', 'the egress field'],
     ],
     [
@@ -16991,6 +17006,40 @@ function checkBridgeReference() {
       confinementSection.includes('`hostSocketTruncation`'),
     "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
   );
+  // Story 1.87: the macOS sentence that said a Seatbelt target reaches a path-based socket outside the private root is gone.
+  // The sentences that replace it name what the profile closes and what it reaches.
+  const staleMacOsSockets = (text) => {
+    const section = (text.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+    return (
+      section.includes('macOS Seatbelt hides no host socket') ||
+      section.includes('a macOS target can connect to a path-based socket') ||
+      ![
+        "`/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names",
+        'since the profile denies every `connect()` to a socket path and then allows the grants back',
+        '`/var/run/mDNSResponder`, which every name lookup of the C library asks, and `/var/run/syslog`, the BSD log socket',
+        'a socket a host process binds after the call started is refused too',
+      ].every((claim) => section.includes(claim))
+    );
+  };
+  check(
+    !staleMacOsSockets(reference),
+    "the reference's confinement section still says a macOS target can connect to a path-based socket outside the private root, or does not name the sockets the Seatbelt profile closes and the ones it reaches",
+  );
+  const oldMacSentence =
+    "macOS Seatbelt hides no host socket apart from the ones under the user's private root, so a macOS target can connect to a path-based socket outside that root.";
+  check(
+    staleMacOsSockets(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldMacSentence}\n`)),
+    'the check on the macOS socket sentences passed with the old sentence in the confinement section',
+  );
+  check(
+    staleMacOsSockets(
+      reference.replace(
+        '`/var/run/mDNSResponder`, which every name lookup of the C library asks, and `/var/run/syslog`, the BSD log socket',
+        'the system services',
+      ),
+    ),
+    'the check on the macOS socket sentences passed with the sockets the profile reaches removed',
+  );
 }
 
 /**
@@ -17021,20 +17070,6 @@ async function checkSeatbeltNetworkAndMach() {
         `a Seatbelt target with network ${network} connecting to the host's loopback got ${JSON.stringify(connected.stdout.trim())}; expected connected`,
       );
     }
-    // Seatbelt hides no host socket but the private root's: a path-based socket outside it is reached (Story 1.82).
-    const hostSocket = path.join(socketDirectory(), 'host.sock');
-    const hostServer = net.createServer((socket) => socket.end());
-    await new Promise((resolve) => hostServer.listen(hostSocket, resolve));
-    try {
-      const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', hostSocket]);
-      const connected = await runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
-      check(
-        connected.stdout.trim() === 'connected',
-        `a Seatbelt target connecting to a path-based socket outside the private root got ${JSON.stringify(connected.stdout.trim())}; expected connected, which the reference states`,
-      );
-    } finally {
-      await closeServer(hostServer);
-    }
     const asked = sandbox.wrap('/usr/bin/dscl', ['.', '-read', '/Users/root', 'UniqueID']);
     const answered = await runToEnd(asked.target, asked.args, { cwd: workspace });
     check(
@@ -17043,6 +17078,470 @@ async function checkSeatbeltNetworkAndMach() {
     );
   } finally {
     await closeServer(server);
+  }
+}
+
+// ---------------------------------------------------------------- Story 1.87: a Seatbelt target has no route to the host's path-based sockets
+
+/** The statement the Seatbelt profile opens its socket rules with: every `connect()` to a path-based Unix socket is refused until a later rule allows it back. */
+const SEATBELT_SOCKET_DENIAL = '(deny network-outbound (remote unix-socket))';
+
+/**
+ * Whether the network rules of a Seatbelt profile let a `connect()` reach the socket whose real path is `socketPath`.
+ * The profile starts from `(allow default)` and the last rule that names the socket decides, which is how Seatbelt reads it.
+ * A host that cannot run Seatbelt holds the profile's text to the same reading.
+ */
+function profileAllowsSocket(profile, socketPath) {
+  let allowed = true;
+  for (const rule of profile.split(/\n(?=\()/)) {
+    const verdict = /^\((allow|deny) network-outbound\b/.exec(rule)?.[1];
+    if (verdict === undefined) continue;
+    const routes = [...rule.matchAll(/\(remote unix-socket(?: \((subpath|literal) "([^"]*)"\))?\)/g)];
+    const matches = routes.some(
+      ([, kind, target]) =>
+        kind === undefined || (kind === 'literal' ? socketPath === target : socketPath === target || socketPath.startsWith(`${target}/`)),
+    );
+    if (matches) allowed = verdict === 'allow';
+  }
+  return allowed;
+}
+
+/**
+ * The Seatbelt profile with its socket rule changed.
+ * `no-rule` takes the denial of every socket out, which is the rule removed.
+ * `deny-all` takes every allowance of a socket out, which is a rule that denies every socket, the grants and the system services included.
+ */
+function mutatedSocketProfile(profile, mutate) {
+  const rules = profile.split(/\n(?=\()/);
+  const keep = {
+    'no-rule': (rule) => rule !== SEATBELT_SOCKET_DENIAL,
+    'deny-all': (rule) => !rule.startsWith('(allow network-outbound'),
+  }[mutate];
+  if (keep === undefined) throw new Error(`unknown mutation ${mutate}`);
+  return rules.filter(keep).join('\n');
+}
+
+/**
+ * The Seatbelt profile's socket rules on any host (Story 1.87).
+ * The denial comes first and the allowances after it name the workspace, the call's private directories, the home and the two system services alone.
+ * The root's denial follows them and the home beneath the root is allowed after that.
+ * The rule names paths, so a socket bound after the profile was made changes nothing.
+ * Both spellings of a grant that goes through a link are named, and the audited profile carries the same rule.
+ * A reading of the profile finds each socket class closed or open as the criteria say, which a profile with no denial, one that denies every socket and one built from a list each fail.
+ */
+async function checkSeatbeltPathSocketUnits() {
+  const base = socketDirectory();
+  const folder = path.join(base, 'evals');
+  const workspace = path.join(base, 'ws');
+  const callDirectory = path.join(base, 'call');
+  const privateRoot = path.join(base, 'root');
+  const rootHome = path.join(privateRoot, 'run-1-abc', 'home');
+  const outsideHome = path.join(base, 'home');
+  for (const directory of [folder, workspace, callDirectory, rootHome, outsideHome]) fs.mkdirSync(directory, { recursive: true });
+  const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder };
+  const profileOf = (extra = {}, writable = [callDirectory]) =>
+    targetSandbox({ confinement: seatbelt, workspace, ...extra }).wrap('/bin/true', [], writable).args[1];
+  const real = (candidate) => fs.realpathSync.native(candidate);
+  const SYSTEM = ['/private/var/run/mDNSResponder', '/private/var/run/syslog'];
+  const CLOSED = [
+    ['an agent socket under the temp directory', path.join(base, 'agent.sock')],
+    ["Docker's socket", '/Users/someone/.docker/run/docker.sock'],
+    ["Docker Desktop's privileged helper", '/private/var/run/com.docker.vmnetd.sock'],
+    ['the socket `SSH_AUTH_SOCK` names under the launchd directory', '/private/tmp/com.apple.launchd.AbCdEf/Listeners'],
+    ['a socket under the private root beside the home', path.join(privateRoot, 'other.sock')],
+    ['a socket in the evaluation folder', path.join(folder, 'evidence.sock')],
+    ['a socket in the parent of the workspace', path.join(base, 'ws.sock')],
+    ['a socket in a directory whose name starts with the workspace name', `${workspace}-sibling/x.sock`],
+  ];
+  const OPEN = [
+    ['a socket in the workspace', path.join(real(workspace), 'w.sock')],
+    ['a socket in a private directory of the call', path.join(real(callDirectory), 'c.sock')],
+    ['the resolver', SYSTEM[0]],
+    ['the log socket', SYSTEM[1]],
+  ];
+  const held = (profile, expectOpenHome) => {
+    for (const [what, target] of CLOSED)
+      check(!profileAllowsSocket(profile, target), `the Seatbelt profile lets a target connect to ${what}`);
+    for (const [what, target] of OPEN) check(profileAllowsSocket(profile, target), `the Seatbelt profile closes ${what}`);
+    if (expectOpenHome !== null) {
+      check(
+        profileAllowsSocket(profile, path.join(expectOpenHome, 'h.sock')) === true,
+        'the Seatbelt profile closes a socket in the home of the call',
+      );
+    }
+  };
+  const plain = profileOf({ home: outsideHome });
+  held(plain, real(outsideHome));
+  const denial = plain.indexOf(SEATBELT_SOCKET_DENIAL);
+  check(
+    denial !== -1 && !plain.includes(SEATBELT_SOCKET_DENIAL, denial + 1),
+    'the Seatbelt profile does not hold the socket denial exactly once',
+  );
+  const allowRule = plain.slice(
+    plain.indexOf('(allow network-outbound', denial),
+    plain.indexOf('\n(', plain.indexOf('(allow network-outbound', denial)),
+  );
+  const named = [...allowRule.matchAll(/\(remote unix-socket \((subpath|literal) "([^"]*)"\)\)/g)].map(
+    (match) => `${match[1]} ${match[2]}`,
+  );
+  const expected = [
+    ...[workspace, callDirectory, outsideHome].flatMap((entry) => [...new Set([entry, real(entry)])]).map((entry) => `subpath ${entry}`),
+    ...SYSTEM.map((entry) => `literal ${entry}`),
+  ];
+  check(
+    JSON.stringify([...named].sort()) === JSON.stringify([...new Set(expected)].sort()),
+    `the Seatbelt profile's socket allowances are ${JSON.stringify(named)}; expected the grants and the two system services alone: ${JSON.stringify(expected)}`,
+  );
+  check(
+    denial < plain.indexOf(allowRule),
+    'the Seatbelt profile allows a socket before it denies sockets, which the denial then overrides',
+  );
+
+  // With a private root the root's denial follows the grants, and the home beneath the root is allowed after it.
+  const inRoot = profileOf({ privateRoot, home: rootHome });
+  held(inRoot, real(rootHome));
+  const rootDeny = inRoot.indexOf(`(deny network-outbound\n  (remote unix-socket (subpath "${privateRoot}"`);
+  const homeAllow = inRoot.indexOf(`(allow network-outbound\n  (remote unix-socket (subpath "${rootHome}")`);
+  check(
+    rootDeny > inRoot.indexOf(SEATBELT_SOCKET_DENIAL) && homeAllow > rootDeny,
+    `the Seatbelt profile does not allow the home beneath the private root after the root's denial:\n${inRoot}`,
+  );
+
+  // The audited profile carries the same rule, before the report rule.
+  const audited = targetSandbox({
+    confinement: { ...seatbelt, observer: { executable: '/usr/bin/log' } },
+    workspace,
+    audit: { directory: base },
+    home: outsideHome,
+  }).wrap('/bin/true', [], [callDirectory]).args[1];
+  held(audited, real(outsideHome));
+  check(
+    audited.includes(SEATBELT_SOCKET_DENIAL) && audited.indexOf(SEATBELT_SOCKET_DENIAL) < audited.indexOf('(with report)'),
+    'the audited Seatbelt profile does not carry the socket denial before the report rule',
+  );
+
+  // A workspace reached through a link names both spellings, since the kernel matches the real path of the socket.
+  const linked = path.join(base, 'ws-link');
+  fs.symlinkSync(workspace, linked);
+  const viaLink = targetSandbox({ confinement: seatbelt, workspace: linked }).wrap('/bin/true', []).args[1];
+  check(
+    viaLink.includes(`(remote unix-socket (subpath "${linked}"))`) &&
+      viaLink.includes(`(remote unix-socket (subpath "${real(workspace)}"))`),
+    'the Seatbelt profile for a workspace reached through a link does not name both spellings',
+  );
+  check(
+    profileAllowsSocket(viaLink, path.join(real(workspace), 'w.sock')),
+    'the Seatbelt profile for a linked workspace closes the real path',
+  );
+
+  // The rule names paths, so a socket bound after the profile was made leaves the profile as it was.
+  const server = await listenOnSocket(path.join(base, 'agent.sock'));
+  try {
+    check(profileOf({ home: outsideHome }) === plain, 'a socket the host bound changed the Seatbelt profile, so the rule holds a list');
+    check(
+      !profileAllowsSocket(plain, path.join(base, 'agent.sock')),
+      'the Seatbelt profile lets a target connect to a socket the host bound',
+    );
+  } finally {
+    await closeServer(server);
+  }
+
+  // Each wrong profile fails the reading: one with no denial, one that denies every socket and one that allows the host's socket.
+  const misreadings = (profile) =>
+    [...CLOSED.map(([, target]) => [target, false]), ...OPEN.map(([, target]) => [target, true])].filter(
+      ([target, open]) => profileAllowsSocket(profile, target) !== open,
+    ).length;
+  check(misreadings(plain) === 0, 'the reading of the Seatbelt profile misreads the profile itself');
+  const hostSocket = path.join(base, 'agent.sock');
+  for (const [what, profile] of [
+    ['no denial', mutatedSocketProfile(plain, 'no-rule')],
+    ['a denial of every socket and no allowance', mutatedSocketProfile(plain, 'deny-all')],
+    [
+      'an allowance of the socket the host bound',
+      plain.replace(
+        SEATBELT_SOCKET_DENIAL,
+        `${SEATBELT_SOCKET_DENIAL}\n(allow network-outbound (remote unix-socket (literal "${hostSocket}")))`,
+      ),
+    ],
+  ]) {
+    check(misreadings(profile) > 0, `a Seatbelt profile with ${what} passed the reading of the socket rules`);
+  }
+}
+
+/** The name lookup a confined process makes through the C library, which asks the resolver service over its socket. */
+const RESOLVE_PROBE = `
+require('node:dns').lookup(process.argv[1], (error, address) => console.log(error ? 'failed ' + error.code : 'resolved ' + address));
+`;
+
+/**
+ * A name only the resolver service can answer on a macOS host, whatever its network.
+ * The host's own `.local` name comes first, which mDNSResponder answers for itself, then the host's name.
+ * The result is `null` when neither resolves with no confinement.
+ */
+async function resolvableName() {
+  const names = [];
+  const local = spawnSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8' });
+  if (local.status === 0 && local.stdout.trim() !== '') names.push(`${local.stdout.trim()}.local`);
+  names.push(os.hostname());
+  for (const name of names) {
+    const ran = await runToEnd(process.execPath, ['-e', RESOLVE_PROBE, name]);
+    if (ran.stdout.trim().startsWith('resolved')) return name;
+  }
+  return null;
+}
+
+/** A datagram client of the BSD log socket, as a logging library in Python writes it. */
+const SYSLOG_PROBE = `
+import socket
+s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+try:
+    s.connect('/var/run/syslog')
+    print('connected')
+except OSError as error:
+    print('refused', error.errno)
+`;
+
+/** What a Seatbelt process does with a socket it links into its workspace: a hard link, then a symbolic link it connects through. */
+const SEATBELT_LINK_PROBE = `
+const fs = require('node:fs');
+const net = require('node:net');
+const [target, link, hard] = process.argv.slice(1);
+const hardLinked = (() => {
+  try {
+    fs.linkSync(target, hard);
+    return 'hard link made';
+  } catch (error) {
+    return 'hard link ' + error.code;
+  }
+})();
+fs.symlinkSync(target, link);
+const socket = net.connect({ path: link });
+socket.on('connect', () => {
+  console.log(hardLinked + ',link connected');
+  socket.destroy();
+});
+socket.on('error', (error) => console.log(hardLinked + ',link refused ' + error.code));
+`;
+
+/**
+ * The route to the host's path-based sockets on a macOS host with Seatbelt (Story 1.87).
+ * Linux skips it and carries its half in `the path socket route`.
+ * A socket the runtime serves under the temp directory outside every grant, a link to it beside it and one in the workspace, a link the target makes itself, the host's Docker sockets and the one `SSH_AUTH_SOCK` names are each refused (`EPERM`), where the runtime's user reaches them.
+ * The target's hard link to the socket is refused too.
+ * The same command with the denial taken out of the real profile connects to each, which is the revert check.
+ * A socket in the workspace, one in a private directory of the call and one in the home beneath the private root stay connectable, and so does the resolver: a name only mDNSResponder answers resolves in the sandbox, and a datagram connects to the log socket.
+ * A socket the runtime binds after the call started is refused as well, with a control that binds one in the workspace after the start and reaches it.
+ * A profile with every allowance taken out fails the grants and the resolver.
+ */
+async function checkSeatbeltPathSocketRoute() {
+  const label = 'Seatbelt path-socket route';
+  if (process.platform !== 'darwin') {
+    skipCase(
+      label,
+      `Seatbelt exists on macOS only, and this host is ${process.platform}; the Seatbelt rule's text is held on every host by the Seatbelt path socket units`,
+    );
+    return;
+  }
+  const folder = tempDir('seatbelt-socket-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = socketDirectory();
+  const callDirectory = socketDirectory();
+  const outsideDirectory = socketDirectory();
+  const privateRoot = socketDirectory();
+  const rootHome = path.join(privateRoot, 'run-1-abc', 'home');
+  fs.mkdirSync(rootHome, { recursive: true });
+  const sandbox = targetSandbox({ confinement, workspace });
+  const rooted = targetSandbox({ confinement, workspace, privateRoot, home: rootHome });
+  const launch = (wrapped) => runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
+  /** The command with the Seatbelt profile's socket rule changed (`mutatedSocketProfile`), the profile being its second argument. */
+  const mutated = (wrapped, mutate) => {
+    const args = [...wrapped.args];
+    const changed = mutatedSocketProfile(args[1], mutate);
+    check(changed !== args[1], `the ${mutate} control did not change the Seatbelt profile`);
+    args[1] = changed;
+    return { ...wrapped, args };
+  };
+  const attempt = async (target, { using = sandbox, mutate = null } = {}) => {
+    let wrapped = using.wrap(process.execPath, ['-e', CONNECT_PROBE, 'path', target], [callDirectory]);
+    if (mutate !== null) wrapped = mutated(wrapped, mutate);
+    const ran = await launch(wrapped);
+    return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+  };
+  const servers = [];
+  try {
+    const outside = path.join(outsideDirectory, 'host.sock');
+    servers.push(await listenOnSocket(outside));
+    const link = path.join(outsideDirectory, 'link.sock');
+    fs.symlinkSync(outside, link);
+    const inWorkspaceLink = path.join(workspace, 'link.sock');
+    fs.symlinkSync(outside, inWorkspaceLink);
+    const targets = [
+      ['a Unix socket file the runtime serves under the temp directory, outside the grants', outside],
+      ['a link to that socket file beside it', link],
+      ['a link in the workspace to that socket file', inWorkspaceLink],
+    ];
+    // The host's own services, where the runtime's user can reach them, so the case proves nothing less than a real route.
+    for (const system of ['/var/run/docker.sock', path.join(os.homedir(), '.docker', 'run', 'docker.sock'), process.env.SSH_AUTH_SOCK]) {
+      if (typeof system !== 'string' || system === '') continue;
+      let reachable = false;
+      try {
+        reachable =
+          fs.statSync(system).isSocket() &&
+          (await runToEnd(process.execPath, ['-e', CONNECT_PROBE, 'path', system])).stdout.trim() === 'connected';
+      } catch {
+        reachable = false;
+      }
+      if (reachable) targets.push([`the host's ${system}`, system]);
+      else console.log(`  the host's ${system} is absent here or not reachable to this user; the case tries the sockets it can reach`);
+    }
+    for (const [what, target] of targets) {
+      const refused = await attempt(target);
+      check(refused === 'refused EPERM', `a Seatbelt process connecting to ${what} got ${JSON.stringify(refused)}; expected refused EPERM`);
+      const control = await attempt(target, { mutate: 'no-rule' });
+      check(
+        control === 'connected',
+        `with the denial taken out of the Seatbelt profile, a process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+    }
+
+    // A link the target makes in its workspace leads to the real path of the socket, which lies outside the grants, and the profile refuses the target a hard link.
+    const madeLink = path.join(workspace, 'made.sock');
+    const madeHard = path.join(workspace, 'made-hard.sock');
+    const makesLinks = async (mutate = null) => {
+      let wrapped = sandbox.wrap(process.execPath, ['-e', SEATBELT_LINK_PROBE, outside, madeLink, madeHard], [callDirectory]);
+      if (mutate !== null) wrapped = mutated(wrapped, mutate);
+      const ran = await launch(wrapped);
+      return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+    };
+    const madeRefused = await makesLinks();
+    check(
+      madeRefused === 'hard link EPERM,link refused EPERM',
+      `a Seatbelt process that links a socket outside its grants into its workspace got ${JSON.stringify(madeRefused)}; expected the hard link refused and the connection through its link refused (EPERM)`,
+    );
+    fs.rmSync(madeLink, { force: true });
+    const madeControl = await makesLinks('no-rule');
+    check(
+      madeControl === 'hard link EPERM,link connected',
+      `with the denial taken out, a Seatbelt process that links a socket outside its grants into its workspace got ${JSON.stringify(madeControl)}; expected the connection through its link reached, since the case proves nothing otherwise`,
+    );
+
+    // What the call owns stays connectable: its workspace, a private directory of the call and the home beneath the private root.
+    const own = [
+      ['its workspace', path.join(workspace, 'workspace.sock'), sandbox],
+      ['a private directory of the call', path.join(callDirectory, 'call.sock'), sandbox],
+      ['its home beneath the private root', path.join(rootHome, 'home.sock'), rooted],
+    ];
+    for (const [, socketPath] of own) servers.push(await listenOnSocket(socketPath));
+    for (const [what, socketPath, using] of own) {
+      const reached = await attempt(socketPath, { using });
+      check(
+        reached === 'connected',
+        `a Seatbelt process connecting to a socket in ${what} got ${JSON.stringify(reached)}; expected connected`,
+      );
+      // A rule that denies every socket fails this case.
+      const denied = await attempt(socketPath, { using, mutate: 'deny-all' });
+      check(
+        denied !== 'connected',
+        `a profile that denies every socket still let a process connect to a socket in ${what}, so the case does not catch it`,
+      );
+    }
+    const underRoot = path.join(privateRoot, 'other.sock');
+    servers.push(await listenOnSocket(underRoot));
+    const rootRefused = await attempt(underRoot, { using: rooted });
+    check(
+      rootRefused === 'refused EPERM',
+      `a Seatbelt process connecting to a socket under the private root beside its home got ${JSON.stringify(rootRefused)}; expected refused EPERM`,
+    );
+
+    // The system services a toolchain needs keep answering: a name only the resolver can answer resolves.
+    const name = await resolvableName();
+    if (name === null) {
+      skipCase('Seatbelt resolver half', 'no name resolves on this host with no confinement, so a refused lookup would prove nothing');
+    } else {
+      const resolve = async (mutate) => {
+        let wrapped = sandbox.wrap(process.execPath, ['-e', RESOLVE_PROBE, name]);
+        if (mutate !== null) wrapped = mutated(wrapped, mutate);
+        const ran = await launch(wrapped);
+        return ran.stdout.trim();
+      };
+      const answered = await resolve(null);
+      check(
+        answered.startsWith('resolved'),
+        `a Seatbelt process resolving ${name} got ${JSON.stringify(answered)}; expected resolved, since the profile keeps the resolver`,
+      );
+      const denied = await resolve('deny-all');
+      check(
+        denied.startsWith('failed'),
+        `a profile that denies every socket still resolved ${name}, so the case does not catch it: ${JSON.stringify(denied)}`,
+      );
+    }
+
+    // The log socket takes a datagram from a logging client: a Python client connects to it, and a profile with every allowance taken out refuses it.
+    const python = '/usr/bin/python3';
+    if (spawnSync(python, ['--version'], { encoding: 'utf8' }).status === 0) {
+      const logs = async (mutate) => {
+        let wrapped = sandbox.wrap(python, ['-c', SYSLOG_PROBE]);
+        if (mutate !== null) wrapped = mutated(wrapped, mutate);
+        return (await launch(wrapped)).stdout.trim();
+      };
+      const logged = await logs(null);
+      check(
+        logged === 'connected',
+        `a Seatbelt process connecting a datagram to /var/run/syslog got ${JSON.stringify(logged)}; expected connected`,
+      );
+      const unlogged = await logs('deny-all');
+      check(
+        unlogged !== 'connected',
+        'a profile that denies every socket still let a process connect a datagram to the log socket, so the case does not catch it',
+      );
+    } else {
+      skipCase('Seatbelt log socket half', `${python} does not run on this host`);
+    }
+
+    // A socket the runtime binds after the call started is refused, since the rule names a path.
+    const late = async (lateSocket, mutate = null) => {
+      const goFile = path.join(workspace, `go-${crypto.randomBytes(4).toString('hex')}`);
+      let wrapped = sandbox.wrap(process.execPath, ['-e', LATE_PROBE, goFile, outside, lateSocket], [callDirectory]);
+      if (mutate !== null) wrapped = mutated(wrapped, mutate);
+      const child = spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+      let output = '';
+      child.stdout.on('data', (chunk) => (output += chunk));
+      child.stderr.on('data', (chunk) => (output += chunk));
+      const closed = new Promise((resolve) => child.once('close', resolve));
+      try {
+        const server = await listenOnSocket(lateSocket);
+        servers.push(server);
+        fs.writeFileSync(goFile, '');
+        let giveUp;
+        await Promise.race([closed, new Promise((resolve) => (giveUp = setTimeout(resolve, 30_000)))]);
+        clearTimeout(giveUp);
+        try {
+          return JSON.parse(output.trim());
+        } catch {
+          return output;
+        }
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      }
+    };
+    const lateOutside = await late(path.join(outsideDirectory, 'late.sock'));
+    check(
+      lateOutside?.early === 'refused EPERM' && lateOutside?.late === 'refused EPERM',
+      `a process started before a socket was bound answered ${JSON.stringify(lateOutside)}; expected both the early and the late socket refused`,
+    );
+    const lateControl = await late(path.join(outsideDirectory, 'late-control.sock'), 'no-rule');
+    check(
+      lateControl?.early === 'connected' && lateControl?.late === 'connected',
+      `with the denial taken out, a process started before a socket was bound answered ${JSON.stringify(lateControl)}; expected both reached, since the case proves nothing otherwise`,
+    );
+    const lateOwn = await late(path.join(workspace, 'late-own.sock'));
+    check(
+      lateOwn?.early === 'refused EPERM' && lateOwn?.late === 'connected',
+      `a process started before a socket was bound in its own workspace answered ${JSON.stringify(lateOwn)}; expected the early socket refused and the late one reached`,
+    );
+  } finally {
+    for (const server of servers) await closeServer(server);
   }
 }
 
@@ -17127,6 +17626,8 @@ const CASES = [
   { name: 'the socket connection run', body: checkSocketConnectionRun, group: 'confinement' },
   { name: 'the socket connection reference', body: checkSocketConnectionReference, group: 'confinement' },
   { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
+  { name: 'the Seatbelt path socket units', body: checkSeatbeltPathSocketUnits, group: 'confinement' },
+  { name: 'the Seatbelt path socket route', body: checkSeatbeltPathSocketRoute, group: 'confinement' },
   { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));

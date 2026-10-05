@@ -892,6 +892,10 @@
           "reason": "the HTTP method an HTTPS client asks a proxy for a tunnel with, which the egress proxy serves and no source declares"
         },
         {
+          "token": "SSH_AUTH_SOCK",
+          "reason": "the environment variable of the host's SSH agent, whose socket a macOS target cannot connect to, which no source declares"
+        },
+        {
           "token": "OLDPWD",
           "reason": "a shell variable the socket launcher restores"
         },
