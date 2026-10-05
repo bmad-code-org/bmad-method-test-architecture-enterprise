@@ -77,7 +77,7 @@
   "test:evaluate-learned-framework": 108,
   "test:evaluate-mcp": 137.4,
   "test:evaluate-mutation": 261.7,
-  "test:evaluate-partition-plans": 780,
+  "test:evaluate-partition-plans": 890,
   "test:evaluate-partitions": 82.5,
   "test:evaluate-pr-ai-feature": 5.5,
   "test:evaluate-pr-api": 3.3,

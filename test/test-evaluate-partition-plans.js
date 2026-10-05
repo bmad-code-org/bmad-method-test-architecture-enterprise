@@ -3790,9 +3790,19 @@ try {
     ['preflight', []],
     ['check', []],
   ]) {
-    const refused = gameRan(variantPlanDirectory, { command, args, stale: true });
+    // The index follows the edit, so the refusal is the plan reader's and no stale index stands in for it.
+    const refused = gameRan(variantPlanDirectory, { command, args });
     assert.equal(refused.status, 10, `a case-variant plan directory, ${command} ${args.join(' ')}: ${refused.output}`);
-    assert.match(refused.output, /corpus\/held-out\/plan\.json/, `a case-variant plan directory, ${command} ${args.join(' ')}`);
+    assert.match(
+      refused.output,
+      /corpus\/held-out\/plan\.json (is not directly under corpus\/held-out\/ of the evaluation folder|cannot be read \(ENOENT\))/,
+      `a case-variant plan directory, ${command} ${args.join(' ')}`,
+    );
+    assert.doesNotMatch(
+      refused.output,
+      /stale/,
+      `a case-variant plan directory, ${command} ${args.join(' ')}: a stale index stood in\n${refused.output}`,
+    );
     assert.doesNotMatch(
       refused.output,
       /\n\s+at \S+ \(|node:internal/,
