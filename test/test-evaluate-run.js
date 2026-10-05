@@ -235,6 +235,7 @@ const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
 const { STAGING } = require('../cli/lib/evaluate/recorded-paths');
 const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-argv');
+const { recordedMount } = require('./lib/recorded-mount');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -300,16 +301,9 @@ function checkMounts(observed, expected, what) {
   checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
 }
 
-/**
- * An observed mount as the isolation manifest records it: below the host's home as `<home>/...` and below the evaluation folder
- * as `<evaluation-folder>/...` (`recorded-paths.js`), any other path as it is. `home` is the `HOME` the run's process had.
- */
-function recordedMount(real, { home = null, folder = null }) {
-  const below = (root, form) => {
-    const base = fs.realpathSync(root);
-    return real === base || real.startsWith(`${base}${path.sep}`) ? `${form}${real.slice(base.length)}` : null;
-  };
-  return (home !== null && below(home, '<home>')) || (folder !== null && below(folder, '<evaluation-folder>')) || real;
+/** An observed mount of a project's run as its manifest records it: the real path through the runtime's substitution under the run's own environment. */
+function mountOf(real, project) {
+  return recordedMount(real, { folder: project.folder, env: project.env });
 }
 
 function tempDir(label) {
@@ -4080,7 +4074,7 @@ async function checkConfinedEvaluationFolder() {
   const probedMounts = observedMountsOf(probedDirectory, 'P-001') ?? [];
   checkReport(
     [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')]
-      .map((entry) => recordedMount(entry, { folder: probed.folder }))
+      .map((entry) => mountOf(entry, probed))
       .every((entry) => probedMounts.includes(entry)),
     `the audit did not report the evaluation folder's paths the target reached for: ${JSON.stringify(probedMounts)}`,
   );
@@ -4131,7 +4125,11 @@ async function checkObservedMounts() {
     /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
     'the target could not read the ungranted file, so the case proves nothing',
   );
-  checkMounts(observedMountsOf(observedDirectory, 'P-001'), [realOutside], "P-001's observed mounts after a target's read");
+  checkMounts(
+    observedMountsOf(observedDirectory, 'P-001'),
+    [mountOf(realOutside, observed)],
+    "P-001's observed mounts after a target's read",
+  );
   const otherMounts = observedMountsOf(observedDirectory, 'P-002');
   check(
     JSON.stringify(otherMounts) === '[]',
@@ -4139,7 +4137,7 @@ async function checkObservedMounts() {
   );
   const observedScore = evaluate(['score', '--evaluation', observed.folder], observed.env);
   checkReport(
-    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
     `score over an observed ungranted mount exited ${observedScore.status}; expected 3 with eval-quality's isolation violation\n${observedScore.output}`,
   );
   const declared = makeProject('confinement-declared', {
@@ -5079,11 +5077,15 @@ async function checkShellTargetAudit() {
     `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 0\n${read.ran.output}`,
   );
   for (const probeId of ['P-001', 'P-002']) {
-    checkMounts(observedMountsOf(read.directory, probeId), [realOutside], `${probeId}'s observed mounts after a shell target's read`);
+    checkMounts(
+      observedMountsOf(read.directory, probeId),
+      [mountOf(realOutside, read)],
+      `${probeId}'s observed mounts after a shell target's read`,
+    );
   }
   const readScore = evaluate(['score', '--evaluation', read.folder], read.env);
   checkReport(
-    readScore.status === 3 && readScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    readScore.status === 3 && readScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, read)}`),
     `score over a shell target's ungranted read exited ${readScore.status}; expected 3 with eval-quality's isolation violation\n${readScore.output}`,
   );
 
@@ -5112,7 +5114,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(cleared.directory, 'P-001'),
-    [realOutside, `${realOutside}.node`],
+    [mountOf(realOutside, cleared), mountOf(`${realOutside}.node`, cleared)],
     'processes started with an empty environment (cat reads the file, Node its neighbor)',
   );
   const target = path.join(tempDir('shell-audit-write'), 'written.txt');
@@ -5123,7 +5125,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(write.directory, 'P-001'),
-    [path.join(fs.realpathSync(path.dirname(target)), 'written.txt')],
+    [mountOf(path.join(fs.realpathSync(path.dirname(target)), 'written.txt'), write)],
     "a shell target's refused write",
   );
   const withheld = shellProject('shell-audit-withheld', 'withheld', (project) => path.join(project.folder, 'contract.json'));
@@ -5133,7 +5135,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(withheld.directory, 'P-001'),
-    [recordedMount(path.join(fs.realpathSync(withheld.folder), 'contract.json'), { folder: withheld.folder })],
+    [mountOf(path.join(fs.realpathSync(withheld.folder), 'contract.json'), withheld)],
     "a shell target's read of the evaluation folder's contract",
   );
 }
@@ -5826,7 +5828,7 @@ async function checkEvaluatorSwap() {
       );
       check(record.findings?.length === 0, `a confined run's clean control carries findings: ${JSON.stringify(record.findings)}`);
       // The row-converting evaluator's trials carry the audit's observed mounts too: the refused swap is one.
-      const swapped = recordedMount(path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js'), { folder: project.folder });
+      const swapped = mountOf(path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js'), project);
       const mounts = observedMountsOf(runDirectory, 'P-001') ?? [];
       checkReport(
         namespaced || mounts.includes(swapped),
@@ -6946,20 +6948,20 @@ async function checkWithheldHistoryRun() {
   const projectGit = fs.realpathSync(path.join(project.repository, '.git'));
   const observed = observedMountsOf(runDirectory, 'P-001') ?? [];
   checkReport(
-    ['HEAD', 'config', 'objects'].every((name) => observed.includes(path.join(projectGit, name))),
+    ['HEAD', 'config', 'objects'].every((name) => observed.includes(mountOf(path.join(projectGit, name), project))),
     `the audit did not report the target's attempts on the project's git directory: ${JSON.stringify(observed)}`,
   );
   check(
-    !observed.some((entry) => entry.startsWith(`${path.join(projectGit, 'worktrees')}${path.sep}`)),
+    !observed.some((entry) => entry.startsWith(`${mountOf(path.join(projectGit, 'worktrees'), project)}${path.sep}`)),
     `the audit reported the target's read of its own worktree's metadata: ${JSON.stringify(observed)}`,
   );
   const audited = evaluate(['score', '--evaluation', project.folder], project.env);
   checkReport(
-    audited.status === 3 && audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'HEAD')}`),
+    audited.status === 3 && audited.output.includes(`mount outside allowlist: ${mountOf(path.join(projectGit, 'HEAD'), project)}`),
     `score over a target that reached for the project's git directory exited ${audited.status}; expected 3 with the isolation violation\n${audited.output}`,
   );
   check(
-    !audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'worktrees')}`),
+    !audited.output.includes(`mount outside allowlist: ${mountOf(path.join(projectGit, 'worktrees'), project)}`),
     `score named the worktree's own metadata as an isolation violation\n${audited.output}`,
   );
 
@@ -10227,7 +10229,7 @@ async function checkSubscriptionLogin() {
       widened.ran.status === 0,
       `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
     );
-    const realSecond = recordedMount(fs.realpathSync(second), { home });
+    const realSecond = recordedMount(fs.realpathSync(second), { folder: widened.folder, home });
     checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
@@ -10380,15 +10382,17 @@ async function checkSubscriptionLogin() {
   checkMounts(
     actMounts(stood.directory),
     [
-      recordedMount(fs.realpathSync(keychain), { home: keychainHome }),
-      recordedMount(`${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`, { home: keychainHome }),
+      recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome }),
+      recordedMount(`${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`, { folder: stood.folder, home: keychainHome }),
     ],
     "a confined target's keychain read and sidecar write",
   );
   const stoodScore = evaluate(['score', '--evaluation', stood.folder], { ...stood.env, ...noLogin });
   checkReport(
     stoodScore.status === 3 &&
-      stoodScore.output.includes(`mount outside allowlist: ${recordedMount(fs.realpathSync(keychain), { home: keychainHome })}`),
+      stoodScore.output.includes(
+        `mount outside allowlist: ${recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })}`,
+      ),
     `score over a target that read the host's keychain exited ${stoodScore.status}; expected 3\n${stoodScore.output}`,
   );
 
@@ -16586,7 +16590,11 @@ async function checkSocketConnectionRun() {
       );
     }
     const mounts = observedMountsOf(held.runDirectory, 'P-001') ?? [];
-    checkMounts(mounts, [late, viaLink].sort(), "P-001's observed mounts after a target connected to late sockets");
+    checkMounts(
+      mounts,
+      [mountOf(late, project), mountOf(viaLink, project)].sort(),
+      "P-001's observed mounts after a target connected to late sockets",
+    );
     const other = observedMountsOf(held.runDirectory, 'P-002');
     check(
       JSON.stringify(other) === '[]',
@@ -16595,9 +16603,9 @@ async function checkSocketConnectionRun() {
     const scored = evaluate(['score', '--evaluation', project.folder], project.env);
     check(
       scored.status === 3 &&
-        scored.output.includes(`mount outside allowlist: ${late}`) &&
-        scored.output.includes(`mount outside allowlist: ${viaLink}`) &&
-        !scored.output.includes(`mount outside allowlist: ${hidden}`),
+        scored.output.includes(`mount outside allowlist: ${mountOf(late, project)}`) &&
+        scored.output.includes(`mount outside allowlist: ${mountOf(viaLink, project)}`) &&
+        !scored.output.includes(`mount outside allowlist: ${mountOf(hidden, project)}`),
       `score over a target that connected to late sockets exited ${scored.status}; expected 3 with the isolation violation naming each late socket and not the refused one\n${scored.output}`,
     );
   } finally {
