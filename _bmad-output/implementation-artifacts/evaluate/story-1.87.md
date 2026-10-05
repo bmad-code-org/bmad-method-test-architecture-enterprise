@@ -38,6 +38,7 @@ A Seatbelt behavior case runs on macOS and skips on Linux with its reason named;
 The engine check runs at start and end.
 No eval-quality change.
 No skill file changes: `references/ci.md`, `SKILL.md`, `assets/evaluation-ci-plan.template.json` and every `capture-record.json` stay as they are.
+The run guide and the gaps guide change in review round 1, where each names both answers a confined target gets from a socket file of the host.
 
 **Never:** a rule built from a list of sockets read when the call starts, a grant of a whole system directory, a change to the evaluation layer's profile (Story 1.88), a change to `cli/lib/isolate.js` or `cli/lib/atdd-isolation.js`, a new dependency, a container, a live run.
 
@@ -69,8 +70,8 @@ The `bmad-build` skill rendered on this host; its human checkpoints were not sto
 - `test/test-evaluate-run.js`: `checkSeatbeltPathSocketUnits`, `checkSeatbeltPathSocketRoute` (with `profileAllowsSocket`, `mutatedSocketProfile`, `RESOLVE_PROBE`, `SEATBELT_LINK_PROBE`, `resolvableName`), the host-socket block removed from `checkSeatbeltNetworkAndMach`, the control of `checkPrivateRootAcrossRuns`, the five reference claims in `checkBridgeReference`, and the macOS sentence check beside the Story 1.82 one.
 - `test/fixtures/isolation-primitives/golden.json`: the rule in each of the eight Seatbelt target profiles.
 - `eval-quality.config.json`: `SSH_AUTH_SOCK` joins the doc-claims `foreign` tokens, since the reference now names the variable and no source declares it.
-- `docs/reference/tea-evaluate-cli.md` (`### File-system confinement`), `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `ARCHITECTURE-SPINE.md`, `epic-1-context.md`, `sprint-status.yaml`.
-- Not changed: the layer profile, `isolate.js`, `atdd-isolation.js`, the audit, the skill's guides, `references/ci.md`, `SKILL.md`, the CI plan template, every `capture-record.json`.
+- `docs/reference/tea-evaluate-cli.md` (`### File-system confinement`), `references/run.md` and `references/gaps.md` of the skill (round 1), `test/test-evaluate-guidance.js` (their markers), `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `ARCHITECTURE-SPINE.md`, `epic-1-context.md`, `sprint-status.yaml`.
+- Not changed: the layer profile, `isolate.js`, `atdd-isolation.js`, the audit, `references/ci.md`, `SKILL.md`, the CI plan template, every `capture-record.json`.
 
 ## Tasks & Acceptance
 
@@ -125,8 +126,10 @@ Run first on this host (macOS 27.0.1, Apple silicon) with `sandbox-exec -p`, a N
    `profileAllowsSocket` applies the last matching rule over `(allow default)`, so a Linux host's static level fails when a socket class is closed or open wrongly, a profile with no denial, one with no allowance and one that allows the host's socket each fail the reading, and the profile before and after a socket is bound is the same text.
 9. **The layer profile, `isolate.js` and `atdd-isolation.js` are unchanged.**
    The evaluation layer's processes are Story 1.88; the other two modules confine other tools and share only the primitives, so the golden's change is the eight target profiles.
-10. **No skill guide changes.**
-    No guide the capture records pin is touched.
+10. **The run guide and the gaps guide name both answers.**
+    Review round 1 found that `references/run.md` and `references/gaps.md` named Bubblewrap alone for a target that cannot reach a host socket, and a macOS Seatbelt target now fails the same way with `EPERM`.
+    Both sentences name both answers and keep the opt-out, and the guidance case's markers fail while a guide names Bubblewrap alone.
+    No guide the capture records pin is touched (`references/ci.md`, `SKILL.md` and the plan template stay as they are), and the exit-table rows the dogfood mutations replace are byte-stable.
 
 ## Implementation Notes
 
@@ -136,23 +139,33 @@ Run first on this host (macOS 27.0.1, Apple silicon) with `sandbox-exec -p`, a N
 
 ## Revert observations
 
-Every table ran once on a scratch copy of the final tree under the scratchpad directory (`final-tree`, made with `rsync` from this working tree after the review round's fixes, `.git` and `website` left out, `node_modules` linked), never in the working tree.
+Every table ran once on a scratch copy of the final tree under the scratchpad directory (`final-tree`, made with `rsync` from this working tree after the review round's fixes, `.git` and `website` left out, `node_modules` linked).
 Each row changed one file of the copy, ran the named case there, recorded the failed-check count and copied the file back from the working tree.
-The cases are `node test/test-evaluate-run.js --group=confinement --only="Seatbelt path socket route"` (the route, 41 checks on the final tree), `--only="Seatbelt path socket units"` (the units, 52) and `--only="the network reference"` (197), and `node test/test-isolation-primitives.js` (the golden, 8 changed outputs).
+The cases are `node test/test-evaluate-run.js --group=confinement --only="Seatbelt path socket route"` (the route, 44 checks on the final tree with `SSH_AUTH_SOCK` set and 41 with it unset), `--only="Seatbelt path socket units"` (the units, 52) and `--only="the network reference"` (197), and `node test/test-isolation-primitives.js` (the golden, 8 changed outputs).
 A count is the failed checks of that run; a case that stops at an error ends at that check.
 
 | Criterion                           | Revert (on the copy)                                                                                                         | Route    | Units    | Reference | Golden |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | -------- | --------- | ------ |
-| No route to a socket outside grants | the denial `(deny network-outbound (remote unix-socket))` taken out of `seatbeltTargetProfile`                               | 21 of 41 | 27 of 52 |           | 8      |
-| Grants and services stay reachable  | the allowance rule taken out (a rule that denies every socket)                                                               | 9 of 41  | 19 of 52 |           | 8      |
-| A later socket is refused           | the denial replaced by one built from the sockets found under `/private/tmp` and `/private/var/run` when the profile is made | 19 of 41 | 28 of 52 |           | 8      |
-| The resolver stays reachable        | `/private/var/run/mDNSResponder` out of `SEATBELT_SYSTEM_SOCKETS`                                                            | 1 of 41  | 5 of 52  |           | 8      |
-| The log socket stays reachable      | `/private/var/run/syslog` out of `SEATBELT_SYSTEM_SOCKETS`                                                                   | 1 of 41  | 5 of 52  |           | 8      |
-| Other system sockets stay closed    | both literals replaced by `(subpath "/private/var/run")`                                                                     | 1 of 41  | 5 of 52  |           | 8      |
-| The home beneath the root           | the home's allowance after the root's denial taken out                                                                       | 1 of 41  | 2 of 52  |           | 2      |
+| No route to a socket outside grants | the denial `(deny network-outbound (remote unix-socket))` taken out of `seatbeltTargetProfile`                               | 23 of 44 | 27 of 52 |           | 8      |
+| Grants and services stay reachable  | the allowance rule taken out (a rule that denies every socket)                                                               | 9 of 44  | 19 of 52 |           | 8      |
+| A later socket is refused           | the denial replaced by one built from the sockets found under `/private/tmp` and `/private/var/run` when the profile is made | 21 of 44 | 24 of 52 |           | 8      |
+| The resolver stays reachable        | `/private/var/run/mDNSResponder` out of `SEATBELT_SYSTEM_SOCKETS`                                                            | 1 of 44  | 5 of 52  |           | 8      |
+| The log socket stays reachable      | `/private/var/run/syslog` out of `SEATBELT_SYSTEM_SOCKETS`                                                                   | 1 of 44  | 5 of 52  |           | 8      |
+| Other system sockets stay closed    | both literals replaced by `(subpath "/private/var/run")`, `SSH_AUTH_SOCK` set                                                | 2 of 44  | 5 of 52  |           | 8      |
+| Other system sockets stay closed    | the same replacement with `SSH_AUTH_SOCK` unset                                                                              | 1 of 41  | 5 of 52  |           | 8      |
+| Each grant stays reachable          | the call's private directory out of the socket allowance (the workspace's spellings kept)                                    | 1 of 44  | 7 of 52  |           | 6      |
+| The home beneath the root           | the home's allowance after the root's denial taken out                                                                       | 1 of 44  | 2 of 52  |           | 2      |
+| A deny-all control that cannot run  | `(this-is-not-a-rule)` appended to the deny-all profile of the route case (a change to the test file of the copy)            | 5 of 44  |          |           |        |
 | The reference                       | the old macOS sentence put back above the new ones                                                                           |          |          | 2 of 197  |        |
 | The reference                       | the sentence on the grants and the two services taken out                                                                    |          |          | 2 of 197  |        |
 | The golden                          | the golden restored to the commit before this story                                                                          |          |          |           | 8      |
+
+The two guides ran on a second scratch copy (`tree2`) with `test/test-evaluate-guidance.js`: the run guide as it was before round 1 fails 1 check and the gaps guide as it was fails 3.
+
+The host-socket check of the route tries `/var/run/com.docker.vmnetd.sock` beside the other host sockets, so the system-sockets row fails on this host's helper when `SSH_AUTH_SOCK` names nothing under `/private/var/run` (the unset row fails 1 of 41).
+The deny-all controls expect the exact refusals (`refused EPERM`, `refused 1`), so a profile `sandbox-exec` cannot start fails them, which the invalid-rule row shows.
+The route's late socket is bound after the probe wrote its ready file, so the confined process exists when the socket appears.
+The deny-all row's four extra failures beyond the checks listed next are the controls that see the mutation already in the profile.
 
 The route's deny-all row fails, in order, the workspace socket, the private directory's socket, the name lookup (`failed ENOTFOUND`), the log datagram and a socket bound late in the workspace, so a rule that denies every socket fails the grants case and the resolver case as the criteria ask.
 The route's removed-denial row fails each connection the case expects refused: every socket outside the grants, the links and the late socket connect.
@@ -169,7 +182,7 @@ No full local `npm test`: the hook and CI carry the chain.
 Local, macOS 27.0.1 (Seatbelt), on the final tree unless a row says otherwise:
 
 - `test:evaluate-confinement` ran once in full on the tree before the review round: 2,001 checks, the 4 failures above fixed, one case that lost two kernel reports rerun by the group's `lossy` marker.
-  After the review round the changed cases ran again alone: the route (41), the units (52), the network reference (197), the private root across runs (16), `--only="Seatbelt"` (96 across the three Seatbelt cases).
+  After the review round the changed cases ran again alone: the route (41 before round 1), the units (52), the network reference (197), the private root across runs (16), `--only="Seatbelt"` (96 across the three Seatbelt cases).
 - `test:evaluate-run` 592 (run before the review round and again on the final tree), `test:evaluate-preflight` 353, `test:evaluate-mutation` 727, `test:evaluate-agents` 501, `test:evaluate-arms` 733, `test:evaluate-held-inputs` 210, `test:cli`, `test:isolation-primitives`, `test:atdd-isolation`: green on the tree before the review round, whose later changes are comments, the log-socket check and a helper in the test file.
 - `test:doc-counts`, `test:doc-claims` (after the `SSH_AUTH_SOCK` token), `test:shards`, `test:ci-coverage`, `test:changelog`, `test:direction`, `test:boundary`, `test:doc-claim-sources`, `test:evaluate-boundaries`, `test:lineage`: green.
 - `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`, `npm run docs:build`: green.
@@ -199,3 +212,17 @@ Every finding was checked before it was acted on.
 
 Round 0 left no finding open.
 The coordinator's Opus review rounds run on the open pull request.
+
+## Review round 1
+
+Two Opus reviewers (code lens, tests and records lens) reviewed the pull request, and each finding was reproduced before it was fixed.
+
+| Finding                                                                                                                               | Verdict | Route                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medium (code): `references/run.md` and `references/gaps.md` name a Bubblewrap target alone as unable to reach a host socket           | valid   | Both guides name both answers (`ECONNREFUSED` from Bubblewrap, `EPERM` from macOS Seatbelt) and keep the opt-out; the guidance markers fail while a guide names Bubblewrap alone; the CHANGELOG entry says so |
+| Medium (tests): the late socket is bound about 21 ms before the confined process exists, so the case never runs the scenario it names | valid   | `LATE_PROBE` writes `<go>.ready` first and the late-socket step of the Seatbelt route and of the Linux `checkPathSocketRoute` waits for it; the messages say what the process was doing                       |
+| Low: four deny-all controls pass for any profile `sandbox-exec` cannot start                                                          | valid   | They expect `refused EPERM` and `refused 1` and print the answer received; an invalid rule appended to the deny-all profile fails 5 of 44                                                                     |
+| Low: the `(subpath "/private/var/run")` mutant passes with `SSH_AUTH_SOCK` unset                                                      | valid   | The route also tries `/var/run/com.docker.vmnetd.sock`; the mutant fails 1 of 41 with the variable unset and 2 of 44 with it set                                                                              |
+| Low: the units' JSDoc and `test-design-epic-1.md` say "built from a list" where the third mutant allows the socket the host bound     | valid   | Both say "one that allows the socket the host bound", as Decision 8 does                                                                                                                                      |
+| Low: a banned tail in the revert paragraph and "proves nothing less than a real route" in a comment                                   | valid   | Fixed, in both route cases                                                                                                                                                                                    |
+| Low: the revert table lacks the row for one grant's allowance dropped                                                                 | valid   | Added: route 1 of 44, units 7 of 52, golden 6                                                                                                                                                                 |

@@ -14949,11 +14949,17 @@ exit 1`);
   }
 }
 
-/** The probe a confined process runs once its go file exists: connects to an early and a late socket and prints each answer. */
+/** Waits until the probe has written its ready file, which means the confined process exists, and stops waiting when the process has already ended. */
+async function probeReady(child, goFile) {
+  while (!fs.existsSync(`${goFile}.ready`) && child.exitCode === null && child.signalCode === null) await sleep(20);
+}
+
+/** The probe a confined process runs: it writes its ready file first, waits for its go file, then connects to an early and a late socket and prints each answer. */
 const LATE_PROBE = `
 const net = require('node:net');
 const fs = require('node:fs');
 const [go, early, late] = process.argv.slice(1);
+fs.writeFileSync(go + '.ready', '');
 const connect = (target) => new Promise((resolve) => {
   const socket = net.connect({ path: target });
   socket.on('connect', () => { socket.destroy(); resolve('connected'); });
@@ -15008,7 +15014,7 @@ async function checkPathSocketRoute() {
       ['a Unix socket file the runtime serves under the temp directory, outside the grants', outside],
       ['a link to that socket file', link],
     ];
-    // The host's own services, where the runtime's user can reach them, so the case proves nothing less than a real route.
+    // The host's own services, where the runtime's user can reach them, so the case proves a real route.
     for (const system of ['/run/dbus/system_bus_socket', '/var/run/docker.sock']) {
       let reachable = false;
       try {
@@ -15089,6 +15095,7 @@ async function checkPathSocketRoute() {
     child.stderr.on('data', (chunk) => (output += chunk));
     const closed = new Promise((resolve) => child.once('close', resolve));
     try {
+      await probeReady(child, goFile);
       servers.push(await listenOnSocket(lateSocket));
       fs.writeFileSync(goFile, '');
       let giveUp;
@@ -15102,7 +15109,7 @@ async function checkPathSocketRoute() {
       }
       check(
         answers?.early === 'refused ECONNREFUSED' && answers?.late === 'connected',
-        `a process started before a socket was bound answered ${JSON.stringify(answers)}; expected the early socket refused and the late one reached, the limit the reference states`,
+        `a running process connecting to a socket bound after its ready file appeared answered ${JSON.stringify(answers)}; expected the early socket refused and the late one reached, the limit the reference states`,
       );
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
@@ -17127,7 +17134,7 @@ function mutatedSocketProfile(profile, mutate) {
  * The root's denial follows them and the home beneath the root is allowed after that.
  * The rule names paths, so a socket bound after the profile was made changes nothing.
  * Both spellings of a grant that goes through a link are named, and the audited profile carries the same rule.
- * A reading of the profile finds each socket class closed or open as the criteria say, which a profile with no denial, one that denies every socket and one built from a list each fail.
+ * A reading of the profile finds each socket class closed or open as the criteria say, which a profile with no denial, one that denies every socket and one that allows the socket the host bound each fail.
  */
 async function checkSeatbeltPathSocketUnits() {
   const base = socketDirectory();
@@ -17381,8 +17388,13 @@ async function checkSeatbeltPathSocketRoute() {
       ['a link to that socket file beside it', link],
       ['a link in the workspace to that socket file', inWorkspaceLink],
     ];
-    // The host's own services, where the runtime's user can reach them, so the case proves nothing less than a real route.
-    for (const system of ['/var/run/docker.sock', path.join(os.homedir(), '.docker', 'run', 'docker.sock'), process.env.SSH_AUTH_SOCK]) {
+    // The host's own services, where the runtime's user can reach them, so the case proves a real route.
+    for (const system of [
+      '/var/run/docker.sock',
+      path.join(os.homedir(), '.docker', 'run', 'docker.sock'),
+      '/var/run/com.docker.vmnetd.sock',
+      process.env.SSH_AUTH_SOCK,
+    ]) {
       if (typeof system !== 'string' || system === '') continue;
       let reachable = false;
       try {
@@ -17442,8 +17454,8 @@ async function checkSeatbeltPathSocketRoute() {
       // A rule that denies every socket fails this case.
       const denied = await attempt(socketPath, { using, mutate: 'deny-all' });
       check(
-        denied !== 'connected',
-        `a profile that denies every socket still let a process connect to a socket in ${what}, so the case does not catch it`,
+        denied === 'refused EPERM',
+        `a profile that denies every socket answered a process connecting to a socket in ${what} with ${JSON.stringify(denied)}; expected refused EPERM`,
       );
     }
     const underRoot = path.join(privateRoot, 'other.sock');
@@ -17492,8 +17504,8 @@ async function checkSeatbeltPathSocketRoute() {
       );
       const unlogged = await logs('deny-all');
       check(
-        unlogged !== 'connected',
-        'a profile that denies every socket still let a process connect a datagram to the log socket, so the case does not catch it',
+        unlogged === 'refused 1',
+        `a profile that denies every socket answered a datagram to the log socket with ${JSON.stringify(unlogged)}; expected refused 1`,
       );
     } else {
       skipCase('Seatbelt log socket half', `${python} does not run on this host`);
@@ -17510,6 +17522,7 @@ async function checkSeatbeltPathSocketRoute() {
       child.stderr.on('data', (chunk) => (output += chunk));
       const closed = new Promise((resolve) => child.once('close', resolve));
       try {
+        await probeReady(child, goFile);
         const server = await listenOnSocket(lateSocket);
         servers.push(server);
         fs.writeFileSync(goFile, '');
@@ -17528,17 +17541,17 @@ async function checkSeatbeltPathSocketRoute() {
     const lateOutside = await late(path.join(outsideDirectory, 'late.sock'));
     check(
       lateOutside?.early === 'refused EPERM' && lateOutside?.late === 'refused EPERM',
-      `a process started before a socket was bound answered ${JSON.stringify(lateOutside)}; expected both the early and the late socket refused`,
+      `a running process connecting to a socket bound after its ready file appeared answered ${JSON.stringify(lateOutside)}; expected both the early and the late socket refused`,
     );
     const lateControl = await late(path.join(outsideDirectory, 'late-control.sock'), 'no-rule');
     check(
       lateControl?.early === 'connected' && lateControl?.late === 'connected',
-      `with the denial taken out, a process started before a socket was bound answered ${JSON.stringify(lateControl)}; expected both reached, since the case proves nothing otherwise`,
+      `with the denial taken out, a running process connecting to a socket bound after its ready file appeared answered ${JSON.stringify(lateControl)}; expected both reached, since the case proves nothing otherwise`,
     );
     const lateOwn = await late(path.join(workspace, 'late-own.sock'));
     check(
       lateOwn?.early === 'refused EPERM' && lateOwn?.late === 'connected',
-      `a process started before a socket was bound in its own workspace answered ${JSON.stringify(lateOwn)}; expected the early socket refused and the late one reached`,
+      `a running process connecting to a socket bound after its ready file appeared in its own workspace answered ${JSON.stringify(lateOwn)}; expected the early socket refused and the late one reached`,
     );
   } finally {
     for (const server of servers) await closeServer(server);
