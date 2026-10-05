@@ -126,8 +126,8 @@ const AjvModule = require('ajv/dist/2020');
 const { baselineDigestFindings } = require('./baseline-digests');
 const { loadEngine } = require('./engine');
 const { createArtifactValidator } = require('./records');
-const { inputFindings, phaseSnapshotProblems, runDirectoryFor } = require('./score');
-const { holdScoreInputs, regularFileBytes, scoreInputList } = require('./score-inputs');
+const { holdRunInputs, inputFindings, phaseSnapshotProblems, runDirectoryFor } = require('./score');
+const { regularFileBytes, scoreInputList } = require('./score-inputs');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -810,7 +810,7 @@ async function scoreInputFindings({ folder, runDirectory, index, record, engine 
       finding(TRIAL_SETS_NAME, 'schema', message),
     );
   }
-  const held = holdScoreInputs({ runDirectory, index, record, engine });
+  const held = holdRunInputs({ folder, runDirectory, index, record, engine });
   const found = await inputFindings({ folder, runDirectory, index, record, engine, held });
   if (found.length === 0) {
     try {

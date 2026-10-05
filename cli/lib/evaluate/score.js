@@ -135,7 +135,7 @@ const {
   releaseScratchDirectory,
   removeScratchDirectory,
 } = require('./workspace');
-const { writePartitionViews } = require('./partition');
+const { PartitionPlanError, loadBothViewDesignation, writePartitionViews } = require('./partition');
 const { phaseOf, writeInterpretation } = require('./interpret');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -274,6 +274,23 @@ function phaseSnapshotProblems(run, contract) {
   return problems;
 }
 
+/**
+ * The held inputs of a run, with the designation each probe is scored under (Story 1.110): a both run under a `partitionPlan` asks
+ * `eval-quality score --designated-oracle` for the oracle its probe's own partition lists (`partition.js` `bothViewDesignation`),
+ * through this one function, so the call's arguments and the in-process check hold the same designation. A designation that cannot be
+ * derived is a finding of the input check, and no score call runs.
+ */
+function holdRunInputs({ folder, runDirectory, index, record, engine }) {
+  let designate;
+  try {
+    designate = loadBothViewDesignation({ folder, partition: record?.partition, heldOutProbes: record?.heldOutProbes });
+  } catch (error) {
+    if (!(error instanceof PartitionPlanError)) throw error;
+    designate = () => ({ oracleId: null, problem: error.message });
+  }
+  return holdScoreInputs({ runDirectory, index, record, engine, designate });
+}
+
 /** Every finding in the held inputs of the run directory, before any engine call. */
 async function inputFindings({ folder, runDirectory, index, record, engine, held }) {
   const validate = createArtifactValidator();
@@ -293,6 +310,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
     return value;
   };
   for (const { relative, message } of held.aliasFindings()) add(relative, 'run-integrity', message);
+  for (const { relative, message } of held.designationFindings()) add(relative, 'designation', message);
   const runPrefix = `${referencePath(folder, runDirectory)}/`;
   const referenceProblem = (reference, what, expectedPath = null) => {
     if (reference?.storage !== 'public' || typeof reference.path !== 'string') {
@@ -514,7 +532,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
 
   const engine = await loadEngine();
-  const held = holdScoreInputs({ runDirectory, index, record: located.record, engine });
+  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine });
   const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine, held });
   if (findings.length === 0) {
     const contract = held.json(index.contract);
@@ -1132,6 +1150,7 @@ module.exports = {
   SEVERITY,
   ScoreOutcome,
   combinedExit,
+  holdRunInputs,
   inputFindings,
   phaseSnapshotProblems,
   regularFileBytes,

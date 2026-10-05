@@ -372,6 +372,97 @@ function loadContractView({ folder, evaluation, partition }) {
   return contractView({ contractBytes, evaluation, heldOutPlan: needsPlan ? readHeldOutPlan(folder, evaluation) : null, partition });
 }
 
+/** What a probe designates when nothing is to be passed: the engine's own rule (a behavior that lists exactly one oracle designates it) applies. */
+const NO_DESIGNATION = Object.freeze({ oracleId: null, problem: null });
+
+/**
+ * The oracle a probe of a both run asks `eval-quality score --designated-oracle` for (Story 1.110, AD-22).
+ *
+ * The both view gives a behavior its development oracle and its held-out oracle, so eval-quality's own rule (a behavior that lists
+ * exactly one oracle designates it) designates none there. Each probe belongs to one partition, though: the held-out one when its
+ * ID is in `heldOutProbes`, the development one otherwise. The oracle it is designated is the one its partition's own view lists
+ * for its behavior (`contractView` over that partition, the view the partition's own run compiles). When that view lists no
+ * oracle or several, nothing is passed, and the both run scores the probe undesignated as the partition's own run does. When the
+ * both view lists exactly one oracle the engine designates it itself, so nothing is passed either.
+ * A run that is not a both run, and a folder with no `partitionPlan`, designate nothing: every view is then `contract.json`.
+ *
+ * @param {object} options
+ * @param {Buffer} options.contractBytes the folder's `contract.json`
+ * @param {object} options.evaluation parsed `evaluation.json`
+ * @param {object|null} options.heldOutPlan the parsed held-out plan; read only by a both run under a plan, never by a development run
+ * @param {string} options.partition the run's partition (`development`, `held-out` or `both`)
+ * @param {Iterable<string>} options.heldOutProbes `evaluation.json`'s `heldOutProbes`
+ * @returns {(probe: { probeId: string, behaviorId: string }) => { oracleId: string|null, problem: string|null }}
+ *   `problem` names a probe whose behavior the contract does not hold; a problem never quotes a byte of the plan
+ */
+function bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition, heldOutProbes }) {
+  if (partition !== 'both' || evaluation?.partitionPlan === undefined) return () => NO_DESIGNATION;
+  const heldOut = new Set(heldOutProbes ?? []);
+  const view = (name) =>
+    contractView({ contractBytes, evaluation, heldOutPlan: name === 'development' ? null : heldOutPlan, partition: name });
+  // Every view is derived before any probe is asked, so a plan that cannot yield one fails here and not inside a score call.
+  const views = { both: view('both'), development: view('development'), 'held-out': view('held-out') };
+  const listed = (name, behaviorId) => {
+    const behavior = (views[name].contract.behaviors ?? []).find((entry) => entry?.id === behaviorId);
+    return Array.isArray(behavior?.oracles) ? behavior.oracles : undefined;
+  };
+  return (probe) => {
+    const inBoth = listed('both', probe?.behaviorId);
+    if (inBoth === undefined) {
+      const probeLabel = named(probe?.probeId, PROBE_ID, 'a probe');
+      const behaviorLabel = named(probe?.behaviorId, BEHAVIOR_ID, 'a behavior');
+      return { oracleId: null, problem: `${probeLabel} names ${behaviorLabel}, which the contract does not hold` };
+    }
+    if (inBoth.length === 1) return NO_DESIGNATION;
+    const own = listed(heldOut.has(probe.probeId) ? 'held-out' : 'development', probe.behaviorId);
+    return own.length === 1 && typeof own[0] === 'string' ? { oracleId: own[0], problem: null } : NO_DESIGNATION;
+  };
+}
+
+/**
+ * `bothViewDesignation` over a folder, for a command that holds a run and not the view it ran (`score`): reads `evaluation.json`
+ * and, only for a both run under a `partitionPlan`, `contract.json` and the held-out plan. A development or held-out run, and a
+ * run with no plan, open neither, so a development run never opens `corpus/held-out/`.
+ *
+ * @param {object} options
+ * @param {string} options.folder
+ * @param {string|undefined} options.partition the run record's partition
+ * @param {Iterable<string>|undefined} options.heldOutProbes the run record's `heldOutProbes`
+ * @returns {(probe: object) => { oracleId: string|null, problem: string|null }}
+ * @throws {PartitionPlanError} when a both run's evaluation, contract or held-out plan cannot be read; the message names paths only
+ */
+function loadBothViewDesignation({ folder, partition, heldOutProbes }) {
+  if (partition !== 'both') return () => NO_DESIGNATION;
+  let evaluation;
+  try {
+    evaluation = JSON.parse(fs.readFileSync(path.join(folder, 'evaluation.json'), 'utf8'));
+  } catch {
+    throw new PartitionPlanError(
+      'evaluation.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived',
+    );
+  }
+  if (evaluation?.partitionPlan === undefined) return () => NO_DESIGNATION;
+  let contractBytes;
+  try {
+    contractBytes = fs.readFileSync(path.join(folder, 'contract.json'));
+    JSON.parse(contractBytes.toString('utf8'));
+  } catch {
+    throw new PartitionPlanError(
+      'contract.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived',
+    );
+  }
+  const heldOutPlan = readHeldOutPlan(folder, evaluation);
+  try {
+    return bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition, heldOutProbes });
+  } catch (error) {
+    if (error instanceof PartitionPlanError) throw error;
+    // A plan or contract off its shape throws from the derivation; the cause quotes the file, so only the path is named.
+    throw new PartitionPlanError(
+      `${evaluation.partitionPlan.heldOutPlan} and contract.json do not derive the views of the both run, so the oracle each probe is scored against cannot be derived`,
+    );
+  }
+}
+
 /** The oracle IDs and `rubricId/criterionId` pairs a contract declares, read defensively: `check` reports a contract off its schema on its own. */
 function declaredBindings(contract) {
   const list = (value) => (Array.isArray(value) ? value : []);
@@ -728,9 +819,11 @@ module.exports = {
   PROBE_ID,
   PartitionPlanError,
   STEP_ID,
+  bothViewDesignation,
   committedProbes,
   contractView,
   heldOutResponsePath,
+  loadBothViewDesignation,
   loadContractView,
   mappingView,
   mappingViewProblems,

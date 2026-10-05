@@ -107,7 +107,7 @@ const { holdDeployment, recordRefusal } = require('./historical');
 const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
-const { committedProbes, selectPartition, unknownPartition } = require('./partition');
+const { bothViewDesignation, committedProbes, selectPartition, unknownPartition } = require('./partition');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
@@ -1642,7 +1642,7 @@ function expectedOutcome(arm) {
  * Then the comparison `score` makes (`held-refusal.js`) refuses a call whose inputs changed, whose staged artifact is not the in-process score of the held bytes, or whose exit or `eval-quality:` lines are not the ones those bytes give: exit 12, no vote.
  * The staged bytes the comparison accepted are the ones copied in and read, once.
  */
-async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
+async function scoreAttempt(context, { probe, directory, set, corpusDigest, designate }) {
   const { writer, runDirectory, env, log, scratch, stop, engine } = context;
   let held;
   try {
@@ -1652,6 +1652,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       corpusDigest,
       probeId: probe.probeId,
       set,
+      designate,
     });
   } catch (error) {
     if (!(error instanceof AttemptInputError)) throw error;
@@ -1659,6 +1660,15 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       stage: 'trial',
       exitCode: 12,
       message: `${probe.probeId}: ${error.message}; no engine call was made and no vote is recorded for the attempt`,
+    });
+  }
+  // The designated oracle of a both run's probe must be one the run's own contract lists (Story 1.110); otherwise nothing is called.
+  const [undesignable] = held.designationFindings();
+  if (undesignable !== undefined) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `${probe.probeId}: ${undesignable.message}; no engine call was made and no vote is recorded for the attempt`,
     });
   }
   const staging = makeScratchDirectory(scratch, 'tea-evaluate-qualification-');
@@ -1761,6 +1771,14 @@ async function qualifyEvaluator(context) {
   }
   const { attempts, minimumAgreement } = evaluation.evaluatorQualification;
   const corpusDigest = await corpusDigestOf(snapshot.index);
+  // An attempt of a both run under a partition plan is scored as its probe's own partition would score it (Story 1.110).
+  const designate = bothViewDesignation({
+    contractBytes: Buffer.from(JSON.stringify(context.view.source)),
+    evaluation,
+    heldOutPlan: context.view.heldOutPlan,
+    partition: snapshot.partition,
+    heldOutProbes: snapshot.heldOutProbes,
+  });
   // The policy an attempt is scored with is the one the trial sets carry, so it is in the run directory before the first score.
   if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
   const report = { attempts, minimumAgreement, arms: [] };
@@ -1794,7 +1812,7 @@ async function qualifyEvaluator(context) {
           runId: `${invocationId}-${probe.probeId}-attempt-${attempt}`,
         });
         writeQualifiedProbe({ writer, stop }, probe);
-        const scored = await scoreAttempt(context, { probe, directory, set, corpusDigest });
+        const scored = await scoreAttempt(context, { probe, directory, set, corpusDigest, designate });
         probes[index].attempts.push({ attempt, ...scored, agrees: scored.outcome === expected });
       }
     }

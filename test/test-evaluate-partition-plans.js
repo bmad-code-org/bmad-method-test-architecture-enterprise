@@ -44,7 +44,9 @@ const { spawnSync } = require('node:child_process');
 
 const {
   PartitionPlanError,
+  bothViewDesignation,
   contractView,
+  loadBothViewDesignation,
   loadContractView,
   mappingView,
   partitionPlanProblems,
@@ -52,6 +54,7 @@ const {
   selectPartition,
   stepsReadBy,
 } = require('../cli/lib/evaluate/partition');
+const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { answersForView } = require('../cli/lib/evaluate/gameability');
 const { EvaluatorLayerError, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { rowsValidator } = require('../cli/lib/evaluate/judgment-rows');
@@ -309,10 +312,12 @@ function gameabilityLayer({ folder }, { heldOut = true } = {}) {
     value.condition.predicate.operands[1].literal = 'verdict: pending';
     return value;
   };
-  const developmentSignature = signature('P-004.probe.json');
-  const heldOutSignature = signature('P-003.probe.json');
-  write(path.join(folder, 'probes/P-005.probe.json'), gameabilityProbeOf('P-005', developmentSignature));
-  write(path.join(folder, 'probes/P-006.probe.json'), gameabilityProbeOf('P-006', heldOutSignature));
+  // The both view answers every step of the plan for every gameability probe, so an oracle the answer violates at any step files a
+  // finding that cites the probe, and the probe's signature must admit the answer there too (Story 1.110): both probes select
+  // any prompt, where a signature that selects one step's request reads the other step's finding as an unwitnessed claim.
+  const gameabilitySignature = signature('P-003.probe.json');
+  write(path.join(folder, 'probes/P-005.probe.json'), gameabilityProbeOf('P-005', gameabilitySignature));
+  write(path.join(folder, 'probes/P-006.probe.json'), gameabilityProbeOf('P-006', gameabilitySignature));
   for (const probeId of ['P-005', 'P-006']) {
     fs.mkdirSync(path.join(folder, 'corpus/gameability'), { recursive: true });
     write(path.join(folder, `corpus/gameability/${probeId}.json`), {
@@ -326,6 +331,32 @@ function gameabilityLayer({ folder }, { heldOut = true } = {}) {
   evaluation.arms = [...evaluation.arms, 'gameability'];
   if (heldOut) evaluation.heldOutProbes = [...evaluation.heldOutProbes, 'P-006'];
   write(path.join(folder, 'evaluation.json'), evaluation);
+}
+
+/**
+ * The several-oracles layer (Story 1.110): a behavior B-003 that lists two development-only oracles in `contract.json` (copies of
+ * O-002) and one held-out oracle in the plan (a copy of O-101), and a development clean control P-007 on it. `check` holds a defect or
+ * gameability probe to a behavior of exactly one oracle, so a clean control is the probe whose partition view lists several.
+ */
+function severalOraclesLayer({ folder }) {
+  const contractFile = path.join(folder, 'contract.json');
+  const contract = read(contractFile);
+  const copyOf = (list, id, to) => ({ ...structuredClone(list.find((entry) => entry.id === id)), id: to });
+  contract.oracles.push(copyOf(contract.oracles, 'O-002', 'O-004'), copyOf(contract.oracles, 'O-002', 'O-005'));
+  const behavior = copyOf(contract.behaviors, 'B-002', 'B-003');
+  behavior.requirementLinks = [{ scheme: 'tea-evaluate-fixture', id: 'strict-policy-accepts-second-case' }];
+  behavior.oracles = ['O-004', 'O-005'];
+  contract.behaviors.push(behavior);
+  write(contractFile, contract);
+  const plan = read(path.join(folder, PLAN_FILE));
+  plan.oracles.push(copyOf(plan.oracles, 'O-101', 'O-102'));
+  plan.behaviorOracles['B-003'] = ['O-102'];
+  write(path.join(folder, PLAN_FILE), plan);
+  write(path.join(folder, 'probes/P-007.probe.json'), {
+    ...read(path.join(folder, 'probes/P-001.probe.json')),
+    probeId: 'P-007',
+    behaviorId: 'B-003',
+  });
 }
 
 /**
@@ -442,9 +473,9 @@ function setTiers(folder, plan) {
 /**
  * The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository).
  * `layer` adds the rubric layer, `waivers` the waiver layer, `mappings` the mapping layer and `gameability` the gameability layer, each with
- * the options it takes; null leaves the fixture as it is.
+ * the options it takes; null leaves the fixture as it is. `several` adds the several-oracles layer.
  */
-function planProject(label, layer = null, waivers = null, mappings = null, gameability = null) {
+function planProject(label, layer = null, waivers = null, mappings = null, gameability = null, several = false) {
   return test.project(
     label,
     ({ folder, directory }) => {
@@ -454,6 +485,7 @@ function planProject(label, layer = null, waivers = null, mappings = null, gamea
       if (waivers !== null) waiverLayer({ folder, directory }, waivers);
       if (mappings !== null) mappingLayer({ folder, directory }, mappings);
       if (gameability !== null) gameabilityLayer({ folder, directory }, gameability);
+      if (several) severalOraclesLayer({ folder });
       relayContract(folder);
       fs.mkdirSync(path.join(folder, 'ci'));
       const plan = JSON.parse(
@@ -580,6 +612,77 @@ try {
   delete unplanned.partitionPlan;
   for (const partition of ['development', 'held-out', 'both']) {
     assert.equal(contractView({ contractBytes, evaluation: unplanned, heldOutPlan: null, partition }).bytes, contractBytes);
+  }
+
+  // ---- the oracle each probe of a both run is designated (Story 1.110) -------------------------------------------------------
+  // A probe belongs to the partition `heldOutProbes` places it in, and is designated the oracle that partition's own view lists for
+  // its behavior: B-002 lists O-002 in the development view, O-101 in the held-out view and both in the both view, which designates
+  // none itself. B-001 lists O-001 everywhere, so the engine designates it and nothing is passed.
+  const PROBE_IDS = ['P-001', 'P-002', 'P-003', 'P-004'];
+  const probeOf = (probeId) => read(path.join(fixtureFolder, 'probes', `${probeId}.probe.json`));
+  const designationsOf = (options = {}) => {
+    const designate = bothViewDesignation({
+      contractBytes,
+      evaluation,
+      heldOutPlan,
+      partition: 'both',
+      heldOutProbes: evaluation.heldOutProbes,
+      ...options,
+    });
+    return Object.fromEntries(PROBE_IDS.map((probeId) => [probeId, designate(probeOf(probeId)).oracleId]));
+  };
+  assert.deepEqual(designationsOf(), { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' });
+  // `heldOutProbes` decides the partition: swapping it swaps the oracles.
+  assert.deepEqual(designationsOf({ heldOutProbes: ['P-004'] }), { 'P-001': null, 'P-002': null, 'P-003': 'O-002', 'P-004': 'O-101' });
+  assert.deepEqual(designationsOf({ heldOutProbes: [] }), { 'P-001': null, 'P-002': null, 'P-003': 'O-002', 'P-004': 'O-002' });
+  // A development or a held-out run designates nothing, and a development run is handed no plan to read.
+  assert.deepEqual(designationsOf({ partition: 'development', heldOutPlan: null }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  assert.deepEqual(designationsOf({ partition: 'held-out' }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  // With no partitionPlan every view is contract.json and the engine's own rule stands.
+  assert.deepEqual(designationsOf({ evaluation: unplanned, heldOutPlan: null }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  // The source with another behavior list: B-002 lists a second development-only oracle (O-003, a copy of O-002 that reads the same
+  // development-only step), so its development view lists two oracles and its held-out view still one.
+  const severalSource = JSON.parse(contractBytes.toString('utf8'));
+  severalSource.oracles.push({ ...structuredClone(severalSource.oracles.find((oracle) => oracle.id === 'O-002')), id: 'O-003' });
+  severalSource.behaviors.find((behavior) => behavior.id === 'B-002').oracles = ['O-002', 'O-003'];
+  const severalBytes = Buffer.from(JSON.stringify(severalSource));
+  assert.deepEqual(
+    designationsOf({ contractBytes: severalBytes }),
+    { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': null },
+    'a development view that lists two oracles was designated one, or the held-out view lost its own',
+  );
+  assert.deepEqual(designationsOf({ contractBytes: severalBytes, heldOutProbes: ['P-003', 'P-004'] }), {
+    'P-001': null,
+    'P-002': null,
+    'P-003': 'O-101',
+    'P-004': 'O-101',
+  });
+  // A both view that lists one oracle is the engine's to designate.
+  const lonelyPlan = { ...heldOutPlan, behaviorOracles: {} };
+  assert.deepEqual(designationsOf({ heldOutPlan: lonelyPlan }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  // A probe of a behavior the contract does not hold is refused by IDs of the schema's shape only.
+  const designate = bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition: 'both', heldOutProbes: ['P-003'] });
+  assert.deepEqual(designate({ probeId: 'P-003', behaviorId: 'B-999' }), {
+    oracleId: null,
+    problem: 'P-003 names B-999, which the contract does not hold',
+  });
+  assert.deepEqual(designate({ probeId: 'canary-probe', behaviorId: 'canary-behavior' }), {
+    oracleId: null,
+    problem: 'a probe names a behavior, which the contract does not hold',
+  });
+  // Over a folder, the files are read for a both run under a plan and for no other run.
+  assert.deepEqual(
+    Object.fromEntries(
+      PROBE_IDS.map((id) => [
+        id,
+        loadBothViewDesignation({ folder: fixtureFolder, partition: 'both', heldOutProbes: ['P-003'] })(probeOf(id)).oracleId,
+      ]),
+    ),
+    { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' },
+  );
+  for (const partition of ['development', 'held-out', undefined]) {
+    const nowhere = path.join(FIXTURE, 'no-such-folder');
+    assert.equal(loadBothViewDesignation({ folder: nowhere, partition, heldOutProbes: [] })(probeOf('P-003')).oracleId, null);
   }
 
   // Steps are read from the structured reference fields only: a pointer operand, a captured binding, evidenceTargets, a rubric
@@ -2412,6 +2515,18 @@ try {
     }
   };
   const qualified = (run) => fs.readdirSync(path.join(run, 'qualification')).sort();
+  /** The oracle each probe's call of a run's latest score was handed through `--designated-oracle`, null for a call handed none (Story 1.110). */
+  const designatedBy = (callRecord) => {
+    const { argv } = read(callRecord);
+    const at = argv.indexOf('--designated-oracle');
+    return at === -1 ? null : argv[at + 1];
+  };
+  const designatedIn = (run) => {
+    const scores = path.join(run, 'scores');
+    const latest = path.join(scores, fs.readdirSync(scores).sort().at(-1));
+    const probeIds = fs.readdirSync(latest, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? [entry.name] : []));
+    return Object.fromEntries(probeIds.sort().map((probeId) => [probeId, designatedBy(path.join(latest, probeId, 'score.json'))]));
+  };
   const developmentLog = [];
   const heldOutLog = [];
 
@@ -2455,9 +2570,21 @@ try {
   assert.equal(developmentScored.status, 0, developmentScored.output);
   developmentLog.push(developmentRan.output, developmentScored.output);
   assert.deepEqual(holding(developmentRun, KEEP_OUT.development), [], 'the development run holds the held-out partition');
+  // A development run designates nothing and never opens the held-out plan, so it scores with that plan unreadable (Story 1.110).
+  assert.deepEqual(designatedIn(developmentRun), { 'P-001': null, 'P-002': null, 'P-004': null });
+  const flowPlanBytes = fs.readFileSync(path.join(flow.folder, PLAN_FILE));
+  fs.writeFileSync(path.join(flow.folder, PLAN_FILE), `${CANARY} {`);
+  try {
+    const unopened = cli(flow, 'score', ['--run', path.basename(developmentRun)]);
+    assert.equal(unopened.status, 0, `a development score opened the held-out plan\n${unopened.output}`);
+    assert.deepEqual(designatedIn(developmentRun), { 'P-001': null, 'P-002': null, 'P-004': null });
+  } finally {
+    fs.writeFileSync(path.join(flow.folder, PLAN_FILE), flowPlanBytes);
+  }
   const developmentRecords = snapshotRecords(flow, developmentRun, 'development');
+  const developmentOutcomes = JSON.parse(outcomes(developmentRun));
   assert.deepEqual(
-    JSON.parse(outcomes(developmentRun)).map(([probeId, outcome]) => [probeId, outcome.caught]),
+    developmentOutcomes.map(([probeId, outcome]) => [probeId, outcome.caught]),
     [
       ['P-001', false],
       ['P-002', true],
@@ -2506,6 +2633,8 @@ try {
   const heldOutRecords = snapshotRecords(flow, heldOutRun, 'held-out');
   const heldOutOutcome = read(path.join(heldOutRun, 'partitions.json'))['held-out'][0].outcome;
   assert.equal(heldOutOutcome.caught, true, JSON.stringify(heldOutOutcome));
+  // A held-out run designates nothing either: its own view lists one oracle for the behavior, which the engine designates itself.
+  assert.deepEqual(designatedIn(heldOutRun), { 'P-003': null });
   const gap = read(path.join(heldOutRun, 'gap-view.json'));
   assert.deepEqual(Object.keys(gap['held-out'][0]).sort(), ['outcome', 'probeClass', 'probeId']);
   assert.equal(JSON.stringify(gap).includes(CANARY), false, 'the gap view carries the canary');
@@ -2561,18 +2690,142 @@ try {
   });
   const bothScored = cli(flow, 'score', ['--run', path.basename(bothRun)]);
   assert.equal(bothScored.status, 0, bothScored.output);
-  // eval-quality designates an oracle only for a behavior that names exactly one, and the both view gives B-002 its development
-  // oracle and its held-out one, so the probes of B-002 are scored without a designated oracle here; every probe is still
-  // scored, and the probes of B-001, which has one oracle in every view, read as they do in a partition's own run.
+  // eval-quality designates an oracle only for a behavior that names exactly one, and the both view gives B-002 its development oracle
+  // and its held-out one. Each probe of B-002 is handed the oracle of its own partition, so the both view scores it as that partition's
+  // own run does (Story 1.110): P-004 against O-002, P-003 against O-101, and both are caught. The probes of B-001, which has one
+  // oracle in every view, are handed nothing.
+  assert.deepEqual(designatedIn(bothRun), { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' });
   const bothOutcomes = JSON.parse(outcomes(bothRun));
   assert.deepEqual(bothOutcomes.map(([probeId]) => probeId).sort(), ['P-001', 'P-002', 'P-003', 'P-004']);
   assert.deepEqual(
-    bothOutcomes.filter(([probeId]) => ['P-001', 'P-002'].includes(probeId)).map(([probeId, outcome]) => [probeId, outcome.caught]),
+    bothOutcomes.map(([probeId, outcome]) => [probeId, outcome.caught]).sort(([left], [right]) => left.localeCompare(right)),
     [
       ['P-001', false],
       ['P-002', true],
+      ['P-003', true],
+      ['P-004', true],
     ],
+    'a probe of the both view was not scored against its own partition oracle',
   );
+  // Each probe reads as it does in its partition's own run, down to the votes.
+  for (const [probeId, own] of [...developmentOutcomes, ...JSON.parse(outcomes(heldOutRun))]) {
+    assert.deepEqual(
+      bothOutcomes.find(([id]) => id === probeId)[1],
+      own,
+      `${probeId} reads differently in the both view than in its own partition`,
+    );
+  }
+
+  // The designation is the folder's both view read for the run: the held-out plan is read for a both run and refused by path when it
+  // cannot be read, and a plan that lists another oracle than the run sealed is a finding of the input check, with no score call.
+  const flowPlanFile = path.join(flow.folder, PLAN_FILE);
+  const scoreCalls = (run) => fs.readdirSync(path.join(run, 'scores')).length;
+  const callsBefore = scoreCalls(bothRun);
+  try {
+    fs.writeFileSync(flowPlanFile, `${CANARY} {`);
+    const unreadablePlan = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+    assert.equal(unreadablePlan.status, 10, unreadablePlan.output);
+    assert.match(unreadablePlan.output, /corpus\/held-out\/plan\.json does not parse as JSON/);
+    assert.equal(unreadablePlan.output.includes(CANARY), false, 'a refusal quoted a byte of the held-out plan');
+    const renamed = JSON.parse(flowPlanBytes.toString('utf8').replaceAll('O-101', 'O-102'));
+    fs.writeFileSync(flowPlanFile, `${JSON.stringify(renamed, null, 2)}\n`);
+    const drifted = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+    assert.equal(drifted.status, 10, drifted.output);
+    assert.match(drifted.output, /probes\/P-003\.probe\.json.*is designated O-102 by the evaluation folder's both view/);
+    assert.equal(drifted.output.includes(CANARY), false);
+    assert.match(drifted.output, /no score call ran/);
+    // A probe whose behavior the folder's contract does not hold is named by the IDs of the schema's shape.
+    fs.writeFileSync(flowPlanFile, flowPlanBytes);
+    const contractFile = path.join(flow.folder, 'contract.json');
+    const contractBefore = fs.readFileSync(contractFile);
+    try {
+      fs.writeFileSync(contractFile, contractBefore.toString('utf8').replaceAll('"id": "B-002"', '"id": "B-902"'));
+      const unheld = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+      assert.equal(unheld.status, 10, unheld.output);
+      assert.match(unheld.output, /P-003 names B-002, which the contract does not hold/);
+    } finally {
+      fs.writeFileSync(contractFile, contractBefore);
+    }
+  } finally {
+    fs.writeFileSync(flowPlanFile, flowPlanBytes);
+  }
+  assert.equal(scoreCalls(bothRun), callsBefore, 'a refused designation still ran a score call');
+  // A probe whose behavior the contract does not hold is named by ID, and a call the CLI makes without the designation the in-process
+  // score holds is refused: the staged artifact is not the one the held inputs produce.
+  const dropFlag = path.join(flow.directory, 'drop-designation.js');
+  fs.writeFileSync(
+    dropFlag,
+    [
+      "const { spawnSync } = require('node:child_process');",
+      'const args = process.argv.slice(2);',
+      "const at = args.indexOf('--designated-oracle');",
+      'if (at !== -1) args.splice(at, 2);',
+      `const ran = spawnSync(process.execPath, [${JSON.stringify(engineCliPath({}))}, ...args], { stdio: 'inherit' });`,
+      String.raw`if (ran.status === null) process.stderr.write('drop-designation: the engine CLI was killed\n');`,
+      'process.exit(ran.status ?? 1);',
+      '',
+    ].join('\n'),
+  );
+  const undesignatedCall = test.cli(flow.folder, 'score', ['--run', path.basename(bothRun)], { ...flow.env, [ENGINE_CLI_ENV]: dropFlag });
+  assert.equal(undesignatedCall.status, 12, undesignatedCall.output);
+  assert.match(undesignatedCall.output, /P-003: .*differs from the one the verified inputs produce/);
+  assert.match(undesignatedCall.output, /P-004: .*differs from the one the verified inputs produce/);
+  const sameCall = test.cli(flow.folder, 'score', ['--run', path.basename(bothRun)], { ...flow.env, [ENGINE_CLI_ENV]: engineCliPath({}) });
+  assert.equal(sameCall.status, 0, sameCall.output);
+
+  // A both baseline replays through `ci`: the replay scores each probe under the same designation, so every probe reads as it does in
+  // the baseline, both probes of B-002 are caught and nothing reads as stale.
+  const bothAccepted = cli(flow, 'compare', ['--run', path.basename(bothRun), '--accept']);
+  assert.equal(bothAccepted.status, 0, bothAccepted.output);
+  commit(flow.repository, 'both baseline');
+  const bothCi = cli(flow, 'ci', ['--tier', 'pr']);
+  assert.equal(bothCi.status, 0, bothCi.output);
+  assert.doesNotMatch(bothCi.output, /stale/, 'a both baseline replays as stale');
+  assert.match(bothCi.output, /7 baseline file\(s\) compared, 0 difference\(s\)/);
+  const replayScores = path.join(test.latest(flow.folder), 'replay/scores');
+  const replayCaught = Object.fromEntries(
+    PROBE_IDS.map((probeId) => {
+      const [outcome] = read(path.join(replayScores, probeId, 'evidence-artifact.json')).reducedProbeOutcomes;
+      return [probeId, outcome.caught];
+    }),
+  );
+  assert.deepEqual(replayCaught, { 'P-001': false, 'P-002': true, 'P-003': true, 'P-004': true }, 'the both replay reads a probe uncaught');
+  assert.deepEqual(
+    Object.fromEntries(PROBE_IDS.map((probeId) => [probeId, designatedBy(path.join(replayScores, probeId, 'score.json'))])),
+    { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' },
+    'the replay scored a both probe under another designation than the baseline',
+  );
+
+  // A behavior whose development view lists several oracles stays undesignated there, and the both run matches that partition's own
+  // run: the development clean control P-007 sits on B-003, which lists two development-only oracles, so it is handed nothing in the
+  // development run and in the both run (Story 1.110).
+  const several = planProject('plan-several-oracles', null, null, null, null, true);
+  const severalChecked = cli(several, 'check');
+  assert.equal(severalChecked.status, 0, severalChecked.output);
+  const severalRuns = {};
+  for (const [partition, args] of [
+    ['development', ['--partition', 'development']],
+    ['held-out', ['--partition', 'held-out']],
+    ['both', []],
+  ]) {
+    const ran = cli(several, 'run', args);
+    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
+    const run = test.latest(several.folder);
+    const scored = cli(several, 'score', ['--run', path.basename(run)]);
+    assert.equal(scored.status, 0, `${partition}: ${scored.output}`);
+    severalRuns[partition] = { designated: designatedIn(run), outcomes: Object.fromEntries(JSON.parse(outcomes(run))) };
+  }
+  assert.deepEqual(severalRuns.development.designated, { 'P-001': null, 'P-002': null, 'P-004': null, 'P-007': null });
+  assert.deepEqual(severalRuns['held-out'].designated, { 'P-003': null });
+  assert.deepEqual(severalRuns.both.designated, { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002', 'P-007': null });
+  for (const probeId of ['P-001', 'P-002', 'P-004', 'P-007']) {
+    assert.deepEqual(
+      severalRuns.both.outcomes[probeId],
+      severalRuns.development.outcomes[probeId],
+      `${probeId} reads differently in the both view than in the development run`,
+    );
+  }
+  assert.deepEqual(severalRuns.both.outcomes['P-003'], severalRuns['held-out'].outcomes['P-003']);
 
   // ---- no partitionPlan: the source bytes in every view ----------------------------------------------------------------------
   const unplannedProject = test.project(
@@ -3024,6 +3277,34 @@ try {
         `${partition}: the agent's prompt holds the other partition`,
       );
     }
+  }
+
+  // An evaluator attempt of a both run is scored as its probe's own partition scores it (Story 1.110): the call of a probe of B-002
+  // is handed the oracle its partition lists, and an attempt of a development or held-out run is handed none.
+  const attemptDesignations = (run) => {
+    const found = {};
+    for (const file of filesUnder(path.join(run, 'evaluator-qualification')).filter((entry) => path.basename(entry) === 'score.json')) {
+      const probeId = path.basename(path.dirname(file));
+      (found[probeId] ??= new Set()).add(designatedBy(file));
+    }
+    return Object.fromEntries(Object.entries(found).map(([probeId, designated]) => [probeId, [...designated]]));
+  };
+  const agentBoth = cli(agentFlow, 'run');
+  assert.equal(agentBoth.status, 0, agentBoth.output);
+  assert.deepEqual(
+    attemptDesignations(test.latest(agentFlow.folder)),
+    { 'P-001': [null], 'P-002': [null], 'P-003': ['O-101'], 'P-004': ['O-002'] },
+    'an evaluator attempt of the both view was not scored against its own partition oracle',
+  );
+  for (const partition of ['development', 'held-out']) {
+    assert.equal(cli(agentFlow, 'run', ['--partition', partition]).status, 0);
+    const designated = Object.values(attemptDesignations(test.latest(agentFlow.folder))).flat();
+    assert.ok(designated.length > 0, `${partition}: no evaluator attempt was scored`);
+    assert.deepEqual(
+      designated,
+      designated.map(() => null),
+      `${partition}: an evaluator attempt was handed a designated oracle`,
+    );
   }
 
   // The tree digest a run records covers the files its partition reads: the mapping of its view in place of the file. A development
@@ -3934,13 +4215,19 @@ try {
         assert.equal(answered.stdout['held-out-run'], HELD_OUT_ANSWER.stdout);
         assert.deepEqual(answered.response, { ...mainOf(probeId), heldOut: heldOutOf(probeId) });
       }
-      // The both view gives B-002 a development oracle and a held-out one, so eval-quality designates none for its probes (Story 1.110);
-      // each gameability probe is still run and scored here.
+      // Each gameability probe of the both view is handed the oracle of its own partition (Story 1.110), so P-005 is scored against O-002
+      // and P-006 against O-101, as their partitions' own runs score them, and both are caught.
       assert.deepEqual(
         JSON.parse(outcomes(run))
           .filter(([probeId]) => GAME_PROBES.includes(probeId))
-          .map(([probeId]) => probeId),
-        GAME_PROBES,
+          .map(([probeId, outcome]) => [probeId, outcome.caught]),
+        GAME_PROBES.map((probeId) => [probeId, true]),
+      );
+      const bothScoreDirectory = path.join(run, 'scores', fs.readdirSync(path.join(run, 'scores')).sort().at(-1));
+      assert.deepEqual(
+        GAME_PROBES.map((probeId) => designatedBy(path.join(bothScoreDirectory, probeId, 'score.json'))),
+        ['O-002', 'O-101'],
+        'a gameability probe of the both view was not handed its own partition oracle',
       );
     }
     if (partition !== 'both') {

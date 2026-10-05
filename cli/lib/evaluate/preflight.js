@@ -1232,6 +1232,7 @@ async function runInWorkspaces({
     return await afterVerdict({
       folder,
       evaluation,
+      view,
       contract,
       registry,
       pristine,
