@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the REAL CAPTURE of the edit run over the evaluation-gate project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's edit prompt and staged workspace) over the skill's edit steps and step-03b-render-evaluation-plans.md.",
+    "The project's pipeline held a hand-written test job and a hand-written publish job that needs it and runs on a published release. The run found the plan, which gates publish on the release tier, wrote the evaluation-pr and evaluation-release jobs under the plan's marker, each limited to its own event under the 30 and 120 minute limits, and appended evaluation-release to the publish job's needs after the test entry it already had. It left the test job and the publish job otherwise byte for byte and wrote no checkpoint, so the stored checkpoint is the one the run left, which is the file the project came with."
+  ],
+  "id": "evaluation-gate-live-capture",
+  "suite": "ci",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "real-capture",
+    "workflow": ".github/workflows/test.yml",
+    "sha256": "1195abb99119d36cbce7e581215e7f8ce33d3ce8e79ec10204cfbb90d69eb79b",
+    "capturedBy": "a live `npm run eval:ci -- --agent claude --runs 1 --set evaluation-gate-slate-publisher` run on 2026-10-04 (15 of 15 requested elements, 0 unrequested, every threshold met; Claude Code 2.1.289, model alias sonnet), whose staged workspace and edit prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores (41 seconds); the file is the by-hand run's, byte for byte, it scores 15 of 15 through the same scorer, and the checkpoint is the one that run left"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-gate-slate-publisher",
+    "scoringInputsDigest": "sha256:cd75807c765daa5aec217a1784c88b7235b8feb3af56f40cb8129a6fc6d0500b"
+  },
+  "derivation": [
+    "The file parses and actionlint reports nothing. All fifteen requested elements are present: the pull_request trigger scoped to main and the release trigger of type published, contents:read, the floor-guarded Node version in each evaluation job, the test command, the evaluations folder's install, one tier step per tier named for the checks the plan places on it, the evaluation-pr and evaluation-release jobs under the one marker with their events and limits, two uploads under always() with a name of their own, the test job's bytes as the pipeline held them, the publish job waiting for [test, evaluation-release] and otherwise as it was, and the checkpoint as the create run left it.",
+    "Zero unrequested elements and zero rule violations."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "trigger-release-published": true,
+      "permission-contents-read": true,
+      "node-version-evaluation-floor": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "command-evaluation-ci-release": true,
+      "job-evaluation-pr": true,
+      "job-evaluation-release": true,
+      "artifact-evaluation-runs-pr": true,
+      "artifact-evaluation-runs-release": true,
+      "preserved-job-test": true,
+      "wait-publish": true,
+      "checkpoint-untouched": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

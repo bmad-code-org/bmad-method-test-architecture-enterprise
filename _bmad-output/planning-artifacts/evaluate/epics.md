@@ -2588,12 +2588,29 @@ So that a blocking exit stops the shipment (CAP-11).
 
 **Acceptance Criteria:**
 
-**Given** a plan check that names an existing pipeline job the tier must gate (and tiers whose triggers resolve to one GitHub event, which step 03b tells apart with a ref or cron guard from Story 2.4's second review round, so the gate lands on the evaluation job of the right tier; a tier whose only event another tier took, such as a `release` tier on a deploy workflow that has `workflow_dispatch` alone beside a `scheduled` tier that takes it, is named in the summary as wired to no event until this story gives it one)
+**Given** a plan check that names an existing pipeline job the tier must gate (and tiers whose triggers resolve to one GitHub event, which step 03b tells apart with a ref or cron guard from Story 2.4's second review round, so the gate lands on the evaluation job of the right tier; a tier whose only event another tier took, such as a `release` tier on a deploy workflow that has `workflow_dispatch` alone beside a `scheduled` tier that takes it, is named in the summary as wired to no event of its own, and the field names the job without creating an event)
 **When** `bmad-testarch-ci` renders the plan in edit or create mode
 **Then** that job waits for the tier's evaluation job, through `needs` inside one workflow file or through a `workflow_run` trigger across files, and the story records which and why
 **And** the plan schema and `ci-plan.js` define and validate the field, `tea-evaluate check` reports a name that is not a job id as a `ci-plan` finding, and the CI skill's step 03b may edit that one job, reports the edit in its summary and restores it on re-render
 **And** a name that matches no job, or a job another plan's tier already gates in a way that conflicts, is reported and renders nothing for that plan
 **And** `test:evaluate-ci` validates the field, `test:evaluate-ci-render` fails when the step drops the wait, and an `evaluation-plan` case of the `ci` behavioral suite captures a live rendering of it (`node tools/generate-contracts.js` and `generate-probes.js` regenerated)
+
+Amended 2026-10-04 in Story 1.97's build: the plan field is an optional `gates` list on a check, the ids of existing pipeline jobs its tier must gate.
+The schema owns the shape (a non-empty list of distinct strings, each a job id: `^[A-Za-z_][A-Za-z0-9_-]*$`), and a violation under `gates` is reported with rule `gates` in place of `schema`, so `tea-evaluate check` and `ci` exit 10 with the same single finding.
+The jobs a tier gates are the union of `gates` over the checks the plan places on it, so a job is named once on any check of the tier and a repeat across the tier's checks is merged.
+`references/ci.md` tells the ci stage to set `gates` when its release flow inspection finds a publish or deploy job the tier must gate, and to leave it out otherwise.
+Step 03b renders the wait by where the gated job lives.
+Inside the pipeline file the step writes, the evaluation job's id is appended to the job's `needs` with the existing entries kept, and the job's `if:` and every other key stay as they were: `needs` is the platform's own dependency edge inside one workflow run, and the evaluation job runs on the event the gated job already runs on.
+In another workflow file `needs` cannot reach the evaluation job, since a job waits only for jobs of its own workflow run, so the gated workflow gains a `workflow_run` trigger naming the pipeline file, the gated job gains an `if:` that requires the conclusion `success` of a run of the pipeline file's path started by the tier's event, its checkout steps name the evaluated commit (a `workflow_run` job otherwise builds the default branch), and the workflow's other jobs get an event guard.
+The edit set of the wait is the gated job's `needs` inside the pipeline file, and across files the job's `if:` and checkout `ref:`, the workflow's `workflow_run` trigger and the event guards of its other jobs.
+A re-render writes the wait under the evaluation job id item 1 gives now and removes it when the plan no longer names the job, the trigger and guards only when no other wait in that file uses them.
+A name matches a job when exactly one workflow file holds a job with that id, and a job the step wrote (one under the plan marker) is no job to gate.
+A gate conflicts when the gated job already ran in a run where its tier's evaluation job is skipped (the events and filters its file held before the render against the events and ref or cron guards of the evaluation job, so a run the render adds is skipped through the wait and is no conflict), when its tier's evaluation job runs on a run it did not run on before (a `workflow_dispatch` the plan adds to a tag-push release file), when it already waits through the other form for another plan, or when its `if:` calls a status function other than `success()`.
+A cross-file gate also conflicts for a pull request or fork tier, an evaluation job behind a ref or cron guard, a workflow that already follows another workflow, a job gated by two plans or tiers, and a job with its own `needs`, `if:`, `uses:` or `github.ref`, `github.sha`, `github.head_ref` or `github.event.*` contexts.
+A name that matches no job or a conflicting gate refuses the plan: the summary reports it and nothing renders from that plan.
+The "wired to no event" summary line stands, reworded to "of its own", because the gate adds no event: such a tier's evaluation job still runs on the event the other tier took, and a job it gates waits for it there.
+The `evaluation-gate` adopter of the `ci` behavioral suite is an edit set whose pipeline holds a hand-written publish job that `needs` the test job and runs on a published release, and whose plan gates that job on its release tier; its ground truth reads the wait through a `wait` element (the exact `needs` list, the events the job still runs on and the digest of the job without its `needs` lines).
+The live capture of that set is stored by the recapture after the build as `evaluation-gate-live-capture`, which replaces the constructed correct run the build began with, the two deviations derive from it by one edit each, and the recall threshold of the suite moves from 0.96 to 0.97 so that the larger corpus still admits two misses.
 
 **Dependencies:** 2.3, 2.4.
 **Gate:** `bmad-testarch-ci` edit gates, `npm test`.
@@ -3217,6 +3234,9 @@ So that a row that points at a deviation fails where it is added (CAP-12).
 **Given** the burn-in job oracle
 **When** the workflow carries `burn-in` only in a comment
 **Then** its token no longer matches, and `test/probes/expected-strength.json` moves only where the story's record says.
+
+Amended 2026-10-04 in Story 1.97's build: 35 pass through, not 33, because Story 1.97 adds two stored constructed deviations of the evaluation-gate project, `evaluation-gate-needs-cut` and `evaluation-gate-release-job-on-pull-requests`, and a `CI_CORRECT_RUNS` row pointed at either passes `test:probe-corpus` (the wait has no substring oracle and the release job's tokens are all present).
+The scratch-copy check of the second criterion covers the 35.
 
 **Dependencies:** 1.94.
 **Gate:** `test:probe-corpus`, `test:probe-sources` (which runs `node tools/generate-probes.js --check`), `test:contract-sources`, then `npm test`.

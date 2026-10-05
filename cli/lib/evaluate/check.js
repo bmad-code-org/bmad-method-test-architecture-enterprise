@@ -107,7 +107,8 @@
  *   runtime-owned plan schema, an unknown `evaluate` check id included (`schema`), and keep the placement rules
  *   `tea-evaluate ci` enforces (`tier`, `duplicate`, `command`, `trigger`, `placeholder`, `placement-default`,
  *   `placement-reason`, `deterministic-off-pr`, `live-on-pr`; Story 1.96 added `trigger`, `placeholder`, `tiers`
- *   and `applicability`, read against `evaluation.json` and `contract.json`; `ci-plan.js`). An absent plan is no defect
+ *   and `applicability`, read against `evaluation.json` and `contract.json`; Story 1.97 added `gates`, a violation
+ *   of the optional list of jobs a check's tier gates; `ci-plan.js`). An absent plan is no defect
  *   here; `tea-evaluate ci` exits 64.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must

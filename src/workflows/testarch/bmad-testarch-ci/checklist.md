@@ -116,6 +116,7 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 - [ ] One standalone `tea-evaluate ci` step per tier, run with `npm exec --prefix <evaluations folder>`, and the evaluations folder installed with `--prefix`
 - [ ] No evaluation step or job marked `continue-on-error`
 - [ ] The evaluation folder's `runs/` uploaded with `if: always()` (or the platform's always-publish form)
+- [ ] Each job a tier gates waits for the tier's evaluation job (`needs` in the pipeline file; in another file a `workflow_run` trigger, an `if:` on the run's `success` conclusion, event and workflow path, and the evaluated commit as the checkout `ref`), with nothing else of the job changed, and a plan with a name that matches no job or a conflicting gate refused and reported
 - [ ] Live-tier credential needs listed in the summary
 
 ## Output Validation

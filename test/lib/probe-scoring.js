@@ -1081,6 +1081,7 @@ const CI_CORRECT_RUNS = {
   'evaluation-plan-quarry-grader': { caseId: 'evaluation-plan-live-capture', observationId: 'ci-evaluation-plan-run' },
   'evaluation-tiers-granite-router': { caseId: 'evaluation-tiers-live-capture', observationId: 'ci-evaluation-tiers-run' },
   'evaluation-edit-ember-ledger': { caseId: 'evaluation-edit-live-capture', observationId: 'ci-evaluation-edit-run' },
+  'evaluation-gate-slate-publisher': { caseId: 'evaluation-gate-live-capture', observationId: 'ci-evaluation-gate-run' },
 };
 
 /** The `ci_platform` value one assembled prompt carries. */
