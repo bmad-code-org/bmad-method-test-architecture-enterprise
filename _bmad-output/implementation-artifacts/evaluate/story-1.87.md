@@ -2,7 +2,7 @@
 title: "Story 1.87: Give a macOS Seatbelt target no route to the host's path-based Unix sockets"
 type: 'feature'
 created: '2026-10-04'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6421dde8a0221761cfeae8bbcb5e8746364e1790'
@@ -86,16 +86,22 @@ The `bmad-build` skill rendered on this host; its human checkpoints were not sto
 
 Run first on this host (macOS 27.0.1, Apple silicon) with `sandbox-exec -p`, a Node `net.connect({ path })` client and a `log stream` child this build started itself, filtering the denial messages of a rule tagged `(with message "...")`.
 
-- A `(deny network-outbound (remote unix-socket (subpath "/private/tmp")))` refuses a socket bound under `/private/tmp` with `EPERM`; the same rule spelled `/tmp` refuses nothing, since Seatbelt matches the real path of the socket the `connect()` reaches. A client that connects through `/tmp/...` is still matched against `/private/tmp/...`.
-- `(deny network-outbound (remote unix-socket))` refuses every socket. A later `(allow network-outbound (remote unix-socket (subpath "<grant>")))` allows a grant back, so the last matching rule wins as it does for the file rules. A `path-regex` denial refuses the same sockets and needs no spelling logic, and is not needed.
+- A `(deny network-outbound (remote unix-socket (subpath "/private/tmp")))` refuses a socket bound under `/private/tmp` with `EPERM`; the same rule spelled `/tmp` refuses nothing, since Seatbelt matches the real path of the socket the `connect()` reaches.
+  A client that connects through `/tmp/...` is still matched against `/private/tmp/...`.
+- `(deny network-outbound (remote unix-socket))` refuses every socket.
+  A later `(allow network-outbound (remote unix-socket (subpath "<grant>")))` allows a grant back, so the last matching rule wins as it does for the file rules.
+  A `path-regex` denial refuses the same sockets and is dropped, since the `subpath` allowances already cover both spellings of a grant.
 - A socket bound after the sandboxed process started is refused by the rule, which names a path.
-- A symbolic link in the workspace to a socket outside it is refused: the match is on the target's real path. A hard link made outside the sandbox in the workspace was refused too, and a hard link made inside the sandbox to a file outside the grants fails with `EPERM`.
+- A symbolic link in the workspace to a socket outside it is refused: the match is on the target's real path.
+  A hard link made outside the sandbox in the workspace was refused too, and a hard link made inside the sandbox to a file outside the grants fails with `EPERM`.
 - Relative paths, `..`, `//` and upper-case spellings of an outside socket are refused, and the same spellings of a granted socket connect.
 - Under the denial alone, `dns.lookup('example.com')` fails (`ENOTFOUND`) and `curl` exits 000: the resolver is `/private/var/run/mDNSResponder`, named by its real path (a literal on the `/var/run` spelling matches nothing).
-- A battery of Node, `npm view`, `git ls-remote https://`, `curl`, `ssh`, Python `urllib`, Ruby `net/http`, Java, Swift, `xcodebuild`, `sqlite3`, `defaults`, `scutil`, `security`, `dscl`, `osascript`, `brew` and `clang`, run under the denial with the resolver and the log socket allowed, logged no other denied socket. The denial log under the bare rule named `/private/var/run/mDNSResponder` for `node`, `curl`, `Python` and `ssh`, and nothing else.
+- A battery of Node, `npm view`, `git ls-remote https://`, `curl`, `ssh`, Python `urllib`, Ruby `net/http`, Java, Swift, `xcodebuild`, `sqlite3`, `defaults`, `scutil`, `security`, `dscl`, `osascript`, `brew` and `clang`, run under the denial with the resolver and the log socket allowed, logged no other denied socket.
+  The denial log under the bare rule named `/private/var/run/mDNSResponder` for `node`, `curl`, `Python` and `ssh`, and nothing else.
 - A datagram `sendto` to a socket path with no `connect` is refused by the same rule (`EPERM`), so a datagram socket is no route around it.
 - A Python datagram `connect` to `/var/run/syslog` is refused by the bare rule and connects once `/private/var/run/syslog` is allowed; libc's `syslog()` goes through the unified log and asks no socket.
-- `/private/var/run` also holds `com.docker.vmnetd.sock` (root's network helper of Docker Desktop, world-writable), `usbmuxd`, `cupsd`, `portmap.socket` and `systemkeychaincheck.socket`. None is a toolchain's need in the battery, so none is allowed.
+- `/private/var/run` also holds `com.docker.vmnetd.sock` (root's network helper of Docker Desktop, world-writable), `usbmuxd`, `cupsd`, `portmap.socket` and `systemkeychaincheck.socket`.
+  None is a toolchain's need in the battery, so none is allowed.
 
 ## Decisions
 
@@ -182,13 +188,13 @@ No full local `npm test`: the hook and CI carry the chain.
 Local, macOS 27.0.1 (Seatbelt), on the final tree unless a row says otherwise:
 
 - `test:evaluate-confinement` ran once in full on the tree before the review round: 2,001 checks, the 4 failures above fixed, one case that lost two kernel reports rerun by the group's `lossy` marker.
-  After the review round the changed cases ran again alone: the route (41 before round 1), the units (52), the network reference (197), the private root across runs (16), `--only="Seatbelt"` (96 across the three Seatbelt cases).
-- `test:evaluate-run` 592 (run before the review round and again on the final tree), `test:evaluate-preflight` 353, `test:evaluate-mutation` 727, `test:evaluate-agents` 501, `test:evaluate-arms` 733, `test:evaluate-held-inputs` 210, `test:cli`, `test:isolation-primitives`, `test:atdd-isolation`: green on the tree before the review round, whose later changes are comments, the log-socket check and a helper in the test file.
+  After the review round the changed cases ran again alone: the route (44 with `SSH_AUTH_SOCK` set, 41 unset), the units (52), the network reference (197), the private root across runs (16), `--only="Seatbelt"` (99 with `SSH_AUTH_SOCK` set, 96 unset, across the three Seatbelt cases), and `test:evaluate-guidance` after the round 1 guide changes.
+- `test:evaluate-run` 592 (run before the review round and again on the final tree), `test:evaluate-preflight` 353, `test:evaluate-mutation` 727, `test:evaluate-agents` 501, `test:evaluate-arms` 733, `test:evaluate-held-inputs` 210, `test:cli`, `test:isolation-primitives`, `test:atdd-isolation`: green on the tree before round 1; round 1 changed the test file (the ready-file wait, the exact deny-all expectations, the Docker Desktop helper socket in the route), `run.md`, `gaps.md` and the guidance markers, and the cases those touch ran again as listed above.
 - `test:doc-counts`, `test:doc-claims` (after the `SSH_AUTH_SOCK` token), `test:shards`, `test:ci-coverage`, `test:changelog`, `test:direction`, `test:boundary`, `test:doc-claim-sources`, `test:evaluate-boundaries`, `test:lineage`: green.
 - `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`, `npm run docs:build`: green.
 - Engine check (`evaluateTarget` is a function): run at the start and the end, exit 0.
 - Linux: no container ran in this build.
-  The Seatbelt route case skips on Linux with its reason named (Seatbelt exists on macOS only, and the units hold the rule's text on every host), the isolation golden and the units run in the ubuntu CI job, and the Bubblewrap cases of Story 1.82 are unchanged and run there.
+  The Seatbelt route case skips on Linux with its reason named (Seatbelt exists on macOS only, and the units hold the rule's text on every host), the isolation golden and the units run in the ubuntu CI job, and the Bubblewrap route case of Story 1.82 gained the round 1 ready-file wait, which runs in the ubuntu CI job only.
   The repository has no macOS CI job, so the route case runs on a macOS host and the ubuntu job carries the units, the golden and the reference claims.
 - No real agent CLI was started and no live run was made.
 - `git diff -- package.json package-lock.json` is empty.
