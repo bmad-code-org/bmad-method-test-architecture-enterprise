@@ -258,6 +258,8 @@ The Bubblewrap cases are `node test/test-evaluate-run.js --group=confinement --o
 A count is the failed checks of that run; a case that stops at an error ends at that check, so the second number can be smaller than the case's full count.
 The row that takes the `try` and `catch` out of `settle` ends the run of the case with an uncaught `ERR_FS_EISDIR` thrown from the HTTP port's child listener, which is the failure the row exists for.
 Rows marked round 2 are new or read a check that no case failed on at `f4bc6c93`.
+Rows marked round 4 are new in review round 4 and ran on the working tree of that round.
+The check of the frozen runtime freezes a child process by its PID, so a row that freezes the case's own process instead (`process.kill(process.pid, 'SIGSTOP')` in place of the child's stop) leaves the suite stopped until its launcher resumes it, which is the dependence the check had before round 4 (a launcher that resumes a stopped child had undone the freeze, and the check failed with `canariesSent` 41 and `canariesDelivered` 41).
 Rows marked round 3 are new in review round 3 and name the case they ran when it is not the Bubblewrap cases (`the audit's mechanism` has 8 checks and `the audit channel's units` 31); every other count was read again on the round 3 tree.
 
 | Criterion                                                                    | Revert (on the copy)                                                                                                                                                                     | Bubblewrap cases          |
@@ -292,6 +294,7 @@ Rows marked round 3 are new in review round 3 and name the case they ran when it
 | The burst check lists only files of the burst (round 2)                      | the burst's process also reads a file outside the burst (`the audit's mechanism`)                                                                                                        | 1 of 8                    |
 | A burst under the floor with no loss reported fails at once (round 3)        | the check of the audit's loss signal taken out of `judgeBurst`, so a short attempt is retried (`the audit channel's units`, 31 checks)                                                   | 2 of 31                   |
 | The best sandbox of the burst judges the floor (round 3)                     | the final floor check taken out of `judgeBurst` (`the audit channel's units`, 31 checks)                                                                                                 | 1 of 31                   |
+| The frozen runtime is stopped by the case itself (round 4)                   | `runtime.kill('SIGSTOP')` taken out of the check (`--only="audit channel"`, 32 checks)                                                                                                   | 2 of 32                   |
 | A `ConfinementError` ends a command with exit 12                             | the branch of `runDriven` taken out with `if (false)`                                                                                                                                    | 1 of 143                  |
 | The guard removes what Bubblewrap made                                       | `settle` removes nothing                                                                                                                                                                 | 19 of 143                 |
 | The removal rule keeps a file with content                                   | the size check taken out                                                                                                                                                                 | 2 of 130                  |
@@ -379,6 +382,7 @@ Local, macOS 27.0.1 (Seatbelt), on the tree of the review round 2 commit:
   It ran on the tree of its commit: `the layer path socket units` 61, `the layer path socket guard` 59 and `the layer path socket recovery` 23 (143 together), `the Seatbelt layer socket units` 44 and `the Seatbelt layer socket route` 37, `the Seatbelt path socket route` and its units 98, `the network reference` 232, `the audit channel's units` 31, `the audit's mechanism` 8 and `the evaluation layer's git directory` 27.
   It also ran `node test/test-evaluate-evaluators.js` (2,217 checks, including the agents and private groups), `test:isolation-primitives` (the golden regenerated for the zero-socket vector), `test:atdd-isolation`, `node test/test-evaluate-guidance.js` (the pinned sentences of `run.md` and `gaps.md` follow the new text), `npm run lint`, `npm run lint:md`, `npm run format:check`, `test:doc-counts`, `test:doc-claims`, `test:changelog`, `test:shards`, `test:ci-coverage` and `npm run docs:validate-links`: green.
   The route case on the ubuntu job gained the zero-socket vector (`EROFS` on a record, with the control that writes once the root's bind is taken out); this host has no `bwrap`, so the vector's text carries it here.
+- Review round 4 ran `--only="audit channel"` (32 checks), `--only="audit's mechanism"`, `--only="layer path socket"` and `--only="Seatbelt layer socket"`, `npm run lint`, `npm run lint:md`, `npm run format:check`, `test:doc-counts`, `test:doc-claims`, `test:changelog` and `npm run docs:validate-links`: green.
 - The revert rows ran on a copy of this tree and each failed at least one check; the tree and the commands are in Revert observations.
 - Linux: no container ran in these rounds and this host has no `bwrap`.
   The Linux half of the records' protection (the read-only private root with the run's parents writable) is proven by the vector's text on this host (`the layer path socket units`: the order after `--bind / /`, the identity of every other argument, the parents) and by `the layer path socket route` on the ubuntu job, where a layer process writes a record and fails and writes in the run's parent and succeeds.
@@ -409,8 +413,8 @@ Every finding was checked before it was acted on.
 
 Round 0 left no finding open.
 The coordinator's Opus review rounds run on the open pull request.
-Review rounds 1 to 3 followed.
-Review round 3 found the items in its table below and they are fixed; no finding of any round is open.
+Review rounds 1 to 4 followed.
+Review round 3 found the items in its table below and they are fixed; review round 4 found one flake and it is fixed; no finding of any round is open.
 
 ### Review round 1
 
@@ -487,3 +491,19 @@ A sandbox under the floor with no loss reported fails the check and is not retri
 `the audit channel's units` holds both through stand-ins on every host: a sandbox of 100 paths with every canary delivered and no loss event fails after one attempt, one with a loss event or an undelivered canary retries and passes on 900 paths, three short sandboxes that each reported the loss end with the failure that names the reported loss after three attempts, a retry whose own sandbox is short with no loss reported fails after two attempts, and a path outside the burst fails the check.
 The load run repeats round 2's: 40 copies of the old case at once (the committed case of review round 2, in a scratch copy), then the new case five times in a row at a one-minute load average of 117 to 125; all five passed (8 of 8 checks each).
 The rows are in Revert observations: the loss assertion taken out fails 2 of 31 checks of `the audit channel's units`, and the floor check taken out fails 1 of 31.
+
+### Review round 4
+
+The coordinator saw `a runtime frozen for 2 seconds was recorded as {"canariesSent":41,"canariesDelivered":41,"logReportedLoss":false}` once, on a rebased tree at a load average of about 20, and Kerem confirmed it as a flake.
+The check froze the test process itself with `kill -STOP $PPID; sleep 2; kill -CONT $PPID` from a sandboxed `/bin/sh`, so a launcher that resumes a stopped child (a shell's job control, a harness) undid the freeze at once.
+It reproduced on the first run from this tool's shell with no extra load: the largest timer gap was 13 ms and the audit recorded 41 canaries sent and 41 delivered.
+The check now starts the runtime side as a child node process that builds the sandbox's audit channel and prints `ready` on its standard output.
+The case stops that child by its PID with `SIGSTOP`, waits 2 seconds on its own clock, resumes it with `SIGCONT` and writes `end` to its standard input.
+The child samples a 10 ms interval of its own, takes one more sample when it reads `end`, and reports the channel record with its largest timer gap on its standard output.
+The extra sample puts the whole freeze into the gap whichever of the interval and the input the child serves first after it resumes.
+The check asserts a gap of at least 1500 ms, which holds because the case stopped the child, and keeps the canary assertion (`canariesSent >= 20`, `canariesDelivered < canariesSent`, `lossy`).
+The advice to run the suite from a shell prompt is gone from the check's comments and message.
+The child is killed by its PID when the check ends, so it never outlives the suite.
+Under 40 busy-loop children (load average 18 at the start, 94 while the concurrent copies ran) the case passed six times in a row, and 20 concurrent copies of it all passed.
+Launched through `script -q /dev/null bash -ic` under the same 40 busy loops, it passed twice.
+The row is in Revert observations: the child's stop taken out fails 2 of 32 checks.

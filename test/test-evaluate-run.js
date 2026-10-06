@@ -5527,34 +5527,83 @@ async function checkAuditChannelUnits() {
         channelEntry(arm, { trialIndex: 1, auditChannel: unspawnable.channel }).completeness === 'lossy',
       `canaries that could not be spawned for 600 ms were recorded as ${JSON.stringify(unspawnable.channel)}; expected them counted as sent and undelivered, so lossy`,
     );
-    // A target that freezes the runtime for two seconds (a stop signal to its parent) leaves no tick to run, so the canaries
-    // the cadence called for in that time count as sent and undelivered.
-    // A parent that resumes a stopped child (a shell's job control) undoes the freeze at once, so the case measures the
-    // largest gap between two ticks of its own timer and judges the gap rule only when the freeze happened.
-    let largestGapMs = 0;
-    const frozen = await read('/usr/bin/log', {
-      waitMs: 0,
-      act: async (sandbox) => {
-        let last = process.hrtime.bigint();
-        const probe = setInterval(() => {
-          const now = process.hrtime.bigint();
-          largestGapMs = Math.max(largestGapMs, Number(now - last) / 1e6);
-          last = now;
-        }, 10);
-        const wrapped = sandbox.wrap('/bin/sh', ['-c', 'kill -STOP $PPID; sleep 2; kill -CONT $PPID']);
-        await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
-        clearInterval(probe);
-      },
-    });
+    // A runtime frozen for two seconds has no tick to run, so the canaries the cadence called for in that time count as sent and undelivered.
+    // The runtime side is a child process this case starts and freezes by its PID, so nothing that launched the suite can resume it.
+    // The case's own timers keep running while only the child stops, and the child reports its own largest timer gap as proof of the freeze.
+    const frozenRuntime = tempDir('audit-channel-frozen');
+    const runtime = spawn(
+      process.execPath,
+      [
+        '-e',
+        `const { selectConfinement, targetSandbox } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement.js'))});
+         const [folder, workspace, directory] = process.argv.slice(1);
+         const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+         const sandbox = targetSandbox({
+           confinement: { ...confinement, observer: { executable: '/usr/bin/log' } },
+           workspace,
+           audit: { directory },
+         });
+         let last = process.hrtime.bigint();
+         let largestGapMs = 0;
+         const sample = () => {
+           const now = process.hrtime.bigint();
+           largestGapMs = Math.max(largestGapMs, Number(now - last) / 1e6);
+           last = now;
+         };
+         setInterval(sample, 10);
+         process.stdin.once('data', async () => {
+           sample();
+           const mounts = await sandbox.observedMounts();
+           process.stdout.write(JSON.stringify({ channel: sandbox.auditChannel(), largestGapMs, mounts }) + '\\n');
+           sandbox.release();
+           process.exit(0);
+         });
+         sandbox.start().then(() => process.stdout.write('ready\\n'));`,
+        frozenRuntime,
+        workspace,
+        fs.realpathSync(tempDir('audit-channel')),
+      ],
+      { env: BASE_ENV, stdio: ['pipe', 'pipe', 'inherit'] },
+    );
+    let said = '';
+    const speaks = (text) =>
+      new Promise((resolve) => {
+        const look = () => {
+          if (said.includes(text)) resolve(true);
+        };
+        runtime.stdout.on('data', (chunk) => {
+          said += chunk;
+          look();
+        });
+        runtime.once('close', () => resolve(false));
+        look();
+      });
+    let frozen = null;
+    try {
+      const ready = await speaks('ready\n');
+      check(ready, 'the runtime child of the frozen-runtime case ended before its sandbox started');
+      if (ready) {
+        runtime.kill('SIGSTOP');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        runtime.kill('SIGCONT');
+        const reported = new Promise((resolve) => runtime.once('close', resolve));
+        runtime.stdin.write('end\n');
+        await reported;
+        frozen = JSON.parse(said.slice(said.indexOf('{')));
+      }
+    } finally {
+      runtime.kill('SIGKILL');
+    }
     check(
-      largestGapMs >= 1500,
-      `the runtime was not frozen (its largest timer gap was ${Math.round(largestGapMs)} ms): the parent of this run resumed it, as a shell's job control does, so the gap rule was not exercised; run the suite directly from a shell prompt`,
+      frozen !== null && frozen.largestGapMs >= 1500,
+      `the frozen runtime's largest timer gap was ${Math.round(frozen?.largestGapMs ?? 0)} ms; expected the 2-second stop the case sent to show as a gap of at least 1500 ms`,
     );
     check(
-      frozen.channel.canariesSent >= 20 &&
+      frozen !== null &&
+        frozen.channel.canariesSent >= 20 &&
         frozen.channel.canariesDelivered < frozen.channel.canariesSent &&
         channelEntry(arm, { trialIndex: 1, auditChannel: frozen.channel }).completeness === 'lossy',
-      `a runtime frozen for 2 seconds was recorded as ${JSON.stringify(frozen.channel)}; expected the canaries it missed counted as sent and undelivered, so lossy`,
+      `a runtime frozen for 2 seconds was recorded as ${JSON.stringify(frozen?.channel)}; expected the canaries it missed counted as sent and undelivered, so lossy`,
     );
     // No more than `CANARY_IN_FLIGHT` canary reads run at once on a host too slow to finish them, and a tick the cap skips
     // counts as a canary sent and undelivered.
