@@ -1819,6 +1819,12 @@ Added 2026-10-03 from Story 1.51's reviews. Levels: guidance contract, CLI integ
 | An unpartitioned plan preflight stops | Run `tea-evaluate preflight` with no `--partition` over the partition-plan fixture; assert exit 64 naming the flag and no run directory holding the held-out step ID | CLI integration     | P0  | Removing the refusal launches the held-out request and puts its ID in the run directory |
 | No plan, no new refusal               | Run `preflight` with no flag over a fixture with no `partitionPlan`; assert the committed replay bytes are unchanged                                                 | CLI integration     | P1  | Refusing every flagless preflight fails the verdict fixture                             |
 
+Amended 2026-10-05 in Story 1.111's build: the refusal row sits in `test/test-evaluate-partition-plans.js` (`test:evaluate-partition-plans`), after the unknown-partition assertion of the plan-flow section, over a fresh partition-plan project.
+It runs `preflight` with no `--partition` and with `--from-working-tree`, scans the project's `runs/` paths first for the held-out step ID, the canary and the held-out witness (the scan fails naming the file and the token when the preflight reaches the pipeline), then asserts exit 64, the message naming `--partition development` and `--partition held-out`, no launch of the target and no `runs/` directory, and asserts that an unreadable `evaluation.json` is still `check`'s exit 10.
+A flagless `run` of the same project still launches the held-out request and exits 0, which holds that the refusal belongs to `preflight`.
+The no-plan row is the existing `plan-absent` project, whose flagless `preflight` exits 0 and writes the folder's own `contract.json` bytes; `test:eval-replay` pins the committed replay bytes.
+The cases that reached the both view through a flagless `preflight` now reach it through a flagless `run`, which runs `check` and the preflight pipeline first.
+
 ### Story 1.112: Keep other sessions' commits from failing a run's adopter-tree check
 
 Added 2026-10-03 from Story 1.46's live runs. Levels: CLI integration over a slow fixture target, on each confinement mechanism the host provides.

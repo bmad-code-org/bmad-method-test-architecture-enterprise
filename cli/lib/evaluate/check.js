@@ -1840,7 +1840,7 @@ function checkPlanMappings(report, folder, planFile, contract, view, heldOutPlan
  * `partitionPlan` (Story 1.51): the development-only steps exist, the held-out plan is a valid file of its own, and the held-out
  * view it makes keeps every behavior an oracle. Every finding names a path or an ID and none quotes held-out plan bytes, so the
  * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
- * run here (`check` compiles nothing); a compile defect surfaces at a held-out or both preflight.
+ * run here (`check` compiles nothing); a compile defect surfaces at the first held-out preflight or run of both partitions.
  *
  * Returns the held-out plan only when it is sound: the file reads, passes its schema and `partitionPlanProblems`, `contract.json`
  * passes the engine's contract schema, and the held-out view it makes passes it too. Those are the findings that block the return.

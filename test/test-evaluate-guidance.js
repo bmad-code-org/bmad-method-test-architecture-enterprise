@@ -1703,10 +1703,9 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
     for (const marker of [
-      'Under a `partitionPlan`, add `--partition development` to that preflight',
-      'builds the both view and launches the held-out request during authoring',
+      'tea-evaluate preflight --evaluation <evaluation-folder> --partition development`. Under a `partitionPlan` the flag is required',
+      'a preflight with no `--partition` exits 64, since it would build the both view and launch the held-out request during authoring',
       'run `--partition held-out` only after the development review',
-      '<evaluation-folder>`. Under a `partitionPlan`',
       'development review. A nonzero exit halts this stage',
     ])
       requireText(adapterGuide, marker, 'adapters.md partition plan preflight', failures);
@@ -3262,9 +3261,10 @@ function checkRunGuidance(guide, failures) {
   ])
     requireText(guide, marker, 'run.md', failures);
   for (const marker of [
-    'Under a `partitionPlan`, give the `preflight` command `--partition development`',
-    'builds the both view and launches the held-out request while the gap loop is still open',
+    'The `preflight` flag is required only when `evaluation.json` declares a `partitionPlan`',
+    'A preflight with no `--partition` over one exits 64, since it would build the both view and launch the held-out request while the gap loop is still open',
     'run `--partition held-out` only after the development review',
+    'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development',
   ])
     requireText(guide, marker, 'run.md partition plan preflight', failures);
   // Story 1.61: each platform's mechanism and observer, the exit-12 refusal, the opt-out, the network namespace and what run.json records.
@@ -3357,7 +3357,7 @@ function checkRunGuidance(guide, failures) {
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
-    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
   ];
@@ -4349,6 +4349,30 @@ async function main() {
   const localFailures = [];
   checkLocalStage6(removedLocalEngine, localFailures);
   if (localFailures.length === 0) failures.push('SKILL.md local Stage 6 engine removal passed its guidance check');
+  // Story 1.111: Stage 6 preflights the development partition in both forms, says when the flag is required and keeps the held-out
+  // preflight after the development review, so a worker that follows SKILL.md alone never launches the held-out request.
+  const STAGE6_DEVELOPMENT_ADOPTER =
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_DEVELOPMENT_LOCAL = 'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_FLAG_RULE =
+    'The flag is required only when `evaluation.json` declares a `partitionPlan`, and a preflight with no `--partition` over one exits 64.';
+  const STAGE6_HELD_OUT_CLAUSE = 'Held-out preflight (`--partition held-out`) runs only after the development review.';
+  const checkStage6Partition = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    for (const marker of [STAGE6_DEVELOPMENT_ADOPTER, STAGE6_DEVELOPMENT_LOCAL, STAGE6_FLAG_RULE, STAGE6_HELD_OUT_CLAUSE])
+      requireText(local, marker, 'SKILL.md Stage 6 partition', found);
+  };
+  checkStage6Partition(skillContent, failures);
+  for (const [name, removed] of [
+    ['the adopter development flag', STAGE6_DEVELOPMENT_ADOPTER],
+    ['the local development flag', STAGE6_DEVELOPMENT_LOCAL],
+    ['the flag rule', STAGE6_FLAG_RULE],
+    ['the held-out clause', STAGE6_HELD_OUT_CLAUSE],
+  ]) {
+    const found = [];
+    checkStage6Partition(skillContent.replace(removed, ''), found);
+    if (found.length === 0) failures.push(`SKILL.md Stage 6 without ${name} passed its guidance check`);
+  }
   requireText(skillContent, '{test_artifacts}/evaluate/<evaluationId>/gap-report.md', 'SKILL.md resume', failures);
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
@@ -4672,7 +4696,7 @@ async function main() {
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
-        (text) => text.replace('give the `preflight` command `--partition development`', 'give the `preflight` command no flag'),
+        (text) => text.replace('A preflight with no `--partition` over one exits 64', 'A preflight with no `--partition` over one runs'),
       ],
       ['harness confined example removal', 'harness', checkHarnessGuidance, (text) => text.replace('<!-- example:registry -->', '')],
       [

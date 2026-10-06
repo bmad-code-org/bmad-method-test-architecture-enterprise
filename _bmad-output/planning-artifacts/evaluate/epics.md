@@ -2915,6 +2915,13 @@ So that no authoring step launches or records a held-out request.
 **Dependencies:** 1.51, 1.84.
 **Gate:** builder Analyze, `npm run test:evaluate-guidance`, `npm run test:evaluate-partition-plans`, `npm run test:evaluate-ci`, `npm test`.
 
+Amended 2026-10-05 in Story 1.111's build: the story takes the refusal branch of the second criterion, so `tea-evaluate preflight` under a declared `partitionPlan` with no `--partition` exits 64 and the "or the story records why" branch is closed.
+The guide edit alone left the CLI accepting the command that launches the held-out request, and a CLI that cannot launch a held-out request during authoring holds where a guide sentence only advises.
+The refusal belongs to the `preflight` command line: the CI `preflight-live` check calls the same library function for a CI run, which is no authoring step, and keeps the both view; `run` and `score` keep their flagless meaning.
+`--partition both` is not a value the CLI offers and none is added.
+`adapters.md` and `run.md` carry the same sentence as `SKILL.md`, and neither is a `sessionRead` key of a capture record.
+The paragraph about Lane 3 and the shared recapture with Story 1.84 is superseded: Story 1.84 merged first, so the recapture of this story is its own.
+
 ### Story 1.112: Keep other sessions' commits from failing a run's adopter-tree check
 
 Added 2026-10-03 from Story 1.46's live runs. `adopterTreeState` (`cli/lib/evaluate/workspace.js`) digests every ref of the repository and its common git directory, so a commit, fetch or branch in any other worktree of the same repository while a `preflight` or `run` is in flight changes the digest and the run exits 12 ("changed during the qualification") with no qualified probe written. The three relay lanes share one repository; Story 1.46's first live preflight failed this way after twelve minutes with no file edited, and the story ran its live legs from a standalone clone to avoid it. A confined target works in a private repository and cannot reach the shared refs, so the comparison guards nothing there; an opted-out target can write them, which is what the comparison is for.

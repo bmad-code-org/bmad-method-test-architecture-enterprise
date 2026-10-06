@@ -75,6 +75,19 @@ function unknownPartition(partition) {
 }
 
 /**
+ * The usage refusal (exit 64) for a request that names no partition over an evaluation that declares a `partitionPlan`, or null.
+ * The request would derive the both view, which launches the held-out request, so an authoring step names its partition.
+ */
+function partitionRequired(partition, evaluation) {
+  if (partition !== undefined || evaluation.partitionPlan === undefined) return null;
+  return {
+    exitCode: 64,
+    message:
+      'evaluation.json declares a partitionPlan; name the partition with --partition development or --partition held-out, since a preflight with no --partition launches the held-out request',
+  };
+}
+
+/**
  * The probes one partition selects, or why the request is refused.
  *
  * @param {object} options
@@ -736,6 +749,7 @@ module.exports = {
   mappingViewProblems,
   named,
   partitionPlanProblems,
+  partitionRequired,
   planCriterionName,
   readHeldOutPlan,
   readHeldOutResponse,

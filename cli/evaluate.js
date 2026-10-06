@@ -12,10 +12,10 @@
  *                                             item's label-free scorerInput; with --file write nothing and print
  *                                             eval-quality's digestBytes over the bytes of one file the folder
  *                                             holds, named relative to the folder (--file and --calibration-inputs cannot be combined)
- *   tea-evaluate preflight --evaluation <path> [--from-working-tree]
+ *   tea-evaluate preflight --evaluation <path> [--from-working-tree] [--partition <development|held-out>]
  *                                             qualify the seeded probes in a disposable workspace, drive the
  *                                             preflight legs and take the verdict from eval-quality
- *   tea-evaluate run --evaluation <path> [--from-working-tree]
+ *   tea-evaluate run --evaluation <path> [--from-working-tree] [--partition <development|held-out>]
  *                                             the preflight, then each arm (clean, mutated, historical,
  *                                             gameability) `trials` times in fresh workspaces, judged by the
  *                                             deterministic evaluator and any rubric judge, sealed as one
@@ -96,6 +96,9 @@
  *   64  also ci: no ci/evaluation-ci-plan.json, an unknown --tier, a check that needs a baseline/ that is absent, an
  *       api-conformance check over an evaluation whose evaluation.json names no registry, or a gate's own 64 passed
  *       through
+ *   64  also preflight: no --partition over an evaluation whose evaluation.json declares a partitionPlan, since the
+ *       command would derive the both view and launch the held-out request; the refusal names --partition and both
+ *       values, and a folder with no partitionPlan preflights with no flag
  *   64  also digest --file: a path outside the folder, through a symbolic link, to a directory, to a file the folder
  *       does not hold or to something that is not a regular file, and --file with --calibration-inputs
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
@@ -226,6 +229,7 @@ function preflightCommand(options) {
   return runDriven('preflight', runPreflightCommand, options, {
     fromWorkingTree: options.fromWorkingTree === true,
     partition: options.partition,
+    requirePartition: true,
   });
 }
 
@@ -286,7 +290,10 @@ function buildProgram(run) {
     )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
-    .option('--partition <name>', 'development or held-out; omitted qualifies both')
+    .option(
+      '--partition <name>',
+      'development or held-out; required when evaluation.json declares a partitionPlan, otherwise omitted qualifies every probe',
+    )
     .action((options) => run(preflightCommand, options));
   program
     .command('run')

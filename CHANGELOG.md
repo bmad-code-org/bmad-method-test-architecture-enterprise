@@ -455,6 +455,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test:ci-qualification` also resolves each ci witness over an absent workflow, and P-003's over the full project's correct pipeline, which pre-flight drops for P-001 and P-002 because their fault leg sends the `witness-github-actions` request; so those shapes are held without a leg cache.
   The reads run over the probes the builder emits and over the committed probe file, which is the one pre-flight reads.
   The probes README and `docs/explanation/eval-quality-command-adapter.md` say that the ci plants clear pre-flight and are refused at AD-9's gate, and that fourteen of the 59 probes (all `test-design`'s) cannot pre-flight.
+- `tea-evaluate preflight` refuses a call with no `--partition` over an evaluation that declares a `partitionPlan`, and Stage 6 of the Evaluate skill names `--partition development` (Story 1.111, AD-9, AD-22).
+  The Stage 6 command had no partition, and the CLI accepted it: under a `partitionPlan` a preflight with no `--partition` derived the both view and launched the held-out request while the gap loop was still open, so a worker that followed `SKILL.md` alone left the held-out request and its step ID in the run directory.
+  The command now exits 64 before `check` and before any workspace, and names the flag and both values, `development` and `held-out`.
+  `--partition development` and `--partition held-out` preflight as before, and an evaluation with no `partitionPlan` preflights with no flag, with the same exit code and committed replay bytes.
+  `run` and `score` are unchanged, and the CI `preflight-live` check still qualifies every partition.
+  Stage 6 shows `--partition development` in both command forms, says the flag is required only when `evaluation.json` declares a `partitionPlan`, and keeps the held-out preflight after the development review; `adapters.md` and `run.md` say the same, and `test:evaluate-guidance` fails when any clause is removed.
+  The skill edit changed the digest both live capture records pin, so both live sessions ran again and each `capture-record.json` was regenerated from its session's output.
+  The CLI reference describes the requirement under `preflight`, and `test:evaluate-partition-plans` holds the refusal over the partition-plan fixture: exit 64 naming the flag, no launch and no run directory.
 - The dogfood suite's O-003 holds each exit's class against its row of the AD-10 table (Story 1.116, CAP-10, AD-15).
   The oracle reconciled the `/exits` records against the reference set by id and tested each class against the table's vocabulary, so a complete listing that swapped the classes of `tea-evaluate 11` and `tea-evaluate 12` passed.
   Its `for-all` predicate is now an `any` of one `all` pair of `@/id` and `@/class` per table row.
