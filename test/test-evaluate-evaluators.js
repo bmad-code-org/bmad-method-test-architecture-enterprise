@@ -3646,7 +3646,14 @@ function scoreAttemptProblems(source) {
     problems.push('reads the staged artifact again, or uses the staging path beyond its one read (produced)');
   const staged = withoutReader.match(/\bstagedArtifact\(/g) ?? [];
   if (staged.length !== 1) problems.push(`reads the staged artifact ${staged.length} times; expected once (stagedArtifact()`);
-  for (const required of ['holdAttemptInputs(', 'held.scoreArguments(', 'heldRefusal(', 'writer.write(evidence, staged.bytes)']) {
+  for (const required of [
+    'holdAttemptInputs(',
+    'designate,',
+    'held.designationFindings(',
+    'held.scoreArguments(',
+    'heldRefusal(',
+    'writer.write(evidence, staged.bytes)',
+  ]) {
     if (!body.includes(required)) problems.push(`does not call ${required}`);
   }
   return problems;
@@ -3690,7 +3697,10 @@ function checkScoreAttemptRoutesThroughTheModule() {
   const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'run.js'), 'utf8');
   for (const problem of scoreAttemptProblems(source)) check(false, `scoreAttempt ${problem}`);
   const plant = (line) =>
-    source.replace('\nasync function scoreAttempt(context, { probe, directory, set, corpusDigest }) {', (head) => `${head}\n  ${line}`);
+    source.replace(
+      '\nasync function scoreAttempt(context, { probe, directory, set, corpusDigest, designate }) {',
+      (head) => `${head}\n  ${line}`,
+    );
   // Every alternative of every rule has a plant, and the plant is refused for that rule's reason.
   for (const { reason, alternatives } of STATIC_READ_RULES) {
     for (const alternative of alternatives) {
@@ -3719,6 +3729,11 @@ function checkScoreAttemptRoutesThroughTheModule() {
       'does not call writer.write(evidence, staged.bytes)',
     ],
     ['inputs held without the module', source.replace('holdAttemptInputs(', 'holdInputs('), 'does not call holdAttemptInputs('],
+    [
+      'a designation the held inputs are never asked to check (Story 1.110)',
+      source.replace('held.designationFindings(', 'held.noDesignationFindings('),
+      'does not call held.designationFindings(',
+    ],
     ['no comparison', source.replace('heldRefusal(', 'noRefusal('), 'does not call heldRefusal('],
     [
       'inputs held through another reader',

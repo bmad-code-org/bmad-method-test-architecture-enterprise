@@ -660,6 +660,16 @@ try {
   // A both view that lists one oracle is the engine's to designate.
   const lonelyPlan = { ...heldOutPlan, behaviorOracles: {} };
   assert.deepEqual(designationsOf({ heldOutPlan: lonelyPlan }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  // A behavior whose source lists no `oracles` and whose plan lists two held-out ones has several in the both view and none in the
+  // development view: the development probe stays undesignated, and no view's missing list throws.
+  const bareSource = JSON.parse(contractBytes.toString('utf8'));
+  delete bareSource.behaviors.find((behavior) => behavior.id === 'B-002').oracles;
+  const twoHeldOut = { ...heldOutPlan, behaviorOracles: { ...heldOutPlan.behaviorOracles, 'B-002': ['O-101', 'O-102'] } };
+  assert.deepEqual(
+    designationsOf({ contractBytes: Buffer.from(JSON.stringify(bareSource)), heldOutPlan: twoHeldOut }),
+    Object.fromEntries(PROBE_IDS.map((id) => [id, null])),
+    'a behavior with no oracle list in the source threw or was designated',
+  );
   // A probe of a behavior the contract does not hold is refused by IDs of the schema's shape only.
   const designate = bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition: 'both', heldOutProbes: ['P-003'] });
   assert.deepEqual(designate({ probeId: 'P-003', behaviorId: 'B-999' }), {
@@ -2772,6 +2782,9 @@ try {
   assert.match(undesignatedCall.output, /P-004: .*differs from the one the verified inputs produce/);
   const sameCall = test.cli(flow.folder, 'score', ['--run', path.basename(bothRun)], { ...flow.env, [ENGINE_CLI_ENV]: engineCliPath({}) });
   assert.equal(sameCall.status, 0, sameCall.output);
+  // The shim's call records say a program was substituted, so the score the baseline is accepted from is a plain one.
+  const plainScore = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+  assert.equal(plainScore.status, 0, plainScore.output);
 
   // A both baseline replays through `ci`: the replay scores each probe under the same designation, so every probe reads as it does in
   // the baseline, both probes of B-002 are caught and nothing reads as stale.
@@ -2781,7 +2794,7 @@ try {
   const bothCi = cli(flow, 'ci', ['--tier', 'pr']);
   assert.equal(bothCi.status, 0, bothCi.output);
   assert.doesNotMatch(bothCi.output, /stale/, 'a both baseline replays as stale');
-  assert.match(bothCi.output, /7 baseline file\(s\) compared, 0 difference\(s\)/);
+  assert.match(bothCi.output, /12 baseline file\(s\) compared, 0 difference\(s\)/);
   const replayScores = path.join(test.latest(flow.folder), 'replay/scores');
   const replayCaught = Object.fromEntries(
     PROBE_IDS.map((probeId) => {
@@ -2847,6 +2860,11 @@ try {
       `a run with no partitionPlan rewrote contract.json (${args.join(' ') || 'both'})`,
     );
   }
+  // A both run of a folder with no partitionPlan designates nothing, with no plan to derive a view from (Story 1.110).
+  assert.equal(
+    loadBothViewDesignation({ folder: unplannedProject.folder, partition: 'both', heldOutProbes: ['P-002'] })(probeOf('P-002')).oracleId,
+    null,
+  );
   // ---- rubrics through run and score: each partition judges and calibrates its own criteria (Story 1.105) ---------------------
   // One labelled file serves every partition. It holds two items per criterion, so the development run is handed items of the
   // held-out criterion and the held-out run items of the development one, and each must leave them unjudged.

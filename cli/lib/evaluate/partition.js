@@ -415,7 +415,7 @@ function bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition
     }
     if (inBoth.length === 1) return NO_DESIGNATION;
     const own = listed(heldOut.has(probe.probeId) ? 'held-out' : 'development', probe.behaviorId);
-    return own.length === 1 && typeof own[0] === 'string' ? { oracleId: own[0], problem: null } : NO_DESIGNATION;
+    return Array.isArray(own) && own.length === 1 && typeof own[0] === 'string' ? { oracleId: own[0], problem: null } : NO_DESIGNATION;
   };
 }
 
