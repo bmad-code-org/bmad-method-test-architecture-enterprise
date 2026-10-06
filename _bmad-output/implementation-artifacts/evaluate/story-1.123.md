@@ -2,7 +2,7 @@
 title: "Story 1.123: Score each ci project's stored workflow structurally as well as by its substring oracles"
 type: 'feature'
 created: '2026-10-06'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f19ad8d2'
@@ -78,7 +78,7 @@ The burn-in element states a `contractPattern` that reads a mapping key or a `na
 - `test/test-contract-oracles.js`: `checkCiBurnInOracleOnForms` scores 232 forms of the burn-in job through eval-quality and through the scorer, and `ciFormsScored` fails a main that stopped calling either form table.
 - `test/test-evaluate-ci-render.js`: two guard cases and one negative control for a pattern on a gate element.
 - Regenerated: `test/contracts/ci.contract.json` (the burn-in check), `test/probes/ci.probes.json` (the ground-truth digest), `test/probes/expected-strength.json` (the ci `corpusDigest`).
-- Prose: `test/probes/README.md`, `test/contracts/README.md`, `test/README.md`, `CHANGELOG.md`, `epics.md` (amendments to Stories 1.94 and 1.123), `test-design-epic-1.md` (the same), `sprint-status.yaml` (row 1.123 `review`), comments in `test/lib/probe-scoring.js`, `test/test-probe-corpus.js` and `tools/generate-contracts.js`.
+- Prose: `test/probes/README.md`, `test/contracts/README.md`, `test/README.md`, `CHANGELOG.md`, `epics.md` (amendments to Stories 1.94 and 1.123), `test-design-epic-1.md` (the same), `sprint-status.yaml` (row 1.123 `done`), comments in `test/lib/probe-scoring.js`, `test/test-probe-corpus.js` and `tools/generate-contracts.js`.
 - Not changed: `references/ci.md`, `SKILL.md`, the plan template, step 03b, `github-actions-template.yaml`, the two capture records, the lane lists, the section of Story 1.95, `package.json`, `package-lock.json`.
 
 ## Tasks & Acceptance
