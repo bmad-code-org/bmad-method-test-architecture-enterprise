@@ -1255,6 +1255,9 @@ async function main() {
   const problems = [];
   const summary = {};
   const liveShaped = [];
+  // What the ci structural check scored and ran, read after the last suite.
+  // A main whose ci block never ran leaves the zeros, which `ciWiringProblems` reports.
+  let ciWiring = { scored: 0, selfRows: 0 };
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
@@ -1289,7 +1292,8 @@ async function main() {
       const legs = suite.evidence.storedRunLegs ?? [];
       const structural = await ciStructuralProblems(legs);
       const self = await ciStructuralSelfProblems();
-      problems.push(...structural.problems, ...self.problems, ...ciWiringProblems({ scored: structural.scored, selfRows: self.exercised }));
+      problems.push(...structural.problems, ...self.problems);
+      ciWiring = { scored: structural.scored, selfRows: self.exercised };
     }
 
     summary[suite.id] = suiteSummary(outcome, registries);
@@ -1301,7 +1305,7 @@ async function main() {
     );
   }
 
-  problems.push(...comparatorProblems(liveShaped, summary));
+  problems.push(...ciWiringProblems(ciWiring), ...comparatorProblems(liveShaped, summary));
 
   const policy = await scoringPolicy();
   problems.push(...(await dominanceComparatorProblems(summary, policy.severityFloor)));
