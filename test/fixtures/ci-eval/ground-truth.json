@@ -601,7 +601,8 @@
           "standaloneStep": true,
           "rule": "evaluationToolingInstall",
           "requestQuote": "Run its pull request checks on every pull request.",
-          "contractToken": "npm install --prefix evals"
+          "contractToken": "npm install --prefix evals",
+          "contractPattern": "^[\\s\\S]*npm\\s+install\\s+--prefix\\s+(?:'evals'|\"evals\"|evals)(?:\\s|$)[\\s\\S]*$"
         },
         {
           "id": "command-evaluation-ci-pr",
@@ -617,7 +618,8 @@
           ],
           "rule": "evaluationPlanCommandSteps",
           "requestQuote": "Run its pull request checks on every pull request.",
-          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr"
+          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr",
+          "contractPattern": "^[\\s\\S]*tea-evaluate\\s+ci\\s+--evaluation\\s+(?:'evals/grader'|\"evals/grader\"|evals/grader)\\s+--tier\\s+(?:'pr'|\"pr\"|pr)(?:\\s|$)[\\s\\S]*$"
         },
         {
           "id": "job-evaluation-pr",

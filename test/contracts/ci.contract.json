@@ -2276,21 +2276,19 @@
       "commentary": "evaluation-plan-quarry-grader: command-evaluation-install is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix evals\".",
+        "negativeDomain": "A run whose workflow carries no \"npm install --prefix evals\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
-          },
-          {
-            "literal": "npm install --prefix evals"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*npm\\s+install\\s+--prefix\\s+(?:'evals'|\"evals\"|evals)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {
@@ -2299,21 +2297,19 @@
       "commentary": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"tea-evaluate ci --evaluation evals/grader --tier pr\".",
+        "negativeDomain": "A run whose workflow carries no \"tea-evaluate ci --evaluation evals/grader --tier pr\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
-          },
-          {
-            "literal": "tea-evaluate ci --evaluation evals/grader --tier pr"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*tea-evaluate\\s+ci\\s+--evaluation\\s+(?:'evals/grader'|\"evals/grader\"|evals/grader)\\s+--tier\\s+(?:'pr'|\"pr\"|pr)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {

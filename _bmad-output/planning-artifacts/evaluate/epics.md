@@ -2534,6 +2534,9 @@ So that a leg that points at the wrong workflow is caught where it is added (CAP
 **Dependencies:** 2.3.
 **Gate:** `test:probe-corpus`, `test:probe-sources`, `test:contract-sources`, `npm test`.
 
+Amended 2026-10-05 in Story 1.122's build: the two oracles hold on the real capture, so every stored correct workflow satisfies every oracle of its set and `KNOWN_UNHELD` is empty.
+`test:probe-corpus` keeps the check that fails a listed oracle which holds and exercises it on every run.
+
 ### Story 1.95: Gate the replay totals, the story count and the lane lists
 
 Added 2026-10-01 in Story 2.3's second review. Several totals that Story 2.3 and its review changed are hand-written and gated by nothing (the stored-output number once printed on the `npm run test:eval-replay` line of `README.md` and the adoption guide was a drift magnet, so Story 2.3's round 4 removed it): the replay corpus counts in `test/README.md` and the header of `test/test-eval-replay.js` (cases, cases that produce a number, constructed cases, captured cases), the story count in the overview of `epics.md` (its intro and the range of appended stories), and the stories listed in the five lane sequences of the same file against the `parallel_lanes` of `sprint-status.yaml` (the 2026-10-03 rebalance and the 2026-10-04 five-lane split moved stories between lanes, so all five lists must hold). The replay counts were stale at the base commit and a count was wrong again after Story 2.3's first push, and no check noticed either time.
@@ -3217,7 +3220,7 @@ So that every stored correct workflow satisfies every oracle of its set and `KNO
 **Acceptance Criteria:**
 
 **Given** the `contractToken` of `command-evaluation-install` and `command-evaluation-ci-pr` in `test/fixtures/ci-eval/ground-truth.json`, which the oracle machinery consumes as one literal (`ciContains` in `tools/generate-contracts.js` renders a `containment` over it and `workflowMentions` in `test/eval-ci.js` is `String.includes`)
-**When** the two elements state a `contractPattern` beside it, a regular expression source that the contract renders with the vocabulary's `regex` operator over the workflow and that the paired scorer tests with `RegExp`, written to tolerate shell quotes and still pin the folder and the tier, and fully anchored because the `regex` operator accepts only a pattern that begins with `^` and ends with `$` (`AnchoredPattern`; an unanchored one fails compile with `malformed-operator-expression`), so each is written in the form `tokenGroupExpression` in `tools/generate-contracts.js` already uses, `^[\s\S]*(?:<pattern>)[\s\S]*$`, which the paired scorer tests with `new RegExp(source)` and no flags: `^[\s\S]*npm install --prefix ['"]?evals['"]?(?:\s|$)[\s\S]*$` and `^[\s\S]*tea-evaluate ci --evaluation ['"]?evals/grader['"]? --tier ['"]?pr['"]?(?:\s|$)[\s\S]*$` (single-quoted, double-quoted and unquoted forms pass; a pattern holds no nested quantifier and stays inside the step budget, which the operator enforces)
+**When** the two elements state a `contractPattern` beside it, a regular expression source that the contract renders with the vocabulary's `regex` operator over the workflow and that the paired scorer tests with `RegExp`, written to tolerate shell quotes and still pin the folder and the tier (amended 2026-10-05 in Story 1.122's build: a balanced pair of quotes and whitespace folds, as below), and fully anchored because the `regex` operator accepts only a pattern that begins with `^` and ends with `$` (`AnchoredPattern`; an unanchored one fails compile with `malformed-operator-expression`), so each is written in the form `tokenGroupExpression` in `tools/generate-contracts.js` already uses, `^[\s\S]*(?:<pattern>)[\s\S]*$`, which the paired scorer tests with `new RegExp(source)` and no flags: `^[\s\S]*npm\s+install\s+--prefix\s+(?:'evals'|"evals"|evals)(?:\s|$)[\s\S]*$` and `^[\s\S]*tea-evaluate\s+ci\s+--evaluation\s+(?:'evals/grader'|"evals/grader"|evals/grader)\s+--tier\s+(?:'pr'|"pr"|pr)(?:\s|$)[\s\S]*$` (single-quoted, double-quoted and unquoted forms pass; a pattern holds no nested quantifier and stays inside the step budget, which the operator enforces)
 **Then** `test/contracts/ci.contract.json`, `test/probes/ci.probes.json` and the ci `corpusDigest` in `test/probes/expected-strength.json` regenerate and no other record in the baseline moves
 **And** `KNOWN_UNHELD` in `test/test-probe-corpus.js` is empty and `storedRunProblems` passes for the evaluation-plan project
 
@@ -3231,6 +3234,17 @@ So that every stored correct workflow satisfies every oracle of its set and `KNO
 
 **Dependencies:** 1.94.
 **Gate:** `test:probe-corpus`, `test:probe-sources` (which runs `node tools/generate-probes.js --check`), `test:contract-sources`, `test:contract-oracles`, then `npm test`.
+
+Amended 2026-10-05 in Story 1.122's build, fix round 1: the patterns above replace the first ones, `['"]?evals['"]?` and `['"]?pr['"]?` between single spaces.
+Each quote there was independent, so an unterminated quote, a closing quote only and a mismatched pair (`'evals"`) all held, and each is a shell syntax error.
+Each argument is now a whole-word alternation, `(?:'x'|"x"|x)`, inside a group and with no nested quantifier, so only a balanced pair holds.
+A folded YAML scalar (`run: >-`) can break the line between the words of a command and the harness accepts it, so the words are separated by `\s+`.
+Amended 2026-10-05 in Story 1.122's build: the paired scorer is `workflowHoldsToken` in `test/eval-ci.js`, which is `workflowMentions` over a literal `contractToken` and `workflowMatches` (`new RegExp(source)`, no flags) over a `contractPattern`.
+`validateCorpus` refuses a `contractPattern` that is empty, has no `contractToken`, is not anchored over the whole expression (`^` first, an unescaped `$` last, no alternation at the top level), is not a regular expression, or fails to match its own token or its element's command.
+The other three projects' command elements keep their literal tokens (`npm install --prefix`, `--tier pr`), which hold on their stored captures.
+`test:contract-oracles` scores forty-one forms of the two commands through the engine and the scorer.
+`KNOWN_UNHELD` is the empty list, and `knownUnheldProblems` in `test:probe-corpus` exercises the check that fails a listed oracle which holds, so the list can be refilled.
+`cleanControlProblems` holds the third criterion: every engine outcome of a clean control of the four stored-run suites is `held` with corroboration `agrees`, and `cleanControlSelfProblems` exercises it over a contradicted and a violated outcome.
 
 ### Story 1.123: Score each ci project's stored workflow structurally as well as by its substring oracles
 

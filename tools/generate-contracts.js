@@ -114,7 +114,14 @@ const {
 // shape and its default agent, and the harness owns every prompt and the
 // document-global predicate an oracle over one workflow file is paired with.
 const { CI_REQUEST_KEYS, DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
-const { buildPrompt: buildCiPrompt, workflowMentions, PLATFORM: CI_PLATFORM, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
+const {
+  buildPrompt: buildCiPrompt,
+  workflowMentions,
+  workflowHoldsToken,
+  PLATFORM: CI_PLATFORM,
+  CI_INTERFACE,
+  CI_OPERATION,
+} = require('../test/eval-ci');
 // And for the atdd command, on the same two rules, with one addition: the
 // scaffold this contract addresses has no fixed name in general, so the
 // harness names the one path its own prompt asks generation to write into.
@@ -3208,27 +3215,44 @@ function ciContains(pointer, literal) {
   return { op: 'containment', operands: [{ pointer }, { literal }] };
 }
 
+/** The workflow read against a `contractPattern`, which states its own anchors because the `regex` operator accepts only a pattern that begins with `^` and ends with `$`. */
+function ciMatches(pointer, source) {
+  return { op: 'regex', operands: [{ pointer }], pattern: source };
+}
+
+/** The oracle's check for one requested element: its `contractPattern` as a `regex` where it has one, else its `contractToken` as a `containment`. */
+function ciRequestedCheck(pointer, element) {
+  return typeof element.contractPattern === 'string'
+    ? ciMatches(pointer, element.contractPattern)
+    : ciContains(pointer, element.contractToken);
+}
+
 /**
  * Every oracle the ci contract states, one spec per claim, in the order they are
  * numbered.
  *
  * The workflow file is one string to this vocabulary, the same limit
  * test/contracts/README.md records for the nfr and trace deliverables, so every
- * claim here is what a substring test can reach: does the document contain the
- * literal a requested element states (`contractToken`), does it omit the literal
- * a forbidden element states (`mustNotEmit`), and did the run leave the file
- * behind and exit clean. Whether a token sits inside the right job, whether a
+ * claim here reads the whole document as one string.
+ * The claims ask three things.
+ * Does the document contain the literal a requested element states (`contractToken`),
+ * or match the quote-tolerant `contractPattern` an element states beside it?
+ * Does it omit the literal a forbidden element states (`mustNotEmit`)?
+ * Did the run leave the file behind and exit clean?
+ * Whether a token sits inside the right job, whether a
  * shard count is four, whether a needs: chain actually reaches the lint job, and
  * every question actionlint answers are the harness's to read structurally; the
  * contract cannot ask them because none of them is "does this string appear in
  * that document".
  *
  * `scorer` is not the harness's real per-element check, `checkElement`, because
- * that check is structural and this contract's claim is a plain substring test.
- * It is `test/eval-ci.js`'s own `workflowMentions`, the document-global predicate
- * this generator pairs the oracle with, applied to the same literal the oracle
- * checks, over the raw workflow text. That is the same idiom
- * `tools/generate-contracts.js` already uses for `test-design`'s oracles, and for
+ * that check is structural and this contract's claim is a substring test,
+ * or a regex over the same document for an element that states a `contractPattern`.
+ * It is `test/eval-ci.js`'s own `workflowHoldsToken`, the document-global predicate
+ * this generator pairs the oracle with.
+ * It is `workflowMentions` over the same literal the oracle checks,
+ * or `workflowMatches` over the same pattern source, over the raw workflow text.
+ * That is the same idiom `tools/generate-contracts.js` already uses for `test-design`'s oracles, and for
  * the reason recorded there: pairing an oracle with the row-scoped harness result
  * would make the two agree by coincidence on whatever the replay corpus happens
  * to hold, and pairing it with the same document-global function the oracle
@@ -3249,6 +3273,7 @@ function ciOracleSpecs(groundTruth) {
 
     for (const element of set.expectedElements ?? []) {
       if (element.contractToken === null) continue;
+      const check = ciRequestedCheck(workflow, element);
       push(
         set.id,
         'requested',
@@ -3258,14 +3283,17 @@ function ciOracleSpecs(groundTruth) {
           commentary: `${label}: ${element.id} is requested. ${element.requestQuote}`,
           direction: {
             polarity: 'expects-hold',
-            relation: 'containment',
+            relation: check.op,
             scope: `The workflow file written for ${label}, read as one document.`,
-            negativeDomain: `A run whose workflow does not contain ${JSON.stringify(element.contractToken)}.`,
+            negativeDomain:
+              check.op === 'regex'
+                ? `A run whose workflow carries no ${JSON.stringify(element.contractToken)} command, whether or not it quotes its arguments for the shell.`
+                : `A run whose workflow does not contain ${JSON.stringify(element.contractToken)}.`,
             evidenceTargets: [workflow],
           },
-          check: ciContains(workflow, element.contractToken),
+          check,
         },
-        (text) => workflowMentions(text, element.contractToken),
+        (text) => workflowHoldsToken(text, element),
       );
     }
 

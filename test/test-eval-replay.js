@@ -571,7 +571,7 @@ function nfrScoringInputs(set) {
  * Only what scoreRun reads: the project's role, the Node version its .nvmrc
  * states, the file list, and each requested element's identity, kind and the
  * parameters its check reads. The request quote, the rule citation and the
- * contract token stay out because scoreRun never reads them, and so does
+ * contract token and contract pattern stay out because scoreRun never reads them, and so does
  * mustNotEmit, which only the contract's oracles address; every `why` and
  * `title` string stays out so an editorial pass moves no digest.
  *
@@ -586,7 +586,7 @@ function ciScoringInputs(set) {
     `files=${[...(set.projectFiles ?? [])].sort().join(' ')}`,
     ...(set.expectedElements ?? []).map((element) => {
       // Rest-destructured to drop the fields scoreRun never reads.
-      const { id, kind, requestQuote, rule, contractToken, ...parameters } = element;
+      const { id, kind, requestQuote, rule, contractToken, contractPattern, ...parameters } = element;
       return [id, kind, JSON.stringify(canonical(parameters))].join('|');
     }),
   ];
