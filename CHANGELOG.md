@@ -424,6 +424,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate` records neutral path forms, so a committed baseline names no machine (Story 1.91, AD-12).
+  `compare --accept` copied every file byte for byte, and `run.json`, the observations and the score call records carried the workspace paths, the repository path, the evaluation checkout's path and the private staging path of the machine that produced the run.
+  The runtime now writes `<workspace>`, `<repository>` and `<credentials-file>` in `run.json`, the observations and the isolation manifests, and each engine call record states its executable as `eval-quality/<path below the package>` and its argv with the evaluation folder's files by their path below the folder, the staging file as `<staging>/<file name>` and the score invocation's directory as `<score-invocation>`.
+  Every digest is taken over those bytes, so `compare --accept` still copies the run unchanged and each digest `run.json` anchors holds.
+  A recorded argv reruns by hand from the evaluation folder.
+  The `pr` replay's comparison set now covers each probe's `score.json` and `aggregate-strength.json`, which Story 2.2 left out because of those paths, so a changed call record is drift and exits 13.
+  Only the invocation's own `score.json` summary stays out, because it names the replay's invocation id.
+  A baseline accepted before this release holds absolute paths in those call records, so its `pr` replay reports drift (exit 13) until `compare --accept` records it again.
+  The twelve committed fixture baselines are accepted again from fresh runs, and the gap-loop, AI-feature and test-review replay bundles hold the same forms.
+  `tea-evaluate ci` records what an `evaluate` check printed and logged in the same forms: the evaluation folder is `<evaluation-folder>`, the private root `<private-root>`, the temporary directory `<tmp>` and the home directory `<home>`.
+  The same forms apply to the Buffers of the HTTP port conformance run, to the stale-baseline reasons in `ci.json` and in the tier's warning, to a failed `score` call's `failure` and `reason` (a spawn error names the executable in its recorded form), and to the isolation manifest's `observedMounts`, where a path below the home or temporary directory still says which file the target read.
+  A gate's own output stays as the gate printed it.
+  A target's printed output is recorded as received, so a target that prints its working directory, its home directory or a stack trace puts that text in its observation.
+  A `test:evaluate-compare` case accepts a run made under a distinctive project path and temporary directory, checks from the run's own log that it used that directory, and scans every file under `baseline/` for them, the home directory and the temporary roots.
+  A second case scans every committed `baseline/` under `test/fixtures/` and `test/evaluations/`.
+  A `test:evaluate-ci` case flips one byte of each probe's `score.json` and of `aggregate-strength.json` and expects exit 13.
+  Another case runs `ci --tier pr` over a project under a distinctive path and scans the whole run directory.
+  The ten `test:evaluate-pr-*` scripts and every tier of the two CI repositories scan the run directories they leave.
+  The reference describes the forms under "Paths in the records".
 - The three ci controlled-mutation witnesses read the request in the workflow the run wrote, so their pre-flight passes (Story 1.121, CAP-7, CAP-11).
   Until now they read the element the run gets wrong, so they fired on the mutated pipeline, and the kit labelled that direction `gap-read`.
   P-001 and P-002 carried a `not` over a containment of the requested element and P-003 a containment of `burn-in`, each silent on the correct run the fault leg replays, so `test/probes/expected-strength.json` recorded `failed: seeded-fault-fired, seeded-faults-scoped` for all three ci defect probes.

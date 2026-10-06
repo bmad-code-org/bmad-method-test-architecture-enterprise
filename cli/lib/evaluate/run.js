@@ -115,6 +115,7 @@ const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
+const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
@@ -604,8 +605,8 @@ async function runTrial(context) {
       mounts: [
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
-        // The login files a registry entry's `login` grants, read-only (Story 1.113).
-        ...new Set(registry.logins.filter(({ file }) => file !== null).map(({ file }) => `read-only login ${file}`)),
+        // The login files a registry entry's `login` grants, read-only (Story 1.113), named by their neutral form (`recorded-paths.js`).
+        ...new Set(registry.logins.filter(({ file }) => file !== null).map(() => `read-only login ${CREDENTIALS_FILE}`)),
       ],
       // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
       observedMounts,
@@ -1561,7 +1562,8 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
     workspaceIdentity: `${evaluation.evaluationId} ${conditionArm}`,
     allowedMounts: trials.flatMap((trial) => trial.mounts),
     // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
-    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts))].sort(),
+    // The audit's host paths in the neutral forms (`recorded-paths.js`): the manifest is a record `compare --accept` copies and `runs/` uploads, and a path below the home or temp directory still says which file the target read.
+    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts).map(textNeutralizer({ folder })))].sort(),
     toolAllowlist: tools,
     observedToolCalls: [...new Set(trials.flatMap((trial) => trial.toolCalls))].sort(),
     resourceCeilings: {
@@ -1643,7 +1645,7 @@ function expectedOutcome(arm) {
  * The staged bytes the comparison accepted are the ones copied in and read, once.
  */
 async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
-  const { writer, runDirectory, env, log, scratch, stop, engine } = context;
+  const { writer, runDirectory, folder, env, log, scratch, stop, engine } = context;
   let held;
   try {
     held = holdAttemptInputs({
@@ -1668,7 +1670,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
     const args = held.scoreArguments({ pathOf: (relative) => writer.pathOf(relative), set: heldSet, out: produced });
     let result;
     try {
-      result = runEngineStage('score', args, { runDirectory, recordPath: `${directory}/score.json`, writer, env, log });
+      result = runEngineStage('score', args, { runDirectory, folder, recordPath: `${directory}/score.json`, writer, env, log });
     } catch (error) {
       if (!(error instanceof EngineStageError)) throw error;
       throw stop({ stage: 'trial', exitCode: 12, message: `${probe.probeId}: an evaluator attempt could not be scored: ${error.message}` });

@@ -24,15 +24,15 @@
       "expectedObservableFailure": "The grader rejects the answer, so its result says verdict rejected.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261004T124711002Z-f2997476/qualification/P-002/baseline-pass.json",
+        "path": "runs/20261005T002653577Z-ef22f04c/qualification/P-002/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:c6da91320ff2869b787c43331f718fa5ea7c7afd53452ba1b6936163862053b3"
+        "digest": "sha256:57aa89b482a179d1e972487fa424def028207123dd1d3d1ddd8a23721018fe41"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261004T124711002Z-f2997476/qualification/P-002/mutated-fail.json",
+        "path": "runs/20261005T002653577Z-ef22f04c/qualification/P-002/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:04345432d1a1105af1966dbc44e5147b3318d22f7a4c7da154c5a6a78e78dd46"
+        "digest": "sha256:48af451e00b847b376d199baf93c7454d39d7810bed17ce3e6579f9f37197680"
       },
       "rollbackVerified": true
     },
@@ -46,9 +46,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261004T124711002Z-f2997476/qualification/P-002/mutated-fail.json",
+            "path": "runs/20261005T002653577Z-ef22f04c/qualification/P-002/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:04345432d1a1105af1966dbc44e5147b3318d22f7a4c7da154c5a6a78e78dd46"
+            "digest": "sha256:48af451e00b847b376d199baf93c7454d39d7810bed17ce3e6579f9f37197680"
           }
         ],
         "source": "controlled-mutation",

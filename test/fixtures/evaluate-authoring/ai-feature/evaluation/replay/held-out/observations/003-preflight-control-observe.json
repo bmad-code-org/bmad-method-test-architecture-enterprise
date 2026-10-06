@@ -2,7 +2,7 @@
   "legId": "preflight-control-observe",
   "sequence": 3,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-93eafb54-e488-412e-a5fd-a9969ba616ff/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "preflight-control-observe",
     "interfaceId": "answer-grade",

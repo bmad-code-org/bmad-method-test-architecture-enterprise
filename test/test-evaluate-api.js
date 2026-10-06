@@ -126,6 +126,7 @@ const { runTrial } = require('../cli/lib/evaluate/run');
 const { requestKey } = require('../cli/lib/evaluate/workspace');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
+const { recordedMount } = require('./lib/recorded-mount');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -4596,13 +4597,23 @@ async function checkConfinedServiceReads() {
     const tamper = path.join(project.folder, 'runs', '.port-tamper');
     const tampered = fs.existsSync(tamper);
     fs.rmSync(tamper, { force: true });
-    return { contract, evidence, observed: manifest?.observedMounts ?? null, attempts, tampered };
+    // The manifest records the audit's paths in the neutral forms the runtime writes, so the expectation is each real path put through them.
+    const recorded = (real) => recordedMount(real, { folder: project.folder, env: project.env });
+    return {
+      contract,
+      recordedContract: recorded(contract),
+      recordedOutside: recorded(realOutside),
+      evidence,
+      observed: manifest?.observedMounts ?? null,
+      attempts,
+      tampered,
+    };
   };
   const refusal = /contract: refused (EPERM|EACCES|ENOENT|EROFS)/;
 
   // The kernel's report channel on macOS can lose a report under load (Story 1.60): a run whose audit lists only what it should, but
   // not all of it, runs again (up to two more times) before the exact comparison below counts. Any extra path counts at once.
-  const wanted = (run) => [run.contract, realOutside].sort();
+  const wanted = (run) => [run.recordedContract, run.recordedOutside].sort();
   const lostOnly = (run) =>
     Array.isArray(run.observed) &&
     run.observed.every((entry) => wanted(run).includes(entry)) &&
@@ -4615,8 +4626,8 @@ async function checkConfinedServiceReads() {
     `a confined started service could not read the ungranted file, so the case proves nothing: ${confined.evidence}`,
   );
   check(
-    JSON.stringify(confined.observed) === JSON.stringify([confined.contract, realOutside].sort()),
-    `a confined started service's trial set observed ${JSON.stringify(confined.observed)}; expected the contract and ${realOutside}`,
+    JSON.stringify(confined.observed) === JSON.stringify(wanted(confined)),
+    `a confined started service's trial set observed ${JSON.stringify(confined.observed)}; expected the contract and the file outside, recorded as ${JSON.stringify(wanted(confined))}`,
   );
   check(
     confined.attempts.length > 0 &&
@@ -4638,7 +4649,7 @@ async function checkConfinedServiceReads() {
     `a started service under a declared system path read: ${declared.evidence}`,
   );
   check(
-    JSON.stringify(declared.observed) === JSON.stringify([declared.contract]),
+    JSON.stringify(declared.observed) === JSON.stringify([declared.recordedContract]),
     `a read under a declared system path was reported: ${JSON.stringify(declared.observed)}; expected the contract alone`,
   );
 

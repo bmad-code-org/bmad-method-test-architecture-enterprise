@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "verdict-ci",
-    "implementationDigest": "sha256:07e9b9243c478203d4ed3fe24a0e9d67946634c6c1f91f650f9f515933d1b107",
+    "implementationDigest": "sha256:41e84c4c7b31623fa97c53f5e6a3c26017306327011deb0ccc71c723f96cad75",
     "artifactDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
-    "commitDigest": "sha256:07e9b9243c478203d4ed3fe24a0e9d67946634c6c1f91f650f9f515933d1b107",
+    "commitDigest": "sha256:41e84c4c7b31623fa97c53f5e6a3c26017306327011deb0ccc71c723f96cad75",
     "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the verdict command then rejects the request on stdout.",
     "qualification": {
       "route": "controlled-mutation",
@@ -24,13 +24,13 @@
       "expectedObservableFailure": "The verdict command rejects the request, so its stdout says verdict: rejected.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261004T124624287Z-74b15b1c/qualification/P-002/baseline-pass.json",
+        "path": "runs/20261005T002714911Z-9a6d158d/qualification/P-002/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:f1d0735a23d91bde52e09405920943f513b436c6778a11e15e3ee155e3d8508e"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261004T124624287Z-74b15b1c/qualification/P-002/mutated-fail.json",
+        "path": "runs/20261005T002714911Z-9a6d158d/qualification/P-002/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:02e0a2ff06ef748ab538afe239182a96a1eb81055a39364e50b9038f9f37975a"
       },
@@ -46,7 +46,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261004T124624287Z-74b15b1c/qualification/P-002/mutated-fail.json",
+            "path": "runs/20261005T002714911Z-9a6d158d/qualification/P-002/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:02e0a2ff06ef748ab538afe239182a96a1eb81055a39364e50b9038f9f37975a"
           }

@@ -73,6 +73,7 @@ const { ArmError, causeNote, faultRecord, hostEnvironmentPort, reasonNote, runAr
 const { DeploymentUnreachable, isApiEntry, originKey, originTarget, sharedOrigin } = require('./http-target');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
+const { workspaceDirectory } = require('./recorded-paths');
 const { quotedIdentifier, reportedRelease, reportsProblems } = require('./release-report');
 const { WorkspaceRefusal, gitAccessOf, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
 
@@ -880,7 +881,7 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
     privateRoot: registry.privateRoot,
   });
   log(`pre-fix workspace at ${preFix}: ${workspace.root}`);
-  return { label: `historical:${preFix}`, cwd: workspace.root, port, workspace, deployment: null };
+  return { label: `historical:${preFix}`, cwd: workspaceDirectory(workspace), port, workspace, deployment: null };
 }
 
 /**
@@ -902,7 +903,7 @@ async function deploymentRoute({ deployment, pristine, registry, log }) {
     deployment,
   });
   log(`pre-fix deployment of ${deployment.release}: ${Object.values(deployment.origins).join(', ')}`);
-  return { label: `historical:${deployment.release}`, cwd: pristine.root, port, workspace: null, deployment, members: [] };
+  return { label: `historical:${deployment.release}`, cwd: workspaceDirectory(pristine), port, workspace: null, deployment, members: [] };
 }
 
 module.exports = {

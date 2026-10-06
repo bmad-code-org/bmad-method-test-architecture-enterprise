@@ -2,7 +2,7 @@
   "legId": "manifest-omitted-pears",
   "sequence": 5,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-50918a7d-87ed-437c-869d-f8ac58a9fc51/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-omitted-pears",
     "interfaceId": "summarizer",

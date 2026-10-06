@@ -119,4 +119,93 @@ function resealBaseline(folder, { digestBytes }) {
   fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-module.exports = { commitAll, copyOf, placeBaseline, resealBaseline, runAndScore };
+/** What names a machine in a record: a home or temporary directory of a Unix or macOS host, and the user's private root of runs. */
+const MACHINE_PATH = /\/Users\/|\/home\/|\/root\/|\/private\/|\/var\/(?:folders|tmp)\/|\/tmp\/|tea-evaluate-p\d/;
+
+/** A path in both spellings a host gives it, the one it was made with and its real path. */
+function spellings(directory) {
+  const spelled = new Set([directory]);
+  try {
+    spelled.add(fs.realpathSync.native(directory));
+  } catch {
+    // A directory that is gone has no other spelling.
+  }
+  return [...spelled];
+}
+
+/**
+ * The strings that name the machine a run happened on: the project's own absolute paths, the temporary directory the run was
+ * given and the one the host has, the home directory and the user's private root of runs, each in both of its spellings.
+ * `project` is a suite project (`folder`, `repository`, `directory`), and `tempRoot` the `TMPDIR` the run got.
+ */
+function machinePaths({ project, tempRoot = null }) {
+  const directories = [
+    project.folder,
+    project.repository,
+    project.directory,
+    os.tmpdir(),
+    os.homedir(),
+    ...(tempRoot === null ? [] : [tempRoot]),
+  ];
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const root = uid === null ? [] : [`tea-evaluate-p${uid}`];
+  return [...new Set([...directories.flatMap(spellings), ...root])].filter((needle) => needle.length > 3 && needle !== path.sep);
+}
+
+/** Every regular file under `directory`, as paths relative to it; no link is followed. */
+function filesUnder(directory) {
+  const found = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const file = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (entry.isFile()) found.push(path.relative(directory, file));
+    }
+  };
+  walk(directory);
+  return found.sort();
+}
+
+/**
+ * The files under `directory` whose bytes hold a machine path, each with what it holds: one of `needles` (strings) or, when
+ * `needles` is null, what `MACHINE_PATH` matches. The scan reads the bytes, so a path in any spelling of a file's content is found.
+ */
+function machinePathHits(directory, needles = null) {
+  const hits = [];
+  for (const relative of filesUnder(directory)) {
+    const bytes = fs.readFileSync(path.join(directory, relative));
+    const text = bytes.toString('latin1');
+    const found = needles === null ? MACHINE_PATH.exec(text)?.[0] : needles.find((needle) => bytes.includes(Buffer.from(needle)));
+    if (found !== undefined && found !== null) hits.push({ file: relative, found });
+  }
+  return hits;
+}
+
+/** Every `baseline/` directory committed under `roots` (relative to `root`), none entered below `node_modules` or `runs`. */
+function committedBaselines(root, roots = ['test/fixtures', 'test/evaluations']) {
+  const found = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (!entry.isDirectory() || ['node_modules', 'runs', '.git'].includes(entry.name)) continue;
+      const directory = path.join(current, entry.name);
+      if (entry.name === 'baseline') found.push(path.relative(root, directory).split(path.sep).join('/'));
+      else walk(directory);
+    }
+  };
+  for (const start of roots) if (fs.existsSync(path.join(root, start))) walk(path.join(root, start));
+  return found.sort();
+}
+
+module.exports = {
+  MACHINE_PATH,
+  commitAll,
+  committedBaselines,
+  copyOf,
+  filesUnder,
+  spellingsOf: spellings,
+  machinePathHits,
+  machinePaths,
+  placeBaseline,
+  resealBaseline,
+  runAndScore,
+};

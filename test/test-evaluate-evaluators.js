@@ -152,6 +152,7 @@ const {
   setRecommendationOf,
   trialRecommendation,
 } = require('../cli/lib/evaluate/judgment-rows');
+const { runnableArgv } = require('./lib/recorded-argv');
 const { removeDeadPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -3139,8 +3140,8 @@ function checkAttemptsReproduce(what, runDirectory) {
       const kept = path.join(directory, 'evidence-artifact.json');
       if (!fs.existsSync(kept)) continue;
       const out = path.join(scratch.make(`${what}-reproduce`), 'evidence-artifact.json');
-      const argv = [...call.argv];
-      argv[argv.indexOf('--out') + 1] = out;
+      // The record names the run's files by their path below the evaluation folder and the staging file as `<staging>/<name>`.
+      const argv = runnableArgv(call.argv, { folder: path.resolve(runDirectory, '..', '..'), out });
       const direct = spawnSync(process.execPath, [engineCliPath(BASE_ENV), ...argv], {
         encoding: 'utf8',
         timeout: SPAWN_TIMEOUT_MS,
@@ -3167,7 +3168,7 @@ function checkAttemptsReproduce(what, runDirectory) {
               '--evaluator-configuration',
             ].includes(call.argv[at - 1]),
           )
-          .every((file) => file.startsWith(runDirectory)),
+          .every((file) => file.startsWith(`runs/${path.basename(runDirectory)}/`)),
         `${what}: ${arm}/attempt ${attempt}'s recorded argv names a file outside the run directory`,
       );
       reproduced += 1;

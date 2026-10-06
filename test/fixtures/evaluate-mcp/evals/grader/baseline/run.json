@@ -1,6 +1,6 @@
 {
-  "invocationId": "20261004T124642952Z-9a9c88f5",
-  "seed": "20261004T124642952Z-9a9c88f5",
+  "invocationId": "20261005T002637506Z-c07ad017",
+  "seed": "20261005T002637506Z-c07ad017",
   "command": "run",
   "teaVersion": "1.27.2",
   "evalQualityVersion": "7.1.0",
@@ -17,13 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-d83066eb-b07e-4d0d-a2ab-25ecede8fd1d/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-c5a330ac-8a66-44d7-89d7-78d1e12b26e1/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
+  "logins": [],
   "adopterTree": {
-    "repository": null,
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -31,22 +32,22 @@
     "contract": "sha256:a3c2be7ef367d37e7209c7feb57552d64b54651407fb85aaac6a6ed559a66a7f",
     "operationPhases": "sha256:5edc837c87ae04cb9e32550a847c70fcbc59583fa307787bfe56f696ac8d1ccf",
     "evaluatorConfiguration": "sha256:7062067fcc066406904bd3de69de266766a70982ea03ca5d1ce62364b06371cf",
-    "preflightVerdict": "sha256:5276d2247079eda69490b2d259cb93866a810f30299d2be3ec2a57c74481b15b",
+    "preflightVerdict": "sha256:c25e68c6b6d2bd5d549e17ad544bd57ee8b85804cdc560bc404e9c6caed2ea5e",
     "probes": {
-      "P-001": "sha256:51f26572a8d7166783efe4152ff582f55c35bddf3b816308630e9abdd27c0898",
-      "P-002": "sha256:eae1cd3340cdf44a85648aa18983f5209edc2ea13ca762a331ca91cf9a27f423"
+      "P-001": "sha256:53d5bf45080d3b203530d90c1d6aa378995663cdff12223408c4faf55217deea",
+      "P-002": "sha256:fffaaf9ed720cd7ff958fe3f88f22eed746d11634d54f6ba533c84cbb9345248"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:c556e3316a11bfdff65f1d2073a2d756786d2d5c3180f7ed370d81685ee9faa8",
-      "trial-sets/P-001/record-2.json": "sha256:bb265b6dd60106c617505eab48049a1ddc2866848ef73d56c1c9d55938ab1592",
-      "trial-sets/P-001/record-3.json": "sha256:b38cb484b41829698ac451f149e6da3436efb9f17018867108f9252026ed832f",
-      "trial-sets/P-002/record-1.json": "sha256:704f99e09a65da404000e40386e63f4108ba6871b57123b0c1e385471a484f8f",
-      "trial-sets/P-002/record-2.json": "sha256:3b0b7d6c7fe432d3ee0f991841fd40592fa2a83e31b9af335486cc385c7382f1",
-      "trial-sets/P-002/record-3.json": "sha256:54f1df100a227af61a782643fbe656be642a2cd8075cb661e8d5b18431b95eed"
+      "trial-sets/P-001/record-1.json": "sha256:b49d1150b551ef4a4825e57cb751219ccb5bc4d64e0484dbef525305a18bb39d",
+      "trial-sets/P-001/record-2.json": "sha256:c0dbff0cd542ed5dd8480af0eed021c6b79e85d40ee4e7e7d79fcd2157f4bc47",
+      "trial-sets/P-001/record-3.json": "sha256:11d6d6a76a57f6ef230fd8b3f319fae0c8bbd7ee2720cb8544b96b38d56cdf4e",
+      "trial-sets/P-002/record-1.json": "sha256:0861a1af609fc84d13d36fbe24251b12adb0d410f99e3b7d73a0a5e95891e747",
+      "trial-sets/P-002/record-2.json": "sha256:3ace49cc3ccd90ba404382b5d8ee7b0b44557ec8f6e9f42a077d71305bf34bb6",
+      "trial-sets/P-002/record-3.json": "sha256:e05c9919341455b7119c348210297d426709f8c39df27778958c5e47f30c145e"
     },
     "isolationManifests": {
-      "P-001": "sha256:09a1a67930e3b7b0c36ddaa6bd4b9d59454bc4b387d240e3b18e2e72f97b5029",
-      "P-002": "sha256:7884cb1b1c9a4e5afddfa58d539b0f6ba569cd0c0ab040aa46ebbb9581672a3b"
+      "P-001": "sha256:1a203a880dcbaa10613f8a20f607ab00a606ae392676f1f1435c16f7bcdc780b",
+      "P-002": "sha256:6edc39999162494f402c431109f28bc9468386a0ff8ccc5d869f5c4938f28667"
     }
   },
   "contractDigest": "sha256:3270d3236c9e14e97c4b487a08fbc87f4340e10f9098b20eed6d527ad376f51b",
@@ -188,12 +189,12 @@
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-04T12:46:42.461Z",
-  "durationMs": 2718,
+  "startedAt": "2026-10-05T00:26:36.955Z",
+  "durationMs": 3279,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261004T124642952Z-9a9c88f5"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T002637506Z-c07ad017"
   }
 }

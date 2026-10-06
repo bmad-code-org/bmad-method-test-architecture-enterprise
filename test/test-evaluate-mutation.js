@@ -406,7 +406,11 @@ async function checkGitTarget() {
     witness?.workspace === 'mutated:M-001' && witness?.cwd === run.workspaces['mutated:M-001'],
     `the witness leg ran in ${witness?.workspace} (${witness?.cwd}); expected the mutated workspace ${run.workspaces['mutated:M-001']}`,
   );
-  check(run.workspaces['mutated:M-001'] !== run.workspaces.pristine, 'the mutated and pristine workspaces are one directory');
+  // run.json records each workspace in its neutral form (`<workspace>`), so the two are told apart by label; the witness's own stdout names the mutated digest below.
+  check(
+    ['pristine', 'mutated:M-001'].every((label) => run.workspaces[label] === '<workspace>'),
+    `run.json records the workspaces as ${JSON.stringify(run.workspaces)}; expected pristine and mutated:M-001, each as <workspace>`,
+  );
   check(
     stubField(witness?.observation?.stdout?.value, 'digest') === rollback.mutatedDigest,
     "the witness leg's own stdout does not name the mutated digest",

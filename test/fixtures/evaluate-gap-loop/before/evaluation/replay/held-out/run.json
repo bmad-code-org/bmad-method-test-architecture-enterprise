@@ -17,11 +17,11 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-6fb23675-b910-4bf1-9236-aaf3f7cc8e74/target",
-    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-1a0905bd-083b-4dc7-8910-c1403e43ac45/target",
-    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-073964c7-9575-41ca-b53c-51d51adcc494/target",
-    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-ed74a306-0660-4353-b674-7a0acb6f8f05/target",
-    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-1832ca81-cc56-4cd8-bdc3-87bb60fc5bd5/target"
+    "pristine": "<workspace>",
+    "mutated:M-005": "<workspace>",
+    "mutated:M-006": "<workspace>",
+    "mutated:M-007": "<workspace>",
+    "mutated:M-008": "<workspace>"
   },
   "confinement": "seatbelt",
   "hostNetwork": [],

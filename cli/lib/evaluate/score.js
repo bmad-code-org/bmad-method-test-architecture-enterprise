@@ -136,6 +136,7 @@ const {
   removeScratchDirectory,
 } = require('./workspace');
 const { writePartitionViews } = require('./partition');
+const { textNeutralizer } = require('./recorded-paths');
 const { phaseOf, writeInterpretation } = require('./interpret');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -625,6 +626,8 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     let stageFailed = false;
     try {
       const result = runEngineStage('score', args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(recordRelative),
         writer,
@@ -903,6 +906,8 @@ async function strengthAggregateStep({
     let result;
     try {
       result = runEngineStage(AGGREGATE_STAGE, args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(callRelative),
         writer,
@@ -984,7 +989,9 @@ async function strengthAggregateStep({
     // The held writer refused a file after the floors were staged: the summary keeps what was written and the run exits 12.
     log(`strength aggregate: ${error.message}`);
     const call = summary.call !== null && writer.has(callRelative) ? summary.call : null;
-    return { summary: { ...summary, call, reason: error.message }, exitCode: null, stageFailed: true, integrity: error.message };
+    // The summary is a record `compare --accept` copies, so the refusal's reason names the run's paths in the neutral forms.
+    const reason = textNeutralizer({ folder })(error.message);
+    return { summary: { ...summary, call, reason }, exitCode: null, stageFailed: true, integrity: error.message };
   } finally {
     releaseScratchDirectory(scratch, staging);
   }

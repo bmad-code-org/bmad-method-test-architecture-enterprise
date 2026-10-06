@@ -2,7 +2,7 @@
   "legId": "preflight-control-observe",
   "sequence": 3,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-e4208f00-055e-4751-85fc-4148409963de/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "preflight-control-observe",
     "interfaceId": "review-cli",

@@ -15,13 +15,13 @@
     "degenerateResponse": "Flag every valid test as disabled.",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20261004T191657799Z-2abe4791/qualification/P-015/naive-oracle-satisfied.json",
+      "path": "runs/20261005T003249653Z-94a4d2b7/qualification/P-015/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:bf617603fb19bb28a60c6b42003c1f88ab3c711743040c18b74e88e13208fad0"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20261004T191657799Z-2abe4791/qualification/P-015/disciplined-oracle-rejected.json",
+      "path": "runs/20261005T003249653Z-94a4d2b7/qualification/P-015/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:e6713b796a5de25ea259b37433e80f68a3897fa7df2d120aba553501665b6a53"
     }

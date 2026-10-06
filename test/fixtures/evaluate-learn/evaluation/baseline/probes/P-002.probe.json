@@ -23,13 +23,13 @@
     "expectedObservableFailure": "stdout is Summary for List pantry: apples followed by a newline; the exact summary oracle fails.",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261005T003540834Z-9af645f6/qualification/P-002/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:726bcd2da32ad4536615e1e1648d445888dad095bb2052ab0ab449e6e463b162"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/mutated-fail.json",
+      "path": "runs/20261005T003540834Z-9af645f6/qualification/P-002/mutated-fail.json",
       "privateRef": null,
       "digest": "sha256:45044f005f4b3376d7882fdd8f4ca370015e14f357672efc4fa067fc34f14094"
     },
@@ -45,7 +45,7 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261004T191416879Z-8cc331b3/qualification/P-002/mutated-fail.json",
+          "path": "runs/20261005T003540834Z-9af645f6/qualification/P-002/mutated-fail.json",
           "privateRef": null,
           "digest": "sha256:45044f005f4b3376d7882fdd8f4ca370015e14f357672efc4fa067fc34f14094"
         }
