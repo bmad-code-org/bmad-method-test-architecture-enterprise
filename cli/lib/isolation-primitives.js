@@ -13,6 +13,10 @@
  *   probe        whether a mechanism confines a trivial process on this host
  *                (`TRIVIAL_PROCESS` is what each caller starts under it)
  *
+ * It also holds the step every spawn of the evaluation layer takes (Story 1.88).
+ * `freshPrefix` asks a prefix that carries a `refresh` for the prefix as it is at the spawn.
+ * `launchPrefix` adds the guard's `settle`, the cleanup a spawn site calls when the process it started has ended.
+ *
  * Every caller keeps its own error class and message text: the checks here
  * answer, and the caller builds the error it has always thrown.
  * The `test:isolation-primitives` script fails when a caller defines one of these
@@ -117,13 +121,43 @@ function probeTrivialProcess({ vector, spawn = {} }) {
   return { ok: true };
 }
 
+/**
+ * The spawn prefix a process starts through, as it is when the process starts.
+ * A prefix that carries a `refresh` function (the evaluation layer's under Bubblewrap, whose list of hidden sockets goes stale) is asked for a new one.
+ * Every other prefix is returned as it is.
+ * A spawn site calls this just before it starts the process, so the vector it hands the mechanism is as old as the spawn.
+ *
+ * @param {string[]|undefined} spawnPrefix
+ * @returns {string[]}
+ */
+function freshPrefix(spawnPrefix) {
+  return typeof spawnPrefix?.refresh === 'function' ? spawnPrefix.refresh() : (spawnPrefix ?? []);
+}
+
+/**
+ * The spawn prefix a process starts through and the step that closes its start (Story 1.88).
+ * `prefix` is `freshPrefix`'s answer.
+ * A prefix that carries a `guard` function (the evaluation layer's under Bubblewrap, whose masks can leave an empty file on the host) has it called now, right before the spawn, and `settle` is what it returned.
+ * A spawn site calls `settle` in a `finally` once the process has ended however it ended, so no site can start a process and skip the cleanup.
+ * `settle` does nothing for a prefix with no guard, and a second call does nothing.
+ *
+ * @param {string[]|undefined} spawnPrefix
+ * @returns {{ prefix: string[], settle: () => void }}
+ */
+function launchPrefix(spawnPrefix) {
+  const prefix = freshPrefix(spawnPrefix);
+  return { prefix, settle: typeof prefix.guard === 'function' ? prefix.guard().settle : () => {} };
+}
+
 module.exports = {
   PROBE_TIMEOUT_MS,
   TRIVIAL_PROCESS,
   assertProfileSafePath,
   executableOnPath,
+  freshPrefix,
   isInside,
   isProfileSafePath,
+  launchPrefix,
   probeTrivialProcess,
   stderrTail,
 };

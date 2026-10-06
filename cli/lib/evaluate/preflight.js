@@ -137,6 +137,7 @@ const {
   removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadMaskRecords,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   journalDirectory,
@@ -683,6 +684,7 @@ async function pipeline(
     const invocationId = newInvocationId();
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
+    reclaimDeadMaskRecords({ log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
     const gameability = gameabilityProbes(folder, { view, selectedProbeIds });

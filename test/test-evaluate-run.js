@@ -170,14 +170,16 @@ const {
   startEgress,
 } = require('../cli/lib/evaluate/confinement-egress');
 const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
-const { executableOnPath } = require('../cli/lib/isolation-primitives');
+const { executableOnPath, freshPrefix, launchPrefix } = require('../cli/lib/isolation-primitives');
 const {
   BUBBLEWRAP_ARGUMENT_LIMIT,
   MAX_HIDDEN_SOCKETS,
   PINNED_SOCKETS,
   SCAN_DIRECTORIES,
   hostPathSockets: listedHostSockets,
+  isServedSocket,
   listHostSockets,
+  registerServedSocket,
   socketBudget,
   socketTablePaths,
 } = require('../cli/lib/evaluate/host-sockets');
@@ -227,11 +229,17 @@ const {
   gitAccessOf,
   journalDirectory,
   makePrivateParent,
+  reclaimDeadMaskRecords,
   reclaimDeadWorkspaces,
   removeWorkspace,
 } = require('../cli/lib/evaluate/workspace');
+const { CLOCK_SLACK_MS, removePlaceholders, startMaskGuard, sweepMaskRecords } = require('../cli/lib/evaluate/mask-guard');
+const { HttpPortError, probeHttpPort } = require('../cli/lib/evaluate/http-target');
+const { openBridge } = require('../cli/lib/evaluate/bridge');
 const { combinedExit } = require('../cli/lib/evaluate/score');
-const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
+const { agentReplyAndUsage, observeAgentVersion } = require('../cli/lib/agent-adapters');
+const { observeFrameworks } = require('../cli/lib/evaluate/command-evaluator');
+const { runAgent, runAgentAsync } = require('../cli/lib/run-agent');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
 const { STAGING } = require('../cli/lib/evaluate/recorded-paths');
 const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-argv');
@@ -4870,6 +4878,43 @@ async function checkAuditRefusals() {
 }
 
 /**
+ * A burst of reads audited in up to `attempts` fresh sandboxes, and what is wrong with it, as a list of failures (Story 1.88, review round 3).
+ * `observe()` runs one sandbox and returns its `mounts` and its audit `channel` (`auditChannel()`).
+ * The floor is judged on the best sandbox, and every path any sandbox lists must satisfy `isBurstFile`.
+ * An attempt under the floor is retried only when the audit reported the loss (`channelEntry` reads the log's loss event and the canaries it delivered fewer than it sent, as a run's summary does).
+ * An attempt under the floor with no loss reported is a failure at once and is not retried, since the audit then lost events without saying so.
+ */
+async function judgeBurst({ floor, attempts, observe, wait, isBurstFile }) {
+  const counts = [];
+  const stray = [];
+  let unreported = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const { mounts, channel } = await observe();
+    counts.push(mounts.length);
+    stray.push(...mounts.filter((entry) => !isBurstFile(entry)));
+    if (mounts.length >= floor) break;
+    if (channelEntry({ conditionArm: 'burst' }, { trialIndex: 1, auditChannel: channel }).completeness !== 'lossy') {
+      unreported = { listed: mounts.length, channel };
+      break;
+    }
+    await wait();
+  }
+  const failures = [];
+  if (stray.length > 0)
+    failures.push(`a burst of 2000 reads listed paths that are no file of the burst: ${JSON.stringify(stray.slice(0, 5))}`);
+  if (unreported !== null) {
+    failures.push(
+      `a burst of 2000 reads listed ${unreported.listed} paths, under the floor of ${floor}, and the audit reported no loss (${JSON.stringify(unreported.channel)}); a log that drops events without saying so is the defect the audit's loss signal exists to catch`,
+    );
+  } else if (Math.max(...counts) < floor) {
+    failures.push(
+      `a burst of 2000 reads listed ${JSON.stringify(counts)} paths in ${counts.length} sandbox(es), each with the loss reported; expected at least ${floor} in one`,
+    );
+  }
+  return { counts, failures };
+}
+
+/**
  * The real mechanism's audit over every kind of process this host runs (Story 1.60): a shell script's own processes and a
  * process started with an empty environment are seen as a Node process is; what a clean script reads, a path declared in
  * `systemPaths`, a path that does not exist, a metadata probe are not reported, the execution of an ungranted binary is; two sandboxes
@@ -4911,6 +4956,15 @@ async function checkAuditMechanism() {
   const mountsOf = async ({ sandbox }) => {
     try {
       return await sandbox.observedMounts();
+    } finally {
+      sandbox.release();
+    }
+  };
+  // The mounts with the audit's own account of how complete they are, read before the sandbox is released.
+  const observeWithChannel = async ({ sandbox }) => {
+    try {
+      const mounts = await sandbox.observedMounts();
+      return { mounts, channel: sandbox.auditChannel() };
     } finally {
       sandbox.release();
     }
@@ -5031,20 +5085,28 @@ async function checkAuditMechanism() {
   });
 
   // A burst of reads: thousands of distinct ungranted files in one process are reported, most of them or all.
+  // The kernel's log drops whole stretches of a burst while other work saturates the log (measured: 9 of 2,000 reported with 40 audited runs at once), so the floor is judged on the best of up to three fresh sandboxes.
+  // A sandbox under the floor is retried only when the audit reported the loss, and one that lost events without saying so fails the check (`judgeBurst`).
+  // Every path any sandbox reports must be a file of the burst, so that assertion is judged on every attempt.
   const files = path.join(outside, 'burst');
   fs.mkdirSync(files);
   for (let index = 0; index < 2000; index += 1) fs.writeFileSync(path.join(files, `f${index}.txt`), 'x');
-  const burst = await open();
-  await burst.run(process.execPath, [
-    '-e',
-    `const fs = require('node:fs'); for (let i = 0; i < 2000; i += 1) fs.readFileSync(${JSON.stringify(files)} + '/f' + i + '.txt');`,
-  ]);
-  const burstMounts = await mountsOf(burst);
-  check(
-    (process.platform === 'darwin' ? burstMounts.length >= 500 : burstMounts.length === 2000) &&
-      burstMounts.every((entry) => entry.startsWith(files)),
-    `a burst of 2000 reads listed ${burstMounts.length} paths; expected most of them (the kernel's log loses some of a burst on macOS)`,
-  );
+  const burst = await judgeBurst({
+    floor: process.platform === 'darwin' ? 500 : 2000,
+    attempts: process.platform === 'darwin' ? 3 : 1,
+    observe: async () => {
+      const audited = await open();
+      await audited.run(process.execPath, [
+        '-e',
+        `const fs = require('node:fs'); for (let i = 0; i < 2000; i += 1) fs.readFileSync(${JSON.stringify(files)} + '/f' + i + '.txt');`,
+      ]);
+      return observeWithChannel(audited);
+    },
+    // The loss comes in windows of a second or two, so the next attempt waits one out.
+    wait: () => new Promise((resolve) => setTimeout(resolve, 1500)),
+    isBurstFile: (entry) => entry.startsWith(files),
+  });
+  check(burst.failures.length === 0, burst.failures.join('; '));
 }
 
 /**
@@ -5316,6 +5378,62 @@ async function checkAuditChannelUnits() {
   check(lostCanaryNote(entries.slice(0, 1)) === '', 'a run whose trials lost no canary got a note on lost canaries');
   check(lostCanaryNote([]) === '', 'a run with no audited trial got a note on lost canaries');
 
+  // A burst under the floor is retried only when the audit reported the loss (`judgeBurst`), on any host through stand-ins for the sandbox.
+  const burstFloor = 500;
+  const burstFile = (entry) => entry.startsWith('/burst/');
+  const listed = (count, channel) => ({ mounts: Array.from({ length: count }, (_, index) => `/burst/f${index}.txt`), channel });
+  const judged = async (observations, attempts = 3) => {
+    let calls = 0;
+    const result = await judgeBurst({
+      floor: burstFloor,
+      attempts,
+      observe: async () => observations[Math.min(calls++, observations.length - 1)],
+      wait: async () => {},
+      isBurstFile: burstFile,
+    });
+    return { ...result, calls };
+  };
+  const silent = await judged([listed(100, counts(10, 10)), listed(900, counts(10, 10))]);
+  check(
+    silent.calls === 1 && silent.failures.length === 1 && silent.failures[0].includes('the audit reported no loss'),
+    `an attempt of 100 paths under the floor with every canary delivered and no loss event made ${silent.calls} attempt(s) and failed ${JSON.stringify(silent.failures)}; expected one attempt and the failure that the audit reported no loss`,
+  );
+  for (const [what, channel] of [
+    ['a loss event of the log', counts(10, 10, true)],
+    ['a canary the log did not deliver', counts(10, 9)],
+  ]) {
+    const retried = await judged([listed(100, channel), listed(900, counts(10, 10))]);
+    check(
+      retried.calls === 2 && retried.failures.length === 0 && retried.counts.join(',') === '100,900',
+      `an attempt under the floor with ${what} made ${retried.calls} attempt(s) and failed ${JSON.stringify(retried.failures)}; expected a retry that passes on 900 paths`,
+    );
+  }
+  const exhausted = await judged([
+    listed(100, counts(10, 9)),
+    listed(200, counts(10, 9)),
+    listed(300, counts(10, 9)),
+    listed(900, counts(10, 10)),
+  ]);
+  check(
+    exhausted.calls === 3 && exhausted.failures.length === 1 && exhausted.failures[0].includes('with the loss reported'),
+    `three attempts under the floor that each reported the loss made ${exhausted.calls} attempt(s) and failed ${JSON.stringify(exhausted.failures)}; expected three attempts and the failure naming the reported loss`,
+  );
+  const lateSilent = await judged([listed(100, counts(10, 9)), listed(200, counts(10, 10)), listed(900, counts(10, 10))]);
+  check(
+    lateSilent.calls === 2 && lateSilent.failures.length === 1 && lateSilent.failures[0].includes('the audit reported no loss'),
+    `a retry whose own attempt came in under the floor with no loss reported made ${lateSilent.calls} attempt(s) and failed ${JSON.stringify(lateSilent.failures)}; expected two attempts and the failure that the audit reported no loss`,
+  );
+  const strayed = await judged([
+    {
+      mounts: ['/burst/f1.txt', '/elsewhere/file', ...Array.from({ length: 600 }, (_, index) => `/burst/g${index}.txt`)],
+      channel: counts(10, 10),
+    },
+  ]);
+  check(
+    strayed.failures.length === 1 && strayed.failures[0].includes('/elsewhere/file'),
+    `an attempt that listed a path outside the burst failed ${JSON.stringify(strayed.failures)}; expected the failure naming it`,
+  );
+
   const folder = tempDir('audit-channel-folder');
   const workspace = tempDir('audit-channel-workspace');
   const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
@@ -5409,34 +5527,83 @@ async function checkAuditChannelUnits() {
         channelEntry(arm, { trialIndex: 1, auditChannel: unspawnable.channel }).completeness === 'lossy',
       `canaries that could not be spawned for 600 ms were recorded as ${JSON.stringify(unspawnable.channel)}; expected them counted as sent and undelivered, so lossy`,
     );
-    // A target that freezes the runtime for two seconds (a stop signal to its parent) leaves no tick to run, so the canaries
-    // the cadence called for in that time count as sent and undelivered.
-    // A parent that resumes a stopped child (a shell's job control) undoes the freeze at once, so the case measures the
-    // largest gap between two ticks of its own timer and judges the gap rule only when the freeze happened.
-    let largestGapMs = 0;
-    const frozen = await read('/usr/bin/log', {
-      waitMs: 0,
-      act: async (sandbox) => {
-        let last = process.hrtime.bigint();
-        const probe = setInterval(() => {
-          const now = process.hrtime.bigint();
-          largestGapMs = Math.max(largestGapMs, Number(now - last) / 1e6);
-          last = now;
-        }, 10);
-        const wrapped = sandbox.wrap('/bin/sh', ['-c', 'kill -STOP $PPID; sleep 2; kill -CONT $PPID']);
-        await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
-        clearInterval(probe);
-      },
-    });
+    // A runtime frozen for two seconds has no tick to run, so the canaries the cadence called for in that time count as sent and undelivered.
+    // The runtime side is a child process this case starts and freezes by its PID, so nothing that launched the suite can resume it.
+    // The case's own timers keep running while only the child stops, and the child reports its own largest timer gap as proof of the freeze.
+    const frozenRuntime = tempDir('audit-channel-frozen');
+    const runtime = spawn(
+      process.execPath,
+      [
+        '-e',
+        `const { selectConfinement, targetSandbox } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement.js'))});
+         const [folder, workspace, directory] = process.argv.slice(1);
+         const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+         const sandbox = targetSandbox({
+           confinement: { ...confinement, observer: { executable: '/usr/bin/log' } },
+           workspace,
+           audit: { directory },
+         });
+         let last = process.hrtime.bigint();
+         let largestGapMs = 0;
+         const sample = () => {
+           const now = process.hrtime.bigint();
+           largestGapMs = Math.max(largestGapMs, Number(now - last) / 1e6);
+           last = now;
+         };
+         setInterval(sample, 10);
+         process.stdin.once('data', async () => {
+           sample();
+           const mounts = await sandbox.observedMounts();
+           process.stdout.write(JSON.stringify({ channel: sandbox.auditChannel(), largestGapMs, mounts }) + '\\n');
+           sandbox.release();
+           process.exit(0);
+         });
+         sandbox.start().then(() => process.stdout.write('ready\\n'));`,
+        frozenRuntime,
+        workspace,
+        fs.realpathSync(tempDir('audit-channel')),
+      ],
+      { env: BASE_ENV, stdio: ['pipe', 'pipe', 'inherit'] },
+    );
+    let said = '';
+    const speaks = (text) =>
+      new Promise((resolve) => {
+        const look = () => {
+          if (said.includes(text)) resolve(true);
+        };
+        runtime.stdout.on('data', (chunk) => {
+          said += chunk;
+          look();
+        });
+        runtime.once('close', () => resolve(false));
+        look();
+      });
+    let frozen = null;
+    try {
+      const ready = await speaks('ready\n');
+      check(ready, 'the runtime child of the frozen-runtime case ended before its sandbox started');
+      if (ready) {
+        runtime.kill('SIGSTOP');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        runtime.kill('SIGCONT');
+        const reported = new Promise((resolve) => runtime.once('close', resolve));
+        runtime.stdin.write('end\n');
+        await reported;
+        frozen = JSON.parse(said.slice(said.indexOf('{')));
+      }
+    } finally {
+      runtime.kill('SIGKILL');
+    }
     check(
-      largestGapMs >= 1500,
-      `the runtime was not frozen (its largest timer gap was ${Math.round(largestGapMs)} ms): the parent of this run resumed it, as a shell's job control does, so the gap rule was not exercised; run the suite directly from a shell prompt`,
+      frozen !== null && frozen.largestGapMs >= 1500,
+      `the frozen runtime's largest timer gap was ${Math.round(frozen?.largestGapMs ?? 0)} ms; expected the 2-second stop the case sent to show as a gap of at least 1500 ms`,
     );
     check(
-      frozen.channel.canariesSent >= 20 &&
+      frozen !== null &&
+        frozen.channel.canariesSent >= 20 &&
         frozen.channel.canariesDelivered < frozen.channel.canariesSent &&
         channelEntry(arm, { trialIndex: 1, auditChannel: frozen.channel }).completeness === 'lossy',
-      `a runtime frozen for 2 seconds was recorded as ${JSON.stringify(frozen.channel)}; expected the canaries it missed counted as sent and undelivered, so lossy`,
+      `a runtime frozen for 2 seconds was recorded as ${JSON.stringify(frozen?.channel)}; expected the canaries it missed counted as sent and undelivered, so lossy`,
     );
     // No more than `CANARY_IN_FLIGHT` canary reads run at once on a host too slow to finish them, and a tick the cap skips
     // counts as a canary sent and undelivered.
@@ -7799,6 +7966,15 @@ async function checkSharedStateAcrossSessions() {
 }
 
 /**
+ * The evaluation layer's Bubblewrap vector with no socket to hide (Story 1.88).
+ * The layer lists the host's sockets for every start, and a case that reads the rest of the vector must not depend on what the host serves.
+ * The vector carries the private root's read-only bind whatever the list holds.
+ */
+function bubblewrapLayer(confinement) {
+  return layerPrefix(confinement, { hostSockets: () => [] });
+}
+
+/**
  * The vectors of the evaluation layer on any host (Story 1.112): the Seatbelt profile denies a write under the project's
  * common git directory and under the hooks directory `core.hooksPath` names outside it, beside the evaluation folder, and the
  * Bubblewrap vector binds both read-only after `--bind / /`, so a layer process cannot plant a hook, change the configuration or
@@ -7827,7 +8003,7 @@ function checkLayerGitDirectoryUnits() {
     hooksProfile.includes(`(deny file-write* (subpath "${folder}") (subpath "${gitDirectory}") (subpath "${hooksDirectory}"))`),
     `the Seatbelt layer profile does not deny a write under the hooks directory beside the git directory: ${JSON.stringify(hooksProfile)}`,
   );
-  const vector = layerPrefix({ ...bubblewrap, gitDirectory });
+  const vector = bubblewrapLayer({ ...bubblewrap, gitDirectory });
   const bound = vector.indexOf('--ro-bind', vector.indexOf('--bind') + 1);
   const readOnlyBind = (arguments_, directory) =>
     arguments_.findIndex(
@@ -7838,7 +8014,7 @@ function checkLayerGitDirectoryUnits() {
     vector[vector.indexOf('--bind') + 1] === '/' && bound > vector.indexOf('--bind') && gitBind > bound && gitBind < vector.indexOf('--'),
     `the Bubblewrap layer vector does not bind the git directory read-only after the evaluation folder and --bind / /: ${vector.join(' ')}`,
   );
-  const hooksVector = layerPrefix({ ...bubblewrap, gitDirectory, hooksDirectory });
+  const hooksVector = bubblewrapLayer({ ...bubblewrap, gitDirectory, hooksDirectory });
   const hooksBind = readOnlyBind(hooksVector, hooksDirectory);
   check(
     hooksBind > readOnlyBind(hooksVector, gitDirectory) &&
@@ -7856,7 +8032,7 @@ function checkLayerGitDirectoryUnits() {
     ),
     `the Seatbelt layer profile does not deny a write to the checkout's .git file beside the directories: ${JSON.stringify(gitFileProfile)}`,
   );
-  const gitFileVector = layerPrefix({ ...bubblewrap, gitDirectory, gitFile });
+  const gitFileVector = bubblewrapLayer({ ...bubblewrap, gitDirectory, gitFile });
   const gitFileBind = readOnlyBind(gitFileVector, gitFile);
   check(
     gitFileBind > readOnlyBind(gitFileVector, gitDirectory) &&
@@ -7865,14 +8041,13 @@ function checkLayerGitDirectoryUnits() {
     `the Bubblewrap layer vector does not bind the checkout's .git file read-only after the git directory and --bind / /: ${gitFileVector.join(' ')}`,
   );
   check(
-    !layerPrefix({ ...seatbelt, gitDirectory })
-      .at(-1)
-      .includes('(literal') && !layerPrefix({ ...bubblewrap, gitDirectory }).includes(gitFile),
+    !/\(deny file-write\*[^\n]*\(literal/.test(layerPrefix({ ...seatbelt, gitDirectory }).at(-1)) &&
+      !bubblewrapLayer({ ...bubblewrap, gitDirectory }).includes(gitFile),
     'a layer vector of a checkout whose .git is a directory names a .git file',
   );
   for (const [name, bare] of [
     ['Seatbelt', layerPrefix(seatbelt).at(-1)],
-    ['Bubblewrap', layerPrefix({ ...bubblewrap, gitDirectory: null, hooksDirectory: null }).join(' ')],
+    ['Bubblewrap', bubblewrapLayer({ ...bubblewrap, gitDirectory: null, hooksDirectory: null }).join(' ')],
   ]) {
     check(
       !bare.includes('.git') && !bare.includes('.husky'),
@@ -7937,13 +8112,13 @@ function checkLayerGitDirectoryUnits() {
       absentProfile.includes(`(subpath "${expected}")`),
       `the Seatbelt layer profile does not deny the absent ${label} hooks directory: ${JSON.stringify(absentProfile)}`,
     );
-    const absentVector = layerPrefix({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
+    const absentVector = bubblewrapLayer({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
     check(
       !absentVector.includes(expected) && absentVector.includes(absent.gitDirectory),
       `the Bubblewrap layer vector binds the absent ${label} hooks directory, or drops the git directory: ${absentVector.join(' ')}`,
     );
     fs.mkdirSync(expected, { recursive: true });
-    const created = layerPrefix({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
+    const created = bubblewrapLayer({ ...bubblewrap, gitDirectory: absent.gitDirectory, hooksDirectory: absent.hooksDirectory });
     check(
       readOnlyBind(created, expected) > 0,
       `the Bubblewrap layer vector does not bind the ${label} hooks directory once it exists: ${created.join(' ')}`,
@@ -11898,7 +12073,7 @@ async function checkNetworkNamespaceUnits() {
     flags === 1 && wrapped.args.indexOf('--unshare-net') < wrapped.args.indexOf('--ro-bind') && !wrapped.args.includes('--bridge'),
     `a Bubblewrap target's vector holds --unshare-net ${flags} time(s) and ${wrapped.args.includes('--bridge') ? 'a' : 'no'} bridge: ${wrapped.args.join(' ')}`,
   );
-  const layer = layerPrefix(bubblewrap);
+  const layer = bubblewrapLayer(bubblewrap);
   check(
     !layer.includes('--unshare-net'),
     `the evaluation layer's vector holds --unshare-net, which cuts off the host's loopback: ${layer.join(' ')}`,
@@ -14931,11 +15106,6 @@ async function checkPathSocketUnits() {
       hostSockets: () => ((seatbeltAsked = true), []),
     }).wrap('/bin/true', []);
     check(!seatbeltAsked, 'a Seatbelt call asked for the host sockets, which only Bubblewrap hides');
-    const layer = layerPrefix(bubblewrap);
-    check(
-      !layer.includes('/dev/null') && !layer.includes('--args'),
-      "the evaluation layer's vector hides a socket, which only a target's does",
-    );
 
     // The call that is made again.
     const stubs = tempDir('masked-start-stubs');
@@ -17053,8 +17223,44 @@ function checkBridgeReference() {
       ['the path socket units'],
     ],
     [
-      "The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.",
-      ['the path socket units'],
+      "The evaluation layer's processes (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge and the evaluation's HTTP port) cannot connect to a path-based Unix socket of the host: under Bubblewrap `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the runtime lists for a target's call answer `ECONNREFUSED`, since each start of a layer process mounts an empty device file over each one.",
+      ['the layer path socket route', 'the layer path socket units'],
+    ],
+    [
+      "The socket the runtime serves a layer process stays connectable: the bridge a sealed-brief agent's relay connects to, beneath the user's private root `/tmp/tea-evaluate-p<uid>`.",
+      ['the layer path socket route', 'the layer path socket units', 'the Seatbelt layer socket units', 'the Seatbelt layer socket route'],
+    ],
+    [
+      "A socket another process moves into the private root is another file, and a layer process that moves a host socket there cannot connect to it; a Bubblewrap layer process sees the root read-only and its own run's private parent writable, so it cannot write a record of the runtime's.",
+      ['the layer path socket route', 'the layer path socket units', 'the Seatbelt layer socket units', 'the Seatbelt layer socket route'],
+    ],
+    [
+      "Each mount over a socket follows a bind of the socket's own path onto itself, since the layer's `/` is a writable bind of the host's and a mount over a path that went away makes Bubblewrap create an empty file there: a socket that went away before Bubblewrap starts stops the start and makes no file, and every start lists the sockets again.",
+      ['the layer path socket route', 'the layer path socket units'],
+    ],
+    [
+      "A socket its owner removes while Bubblewrap mounts it, between Bubblewrap's check of every bind source and the mask's mount, can leave an empty file and its directory chain at that path for as long as the layer process runs, and the file is no route to anything.",
+      ['the layer path socket route', 'the layer path socket units'],
+    ],
+    [
+      'The runtime removes the file and the directories Bubblewrap made when the process has ended, and the next run removes them for a run that was killed before it could, and it removes nothing else: a path that stood before the process started, a socket the owner made again, a file with content, a file with a write bit or another owner, and a directory with an entry stay.',
+      ['the layer path socket units', 'the layer path socket recovery'],
+    ],
+    [
+      "A socket a process binds after a layer process started stays reachable under Bubblewrap, one the layer's own processes bind included, and a start whose list does not fit the room its command leaves (six arguments for each socket, with 1,000 held back for the command) is refused, since the layer has no record that could name a socket left reachable.",
+      ['the layer path socket route', 'the layer path socket units'],
+    ],
+    [
+      "A macOS Seatbelt process of the layer cannot connect to a path-based Unix socket outside the bridge's directory either: `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names and every other socket file answer `EPERM`, one bound after the process started included, while the resolver `/var/run/mDNSResponder` and the log socket `/var/run/syslog` stay connectable.",
+      ['the Seatbelt layer socket units', 'the Seatbelt layer socket route'],
+    ],
+    [
+      "The profile also refuses every write to the private root, to each entry directly in it and to any path of the bridge's shape, so a layer process cannot rename a host directory that holds a socket to a path the connect rule allows, and cannot write a record that the runtime's recovery reads.",
+      ['the Seatbelt layer socket units', 'the Seatbelt layer socket route'],
+    ],
+    [
+      "A layer process on macOS that serves a Unix socket outside the bridge's directory cannot connect to it; a loopback port is its route to a service of its own.",
+      ['the Seatbelt layer socket units', 'the Seatbelt layer socket route'],
     ],
     [
       "A macOS Seatbelt target cannot connect to a path-based Unix socket of the host outside its grants: `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names, an agent socket under `/tmp` and every other socket file answer `EPERM`, since the profile denies every `connect()` to a socket path and then allows the grants back.",
@@ -17178,6 +17384,38 @@ function checkBridgeReference() {
       confinementSection.includes('`hostSocketTruncation`'),
     "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
   );
+  // Story 1.88: the sentence that said the evaluation layer's processes keep every socket of the host is gone.
+  // The sentences that replace it name the sockets the layer's processes cannot connect to and the ones they reach.
+  const staleLayerSockets = (text) => {
+    const section = (text.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+    return (
+      section.includes("The evaluation layer's processes keep every socket of the host") ||
+      ![
+        'cannot connect to a path-based Unix socket of the host: under Bubblewrap `/var/run/docker.sock`',
+        'The socket the runtime serves a layer process stays connectable',
+        'a socket that went away before Bubblewrap starts stops the start and makes no file, and every start lists the sockets again',
+        'can leave an empty file and its directory chain at that path for as long as the layer process runs',
+        'The runtime removes the file and the directories Bubblewrap made when the process has ended',
+        'A socket a process binds after a layer process started stays reachable under Bubblewrap',
+        "A macOS Seatbelt process of the layer cannot connect to a path-based Unix socket outside the bridge's directory either",
+      ].every((claim) => section.includes(claim))
+    );
+  };
+  check(
+    !staleLayerSockets(reference),
+    "the reference's confinement section still says the evaluation layer's processes keep every socket of the host, or does not name the sockets they cannot connect to and the ones they reach",
+  );
+  const oldLayerSentence =
+    "The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.";
+  check(
+    staleLayerSockets(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldLayerSentence}\n`)),
+    'the check on the evaluation layer sentences passed with the old sentence in the confinement section',
+  );
+  check(
+    staleLayerSockets(reference.replace('The socket the runtime serves a layer process stays connectable', 'A socket stays connectable')),
+    'the check on the evaluation layer sentences passed with the sentence on the private root removed',
+  );
+
   // Story 1.87: the macOS sentence that said a Seatbelt target reaches a path-based socket outside the private root is gone.
   // The sentences that replace it name what the profile closes and what it reaches.
   const staleMacOsSockets = (text) => {
@@ -17260,6 +17498,7 @@ const SEATBELT_SOCKET_DENIAL = '(deny network-outbound (remote unix-socket))';
 
 /**
  * Whether the network rules of a Seatbelt profile let a `connect()` reach the socket whose real path is `socketPath`.
+ * A `regex` route is read as the regular expression it holds, which the shapes the layer profile uses mean the same in Seatbelt and in JavaScript.
  * The profile starts from `(allow default)` and the last rule that names the socket decides, which is how Seatbelt reads it.
  * A host that cannot run Seatbelt holds the profile's text to the same reading.
  */
@@ -17268,11 +17507,12 @@ function profileAllowsSocket(profile, socketPath) {
   for (const rule of profile.split(/\n(?=\()/)) {
     const verdict = /^\((allow|deny) network-outbound\b/.exec(rule)?.[1];
     if (verdict === undefined) continue;
-    const routes = [...rule.matchAll(/\(remote unix-socket(?: \((subpath|literal) "([^"]*)"\))?\)/g)];
-    const matches = routes.some(
-      ([, kind, target]) =>
-        kind === undefined || (kind === 'literal' ? socketPath === target : socketPath === target || socketPath.startsWith(`${target}/`)),
-    );
+    const routes = [...rule.matchAll(/\(remote unix-socket(?: \((subpath|literal) "([^"]*)"\)| \(regex #"((?:[^"\\]|\\.)*)"\))?\)/g)];
+    const matches = routes.some(([, kind, target, pattern]) => {
+      if (pattern !== undefined) return new RegExp(pattern).test(socketPath);
+      if (kind === undefined) return true;
+      return kind === 'literal' ? socketPath === target : socketPath === target || socketPath.startsWith(`${target}/`);
+    });
     if (matches) allowed = verdict === 'allow';
   }
   return allowed;
@@ -17718,8 +17958,2172 @@ async function checkSeatbeltPathSocketRoute() {
       lateOwn?.early === 'refused EPERM' && lateOwn?.late === 'connected',
       `a running process connecting to a socket bound after its ready file appeared in its own workspace answered ${JSON.stringify(lateOwn)}; expected the early socket refused and the late one reached`,
     );
+    // The grants are a route only for a socket the target made there: the profile denies every write outside them, so a target cannot rename a host directory that holds a socket into one.
+    const movingDirectory = fs.mkdtempSync(path.join(outsideDirectory, 'moving-'));
+    servers.push(await listenOnSocket(path.join(movingDirectory, 'host.sock')));
+    for (const [what, destination] of [
+      ['its workspace', path.join(workspace, 'moved')],
+      ['a private directory of the call', path.join(callDirectory, 'moved')],
+    ]) {
+      const wrapped = sandbox.wrap(
+        process.execPath,
+        ['-e', RENAME_PROBE, JSON.stringify([movingDirectory, destination, 'host.sock'])],
+        [callDirectory],
+      );
+      const renamed = (await launch(wrapped)).stdout.trim();
+      check(
+        renamed === 'rename EPERM' && fs.existsSync(movingDirectory),
+        `a Seatbelt target that renamed a directory holding a host socket into ${what} got ${JSON.stringify(renamed)}; expected rename EPERM`,
+      );
+    }
   } finally {
     for (const server of servers) await closeServer(server);
+  }
+}
+
+// ---------------------------------------------------------------- Story 1.88: the evaluation layer has no route to the host's path-based sockets
+
+/** The user's private root, where the runtime serves the layer's own sockets (`/tmp/tea-evaluate-p<uid>`). */
+function layerPrivateRoot() {
+  return path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+}
+
+/**
+ * The Bubblewrap options that make a file on the host: a file, a directory or a link given to the sandbox, a bind that skips a missing source, and an overlay.
+ * The layer's vector holds none of them, so the only way it can make a file is a bind whose destination is no path it names itself (`bindsThatCanCreate`).
+ */
+const CREATING_OPTIONS = Object.freeze([
+  '--file',
+  '--bind-data',
+  '--ro-bind-data',
+  '--dir',
+  '--mkdir',
+  '--symlink',
+  '--bind-try',
+  '--ro-bind-try',
+  '--dev-bind-try',
+  '--overlay',
+  '--tmp-overlay',
+  '--ro-overlay',
+  '--copy-file',
+]);
+
+/**
+ * The destinations of a Bubblewrap vector's binds that Bubblewrap would make on the host when the destination is gone (Story 1.88).
+ * Bubblewrap reads a bind's source before it prepares the destination, so a bind of a path onto itself stops the start when the path is gone, and makes nothing.
+ * A destination another bind of the vector already stands on is a mount point by then.
+ * Every other destination is made as an empty file when it is gone, which over the layer's writable `/` is a file on the host.
+ */
+function bindsThatCanCreate(vector) {
+  const standing = new Set(['/']);
+  const creating = [];
+  for (let at = 0; at < vector.length; at += 1) {
+    if (vector[at] !== '--bind' && vector[at] !== '--ro-bind') continue;
+    const [source, destination] = [vector[at + 1], vector[at + 2]];
+    if (source !== destination && !standing.has(destination)) creating.push(destination);
+    standing.add(destination);
+  }
+  return creating;
+}
+
+/** A vector with the bind of each socket's own path taken out: the layer's mask as a mount over a path that can be gone. */
+function withoutSocketPins(vector, sockets) {
+  const kept = [...vector];
+  for (const socket of sockets) {
+    const at = kept.findIndex((argument, index) => argument === '--ro-bind' && kept[index + 1] === socket && kept[index + 2] === socket);
+    if (at !== -1) kept.splice(at, 3);
+  }
+  return kept;
+}
+
+/**
+ * A stand-in for Bubblewrap that applies the rules the layer's vector and its guard rely on, over the host's own file system (Story 1.88).
+ * It follows Bubblewrap v0.9.0's order.
+ * `resolve_symlinks_in_ops` runs `realpath` on every bind source before any mount, and a source that is gone stops the start (`Can't find source path`).
+ * `setup_newroot` then handles each bind in turn: it reads the source's type (`Can't get type of source` when the source went away since), makes the destination's parent directories, makes the destination as an empty file with mode 0444 when it is gone and the source is no directory, and mounts (`Can't bind mount` when the source went away since).
+ * The stand-in makes those files and directories on the real file system, so a case that reads the directory afterwards sees what Bubblewrap would have left on the host.
+ * It reads `stand-in.json` beside it: `record` names the file that receives its arguments, and `vanish` stages the race the guard exists for.
+ * `vanish` is one plan or a list of plans `{ stage, bind, paths, rebind }`: just before (`before-source`) or after (`after-source`) the source of the bind with that index is read, each of `paths` is removed as its owner would, and each of `rebind` is bound again as a socket.
+ * The stand-in runs the command after `--`.
+ * The real Bubblewrap runs the same vector in `the layer path socket route`, which the Linux CI job proves.
+ */
+const BWRAP_STAND_IN = `#!/usr/bin/env node
+'use strict';
+const fs = require('node:fs');
+const net = require('node:net');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+let config = {};
+try {
+  config = JSON.parse(fs.readFileSync(path.join(__dirname, 'stand-in.json'), 'utf8'));
+} catch {
+  config = {};
+}
+if (config.record) fs.writeFileSync(config.record, JSON.stringify(args));
+const fail = (message) => {
+  process.stderr.write('bwrap: ' + message + '\\n');
+  process.exit(1);
+};
+const arity = { '--unshare-user': 0, '--unshare-pid': 0, '--unshare-net': 0, '--die-with-parent': 0, '--new-session': 0, '--dev': 1, '--proc': 1, '--tmpfs': 1, '--unsetenv': 1, '--args': 1 };
+const binds = [];
+let at = 0;
+for (; at < args.length && args[at] !== '--'; ) {
+  const option = args[at];
+  if (option === '--bind' || option === '--ro-bind') {
+    binds.push({ source: args[at + 1], destination: args[at + 2] });
+    at += 3;
+    continue;
+  }
+  if (!(option in arity)) fail('Unknown option ' + option);
+  at += 1 + arity[option];
+}
+if (args[at] !== '--') fail('No command given');
+for (const { source } of binds) {
+  try {
+    fs.realpathSync(source);
+  } catch {
+    fail("Can't find source path " + source + ': No such file or directory');
+  }
+}
+const servers = [];
+const vanish = (stage, index) => {
+  for (const plan of [].concat(config.vanish || [])) {
+    if (plan.stage !== stage || plan.bind !== index) continue;
+    for (const target of plan.paths) fs.rmSync(target, { recursive: true, force: true });
+    for (const target of plan.rebind || []) {
+      const server = net.createServer();
+      server.listen(target);
+      servers.push(server);
+    }
+  }
+};
+binds.forEach(({ source, destination }, index) => {
+  vanish('before-source', index);
+  let kind;
+  try {
+    kind = fs.statSync(source);
+  } catch {
+    fail("Can't get type of source " + source + ': No such file or directory');
+  }
+  vanish('after-source', index);
+  fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o755 });
+  if (kind.isDirectory()) {
+    fs.mkdirSync(destination, { recursive: true });
+  } else {
+    let standing = null;
+    try {
+      standing = fs.statSync(destination);
+    } catch {
+      standing = null;
+    }
+    if (standing !== null && standing.isDirectory()) fail("Can't create file at " + destination + ': Is a directory');
+    if (standing === null) fs.writeFileSync(destination, '', { mode: 0o444 });
+  }
+  try {
+    fs.statSync(source);
+  } catch {
+    fail("Can't bind mount " + source + ' on ' + destination + ': No such file or directory');
+  }
+});
+const ran = spawnSync(args[at + 1], args.slice(at + 2), { stdio: 'inherit' });
+process.exit(ran.status ?? 1);
+`;
+
+/** Stages the stand-in's next starts: its `record` file and the race to stage (`vanish`), written beside it. */
+function stageStandIn(confinement, config) {
+  fs.writeFileSync(path.join(path.dirname(confinement.executable), 'stand-in.json'), JSON.stringify(config));
+}
+
+/**
+ * The index, among the binds of a Bubblewrap vector (`--bind` and `--ro-bind`, in order), of the `which`th bind whose destination is `socket`.
+ * The first is the bind of the socket's own path, the second the empty device file over it.
+ */
+function bindIndex(vector, socket, which) {
+  let index = 0;
+  let seen = 0;
+  for (let at = 0; at < vector.length; at += 1) {
+    if (vector[at] !== '--bind' && vector[at] !== '--ro-bind') continue;
+    if (vector[at + 2] === socket) {
+      if (seen === which) return index;
+      seen += 1;
+    }
+    index += 1;
+  }
+  return -1;
+}
+
+/** The layer's confinement over the stand-in, with an evaluation folder to bind. */
+function standInConfinement(directory) {
+  const executable = path.join(directory, 'bwrap');
+  fs.writeFileSync(executable, BWRAP_STAND_IN, { mode: 0o755 });
+  const folder = path.join(directory, 'evals');
+  fs.mkdirSync(folder, { recursive: true });
+  return { mode: 'bubblewrap', executable, evaluationFolder: fs.realpathSync(folder) };
+}
+
+/**
+ * The evaluation layer's Bubblewrap vector on every host (Story 1.88).
+ * Its text and order are held: with no socket the vector is what it was before the story plus the private root's two binds, and each socket adds the bind of its own path and the empty device file over it, after the read-only binds.
+ * No option of the vector makes a file on the host: the layer's `/` is a writable bind of the host's, so a mount over a socket file that went away would make an empty file there, and the bind of the path onto itself stops the start.
+ * A socket that goes away between Bubblewrap's read of the source and the mask's mount leaves a file that the guard removes (`the layer path socket guard`).
+ * The list is asked for with the room the layer's command leaves and without `/dev`, `/proc` and `/run/user`, and it keeps the user's private root, where a layer process can move a host socket to.
+ * A vector that hides sockets binds the private root read-only right after `--bind / /` and the run's own private parents writable again, so a layer process cannot write a record of the guard.
+ * A list that does not fit is refused, a path no argument can carry is refused, and a vector built earlier is listed again at the spawn (`refresh`).
+ * Through a stand-in for Bubblewrap that makes the file a mount over a missing destination makes, a socket that went away after the vector was built stops the start and leaves the directory as it was, a vector listed again leaves it as it was, and the mask with no bind of its own path leaves the file the criteria forbid.
+ */
+async function checkLayerPathSocketUnits() {
+  const base = socketDirectory();
+  const stub = standInConfinement(base);
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: stub.evaluationFolder };
+  const runUser = fs.existsSync('/run/user') ? ['--tmpfs', '/run/user'] : [];
+  const head = [
+    '/usr/bin/bwrap',
+    '--unshare-user',
+    '--bind',
+    '/',
+    '/',
+    '--dev',
+    '/dev',
+    '--unshare-pid',
+    '--proc',
+    '/proc',
+    '--die-with-parent',
+    '--new-session',
+    '--unsetenv',
+    'NODE_V8_COVERAGE',
+    ...runUser,
+    '--ro-bind',
+    bubblewrap.evaluationFolder,
+    bubblewrap.evaluationFolder,
+  ];
+  const none = () => [];
+  // The vector binds the user's private root read-only right after `--bind / /`, then each of the run's own parent directories writable, so a layer process cannot write a record of the guard.
+  // It does so whatever the number of sockets, since a vector that hides none leaves the root writable to a layer process that writes a record.
+  const recordRoot = fs.realpathSync(fs.mkdtempSync(path.join(base, 'record-root-')));
+  const writableParent = path.join(recordRoot, `run-${process.pid}-0123456789abcdef`);
+  fs.mkdirSync(writableParent);
+  const rootArguments = ['--ro-bind', recordRoot, recordRoot, '--bind', writableParent, writableParent];
+  const afterRoot = head.indexOf('--bind') + 3;
+  const headWithRoot = [...head.slice(0, afterRoot), ...rootArguments, ...head.slice(afterRoot)];
+  const plain = layerPrefix(bubblewrap, {
+    hostSockets: none,
+    recordDirectory: () => recordRoot,
+    privateParents: () => [writableParent],
+  });
+  check(
+    JSON.stringify(plain) === JSON.stringify([...headWithRoot, '--']),
+    `the layer's vector with no socket to hide is ${JSON.stringify(plain)}; expected the private root read-only and the run's parent writable right after --bind / /, and no mask`,
+  );
+  check(
+    JSON.stringify([...plain.slice(0, afterRoot), ...plain.slice(afterRoot + rootArguments.length)]) === JSON.stringify([...head, '--']),
+    `the layer's vector with no socket to hide differs from the vector of Story 1.112 in an argument besides the private root's two binds: ${JSON.stringify(plain)}`,
+  );
+  check(
+    JSON.stringify(Object.keys(plain)) === JSON.stringify(plain.map((_, at) => String(at))) && typeof plain.refresh === 'function',
+    "the layer's vector carries its refresh as a property of the array, so it is no argument",
+  );
+
+  // The text and order of the mounts.
+  const hidden = ['/run/dbus/system_bus_socket', '/run/docker.sock', path.join(base, 'agent.sock')];
+  const vector = layerPrefix(bubblewrap, {
+    hostSockets: () => hidden,
+    recordDirectory: () => recordRoot,
+    privateParents: () => [writableParent],
+  });
+  const expected = [...headWithRoot, ...hidden.flatMap((socket) => ['--ro-bind', socket, socket, '--ro-bind', '/dev/null', socket]), '--'];
+  check(
+    JSON.stringify(vector) === JSON.stringify(expected),
+    `the layer's vector hiding three sockets is ${JSON.stringify(vector)}; expected the private root read-only and the run's parent writable right after --bind / /, then each socket's bind of its own path and the empty device file, after the read-only binds and before --`,
+  );
+  check(
+    JSON.stringify(vector.slice(afterRoot + rootArguments.length)) ===
+      JSON.stringify([...head.slice(afterRoot), ...expected.slice(headWithRoot.length)]),
+    "hiding sockets changed an argument of the layer's vector other than the private root's two binds",
+  );
+  check(
+    vector.slice(afterRoot - 3, afterRoot).join(' ') === '--bind / /' &&
+      vector.slice(afterRoot, afterRoot + 3).join(' ') === `--ro-bind ${recordRoot} ${recordRoot}` &&
+      vector.slice(afterRoot + 3, afterRoot + 6).join(' ') === `--bind ${writableParent} ${writableParent}` &&
+      vector.indexOf('--dev') > afterRoot + 5,
+    "the private root's read-only bind does not follow --bind / / directly, or the run's parent is not bound writable after it",
+  );
+  check(
+    JSON.stringify(vector.slice(0, afterRoot)) === JSON.stringify(plain.slice(0, afterRoot)),
+    "hiding sockets changed the arguments of the layer's vector that come before the private root's binds",
+  );
+  check(
+    vector.indexOf('--bind') < vector.indexOf('--ro-bind', vector.indexOf('--bind') + 1) &&
+      vector.indexOf('/dev/null') > vector.indexOf('--bind') &&
+      vector.lastIndexOf('/dev/null') < vector.indexOf('--'),
+    "the layer's masks come before --bind / / or after --",
+  );
+  // With no root to hold a record the vector names none, whatever the number of sockets, and the guard refuses a start that hides sockets.
+  check(
+    JSON.stringify(layerPrefix(bubblewrap, { hostSockets: none, recordDirectory: () => null })) === JSON.stringify([...head, '--']),
+    "the layer's vector with no socket to hide over no private root is not the vector of Story 1.112 byte for byte",
+  );
+  const maskArguments = hidden.flatMap((socket) => ['--ro-bind', socket, socket, '--ro-bind', '/dev/null', socket]);
+  check(
+    JSON.stringify(layerPrefix(bubblewrap, { hostSockets: () => hidden, recordDirectory: () => null })) ===
+      JSON.stringify([...head, ...maskArguments, '--']),
+    "the layer's vector over no private root names one",
+  );
+  // The run's own parents are the directories this process made: `run-<pid>-...` directories the user owns, and nothing else.
+  const ownParent = path.join(recordRoot, `run-${process.pid}-a`);
+  const strangers = [
+    path.join(recordRoot, `run-${process.pid + 1}-a`),
+    path.join(recordRoot, `run-${process.pid}`),
+    path.join(recordRoot, `other-${process.pid}-a`),
+  ];
+  for (const directory of [ownParent, ...strangers]) fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(recordRoot, `run-${process.pid}-file`), '');
+  const found = layerPrefix(bubblewrap, { hostSockets: () => hidden, recordDirectory: () => recordRoot });
+  const boundWritable = found.flatMap((argument, at) => (found[at - 1] === '--bind' && argument !== '/' ? [argument] : []));
+  check(
+    boundWritable.includes(ownParent) &&
+      boundWritable.includes(writableParent) &&
+      !boundWritable.some((argument) => strangers.includes(argument) || argument.endsWith('-file')),
+    `the layer bound ${JSON.stringify(boundWritable)} writable beneath the private root; expected this process's own run-<pid>-... directories and no other entry`,
+  );
+  check(
+    JSON.stringify(found.refresh()) === JSON.stringify(found),
+    'a vector listed again at the spawn does not keep the private root arguments',
+  );
+
+  // Nothing in the vector can make a file on the host, and the check sees the mask that could.
+  check(
+    bindsThatCanCreate(vector).length === 0 && CREATING_OPTIONS.every((option) => !vector.includes(option)),
+    `the layer's vector holds an argument that can make a file on the host: ${JSON.stringify(bindsThatCanCreate(vector))}`,
+  );
+  const unpinned = withoutSocketPins(vector, hidden);
+  check(
+    JSON.stringify(bindsThatCanCreate(unpinned)) === JSON.stringify(hidden),
+    `with the bind of each socket's own path taken out the check named ${JSON.stringify(bindsThatCanCreate(unpinned))}; expected the three destinations a mount would make when they are gone`,
+  );
+  check(
+    bindsThatCanCreate(['--bind', '/', '/', '--ro-bind', '/dev/null', '/tmp/a.sock']).length === 1 &&
+      bindsThatCanCreate(['--bind', '/', '/', '--ro-bind', '/tmp/a.sock', '/tmp/a.sock', '--ro-bind', '/dev/null', '/tmp/a.sock'])
+        .length === 0,
+    'the reading of which binds make a file does not tell a mount over a gone path from one that stands on its own bind',
+  );
+
+  // What the list is asked for.
+  const asked = [];
+  layerPrefix(bubblewrap, { hostSockets: (options) => (asked.push(options), []) });
+  const { except, limit } = asked[0];
+  const room = Math.floor((BUBBLEWRAP_ARGUMENT_LIMIT - (head.length + 1 + 1000) - 8) / 6);
+  check(
+    limit === Math.min(MAX_HIDDEN_SOCKETS, room) && limit > 1000,
+    `the layer asked for room for ${limit} sockets; expected ${Math.min(MAX_HIDDEN_SOCKETS, room)}`,
+  );
+  for (const left of ['/dev', '/proc', ...(fs.existsSync('/run/user') ? ['/run/user'] : [])]) {
+    check(except.includes(left), `the layer's list was not told to leave out ${left}: ${JSON.stringify(except)}`);
+  }
+  check(
+    !except.includes(layerPrivateRoot()),
+    "the layer's list was told to leave out the user's private root, where a layer process can move a host socket to",
+  );
+  check(
+    !except.includes('/tmp') && !except.includes(os.tmpdir()),
+    "the layer's list was told to leave out the temp directory, where a listener of the runtime's is a socket the layer must not reach",
+  );
+
+  // The layer hides every socket the list names or does not start.
+  const refusal = (body) => {
+    try {
+      body();
+      return null;
+    } catch (error) {
+      return error.name === 'ConfinementError' ? error.message : `${error.name}: ${error.message}`;
+    }
+  };
+  for (const [what, result] of [
+    ['a refusal of the first ranks', { sockets: [], left: 0, refused: 'the host holds 5000 Unix sockets that only root can create' }],
+    ['a socket the room cut', { sockets: ['/tmp/a.sock'], left: 1, refused: null }],
+    ['more sockets than the room', { sockets: Array.from({ length: limit + 1 }, (_, at) => `/tmp/s${at}.sock`), left: 0, refused: null }],
+  ]) {
+    const refused = refusal(() => layerPrefix(bubblewrap, { hostSockets: () => result }));
+    check(
+      refused !== null && refused.includes('socket') && refused.includes('evaluation layer'),
+      `the layer started over ${what}: ${JSON.stringify(refused)}; expected a ConfinementError naming the layer`,
+    );
+  }
+  const firstRanks = refusal(() =>
+    layerPrefix(bubblewrap, {
+      hostSockets: () => ({ sockets: [], left: 0, refused: 'the host holds 5000 Unix sockets that only root can create' }),
+    }),
+  );
+  check(
+    firstRanks !== null && firstRanks.includes('only root can create'),
+    `the layer's refusal of the first ranks said ${JSON.stringify(firstRanks)}; expected the list's own reason`,
+  );
+
+  for (const [what, socket] of [
+    ['a relative path', 'agent.sock'],
+    ['a path with a NUL', '/tmp/a\0b.sock'],
+    ['a number', 7],
+  ]) {
+    const refused = refusal(() => layerPrefix(bubblewrap, { hostSockets: () => [socket] }));
+    check(
+      refused !== null && refused.includes('no absolute path'),
+      `the layer started over ${what} as a socket: ${JSON.stringify(refused)}`,
+    );
+  }
+  let read = false;
+  const unsafe = refusal(() =>
+    layerPrefix({ ...bubblewrap, evaluationFolder: '/proj/"quoted"' }, { hostSockets: () => ((read = true), []) }),
+  );
+  check(
+    unsafe !== null && unsafe.includes('cannot be carried') && !read,
+    `a layer over an unsafe path ended ${JSON.stringify(unsafe)} after ${read ? 'reading' : 'not reading'} the host's sockets; expected the refusal before the host is read`,
+  );
+
+  // A vector built earlier is listed again at the spawn.
+  let listing = ['/tmp/first.sock'];
+  const stale = layerPrefix(bubblewrap, { hostSockets: () => listing });
+  listing = ['/tmp/second.sock'];
+  const refreshed = stale.refresh();
+  check(
+    stale.includes('/tmp/first.sock') &&
+      !stale.includes('/tmp/second.sock') &&
+      refreshed.includes('/tmp/second.sock') &&
+      !refreshed.includes('/tmp/first.sock'),
+    'a vector listed again at the spawn names the sockets of the first listing, or the first vector changed',
+  );
+  check(
+    typeof refreshed.refresh === 'function' &&
+      freshPrefix(stale).includes('/tmp/second.sock') &&
+      freshPrefix(['a', 'b']).join(',') === 'a,b' &&
+      freshPrefix().length === 0,
+    'freshPrefix does not list a vector that can refresh again, or changes a prefix that cannot',
+  );
+
+  // Each spawn site asks for the vector as it is at the spawn, and a site that kept the vector it was given runs without the refreshed variable.
+  // Each starts through a prefix whose refresh adds a variable to the environment of the process, and the process reports it.
+  const sites = fs.mkdtempSync(path.join(base, 'sites-'));
+  fs.mkdirSync(path.join(sites, 'evaluator'));
+  const probe = path.join(sites, 'evaluator', 'probe.sh');
+  fs.writeFileSync(probe, '#!/bin/sh\nprintf \'{"package":"p","version":"%s"}\' "${TEA_REFRESHED:-stale}"\n', { mode: 0o755 });
+  const refreshing = (made) => {
+    const prefix = Object.defineProperty(['/usr/bin/env'], 'refresh', {
+      value: () => (made.push('refreshed'), ['/usr/bin/env', 'TEA_REFRESHED=fresh']),
+    });
+    return prefix;
+  };
+  const probed = [];
+  const [observed] = await observeFrameworks({
+    folder: sites,
+    evaluator: { kind: 'command', command: 'evaluator/probe.sh', timeoutMs: 30_000 },
+    frameworks: [{ package: 'p', version: 'fresh', probe: { command: 'evaluator/probe.sh', args: [] } }],
+    scratch: [],
+    spawnPrefix: refreshing(probed),
+  });
+  check(
+    probed.length === 1 && observed.observed?.version === 'fresh',
+    `a command evaluator's launch ran ${JSON.stringify(observed)} after ${probed.length} refresh(es); expected one refresh and the refreshed prefix`,
+  );
+  // A layer that cannot hide the sockets does not start the process, and the command evaluator reports it as its own error.
+  const refusing = Object.defineProperty(['/usr/bin/env'], 'refresh', {
+    value: () => {
+      throw Object.assign(new Error('the host holds too many sockets'), { name: 'ConfinementError' });
+    },
+  });
+  const unstarted = await observeFrameworks({
+    folder: sites,
+    evaluator: { kind: 'command', command: 'evaluator/probe.sh', timeoutMs: 30_000 },
+    frameworks: [{ package: 'p', version: 'fresh', probe: { command: 'evaluator/probe.sh', args: [] } }],
+    scratch: [],
+    spawnPrefix: refusing,
+  }).then(
+    () => null,
+    (error) => error,
+  );
+  check(
+    unstarted?.name === 'EvaluatorError' && unstarted.message.includes('too many sockets'),
+    `a command evaluator whose layer refused to start ended ${JSON.stringify(unstarted?.name)}; expected an EvaluatorError carrying the reason`,
+  );
+  const agentScript = path.join(sites, 'agent.sh');
+  fs.writeFileSync(agentScript, '#!/bin/sh\nprintf "agent:%s" "${TEA_REFRESHED:-stale}"\n', { mode: 0o755 });
+  const agentRefreshes = [];
+  const agentRan = runAgent('prompt', { agent: 'custom', agentCommand: agentScript, spawnPrefix: refreshing(agentRefreshes) });
+  check(
+    agentRefreshes.length === 1 && agentRan.stdout.includes('agent:fresh'),
+    `an agent run started through a prefix that refreshes printed ${JSON.stringify(agentRan.stdout)} after ${agentRefreshes.length} refresh(es); expected one refresh and the refreshed prefix`,
+  );
+  const asyncRefreshes = [];
+  const asyncRan = await runAgentAsync('prompt', { agent: 'custom', agentCommand: agentScript, spawnPrefix: refreshing(asyncRefreshes) });
+  check(
+    asyncRefreshes.length === 1 && asyncRan.stdout.includes('agent:fresh'),
+    `an asynchronous agent run started through a prefix that refreshes printed ${JSON.stringify(asyncRan.stdout)} after ${asyncRefreshes.length} refresh(es); expected one refresh and the refreshed prefix`,
+  );
+  // The agent's version probe and the HTTP port start through the same call, and a copy of the prefix would lose its refresh.
+  const versionScript = path.join(sites, 'version.sh');
+  fs.writeFileSync(
+    versionScript,
+    '#!/bin/sh\nif [ "${TEA_REFRESHED:-}" = fresh ]; then version=1.2.3; else version=0.0.1; fi\nprintf \'{"agentVersion":"%s"}\' "$version"\n',
+    { mode: 0o755 },
+  );
+  const versionRefreshes = [];
+  const observedVersion = await observeAgentVersion({
+    evaluator: { agent: 'custom', agentCommand: versionScript },
+    scratch: [],
+    spawnPrefix: refreshing(versionRefreshes),
+  });
+  check(
+    versionRefreshes.length === 1 && observedVersion === '1.2.3',
+    `the agent version probe started through a prefix that refreshes read ${JSON.stringify(observedVersion)} after ${versionRefreshes.length} refresh(es); expected one refresh and 1.2.3`,
+  );
+  const portFolder = path.join(sites, 'port');
+  fs.mkdirSync(path.join(portFolder, 'adapter'), { recursive: true });
+  fs.writeFileSync(
+    path.join(portFolder, 'adapter', 'http-probe-port.mjs'),
+    'process.stdout.write(`port-saw:${process.env.TEA_REFRESHED ?? "stale"}`);\nprocess.exit(0);\n',
+  );
+  const portRefreshes = [];
+  const portEnded = await probeHttpPort(portFolder, { spawnPrefix: refreshing(portRefreshes) }).then(
+    () => null,
+    (error) => error,
+  );
+  check(
+    portRefreshes.length === 1 && portEnded?.message.includes('port-saw:fresh'),
+    `the HTTP port started through a prefix that refreshes ended ${JSON.stringify(portEnded?.message)} after ${portRefreshes.length} refresh(es); expected one refresh and the port reporting the refreshed prefix`,
+  );
+  // A layer that cannot hide the sockets does not start the port, and the probe ends with exit 12, a target that could not run.
+  const portRefused = await probeHttpPort(portFolder, { spawnPrefix: refusing }).then(
+    () => null,
+    (error) => error,
+  );
+  check(
+    portRefused instanceof HttpPortError && portRefused.exitCode === 12 && portRefused.message.includes('too many sockets'),
+    `the HTTP port whose layer refused to start ended ${JSON.stringify([portRefused?.name, portRefused?.exitCode, portRefused?.message])}; expected an HttpPortError with exit 12 carrying the reason`,
+  );
+  // The command line ends a refused layer with exit 12 and the reason, where it was a stack and exit 1 before.
+  fs.writeFileSync(path.join(sites, 'evaluation.json'), '{}');
+  const command = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const runPath = require.resolve(${JSON.stringify(path.join(PROJECT_ROOT, 'cli/lib/evaluate/run'))});
+const real = require(runPath);
+require.cache[runPath].exports = { ...real, runRunCommand: async () => { throw Object.assign(new Error('the host holds too many sockets for the layer'), { name: 'ConfinementError' }); } };
+require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli/evaluate.js'))}).main(['node', 'tea-evaluate', 'run', '--evaluation', ${JSON.stringify(sites)}]).then(
+  (code) => process.exit(code),
+  (error) => { process.stderr.write('escaped: ' + error.message); process.exit(99); },
+);`,
+    ],
+    { encoding: 'utf8' },
+  );
+  check(
+    command.status === 12 && command.stderr === 'tea-evaluate run: the host holds too many sockets for the layer\n',
+    `the command line over a layer that could not hide the sockets ended ${command.status} with ${JSON.stringify(command.stderr)}; expected exit 12 and the reason alone, with no stack`,
+  );
+
+  // The socket the runtime serves stays out of the vector, and a socket moved into the private root is another file that stays in it.
+  const rootDirectory = layerPrivateRoot();
+  fs.mkdirSync(rootDirectory, { recursive: true, mode: 0o700 });
+  const parentDirectory = fs.mkdtempSync(path.join(rootDirectory, 'run-unit-'));
+  const bridgeDirectory = fs.mkdtempSync(path.join(parentDirectory, 's-'));
+  const bridgeSocket = path.join(fs.realpathSync(bridgeDirectory), 'bridge.sock');
+  const hostDirectory = fs.mkdtempSync(path.join(base, 'moved-'));
+  const hostSocket = path.join(fs.realpathSync(hostDirectory), 'host.sock');
+  const registryServers = [await listenOnSocket(bridgeSocket), await listenOnSocket(hostSocket)];
+  const unregister = registerServedSocket(bridgeSocket);
+  try {
+    check(isServedSocket(fs.realpathSync(bridgeSocket)), 'the socket the runtime registered is not served');
+    const moved = path.join(fs.realpathSync(parentDirectory), 'moved.sock');
+    const listing = { sockets: [bridgeSocket, hostSocket] };
+    const before = layerPrefix(bubblewrap, { hostSockets: () => listing.sockets });
+    check(
+      !before.includes(bridgeSocket) && before.includes(hostSocket),
+      `the layer's vector over the socket the runtime serves and a host socket was ${JSON.stringify(before.filter((argument) => argument.startsWith(base) || argument.startsWith(rootDirectory)))}; expected the host socket hidden and the runtime's own socket left connectable`,
+    );
+    // Between two spawns a layer process moves the host's socket into the private root, and the next spawn lists it there.
+    fs.renameSync(hostSocket, moved);
+    listing.sockets = [bridgeSocket, moved];
+    const after = before.refresh();
+    check(
+      after.includes(moved) && !after.includes(bridgeSocket),
+      `a socket moved into the private root between two spawns left the refreshed vector as ${JSON.stringify(after.filter((argument) => argument.startsWith(rootDirectory)))}; expected the moved socket hidden and the runtime's own socket left connectable`,
+    );
+    // The moved socket takes the place of the served one: the path is the same and the inode is another.
+    fs.renameSync(moved, bridgeSocket);
+    listing.sockets = [bridgeSocket];
+    check(
+      !isServedSocket(fs.realpathSync(bridgeSocket)) && after.refresh().includes(bridgeSocket),
+      "a socket another process moved over the runtime's own socket stays out of the vector",
+    );
+    unregister();
+    check(!isServedSocket(fs.realpathSync(bridgeSocket)), 'a socket the runtime stopped serving is still served');
+    // The bridge registers the socket it listens on and takes the record off when it closes.
+    const opened = await openBridge({
+      tools: [],
+      handle: async () => ({ text: '', isError: false }),
+      scratch: Object.assign([], { privateParent: parentDirectory }),
+    });
+    const served = opened.server.args[2];
+    check(isServedSocket(fs.realpathSync(served)), 'the bridge did not register the socket it listens on');
+    await opened.close();
+    check(!isServedSocket(served), 'the bridge left its socket registered after it closed');
+  } finally {
+    unregister();
+    for (const server of registryServers) await closeServer(server);
+    fs.rmSync(parentDirectory, { recursive: true, force: true });
+    fs.rmSync(hostDirectory, { recursive: true, force: true });
+  }
+
+  // Through the stand-in: the real list of a directory, so only sockets this case serves.
+  const restricted = socketsUnder(base);
+  const record = path.join(base, 'record.json');
+  stageStandIn(stub, { record });
+  const startOver = (prefix) =>
+    spawnSync(prefix[0], [...prefix.slice(1), process.execPath, '-e', "process.stdout.write('ran')"], { encoding: 'utf8' });
+  const entries = () =>
+    fs
+      .readdirSync(base)
+      .filter((name) => name.endsWith('.sock'))
+      .sort();
+  const live = path.join(base, 'live.sock');
+  const gone = path.join(base, 'gone.sock');
+  const servers = [await listenOnSocket(live), await listenOnSocket(gone)];
+  try {
+    const built = layerPrefix(stub, { hostSockets: restricted });
+    check(
+      built.includes(live) && built.includes(gone) && bindsThatCanCreate(built).length === 0,
+      `the layer's list of the directory was ${JSON.stringify(built.filter((argument) => argument.startsWith(base)))}; expected both sockets, each bound onto its own path`,
+    );
+    const started = startOver(built);
+    check(started.status === 0 && started.stdout === 'ran', `a layer over two live sockets ended ${started.status}: ${started.stderr}`);
+    check(
+      fs.readFileSync(record, 'utf8').includes(`"--ro-bind","/dev/null","${gone}"`),
+      'the stand-in did not receive the empty device file over a socket the layer hides',
+    );
+    // The socket goes away after the vector was built.
+    await closeServer(servers[1]);
+    fs.rmSync(gone, { force: true });
+    const stopped = startOver(built);
+    check(
+      stopped.status === 1 && stopped.stderr.includes(`Can't find source path ${gone}`) && stopped.stdout === '',
+      `a vector built before a socket went away ended ${stopped.status} with ${JSON.stringify(stopped.stderr)}; expected the start stopped at the bind of the socket's own path`,
+    );
+    check(
+      JSON.stringify(entries()) === JSON.stringify(['live.sock']),
+      `a vector built before a socket went away left ${JSON.stringify(entries())} on the host; expected the directory as it was`,
+    );
+    const again = startOver(built.refresh());
+    check(
+      again.status === 0 && again.stdout === 'ran' && JSON.stringify(entries()) === JSON.stringify(['live.sock']),
+      `a vector listed again after the socket went away ended ${again.status} and left ${JSON.stringify(entries())}; expected the start and the directory as it was`,
+    );
+    // The mask with no bind of the socket's own path makes the file: the stand-in sees the file a real mount would leave on the host.
+    const control = startOver(withoutSocketPins(built, [live, gone]));
+    check(
+      control.status === 0 && fs.existsSync(gone) && fs.lstatSync(gone).isFile(),
+      `with the bind of each socket's own path taken out the stand-in left ${JSON.stringify(entries())}; expected an empty file where the socket went away, or the case proves nothing`,
+    );
+    // Bubblewrap that stopped at a socket that went away before the start is a host condition: the port ends with exit 12.
+    fs.rmSync(gone, { force: true });
+    const lost = await probeHttpPort(portFolder, { spawnPrefix: [...built] }).then(
+      () => null,
+      (error) => error,
+    );
+    check(
+      lost instanceof HttpPortError && lost.exitCode === 12 && lost.message.includes(`Can't find source path ${gone}`),
+      `the HTTP port started through a vector naming a socket that went away ended ${JSON.stringify([lost?.name, lost?.exitCode, lost?.message])}; expected an HttpPortError with exit 12 quoting the Bubblewrap message`,
+    );
+    // The same for a socket that went away after Bubblewrap's check of every source and before its read of this one.
+    const late = path.join(base, 'late.sock');
+    const lateServer = await listenOnSocket(late);
+    try {
+      const lateVector = [...layerPrefix(stub, { hostSockets: () => [late] })];
+      stageStandIn(stub, { vanish: { stage: 'before-source', bind: bindIndex(lateVector, late, 0), paths: [late] } });
+      const lateLost = await probeHttpPort(portFolder, { spawnPrefix: lateVector }).then(
+        () => null,
+        (error) => error,
+      );
+      check(
+        lateLost instanceof HttpPortError && lateLost.exitCode === 12 && lateLost.message.includes(`Can't get type of source ${late}`),
+        `the HTTP port started through a vector whose socket went away after the check of every source ended ${JSON.stringify([lateLost?.name, lateLost?.exitCode, lateLost?.message])}; expected exit 12 quoting the Bubblewrap message`,
+      );
+    } finally {
+      stageStandIn(stub, { record });
+      await closeServer(lateServer);
+    }
+    // A port that ends on its own with no Bubblewrap message is the port's own failure, exit 10.
+    const own = await probeHttpPort(portFolder, { spawnPrefix: ['/usr/bin/env'] }).then(
+      () => null,
+      (error) => error,
+    );
+    check(
+      own instanceof HttpPortError && own.exitCode === 10,
+      `the HTTP port that ended on its own ended ${JSON.stringify([own?.name, own?.exitCode])}; expected exit 10`,
+    );
+    // The port that prints Bubblewrap's text itself is the port's own failure: only the diagnostic that opens the standard error alone, with status 1, makes exit 12.
+    const impostorFolder = path.join(base, 'impostor-port');
+    fs.mkdirSync(path.join(impostorFolder, 'adapter'), { recursive: true });
+    const impostor = path.join(impostorFolder, 'adapter', 'http-probe-port.mjs');
+    const diagnostic = `bwrap: Can't find source path ${gone}: No such file or directory\n`;
+    for (const [what, script, expected] of [
+      [
+        'prints the diagnostic as its first line and ends with status 1 (the shape of Bubblewrap)',
+        `process.stderr.write(${JSON.stringify(diagnostic)});\nprocess.exit(1);\n`,
+        12,
+      ],
+      [
+        'prints the diagnostic after another line of its standard error',
+        `process.stderr.write('starting\\n');\nprocess.stderr.write(${JSON.stringify(diagnostic)});\nprocess.exit(1);\n`,
+        10,
+      ],
+      [
+        'prints the diagnostic after something on its standard output and another line on its standard error',
+        `process.stdout.write('ready\\n');\nprocess.stderr.write('warning\\n');\nprocess.stderr.write(${JSON.stringify(diagnostic)});\nprocess.exit(1);\n`,
+        10,
+      ],
+      [
+        'prints the diagnostic first and ends with another status',
+        `process.stderr.write(${JSON.stringify(diagnostic)});\nprocess.exit(2);\n`,
+        10,
+      ],
+      [
+        'prints the diagnostic as the first line of its standard output and ends with status 1',
+        `process.stdout.write(${JSON.stringify(diagnostic)});\nprocess.exit(1);\n`,
+        10,
+      ],
+      [
+        'prints the diagnostic first after it wrote a line of the protocol that is no answer to the hello',
+        `import fs from 'node:fs';\nfs.writeSync(3, '{"type":"noise"}\\n');\nsetTimeout(() => {\n  process.stderr.write(${JSON.stringify(diagnostic)});\n  process.exit(1);\n}, 300);\n`,
+        10,
+      ],
+    ]) {
+      fs.writeFileSync(impostor, script);
+      const ended = await probeHttpPort(impostorFolder, { spawnPrefix: ['/usr/bin/env'] }).then(
+        () => null,
+        (error) => error,
+      );
+      check(
+        ended instanceof HttpPortError && ended.exitCode === expected,
+        `the HTTP port that ${what} ended ${JSON.stringify([ended?.name, ended?.exitCode])}; expected exit ${expected}`,
+      );
+    }
+  } finally {
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/** The host's list narrowed to the sockets under `directory`, so a case that starts the real Bubblewrap names no socket a host process may remove meanwhile. */
+function socketsUnder(directory) {
+  return (options) => listHostSockets({ ...options, table: path.join(directory, 'no-table'), roots: [directory], pinned: [] });
+}
+
+/** The probe a layer process runs with a sealed-brief agent's relay: it connects to the socket and prints how it ended. */
+const LAYER_CONNECT = (target) => ['-e', CONNECT_PROBE, 'path', target];
+
+/** The layer's command: the prefix, then a Node program. */
+function layerCommand(prefix, argv) {
+  return { target: prefix[0], args: [...prefix.slice(1), process.execPath, ...argv] };
+}
+
+/**
+ * The guard that follows a layer process whose Bubblewrap vector hides sockets, on every host (Story 1.88).
+ * The stand-in stages the race Bubblewrap's own source allows: a socket its owner removes after the check of every bind source and before the mask's mount leaves an empty file with mode 0444 at its path, and the directories above it when they went away too.
+ * The guard records the state of each hidden path and of each directory above it right before the start, and its `settle` removes what Bubblewrap made when the process has ended.
+ * It removes a path only when it was a socket or absent before the start and is now an empty regular file the runtime's user owns with no write bit and a change at or after the start, and it removes a recreated directory only when it is empty.
+ * A socket its owner made again, a file with content, a file with a write bit or another owner, a file that stood before the start, a file stamped before the start and a directory with an entry stay.
+ * Each spawn site (the command evaluator, the agent run in both forms, the agent's version probe and the HTTP port) settles after its process has ended, so the host directory is clean when the site returns.
+ * A vector with no guard step (the revert) leaves the file, which each case reads.
+ */
+async function checkLayerPathSocketGuard() {
+  const base = socketDirectory();
+  const stub = standInConfinement(base);
+  const records = fs.mkdtempSync(path.join(base, 'records-'));
+  const layer = (sockets) => layerPrefix(stub, { hostSockets: () => sockets, recordDirectory: () => records });
+  const recordNames = () => fs.readdirSync(records);
+  const run = (prefix) =>
+    spawnSync(prefix[0], [...prefix.slice(1), process.execPath, '-e', "process.stdout.write('ran')"], { encoding: 'utf8' });
+  const servers = [];
+  const serve = async (socket) => {
+    fs.mkdirSync(path.dirname(socket), { recursive: true });
+    servers.push(await listenOnSocket(socket));
+  };
+  const placeholder = (file) => {
+    try {
+      const stat = fs.lstatSync(file);
+      return stat.isFile() && stat.size === 0 && (stat.mode & 0o222) === 0;
+    } catch {
+      return false;
+    }
+  };
+  const directory = (label) => fs.mkdtempSync(path.join(base, `${label}-`));
+  try {
+    // (a) The owner removes the socket while the mask mounts: the file exists when the process has run and is gone after settle.
+    const aDirectory = directory('a');
+    const aSocket = path.join(aDirectory, 'a.sock');
+    await serve(aSocket);
+    const aVector = layer([aSocket]);
+    stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(aVector, aSocket, 1), paths: [aSocket] } });
+    const aLaunch = launchPrefix(aVector);
+    check(recordNames().length === 1, `the guard wrote ${recordNames().length} records before the start; expected one`);
+    const aRan = run(aLaunch.prefix);
+    check(
+      aRan.status === 0 && aRan.stdout === 'ran',
+      `a layer process whose socket went away while the mask mounted ended ${aRan.status}: ${aRan.stderr}`,
+    );
+    check(
+      placeholder(aSocket),
+      'the stand-in left no empty file at the socket that went away while the mask mounted, so the case stages nothing',
+    );
+    aLaunch.settle();
+    check(
+      !fs.existsSync(aSocket) && fs.readdirSync(aDirectory).length === 0 && recordNames().length === 0,
+      `after settle the directory held ${JSON.stringify(fs.readdirSync(aDirectory))} and the records ${JSON.stringify(recordNames())}; expected both empty`,
+    );
+    aLaunch.settle();
+    check(recordNames().length === 0, 'a second settle changed the records');
+
+    // A start the record cannot cover does not begin: with no directory to write it in, the launch is refused before anything starts.
+    const uncovered = (() => {
+      try {
+        launchPrefix(layerPrefix(stub, { hostSockets: () => [aSocket], recordDirectory: () => null }));
+        return null;
+      } catch (error) {
+        return error;
+      }
+    })();
+    check(
+      uncovered?.name === 'ConfinementError' && uncovered.message.includes('private root'),
+      `a launch with no directory for the record ended ${JSON.stringify(uncovered?.name)}; expected a ConfinementError naming the private root`,
+    );
+    // A socket that went away before Bubblewrap read its source stops the start with no file; the guard finds nothing to remove and drops its record.
+    const b0Directory = directory('b0');
+    const b0Socket = path.join(b0Directory, 'b0.sock');
+    await serve(b0Socket);
+    const b0Vector = layer([b0Socket]);
+    stageStandIn(stub, { vanish: { stage: 'before-source', bind: bindIndex(b0Vector, b0Socket, 0), paths: [b0Socket] } });
+    const b0Launch = launchPrefix(b0Vector);
+    const b0Ran = run(b0Launch.prefix);
+    check(
+      b0Ran.status === 1 && b0Ran.stderr.includes("Can't get type of source") && !fs.existsSync(b0Socket),
+      `a start whose socket went away before its source was read ended ${b0Ran.status} with ${JSON.stringify(b0Ran.stderr)}; expected a stopped start and no file`,
+    );
+    b0Launch.settle();
+    check(fs.readdirSync(b0Directory).length === 0 && recordNames().length === 0, 'settle left something after a start that made no file');
+
+    // The owner removes the socket after Bubblewrap read its source and before it makes the destination, which is the source's own path:
+    // the destination is made as an empty file, the bind finds that file as its source, and the start goes on over it.
+    const b1Directory = directory('b1');
+    const b1Socket = path.join(b1Directory, 'b1.sock');
+    await serve(b1Socket);
+    const b1Vector = layer([b1Socket]);
+    stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(b1Vector, b1Socket, 0), paths: [b1Socket] } });
+    const b1Launch = launchPrefix(b1Vector);
+    const b1Ran = run(b1Launch.prefix);
+    check(
+      b1Ran.status === 0 && b1Ran.stdout === 'ran' && placeholder(b1Socket),
+      `a start whose socket went away after its source was read ended ${b1Ran.status} with ${JSON.stringify(b1Ran.stderr)}; expected the start to go on over an empty file`,
+    );
+    b1Launch.settle();
+    check(fs.readdirSync(b1Directory).length === 0 && recordNames().length === 0, 'settle left the file the start went on over');
+
+    // (b) The owner makes the socket again between Bubblewrap's read of the source and the mask's mount: a socket of another inode stays.
+    const cDirectory = directory('c');
+    const cSocket = path.join(cDirectory, 'c.sock');
+    await serve(cSocket);
+    const cBefore = fs.lstatSync(cSocket).ino;
+    const cVector = layer([cSocket]);
+    stageStandIn(stub, {
+      vanish: { stage: 'after-source', bind: bindIndex(cVector, cSocket, 1), paths: [cSocket], rebind: [cSocket] },
+    });
+    const cLaunch = launchPrefix(cVector);
+    const cRan = run(cLaunch.prefix);
+    check(cRan.status === 0 && fs.lstatSync(cSocket).isSocket(), 'the stand-in did not leave the socket the owner made again');
+    const cNow = fs.lstatSync(cSocket);
+    // Mode 0555 leaves no write bit, so the type of the file is the one check that keeps the socket.
+    fs.chmodSync(cSocket, 0o555);
+    cLaunch.settle();
+    check(
+      fs.lstatSync(cSocket).isSocket() && fs.lstatSync(cSocket).ino === cNow.ino && cNow.ino !== cBefore,
+      'settle removed a socket the owner made again, or the case did not stage a socket of another inode',
+    );
+
+    // (c) What is no placeholder stays: a file with content, a file with a write bit, a file another owner has, a file stamped before the start, a file that stood before the start.
+    const stage = async (label, change, options = {}) => {
+      const dir = directory(label);
+      const socket = path.join(dir, `${label}.sock`);
+      await serve(socket);
+      const vector = layer([socket]);
+      stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(vector, socket, 1), paths: [socket] } });
+      const launch = options.launch === undefined ? launchPrefix(vector) : options.launch(vector, socket);
+      const ran = run(launch.prefix ?? vector);
+      check(ran.status === 0, `the ${label} case's process ended ${ran.status}: ${ran.stderr}`);
+      change?.(socket);
+      launch.settle();
+      return { dir, socket };
+    };
+    const content = await stage('content', (socket) => {
+      fs.chmodSync(socket, 0o644);
+      fs.writeFileSync(socket, 'kept');
+      fs.chmodSync(socket, 0o444);
+    });
+    check(fs.existsSync(content.socket) && fs.readFileSync(content.socket, 'utf8') === 'kept', 'settle removed a file with content');
+    const writable = await stage('writable', (socket) => fs.chmodSync(socket, 0o644));
+    check(fs.existsSync(writable.socket), 'settle removed a file with a write bit');
+    const another = await stage('another', null, {
+      launch: (vector, socket) => {
+        const guard = startMaskGuard({ sockets: [socket], recordDirectory: null, uid: process.getuid() + 1 });
+        return { prefix: vector, settle: guard.settle };
+      },
+    });
+    check(placeholder(another.socket), "settle removed a file the runtime's user does not own, or the case staged no file");
+    const stamped = await stage('stamped', null, {
+      launch: (vector, socket) => {
+        const guard = startMaskGuard({ sockets: [socket], recordDirectory: null, now: () => Date.now() + 3_600_000 });
+        return { prefix: vector, settle: guard.settle };
+      },
+    });
+    check(placeholder(stamped.socket), 'settle removed a file stamped before the start');
+    const standing = directory('standing');
+    const standingFile = path.join(standing, 'standing.sock');
+    fs.writeFileSync(standingFile, '', { mode: 0o444 });
+    const standingGuard = startMaskGuard({ sockets: [standingFile], recordDirectory: null });
+    standingGuard.settle();
+    check(placeholder(standingFile), 'settle removed an empty file that stood at the path before the start');
+    // The control for the five cases above: the same staging with the real runtime's user removes the file.
+    const control = await stage('control');
+    check(
+      !fs.existsSync(control.socket),
+      'with the runtime user and the start as they are, settle left the file; the cases that keep a file prove nothing',
+    );
+
+    // (c2) Each check of the removal rule keeps a path that every other check would remove, so no check of the rule goes unread.
+    // A path is built now and is old for the rule only through the stat the file system reports for it.
+    const ruleDirectory = directory('rule');
+    const startedAt = Date.now() - 500;
+    const before = startedAt - CLOCK_SLACK_MS - 5000;
+    const reporting = (overrides) => ({
+      ...fs,
+      lstatSync: (file) => Object.assign(Object.create(fs.lstatSync(file)), overrides[file] ?? {}),
+    });
+    const ruleFile = (name) => {
+      const file = path.join(ruleDirectory, name);
+      fs.writeFileSync(file, '', { mode: 0o444 });
+      return file;
+    };
+    const ruleFolder = (name) => {
+      const folder = path.join(ruleDirectory, name);
+      fs.mkdirSync(folder);
+      return folder;
+    };
+    for (const [what, report, entry, removed, launched = startedAt] of [
+      ['an empty file with no write bit made after the start', {}, { state: 'absent' }, true],
+      ['a file whose change the file system stamped before the start', { ctimeMs: before }, { state: 'absent' }, false],
+      ['a file born before the start', { birthtimeMs: before }, { state: 'absent' }, false],
+      ['a file whose birth time reads 0', { birthtimeMs: 0 }, { state: 'absent' }, false],
+      ['a file whose birth time is unavailable', { birthtimeMs: Number.NaN }, { state: 'absent' }, false],
+      // A start recorded as 0 makes every birth time read as later than it, so the birth check alone keeps a path whose birth time is no date.
+      ['a file whose birth time reads 0 under a start of 0', { birthtimeMs: 0 }, { state: 'absent' }, false, 0],
+      ['a file with no birth time under a start of 0', { birthtimeMs: undefined }, { state: 'absent' }, false, 0],
+      [
+        'a file with the device and inode the socket had, since inodes are reused',
+        { dev: 7, ino: 9 },
+        { state: 'socket', dev: 7, ino: 9 },
+        true,
+      ],
+    ]) {
+      const file = ruleFile(`file-${Math.random().toString(16).slice(2)}`);
+      const result = removePlaceholders(
+        { launchedAt: launched, sockets: [{ path: file, ...entry }], directories: [] },
+        { fileSystem: reporting({ [file]: report }) },
+      );
+      check(
+        result.files.includes(file) === removed && fs.existsSync(file) !== removed,
+        `the removal rule ${removed ? 'kept' : 'removed'} ${what}; expected it ${removed ? 'removed' : 'kept'}`,
+      );
+    }
+    for (const [what, report, entry, uid, removed, launched = startedAt] of [
+      ['an empty directory made after the start that the runtime user owns', {}, { state: 'absent' }, process.getuid(), true],
+      ['an empty directory another user owns', {}, { state: 'absent' }, process.getuid() + 1, false],
+      [
+        'an empty directory whose change the file system stamped before the start',
+        { ctimeMs: before },
+        { state: 'absent' },
+        process.getuid(),
+        false,
+      ],
+      ['an empty directory born before the start', { birthtimeMs: before }, { state: 'absent' }, process.getuid(), false],
+      ['an empty directory whose birth time reads 0', { birthtimeMs: 0 }, { state: 'absent' }, process.getuid(), false],
+      [
+        'an empty directory whose birth time reads 0 under a start of 0',
+        { birthtimeMs: 0 },
+        { state: 'absent' },
+        process.getuid(),
+        false,
+        0,
+      ],
+      [
+        'an empty directory with no birth time under a start of 0',
+        { birthtimeMs: undefined },
+        { state: 'absent' },
+        process.getuid(),
+        false,
+        0,
+      ],
+      ['an empty directory the record notes as a file', {}, { state: 'file', dev: 1, ino: 1 }, process.getuid(), false],
+      ['an empty directory the record notes as another kind of path', {}, { state: 'other', dev: 1, ino: 1 }, process.getuid(), false],
+    ]) {
+      const folder = ruleFolder(`directory-${Math.random().toString(16).slice(2)}`);
+      const result = removePlaceholders(
+        { launchedAt: launched, sockets: [], directories: [{ path: folder, ...entry }] },
+        { fileSystem: reporting({ [folder]: report }), uid },
+      );
+      check(
+        result.directories.includes(folder) === removed && fs.existsSync(folder) !== removed,
+        `the removal rule ${removed ? 'kept' : 'removed'} ${what}; expected it ${removed ? 'removed' : 'kept'}`,
+      );
+    }
+
+    // A removal that fails keeps the record, so the recovery of a dead run tries again; a record replaced by a directory does not make settle throw.
+    const keptDirectory = directory('kept');
+    const keptSocket = path.join(keptDirectory, 'kept.sock');
+    await serve(keptSocket);
+    const keptVector = layer([keptSocket]);
+    stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(keptVector, keptSocket, 1), paths: [keptSocket] } });
+    const refusing = {
+      ...fs,
+      unlinkSync: () => {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      },
+    };
+    const keptGuard = startMaskGuard({ sockets: [keptSocket], recordDirectory: records, fileSystem: refusing });
+    run(keptVector);
+    keptGuard.settle();
+    check(
+      placeholder(keptSocket) && recordNames().length === 1,
+      `a removal that failed left the file ${placeholder(keptSocket) ? 'in place' : 'removed'} and ${recordNames().length} record(s); expected the file and one record kept for the recovery`,
+    );
+    const resumed = sweepMaskRecords({ recordDirectory: records, alive: () => false });
+    check(
+      resumed.length === 1 && !fs.existsSync(keptSocket) && recordNames().length === 0,
+      `the recovery of the dead run's record left ${JSON.stringify(fs.readdirSync(keptDirectory))} and ${recordNames().length} record(s); expected both gone`,
+    );
+    const brokenDirectory = directory('broken');
+    const brokenSocket = path.join(brokenDirectory, 'broken.sock');
+    await serve(brokenSocket);
+    const brokenVector = layer([brokenSocket]);
+    stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(brokenVector, brokenSocket, 1), paths: [brokenSocket] } });
+    const brokenGuard = startMaskGuard({ sockets: [brokenSocket], recordDirectory: records });
+    run(brokenVector);
+    const [brokenName] = recordNames();
+    fs.rmSync(path.join(records, brokenName));
+    fs.mkdirSync(path.join(records, brokenName));
+    let thrown = null;
+    try {
+      brokenGuard.settle();
+    } catch (error) {
+      thrown = error;
+    }
+    check(
+      thrown === null && !fs.existsSync(brokenSocket),
+      `settle over a record replaced by a directory ${thrown === null ? 'returned' : `threw ${thrown.code}`} and left ${JSON.stringify(fs.readdirSync(brokenDirectory))}; expected it to return with the placeholder removed`,
+    );
+    fs.rmdirSync(path.join(records, brokenName));
+
+    // (d) The directories Bubblewrap made again go when they are empty, and the directories that stood stay.
+    const dRoot = directory('d');
+    const dSocket = path.join(dRoot, 'sub', 'deeper', 'd.sock');
+    await serve(dSocket);
+    const dVector = layer([dSocket]);
+    stageStandIn(stub, {
+      vanish: { stage: 'after-source', bind: bindIndex(dVector, dSocket, 1), paths: [path.join(dRoot, 'sub')] },
+    });
+    const dLaunch = launchPrefix(dVector);
+    const dRan = run(dLaunch.prefix);
+    check(dRan.status === 0 && placeholder(dSocket), 'the stand-in did not make the file and the directories above it');
+    dLaunch.settle();
+    check(
+      fs.existsSync(dRoot) && fs.readdirSync(dRoot).length === 0,
+      `after settle the directory that stood held ${JSON.stringify(fs.readdirSync(dRoot))}; expected it empty, with the recreated directories and the file gone`,
+    );
+    // A recreated directory that gained an entry stays, and so does every directory above it.
+    const eRoot = directory('e');
+    const eSocket = path.join(eRoot, 'sub', 'deeper', 'e.sock');
+    await serve(eSocket);
+    const eVector = layer([eSocket]);
+    stageStandIn(stub, {
+      vanish: { stage: 'after-source', bind: bindIndex(eVector, eSocket, 1), paths: [path.join(eRoot, 'sub')] },
+    });
+    const eLaunch = launchPrefix(eVector);
+    run(eLaunch.prefix);
+    fs.writeFileSync(path.join(eRoot, 'sub', 'other.txt'), 'kept');
+    eLaunch.settle();
+    check(
+      !fs.existsSync(path.join(eRoot, 'sub', 'deeper')) && fs.readFileSync(path.join(eRoot, 'sub', 'other.txt'), 'utf8') === 'kept',
+      'settle removed a recreated directory that held an entry, or left an empty one',
+    );
+
+    // (e) A path that was absent before the start and a socket that stood are both handled.
+    const fDirectory = directory('f');
+    const present = path.join(fDirectory, 'present.sock');
+    const absent = path.join(fDirectory, 'absent.sock');
+    await serve(present);
+    await serve(absent);
+    const fVector = layer([present, absent]);
+    fs.rmSync(absent);
+    const fGuard = fVector.guard();
+    const unpinned = withoutSocketPins(fVector, [present, absent]);
+    stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(unpinned, present, 0), paths: [present] } });
+    const fRan = run(unpinned);
+    check(
+      fRan.status === 0 && placeholder(present) && placeholder(absent),
+      'the control vector made no file at the socket that went away or at the path that was absent',
+    );
+    fGuard.settle();
+    check(
+      fs.readdirSync(fDirectory).length === 0 && recordNames().length === 0,
+      `after settle the directory held ${JSON.stringify(fs.readdirSync(fDirectory))}; expected the file over the socket that stood and the file over the absent path both gone`,
+    );
+
+    // The guard is the one step of a spawn site: each site settles after its process has ended.
+    const sites = directory('sites');
+    fs.mkdirSync(path.join(sites, 'evaluator'));
+    fs.writeFileSync(path.join(sites, 'evaluator', 'probe.sh'), '#!/bin/sh\nprintf \'{"package":"p","version":"1.0.0"}\'\n', {
+      mode: 0o755,
+    });
+    const agentScript = path.join(sites, 'agent.sh');
+    fs.writeFileSync(agentScript, '#!/bin/sh\nprintf agent\n', { mode: 0o755 });
+    const versionScript = path.join(sites, 'version.sh');
+    fs.writeFileSync(versionScript, '#!/bin/sh\nprintf \'{"agentVersion":"1.2.3"}\'\n', { mode: 0o755 });
+    const portFolder = path.join(sites, 'port');
+    fs.mkdirSync(path.join(portFolder, 'adapter'), { recursive: true });
+    fs.writeFileSync(path.join(portFolder, 'adapter', 'http-probe-port.mjs'), 'process.exit(0);\n');
+    const siteDrivers = [
+      [
+        'the command evaluator',
+        (vector) =>
+          observeFrameworks({
+            folder: sites,
+            evaluator: { kind: 'command', command: 'evaluator/probe.sh', timeoutMs: 30_000 },
+            frameworks: [{ package: 'p', version: '1.0.0', probe: { command: 'evaluator/probe.sh', args: [] } }],
+            scratch: [],
+            spawnPrefix: vector,
+          }),
+      ],
+      ['the agent run', async (vector) => runAgent('prompt', { agent: 'custom', agentCommand: agentScript, spawnPrefix: vector })],
+      [
+        'the asynchronous agent run',
+        (vector) => runAgentAsync('prompt', { agent: 'custom', agentCommand: agentScript, spawnPrefix: vector }),
+      ],
+      [
+        "the agent's version probe",
+        (vector) => observeAgentVersion({ evaluator: { agent: 'custom', agentCommand: versionScript }, scratch: [], spawnPrefix: vector }),
+      ],
+      ['the HTTP port', (vector) => probeHttpPort(portFolder, { spawnPrefix: vector }).catch(() => null)],
+    ];
+    for (const [site, drive] of siteDrivers) {
+      const dir = directory('site');
+      const socket = path.join(dir, 'site.sock');
+      await serve(socket);
+      const vector = layer([socket]);
+      stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(vector, socket, 1), paths: [socket] } });
+      await drive(vector);
+      check(
+        !fs.existsSync(socket) && fs.readdirSync(dir).length === 0 && recordNames().length === 0,
+        `after ${site} finished the host directory held ${JSON.stringify(fs.readdirSync(dir))} and the records ${JSON.stringify(recordNames())}; expected both empty`,
+      );
+    }
+
+    // An agent that is refused after the guard started (its command is missing) settles: the records directory is empty afterwards.
+    const missing = directory('missing');
+    const missingSocket = path.join(missing, 'missing.sock');
+    await serve(missingSocket);
+    const refused = (() => {
+      try {
+        runAgent('prompt', { agent: 'custom', agentCommand: path.join(sites, 'no-such-agent'), spawnPrefix: layer([missingSocket]) });
+        return null;
+      } catch (error) {
+        return error;
+      }
+    })();
+    check(
+      refused?.code === 'AGENT_NOT_FOUND' && recordNames().length === 0,
+      `an agent run refused for a missing command ended ${JSON.stringify(refused?.code)} and left the records ${JSON.stringify(recordNames())}; expected AGENT_NOT_FOUND and no record`,
+    );
+
+    // A layer process that replaces its own record with a directory cannot make a spawn site throw: every site returns what its process produced.
+    const breaker = `for record in ${JSON.stringify(records)}/mask-*.json; do rm -f "$record"; mkdir "$record"; done\n`;
+    fs.writeFileSync(
+      path.join(sites, 'evaluator', 'breaking-probe.sh'),
+      `#!/bin/sh\n${breaker}printf '{"package":"p","version":"1.0.0"}'\n`,
+      { mode: 0o755 },
+    );
+    const breakingAgent = path.join(sites, 'breaking-agent.sh');
+    fs.writeFileSync(breakingAgent, `#!/bin/sh\n${breaker}printf agent\n`, { mode: 0o755 });
+    const breakingVersion = path.join(sites, 'breaking-version.sh');
+    fs.writeFileSync(breakingVersion, `#!/bin/sh\n${breaker}printf '{"agentVersion":"1.2.3"}'\n`, { mode: 0o755 });
+    fs.writeFileSync(
+      path.join(portFolder, 'adapter', 'http-probe-port.mjs'),
+      `import fs from 'node:fs';
+import path from 'node:path';
+const directory = ${JSON.stringify(records)};
+for (const name of fs.readdirSync(directory).filter((entry) => entry.startsWith('mask-'))) {
+  fs.rmSync(path.join(directory, name), { force: true });
+  fs.mkdirSync(path.join(directory, name));
+}
+process.exit(0);
+`,
+    );
+    const breakingDrivers = [
+      [
+        'the command evaluator',
+        async (vector) =>
+          (
+            await observeFrameworks({
+              folder: sites,
+              evaluator: { kind: 'command', command: 'evaluator/breaking-probe.sh', timeoutMs: 30_000 },
+              frameworks: [{ package: 'p', version: '1.0.0', probe: { command: 'evaluator/breaking-probe.sh', args: [] } }],
+              scratch: [],
+              spawnPrefix: vector,
+            })
+          )[0]?.observed?.version === '1.0.0',
+      ],
+      [
+        'the agent run',
+        async (vector) => runAgent('prompt', { agent: 'custom', agentCommand: breakingAgent, spawnPrefix: vector }).stdout === 'agent',
+      ],
+      [
+        'the asynchronous agent run',
+        async (vector) =>
+          (await runAgentAsync('prompt', { agent: 'custom', agentCommand: breakingAgent, spawnPrefix: vector })).stdout === 'agent',
+      ],
+      [
+        "the agent's version probe",
+        async (vector) =>
+          (await observeAgentVersion({
+            evaluator: { agent: 'custom', agentCommand: breakingVersion },
+            scratch: [],
+            spawnPrefix: vector,
+          })) === '1.2.3',
+      ],
+      [
+        'the HTTP port',
+        async (vector) => (await probeHttpPort(portFolder, { spawnPrefix: vector }).catch((error) => error)) instanceof HttpPortError,
+      ],
+    ];
+    for (const [site, drive] of breakingDrivers) {
+      const dir = directory('breaking');
+      const socket = path.join(dir, 'breaking.sock');
+      await serve(socket);
+      const vector = layer([socket]);
+      stageStandIn(stub, { vanish: { stage: 'after-source', bind: bindIndex(vector, socket, 1), paths: [socket] } });
+      let stood = false;
+      let escaped = null;
+      try {
+        stood = await drive(vector);
+      } catch (error) {
+        escaped = error;
+      }
+      check(
+        escaped === null && stood && !fs.existsSync(socket),
+        `${site} over a record its layer process replaced with a directory ${escaped === null ? `returned ${JSON.stringify(stood)}` : `threw ${escaped.code ?? escaped.message}`} and left ${JSON.stringify(fs.readdirSync(dir))}; expected the result of its process and the placeholder removed`,
+      );
+      for (const name of recordNames()) fs.rmSync(path.join(records, name), { recursive: true, force: true });
+    }
+  } finally {
+    stageStandIn(stub, {});
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/**
+ * The recovery of a killed run's hidden-socket records, on every host (Story 1.88).
+ * A child process the case starts launches a layer process through the stand-in with the race staged, so Bubblewrap's file and the directories above it exist, and the child is killed by its own pid before it can settle.
+ * The records the guard wrote in the user's private root outlive it, and the recovery (`reclaimDeadMaskRecords`) applies the same rule teardown does for the dead run: the placeholder and the recreated directories go, and a socket the owner made again, a file with content and a file with a write bit stay at their recorded paths.
+ * A record whose process is alive is left, and one that does not read as a record of the module is removed without touching any path.
+ */
+async function checkLayerPathSocketRecovery() {
+  const base = socketDirectory();
+  const stub = standInConfinement(base);
+  const root = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+  fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  const servers = [];
+  const serve = async (socket) => {
+    fs.mkdirSync(path.dirname(socket), { recursive: true });
+    servers.push(await listenOnSocket(socket));
+  };
+  const recordsOf = (pid) => fs.readdirSync(root).filter((name) => name.startsWith(`mask-${pid}-`));
+  const emptyFile = (file) => {
+    try {
+      const stat = fs.lstatSync(file);
+      return stat.isFile() && stat.size === 0 && (stat.mode & 0o222) === 0;
+    } catch {
+      return false;
+    }
+  };
+  let child = null;
+  try {
+    const top = fs.mkdtempSync(path.join(base, 'killed-'));
+    const placeholderSocket = path.join(top, 'sub', 'deeper', 'placeholder.sock');
+    const recreatedSocket = path.join(top, 'recreated.sock');
+    const contentSocket = path.join(top, 'content.sock');
+    const writableSocket = path.join(top, 'writable.sock');
+    const sockets = [placeholderSocket, recreatedSocket, contentSocket, writableSocket];
+    for (const socket of sockets) await serve(socket);
+    const vector = layerPrefix(stub, { hostSockets: () => sockets });
+    const at = (socket) => bindIndex(vector, socket, 1);
+    stageStandIn(stub, {
+      vanish: [
+        { stage: 'after-source', bind: at(placeholderSocket), paths: [path.join(top, 'sub')] },
+        { stage: 'after-source', bind: at(recreatedSocket), paths: [recreatedSocket], rebind: [recreatedSocket] },
+        { stage: 'after-source', bind: at(contentSocket), paths: [contentSocket] },
+        { stage: 'after-source', bind: at(writableSocket), paths: [writableSocket] },
+      ],
+    });
+    const script = `const { layerPrefix } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli/lib/evaluate/confinement'))});
+const { launchPrefix } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli/lib/isolation-primitives'))});
+const { spawnSync } = require('node:child_process');
+const [confinement, sockets] = JSON.parse(process.argv[1]);
+const { prefix } = launchPrefix(layerPrefix(confinement, { hostSockets: () => sockets }));
+const ran = spawnSync(prefix[0], [...prefix.slice(1), process.execPath, '-e', "process.stdout.write('ran')"], { encoding: 'utf8' });
+process.stdout.write('launched ' + ran.status + '\\n');
+setInterval(() => {}, 1000);`;
+    child = spawn(process.execPath, ['-e', script, JSON.stringify([stub, sockets])], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const ended = new Promise((resolve) => child.once('exit', resolve));
+    const deadline = Date.now() + 30_000;
+    while (!output.includes('launched') && child.exitCode === null && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    check(
+      output.startsWith('launched 0'),
+      `the child that launched the layer process printed ${JSON.stringify(output)}; expected launched 0`,
+    );
+    check(
+      emptyFile(placeholderSocket),
+      'the stand-in left no empty file at the path that went away, so the recovery has nothing to remove',
+    );
+    check(fs.lstatSync(recreatedSocket).isSocket(), 'the stand-in did not make the socket again');
+    check(emptyFile(contentSocket) && emptyFile(writableSocket), 'the stand-in left no empty file at the two paths the case then changes');
+    check(recordsOf(child.pid).length === 1, `the killed run's records are ${JSON.stringify(recordsOf(child.pid))}; expected one`);
+    // The owner's later changes: content in one file, a write bit on the other.
+    fs.chmodSync(contentSocket, 0o644);
+    fs.writeFileSync(contentSocket, 'kept');
+    fs.chmodSync(contentSocket, 0o444);
+    fs.chmodSync(writableSocket, 0o644);
+    // A run that is alive keeps its record: the recovery leaves it and the placeholder.
+    const live = reclaimDeadMaskRecords();
+    check(
+      !live.some((file) => file.includes(`mask-${child.pid}-`)) && recordsOf(child.pid).length === 1 && emptyFile(placeholderSocket),
+      'the recovery applied the record of a run that is alive',
+    );
+    child.kill('SIGKILL');
+    await ended;
+    const swept = reclaimDeadMaskRecords();
+    check(
+      swept.some((file) => file.includes(`mask-${child.pid}-`)) && recordsOf(child.pid).length === 0,
+      "the recovery did not apply and delete the killed run's record",
+    );
+    check(
+      !fs.existsSync(placeholderSocket) && !fs.existsSync(path.join(top, 'sub')),
+      'the recovery left the placeholder or the directories Bubblewrap made again',
+    );
+    check(fs.lstatSync(recreatedSocket).isSocket(), 'the recovery removed a socket the owner made again');
+    check(fs.readFileSync(contentSocket, 'utf8') === 'kept', 'the recovery removed a file with content');
+    check(fs.existsSync(writableSocket), 'the recovery removed a file with a write bit');
+    check(fs.existsSync(top), 'the recovery removed the directory that stood');
+
+    // A record whose process is dead and that names a path with content removes nothing, and a record that is no record is deleted.
+    const forgedPid = child.pid;
+    const record = (name, text, mode = 0o600) => {
+      const file = path.join(root, name);
+      fs.writeFileSync(file, text, { mode });
+      fs.chmodSync(file, mode);
+      return file;
+    };
+    const named = (pid, extra = {}) => ({
+      version: 1,
+      kind: 'layer-mask',
+      ownerPid: pid,
+      launchedAt: Date.now(),
+      sockets: [{ path: contentSocket, state: 'absent' }],
+      directories: [{ path: top, state: 'absent' }],
+      ...extra,
+    });
+    const forged = record(`mask-${forgedPid}-${'a'.repeat(16)}.json`, JSON.stringify(named(forgedPid, { launchedAt: 0 })));
+    const garbage = record(`mask-${forgedPid}-${'b'.repeat(16)}.json`, 'not a record');
+    const swept2 = reclaimDeadMaskRecords();
+    check(
+      !swept2.includes(forged) && !fs.existsSync(forged) && !fs.existsSync(garbage),
+      'the recovery kept a forged record of a dead run or a file that is no record, or applied the one whose start is far from its own change time',
+    );
+    check(
+      fs.readFileSync(contentSocket, 'utf8') === 'kept' && fs.existsSync(top),
+      'a forged record made the recovery remove a file with content or a directory with an entry',
+    );
+    const direct = removePlaceholders(
+      { launchedAt: 0, sockets: [{ path: contentSocket, state: 'absent' }], directories: [{ path: top, state: 'absent' }] },
+      {},
+    );
+    check(
+      direct.files.length === 0 && direct.directories.length === 0,
+      'the removal rule removed a file with content or a directory with an entry',
+    );
+
+    // A record that fails one test of the sweep is deleted and applies nothing, though each of them names a placeholder the rule would remove.
+    // The records sit in a directory of their own and the sweep reads them as a dead run's.
+    const sweepDirectory = fs.mkdtempSync(path.join(base, 'sweep-'));
+    const sweepSocket = path.join(sweepDirectory, 'placeholder.sock');
+    const plant = (index, { pid = forgedPid, mode = 0o600, launched = Date.now() } = {}) => {
+      fs.writeFileSync(sweepSocket, '', { mode: 0o444 });
+      const file = path.join(sweepDirectory, `mask-${forgedPid}-${index.toString(16).padStart(16, '0')}.json`);
+      const contents = { ...named(pid, { launchedAt: launched }), sockets: [{ path: sweepSocket, state: 'absent' }], directories: [] };
+      fs.writeFileSync(file, JSON.stringify(contents));
+      fs.chmodSync(file, mode);
+      return file;
+    };
+    const sweepCases = [
+      ['a record of this module with the right owner, mode, pid and start', {}, process.getuid(), true],
+      ["a record another user than the runtime's owns", {}, process.getuid() + 1, false],
+      ['a record with mode 0644', { mode: 0o644 }, process.getuid(), false],
+      ['a record with mode 0660', { mode: 0o660 }, process.getuid(), false],
+      ['a record whose pid differs from the pid in its name', { pid: forgedPid + 1 }, process.getuid(), false],
+      ['a record whose start is long before its own change time', { launched: Date.now() - 3_600_000 }, process.getuid(), false],
+      ['a record whose start is long after its own change time', { launched: Date.now() + 3_600_000 }, process.getuid(), false],
+    ];
+    for (const [index, [what, options, uid, applied]] of sweepCases.entries()) {
+      const file = plant(index + 1, options);
+      const swept = sweepMaskRecords({ recordDirectory: sweepDirectory, alive: () => false, uid });
+      check(
+        !fs.existsSync(file) && swept.includes(file) === applied && fs.existsSync(sweepSocket) !== applied,
+        `the sweep over ${what} ${swept.includes(file) ? 'applied' : 'did not apply'} it and left ${fs.existsSync(sweepSocket) ? 'the placeholder' : 'no placeholder'}; expected it ${applied ? 'applied, the placeholder removed' : 'deleted with the placeholder left'}`,
+      );
+      fs.rmSync(sweepSocket, { force: true });
+      fs.rmSync(file, { force: true });
+    }
+    // A record of a live run is left, whatever else it is.
+    const livePlanted = plant(99);
+    const liveSwept = sweepMaskRecords({ recordDirectory: sweepDirectory, alive: () => true });
+    check(
+      liveSwept.length === 0 && fs.existsSync(livePlanted) && fs.existsSync(sweepSocket),
+      'the sweep applied or deleted the record of a run that is alive',
+    );
+    fs.rmSync(sweepSocket, { force: true });
+    fs.rmSync(livePlanted, { force: true });
+  } finally {
+    // The child waits for a signal, so one that a failed check left alive is ended here, by its own handle.
+    if (child !== null && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    stageStandIn(stub, {});
+    for (const server of servers) await closeServer(server);
+  }
+}
+
+/**
+ * The route to the host's path-based sockets of a process of the evaluation layer, on a Linux host with Bubblewrap and strace only (Story 1.88; the Linux CI job proves it, a macOS host skips it).
+ * The runtime serves a Unix socket file under the temp directory, and the host's own `/run/dbus/system_bus_socket` and `/var/run/docker.sock` are tried where the runtime's user can connect to them.
+ * A layer process connecting to each is refused (`ECONNREFUSED`), and the layer with the empty device files taken out of its vector connects to each, which is the revert check.
+ * The socket the runtime serves in the user's private root, where it serves a sealed-brief agent's bridge, stays connectable, and a host socket moved there is hidden at the next start.
+ * The private root is read-only beneath a layer process, with or without a socket to hide, and the run's own parent stays writable: a layer process writing a record of the guard fails, and one writing in the run's parent succeeds.
+ * A socket bound after the process started is reached, which the reference states.
+ * A socket that went away after the vector was built stops the start with the file system of the host as it was, and the vector listed again starts; the layer with the bind of each socket's own path taken out starts and leaves an empty file where the socket was, which is the assertion that fails without the bind.
+ */
+async function checkLayerPathSocketRoute() {
+  const label = 'layer path-socket route';
+  if (process.platform !== 'linux') {
+    skipCase(
+      label,
+      `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it, and the vector's text is held on every host by the layer path socket units`,
+    );
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('layer-socket-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const outsideDirectory = socketDirectory();
+  const root = layerPrivateRoot();
+  fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  const ownDirectory = fs.mkdtempSync(path.join(root, 'layer-socket-'));
+  const servers = [];
+  const runParents = [];
+  let unregisterOwn = () => {};
+  // Each start lists the host's sockets again, as a spawn does, so a socket a host process removes since the first list cannot stop it.
+  const connect = async (prefix, target) => {
+    const { target: command, args } = layerCommand(freshPrefix(prefix), LAYER_CONNECT(target));
+    const ran = await runToEnd(command, args);
+    return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+  };
+  try {
+    const outside = path.join(outsideDirectory, 'host.sock');
+    servers.push(await listenOnSocket(outside));
+    const own = path.join(ownDirectory, 'bridge.sock');
+    servers.push(await listenOnSocket(own));
+    // The runtime registers the socket it serves, as the bridge does when it listens.
+    unregisterOwn = registerServedSocket(own);
+    const targets = [['a Unix socket file the runtime serves under the temp directory', outside]];
+    for (const system of ['/run/dbus/system_bus_socket', '/var/run/docker.sock']) {
+      let reachable = false;
+      try {
+        reachable =
+          fs.statSync(system).isSocket() &&
+          (await runToEnd(process.execPath, ['-e', CONNECT_PROBE, 'path', system])).stdout.trim() === 'connected';
+      } catch {
+        reachable = false;
+      }
+      if (reachable) targets.push([`the host's ${system}`, system]);
+      else console.log(`  the host's ${system} is absent here or not reachable to this user; the case tries the sockets it can reach`);
+    }
+    // The list is narrowed to what the case serves, its directory beneath the private root and the host sockets it tries, so a socket another process on the runner removes cannot stop a start.
+    const reachableSystem = targets
+      .filter(([, target]) => target.startsWith('/') && !target.startsWith(outsideDirectory))
+      .map(([, target]) => target);
+    const narrowed = (options) =>
+      listHostSockets({
+        ...options,
+        table: path.join(outsideDirectory, 'no-table'),
+        roots: [outsideDirectory, ownDirectory],
+        pinned: reachableSystem,
+      });
+    // The run's own private parent exists when the vector is built, so the vector keeps it writable beneath the read-only root.
+    const runParent = fs.mkdtempSync(path.join(root, `run-${process.pid}-`));
+    runParents.push(runParent);
+    const layer = layerPrefix(confinement, { hostSockets: narrowed });
+    const open = layerPrefix(confinement, { hostSockets: () => [] });
+    check(
+      layer.includes(outside) && !layer.includes(own),
+      "the layer's vector does not hide the socket the runtime serves under the temp directory, or hides one under the private root",
+    );
+    for (const [what, target] of targets) {
+      const refused = await connect(layer, target);
+      check(
+        refused === 'refused ECONNREFUSED',
+        `a layer process connecting to ${what} got ${JSON.stringify(refused)}; expected refused ECONNREFUSED`,
+      );
+      const control = await connect(open, target);
+      check(
+        control === 'connected',
+        `with the empty device files taken out of the layer's vector, a process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+    }
+    const reached = await connect(layer, own);
+    check(
+      reached === 'connected',
+      `a layer process connecting to a socket under the private root got ${JSON.stringify(reached)}; expected connected`,
+    );
+    // The private root is read-only beneath the layer and the run's own parent stays writable: a layer process cannot write a record of the guard, and its scratch directory works.
+    const writeAs = async (prefix, file) => {
+      const { target: command, args } = layerCommand(freshPrefix(prefix), ['-e', WRITE_PROBE, file, 'forged']);
+      const ran = await runToEnd(command, args);
+      return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+    };
+    const rootArguments = ['--ro-bind', root, root, '--bind', runParent, runParent].join(' ');
+    check(
+      freshPrefix(layer).join(' ').includes(rootArguments),
+      `the layer's vector does not carry ${rootArguments} after --bind / /: ${JSON.stringify(freshPrefix(layer).slice(0, 14))}`,
+    );
+    const forgedRecord = path.join(root, `mask-${process.pid}-${'d'.repeat(16)}.json`);
+    const recordWritten = await writeAs(layer, forgedRecord);
+    check(
+      recordWritten === 'write EROFS' && !fs.existsSync(forgedRecord),
+      `a layer process writing a record in the private root got ${JSON.stringify(recordWritten)}; expected write EROFS and no file`,
+    );
+    const scratchWritten = await writeAs(layer, path.join(runParent, 'scratch.txt'));
+    check(
+      scratchWritten === 'written' && fs.readFileSync(path.join(runParent, 'scratch.txt'), 'utf8') === 'forged',
+      `a layer process writing a file in the run's own private parent got ${JSON.stringify(scratchWritten)}; expected written`,
+    );
+    // A vector that hides no socket binds the root read-only too, since a layer process could otherwise write a record that a later preflight would apply.
+    const openArguments = freshPrefix(open);
+    check(
+      openArguments.join(' ').includes(rootArguments),
+      `the layer's vector with no socket to hide does not carry ${rootArguments} after --bind / /: ${JSON.stringify(openArguments.slice(0, 14))}`,
+    );
+    const openWritten = await writeAs(open, forgedRecord);
+    check(
+      openWritten === 'write EROFS' && !fs.existsSync(forgedRecord),
+      `a layer process writing a record in the private root under the vector with no socket to hide got ${JSON.stringify(openWritten)}; expected write EROFS and no file`,
+    );
+    const rootBind = openArguments.findIndex((argument, at) => argument === '--ro-bind' && openArguments[at + 1] === root);
+    const writableRoot = rootBind === -1 ? [] : [...openArguments.slice(0, rootBind), ...openArguments.slice(rootBind + 3)];
+    const controlWritten = await writeAs(writableRoot, forgedRecord);
+    check(
+      rootBind >= 0 && controlWritten === 'written' && fs.existsSync(forgedRecord),
+      `with the root's read-only bind taken out of the vector, a process writing a record got ${JSON.stringify(controlWritten)}; expected written, since the case proves nothing otherwise`,
+    );
+    fs.rmSync(forgedRecord, { force: true });
+    // A host socket a layer process moved into the private root stays hidden: the next start lists it there, and the socket the runtime serves stays out.
+    const movedFrom = path.join(outsideDirectory, 'to-move.sock');
+    servers.push(await listenOnSocket(movedFrom));
+    const movedTo = path.join(ownDirectory, 'moved.sock');
+    fs.renameSync(movedFrom, movedTo);
+    const relisted = layerPrefix(confinement, { hostSockets: narrowed });
+    check(
+      relisted.includes(movedTo) && !relisted.includes(own),
+      "the layer's vector listed again does not hide the socket that was moved into the private root, or hides the one the runtime serves",
+    );
+    const movedAnswer = await connect(relisted, movedTo);
+    check(
+      movedAnswer === 'refused ECONNREFUSED',
+      `a layer process connecting to a host socket moved into the private root got ${JSON.stringify(movedAnswer)}; expected refused ECONNREFUSED`,
+    );
+
+    // A socket bound after the process started is reached.
+    const lateSocket = path.join(outsideDirectory, 'late.sock');
+    const goFile = path.join(outsideDirectory, 'go');
+    const { target: lateTarget, args: lateArgs } = layerCommand(freshPrefix(layer), ['-e', LATE_PROBE, goFile, outside, lateSocket]);
+    const child = spawn(lateTarget, lateArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const closed = new Promise((resolve) => child.once('close', resolve));
+    try {
+      await probeReady(child, goFile);
+      servers.push(await listenOnSocket(lateSocket));
+      fs.writeFileSync(goFile, '');
+      let giveUp;
+      await Promise.race([closed, new Promise((resolve) => (giveUp = setTimeout(resolve, 30_000)))]);
+      clearTimeout(giveUp);
+      let answers = null;
+      try {
+        answers = JSON.parse(output.trim());
+      } catch {
+        answers = output;
+      }
+      check(
+        answers?.early === 'refused ECONNREFUSED' && answers?.late === 'connected',
+        `a running layer process connecting to a socket bound after its ready file appeared answered ${JSON.stringify(answers)}; expected the early socket refused and the late one reached, the reach the reference states`,
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+
+    // A socket that went away after the vector was built: the start stops and the host's file system is as it was.
+    const vanishing = path.join(outsideDirectory, 'vanishing.sock');
+    const vanishingServer = await listenOnSocket(vanishing);
+    const built = layerPrefix(confinement, { hostSockets: socketsUnder(outsideDirectory) });
+    check(built.includes(vanishing), "the layer's vector does not name the socket the case then removes");
+    await closeServer(vanishingServer);
+    fs.rmSync(vanishing, { force: true });
+    const ranBuilt = layerCommand(built, ['-e', 'process.stdout.write("ran")']);
+    const stopped = await runToEnd(ranBuilt.target, ranBuilt.args);
+    check(
+      stopped.status !== 0 &&
+        stopped.stdout === '' &&
+        !fs.existsSync(vanishing) &&
+        stopped.stderr.includes(`Can't find source path ${vanishing}`),
+      `the real Bubblewrap over a vector naming a socket that went away ended ${stopped.status} with ${JSON.stringify(stopped.stderr.trim())} and left ${fs.existsSync(vanishing) ? 'a file' : 'nothing'} at its path; expected the start stopped and no file on the host`,
+    );
+    const refreshed = layerCommand(built.refresh(), ['-e', 'process.stdout.write("ran")']);
+    const again = await runToEnd(refreshed.target, refreshed.args);
+    check(
+      again.status === 0 && again.stdout === 'ran' && !fs.existsSync(vanishing),
+      `the real Bubblewrap over a vector listed again after the socket went away ended ${again.status} with ${JSON.stringify(again.stderr.trim())}; expected the start with no file at ${vanishing}`,
+    );
+    // The control: the mask with no bind of the socket's own path makes an empty file where the socket was, and the guard removes it once the process has ended.
+    const guarded = built.guard();
+    const unpinned = layerCommand(withoutSocketPins(built, [vanishing]), ['-e', 'process.stdout.write("ran")']);
+    const made = await runToEnd(unpinned.target, unpinned.args);
+    check(
+      made.status === 0 && fs.existsSync(vanishing) && fs.lstatSync(vanishing).isFile(),
+      `the real Bubblewrap over a vector with no bind of the socket's own path ended ${made.status} and left ${fs.existsSync(vanishing) ? 'a file' : 'nothing'} at ${vanishing}; expected an empty file, or the case proves nothing`,
+    );
+    guarded.settle();
+    check(
+      !fs.existsSync(vanishing),
+      `after the process ended, settle left ${fs.existsSync(vanishing) ? 'the empty file the real Bubblewrap made' : 'nothing'} at ${vanishing}; expected the host directory as it was`,
+    );
+  } finally {
+    unregisterOwn();
+    for (const server of servers) await closeServer(server);
+    fs.rmSync(ownDirectory, { recursive: true, force: true });
+    for (const parent of runParents) fs.rmSync(parent, { recursive: true, force: true });
+  }
+}
+
+/** `text` with every character a regular expression reads as syntax escaped: the spelling the Seatbelt layer profile gives a path. */
+function escapedForSeatbelt(text) {
+  return text.replaceAll(/[.*+?^$()[\]{}|\\]/g, String.raw`\$&`);
+}
+
+/**
+ * The layer profile with the allowance Story 1.88 first built: the whole private root allowed for a `connect()` and no write denied beneath it.
+ * A layer process under `(allow default)` renames a host directory that holds a socket into the root and connects there, which this profile lets it do.
+ */
+function oldRootAllowance(profile, roots) {
+  let at = 0;
+  return profile
+    .replaceAll(/\(remote unix-socket \(regex #"[^"]*"\)\)/g, () => `(remote unix-socket (subpath "${roots[at++]}"))`)
+    .replace(/\n\(deny file-write\* (?:\(regex #"[^"]*"\) ?)+\)/, '');
+}
+
+/**
+ * The layer profile of review round 1: the write denial names the bridge directory's shape alone, so the private root and every entry directly in it stay writable.
+ * A layer process under `(allow default)` renames a tree of that shape to `<root>/run-<name>` or writes a record in the root, which this profile lets it do.
+ */
+function withoutRootDenial(profile, roots) {
+  return roots.reduce((text, root) => text.replace(`(regex #"^${escapedForSeatbelt(root)}(/[^/]+)?$") `, ''), profile);
+}
+
+/** The probe a layer process runs to write a file of mode 0600: the arguments are the file and its contents, and it prints how it ended. */
+const WRITE_PROBE = `
+const fs = require('node:fs');
+try {
+  fs.writeFileSync(process.argv[1], process.argv[2], { mode: 0o600 });
+  process.stdout.write('written');
+} catch (error) {
+  process.stdout.write('write ' + error.code);
+}
+`;
+
+/**
+ * The Seatbelt profile of the evaluation layer on any host (Story 1.88).
+ * The denial of every path-based socket comes first and the allowance after it names the bridge's socket shape beneath the user's private root, `<root>/run-<name>/s-<name>/bridge.sock`, and the two system services alone.
+ * The profile also denies every write to a path of the shape `<root>/run-<name>/s-<name>` and beneath it, so a layer process cannot rename a host directory that holds a socket to a path the allowance names.
+ * A reading of the profile finds each socket class closed or open, which a profile with no denial, one that denies every socket, one that allows the socket the host bound and one that allows the whole private root each fail.
+ * The profile is the layer's before the story with the rules added and nothing else changed, and it holds the same text before and after a socket is bound.
+ */
+async function checkSeatbeltLayerSocketUnits() {
+  const base = socketDirectory();
+  const folder = path.join(base, 'evals');
+  fs.mkdirSync(folder, { recursive: true });
+  const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder };
+  const profile = layerPrefix(seatbelt).at(-1);
+  const root = layerPrivateRoot();
+  const rootSpellings = [...new Set(['/tmp', fs.realpathSync.native('/tmp')].map((entry) => path.join(entry, path.basename(root))))];
+  const SYSTEM = ['/private/var/run/mDNSResponder', '/private/var/run/syslog'];
+  const bridges = rootSpellings.map((entry) => path.join(entry, 'run-1-abc', 's-xyz', 'bridge.sock'));
+  const CLOSED = [
+    ['an agent socket under the temp directory', path.join(base, 'agent.sock')],
+    ["Docker's socket", '/var/run/docker.sock'],
+    ["Docker Desktop's socket", '/Users/someone/.docker/run/docker.sock'],
+    ["Docker Desktop's privileged helper", '/private/var/run/com.docker.vmnetd.sock'],
+    ['the socket `SSH_AUTH_SOCK` names under the launchd directory', '/private/tmp/com.apple.launchd.AbCdEf/Listeners'],
+    ['a socket in the evaluation folder', path.join(folder, 'evidence.sock')],
+    ["a socket in a directory that only starts like the user's private root", `${root}-other/x.sock`],
+    ["a host directory's socket moved into the private root", path.join(root, 'evil', 'host.sock')],
+    ["a host directory's socket moved beneath a run's parent", path.join(root, 'run-1-abc', 'host.sock')],
+    ["a host directory's socket moved to a bridge directory's name", path.join(root, 'run-1-abc', 's-evil', 'host.sock')],
+    ["a socket of another name in the bridge's directory", path.join(root, 'run-1-abc', 's-xyz', 'other.sock')],
+    ["a socket beneath a directory of the bridge's directory", path.join(root, 'run-1-abc', 's-xyz', 'sub', 'bridge.sock')],
+    ['a bridge socket directly beneath the private root', path.join(root, 's-xyz', 'bridge.sock')],
+    ["a bridge socket's name with a suffix", `${bridges[0]}.x`],
+  ];
+  const OPEN = [
+    ...bridges.map((target) => ["a bridge socket under the user's private root", target]),
+    ['the resolver', SYSTEM[0]],
+    ['the log socket', SYSTEM[1]],
+  ];
+  const held = (text) => {
+    for (const [what, target] of CLOSED)
+      check(!profileAllowsSocket(text, target), `the Seatbelt layer profile lets a layer process connect to ${what}`);
+    for (const [what, target] of OPEN) check(profileAllowsSocket(text, target), `the Seatbelt layer profile closes ${what}`);
+  };
+  held(profile);
+  const denial = profile.indexOf(SEATBELT_SOCKET_DENIAL);
+  check(
+    denial !== -1 && !profile.includes(SEATBELT_SOCKET_DENIAL, denial + 1),
+    'the Seatbelt layer profile does not hold the socket denial exactly once',
+  );
+  const allowRule = profile.slice(profile.indexOf('(allow network-outbound', denial));
+  const named = [...allowRule.matchAll(/\(remote unix-socket (?:\((subpath|literal) "([^"]*)"\)|\(regex #"([^"]*)"\))\)/g)].map((match) =>
+    match[3] === undefined ? `${match[1]} ${match[2]}` : `regex ${match[3]}`,
+  );
+  const expected = [
+    ...rootSpellings.map((entry) => `regex ^${escapedForSeatbelt(entry)}/run-[^/]+/s-[^/]+/bridge\\.sock$`),
+    ...SYSTEM.map((entry) => `literal ${entry}`),
+  ];
+  check(
+    JSON.stringify([...named].sort()) === JSON.stringify([...expected].sort()),
+    `the Seatbelt layer profile's socket allowances are ${JSON.stringify(named)}; expected the bridge's socket shape beneath the private root and the two system services alone: ${JSON.stringify(expected)}`,
+  );
+  const lines = profile.split('\n');
+  const writeDenial = lines[3];
+  check(
+    lines[0] === '(version 1)' &&
+      lines[1] === '(allow default)' &&
+      lines[2] === `(deny file-write* (subpath "${folder}"))` &&
+      writeDenial.startsWith('(deny file-write* (regex #"') &&
+      lines[4] === SEATBELT_SOCKET_DENIAL &&
+      lines[5].startsWith('(allow network-outbound'),
+    `the Seatbelt layer profile is not the layer's write denial followed by the socket rules: ${JSON.stringify(profile)}`,
+  );
+  const writeShapes = [...writeDenial.matchAll(/\(regex #"([^"]*)"\)/g)].map((match) => match[1]);
+  check(
+    JSON.stringify([...writeShapes].sort()) ===
+      JSON.stringify(
+        [
+          ...rootSpellings.map((entry) => `^${escapedForSeatbelt(entry)}(/[^/]+)?$`),
+          ...rootSpellings.map((entry) => `^${escapedForSeatbelt(entry)}/run-[^/]+/s-[^/]+(/|$)`),
+        ].sort(),
+      ),
+    `the Seatbelt layer profile denies writes to ${JSON.stringify(writeShapes)}; expected the private root with each entry directly in it and the bridge's directory with everything beneath it, in each spelling of the private root`,
+  );
+  for (const [target, denied] of [
+    [root, true],
+    [path.join(root, 'run-1-abc'), true],
+    [path.join(root, 'run-new'), true],
+    [path.join(root, `mask-1-${'a'.repeat(16)}.json`), true],
+    [path.join(root, 'evil'), true],
+    [path.join(root, 'run-1-abc', 's-xyz'), true],
+    [path.join(root, 'run-1-abc', 's-evil'), true],
+    [path.join(root, 'run-1-abc', 's-xyz', 'bridge.sock'), true],
+    [path.join(root, 'run-1-abc', 's-xyz', 'token'), true],
+    [path.join(root, 'run-1-abc', 'scratch'), false],
+    [path.join(root, 'run-1-abc', 'scratch', 'deeper'), false],
+    [path.join(root, 'evil', 'deeper'), false],
+    [`${root}-other`, false],
+    [path.join(base, 'scratch'), false],
+  ]) {
+    check(
+      writeShapes.some((pattern) => new RegExp(pattern).test(target)) === denied,
+      `the Seatbelt layer profile ${denied ? 'lets a layer process write' : 'denies a write'} at ${target}`,
+    );
+  }
+
+  // The rule names paths, so a socket bound after the profile was made leaves the profile as it was.
+  const server = await listenOnSocket(path.join(base, 'agent.sock'));
+  try {
+    check(layerPrefix(seatbelt).at(-1) === profile, 'a socket the host bound changed the Seatbelt layer profile');
+    check(
+      !profileAllowsSocket(profile, path.join(base, 'agent.sock')),
+      'the Seatbelt layer profile lets a layer process connect to a socket the host bound',
+    );
+  } finally {
+    await closeServer(server);
+  }
+
+  // Each wrong profile fails the reading.
+  const misreadings = (text) =>
+    [...CLOSED.map(([, target]) => [target, false]), ...OPEN.map(([, target]) => [target, true])].filter(
+      ([target, wanted]) => profileAllowsSocket(text, target) !== wanted,
+    ).length;
+  check(misreadings(profile) === 0, 'the reading of the Seatbelt layer profile misreads the profile itself');
+  const oldProfile = oldRootAllowance(profile, rootSpellings);
+  check(
+    oldProfile !== profile && !oldProfile.includes('regex'),
+    'the profile with the whole private root allowed did not replace the bridge shape and the write denial',
+  );
+  for (const [what, text] of [
+    ['no denial', mutatedSocketProfile(profile, 'no-rule')],
+    ['a denial of every socket and no allowance', mutatedSocketProfile(profile, 'deny-all')],
+    [
+      'an allowance of the socket the host bound',
+      profile.replace(
+        SEATBELT_SOCKET_DENIAL,
+        `${SEATBELT_SOCKET_DENIAL}\n(allow network-outbound (remote unix-socket (literal "${path.join(base, 'agent.sock')}")))`,
+      ),
+    ],
+    ['the whole private root allowed', oldProfile],
+  ]) {
+    check(misreadings(text) > 0, `a Seatbelt layer profile with ${what} passed the reading of the socket rules`);
+  }
+}
+
+/**
+ * The probe a layer process runs to move a directory that holds a host socket: it renames the directory and, when that succeeds, connects to the socket by the path it now has, and it prints how it ended.
+ * The arguments are a JSON list of the directory, the destination and the socket's name.
+ */
+const RENAME_PROBE = `
+const fs = require('node:fs');
+const net = require('node:net');
+const path = require('node:path');
+const [source, destination, name] = JSON.parse(process.argv[1]);
+try {
+  fs.renameSync(source, destination);
+} catch (error) {
+  process.stdout.write('rename ' + error.code);
+  process.exit(0);
+}
+const socket = net.connect(path.join(destination, name));
+socket.on('connect', () => {
+  process.stdout.write('renamed connected');
+  process.exit(0);
+});
+socket.on('error', (error) => {
+  process.stdout.write('renamed refused ' + error.code);
+  process.exit(0);
+});
+`;
+
+/**
+ * The route to the host's path-based sockets of a process of the evaluation layer on a macOS host with Seatbelt (Story 1.88).
+ * Linux skips it and carries its half in `the layer path socket route`.
+ * A socket the runtime serves under the temp directory, the host's Docker sockets and the one `SSH_AUTH_SOCK` names are each refused (`EPERM`) where the runtime's user reaches them, and the same command with the denial taken out of the real profile connects to each, which is the revert check.
+ * Only a socket of the bridge's shape, `<root>/run-<name>/s-<name>/bridge.sock`, stays connectable beneath the user's private root, and a profile with every allowance taken out refuses it.
+ * A layer process that renames a host directory holding a socket to a bridge directory's name, to a run's name in the root (the whole tree built outside and renamed in) or to a name directly in the root gets `EPERM` for the rename, and the profile of review round 1 lets the tree through.
+ * A layer process that writes a record in the root gets `EPERM`, and the recovery of the host deletes the forged record that the profile of review round 1 let it write and leaves the empty directory it names in the git directory.
+ * The resolver and the log socket keep answering.
+ * A socket bound after the process started is refused too, since the rule names a path.
+ */
+async function checkSeatbeltLayerSocketRoute() {
+  const label = 'Seatbelt layer socket route';
+  if (process.platform !== 'darwin') {
+    skipCase(
+      label,
+      `Seatbelt exists on macOS only, and this host is ${process.platform}; the rule's text is held on every host by the Seatbelt layer socket units`,
+    );
+    return;
+  }
+  const folder = tempDir('seatbelt-layer-folder');
+  // The project is a git repository, so the layer profile also denies every write to its git directory.
+  spawnSync('git', ['init', '-q'], { cwd: folder });
+  const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const outsideDirectory = socketDirectory();
+  const root = layerPrivateRoot();
+  fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  // The runtime serves the bridge at <root>/run-<name>/s-<name>/bridge.sock (`workspace.js` `makePrivateParent`, `bridge.js` `socketPlace`).
+  const parentDirectory = fs.mkdtempSync(path.join(root, 'run-1-'));
+  const ownDirectory = fs.mkdtempSync(path.join(parentDirectory, 's-'));
+  const prefix = layerPrefix(confinement);
+  const mutated = (mutate) => {
+    const changed = [...prefix];
+    changed[2] = mutatedSocketProfile(prefix[2], mutate);
+    check(changed[2] !== prefix[2], `the ${mutate} control did not change the Seatbelt layer profile`);
+    return changed;
+  };
+  const connect = async (using, target) => {
+    const { target: command, args } = layerCommand(using, LAYER_CONNECT(target));
+    const ran = await runToEnd(command, args);
+    return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+  };
+  const servers = [];
+  try {
+    const outside = path.join(outsideDirectory, 'host.sock');
+    servers.push(await listenOnSocket(outside));
+    const targets = [['a Unix socket file the runtime serves under the temp directory', outside]];
+    for (const system of [
+      '/var/run/docker.sock',
+      path.join(os.homedir(), '.docker', 'run', 'docker.sock'),
+      '/var/run/com.docker.vmnetd.sock',
+      process.env.SSH_AUTH_SOCK,
+    ]) {
+      if (typeof system !== 'string' || system === '') continue;
+      let reachable = false;
+      try {
+        reachable =
+          fs.statSync(system).isSocket() &&
+          (await runToEnd(process.execPath, ['-e', CONNECT_PROBE, 'path', system])).stdout.trim() === 'connected';
+      } catch {
+        reachable = false;
+      }
+      if (reachable) targets.push([`the host's ${system}`, system]);
+      else console.log(`  the host's ${system} is absent here or not reachable to this user; the case tries the sockets it can reach`);
+    }
+    for (const [what, target] of targets) {
+      const refused = await connect(prefix, target);
+      check(
+        refused === 'refused EPERM',
+        `a Seatbelt layer process connecting to ${what} got ${JSON.stringify(refused)}; expected refused EPERM`,
+      );
+      const control = await connect(mutated('no-rule'), target);
+      check(
+        control === 'connected',
+        `with the denial taken out of the Seatbelt layer profile, a process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+    }
+    // The runtime's own sockets: a socket under the private root.
+    const own = path.join(ownDirectory, 'bridge.sock');
+    servers.push(await listenOnSocket(own));
+    const reached = await connect(prefix, own);
+    check(
+      reached === 'connected',
+      `a Seatbelt layer process connecting to a socket under the private root got ${JSON.stringify(reached)}; expected connected`,
+    );
+    const denied = await connect(mutated('deny-all'), own);
+    check(
+      denied === 'refused EPERM',
+      `a profile that denies every socket answered a layer process connecting to a socket under the private root with ${JSON.stringify(denied)}; expected refused EPERM`,
+    );
+    // A layer process moves a directory that holds a host socket into the private root and connects there.
+    // The profile refuses the rename to the bridge's shape and to a name directly in the root, and a socket moved to any other name beneath a run's parent is refused by the connect rule.
+    // The profile that allowed the whole private root lets the same process rename the directory and connect.
+    const movingDirectory = fs.mkdtempSync(path.join(outsideDirectory, 'moving-'));
+    const movingSocket = path.join(movingDirectory, 'host.sock');
+    servers.push(await listenOnSocket(movingSocket));
+    const rename = async (using, destination) => {
+      const { target: command, args } = layerCommand(using, [
+        '-e',
+        RENAME_PROBE,
+        JSON.stringify([movingDirectory, destination, 'host.sock']),
+      ]);
+      const ran = await runToEnd(command, args);
+      if (fs.existsSync(destination) && !fs.existsSync(movingDirectory)) fs.renameSync(destination, movingDirectory);
+      return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+    };
+    const oldProfile = [...prefix];
+    oldProfile[2] = oldRootAllowance(
+      prefix[2],
+      [...new Set(['/tmp', fs.realpathSync.native('/tmp')])].map((entry) => path.join(entry, path.basename(root))),
+    );
+    check(oldProfile[2] !== prefix[2], 'the control that allows the whole private root did not change the Seatbelt layer profile');
+    for (const [what, destination, expectedHeld] of [
+      ["a bridge directory's name beneath a run's parent", path.join(parentDirectory, 's-evil'), 'rename EPERM'],
+      ["a name beneath a run's parent that is no bridge directory's", path.join(parentDirectory, 'moved'), 'renamed refused EPERM'],
+      ['a name directly in the private root', path.join(root, `moved-${process.pid}`), 'rename EPERM'],
+    ]) {
+      const held = await rename(prefix, destination);
+      check(
+        held === expectedHeld,
+        `a Seatbelt layer process that renamed a directory holding a host socket to ${what} and connected there got ${JSON.stringify(held)}; expected ${JSON.stringify(expectedHeld)}`,
+      );
+    }
+    const open = await rename(oldProfile, path.join(parentDirectory, 's-evil'));
+    check(
+      open === 'renamed connected',
+      `with the whole private root allowed, a layer process that renamed a directory holding a host socket to a bridge directory's name and connected there got ${JSON.stringify(open)}; expected "renamed connected", since the case proves nothing otherwise`,
+    );
+    // Seatbelt checks a rename against the path of the entry that is renamed, so a tree built outside the root and renamed to a run's name in the root is a write to that entry.
+    // The profile of review round 1 let the layer do it, and the connect rule then matched the tree's bridge socket.
+    const previous = [...prefix];
+    previous[2] = withoutRootDenial(
+      prefix[2],
+      [...new Set(['/tmp', fs.realpathSync.native('/tmp')])].map((entry) => path.join(entry, path.basename(root))),
+    );
+    check(previous[2] !== prefix[2], 'the profile of review round 1 did not change the Seatbelt layer profile');
+    const stagingDirectory = fs.mkdtempSync(path.join(outsideDirectory, 'staging-'));
+    fs.mkdirSync(path.join(stagingDirectory, 's-B'));
+    servers.push(await listenOnSocket(path.join(stagingDirectory, 's-B', 'bridge.sock')));
+    const renameTree = async (using, destination) => {
+      const { target: command, args } = layerCommand(using, [
+        '-e',
+        RENAME_PROBE,
+        JSON.stringify([stagingDirectory, destination, path.join('s-B', 'bridge.sock')]),
+      ]);
+      const ran = await runToEnd(command, args);
+      if (fs.existsSync(destination) && !fs.existsSync(stagingDirectory)) fs.renameSync(destination, stagingDirectory);
+      return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+    };
+    const treeDestination = path.join(root, `run-${process.pid}-x`);
+    const treeHeld = await renameTree(prefix, treeDestination);
+    check(
+      treeHeld === 'rename EPERM',
+      `a Seatbelt layer process that renamed a tree holding .../s-B/bridge.sock to a run's name in the private root got ${JSON.stringify(treeHeld)}; expected rename EPERM`,
+    );
+    const treeOpen = await renameTree(previous, treeDestination);
+    check(
+      treeOpen === 'renamed connected',
+      `with the profile of review round 1, a layer process that renamed a tree holding .../s-B/bridge.sock to a run's name in the private root and connected there got ${JSON.stringify(treeOpen)}; expected "renamed connected", since the case proves nothing otherwise`,
+    );
+    // A layer process writes a record of the guard in the private root: the profile refuses it, so the records are the runtime's alone.
+    // The profile of review round 1 lets it, and the next preflight of the host then reads a forged record that names an empty directory in the git directory, which the layer cannot touch.
+    check(
+      typeof confinement.gitDirectory === 'string',
+      'the layer confinement of a git repository names no git directory, so the forged record has no git directory to name',
+    );
+    const protectedEmpty = path.join(confinement.gitDirectory ?? confinement.evaluationFolder, `forged-target-${process.pid}`);
+    fs.mkdirSync(protectedEmpty);
+    const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
+    const forgedRecord = path.join(root, `mask-${deadPid}-${'c'.repeat(16)}.json`);
+    const forgery = JSON.stringify({
+      version: 1,
+      kind: 'layer-mask',
+      ownerPid: deadPid,
+      launchedAt: 0,
+      sockets: [],
+      directories: [{ path: protectedEmpty, state: 'absent' }],
+    });
+    const writeRecord = async (using) => {
+      const { target: command, args } = layerCommand(using, ['-e', WRITE_PROBE, forgedRecord, forgery]);
+      const ran = await runToEnd(command, args);
+      return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+    };
+    try {
+      const writeHeld = await writeRecord(prefix);
+      check(
+        writeHeld === 'write EPERM' && !fs.existsSync(forgedRecord),
+        `a Seatbelt layer process writing a record in the private root got ${JSON.stringify(writeHeld)}; expected write EPERM and no file`,
+      );
+      const writeOpen = await writeRecord(previous);
+      check(
+        writeOpen === 'written' && fs.existsSync(forgedRecord),
+        `with the profile of review round 1, a layer process writing a record in the private root got ${JSON.stringify(writeOpen)}; expected written, since the case proves nothing otherwise`,
+      );
+      // The host's recovery deletes the forged record and leaves the directory in place: the record's start (0) is far from its own change time.
+      const recovered = reclaimDeadMaskRecords();
+      check(
+        !recovered.includes(forgedRecord) && !fs.existsSync(forgedRecord) && fs.existsSync(protectedEmpty),
+        `the recovery over a record a layer process wrote ${fs.existsSync(forgedRecord) ? 'kept it' : 'deleted it'} and ${fs.existsSync(protectedEmpty) ? 'left' : 'removed'} the empty directory it names in the git directory; expected the record deleted and the directory in place`,
+      );
+    } finally {
+      fs.rmSync(forgedRecord, { force: true });
+      fs.rmSync(protectedEmpty, { recursive: true, force: true });
+    }
+    // The system services a toolchain needs keep answering.
+    const name = await resolvableName();
+    if (name === null) {
+      skipCase(
+        'Seatbelt layer resolver half',
+        'no name resolves on this host with no confinement, so a refused lookup would prove nothing',
+      );
+    } else {
+      const resolve = async (using) => {
+        const { target: command, args } = layerCommand(using, ['-e', RESOLVE_PROBE, name]);
+        return (await runToEnd(command, args)).stdout.trim();
+      };
+      const answered = await resolve(prefix);
+      check(
+        answered.startsWith('resolved'),
+        `a Seatbelt layer process resolving ${name} got ${JSON.stringify(answered)}; expected resolved`,
+      );
+      const failed = await resolve(mutated('deny-all'));
+      check(
+        failed.startsWith('failed'),
+        `a profile that denies every socket still resolved ${name} for a layer process: ${JSON.stringify(failed)}`,
+      );
+    }
+    const python = '/usr/bin/python3';
+    if (spawnSync(python, ['--version'], { encoding: 'utf8' }).status === 0) {
+      const logs = async (using) => {
+        const ran = await runToEnd(using[0], [...using.slice(1), python, '-c', SYSLOG_PROBE]);
+        return ran.stdout.trim();
+      };
+      check(
+        (await logs(prefix)) === 'connected',
+        'a Seatbelt layer process connecting a datagram to /var/run/syslog was refused; expected connected',
+      );
+      const unlogged = await logs(mutated('deny-all'));
+      check(
+        unlogged === 'refused 1',
+        `a profile that denies every socket answered a datagram to the log socket with ${JSON.stringify(unlogged)}; expected refused 1`,
+      );
+    } else {
+      skipCase('Seatbelt layer log socket half', `${python} does not run on this host`);
+    }
+    // A socket the runtime binds after the process started is refused, since the rule names a path.
+    const lateSocket = path.join(outsideDirectory, 'late.sock');
+    const goFile = path.join(outsideDirectory, 'go');
+    const { target: lateTarget, args: lateArgs } = layerCommand(prefix, ['-e', LATE_PROBE, goFile, outside, lateSocket]);
+    const child = spawn(lateTarget, lateArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const closed = new Promise((resolve) => child.once('close', resolve));
+    try {
+      await probeReady(child, goFile);
+      servers.push(await listenOnSocket(lateSocket));
+      fs.writeFileSync(goFile, '');
+      let giveUp;
+      await Promise.race([closed, new Promise((resolve) => (giveUp = setTimeout(resolve, 30_000)))]);
+      clearTimeout(giveUp);
+      let answers = null;
+      try {
+        answers = JSON.parse(output.trim());
+      } catch {
+        answers = output;
+      }
+      check(
+        answers?.early === 'refused EPERM' && answers?.late === 'refused EPERM',
+        `a running Seatbelt layer process connecting to a socket bound after its ready file appeared answered ${JSON.stringify(answers)}; expected both refused`,
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+  } finally {
+    for (const server of servers) await closeServer(server);
+    fs.rmSync(parentDirectory, { recursive: true, force: true });
   }
 }
 
@@ -17807,6 +20211,12 @@ const CASES = [
   { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
   { name: 'the Seatbelt path socket units', body: checkSeatbeltPathSocketUnits, group: 'confinement' },
   { name: 'the Seatbelt path socket route', body: checkSeatbeltPathSocketRoute, group: 'confinement' },
+  { name: 'the layer path socket units', body: checkLayerPathSocketUnits, group: 'confinement' },
+  { name: 'the layer path socket guard', body: checkLayerPathSocketGuard, group: 'confinement' },
+  { name: 'the layer path socket recovery', body: checkLayerPathSocketRecovery, group: 'confinement' },
+  { name: 'the layer path socket route', body: checkLayerPathSocketRoute, group: 'confinement' },
+  { name: 'the Seatbelt layer socket units', body: checkSeatbeltLayerSocketUnits, group: 'confinement' },
+  { name: 'the Seatbelt layer socket route', body: checkSeatbeltLayerSocketRoute, group: 'confinement' },
   { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));

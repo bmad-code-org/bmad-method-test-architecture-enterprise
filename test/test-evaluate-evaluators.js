@@ -1230,6 +1230,22 @@ async function checkKilledCommandRecovery() {
       'the command run did not die by SIGKILL',
     );
     check(parent && fs.existsSync(parent), 'SIGKILL did not leave the command evaluator parent');
+    // The killed run also left a record of the sockets its layer hid (Story 1.88), and an empty file where a socket went away.
+    const strewn = path.join(scratch.make('killed-mask-placeholder'), 'killed.sock');
+    fs.writeFileSync(strewn, '', { mode: 0o444 });
+    const maskRecord = path.join(PRIVATE_ROOT, `mask-${child.pid}-${'d'.repeat(16)}.json`);
+    fs.writeFileSync(
+      maskRecord,
+      JSON.stringify({
+        version: 1,
+        kind: 'layer-mask',
+        ownerPid: child.pid,
+        launchedAt: Date.now() - 1000,
+        sockets: [{ path: strewn, state: 'absent' }],
+        directories: [],
+      }),
+      { mode: 0o600 },
+    );
     const laterTemp = scratch.make('killed-command-later-temp');
     const recovered = evaluate(['preflight', '--evaluation', project.folder], {
       ...project.env,
@@ -1247,6 +1263,10 @@ async function checkKilledCommandRecovery() {
       `preflight did not report killed command scratch ${commands}`,
     );
     check(!fs.existsSync(parent), `preflight left killed command scratch in ${parent}`);
+    check(
+      !fs.existsSync(maskRecord) && !fs.existsSync(strewn),
+      `preflight after a killed run left the hidden-socket record ${maskRecord} (${fs.existsSync(maskRecord)}) or the empty file ${strewn} (${fs.existsSync(strewn)})`,
+    );
     check(git(project.repository, ['status', '--porcelain']) === status, 'command scratch recovery changed adopter status');
     check(git(project.repository, ['for-each-ref']) === refs, 'command scratch recovery changed adopter refs');
   } finally {
