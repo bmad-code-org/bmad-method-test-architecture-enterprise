@@ -274,8 +274,8 @@ async function runCiCommand(folder, { tier, env = process.env, log = () => {} } 
     }
   };
   const context = createContext({ folder, tier, env, log, writer, scratch });
-  // An interrupting signal reaches the gate's process group and removes the scratch directory; the engine stage that is running
-  // is ended by the guard `engine-cli.js` keeps while a stage is live, which runs right after this handler.
+  // An interrupting signal ends the engine stage that is running (`cleanUpOnSignal` does, before this handler), reaches the gate's
+  // process group and removes the scratch directory.
   const release = cleanUpOnSignal([], new AbortController(), {
     onSignal: (name) => {
       stopChildren(context, name, SIGNAL_GRACE_MS);
@@ -470,7 +470,7 @@ function finish({ folder, tier, writer, rows, baseline }) {
 /**
  * Ends every child the invocation has running (`stopGroups`, `process-group.js`): `signal` goes to its process group first and,
  * once `graceMs` has passed, SIGKILL follows. Nothing a gate started outlives `ci` that way, except when `ci` itself is killed
- * with SIGKILL, which no handler sees. The engine stages end through the guard in `engine-cli.js`.
+ * with SIGKILL, which no handler sees. The engine stages end through `cleanUpOnSignal`, which stops them before this runs.
  */
 function stopChildren(context, signal, graceMs) {
   stopGroups(context.children, signal, graceMs);
@@ -587,12 +587,9 @@ async function runGate(context, entry) {
 // evaluate checks
 
 async function checkCheck(context) {
-  // The check's engine compile works in a directory on the invocation's list, which a signal removes with the private parent.
-  try {
-    makePrivateParent(context.scratch);
-  } catch {
-    // Without a private root the directory is made in the temporary directory and removed when the check ends.
-  }
+  // The check's engine compile works in a directory on the invocation's list, beside the replay's scratch directory, which carries the
+  // owner file: a signal removes the private parent, and the next `ci` over the folder removes it after a SIGKILL.
+  invocationScratch(context);
   const findings = await checkEvaluation(context.folder, { env: context.env, scratch: context.scratch });
   const text = findings.map((entry) => findingLine(entry.file, entry.rule, entry.message));
   text.push(

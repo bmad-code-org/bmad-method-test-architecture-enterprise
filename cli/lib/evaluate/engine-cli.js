@@ -19,9 +19,11 @@
  * A stage runs as an asynchronous child that leads a process group of its own, and every live stage is on one list
  * (`liveStages`). A synchronous call would hold the event loop, so a SIGINT or SIGTERM that reached `tea-evaluate` could not run
  * its handler until the stage ended, and a stage that hangs would hold the command and its scratch directories.
- * While a stage is live this module keeps a guard on SIGINT, SIGTERM, SIGHUP and SIGQUIT: it sends the signal to each stage's
- * group, SIGKILL after a grace, and ends the process by the same signal once no other handler is left to do it. A command's own
- * handler (`tea-evaluate ci` removes its scratch directories) is registered earlier and runs first.
+ * A stage writes its output file into a staging directory and creates the directory when it is gone, so a command that removes its
+ * scratch directories while a stage is still alive can find an entry the stage made after the removal. Every command that runs a
+ * stage registers `cleanUpOnSignal` (`workspace.js`), which calls `stopEngineStages` before the command's own `onSignal` removes
+ * anything: the stage's group gets the signal, SIGKILL follows after a grace, and the handler then ends the process by the signal.
+ * A process that ends through `process.exit` kills the live groups from an `exit` hook.
  */
 
 'use strict';
@@ -47,14 +49,8 @@ class EngineStageError extends Error {
 /** A generous ceiling on what one stage may print on each stream; a stage printing more could not run. */
 const MAX_STAGE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
-/** How long a stage that was sent the guard's signal has before SIGKILL. */
-const STAGE_SIGNAL_GRACE_MS = 500;
-
 /** The eval-quality stages that are running now, each the leader of its own process group. */
 const liveStages = new Set();
-
-const GUARDED_SIGNALS = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
-let guards = null;
 
 /**
  * Ends every live stage: `signal` goes to each stage's process group and, after `graceMs` (a wait that blocks, since the caller is
@@ -65,32 +61,6 @@ let guards = null;
  */
 function stopEngineStages(signal, graceMs) {
   stopGroups(liveStages, signal, graceMs);
-}
-
-/**
- * While a stage is live, a signal that ends the process ends the stage first. The command's own handler runs ahead of this one
- * (it was registered earlier) and ends the process itself; when this is the only listener the signal's default action would have
- * run, so the guard stops the stages and raises the signal again with the default action restored.
- */
-function guardStages() {
-  if (guards !== null) return;
-  guards = new Map();
-  for (const name of GUARDED_SIGNALS) {
-    const guard = () => {
-      stopEngineStages(name, STAGE_SIGNAL_GRACE_MS);
-      if (process.listenerCount(name) > 1) return;
-      unguardStages();
-      process.kill(process.pid, name);
-    };
-    guards.set(name, guard);
-    process.on(name, guard);
-  }
-}
-
-function unguardStages() {
-  if (guards === null) return;
-  for (const [name, guard] of guards) process.removeListener(name, guard);
-  guards = null;
 }
 
 // A process that ends through `process.exit` leaves no stage running either.
@@ -116,13 +86,11 @@ function spawnStage(command, commandArgs, env) {
       return;
     }
     liveStages.add(child);
-    guardStages();
     let settled = false;
     const settle = (status, signal, error) => {
       if (settled) return;
       settled = true;
       liveStages.delete(child);
-      if (liveStages.size === 0) unguardStages();
       resolve({
         status,
         signal,
@@ -254,4 +222,4 @@ async function runEngineStage(
   return { exitCode, stdout: result.stdout ?? '', stderr: result.stderr ?? '', recordPath };
 }
 
-module.exports = { DOCUMENTED_EXITS, EngineStageError, runEngineStage };
+module.exports = { DOCUMENTED_EXITS, EngineStageError, runEngineStage, stopEngineStages };
