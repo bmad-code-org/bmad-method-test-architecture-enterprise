@@ -193,12 +193,12 @@ function lineNamesOperation(line, operations) {
  *
  * @param {string} contractPath the evaluation's `contract.json`
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {{ signatureCollision: string|null, interfaceRepeat: string|null }}
+ * @param {string[]} [scratch] the caller's list of directories it removes however it ends, a signal included; the compile's directory is on a list of its own when absent
+ * @returns {Promise<{ signatureCollision: string|null, interfaceRepeat: string|null }>}
  */
-function compileRefusals(contractPath, env = process.env) {
+async function compileRefusals(contractPath, env = process.env, scratch = []) {
   const none = { signatureCollision: null, interfaceRepeat: null };
-  // A scratch list of its own, since `check` has no run: the directory goes through the layer's one scratch path (`makeScratchDirectory`) and is released the same way.
-  const scratch = [];
+  // The directory goes through the layer's one scratch path (`makeScratchDirectory`) and is released the same way. `check` has no run, so it keeps the list this call makes; `ci` hands over its own, which its signal handler removes.
   let staging;
   try {
     staging = makeScratchDirectory(scratch, 'tea-evaluate-check-');
@@ -207,7 +207,7 @@ function compileRefusals(contractPath, env = process.env) {
     return none;
   }
   try {
-    const stage = runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
+    const stage = await runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
       runDirectory: staging,
       folder: path.dirname(contractPath),
       recordPath: path.join(staging, 'compile-record.json'),

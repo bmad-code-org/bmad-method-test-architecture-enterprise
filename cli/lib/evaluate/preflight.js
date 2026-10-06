@@ -874,11 +874,11 @@ async function runInWorkspaces({
   // An engine stage writes its output into a private directory made for the
   // call, which no target has seen, and the runtime copies it into the run
   // directory through its writer, which holds the digest of what it wrote.
-  const engineStage = (stage, args, output) => {
+  const engineStage = async (stage, args, output) => {
     const staging = makeScratchDirectory(scratch, 'tea-evaluate-engine-');
     try {
       const produced = path.join(staging, output);
-      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
+      const result = await runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
       if (fs.existsSync(produced)) writer.copyIn(output, produced);
       return result;
     } finally {
@@ -890,7 +890,7 @@ async function runInWorkspaces({
     ['compile', 'eval-contract.json'],
     ['seal', 'sealed-evaluator-brief.json'],
   ]) {
-    const result = engineStage(stage, ['--in', contractPath], output);
+    const result = await engineStage(stage, ['--in', contractPath], output);
     if (result.exitCode !== 0) {
       return outcome({
         stage: 'engine',
@@ -1213,7 +1213,7 @@ async function runInWorkspaces({
     // The CLI reads the run directory next: it must hold what the runtime wrote, and nothing else.
     writer.verify('after the legs');
 
-    verdict = engineStage(
+    verdict = await engineStage(
       'preflight',
       ['--contract', contractPath, '--probes', probesPath, '--observations', observationsPath, '--run-id', invocationId],
       'preflight-verdict.json',

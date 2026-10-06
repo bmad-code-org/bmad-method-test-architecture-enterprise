@@ -644,6 +644,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The clean control P-004 now scores `held` with corroboration `agrees` on both oracles, and `test:probe-corpus` fails a clean control outcome that is anything else.
   `KNOWN_UNHELD` is empty and its check stays: a listed oracle that holds fails, and the check runs over an empty list on every run.
   `test/probes/expected-strength.json` moves in the ci corpus digest only; `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated.
+
+- A signal ends `tea-evaluate ci`, the eval-quality stage it is waiting on and its scratch directory at once (Story 1.92, AD-10, AD-12).
+  Each stage ran through a synchronous call, so a SIGINT or SIGTERM that reached `ci` while `compile`, `seal`, `preflight`, `score`, `aggregate-strength` or the stale-baseline compile ran waited for the stage to end, and a stage that hangs held `ci` and its private directory until something stopped it.
+  A stage is an asynchronous child that leads a process group of its own, and every live stage is on one list in `engine-cli.js`.
+  A guard in `engine-cli.js`, live while a stage runs, sends each stage's group the signal and kills it half a second later, `ci` removes its scratch directory, and `ci` ends by the same signal.
+  Every command that runs a stage ends it the same way: a SIGINT, SIGTERM, SIGHUP or SIGQUIT to `score`, `run`, `preflight` or `check` stops the stage and ends the command by that signal, and a `check` that compiles the contract keeps the compile's directory on the invocation's list.
+  The exits and streams of a stage pass through unchanged, and a stage that ends by a signal still raises the error `killed by <signal>`.
+  A spawn error names `spawn` where it named `spawnSync`.
+  `a signal while an engine stage runs` sends SIGINT and SIGTERM to a `ci` whose stage hangs and leaves the stage to the signal alone: it covers the replay's `score`, `aggregate-strength`, `preflight` and stale-baseline compile, a plan's `compile` and `seal`, the stale-baseline compile after a plan that does not read the baseline, and the `check` check's compile, and asserts `ci` ends by the signal within a bound, the stage's process is gone and neither the temporary directory nor the private root holds an entry of the run.
+  `a signal to score while its stage runs` holds the same for a command with no handler of its own.
+  The reference states that a SIGKILL of `ci` itself still leaves a running gate or stage in its own process group, since no portable parent-death signal exists.
+
 - A development `preflight` or `run` under a `partitionPlan` no longer opens the held-out files while it reads the adopter's tree (Story 1.109, Story 1.112).
   The tree reading that brackets a run hashed every path `git status` named, so a held-out plan or answers file an author was editing (modified or untracked) was opened and a path nobody may open ended the run with exit 12 and an `EACCES` stack.
   Those files now enter the reading by `lstat` size, modification time and mode, so an edit still moves the reading and no byte is read.
