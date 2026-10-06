@@ -21,7 +21,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free, so it runs on every pull request. .github/workflows/ci.yml runs on pull_request with no secret, and CONTRIBUTING.md says pull requests from forks run without any secret."
+        "reason": "Authoring check over the committed evaluation, including contract-source freshness. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -46,7 +46,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free, so it runs on every pull request (CAP-11). .github/workflows/ci.yml runs on pull_request with no secret."
+        "reason": "Compiles contract.json with eval-quality. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -71,7 +71,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free, so it runs on every pull request (CAP-11). .github/workflows/ci.yml runs on pull_request with no secret."
+        "reason": "Seals the contract into the evaluator brief. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -96,7 +96,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "The registry in evaluation.json names an HTTP target (kind api, POST /grade), so the conformance check applies. It is deterministic and runs on every pull request (CAP-11)."
+        "reason": "The registry names one HTTP target (answer-grade on 127.0.0.1), so the port conformance applies. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -121,7 +121,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Probes P-009 and P-015 take the gameability route, so the arm applies. It is deterministic and runs on every pull request (CAP-11); it reads baseline/."
+        "reason": "Probes P-009 and P-015 take the gameability route, so the arm applies. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -146,7 +146,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free, so it runs on every pull request (CAP-11); it reads baseline/."
+        "reason": "Compares oracle and scorer over baseline/scores. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -172,7 +172,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free, so it runs on every pull request (CAP-11); it reads baseline/."
+        "reason": "Replays the accepted baseline without a live run. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md says pull requests from forks run without any secret; this check is deterministic, needs no secret and calls no model, so it stays on pr (CAP-11)."
       }
     },
     {
@@ -195,7 +195,7 @@
       "placement": {
         "tier": "merge",
         "defaultTier": "merge",
-        "reason": "The registry names no environmentKeys and the target is the local stub app/server/grade.mjs (an ai-feature, no skill or agent runner), so it needs no secret and AD-10 defaults the live preflight to merge. The adopter stated no cost or run-time cap on the post-merge run, and the preflight is bounded by maxElapsedMs 30000. CONTRIBUTING.md says nothing runs after a merge to main today and ci.yml lists only pull_request, so the push to main is the post-merge event the CI skill must add."
+        "reason": "The target needs no secret: the registry names no environmentKeys and the server is the local app/server/grade.mjs on loopback, so AD-10 defaults the live preflight to merge. The adopter stated no cost or time limit against it. CONTRIBUTING.md says nothing runs after a squash merge to main, so the CI skill adds the push to main trigger to .github/workflows/ci.yml for this tier."
       }
     },
     {
@@ -217,14 +217,14 @@
       "evidence": [
         "runs/<invocationId>/checks/twin-run/stdout"
       ],
+      "gates": [
+        "publish"
+      ],
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "docs/RELEASING.md names the tag as the only release gate and says no scheduled job exists, and no workflow has a schedule trigger, so no scheduled entry exists and the live set sits on release. .github/workflows/release.yml starts on push of v* tags and holds the publish job. It shares that file with the evaluation jobs, so publish waits for this tier through gates. The contract declares a critical behavior (B-001, unsafe pass) and a defect that ships stays in the registry about six weeks while consumers pin versions. The target needs no secret, so the run costs no model call."
-      },
-      "gates": [
-        "publish"
-      ]
+        "reason": "docs/RELEASING.md says the tag is the only release gate and there is no scheduled job; no workflow has a schedule trigger, so no scheduled entry exists and the live set sits on release. The contract declares a critical behavior (B-001, restricted answers must be rejected), a defect ships for about six weeks, and consumers pin versions. The publish job of .github/workflows/release.yml shares the file with the evaluation jobs and waits for this tier; the file starts only on a push of v* tags."
+      }
     },
     {
       "id": "held-out",
@@ -248,7 +248,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so the held-out partition (P-011, P-012, P-013, P-015) runs at the tag. .github/workflows/release.yml starts on push of v* tags and docs/RELEASING.md names the tag as the release gate; the contract's critical behavior B-001 justifies blocking."
+        "reason": "No workflow has a schedule trigger (docs/RELEASING.md: no scheduled job), so the held-out partition (P-011, P-012, P-013, P-015) runs at the tag that starts .github/workflows/release.yml. One live run makes no model call: the target is the local stub."
       }
     },
     {
@@ -273,7 +273,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so the strength comparison against baseline/ runs at the tag in .github/workflows/release.yml, which docs/RELEASING.md names as the release gate. AD-10 allows warn for a strength regression."
+        "reason": "No workflow has a schedule trigger, so the strength comparison against baseline/ runs at the tag in .github/workflows/release.yml; a regression is a warning under AD-10."
       }
     }
   ]

@@ -111,6 +111,7 @@ const {
   PartitionPlanError,
   committedProbes,
   loadContractView,
+  partitionRequired,
   readHeldOutResponse,
   selectPartition,
   unknownPartition,
@@ -452,16 +453,23 @@ function writeQualificationEvidence(writer, directory, { probe, evidence, worksp
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @param {string} [options.partition] `development` or `held-out`; everything when absent. Only that partition's probes are
  *   qualified, over the contract that partition runs (`partition.js`, Story 1.51)
+ * @param {boolean} [options.requirePartition] refuse with exit 64 a call that names no partition over an evaluation that declares a
+ *   `partitionPlan`, since it would derive the both view and launch the held-out request (Story 1.111).
+ *   The command line sets it.
+ *   The CI `preflight-live` check, which is no authoring step, calls with the both view
  * @returns {Promise<PreflightOutcome>}
  */
-function runPreflightCommand(folder, { partition, ...options } = {}) {
+function runPreflightCommand(folder, { partition, requirePartition = false, ...options } = {}) {
   const unknown = unknownPartition(partition);
   if (unknown !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...unknown }));
   let selection;
   try {
+    const evaluation = readJson(path.join(folder, MANIFEST_NAME));
+    const missing = requirePartition ? partitionRequired(partition, evaluation) : null;
+    if (missing !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...missing }));
     selection = selectPartition({
       partition,
-      heldOutProbes: readJson(path.join(folder, MANIFEST_NAME)).heldOutProbes ?? [],
+      heldOutProbes: evaluation.heldOutProbes ?? [],
       probes: partition === undefined ? [] : committedProbes(folder),
     });
   } catch {

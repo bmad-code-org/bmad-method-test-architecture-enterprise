@@ -20,12 +20,12 @@ For an adopter installation, execute these commands in order. Replace `<evaluati
 npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>
 npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json
 npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json
-npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>
+npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development
 ```
 
-Under a `partitionPlan`, give the `preflight` command `--partition development`. A preflight with no `--partition` builds the both view and launches the held-out request while the gap loop is still open; run `--partition held-out` only after the development review.
+The `preflight` flag is required only when `evaluation.json` declares a `partitionPlan`. A preflight with no `--partition` over one exits 64, since it would build the both view and launch the held-out request while the gap loop is still open; run `--partition held-out` only after the development review.
 
-Inside TeA, run `node cli/evaluate.js` from the repository root for every `tea-evaluate` subcommand, retaining its arguments. Run compile and seal through `./node_modules/.bin/eval-quality` from that same root. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder>` and `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json` use the repository's one local eval-quality installation. The Stage 6 sequence uses this same branch before the first preflight.
+Inside TeA, run `node cli/evaluate.js` from the repository root for every `tea-evaluate` subcommand, retaining its arguments. Run compile and seal through `./node_modules/.bin/eval-quality` from that same root. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development` and `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json` use the repository's one local eval-quality installation. The Stage 6 sequence uses this same branch before the first preflight.
 
 ## Run confined
 
