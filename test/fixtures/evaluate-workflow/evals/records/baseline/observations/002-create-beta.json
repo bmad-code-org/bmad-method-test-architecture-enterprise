@@ -2,7 +2,7 @@
   "legId": "create-beta",
   "sequence": 2,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-e4f02689-ffe3-414d-8bac-73204f03e634/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "create-beta",
     "interfaceId": "records",
@@ -31,9 +31,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-57d9c825-fffb-4ee0-9af8-205ef305113c",
+        "id": "rec-c6ea738b-722e-4dac-b278-01cac97eeeee",
         "title": "Beta",
-        "path": "store/rec-57d9c825-fffb-4ee0-9af8-205ef305113c.json"
+        "path": "store/rec-c6ea738b-722e-4dac-b278-01cac97eeeee.json"
       }
     },
     "stderr": {

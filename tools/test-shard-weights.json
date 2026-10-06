@@ -102,6 +102,7 @@
   "test:framework-scaffold-install-isolation": 1.3,
   "test:guard-publish": 0.3,
   "test:install": 3.5,
+  "test:install-actionlint": 7,
   "test:isolation-primitives": 0.5,
   "test:knowledge": 0.3,
   "test:layering-boundary-lineage": 7.6,

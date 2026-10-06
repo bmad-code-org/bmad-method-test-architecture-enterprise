@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261005T053049113Z-81743f92",
-  "seed": "20261005T053049113Z-81743f92",
+  "invocationId": "20261005T002700231Z-2a847f02",
+  "seed": "20261005T002700231Z-2a847f02",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.2.0",
+  "evalQualityVersion": "7.1.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,14 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-e4f02689-ffe3-414d-8bac-73204f03e634/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-a3214599-c599-4ae4-976c-b204d00b9f46/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
   "logins": [],
   "adopterTree": {
-    "repository": "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-workflow-57928/repo",
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -32,22 +32,22 @@
     "contract": "sha256:8db09fcb1870e8052dbdeb7f4a4612c77f9a8910c01d6b643bf8b91300fd0a22",
     "operationPhases": "sha256:8e3fbb0475f17e51e7378df39056d4dd3e7e30e3330513c32e9e4507618673b4",
     "evaluatorConfiguration": "sha256:2ddd24f1f72da7d38a312ebb8cca8b1de297f09a30c01a5cc19f56b4f18117d1",
-    "preflightVerdict": "sha256:16935430475e2a3c79a931a9ba3a1e3a3e52d4c07d5d1520f68647222905367e",
+    "preflightVerdict": "sha256:d7e793e814134f010d991b6882518d02bbebb2bdd56a3c1bde63061400153446",
     "probes": {
-      "P-001": "sha256:2f18ef7cacb079ce26cff4ced00b4ce72d91e613046fd79cbe750b853b937cba",
-      "P-002": "sha256:15cd98f472e0d0a1e73e0e521f253dc501ac403165b2fc023770d2e414559e21"
+      "P-001": "sha256:705d80f02d598c331de9ae87c76ac2bb13da7b8420d85bda03b1541b49c4bd32",
+      "P-002": "sha256:9a15cbbfbad54b8e322838868eac6789dd2e98d3eb91cb25c753fa98a9c3643f"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:b348230d1244da642c69cbeb3586c62997438aa97bc77cae893e70ff70f20968",
-      "trial-sets/P-001/record-2.json": "sha256:4107ee3c6a4e28056c4ada21148e3594778e776387e2141eab757b33964b99a0",
-      "trial-sets/P-001/record-3.json": "sha256:e65f9e2a53c5c7d6dc90e9b5ec1f9d28ec5fa1940f5d21bb30c6a08712224692",
-      "trial-sets/P-002/record-1.json": "sha256:c4f3ca6728d45a7329094083e0d7ca53d21f550e934987dc52a43fccf058efc9",
-      "trial-sets/P-002/record-2.json": "sha256:493f1c2e69fbe1db18f1ee8e83ca6223f3be24911b2445cdfcca053e84642caf",
-      "trial-sets/P-002/record-3.json": "sha256:4b4ea6dee897133b7b7f285c96b17046d1e55fc0f3522aed83b93f0545117de2"
+      "trial-sets/P-001/record-1.json": "sha256:c3bbafa040f444b7625df2d18f5fcd8c4a6e8ec0ad9cf29ded8e4aa982a743e1",
+      "trial-sets/P-001/record-2.json": "sha256:17c5e766334a4f17f0b30880fb0b04d608c1f0249d58951943dfcf2eec745ff1",
+      "trial-sets/P-001/record-3.json": "sha256:5daf4ef5d441dd027364746e913b7f00a2ebc9ee239c3f9333dcede19ea7d7ab",
+      "trial-sets/P-002/record-1.json": "sha256:da21fd779bb25b56e5ffeed100e43846e0be6caebabd33ddab85088e5c036d5e",
+      "trial-sets/P-002/record-2.json": "sha256:547c1062073482c4d43eea72d6834618f933d794cd7d72ea28002fb3f8077ad9",
+      "trial-sets/P-002/record-3.json": "sha256:53eae121c53e9558ca6c83bbb5751f3024047b5f245d4c0fd6216c21260b685f"
     },
     "isolationManifests": {
-      "P-001": "sha256:4bb88b86e9920193c2fb83fe467f0c926b6354b9d0ad858bfa72cb655499e0f4",
-      "P-002": "sha256:3801f2e7888338ed53b16b3da3855155333e3081cf59658b2bc694f00664f923"
+      "P-001": "sha256:132471c0009709391abba35c22d97b8b4d36813ace4ab1870ade1a4552e9fdbe",
+      "P-002": "sha256:aae869efdd33278d3729a0bf1f634d2f061b015e077e94d3d27d4e9df2b5a61d"
     }
   },
   "contractDigest": "sha256:d0f938903bf9336b473d1bfd59d0afcd673488ce157bb74e888ca553ffbbae50",
@@ -189,12 +189,12 @@
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-05T05:30:48.617Z",
-  "durationMs": 4275,
+  "startedAt": "2026-10-05T00:26:59.736Z",
+  "durationMs": 4209,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T053049113Z-81743f92"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T002700231Z-2a847f02"
   }
 }

@@ -2,7 +2,7 @@
   "legId": "p-014-manifest-raw-invalid-json",
   "sequence": 11,
   "workspace": "mutated:M-008",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-5dbb0c56-a112-4216-ad49-f865d1abc15e/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-014-manifest-raw-invalid-json",
     "interfaceId": "answer-grade",

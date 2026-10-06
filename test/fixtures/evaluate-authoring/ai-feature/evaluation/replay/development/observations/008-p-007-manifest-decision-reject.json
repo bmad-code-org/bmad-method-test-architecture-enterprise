@@ -2,7 +2,7 @@
   "legId": "p-007-manifest-decision-reject",
   "sequence": 8,
   "workspace": "mutated:M-003",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-003-28e71f2e-4aac-429a-88ca-dab7d72cfa1c/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-007-manifest-decision-reject",
     "interfaceId": "answer-grade",

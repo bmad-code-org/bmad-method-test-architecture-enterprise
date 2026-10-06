@@ -233,6 +233,9 @@ const {
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
+const { STAGING } = require('../cli/lib/evaluate/recorded-paths');
+const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-argv');
+const { recordedMount } = require('./lib/recorded-mount');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -296,6 +299,11 @@ function checkMounts(observed, expected, what) {
   check(extra.length === 0, `${what}: the audit listed ${JSON.stringify(extra)} beyond ${JSON.stringify(expected)}`);
   const missing = expected.filter((entry) => !observed.includes(entry));
   checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
+}
+
+/** An observed mount of a project's run as its manifest records it: the real path through the runtime's substitution under the run's own environment. */
+function mountOf(real, project) {
+  return recordedMount(real, { folder: project.folder, env: project.env });
 }
 
 function tempDir(label) {
@@ -452,9 +460,8 @@ function latestScoreDirectory(runDirectory) {
 }
 
 /** `eval-quality score` run directly on the argv a `tea-evaluate score` call persisted, with its own `--out`. */
-function directScore(record, out) {
-  const argv = [...record.argv];
-  argv[argv.indexOf('--out') + 1] = out;
+function directScore(record, out, scoreDirectory) {
+  const argv = runnableArgv(record.argv, { ...scoreContext(scoreDirectory), out });
   const cli = engineCliPath(BASE_ENV);
   const result = spawnSync(process.execPath, [cli, ...argv], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
   return { status: result.status, bytes: fs.existsSync(out) ? fs.readFileSync(out) : null };
@@ -466,7 +473,7 @@ function checkDirectRerun(label, scoreDirectory) {
     const record = written(path.join(scoreDirectory, probeId, 'score.json'), `${label}, ${probeId}'s score call`);
     if (record === null) continue;
     const persisted = path.join(scoreDirectory, probeId, 'evidence-artifact.json');
-    const direct = directScore(record, path.join(tempDir(`${label.replaceAll(' ', '-')}-direct`), 'evidence.json'));
+    const direct = directScore(record, path.join(tempDir(`${label.replaceAll(' ', '-')}-direct`), 'evidence.json'), scoreDirectory);
     check(
       direct.status === record.exitCode,
       `${label}: eval-quality score run directly on ${probeId}'s inputs exited ${direct.status}; tea-evaluate recorded ${record.exitCode}`,
@@ -479,9 +486,8 @@ function checkDirectRerun(label, scoreDirectory) {
 }
 
 /** `eval-quality aggregate-strength` run directly on the argv a `tea-evaluate score` invocation persisted, with its own `--out`. */
-function directAggregate(record, out) {
-  const argv = [...record.argv];
-  argv[argv.indexOf('--out') + 1] = out;
+function directAggregate(record, out, scoreDirectory) {
+  const argv = runnableArgv(record.argv, { ...scoreContext(scoreDirectory), out });
   const cli = engineCliPath(BASE_ENV);
   const result = spawnSync(process.execPath, [cli, ...argv], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
   return { status: result.status, bytes: fs.existsSync(out) ? fs.readFileSync(out) : null };
@@ -499,15 +505,22 @@ function checkAggregateRerun(label, { engine, runDirectory, scoreDirectory, prob
     check(false, `${label}: the invocation copied no strength aggregate`);
     return null;
   }
-  const direct = directAggregate(call, path.join(tempDir(`${label.replaceAll(' ', '-')}-aggregate`), 'strength-aggregate.json'));
+  const direct = directAggregate(
+    call,
+    path.join(tempDir(`${label.replaceAll(' ', '-')}-aggregate`), 'strength-aggregate.json'),
+    scoreDirectory,
+  );
   check(direct.status === 0 && direct.bytes !== null, `${label}: eval-quality aggregate-strength run directly exited ${direct.status}`);
   const bytes = fs.readFileSync(copied);
   check(
     direct.bytes?.equals(bytes) === true,
     `${label}: the copied aggregate is not byte-identical to a direct eval-quality aggregate-strength`,
   );
-  const value = (flag) => call.argv[call.argv.indexOf(flag) + 1];
-  const evidenceFlags = call.argv.flatMap((argument, at) => (argument === '--evidence' ? [call.argv[at + 1]] : []));
+  // The record states the call in neutral forms: the files of the run by their path below the evaluation folder, the score
+  // invocation as a placeholder and the private staging file as `<staging>/<name>`.
+  const resolved = runnableArgv(call.argv, { ...scoreContext(scoreDirectory), out: '<staging-out>' });
+  const value = (flag) => resolved[resolved.indexOf(flag) + 1];
+  const evidenceFlags = resolved.flatMap((argument, at) => (argument === '--evidence' ? [resolved[at + 1]] : []));
   check(
     JSON.stringify(evidenceFlags) ===
       JSON.stringify(probeIds.map((probeId) => path.join(scoreDirectory, probeId, 'evidence-artifact.json'))) &&
@@ -516,13 +529,10 @@ function checkAggregateRerun(label, { engine, runDirectory, scoreDirectory, prob
       call.argv[0] === 'aggregate-strength',
     `${label}: the aggregate call carried ${JSON.stringify(call.argv)}`,
   );
-  const out = value('--out');
   check(
-    typeof out === 'string' &&
-      path.basename(out) === 'strength-aggregate.json' &&
-      path.basename(path.dirname(out)).startsWith('tea-evaluate-aggregate-') &&
-      !fs.existsSync(path.dirname(out)),
-    `${label}: the aggregate call names --out ${out}, which is not a removed staging file`,
+    call.argv[call.argv.indexOf('--out') + 1] === `${STAGING}/strength-aggregate.json` &&
+      call.argv.every((argument) => !path.isAbsolute(argument)),
+    `${label}: the aggregate call names --out ${call.argv[call.argv.indexOf('--out') + 1]} or an absolute path in ${JSON.stringify(call.argv)}`,
   );
   const aggregate = JSON.parse(bytes.toString('utf8'));
   for (const input of aggregate.inputs) {
@@ -786,29 +796,23 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
     );
     const call = written(path.join(scoreDirectory, probeId, 'score.json'), `${probeId}'s score call`) ?? { argv: [] };
     const set = index.trialSets.find((candidate) => candidate.probeId === probeId);
-    const value = (flag) => call.argv[call.argv.indexOf(flag) + 1];
+    // The record states the call in neutral forms (`recorded-paths.js`); resolved, the argv names the run directory's own files.
+    const resolved = runnableArgv(call.argv, { ...scoreContext(scoreDirectory), out: '<staging-out>' });
+    const value = (flag) => resolved[resolved.indexOf(flag) + 1];
     check(
-      JSON.stringify(call.argv.flatMap((argument, at) => (argument === '--record' ? [call.argv[at + 1]] : []))) ===
+      JSON.stringify(resolved.flatMap((argument, at) => (argument === '--record' ? [resolved[at + 1]] : []))) ===
         JSON.stringify(set.records.map((relative) => path.join(runDirectory, relative))) &&
         value('--isolation-manifest') === path.join(runDirectory, set.isolationManifest) &&
         value('--evaluator-configuration') === path.join(runDirectory, 'evaluator-configuration.json') &&
         value('--probe') === path.join(runDirectory, set.probe),
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
-    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
-    // parent beneath the user's private root in `/tmp`, whatever the run's temp directory is (Story 1.58), and gone once the call was copied in.
-    const out = value('--out');
+    // `--out` is the private staging file, which the record states as `<staging>/<name>`; no argument of the record is an absolute path.
+    // The staging file's real place is checked against the argv a shim logs (`checkShimmedScore`).
+    const recordedOut = call.argv[call.argv.indexOf('--out') + 1];
     check(
-      typeof out === 'string' &&
-        path.basename(out) === 'evidence-artifact.json' &&
-        path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
-        path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
-        /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
-        ['/tmp', fs.realpathSync('/tmp')].includes(path.dirname(path.dirname(path.dirname(path.dirname(out))))) &&
-        !fs.existsSync(path.dirname(path.dirname(out))) &&
-        !out.startsWith(`${folder}${path.sep}`) &&
-        !fs.existsSync(path.dirname(out)),
-      `${probeId}'s score call names --out ${out}, which is not a removed staging file in the private root`,
+      recordedOut === `${STAGING}/evidence-artifact.json` && call.argv.every((argument) => !path.isAbsolute(argument)),
+      `${probeId}'s score call names --out ${recordedOut} or an absolute path in ${JSON.stringify(call.argv)}`,
     );
   }
   checkDirectRerun('the passing run', scoreDirectory);
@@ -896,10 +900,25 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
     );
     const call = written(path.join(scoreDirectory, set.probeId, 'score.json'), `${set.probeId}'s shimmed score call`);
     if (call === null) continue;
-    // The recorded argv is the argv that ran, the staging path in `--out` included.
+    // The recorded argv is the argv that ran, in the neutral forms the record states.
     check(
-      JSON.stringify(call.argv) === JSON.stringify(argv),
+      JSON.stringify(call.argv) === JSON.stringify(recordedArgv(argv, scoreContext(scoreDirectory))),
       `${set.probeId}'s persisted argv ${JSON.stringify(call.argv)} is not the argv the engine was called with, ${JSON.stringify(argv)}`,
+    );
+    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
+    // parent beneath the user's private root in `/tmp`, whatever the run's temp directory is (Story 1.58), and gone once the call was copied in.
+    const out = argv[argv.indexOf('--out') + 1];
+    check(
+      typeof out === 'string' &&
+        path.basename(out) === 'evidence-artifact.json' &&
+        path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
+        path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
+        /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
+        ['/tmp', fs.realpathSync('/tmp')].includes(path.dirname(path.dirname(path.dirname(path.dirname(out))))) &&
+        !fs.existsSync(path.dirname(path.dirname(out))) &&
+        !out.startsWith(`${folder}${path.sep}`) &&
+        !fs.existsSync(path.dirname(out)),
+      `${set.probeId}'s score call ran with --out ${out}, which is not a removed staging file in the private root`,
     );
     const probeFile = `${set.probeId}.probe.json`;
     const code = set.probeId === 'P-001' ? 0 : 3;
@@ -2999,7 +3018,7 @@ function checkUnverifiedEvidence() {
       if (call === null) continue;
       const logged = calls.find((argv) => argv[argv.indexOf('--probe') + 1]?.endsWith(`${probeId}.probe.json`));
       check(
-        JSON.stringify(call.argv) === JSON.stringify(logged),
+        JSON.stringify(call.argv) === JSON.stringify(recordedArgv(logged, scoreContext(scoreDirectory))),
         `${mode}, ${probeId}: the persisted argv ${JSON.stringify(call.argv)} is not the argv the engine ran with, ${JSON.stringify(logged)}`,
       );
       const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
@@ -3229,16 +3248,17 @@ async function checkHeldInputs() {
     );
     const call = written(path.join(secondDirectory, probeId, 'score.json'), `${probeId}'s repeated score call`);
     if (call === null) continue;
-    // The recorded argv names the run directory's own files; only `--out` names the private staging file.
+    // The recorded argv names the run directory's own files by their path below the evaluation folder; only `--out` names the private staging file.
     const named = call.argv.filter((argument, position) =>
       /^--(record|contract|probe|preflight-verdict|policy|isolation-manifest|evaluator-configuration)$/.test(call.argv[position - 1] ?? ''),
     );
+    const runPrefix = `runs/${path.basename(runDirectory)}/`;
     check(
-      named.length >= 7 && named.every((file) => file.startsWith(`${runDirectory}${path.sep}`)),
+      named.length >= 7 && named.every((file) => file.startsWith(runPrefix)),
       `${probeId}: the recorded argv names a path outside the run directory: ${JSON.stringify(named)}`,
     );
     const out = call.argv[call.argv.indexOf('--out') + 1];
-    check(!out.startsWith(runDirectory) && path.basename(out) === 'evidence-artifact.json', `${probeId}: the recorded --out is ${out}`);
+    check(out === `${STAGING}/evidence-artifact.json`, `${probeId}: the recorded --out is ${out}`);
   }
   checkDirectRerun('the normal score', firstDirectory);
   checkDirectRerun('the repeated score', secondDirectory);
@@ -4053,12 +4073,14 @@ async function checkConfinedEvaluationFolder() {
   const realFolder = fs.realpathSync(probed.folder);
   const probedMounts = observedMountsOf(probedDirectory, 'P-001') ?? [];
   checkReport(
-    [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')].every((entry) => probedMounts.includes(entry)),
+    [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')]
+      .map((entry) => mountOf(entry, probed))
+      .every((entry) => probedMounts.includes(entry)),
     `the audit did not report the evaluation folder's paths the target reached for: ${JSON.stringify(probedMounts)}`,
   );
   const probedScore = evaluate(['score', '--evaluation', probed.folder], probed.env);
   checkReport(
-    probedScore.status === 3 && probedScore.output.includes(`mount outside allowlist: ${path.join(realFolder, 'contract.json')}`),
+    probedScore.status === 3 && probedScore.output.includes('mount outside allowlist: <evaluation-folder>/contract.json'),
     `score over a target that reached for the contract exited ${probedScore.status}; expected 3 with the isolation violation\n${probedScore.output}`,
   );
   check(
@@ -4103,7 +4125,11 @@ async function checkObservedMounts() {
     /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
     'the target could not read the ungranted file, so the case proves nothing',
   );
-  checkMounts(observedMountsOf(observedDirectory, 'P-001'), [realOutside], "P-001's observed mounts after a target's read");
+  checkMounts(
+    observedMountsOf(observedDirectory, 'P-001'),
+    [mountOf(realOutside, observed)],
+    "P-001's observed mounts after a target's read",
+  );
   const otherMounts = observedMountsOf(observedDirectory, 'P-002');
   check(
     JSON.stringify(otherMounts) === '[]',
@@ -4111,7 +4137,7 @@ async function checkObservedMounts() {
   );
   const observedScore = evaluate(['score', '--evaluation', observed.folder], observed.env);
   checkReport(
-    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
     `score over an observed ungranted mount exited ${observedScore.status}; expected 3 with eval-quality's isolation violation\n${observedScore.output}`,
   );
   const declared = makeProject('confinement-declared', {
@@ -5051,11 +5077,15 @@ async function checkShellTargetAudit() {
     `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 0\n${read.ran.output}`,
   );
   for (const probeId of ['P-001', 'P-002']) {
-    checkMounts(observedMountsOf(read.directory, probeId), [realOutside], `${probeId}'s observed mounts after a shell target's read`);
+    checkMounts(
+      observedMountsOf(read.directory, probeId),
+      [mountOf(realOutside, read)],
+      `${probeId}'s observed mounts after a shell target's read`,
+    );
   }
   const readScore = evaluate(['score', '--evaluation', read.folder], read.env);
   checkReport(
-    readScore.status === 3 && readScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    readScore.status === 3 && readScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, read)}`),
     `score over a shell target's ungranted read exited ${readScore.status}; expected 3 with eval-quality's isolation violation\n${readScore.output}`,
   );
 
@@ -5084,7 +5114,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(cleared.directory, 'P-001'),
-    [realOutside, `${realOutside}.node`],
+    [mountOf(realOutside, cleared), mountOf(`${realOutside}.node`, cleared)],
     'processes started with an empty environment (cat reads the file, Node its neighbor)',
   );
   const target = path.join(tempDir('shell-audit-write'), 'written.txt');
@@ -5095,7 +5125,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(write.directory, 'P-001'),
-    [path.join(fs.realpathSync(path.dirname(target)), 'written.txt')],
+    [mountOf(path.join(fs.realpathSync(path.dirname(target)), 'written.txt'), write)],
     "a shell target's refused write",
   );
   const withheld = shellProject('shell-audit-withheld', 'withheld', (project) => path.join(project.folder, 'contract.json'));
@@ -5105,7 +5135,7 @@ async function checkShellTargetAudit() {
   );
   checkMounts(
     observedMountsOf(withheld.directory, 'P-001'),
-    [path.join(fs.realpathSync(withheld.folder), 'contract.json')],
+    [mountOf(path.join(fs.realpathSync(withheld.folder), 'contract.json'), withheld)],
     "a shell target's read of the evaluation folder's contract",
   );
 }
@@ -5798,7 +5828,7 @@ async function checkEvaluatorSwap() {
       );
       check(record.findings?.length === 0, `a confined run's clean control carries findings: ${JSON.stringify(record.findings)}`);
       // The row-converting evaluator's trials carry the audit's observed mounts too: the refused swap is one.
-      const swapped = path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js');
+      const swapped = mountOf(path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js'), project);
       const mounts = observedMountsOf(runDirectory, 'P-001') ?? [];
       checkReport(
         namespaced || mounts.includes(swapped),
@@ -6918,20 +6948,20 @@ async function checkWithheldHistoryRun() {
   const projectGit = fs.realpathSync(path.join(project.repository, '.git'));
   const observed = observedMountsOf(runDirectory, 'P-001') ?? [];
   checkReport(
-    ['HEAD', 'config', 'objects'].every((name) => observed.includes(path.join(projectGit, name))),
+    ['HEAD', 'config', 'objects'].every((name) => observed.includes(mountOf(path.join(projectGit, name), project))),
     `the audit did not report the target's attempts on the project's git directory: ${JSON.stringify(observed)}`,
   );
   check(
-    !observed.some((entry) => entry.startsWith(`${path.join(projectGit, 'worktrees')}${path.sep}`)),
+    !observed.some((entry) => entry.startsWith(`${mountOf(path.join(projectGit, 'worktrees'), project)}${path.sep}`)),
     `the audit reported the target's read of its own worktree's metadata: ${JSON.stringify(observed)}`,
   );
   const audited = evaluate(['score', '--evaluation', project.folder], project.env);
   checkReport(
-    audited.status === 3 && audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'HEAD')}`),
+    audited.status === 3 && audited.output.includes(`mount outside allowlist: ${mountOf(path.join(projectGit, 'HEAD'), project)}`),
     `score over a target that reached for the project's git directory exited ${audited.status}; expected 3 with the isolation violation\n${audited.output}`,
   );
   check(
-    !audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'worktrees')}`),
+    !audited.output.includes(`mount outside allowlist: ${mountOf(path.join(projectGit, 'worktrees'), project)}`),
     `score named the worktree's own metadata as an isolation violation\n${audited.output}`,
   );
 
@@ -10247,8 +10277,8 @@ async function checkSubscriptionLogin() {
   check(filedRun?.confinement === CONFINEMENT, `the login-file run recorded confinement ${filedRun?.confinement}; expected ${CONFINEMENT}`);
   check(
     JSON.stringify(filedRun?.logins) ===
-      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: null, file: realFile }]),
-    `the login-file run recorded the logins ${JSON.stringify(filedRun?.logins)}; expected the credentials file by path and no variable`,
+      JSON.stringify([{ interfaceId: 'verdict', executable: 'verdict', login: 'claude', variable: null, file: '<credentials-file>' }]),
+    `the login-file run recorded the logins ${JSON.stringify(filedRun?.logins)}; expected the credentials file as <credentials-file> and no variable`,
   );
   const filedOut = trialStdout(filed.directory, 'clean', 1);
   check(
@@ -10286,12 +10316,14 @@ async function checkSubscriptionLogin() {
   checkMounts(plainMounts(filed.directory), [], "the login file's audit of the plain trials");
   const filedManifest = written(path.join(filed.directory, 'trial-sets', 'P-001', 'isolation-manifest.json'), 'the login-file manifest');
   check(
-    filedManifest?.allowedMounts?.includes(`read-only login ${realFile}`),
+    filedManifest?.allowedMounts?.includes('read-only login <credentials-file>'),
     `the isolation manifest's allowed mounts ${JSON.stringify(filedManifest?.allowedMounts)} do not name the login file read-only`,
   );
   const filedNote = Object.values(filedManifest?.forbiddenInputAccounting ?? {})[0]?.note ?? '';
   check(
-    filedNote.includes(`the file ${realFile}, read-only`) && !filedNote.includes('the environment variable'),
+    filedNote.includes('the file <credentials-file>, read-only') &&
+      !filedNote.includes(realFile) &&
+      !filedNote.includes('the environment variable'),
     `the isolation manifest's note does not name the granted file alone: ${filedNote}`,
   );
   check(
@@ -10319,7 +10351,7 @@ async function checkSubscriptionLogin() {
       widened.ran.status === 0,
       `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
     );
-    const realSecond = fs.realpathSync(second);
+    const realSecond = recordedMount(fs.realpathSync(second), { folder: widened.folder, home });
     checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
@@ -10343,8 +10375,8 @@ async function checkSubscriptionLogin() {
   );
   const configuredRun = written(path.join(configured.directory, 'run.json'), 'the CLAUDE_CONFIG_DIR run');
   check(
-    configuredRun?.logins?.[0]?.file === fs.realpathSync(kept),
-    `the CLAUDE_CONFIG_DIR run recorded ${configuredRun?.logins?.[0]?.file}; expected the real path of the file the link names, ${fs.realpathSync(kept)}`,
+    configuredRun?.logins?.[0]?.file === '<credentials-file>' && !JSON.stringify(configuredRun).includes(kept),
+    `the CLAUDE_CONFIG_DIR run recorded ${configuredRun?.logins?.[0]?.file}; expected <credentials-file>, and no path of the file the link names, ${kept}`,
   );
   check(
     loginField(trialStdout(configured.directory, 'clean', 1), 'login-file') === sha(credentials),
@@ -10471,12 +10503,18 @@ async function checkSubscriptionLogin() {
   );
   checkMounts(
     actMounts(stood.directory),
-    [fs.realpathSync(keychain), `${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`],
+    [
+      recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome }),
+      recordedMount(`${fs.realpathSync(path.dirname(keychain))}/login.keychain-db-shm`, { folder: stood.folder, home: keychainHome }),
+    ],
     "a confined target's keychain read and sidecar write",
   );
   const stoodScore = evaluate(['score', '--evaluation', stood.folder], { ...stood.env, ...noLogin });
   checkReport(
-    stoodScore.status === 3 && stoodScore.output.includes(`mount outside allowlist: ${fs.realpathSync(keychain)}`),
+    stoodScore.status === 3 &&
+      stoodScore.output.includes(
+        `mount outside allowlist: ${recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })}`,
+      ),
     `score over a target that read the host's keychain exited ${stoodScore.status}; expected 3\n${stoodScore.output}`,
   );
 
@@ -11024,13 +11062,14 @@ async function checkSubscriptionLoginUnits() {
   const plainProfile = sandboxFor('seatbelt', []).wrap(process.execPath, ['-e', '']).args[1];
   check(!plainProfile.includes(file), 'a Seatbelt profile with no linked file names one');
 
-  // The manifest's note names the variable and the path and holds no value.
+  // The manifest's note names the variable and the file as `<credentials-file>`, and holds no value and no path.
   const noteOf = (logins) => forbiddenInputNote({ mode: CONFINEMENT }, [], logins);
   const given = noteOf([{ interfaceId: 'agent', login: 'claude', variable: 'CLAUDE_CODE_OAUTH_TOKEN', file }]);
   check(
     given.includes('The registry entry "agent" declares "login": "claude"') &&
       given.includes('the environment variable CLAUDE_CODE_OAUTH_TOKEN and the file') &&
-      given.includes(`${file}, read-only`) &&
+      given.includes('<credentials-file>, read-only') &&
+      !given.includes(file) &&
       given.includes("no record holds the variable's value or a string of the file"),
     `the note for a granted login reads ${given}`,
   );
@@ -16673,7 +16712,11 @@ async function checkSocketConnectionRun() {
       );
     }
     const mounts = observedMountsOf(held.runDirectory, 'P-001') ?? [];
-    checkMounts(mounts, [late, viaLink].sort(), "P-001's observed mounts after a target connected to late sockets");
+    checkMounts(
+      mounts,
+      [mountOf(late, project), mountOf(viaLink, project)].sort(),
+      "P-001's observed mounts after a target connected to late sockets",
+    );
     const other = observedMountsOf(held.runDirectory, 'P-002');
     check(
       JSON.stringify(other) === '[]',
@@ -16682,9 +16725,9 @@ async function checkSocketConnectionRun() {
     const scored = evaluate(['score', '--evaluation', project.folder], project.env);
     check(
       scored.status === 3 &&
-        scored.output.includes(`mount outside allowlist: ${late}`) &&
-        scored.output.includes(`mount outside allowlist: ${viaLink}`) &&
-        !scored.output.includes(`mount outside allowlist: ${hidden}`),
+        scored.output.includes(`mount outside allowlist: ${mountOf(late, project)}`) &&
+        scored.output.includes(`mount outside allowlist: ${mountOf(viaLink, project)}`) &&
+        !scored.output.includes(`mount outside allowlist: ${mountOf(hidden, project)}`),
       `score over a target that connected to late sockets exited ${scored.status}; expected 3 with the isolation violation naming each late socket and not the refused one\n${scored.output}`,
     );
   } finally {

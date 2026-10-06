@@ -31,6 +31,7 @@ const { spawnSync } = require('node:child_process');
 
 const { readPlan } = require('../cli/lib/evaluate/ci-plan');
 const { engineVersion } = require('../cli/lib/evaluate/engine');
+const baselines = require('./lib/evaluate-baseline');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const ROOT = path.join(__dirname, '..');
@@ -121,6 +122,11 @@ function checkTier(name, tier) {
   const result = ci(evaluation, tier);
   assert.equal(result.status, 0, `${name} ${tier}: ci exited ${result.status}\n${result.output}`);
   const { json } = result;
+  // The run directories the tier left (the ci invocation's and the live runs it made) name no path of this machine: `runs/` is uploaded as a CI artifact.
+  for (const entry of fs.readdirSync(path.join(evaluation, 'runs')).filter((item) => !item.startsWith('.'))) {
+    const hits = baselines.machinePathHits(path.join(evaluation, 'runs', entry));
+    assert.deepEqual(hits, [], `${name} ${tier}: runs/${entry} names a path of this machine`);
+  }
   assert.deepEqual(
     json.checks.map((row) => row.id),
     plan.checks.filter((item) => item.placement.tier === tier).map((item) => item.id),

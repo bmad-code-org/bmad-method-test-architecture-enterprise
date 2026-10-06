@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261005T053026807Z-262ddcda",
-  "seed": "20261005T053026807Z-262ddcda",
+  "invocationId": "20261005T002653577Z-ef22f04c",
+  "seed": "20261005T002653577Z-ef22f04c",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.2.0",
+  "evalQualityVersion": "7.1.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,14 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-5eaa806e-4ec4-4591-9a00-fcae60615618/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-d6219b1a-9ba9-40da-84b7-0dc7489b98c7/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
   "logins": [],
   "adopterTree": {
-    "repository": "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-api-52041/repo",
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -32,22 +32,22 @@
     "contract": "sha256:33143cca64e0109bef1d6d680f44842b15f225c5e39129309c1696a76d48cd13",
     "operationPhases": "sha256:9a43bec805733114afeeda862fd2b8fd739f3022e0fb59e03c52ed9400f4eb31",
     "evaluatorConfiguration": "sha256:2907b081b447204bfc4892e329feb7f77dc37ede31467280acbff0b5f4745722",
-    "preflightVerdict": "sha256:472f6c2286d00f2e8d562793375dff032a8d5a99157fdc7ad28f2ba29493fc7d",
+    "preflightVerdict": "sha256:e752c9cadbcd4433519f9cb25432a6b6675586ee17069979a7c8d784ccb5f12f",
     "probes": {
-      "P-001": "sha256:20d8813cb883436e295f8e2cb8f28959b48fe760017da183137ccfad26e10e19",
-      "P-002": "sha256:03bab2be338778d7e722a5320d8cb859788543b0b04e6877eb62a8251d28e75a"
+      "P-001": "sha256:23d369232c324ebbd4a5ac4855979e070a3d2e00efd90766df3602f9e0110176",
+      "P-002": "sha256:d2dfa5a327a1823c9bc2f6a64b160c3639890a29b20da77e821bb8c0e41c39ec"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:6143edccdc519d9ddea3820595e76d06c6ccdaf4ea0ed5ab8212e515553eef98",
-      "trial-sets/P-001/record-2.json": "sha256:97a5966e813ca0ea082cdb05003a7573fac9cbde00f297edbc8e5a870420841d",
-      "trial-sets/P-001/record-3.json": "sha256:efefee4e00d6ef1695ede16edcee968a1beb39807a5b900af6f2eb1ce54b773a",
-      "trial-sets/P-002/record-1.json": "sha256:fc565eede63a122d19113c78f524668718bbb17429e0d7e6c55b600920de62e9",
-      "trial-sets/P-002/record-2.json": "sha256:454eeb8d14ebcec1cf7488c69911f7683ff136508dc0899373daaef8a7249f8f",
-      "trial-sets/P-002/record-3.json": "sha256:ff279bee2b2c4719b2ef4ef6439812c26f8a90fdef8b9e3e3f96aeaa2a12bbc5"
+      "trial-sets/P-001/record-1.json": "sha256:60590cbd84a46370cfbd37d795fcbbf50d829a5edf3e9e8e6b7a7a7d9668bd23",
+      "trial-sets/P-001/record-2.json": "sha256:950913644dc8b8435ea29954d60ff913759fbb189033e6b901ec5b966ca947f6",
+      "trial-sets/P-001/record-3.json": "sha256:37b7410718d14cd7b5decaa9db3230d87e18a4db7820776275bf5ef834ed287b",
+      "trial-sets/P-002/record-1.json": "sha256:db7a9a44ce58c84ae93f2ab8754034aa8a1e91859e3f94a49603ebe47af064cb",
+      "trial-sets/P-002/record-2.json": "sha256:ea6efafeaa150603fbd2903ad6acd01614bb9d4cf0cf2ade118645045b497e3e",
+      "trial-sets/P-002/record-3.json": "sha256:d1c131cc08c9e4dbcb60f9492c0c3b7a54ffd5f1554b00ae188a928c10974d69"
     },
     "isolationManifests": {
-      "P-001": "sha256:b86a4a9c2aacbf3eb1ff1ec8500ef89da08fb40870404c03eb7a4f6e073cadcf",
-      "P-002": "sha256:9914f6218024fb395b6c2474a1845b921abf8b20f8745aa6e045bb17d79dc9ec"
+      "P-001": "sha256:09c85850f2c75994ad3a3e371f1a0303545092899cfeb656fdf0a3e2646a9cdb",
+      "P-002": "sha256:801b97172ebbda26da4505c1fb1fa8591c050a7460a3b90984a8db68bb7c1995"
     }
   },
   "contractDigest": "sha256:a2f730f44041a36317f2ca873fca3ff249c5ff06c8129338196f868b5e881a84",
@@ -166,8 +166,8 @@
       "conditionArm": "clean",
       "trialIndex": 3,
       "completeness": "complete",
-      "canariesSent": 5,
-      "canariesDelivered": 5,
+      "canariesSent": 6,
+      "canariesDelivered": 6,
       "logReportedLoss": false
     },
     {
@@ -197,12 +197,12 @@
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-05T05:30:26.152Z",
-  "durationMs": 5255,
+  "startedAt": "2026-10-05T00:26:52.968Z",
+  "durationMs": 5201,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T053026807Z-262ddcda"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T002653577Z-ef22f04c"
   }
 }

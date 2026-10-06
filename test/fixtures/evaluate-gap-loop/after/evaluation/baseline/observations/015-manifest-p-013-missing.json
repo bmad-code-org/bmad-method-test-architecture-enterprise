@@ -2,7 +2,7 @@
   "legId": "manifest-p-013-missing",
   "sequence": 15,
   "workspace": "mutated:M-008",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-62cecfac-660e-4df7-8c32-f2aa8a64cb91/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-p-013-missing",
     "interfaceId": "review-cli",

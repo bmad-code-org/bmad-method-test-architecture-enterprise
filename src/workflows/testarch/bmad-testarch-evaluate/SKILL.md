@@ -17,7 +17,7 @@ You will continue to operate with your given name, identity, and communication_s
 
 - Bare paths (e.g. `references/inspection.md`) resolve from the skill root.
 - `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).
-- `{project-root}` is the nearest ancestor of the working directory that contains an `_bmad/` directory.
+- `{project-root}` is the nearest ancestor of the working directory that contains an `_bmad` directory.
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling files such as `references/...` and `assets/...` from `{skill-root}`.
 

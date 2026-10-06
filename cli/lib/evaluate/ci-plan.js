@@ -23,7 +23,12 @@
  *     runs on every pull request;
  *   - `live-on-pr` (AD-20): a check that drives a live target placed on `pr`, which needs no secret and calls no model;
  *   - `enforcement`: `enforcement: "warn"` on a check or tier where AD-10 gives no warn (`WARN_ALLOWED`). The
- *     field records AD-10's class and the action comes from AD-10's table, so a plan cannot demote a blocking exit.
+ *     field records AD-10's class and the action comes from AD-10's table, so a plan cannot demote a blocking exit;
+ *   - `gates` (Story 1.97): an optional list on a check of the existing pipeline jobs its tier must gate. The schema owns
+ *     the shape (a non-empty list of distinct job ids), so a violation under `gates` is reported with this rule name in
+ *     place of `schema`. The jobs a tier gates are the union of `gates` over the checks the plan places on it, so a name
+ *     repeated across the tier's checks is merged and is no finding. Whether a name matches a job of the repository is the
+ *     CI skill's to answer when it renders the wait, since only the repository's workflow files hold the jobs.
  *
  * Three more rules read the evaluation the plan sits in, so they run when `evaluation.json` (and, for the rubric,
  * `contract.json`) can be read and are skipped otherwise, which `check` reports on its own:
@@ -363,6 +368,25 @@ function evaluationFindings(plan, facts) {
   return findings;
 }
 
+/** The `checks[n].gates` or `checks[n].gates[m]` an ajv error addresses, or null when it addresses something else. */
+function gatesLocation(instancePath) {
+  const match = /^\/checks\/(\d+)\/gates(?:\/(\d+))?$/.exec(instancePath);
+  return match === null ? null : { check: Number(match[1]), name: match[2] === undefined ? null : Number(match[2]) };
+}
+
+/** One ajv error as a finding: a violation under `gates` is a `gates` finding that names the repair, the rest are `schema` findings. */
+function schemaFinding(plan, error) {
+  const where = gatesLocation(error.instancePath);
+  if (where === null) return finding('schema', `${error.instancePath || '/'} ${error.message}`);
+  const label = `checks[${where.check}].gates${where.name === null ? '' : `[${where.name}]`}`;
+  if (where.name !== null && error.keyword === 'pattern')
+    return finding(
+      'gates',
+      `${label} is ${JSON.stringify(plan.checks[where.check].gates[where.name])}, which is not a job id; name the id of a job in one of the repository's workflow files (letters, digits, - and _, starting with a letter or _)`,
+    );
+  return finding('gates', `${label} ${error.message}; list each job id once and leave the field out when no job needs to wait`);
+}
+
 /**
  * The findings of a parsed plan: schema violations, and only when there are none, the placement rules and, when `facts`
  * carries what the evaluation says, the rules that read it.
@@ -373,9 +397,7 @@ function evaluationFindings(plan, facts) {
  */
 function planFindings(plan, facts = {}) {
   if (!validatePlan(plan)) {
-    return [...new Set(validatePlan.errors.map((error) => `${error.instancePath || '/'} ${error.message}`))].map((message) =>
-      finding('schema', message),
-    );
+    return validatePlan.errors.map((error) => schemaFinding(plan, error));
   }
   return [...placementFindings(plan, facts), ...evaluationFindings(plan, facts)];
 }

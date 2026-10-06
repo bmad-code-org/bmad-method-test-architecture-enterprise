@@ -15,13 +15,13 @@
     "degenerateResponse": "decision pass with strict mode reported on a strict answer below the doubled minimum",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20261005T053147366Z-fb66860e/qualification/P-015/naive-oracle-satisfied.json",
+      "path": "runs/20261005T003059220Z-94afbbcd/qualification/P-015/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:3c234163fb956cf8984860c3dc5f67a8dcaaeb1b87a1802ea8710810756082e5"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20261005T053147366Z-fb66860e/qualification/P-015/disciplined-oracle-rejected.json",
+      "path": "runs/20261005T003059220Z-94afbbcd/qualification/P-015/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:244bfa69994c7aa1d7674beb0069ee1025f7b04a44fe0505d0ff2c0e09029c86"
     }

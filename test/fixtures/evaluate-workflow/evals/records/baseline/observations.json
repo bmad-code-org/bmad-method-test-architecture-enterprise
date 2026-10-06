@@ -8,9 +8,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-4f5665ab-9bb5-42b9-9b04-609deefa62c3",
+        "id": "rec-5b9caded-0351-466d-a95f-919c9f98177c",
         "title": "Alpha",
-        "path": "store/rec-4f5665ab-9bb5-42b9-9b04-609deefa62c3.json"
+        "path": "store/rec-5b9caded-0351-466d-a95f-919c9f98177c.json"
       }
     },
     "stderr": {
@@ -28,9 +28,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-57d9c825-fffb-4ee0-9af8-205ef305113c",
+        "id": "rec-c6ea738b-722e-4dac-b278-01cac97eeeee",
         "title": "Beta",
-        "path": "store/rec-57d9c825-fffb-4ee0-9af8-205ef305113c.json"
+        "path": "store/rec-c6ea738b-722e-4dac-b278-01cac97eeeee.json"
       }
     },
     "stderr": {
@@ -128,9 +128,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-1747c7f3-5603-48a0-abbe-bfa48cd4f532",
+        "id": "rec-081989d5-0a35-4e52-a5cf-50d4eb612bb7",
         "title": "Ship the workflow",
-        "path": "store/rec-dc357610-60e4-4872-9565-8a59ce93c275.json"
+        "path": "store/rec-d2830e90-3612-444b-b873-7c76bff62451.json"
       }
     },
     "stderr": {

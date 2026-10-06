@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261005T053057717Z-9343e896",
-  "seed": "20261005T053057717Z-9343e896",
+  "invocationId": "20261005T003519483Z-09aa2413",
+  "seed": "20261005T003519483Z-09aa2413",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.2.0",
+  "evalQualityVersion": "7.1.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,14 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-9c4a8cdc-f671-44ac-8c32-b60ef14e41eb/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-a2e1616b-661d-432b-a00e-7672541d636b/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
   "logins": [],
   "adopterTree": {
-    "repository": "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-tool-use-60964/repo",
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -32,22 +32,22 @@
     "contract": "sha256:c2a719f69a3fd8c304f306af3beb9c23b3cca90285f7f532ccde3453f0a04df2",
     "operationPhases": "sha256:e1a6785f322854caf07f423ef7c764069ed03ddcc230d4b7e2f5ef078eba8cac",
     "evaluatorConfiguration": "sha256:f86833ae34b6dd8e5e527eb3f653d7a15124471331f2dcfdf431f456e7438086",
-    "preflightVerdict": "sha256:5afc66e79690b4f0995ee68e99864f8b51cc33a7f1ea906f65268dd97db9c013",
+    "preflightVerdict": "sha256:bb0e4923a802f0faee1ba1e4b99653177dbadbfddcc8f756e4cb90095011da17",
     "probes": {
-      "P-001": "sha256:d30fd9651ce0a117d935e4dc61ec8caa9093a70024d3b7732d1a7279aa0ca0b8",
-      "P-002": "sha256:adbe6e1fe87b98090a88ded22c75f64a59e3ac9b0539ec06fad9b456cc2dd408"
+      "P-001": "sha256:66e1b860a3fb1cf71ef9aef6269f4bd7c359770f353520eea09231e4b326d10d",
+      "P-002": "sha256:a01467348940985eff8898670ff049d7d6d089d912dcf03e704d8e6efe56507b"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:d5bcea26e242a40c84337b1c5524a9f084064fc3d0b41122ec701242b6b64b02",
-      "trial-sets/P-001/record-2.json": "sha256:54302ac58c7d566b582cd4a5b08dce04361716a32320b5d40966a422248dc47f",
-      "trial-sets/P-001/record-3.json": "sha256:19da534e38d7114241f9b36761df1f574e6feb7e64724fd402b7d2ff3063f15c",
-      "trial-sets/P-002/record-1.json": "sha256:363743d660d9760e3d4c10aba5f8bdd92c998d9c486e9bcc6cd089d0c7e13de9",
-      "trial-sets/P-002/record-2.json": "sha256:e2ad76629bae2839abff4eb2c89ea005e617d71c197246c1f3473579963f670d",
-      "trial-sets/P-002/record-3.json": "sha256:358834a390e9893c56708b5a19c0ea9821f9c70eb7b1f8c3695a765701e0748b"
+      "trial-sets/P-001/record-1.json": "sha256:d3d1ab5d907a1d6b9352834f340c00b92c4172dbcd64e66b2e9917779a9ca461",
+      "trial-sets/P-001/record-2.json": "sha256:2803f32388485a12207e8ee1a1a888dd4853168f4bb087e54faaf2bb76a69e27",
+      "trial-sets/P-001/record-3.json": "sha256:cfadf39972fececa184d002fa54594634d96931e508dc510f5e99ed6570bf94c",
+      "trial-sets/P-002/record-1.json": "sha256:3683b83f0c93c289599155d991f97ec2e38765fb7c90656fd4cddb247e3f843a",
+      "trial-sets/P-002/record-2.json": "sha256:c739b8371797b75148ef9aeafd8a73ea41d06bd43a89e2b97ee484bb65e580b3",
+      "trial-sets/P-002/record-3.json": "sha256:731319f663251b0e53ff512ae71f47b9551bc15d7fd73c8ba1809c209936ed6e"
     },
     "isolationManifests": {
-      "P-001": "sha256:b927ea93e8bef5553ef91c6b44b88c05dcda33339d5e88b73c1d30263b27f8e3",
-      "P-002": "sha256:badbfeec1fc9246d6f0e2d0c3a91b6e0464baaebdc45b962159f77d098087d61"
+      "P-001": "sha256:17c95348f3e37a82617f7ea9381babeab2523590a2b4eb8ed10f7fb8aa1774d7",
+      "P-002": "sha256:21346dd5852bb1dce141fa83a7239d31681e0db44bca512e3d50794167ed1ace"
     }
   },
   "contractDigest": "sha256:d258c646e76d2ec43c089ee2580c42e52e087bab4993fa27d107869a6ec86733",
@@ -142,16 +142,16 @@
       "conditionArm": "clean",
       "trialIndex": 1,
       "completeness": "complete",
-      "canariesSent": 18,
-      "canariesDelivered": 18,
+      "canariesSent": 17,
+      "canariesDelivered": 17,
       "logReportedLoss": false
     },
     {
       "conditionArm": "clean",
       "trialIndex": 2,
       "completeness": "complete",
-      "canariesSent": 14,
-      "canariesDelivered": 14,
+      "canariesSent": 15,
+      "canariesDelivered": 15,
       "logReportedLoss": false
     },
     {
@@ -189,12 +189,12 @@
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-05T05:30:57.219Z",
-  "durationMs": 6996,
+  "startedAt": "2026-10-05T00:35:18.960Z",
+  "durationMs": 7346,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T053057717Z-9343e896"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T003519483Z-09aa2413"
   }
 }

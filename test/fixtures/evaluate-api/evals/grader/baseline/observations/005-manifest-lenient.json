@@ -2,7 +2,7 @@
   "legId": "manifest-lenient",
   "sequence": 5,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-d6219b1a-9ba9-40da-84b7-0dc7489b98c7/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-lenient",
     "interfaceId": "grader",
@@ -29,7 +29,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Mon, 05 Oct 2026 05:30:28 GMT",
+      "date": "Mon, 05 Oct 2026 00:26:55 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

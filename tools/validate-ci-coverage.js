@@ -52,6 +52,12 @@
  * drop a definition while keeping the entry that calls it, so the failure arrives
  * after the commit with nothing naming the cause.
  *
+ * The `Install actionlint` step of `quality.yaml` and `publish.yaml` is held the same way.
+ * A GitHub outage answers the release download with an error page.
+ * The pinned download script hands whatever arrives to `tar`, so an inline `curl | bash` step fails a whole shard on one 503.
+ * Both workflows run `tools/install-actionlint.sh` (`actionlintInstallStepProblems`).
+ * That installer keeps its retry, its `gzip -t` and checksum checks, its latest-version resolution and its commit-pinned, hash-checked download script (`actionlintInstallerProblems`).
+ *
  * Usage: node tools/validate-ci-coverage.js
  */
 
@@ -325,6 +331,119 @@ function staleDeliberatelyLocalEntries(manifest) {
   return Object.keys(DELIBERATELY_LOCAL).filter((name) => typeof manifest.scripts[name] !== 'string');
 }
 
+/** The workflows whose `Install actionlint` step runs the shared installer. */
+const ACTIONLINT_WORKFLOWS = ['quality.yaml', 'publish.yaml'];
+const ACTIONLINT_INSTALLER = path.join(PROJECT_ROOT, 'tools', 'install-actionlint.sh');
+
+/**
+ * Why one workflow's `Install actionlint` step does not run the shared installer, or an empty list when it does.
+ * The step has to exist, call `tools/install-actionlint.sh` as its own command, carry `timeout-minutes: 5`, and neither skip nor swallow the call.
+ * No step may fetch or run the download script itself, since that is the inline `curl | bash` whose first 503 failed a shard.
+ */
+function actionlintInstallStepProblems(file, text) {
+  const workflow = yaml.load(text);
+  const steps = Object.values(workflow?.jobs ?? {}).flatMap((definition) => definition?.steps ?? []);
+  const problems = [];
+  const installs = steps.filter((step) => step?.name === 'Install actionlint');
+  if (installs.length === 0) problems.push(`${file} has no step named "Install actionlint"`);
+  for (const step of installs) {
+    if (typeof step.run !== 'string' || !/^bash tools\/install-actionlint\.sh [^|;&\n]*$/m.test(step.run)) {
+      problems.push(
+        `${file}'s Install actionlint step does not run \`bash tools/install-actionlint.sh <directory>\`, which holds the retry and the download checks`,
+      );
+    }
+    for (const key of ['if', 'continue-on-error']) {
+      if (Object.hasOwn(step, key)) {
+        problems.push(
+          `${file}'s Install actionlint step sets \`${key}\`, which can skip the install or keep its failure from failing the job`,
+        );
+      }
+    }
+    if (step['timeout-minutes'] !== 5) {
+      problems.push(
+        `${file}'s Install actionlint step does not set \`timeout-minutes: 5\`, the timeout the installer's worst case of about 274 seconds is sized against`,
+      );
+    }
+  }
+  for (const step of steps) {
+    if (typeof step?.run === 'string' && /download-actionlint\.bash/.test(step.run)) {
+      problems.push(
+        `${file} step ${JSON.stringify(step.name ?? '(unnamed)')} runs or fetches download-actionlint.bash itself; only tools/install-actionlint.sh may, because it retries and checks the download`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** The shell with its comment lines removed, so a comment cannot stand in for the code. */
+function withoutComments(text) {
+  return text
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+/**
+ * The parts of `tools/install-actionlint.sh` the story's acceptance criteria name, each as a
+ * pattern over the shell with its comments removed.
+ */
+const ACTIONLINT_INSTALLER_PARTS = [
+  [
+    'retries each download at least five times',
+    (code) => Number.parseInt(/^ATTEMPTS=(\d+)$/m.exec(code)?.[1] ?? '0', 10) >= 5 && /\(\(\s*attempt >= ATTEMPTS\s*\)\)/.test(code),
+  ],
+  ['makes exactly 7 attempts, so the waits reach 2, 4, 8, 16, 32 and 64 seconds', (code) => /^ATTEMPTS=7$/m.test(code)],
+  ['grows the wait between attempts', (code) => /RETRY_BASE << \(\$1 - 1\)/.test(code)],
+  ['spends at most 126 seconds of waits in a run', (code) => /^WAIT_BUDGET=126$/m.test(code)],
+  ['waits a base of 2 seconds by default', (code) => /^RETRY_BASE=\$\{INSTALL_ACTIONLINT_RETRY_BASE:-2\}$/m.test(code)],
+  ['sleeps with the real `sleep` by default', (code) => /^SLEEP=\$\{INSTALL_ACTIONLINT_SLEEP:-sleep\}$/m.test(code)],
+  ['stops retrying after 170 seconds by default', (code) => /^DEADLINE=\$\{INSTALL_ACTIONLINT_DEADLINE:-170\}$/m.test(code)],
+  [
+    'checks the tarball with `gzip -t` before the pinned script reads it',
+    (code) => /fetch_file "\$TARBALL_URL"[^\n]*&& gzip -t /.test(code),
+  ],
+  [
+    'compares the tarball with the release checksum file',
+    (code) => /verify_checksum "\$tarball" && return 0/.test(code) && /\[\[ \$actual != "\$expected" \]\]/.test(code),
+  ],
+  [
+    'resolves the latest release tag and hands it to the pinned script',
+    (code) =>
+      /^LATEST_URL="\$\{RELEASES_BASE\}\/latest"$/m.test(code) &&
+      /with_retry try_latest/.test(code) &&
+      /download-actionlint\.bash" "\$VERSION" "\$dir"/.test(code),
+  ],
+  ['keeps the actionlint version out of its code', (code) => !/\b\d+\.\d+\.\d+\b/.test(code)],
+  [
+    'fetches the download script from a 40-hex commit',
+    (code) =>
+      /^SCRIPT_COMMIT=[0-9a-f]{40}$/m.test(code) &&
+      /^RAW_BASE=\$\{INSTALL_ACTIONLINT_RAW_BASE:-https:\/\/raw\.githubusercontent\.com\/rhysd\/actionlint\}$/m.test(code) &&
+      /^SCRIPT_URL="\$\{RAW_BASE\}\/\$\{SCRIPT_COMMIT\}\/scripts\/download-actionlint\.bash"$/m.test(code),
+  ],
+  [
+    'checks the download script against a 64-hex sha256 before it runs',
+    (code) =>
+      /^SCRIPT_SHA256_DEFAULT=[0-9a-f]{64}$/m.test(code) &&
+      /\[\[ \$actual != "\$SCRIPT_SHA256" \]\]/.test(code) &&
+      /^SCRIPT_SHA256=\$\{INSTALL_ACTIONLINT_SCRIPT_SHA256:-\$SCRIPT_SHA256_DEFAULT\}$/m.test(code),
+  ],
+];
+
+/** Why the installer's text has dropped a part the acceptance criteria require, or an empty list when it holds them all. */
+function actionlintInstallerProblems(text) {
+  const code = withoutComments(text);
+  return ACTIONLINT_INSTALLER_PARTS.filter(([, holds]) => !holds(code)).map(([part]) => `tools/install-actionlint.sh no longer ${part}`);
+}
+
+/** Both workflows and the installer, read from the repository. */
+function actionlintInstallProblems(workflowRoot = WORKFLOW_ROOT, installer = ACTIONLINT_INSTALLER) {
+  const problems = ACTIONLINT_WORKFLOWS.flatMap((name) =>
+    actionlintInstallStepProblems(name, fs.readFileSync(path.join(workflowRoot, name), 'utf8')),
+  );
+  return [...problems, ...actionlintInstallerProblems(fs.readFileSync(installer, 'utf8'))];
+}
+
 function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   let chained;
@@ -365,6 +484,16 @@ function main() {
     for (const problem of runProblems) console.error(`  - ${problem}`);
     console.error(
       `\n${colors.dim}Make the job's strategy.matrix.shard list 1 through N, where N is the count its tools/test-shards.js command passes.${colors.reset}`,
+    );
+    return 1;
+  }
+
+  const installProblems = actionlintInstallProblems();
+  if (installProblems.length > 0) {
+    console.error(`${colors.red}the actionlint install no longer retries and verifies its download:${colors.reset}`);
+    for (const problem of installProblems) console.error(`  - ${problem}`);
+    console.error(
+      `\n${colors.dim}Both workflows run \`bash tools/install-actionlint.sh <directory>\` in their Install actionlint step, and the installer keeps the retry, the tarball checks and the version resolution.${colors.reset}`,
     );
     return 1;
   }
@@ -415,6 +544,11 @@ function main() {
 if (require.main === module) process.exit(main());
 
 module.exports = {
+  ACTIONLINT_INSTALLER,
+  ACTIONLINT_WORKFLOWS,
+  actionlintInstallerProblems,
+  actionlintInstallProblems,
+  actionlintInstallStepProblems,
   chainedScripts,
   DELIBERATELY_LOCAL,
   scriptsCoveredInCi,

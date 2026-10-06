@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "invocationId": "20261005T053026807Z-262ddcda",
+  "invocationId": "20261005T002653577Z-ef22f04c",
   "corpusDigest": "sha256:68ddfc02ab8e9f5aaca1bcd33d36b41be1144f75917b7138be782b43c210b39c",
   "contract": "eval-contract.json",
   "policy": "scoring-policy.json",
@@ -9,7 +9,7 @@
   "trialSets": [
     {
       "probeId": "P-001",
-      "runId": "20261005T053026807Z-262ddcda-P-001",
+      "runId": "20261005T002653577Z-ef22f04c-P-001",
       "conditionArm": "clean",
       "probe": "probes/P-001.probe.json",
       "records": [
@@ -21,7 +21,7 @@
     },
     {
       "probeId": "P-002",
-      "runId": "20261005T053026807Z-262ddcda-P-002",
+      "runId": "20261005T002653577Z-ef22f04c-P-002",
       "conditionArm": "mutated:M-001",
       "probe": "probes/P-002.probe.json",
       "records": [

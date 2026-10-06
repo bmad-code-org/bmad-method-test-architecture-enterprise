@@ -2,7 +2,7 @@
   "conditionArm": "clean",
   "trialIndex": 3,
   "workspace": "trial-clean-3",
-  "elapsedMs": 210,
+  "elapsedMs": 212,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -43,7 +43,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Mon, 05 Oct 2026 05:30:30 GMT",
+          "date": "Mon, 05 Oct 2026 00:26:57 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },

@@ -20,9 +20,9 @@
  *    another engine measured (`refused`, informational).
  *
  * The replay's determinism, measured here and recorded in the story: the produced preflight verdict, each probe's
- * `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json` equal the baseline's byte for byte; the
- * call records of `score` (`score.json` per probe and in total, and `aggregate-strength.json`) name each call's private
- * staging paths and the invocation id, so they differ by construction and are the only files the comparison leaves out.
+ * `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json` equal the baseline's byte for byte, and so do
+ * the call records of `score` (each probe's `score.json` and `aggregate-strength.json`), which hold neutral path forms; the
+ * invocation's own `score.json` summary names the replay's invocation id and is the one file the comparison leaves out.
  */
 
 const assert = require('node:assert/strict');
@@ -36,6 +36,7 @@ const yaml = require('js-yaml');
 const { engineCliPath, engineVersion, loadEngine } = require('../cli/lib/evaluate/engine');
 const { checkEvaluation } = require('../cli/lib/evaluate/check');
 const { MAX_OUTPUT_BYTES, confine } = require('../cli/lib/evaluate/ci');
+const { textNeutralizer } = require('../cli/lib/evaluate/recorded-paths');
 const planModule = require('../cli/lib/evaluate/ci-plan');
 const { principalMappingProblems } = require('../cli/lib/evaluate/registry');
 const { EXIT_CODES } = require('../cli/evaluate');
@@ -860,6 +861,111 @@ async function checkDerivableFields() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The gated jobs of a plan (Story 1.97): the optional `gates` list of a check
+
+/** The jobs of `gates` entries `check` and `ci` accept, and the shapes and names they refuse with a `gates` finding. */
+function checkGatedJobs() {
+  // A job id is accepted wherever the plan places a check (revert: dropping `gates` from the schema fails every valid case below).
+  for (const [label, gates] of [
+    ['a plain id', ['publish']],
+    ['an id with a hyphen and an underscore', ['deploy-to_prod']],
+    ['an id that starts with an underscore', ['_deploy']],
+    ['an id in upper case with digits', ['Deploy2']],
+    ['two ids', ['publish', 'deploy']],
+  ]) {
+    derivedValid(label, { plan: (value) => (value.checks[0].gates = gates) });
+  }
+
+  // A name that is no job id exits 10 from both commands with the `gates` rule and no other (revert: removing the pattern from the
+  // schema passes every name below; reporting the violation as `schema` fails the rule assertion).
+  for (const name of [
+    '',
+    '1deploy',
+    '-deploy',
+    'deploy prod',
+    'deploy.prod',
+    'deploy/prod',
+    'deploy;rm',
+    'deploy\n',
+    '${{ matrix.job }}',
+    'déploy',
+  ]) {
+    const folder = copyFixture('mcp', 'gates');
+    const message = derivedProblem(`the name ${JSON.stringify(name)}`, 'gates', {
+      folder,
+      plan: (value) => (value.checks[2].gates = ['publish', name]),
+    });
+    assert.match(
+      message,
+      /checks\[2\]\.gates\[1\] is .*, which is not a job id; name the id of a job in one of the repository's workflow files/,
+      JSON.stringify(name),
+    );
+    assert.deepEqual(rulesOf(folder), ['gates'], `the name ${JSON.stringify(name)} reports the gates rule alone`);
+  }
+
+  // The list itself: a non-empty list of distinct strings (revert: dropping minItems, uniqueItems or the item type passes the case).
+  for (const [label, gates, expected] of [
+    ['a name outside a list', 'publish', /checks\[0\]\.gates must be array/],
+    ['an empty list', [], /checks\[0\]\.gates must NOT have fewer than 1 items/],
+    ['a repeated name in one check', ['publish', 'publish'], /checks\[0\]\.gates must NOT have duplicate items/],
+    ['a number', [5], /checks\[0\]\.gates\[0\] must be string/],
+  ]) {
+    const folder = copyFixture('mcp', 'gates');
+    const message = derivedProblem(label, 'gates', { folder, plan: (value) => (value.checks[0].gates = gates) });
+    assert.match(message, expected, label);
+    assert.deepEqual(rulesOf(folder), ['gates'], label);
+  }
+
+  // A violation elsewhere in the plan keeps the rule `schema` (revert: mapping every schema error to `gates` fails this).
+  {
+    const folder = copyFixture('mcp', 'gates');
+    derivedProblem('a schema violation next to a gate', 'schema', {
+      folder,
+      plan: (value) => {
+        value.checks[0].gates = ['publish'];
+        value.checks[1].enforcement = 'optional';
+      },
+    });
+    assert.deepEqual(rulesOf(folder), ['schema']);
+  }
+
+  // The jobs a tier gates are the union over its checks: a name on two checks of one tier is merged and no finding, and a name
+  // on checks of two tiers is valid (revert: reading a repeat across checks as a duplicate fails the first two cases).
+  derivedValid('one job named on two checks of a tier', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks[1].gates = ['publish'];
+    },
+  });
+  derivedValid('different jobs on the checks of a tier', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks[1].gates = ['deploy'];
+      value.checks[2].gates = ['publish', 'deploy'];
+    },
+  });
+  derivedValid('one job on checks of two tiers', {
+    plan: (value) => {
+      value.checks[0].gates = ['publish'];
+      value.checks.push({ ...entry('twin-run', 'release'), gates: ['publish'] });
+    },
+  });
+  // A gate check takes the list too, and the plan alone validates it (the guide's tagged examples are held to `planFindings`).
+  derivedValid('a gate check naming a job', {
+    plan: (value) =>
+      value.checks.push({
+        ...entry('lockfile-age', 'pr', { kind: 'gate', command: ['eval-quality-gates', 'lockfile-age'] }),
+        gates: ['publish'],
+      }),
+  });
+  assert.deepEqual(planModule.planFindings({ schemaVersion: 1, checks: [{ ...entry('check', 'pr'), gates: ['publish'] }] }), []);
+  assert.deepEqual(
+    planModule.planFindings({ schemaVersion: 1, checks: [{ ...entry('check', 'pr'), gates: ['not a job'] }] }).map((found) => found.rule),
+    ['gates'],
+  );
+}
+
 function checkWiring() {
   const folder = copyFixture('mcp', 'wiring');
   // A tier with no checks is not an error: nothing runs, and the invocation still leaves its summary.
@@ -1472,6 +1578,138 @@ function checkEngineStageExits() {
   assert.equal(odd.status, 12, odd.output);
 }
 
+/**
+ * `ci --tier pr` over a project under a distinctive path leaves a run directory that names no path of this machine: the
+ * project's own paths, the temporary and home directories and the private root, and any path of a Unix or macOS host, are
+ * absent from every file of `runs/<invocationId>/` (the directory the `chain` job uploads). The scan finds a project path
+ * planted in each file in turn, so it cannot pass over a directory that holds one.
+ */
+function checkCiRunHoldsNoMachinePath() {
+  const folder = copyFixture('verdict', 'machine-path-canary-ci-6b3e');
+  const repository = path.resolve(folder, '..', '..');
+  const project = { folder, repository, directory: path.dirname(repository) };
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 0, result.output);
+  const { directory } = latestCi(folder);
+  const needles = baselines.machinePaths({ project });
+  assert.ok(
+    needles.some((needle) => needle.includes('machine-path-canary-ci-6b3e')),
+    `the scan does not look for the project's path: ${JSON.stringify(needles)}`,
+  );
+  assert.deepEqual(baselines.machinePathHits(directory, needles), [], 'a file of the ci run directory names a path of this machine');
+  assert.deepEqual(baselines.machinePathHits(directory), [], 'a file of the ci run directory holds a path of a Unix or macOS host');
+  assert.match(
+    fs.readFileSync(path.join(directory, 'checks', 'check', 'stdout'), 'utf8'),
+    /^tea-evaluate check: <evaluation-folder> has no authoring defects$/m,
+  );
+  const planted = path.join(path.dirname(directory), 'planted-ci-run');
+  fs.cpSync(directory, planted, { recursive: true });
+  for (const file of baselines.filesUnder(planted)) {
+    const target = path.join(planted, file);
+    const original = fs.readFileSync(target);
+    fs.appendFileSync(target, repository);
+    assert.deepEqual(
+      baselines.machinePathHits(planted, needles).map((hit) => hit.file),
+      [file],
+      `${file}: a planted project path is not found`,
+    );
+    fs.writeFileSync(target, original);
+  }
+}
+
+/**
+ * `textNeutralizer` over strings and Buffers: the evaluation folder, the private root, the temporary directory and the home
+ * directory become their forms where a path stands alone, and a path that only ends or starts like one is left as it is
+ * (`/var/tmp/x` and `build/tmp/x` under a temporary directory of `/tmp`, a sibling folder of the evaluation folder). A Buffer
+ * keeps every byte outside a substituted path, UTF-8 or not.
+ */
+function checkTextNeutralizer() {
+  const saved = process.env.TMPDIR;
+  process.env.TMPDIR = '/tmp';
+  try {
+    const folder = path.join(path.parse(process.cwd()).root, 'Users', 'ci', 'work', 'evals', 'grader');
+    const neutral = textNeutralizer({ folder });
+    const cases = [
+      ['/var/tmp/eval', '/var/tmp/eval'],
+      ['build/tmp/out.json', 'build/tmp/out.json'],
+      ['/tmpfoo/x', '/tmpfoo/x'],
+      [`${folder}-other/x`, `${folder}-other/x`],
+      [`${folder}/runs/1`, '<evaluation-folder>/runs/1'],
+      ['file:///tmp/port.mjs:24', 'file://<tmp>/port.mjs:24'],
+      [
+        'at run (/tmp/a/b.js:1:2) and "/tmp/c" and path=/tmp/d and /tmp.bak',
+        'at run (<tmp>/a/b.js:1:2) and "<tmp>/c" and path=<tmp>/d and /tmp.bak',
+      ],
+      [`open '${folder}/policy/p.json'`, "open '<evaluation-folder>/policy/p.json'"],
+    ];
+    for (const [input, expected] of cases) assert.equal(neutral(input), expected, `neutralizing ${JSON.stringify(input)}`);
+    const bytes = Buffer.concat([
+      Buffer.from('caf\u00E9 '),
+      Buffer.from([0xff, 0xfe, 0x00]),
+      Buffer.from(` at file:///tmp/port.mjs:24 ${folder}/x\n`),
+    ]);
+    const recorded = neutral(bytes);
+    assert.ok(Buffer.isBuffer(recorded));
+    assert.deepEqual(
+      recorded,
+      Buffer.concat([
+        Buffer.from('caf\u00E9 '),
+        Buffer.from([0xff, 0xfe, 0x00]),
+        Buffer.from(' at file://<tmp>/port.mjs:24 <evaluation-folder>/x\n'),
+      ]),
+    );
+    assert.equal(neutral(7), 7);
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved;
+  }
+}
+
+/**
+ * A failing HTTP port conformance (the adopter's file throws, so its stack names the file) and a stale baseline whose reason
+ * names a file under the evaluation folder leave run directories with no path of this machine: the check's streams are Buffers
+ * of the child's output, and the tier records the stale reasons in `ci.json` and in its one warning.
+ */
+function checkCiRunHoldsNoMachinePathOnFailure() {
+  const api = copyFixture('api', 'machine-path-canary-api-3e0d');
+  fs.writeFileSync(path.join(api, 'adapter', 'http-probe-port.conformance.mjs'), "throw new Error('the port answers wrongly');\n");
+  const failed = ci(api, 'pr');
+  assert.notEqual(failed.status, 0, failed.output);
+  const conformance = latestCi(api).directory;
+  assert.match(fs.readFileSync(path.join(conformance, 'checks', 'api-conformance', 'stderr'), 'utf8'), /http-probe-port\.conformance\.mjs/);
+  assert.deepEqual(
+    baselines.machinePathHits(conformance),
+    [],
+    'a failing conformance port left a path of this machine in the ci run directory',
+  );
+  assert.deepEqual(
+    baselines.machinePathHits(
+      conformance,
+      baselines.machinePaths({
+        project: { folder: api, repository: path.resolve(api, '..', '..'), directory: path.dirname(path.resolve(api, '..', '..')) },
+      }),
+    ),
+    [],
+  );
+
+  const stale = copyFixture('verdict', 'machine-path-canary-stale-8a15');
+  fs.renameSync(path.join(stale, 'policy', 'scoring-policy.json'), path.join(path.dirname(stale), 'moved-policy.json'));
+  ci(stale, 'pr');
+  const { directory, json } = latestCi(stale);
+  assert.equal(json.baseline.stale, true);
+  assert.deepEqual(json.baseline.reasons, [
+    "the scoring policy cannot be read (ENOENT: no such file or directory, open '<evaluation-folder>/policy/scoring-policy.json')",
+  ]);
+  const staleWarnings = json.warnings.filter((line) => line.startsWith('the baseline is stale'));
+  assert.equal(
+    staleWarnings.length,
+    1,
+    `the tier warns ${staleWarnings.length} times about the stale baseline: ${JSON.stringify(json.warnings)}`,
+  );
+  assert.ok(staleWarnings[0].includes('<evaluation-folder>/policy/scoring-policy.json'));
+  assert.deepEqual(baselines.machinePathHits(directory), [], 'a stale baseline left a path of this machine in the ci run directory');
+}
+
 function checkPrReplay() {
   const folder = copyFixture('verdict', 'pr');
   const baselineBefore = treeDigest(path.join(folder, 'baseline'));
@@ -1480,7 +1718,7 @@ function checkPrReplay() {
 
   // A clean baseline: every pr check runs, in plan order, and exactly those (a hard-coded list would diverge from a plan that omits one).
   const log = path.join(path.dirname(folder), 'shim.log');
-  const clean = ci(folder, 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_RUN_REAL: '1' }));
+  const clean = ci(folder, 'pr');
   assert.equal(clean.status, 0, clean.output);
   const { directory, json } = latestCi(folder);
   assert.deepEqual(
@@ -1531,14 +1769,33 @@ function checkPrReplay() {
     'the replay did not reproduce the preflight verdict',
   );
   assert.deepEqual(treeDigest(path.join(folder, 'baseline')), baselineBefore, 'ci wrote under baseline/');
-  // The call records of score are the files the comparison leaves out: they differ by construction.
-  for (const name of ['score.json', 'aggregate-strength.json']) {
+  // The call records of score hold neutral path forms (`recorded-paths.js`), so the replay writes the baseline's bytes again and the
+  // comparison covers them; the invocation's own summary names this replay's invocation id and is the one file left out.
+  for (const name of ['P-001/score.json', 'P-002/score.json', 'aggregate-strength.json']) {
     assert.equal(
       fs.readFileSync(path.join(directory, 'replay', 'scores', name)).equals(fs.readFileSync(path.join(baselineScores, name))),
-      false,
-      `${name} is deterministic after all`,
+      true,
+      `the replay did not reproduce the call record ${name}`,
     );
   }
+  assert.equal(
+    fs
+      .readFileSync(path.join(directory, 'replay', 'scores', 'score.json'))
+      .equals(fs.readFileSync(path.join(baselineScores, 'score.json'))),
+    false,
+    'the invocation summary is deterministic after all',
+  );
+
+  // The same replay through the logging shim, which runs the real CLI beneath. The call records say the engine was substituted
+  // (`substituted` and the executable differ from the baseline's), so those three files are the only drift, and the evidence is the
+  // baseline's byte for byte.
+  const shimmed = ci(copyFixture('verdict', 'pr-shim'), 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_RUN_REAL: '1' }));
+  assert.equal(shimmed.status, 13, shimmed.output);
+  assert.deepEqual([...shimmed.stdout.matchAll(/replay: \[drift\] (\S+): the replay produced/g)].map((match) => match[1]).sort(), [
+    'scores/P-001/score.json',
+    'scores/P-002/score.json',
+    'scores/aggregate-strength.json',
+  ]);
 
   // The stage exits are the engine's: the direct CLI over the same inputs exits as the replay says, and the replay
   // re-ran preflight and score through the engine (the shim log) with no --strict anywhere.
@@ -1778,23 +2035,28 @@ function flipByte(file) {
 }
 
 function checkReplayComparisonSet() {
-  // The comparison set is five files over the verdict fixture: the preflight verdict, two evidence artifacts, the strength
-  // aggregate and its floors. A clean replay reads all five.
+  // The comparison set is eight files over the verdict fixture: the preflight verdict, two evidence artifacts, the strength
+  // aggregate and its floors, and the three call records (each probe's `score.json` and `aggregate-strength.json`), which hold
+  // neutral path forms. A clean replay reads all eight.
   const clean = copyFixture('verdict', 'comparison-set');
   const ok = ci(clean, 'pr');
   assert.equal(ok.status, 0, ok.output);
   assert.match(
     fs.readFileSync(path.join(latestCi(clean).directory, 'checks', 'replay', 'stdout'), 'utf8'),
-    /5 baseline file\(s\) compared, 0 difference\(s\)/,
+    /8 baseline file\(s\) compared, 0 difference\(s\)/,
   );
-  // One byte of the baseline's strength aggregate, and one byte of its floors (a space become a tab: the floors still
-  // parse, so the replay scores under them, and the file score writes from them differs from the baseline's bytes): each is
-  // drift, named (revert: leaving either file out of the comparison passes its case).
+  // One byte of the baseline's strength aggregate, one byte of its floors (a space become a tab: the floors still
+  // parse, so the replay scores under them, and the file score writes from them differs from the baseline's bytes), and one byte
+  // of each probe's call record and of the aggregate's: each is drift, named (revert: leaving any of these files out of the
+  // comparison passes its case, so the case fails).
   for (const [name, edit] of [
     ['strength-aggregate.json', (file) => flipByte(file)],
+    ['P-001/score.json', (file) => flipByte(file)],
+    ['P-002/score.json', (file) => flipByte(file)],
+    ['aggregate-strength.json', (file) => flipByte(file)],
     ['strength-floors.json', (file) => fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(': ', ':\t'))],
   ]) {
-    const folder = copyFixture('verdict', `comparison-${name}`);
+    const folder = copyFixture('verdict', `comparison-${name.replaceAll('/', '-')}`);
     const file = path.join(scoreDirectory(folder), name);
     const before = fs.readFileSync(file);
     edit(file);
@@ -2886,7 +3148,7 @@ function planProblems(name, plan, repository, required, folder) {
   if (liveTiers.has('release') && !events.release) problems.push(`${name}: a release tier without a release or deploy workflow`);
   for (const item of plan.checks) {
     const where = `${name}: ${item.id} on ${item.placement.tier}`;
-    problems.push(...planEntryShapeProblems(item, name));
+    problems.push(...planEntryShapeProblems(item, name, { subsetTriggers: true }));
     if (folder !== undefined && item.kind === 'evaluate' && item.command[3] !== folder)
       problems.push(`${where} runs another evaluation folder`);
     const reason = item.placement.reason?.trim() ?? '';
@@ -4163,6 +4425,7 @@ async function main() {
     ['the committed plans and baselines', checkFixturePlans],
     ['the placement rules', checkPlacementRules],
     ['the derivable fields', checkDerivableFields],
+    ['the gated jobs', checkGatedJobs],
     ['wiring', checkWiring],
     ['the AD-10 table', checkEnforcementTable],
     ['tier membership', checkTierMembership],
@@ -4172,6 +4435,9 @@ async function main() {
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
     ['the pr replay', checkPrReplay],
+    ['the text neutralizer', checkTextNeutralizer],
+    ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],
+    ['the ci run directory after a failing port and a stale baseline', checkCiRunHoldsNoMachinePathOnFailure],
     ['the replay comparison set', checkReplayComparisonSet],
     ['a replay stage that exits 2', checkReplayStageExit],
     ['baseline integrity', checkBaselineIntegrity],

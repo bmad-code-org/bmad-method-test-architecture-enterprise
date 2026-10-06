@@ -725,8 +725,8 @@ async function checkHistorical() {
     .map((name) => readJson(path.join(runDirectory, 'observations', name)));
   const leg = observations.find((observation) => observation.legId === 'manifest-pre-fix');
   check(
-    leg?.workspace === `historical:${parent}` && path.basename(path.dirname(leg.cwd)).startsWith(`tea-evaluate-historical-${parent}-`),
-    `the witness leg ran in ${leg?.workspace} at ${leg?.cwd}; expected the pre-fix worktree at ${parent}`,
+    leg?.workspace === `historical:${parent}` && leg.cwd === '<workspace>',
+    `the witness leg ran in ${leg?.workspace} at ${leg?.cwd}; expected the pre-fix worktree at ${parent}, recorded as <workspace>`,
   );
   check(
     observations

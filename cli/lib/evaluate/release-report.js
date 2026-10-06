@@ -209,6 +209,7 @@ function compileRefusals(contractPath, env = process.env) {
   try {
     const stage = runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
       runDirectory: staging,
+      folder: path.dirname(contractPath),
       recordPath: path.join(staging, 'compile-record.json'),
       env,
     });

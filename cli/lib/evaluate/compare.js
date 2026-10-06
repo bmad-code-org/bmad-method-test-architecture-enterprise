@@ -60,8 +60,12 @@
  * their actions artifacts and isolation manifests as `runs/<acceptedRun>/...`
  * paths and `score` refuses a reference outside the run directory it scores, so
  * a replay through `score` places the baseline's bytes at `runs/<acceptedRun>/`
- * (in a scratch copy of the evaluation folder); no path is rewritten, since that
- * would move the digests. The refusal order is: no run, a run that did not
+ * (in a scratch copy of the evaluation folder).
+ * No file is rewritten, since that would move the digests.
+ * The runtime records neutral path forms at the source (`recorded-paths.js`), so
+ * `run.json`, the observations and the score call records the copy holds name no
+ * workspace, repository, staging directory or checkout of the machine that made
+ * the run, and every digest was taken over those bytes. The refusal order is: no run, a run that did not
  * complete or a run with no score invocation (64); `dirty: true` (10, nothing
  * written); a probe with no evidence artifact in the latest score invocation, a
  * missing member, an entry that is not a regular file, a directory on the way

@@ -2,7 +2,7 @@
   "legId": "manifest-wrong-tool",
   "sequence": 5,
   "workspace": "mutated:M-001",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-a2e1616b-661d-432b-a00e-7672541d636b/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "manifest-wrong-tool",
     "interfaceId": "calling-agent",

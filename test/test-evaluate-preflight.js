@@ -2364,8 +2364,10 @@ function checkSubscriptionLogin() {
   check(
     ['seatbelt', 'bubblewrap'].includes(filedRun?.confinement) &&
       JSON.stringify(filedRun?.logins) ===
-        JSON.stringify([{ interfaceId: 'stub-skill', executable: 'tea-skill-runner', login: 'claude', variable: null, file: realFile }]),
-    `the preflight's run.json recorded confinement ${filedRun?.confinement} and the logins ${JSON.stringify(filedRun?.logins)}; expected the mechanism and the file by path`,
+        JSON.stringify([
+          { interfaceId: 'stub-skill', executable: 'tea-skill-runner', login: 'claude', variable: null, file: '<credentials-file>' },
+        ]),
+    `the preflight's run.json recorded confinement ${filedRun?.confinement} and the logins ${JSON.stringify(filedRun?.logins)}; expected the mechanism and the file as <credentials-file>`,
   );
   check(
     filesUnder(filed.directory ?? '').every((file) => fs.statSync(file).isDirectory() || !fs.readFileSync(file).includes(fakeLogin)),

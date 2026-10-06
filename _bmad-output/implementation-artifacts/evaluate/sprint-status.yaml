@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 10-04-2026 17:45
+last_updated: 10-04-2026 22:52
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -121,17 +121,17 @@ development_status:
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: done
   1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
-  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: backlog
+  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: done
   1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent: backlog
   1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository: done
   1-90-verify-the-baseline-manifests-file-digests: done
-  1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
+  1-91-keep-machine-paths-out-of-a-committed-baseline: done
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: done
-  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
+  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: done
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: done
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: done
@@ -156,7 +156,7 @@ development_status:
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: done
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: done
-  1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: backlog
+  1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: done
   1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: backlog
   1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: backlog
   epic-1-retrospective: optional

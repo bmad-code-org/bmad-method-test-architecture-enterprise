@@ -2,7 +2,7 @@
   "legId": "witness-beta",
   "sequence": 2,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-ab363817-63d6-4d28-a4b3-aa59a2951d58/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "witness-beta",
     "interfaceId": "verdict",
