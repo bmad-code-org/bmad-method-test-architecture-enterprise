@@ -237,8 +237,8 @@ const strayParents = (before) =>
 /**
  * A stand-in for the engine CLI that runs the real one, except at the stage `KILL_AT` names (and only when an argument
  * contains `KILL_ARG`, when it is set): there it writes its pid to `KILL_MARK` and either ends by SIGKILL or, with
- * `KILL_HOW=hang`, waits to be killed, or with `KILL_HOW=write` keeps creating and writing the directory of its `--out` until it is
- * killed. With `KILL_ONCE` it does so for the first call only.
+ * `KILL_HOW=hang`, waits to be killed, or with `KILL_HOW=write` keeps creating and writing the directory of its `--out` and ignores
+ * SIGINT and SIGTERM, so only SIGKILL ends it. With `KILL_ONCE` it does so for the first call only.
  */
 function killShim(label) {
   const wrapper = path.join(scratch.make(label), 'kill-shim.js');
@@ -255,7 +255,10 @@ const spent = process.env.KILL_ONCE !== undefined && fs.existsSync(process.env.K
 if (process.env.KILL_AT === stage && matches && !spent) {
   fs.writeFileSync(process.env.KILL_MARK, String(process.pid));
   if (process.env.KILL_HOW === 'write') {
-    // A stage that is writing its output: it recreates the directory of --out and fills it until it is stopped.
+    // A stage that is writing its output: it recreates the directory of --out and fills it, and ignores SIGINT and SIGTERM, so only
+    // the SIGKILL that follows the grace ends it.
+    process.on('SIGINT', () => {});
+    process.on('SIGTERM', () => {});
     const out = args[args.indexOf('--out') + 1];
     let count = 0;
     setInterval(() => {

@@ -3,9 +3,9 @@ title: 'Story 1.92: Stop tea-evaluate ci at once on a signal while an engine sta
 type: 'feature'
 created: '2026-10-06'
 baseline_commit: '15f1232e'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 2
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 1.92; Parallel lanes)'
   - '_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md (Story 1.92)'
@@ -48,7 +48,7 @@ The callers a `ci` signal reaches were measured by reading each call site.
 | `release-report.js` `compileRefusals` through `check.js` `checkProbes` (called by `checkEvaluation`) | the `check` check, and the pipeline's own check of every live run |
 
 All seven are awaited now, so there is no synchronous variant.
-`compileRefusals`, `checkProbes` and `preflight.js`'s `engineStage` became asynchronous; the others were already inside asynchronous code.
+`compileRefusals`, `checkProbes`, `preflight.js`'s `engineStage`, `ci.js`'s `engineStageCheck` and the `context.once` callback of `replayPreflight` became asynchronous; the others were already inside asynchronous code.
 
 ### The order of a signal
 
@@ -57,7 +57,6 @@ eval-quality writes an artifact with `mkdir(dirname(out), { recursive: true })` 
 Round 1 reproduced `run-<pid>-*` left behind in 4 of 6 `ci` runs and in 6 of 6 standalone `tea-evaluate preflight` runs against a stage that writes its `--out`, and 0 of 6 with the stage stopped first.
 `cleanUpOnSignal` therefore calls `stopEngineStages` (SIGINT or SIGTERM to each group, SIGKILL after 500 ms, the list emptied) before it aborts the run and calls the command's `onSignal`.
 It is the one place every handler passes through, so `ci`, `preflight` and `run` need no call of their own, and `workspace.js` requires `engine-cli.js` with no cycle.
-The stage the handler stops is the only way a stage leaves the list on a signal, so no second guard on the signals is installed.
 A process that ends through `process.exit` kills the live groups from an `exit` hook in `engine-cli.js`.
 
 ### Which commands remove what on a signal
@@ -102,9 +101,11 @@ No test or doc counts lane entries yet.
 
 - `test/test-evaluate-ci.js`:
   - `an interrupted replay` lost its signal block: the case no longer kills the stage.
-  - `a signal while an engine stage runs` hangs a stage with the kill shim (`KILL_HOW=hang`) or keeps it writing its `--out` (`KILL_HOW=write`), sends SIGINT and then SIGTERM to `ci` alone and stops no stage itself.
+  - `a signal while an engine stage runs` hangs a stage with the kill shim (`KILL_HOW=hang`), sends SIGINT and then SIGTERM to `ci` alone and stops no stage itself.
     It asserts `ci` ends by that signal within 30 s, the stage's pid is gone, and neither the private root (`run-<ci pid>-*`) nor the temporary directory (`tea-evaluate-*`) holds an entry.
-    Stages: the replay's `score` (with the scratch layout asserted before the signal), `aggregate-strength`, `preflight`, and the stale-baseline `compile` inside `replay`; a plan's `compile` and `seal`; the stale-baseline `compile` after a plan that does not read the baseline; the `check` check's `compile`; and, over the writing stage, the plan's `compile`, the replay's `score` and `preflight` and the `check` check's `compile`.
+    Stages: the replay's `score` (with the scratch layout asserted before the signal), `aggregate-strength`, `preflight`, and the stale-baseline `compile` inside `replay`; a plan's `compile` and `seal`; the stale-baseline `compile` after a plan that does not read the baseline; the `check` check's `compile`.
+  - `a signal while an engine stage writes` runs the same assertions over the kill shim in `KILL_HOW=write` mode: the stage keeps creating its `--out` directory and filling it, and ignores SIGINT and SIGTERM until the engine stage's own SIGKILL.
+    Stages: the replay's `score` and `preflight`, a plan's `compile` and the `check` check's `compile`.
   - `a signal to a command that runs a stage` runs the same two assertions, and that the private parent and temporary entries of the command's own pid are gone, over standalone `check` (a two-interface contract, hanging and writing), `preflight` (a two-interface contract, so the pipeline's own check compiles, and the pipeline's compile, hanging and writing), `run` (the pipeline's compile, hanging and writing) and `score` (hanging and writing).
   - `a killed check check` hangs the `check` check's compile over a two-interface contract, SIGKILLs `ci` and then the stage, finds the compile's directory in the private parent, and asserts the next `ci` over the folder removes the parent.
   - `a process that exits while a stage runs` holds the `exit` hook.
@@ -144,15 +145,18 @@ Reverting the whole story fails `a signal while an engine stage runs` at its fir
 
 ### Flakiness
 
-The writing cases and the standalone cases ran 10 times each in a scratch copy of the final tree, and again with the order of the handler reversed.
+The writing cases ran in a scratch copy of the tree and again with the order of the handler reversed.
+Round 1 ran them 10 times each; the reversed order failed `an engine stage writes` 4 times of 10, because the shim died on SIGINT or SIGTERM before it recreated anything.
+Round 2 made the shim in `KILL_HOW=write` mode ignore SIGINT and SIGTERM, so only the engine stage's own SIGKILL after the grace ends it, and ran each case 5 times:
 
-| Tree                         | Case (`--only=`)              | Runs of 10     |
-| ---------------------------- | ----------------------------- | -------------- |
-| Final tree                   | `an engine stage writes`      | 10 pass        |
-| Final tree                   | `a command that runs a stage` | 10 pass        |
-| Final tree                   | `a killed check check`        | 10 pass        |
-| Handler stops the stage last | `an engine stage writes`      | 6 pass, 4 fail |
-| Handler stops the stage last | `a command that runs a stage` | 1 pass, 9 fail |
+| Tree                         | Case (`--only=`)              | Runs of 5 |
+| ---------------------------- | ----------------------------- | --------- |
+| Final tree                   | `an engine stage writes`      | 5 pass    |
+| Final tree                   | `a command that runs a stage` | 5 pass    |
+| Handler stops the stage last | `an engine stage writes`      | 5 fail    |
+| Handler stops the stage last | `a command that runs a stage` | 5 fail    |
+
+`a killed check check` passed 10 times of 10 in round 1.
 
 ## Gates
 
@@ -164,3 +168,9 @@ The machine ran at a load average of 60 to 80 from other lanes, so the suites ra
 - The first build (before round 1): the same suites passed, `test:evaluate-arms` (733), `-pr-mcp`, two `-ci-repositories` scripts included.
   The first `test:evaluate-ci` run of that build failed once in `an interrupted replay` on `run-<pid>-otherfol`, a directory another lane's `test:evaluate-ci` planted in the shared `/tmp/tea-evaluate-p501`; the rerun passed.
 - `test:doc-counts`, `test:doc-claims`, `docs:validate-links`, `lint`, `lint:md` and `format:check` pass over the final tree.
+
+## Review
+
+Round 1: two lenses, 5 and 3 findings (the order of the signal, scratch left by `ci`'s live checks, standalone `score` and `check`, the `check` check's owner file, prose and plan-sync wording); all fixed in this pull request.
+Round 2: two lenses, 3 and 1 findings (the writing coverage attributed to the wrong case, the dropped guard's prose, two `workspace.js` comments, the writing shim that died on the signal); all fixed in this pull request.
+No story was filed.

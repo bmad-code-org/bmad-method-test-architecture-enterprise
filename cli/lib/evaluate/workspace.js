@@ -62,9 +62,9 @@ const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
 
-/** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 /** How long an eval-quality stage that a signal stopped has before SIGKILL. */
 const ENGINE_STAGE_GRACE_MS = 500;
+/** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 /** How long one pack of a withheld repository may take: it holds the project's whole history. */
 const GIT_HISTORY_TIMEOUT_MS = 10 * 60_000;
@@ -2094,7 +2094,7 @@ function removeWorkspace(workspace) {
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
  * @param {object} [options]
- * @param {(signal: string) => void} [options.onSignal] runs first, with the signal's name; it must not throw
+ * @param {(signal: string) => void} [options.onSignal] runs once the live stages are stopped and the controller is aborted, with the signal's name; it must not throw
  * @returns {() => void} removes the handlers
  */
 function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {

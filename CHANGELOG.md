@@ -653,8 +653,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `check` check of `ci` takes the invocation's scratch directory first, so the next `ci` over the folder removes what a SIGKILL of `ci` left of its compile.
   The exits and streams of a stage pass through unchanged, and a stage that ends by a signal still raises the error `killed by <signal>`.
   A spawn error names `spawn` where it named `spawnSync`.
-  `a signal while an engine stage runs` sends SIGINT and SIGTERM to a `ci` whose stage hangs, or keeps writing its output, and leaves the stage to the signal alone: it covers the replay's `score`, `aggregate-strength` and `preflight`, a plan's `compile` and `seal`, the stale-baseline compile in two positions and the `check` check's compile, and asserts `ci` ends by the signal within a bound, the stage's process is gone and neither the temporary directory nor the private root holds an entry of the run.
-  `a signal to a command that runs a stage` holds `check`, `preflight`, `run` and `score` to the same end, and `a killed check check` holds the SIGKILL case.
+  Four cases hold it.
+  `a signal while an engine stage runs` sends SIGINT and SIGTERM to a `ci` whose stage hangs and leaves the stage to the signal alone: it covers the replay's `score`, `aggregate-strength` and `preflight`, a plan's `compile` and `seal`, the stale-baseline compile in two positions and the `check` check's compile, and asserts `ci` ends by the signal within a bound, the stage's process is gone and neither the temporary directory nor the private root holds an entry of the run.
+  `a signal while an engine stage writes` does the same over a stage that keeps creating and filling its output directory and ignores the signal until `ci` kills it: the replay's `score` and `preflight`, a plan's `compile` and the `check` check's compile.
+  `a signal to a command that runs a stage` holds `check`, `preflight`, `run` and `score` to the same end, hanging and writing.
+  `a killed check check` holds the SIGKILL case.
   The reference states that a SIGKILL of `ci` itself still leaves a running gate or stage in its own process group, since no portable parent-death signal exists.
 
 - A development `preflight` or `run` under a `partitionPlan` no longer opens the held-out files while it reads the adopter's tree (Story 1.109, Story 1.112).
