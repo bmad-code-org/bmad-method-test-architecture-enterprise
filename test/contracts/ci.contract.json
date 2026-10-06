@@ -1721,21 +1721,19 @@
       "commentary": "full-meridian-storefront: gate-burn-in is requested. The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for full-meridian-storefront, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"burn-in\".",
+        "negativeDomain": "A run whose workflow has no key or name line for \"burn-in\" outside a comment.",
         "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
-          },
-          {
-            "literal": "burn-in"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*(?:^|\\n)[ \\t-]*(?:[\\w-]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn][\\w-]*:|name: [^\\n#]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn])[\\s\\S]*$"
       }
     },
     {

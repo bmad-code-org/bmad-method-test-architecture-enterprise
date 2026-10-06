@@ -1205,7 +1205,10 @@ async function ciEvidence(contract, { storedCase = identity } = {}) {
         // Every stored workflow is meant to be a correct one: every requested
         // element present, nothing unrequested, no rule violation. A row of
         // CI_CORRECT_RUNS that names another project's workflow, or one that
-        // deviates, fails the oracle it no longer satisfies.
+        // deviates, fails the oracle it no longer satisfies where the oracles'
+        // vocabulary can state the deviation. test:probe-corpus also scores each
+        // stored workflow with the harness's own scoreRun, which reads the structures
+        // a string cannot.
         oracleDispositions: scoredDispositions(
           contract,
           specs,

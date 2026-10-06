@@ -375,7 +375,7 @@ value to the key above it and `security` is a key in the ADR `categories` block 
 `ci.contract.json` hits the same limit from the other side: its one deliverable, the platform's own
 pipeline file, is machine-parseable YAML and the harness reads it structurally, but the contract's
 vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain
-substring claims (two state a quote-tolerant regex, below), and the per-element check stays the harness's.
+substring claims (three state a regex, below), and the per-element check stays the harness's.
 Each is paired with
 `workflowHoldsToken`, `test/eval-ci.js`'s own document-global predicate (`workflowMentions` over the
 element's `contractToken`, or `workflowMatches` over its `contractPattern`), the same idiom `test-design`'s
@@ -390,6 +390,10 @@ Two elements of the evaluation-plan project, `command-evaluation-install` and `c
 The contract renders it with the `regex` operator, which accepts only a pattern that begins with `^` and ends with `$`.
 Each is therefore written as `^[\s\S]*(?:...)[\s\S]*$`.
 The paired scorer tests the same source with `new RegExp(source)` and no flags.
+The full project's burn-in gate, `gate-burn-in`, states one too, because its word is also one a comment carries: the schedule comment `# Weekly burn-in on Sundays` satisfied the bare token, so a workflow with no burn-in job held the oracle.
+Its token is the job id the skill's template writes, `burn-in:`, and its pattern reads a mapping key or a `name:` line that carries the word, outside a comment (a job id, a job name, a step name, and also an `env` or `with` key or an artifact name, which a line cannot tell from them; the structural score does), in any case and with a hyphen, an underscore, a space or nothing between the two halves, the spellings the harness's own `isBurnInJob` accepts.
+A comment line, a trailing comment, a run line and the value of another key leave it unsatisfied.
+`test:contract-oracles` scores 229 forms of the burn-in job through eval-quality and through the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name, which must agree with `isBurnInJob`.
 
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a

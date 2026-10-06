@@ -3227,6 +3227,13 @@ function ciRequestedCheck(pointer, element) {
     : ciContains(pointer, element.contractToken);
 }
 
+/** What a run that fails a `regex` oracle of one requested element lacks, in the words of the element's own claim. */
+function ciPatternNegativeDomain(element) {
+  return element.kind === 'gate'
+    ? `A run whose workflow has no key or name line for ${JSON.stringify(element.gate)} outside a comment.`
+    : `A run whose workflow carries no ${JSON.stringify(element.contractToken)} command, whether or not it quotes its arguments for the shell.`;
+}
+
 /**
  * Every oracle the ci contract states, one spec per claim, in the order they are
  * numbered.
@@ -3236,7 +3243,8 @@ function ciRequestedCheck(pointer, element) {
  * claim here reads the whole document as one string.
  * The claims ask three things.
  * Does the document contain the literal a requested element states (`contractToken`),
- * or match the quote-tolerant `contractPattern` an element states beside it?
+ * or match the `contractPattern` an element states beside it?
+ * A pattern keeps a comment from standing for the burn-in job and tolerates the quotes a run writes around a folder.
  * Does it omit the literal a forbidden element states (`mustNotEmit`)?
  * Did the run leave the file behind and exit clean?
  * Whether a token sits inside the right job, whether a
@@ -3287,7 +3295,7 @@ function ciOracleSpecs(groundTruth) {
             scope: `The workflow file written for ${label}, read as one document.`,
             negativeDomain:
               check.op === 'regex'
-                ? `A run whose workflow carries no ${JSON.stringify(element.contractToken)} command, whether or not it quotes its arguments for the shell.`
+                ? ciPatternNegativeDomain(element)
                 : `A run whose workflow does not contain ${JSON.stringify(element.contractToken)}.`,
             evidenceTargets: [workflow],
           },
