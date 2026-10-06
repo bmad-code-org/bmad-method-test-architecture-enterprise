@@ -292,6 +292,18 @@ async function openBridge({ tools, handle, scratch = [] }) {
     removeDirectory();
     throw error;
   }
+  // The evaluation layer hides every host socket but this one (`confinement.js` `layerSockets`); a socket another process moves here is another file.
+  let unregister = () => {};
+  if (process.platform !== 'win32') {
+    try {
+      // Read here: the relay is this file run as a program, and it needs none of the runtime's modules.
+      unregister = require('./host-sockets').registerServedSocket(socketPath);
+    } catch (error) {
+      await new Promise((resolve) => server.close(() => resolve()));
+      removeDirectory();
+      throw error;
+    }
+  }
   return {
     server: {
       name: BRIDGE_NAME,
@@ -300,6 +312,7 @@ async function openBridge({ tools, handle, scratch = [] }) {
       env: { [TOKEN_FILE_VARIABLE]: tokenFile },
     },
     async close() {
+      unregister();
       for (const socket of connections) socket.destroy();
       await new Promise((resolve) => server.close(() => resolve()));
       // Whatever call was in flight has settled before the caller reads what the bridge recorded.

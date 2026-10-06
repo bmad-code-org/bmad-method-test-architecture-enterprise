@@ -449,18 +449,26 @@ async function observeAgentVersion({ evaluator, scratch, env = process.env, spaw
   const command = evaluator.agentCommand || adapter.command;
   if (!command) throw new Error(`the ${evaluator.agent} adapter has no configured executable`);
   const { runSupervised, buildMinimalEnv } = require('./run-agent');
+  const { launchPrefix } = require('./isolation-primitives');
   const { makeScratchDirectory, releaseScratchDirectory } = require('./evaluate/workspace');
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-agent-version-');
   const args = adapter.versionArgv(evaluator.agentArgs ?? []);
-  const isolated = spawnPrefix.length > 0;
   try {
-    const result = await runSupervised({
-      command: isolated ? spawnPrefix[0] : command,
-      args: isolated ? [...spawnPrefix.slice(1), command, ...args] : args,
-      cwd,
-      env: buildMinimalEnv(evaluator.environmentKeys ?? [], env, adapter.envNames),
-      timeout: AGENT_VERSION_TIMEOUT_MS,
-    });
+    // The prefix as it is at this start: the evaluation layer's lists the host's sockets again, and `settle` closes the start once the process has ended (Story 1.88).
+    const { prefix, settle } = launchPrefix(spawnPrefix);
+    const isolated = prefix.length > 0;
+    let result;
+    try {
+      result = await runSupervised({
+        command: isolated ? prefix[0] : command,
+        args: isolated ? [...prefix.slice(1), command, ...args] : args,
+        cwd,
+        env: buildMinimalEnv(evaluator.environmentKeys ?? [], env, adapter.envNames),
+        timeout: AGENT_VERSION_TIMEOUT_MS,
+      });
+    } finally {
+      settle();
+    }
     if (result.outcome.timedOut) throw new Error(`the agent version probe timed out after ${AGENT_VERSION_TIMEOUT_MS} ms`);
     if (result.outcome.spawnError || result.outcome.failure || result.outcome.status !== 0)
       throw new Error(`the agent version probe failed: ${JSON.stringify(result.outcome)}`);

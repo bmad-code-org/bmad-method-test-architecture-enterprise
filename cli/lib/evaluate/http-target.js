@@ -96,6 +96,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
+const { launchPrefix } = require('../isolation-primitives');
 const { quotedCapture } = require('./arm');
 const { bridgeAccepts, bridgeHostOf, startForwarder } = require('./confinement-relay');
 const { canonicalAddress, loadAdapters, loadConformance, loadEngine } = require('./engine');
@@ -250,13 +251,29 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
     const stdio = ['ignore', 'pipe', 'pipe'];
     stdio[PROTOCOL_FD] = 'pipe';
     // In a confined run the port starts through the evaluation layer's confinement (`confinement.js` `layerPrefix`).
-    const prefix = httpPort.spawnPrefix ?? [];
+    // The prefix as it is at this start: the evaluation layer's lists the host's sockets again, and `settle` closes the start once the process has ended (Story 1.88).
+    let launched;
+    try {
+      launched = launchPrefix(httpPort.spawnPrefix);
+    } catch (error) {
+      // A layer that cannot hide the host's sockets does not start the port: a target that could not run, exit 12.
+      if (error?.name !== 'ConfinementError') throw error;
+      reject(new PortProcessError(`the evaluation's HTTP port ${HTTP_PORT_MODULE} could not start: ${error.message}`, { exitCode: 12 }));
+      return;
+    }
+    const { prefix, settle } = launched;
     const command = prefix.length === 0 ? process.execPath : prefix[0];
-    const child = spawn(command, [...prefix.slice(1), ...(prefix.length === 0 ? [] : [process.execPath]), httpPort.file], {
-      cwd: httpPort.folder,
-      env: portEnvironment(),
-      stdio,
-    });
+    let child;
+    try {
+      child = spawn(command, [...prefix.slice(1), ...(prefix.length === 0 ? [] : [process.execPath]), httpPort.file], {
+        cwd: httpPort.folder,
+        env: portEnvironment(),
+        stdio,
+      });
+    } catch (error) {
+      settle();
+      throw error;
+    }
     const channel = child.stdio[PROTOCOL_FD];
     const decoder = new StringDecoder('utf8');
     let settled = false;
@@ -290,20 +307,25 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
     signal?.addEventListener('abort', onAbort, { once: true });
     // A port's own logging (a console.log, a warning) goes to its standard output or error, which never reach the
     // protocol: both are kept, in the order they arrive, for the failure to quote.
+    // The standard error is also kept alone: Bubblewrap prints its diagnostic before it runs the port, so nothing the port prints precedes it there.
+    let printedToError = '';
     for (const stream of [child.stdout, child.stderr]) {
       stream.setEncoding('utf8');
       stream.on('data', (chunk) => {
         printed += chunk;
+        if (stream === child.stderr && printedToError.length < PORT_OUTPUT_BYTES) printedToError += chunk;
         if (printed.length > PORT_OUTPUT_BYTES) stop(`printed past its output ceiling (${PORT_OUTPUT_BYTES} characters) and was ended`);
       });
     }
     // Each line is handled after the one before it, since answering `send` waits for a server to start.
     let handled = Promise.resolve();
+    let answered = false;
     const handle = async (line) => {
       if (settled) return;
       let answer;
       try {
         answer = JSON.parse(line);
+        answered = true;
       } catch {
         // The line is quoted cut at its end, JSON-escaped first, so the run's scrub finds a secret's leading part there.
         stop(`wrote a line that is not the runtime's protocol: ${JSON.stringify(line).slice(0, 200)}`);
@@ -334,10 +356,21 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       }
     });
     channel.on('error', () => {});
-    child.once('error', (error) => finish(() => reject(failed(`could not start: ${error.message}`, 12))));
+    // The process has ended when it could not start, has exited or has closed, whichever way the exchange ended; the layer's guard is settled then.
+    child.once('exit', settle);
+    child.once('error', (error) => {
+      settle();
+      finish(() => reject(failed(`could not start: ${error.message}`, 12)));
+    });
     child.once('close', (code, signalName) => {
+      settle();
       // A line already read is handled before the process's end is.
-      handled = handled.then(() => finish(() => reject(failed(`ended (${signalName ?? `exit ${code}`}) before it answered`))));
+      // Bubblewrap that stopped because a socket of the vector went away before the start (Story 1.88) is a host condition, exit 12.
+      // Its diagnostic is the first thing on the standard error, its status is 1 and the port had not answered; the same text from the port keeps exit 10.
+      const lostSocket = code === 1 && signalName === null && /^bwrap: Can't (?:find source path|get type of source) /.test(printedToError);
+      handled = handled.then(() =>
+        finish(() => reject(failed(`ended (${signalName ?? `exit ${code}`}) before it answered`, lostSocket && !answered ? 12 : 10))),
+      );
     });
     if (signal?.aborted) onAbort();
     channel.write(`${JSON.stringify(message)}\n`);
@@ -357,7 +390,8 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
  *   protocol; exit 12 for one whose process cannot start or does not answer in time
  */
 async function probeHttpPort(folder, { spawnPrefix = [] } = {}) {
-  const httpPort = { ...httpPortFile(folder), spawnPrefix: [...spawnPrefix] };
+  // The port keeps the prefix itself: a copy would lose its `refresh`.
+  const httpPort = { ...httpPortFile(folder), spawnPrefix };
   let hello;
   try {
     hello = await exchangeWithPort({

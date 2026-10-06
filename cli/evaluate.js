@@ -202,6 +202,11 @@ async function runDriven(name, command, options, extra) {
     outcome = await command(folder, { ...extra, log: (line) => process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(line)}\n`) });
   } catch (error) {
     if (error instanceof EngineUnavailableError || error instanceof EngineStageError) throw error;
+    // A layer process that cannot start because the host's sockets cannot all be hidden (Story 1.88) is a host condition: its message is the whole report.
+    if (error?.name === 'ConfinementError') {
+      process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(error.message)}\n`);
+      return EXIT_CODES.infrastructure;
+    }
     process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(error?.stack ?? error)}\n`);
     return EXIT_CODES.infrastructure;
   }

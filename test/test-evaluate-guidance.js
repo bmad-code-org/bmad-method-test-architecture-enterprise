@@ -3308,7 +3308,10 @@ function checkRunGuidance(guide, failures) {
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
     'Read both before reading a verdict',
     // Stories 1.82 and 1.87: a socket file of the host is closed to a Bubblewrap target under either network value and to a macOS Seatbelt target, and run.json records the Bubblewrap cut.
-    'A confined target cannot connect to a socket file of the host (Bubblewrap answers `ECONNREFUSED`, macOS Seatbelt `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    // Story 1.88: a socket that exists when the call starts is out of reach, one bound afterwards is reachable where nothing masks or denies its path, and the reason is the platform's.
+    'A confined target cannot connect to a socket file of the host that exists when its call starts (Bubblewrap masks it and answers `ECONNREFUSED`, macOS Seatbelt denies it and answers `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root",
+    "The reason is that seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads, so Bubblewrap has no way to refuse a connection to a path once the process has started",
     '`hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the host held more Unix sockets than a call can hide, and is `[]` when no call was cut',
     "when an entry is listed, say so before reading that trial's verdict",
   ])
@@ -3396,9 +3399,10 @@ function checkIsolationViolationGuidance(guide, failures) {
     'The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route, and such a target opts out with `"confinement": false` and the adopter\'s recorded reason',
     "A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels reaches a plain-HTTP gateway on the host's loopback that its entry lists",
     // Stories 1.82 and 1.87: a host service behind a socket file is out of a confined target's reach (Bubblewrap under either `network`, macOS Seatbelt), and the escape is the opt-out.
-    'A confined target cannot reach a host service through a socket file:',
+    'A confined target cannot reach a host service through a socket file that exists when its call starts:',
     "a connection to the Docker socket (testcontainers) or to a database's Unix socket (a `.s.PGSQL.5432` file) answers `ECONNREFUSED` from a Bubblewrap target",
-    "since the runtime mounts an empty device file over every socket file outside the call's own grants",
+    "since the runtime mounts an empty device file over each socket file it lists outside the call's own grants",
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root, since seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads",
     "and `EPERM` from a macOS Seatbelt target, since its profile denies every connection to a socket path outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",

@@ -58,6 +58,7 @@ const { spawnSync } = require('node:child_process');
 const { killLiveStreams } = require('./confinement-audit');
 const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
+const { sweepMaskRecords } = require('./mask-guard');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
 
@@ -658,6 +659,21 @@ function recordedPrivateRoot(entry, platform) {
   )
     return null;
   return root;
+}
+
+/**
+ * Removes what a killed run's evaluation layer left at the paths it hid (Story 1.88): the records `mask-guard.js` wrote in the user's private root before each start of a layer process.
+ * A record names a path, the device and inode it had and its state before the start, in a file named for the runtime's pid.
+ * A record whose pid is alive is left, since that run settles it itself; a dead run's record is applied under the rule teardown uses (`removePlaceholders`) and deleted.
+ * The records sit in the root beside the run's private parent, since a layer process that starts before the parent exists (the probe of the HTTP port) must be covered too.
+ *
+ * @param {object} [options]
+ * @param {(message: string) => void} [options.log]
+ * @returns {string[]} the records that were applied and deleted
+ */
+function reclaimDeadMaskRecords({ log = () => {} } = {}) {
+  const root = heldPrivateRoot(path.join(privateRootBase(), privateRootName()));
+  return root === null ? [] : sweepMaskRecords({ recordDirectory: root, log });
 }
 
 /** Reclaim a dead invocation's private parent only when its journal and in-parent marker agree. */
@@ -2314,6 +2330,7 @@ module.exports = {
   removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadMaskRecords,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   repositoryOf,
