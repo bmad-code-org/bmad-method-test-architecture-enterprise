@@ -22,11 +22,12 @@ context:
 
 ## Intent
 
-**Problem:** The real capture `test/replay/ci/evaluation-plan-live-capture` quotes its folder and tier for the shell (`npm install --prefix 'evals'`, `tea-evaluate ci --evaluation 'evals/grader' --tier pr`).
+**Problem:** The real capture `test/replay/ci/evaluation-plan-live-capture` quotes its folder names for the shell (`npm install --prefix 'evals'`, `tea-evaluate ci --evaluation 'evals/grader' --tier pr`).
 The `containment` oracles O-031 (`command-evaluation-install`) and O-032 (`command-evaluation-ci-pr`) search for the unquoted literals, so the stored correct run violates both.
 The engine resolves both checks false with corroboration `disagrees` on the clean control P-004, and `KNOWN_UNHELD` in `test/test-probe-corpus.js` lists the two so the corpus can pass.
 
-**Approach:** Each of the two elements states a `contractPattern` beside its `contractToken` in `test/fixtures/ci-eval/ground-truth.json`, a fully anchored regular expression that tolerates one pair of single or double quotes and pins the folder and the tier.
+**Approach:** Each of the two elements states a `contractPattern` beside its `contractToken` in `test/fixtures/ci-eval/ground-truth.json`, a fully anchored regular expression that pins the folder and the tier.
+It tolerates a balanced pair of single or double quotes around the folder, which a correct run may also write around the tier, and separates the words of the command by `\s+`, since a folded YAML scalar can break the line between them.
 `tools/generate-contracts.js` renders it with the vocabulary's `regex` operator, and the paired scorer tests the same source with `new RegExp(source)` and no flags.
 `KNOWN_UNHELD` is empty and its check stays.
 
@@ -36,7 +37,7 @@ The engine resolves both checks false with corroboration `disagrees` on the clea
 
 - The sources are `ground-truth.json` and `tools/generate-contracts.js`; `test/contracts/ci.contract.json`, `test/probes/ci.probes.json` and the ci `corpusDigest` regenerate from them and no generated file is edited by hand.
 - `expected-strength.json` moves in the ci `corpusDigest` only.
-- The patterns are the anchored forms of the acceptance criteria: the folder and the tier stay pinned, and the single-quoted, double-quoted and unquoted forms pass.
+- The patterns are the anchored forms of the acceptance criteria: the folder and the tier stay pinned, and the single-quoted, double-quoted and unquoted forms pass (the quote and whitespace forms are those of fix round 1, below).
 - Story 1.121's state holds: the three ci pre-flight records are `passed` and `test:ci-qualification` keeps `plant-reported`.
 
 **Never:**
@@ -50,29 +51,30 @@ The engine resolves both checks false with corroboration `disagrees` on the clea
 
 ## I/O & Edge-Case Matrix
 
-| Scenario                                  | Input / State                                                                                          | Expected Output / Behavior                                           | Error Handling                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| The stored capture                        | `npm install --prefix 'evals'` and `--evaluation 'evals/grader' --tier pr`                             | O-031 and O-032 hold                                                 | `storedRunProblems` fails the oracle that does not            |
-| Double-quoted or unquoted forms           | the same commands with `"` or no quotes                                                                | both hold                                                            | `test:contract-oracles` names the form                        |
-| Another tier                              | `--tier nightly`, `--tier prod`, `--tier merge`, `--tier PR`                                           | O-032 fails, O-031 holds                                             | the oracle and the scorer both resolve false                  |
-| Another folder or prefix                  | `npm install --prefix other`, `evals-other`, `--evaluation other/grader`, `evals/grader2`              | the matching oracle fails                                            | same                                                          |
-| An omitted command                        | no install line, no ci line, neither                                                                   | the matching oracle fails                                            | same                                                          |
-| A command at the end of the file          | no trailing newline                                                                                    | holds (`$` branch)                                                   | n/a                                                           |
-| The clean control P-004                   | the engine scores its record                                                                           | O-031 and O-032 `held`, corroboration `agrees`, no other outcome off | `cleanControlProblems` names an outcome that is anything else |
-| A `contractPattern` that cannot be a pair | empty, no token, unanchored, not a regular expression, no match for its token or the element's command | `validateCorpus` refuses it                                          | `test:eval-ci-data` and `test:evaluate-ci-render` fail        |
-| A listed `KNOWN_UNHELD` oracle that holds | a leftover entry                                                                                       | `storedRunProblems` fails with the oracle's id                       | `knownUnheldProblems` proves the branch over an empty list    |
+| Scenario                                  | Input / State                                                                                                                                                           | Expected Output / Behavior                                           | Error Handling                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
+| The stored capture                        | `npm install --prefix 'evals'` and `--evaluation 'evals/grader' --tier pr`                                                                                              | O-031 and O-032 hold                                                 | `storedRunProblems` fails the oracle that does not            |
+| Double-quoted or unquoted forms           | the same commands with `"` or no quotes, or folded over several lines                                                                                                   | both hold                                                            | `test:contract-oracles` names the form                        |
+| Another tier                              | `--tier nightly`, `--tier prod`, `--tier merge`, `--tier PR`                                                                                                            | O-032 fails, O-031 holds                                             | the oracle and the scorer both resolve false                  |
+| Another folder or prefix                  | `npm install --prefix other`, `evals-other`, `--evaluation other/grader`, `evals/grader2`                                                                               | the matching oracle fails                                            | same                                                          |
+| A broken quote                            | an unterminated quote, a closing quote only, a mismatched pair, a trailing digit (`evals2`, `pr2`)                                                                      | the matching oracle fails                                            | same                                                          |
+| An omitted command                        | no install line, no ci line, neither                                                                                                                                    | the matching oracle fails                                            | same                                                          |
+| A command at the end of the file          | no trailing newline                                                                                                                                                     | holds (`$` branch)                                                   | n/a                                                           |
+| The clean control P-004                   | the engine scores its record                                                                                                                                            | O-031 and O-032 `held`, corroboration `agrees`, no other outcome off | `cleanControlProblems` names an outcome that is anything else |
+| A `contractPattern` that cannot be a pair | empty, no token, unanchored (an alternation at the top level or an escaped final dollar too), not a regular expression, no match for its token or the element's command | `validateCorpus` refuses it                                          | `test:eval-ci-data` and `test:evaluate-ci-render` fail        |
+| A listed `KNOWN_UNHELD` oracle that holds | a leftover entry                                                                                                                                                        | `storedRunProblems` fails with the oracle's id                       | `knownUnheldProblems` proves the branch over an empty list    |
 
 </frozen-after-approval>
 
 ## Code Map
 
 - `test/fixtures/ci-eval/ground-truth.json`: `contractPattern` beside `contractToken` on the two plan-project elements.
-- `test/eval-ci.js`: `workflowMatches` (`new RegExp(source)`, no flags) and `workflowHoldsToken` (the pattern where an element has one, else `workflowMentions` over the token), both exported; `validateCorpus` holds the field to non-empty, a token beside it, anchored, a regular expression, a match for its own token and for the element's command.
+- `test/eval-ci.js`: `isEscaped`, `hasTopLevelAlternation` and `isPatternAnchored` (the operator's anchoring rule, copied), `workflowMatches` (`new RegExp(source)`, no flags) and `workflowHoldsToken` (the pattern where an element has one, else `workflowMentions` over the token), both exported; `validateCorpus` holds the field to non-empty, a token beside it, anchored over the whole expression (`isPatternAnchored`, copied from the operator's own rule), a regular expression, a match for its own token and for the element's command.
 - `tools/generate-contracts.js`: `ciMatches` and `ciRequestedCheck` render the `regex` operator over the workflow pointer from the pattern (relation `regex`), else the `containment` as before; `ciOracleSpecs` pairs the oracle with `workflowHoldsToken`.
 - `test/test-eval-replay.js`: `ciScoringInputs` leaves `contractPattern` out beside `contractToken`, since `scoreRun` never reads it and a replay digest would move otherwise.
-- `test/test-probe-corpus.js`: `KNOWN_UNHELD` is empty; `storedRunProblems` takes the list as a parameter; `knownUnheldProblems` exercises both branches of the check over the suite's own records; `cleanControlProblems` holds every engine outcome of a clean control to `held` with corroboration `agrees`.
-- `test/test-contract-oracles.js`: `checkCiCommandOraclesOnQuotedForms` scores nineteen forms of the two commands through eval-quality and through the scorer.
-- `test/test-evaluate-ci-render.js`: seven `validateCorpus` guard cases for the new field.
+- `test/test-probe-corpus.js`: `KNOWN_UNHELD` is empty; `storedRunProblems` takes the list as a parameter; `knownUnheldProblems` exercises both branches of the check over the suite's own records; `cleanControlProblems` holds every engine outcome of a clean control to `held` with corroboration `agrees`, and `cleanControlSelfProblems` exercises it over a contradicted and a violated outcome.
+- `test/test-contract-oracles.js`: `checkCiCommandOraclesOnQuotedForms` scores twenty-nine forms of the two commands through eval-quality and through the scorer.
+- `test/test-evaluate-ci-render.js`: nine `validateCorpus` guard cases for the new field.
 - Regenerated: `test/contracts/ci.contract.json` (the two checks), `test/probes/ci.probes.json` (the ground-truth digest), `test/probes/expected-strength.json` (the ci `corpusDigest`).
 - Prose: `test/probes/README.md`, `test/contracts/README.md`, `CHANGELOG.md`, `epics.md` (amendments to Stories 1.94 and 1.122), `test-design-epic-1.md` (the same), `sprint-status.yaml` (row 1.122 `review`).
 - Not changed: `references/ci.md`, `SKILL.md`, the plan template, step 03b, `github-actions-template.yaml`, the two capture records, the lane lists, the sections of Stories 1.123 and 1.95, `package.json`, `package-lock.json`.
@@ -99,7 +101,7 @@ The engine resolves both checks false with corroboration `disagrees` on the clea
    Every reader of the scorer (the generator's `ciOracleSpecs`, `test:contract-oracles`, the probe builder) already goes through the spec's `scorer`, so one function that chooses between the literal and the pattern keeps the oracle and its twin one claim.
    `workflowMentions` stays for the literal elements and for `mustNotEmit`.
 4. **`relation` is the check's op.**
-   The direction of a `regex` oracle states `relation: regex`, as the other regex oracles of the contracts do (`matcherExpression(...).op`), and its `negativeDomain` names the command whether or not it quotes the folder or the tier.
+   The direction of a `regex` oracle states `relation: regex`, as the other regex oracles of the contracts do (`matcherExpression(...).op`), and its `negativeDomain` names the command whether or not it quotes its arguments for the shell.
 5. **`knownUnheldProblems` keeps the machinery exercised.**
    With the list empty, neither branch of `storedRunProblems` would run, and a change that removed one would pass.
    The check lists one real oracle of each stored-run suite against the records as they are (it must be reported as holding now), then flips the same oracle to `violated` in one record, which must be reported when unlisted and silent when listed.
@@ -111,8 +113,24 @@ The engine resolves both checks false with corroboration `disagrees` on the clea
    `scoreRun` never reads it, and the replay digest of every plan-project case would move otherwise (see the revert row for it).
 8. **The `contractPattern` field is validated.**
    The regex operator accepts only an anchored pattern, so `validateCorpus` refuses any other at the corpus, before compile does, and refuses a pattern that does not match the token or the command it stands for.
-9. **The nineteen forms of `checkCiCommandOraclesOnQuotedForms` include `--tier PR`.**
+9. **The twenty-nine forms of `checkCiCommandOraclesOnQuotedForms` include `--tier PR`.**
    The operator reads a pattern with no flags, so a scorer that adds `i` would pass an upper-case tier the oracle fails; the row holds the scorer to no flags.
+
+10. **Fix round 1: balanced quotes.**
+    Each quote of the first patterns was an independent `['"]?`, so `'evals"`, an unterminated `'evals`, `evals'` and `--tier 'pr` all held, and each is a shell syntax error.
+    Each argument is now a whole-word alternation inside a group (`(?:'evals'|"evals"|evals)`), with no nested quantifier.
+    The eight rows for broken quotes and trailing digits fail on the revert of any one-character widening.
+11. **Fix round 1: folded scalars.**
+    A YAML folded scalar (`run: >-`) can break the line between the words of a command, and the harness accepts it, so the words are separated by `\s+`.
+    The token and the command stay single-spaced, which the patterns match.
+12. **Fix round 1: the anchor guard mirrors the operator.**
+    `isPatternAnchored` copies the operator's rule (`^` first, an unescaped `$` last, no top-level alternation) from eval-quality's `expression-legality.js` without importing an internal.
+    Backreferences, lookbehind and nested quantifiers stay with compile, which `test:contracts` runs.
+13. **Fix round 1: `cleanControlSelfProblems`.**
+    A neutered `cleanControlProblems` passed every real run, so one outcome of the clean control is set to `held` with `disagrees` and another to `violated` with `disagrees`, both must be reported, and listing their oracles must silence them.
+14. **Fix round 1: the quote claim.**
+    The capture quotes its folder names (`'evals'`, `'evals/grader'`) and leaves the tier bare, so the prose says that and keeps the clause that a correct run may also quote a tier.
+    The generated `negativeDomain` says `whether or not it quotes its arguments for the shell`, since the install command has no tier.
 
 ## Reproduction
 
@@ -140,38 +158,47 @@ every other outcome held/agrees except: []
 ```
 
 The real-cache command prints the same four lines and the same matching line, so the pre-flights and the verdicts did not move.
-`expected-strength.json` differs from `origin/main` in one line, the ci `corpusDigest` (`sha256:4358c3a1` to `sha256:7cda79d0`).
+`expected-strength.json` differs from `origin/main` in one line, the ci `corpusDigest` (`sha256:4358c3a1` to `sha256:4943e769`).
 
 ## Revert observations
 
 Each revert was applied once to a scratch copy of the final tree (the working tree copied without `node_modules`, a scratch git repository for the suite's status guard, the real leg cache copied in, `node_modules` linked) under the scratchpad directory, the named check run, the failure recorded and the copy discarded.
 Revert rows that change the ground truth regenerate the contract and the probes in the copy, as a maintainer's edit would.
 
-| Revert (the one edit)                                                                 | Check run                 | Observed                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| both `contractPattern`s removed (the literal tokens restored over the quoted capture) | `test:probe-corpus`       | 5 problems: O-031 and O-032 `no longer holds on the stored correct run`, both scored `violated` with corroboration `disagrees` on the clean control, and the baseline digest |
-|                                                                                       | `test:contract-oracles`   | 38 of 9,262 fail: the stored, double-quoted and single-quoted-tier forms for both oracles, and `no install command` for O-032                                                |
-| both patterns replaced by `^[\s\S]*$` (matches anything)                              | `test:contract-oracles`   | 34 fail: every omitted-command row, the two end-of-file rows and the `was seen resolving false` check of both oracles                                                        |
-|                                                                                       | `test:probe-corpus`       | O-031 and O-032 `holds under every wrong stored run, so a constant held would pass the corpus`, and the baseline digest                                                      |
-| the tier of the pattern loosened to `['"]?[a-z]+['"]?`                                | `test:contract-oracles`   | 8 fail: `nightly`, `prod`, `quoted prod` and `merge`, each for the scorer and the oracle of O-032                                                                            |
-| the prefix of the pattern loosened to `\S+`                                           | `test:contract-oracles`   | 6 fail: `another install prefix`, `another quoted install prefix` and `an install prefix that continues the folder name`, each for the scorer and the oracle of O-031        |
-| the quote tolerance removed from both patterns                                        | `test:probe-corpus`       | 5 problems: the same two `no longer holds`, the two clean-control outcomes and the digest                                                                                    |
-|                                                                                       | `test:contract-oracles`   | 36 fail: every row that carries a quote                                                                                                                                      |
-| the two `KNOWN_UNHELD` entries re-added                                               | `test:probe-corpus`       | 2 problems: `command-evaluation-install` and `command-evaluation-ci-pr` `holds now, so it no longer belongs in KNOWN_UNHELD`                                                 |
-| the `holds now` branch of `storedRunProblems` removed                                 | `test:probe-corpus`       | 4 problems, one per stored-run suite: `an oracle listed in KNOWN_UNHELD that holds on every stored run was not reported`                                                     |
-| the listed-oracle exemption of `storedRunProblems` removed                            | `test:probe-corpus`       | 4 problems, one per stored-run suite: `a violated oracle listed in KNOWN_UNHELD was reported`                                                                                |
-| the contract rendered with the literal while the scorer reads the pattern             | `test:contract-oracles`   | 59 fail: `agrees with workflowMentions` on every stored run that quotes the commands                                                                                         |
-|                                                                                       | `test:probe-corpus`       | 2 problems, the only two: O-031 and O-032 `scored held with corroboration disagrees on the clean control` (`cleanControlProblems` alone sees it)                             |
-| the scorer reads the literal while the contract renders the pattern                   | `test:contract-oracles`   | 59 fail, the same rows                                                                                                                                                       |
-|                                                                                       | `test:probe-corpus`       | 4 problems: both `no longer holds` and both clean-control outcomes                                                                                                           |
-| the scorer's `RegExp` given the `i` flag                                              | `test:contract-oracles`   | 1 fails: `an upper-case tier: the scorer of O-032 says fail`                                                                                                                 |
-| `ciScoringInputs` keeping `contractPattern`                                           | `test:eval-replay`        | 16 fail: every plan-project case, `the ground truth moved`                                                                                                                   |
-| `expected-strength.json` with the ci `corpusDigest` as on `origin/main`               | `test:probe-corpus`       | 1 problem: `expected-strength.json is out of date, first at line 205`                                                                                                        |
-| the anchor check of `validateCorpus` removed                                          | `test:evaluate-ci-render` | 2 of 532 fail: the pattern unanchored at its start and at its end                                                                                                            |
-| the check that the pattern matches its token removed                                  | `test:evaluate-ci-render` | 1 fails: `does not match its own contractToken`                                                                                                                              |
-| the check that the pattern matches the element's command removed                      | `test:evaluate-ci-render` | 1 fails: `does not match the command` the element requests                                                                                                                   |
-| the whole `contractPattern` block of `validateCorpus` removed                         | `test:evaluate-ci-render` | 7 of 532 fail, one per guard case                                                                                                                                            |
-| both patterns removed from the ground truth, nothing regenerated                      | `test:contract-sources`   | fails: `test/contracts/ci.contract.json differs from its sources, first at line 2279`; `test:probe-sources` fails on `test/probes/ci.probes.json` at line 10                 |
+| Revert (the one edit)                                                                             | Check run                 | Observed                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| both `contractPattern`s removed (the literal tokens restored over the quoted capture)             | `test:probe-corpus`       | 5 problems: O-031 and O-032 `no longer holds on the stored correct run`, both scored `violated` with corroboration `disagrees` on the clean control, and the baseline digest |
+|                                                                                                   | `test:contract-oracles`   | 66 of 9,302 fail: every row that carries a quote or a fold, for the scorer and the oracle                                                                                    |
+| both patterns replaced by `^[\s\S]*$` (matches anything)                                          | `test:contract-oracles`   | 50 fail: every omitted-command row, the end-of-file rows, the deviating folders and tiers, and the `was seen resolving false` check of both oracles                          |
+|                                                                                                   | `test:probe-corpus`       | 3 problems: O-031 and O-032 `holds under every wrong stored run, so a constant held would pass the corpus`, and the baseline digest                                          |
+| the tier alternation loosened to `(?:'[a-z]+'                                                     | "[a-z]+"                  | [a-z]+)`                                                                                                                                                                     | `test:contract-oracles` | 8 fail: `nightly`, `prod`, `quoted prod` and `merge`, each for the scorer and the oracle of O-032 |
+| the install prefix alternation loosened to `\S+`                                                  | `test:contract-oracles`   | 14 fail: another prefix, a quoted other prefix, `evals-other` and the quote and digit forms of the prefix, each for the scorer and the oracle of O-031                       |
+| the prefix alternation widened by one character (`evals.?`)                                       | `test:contract-oracles`   | 4 fail: `an install prefix with a closing quote only` and `with a trailing digit`                                                                                            |
+| the tier alternation widened by one character (`pr.?`)                                            | `test:contract-oracles`   | 4 fail: `a tier with a closing quote only` and `with a trailing digit`                                                                                                       |
+| each alternation of quote forms reverted to independent `['"]?`                                   | `test:contract-oracles`   | 12 fail: the mismatched, unterminated and closing-quote-only rows of the prefix, the folder and the tier                                                                     |
+| the `\s+` between the words replaced by one space                                                 | `test:contract-oracles`   | 4 fail: the two folded-scalar rows, for the scorer and the oracle                                                                                                            |
+|                                                                                                   | `test:probe-corpus`       | 1 problem: the baseline digest                                                                                                                                               |
+| the quote forms removed from both patterns                                                        | `test:probe-corpus`       | 5 problems: the same two `no longer holds`, the two clean-control outcomes and the digest                                                                                    |
+|                                                                                                   | `test:contract-oracles`   | 60 fail: every row that carries a quote                                                                                                                                      |
+| the two `KNOWN_UNHELD` entries re-added                                                           | `test:probe-corpus`       | 2 problems: `command-evaluation-install` and `command-evaluation-ci-pr` `holds now, so it no longer belongs in KNOWN_UNHELD`                                                 |
+| the `holds now` branch of `storedRunProblems` removed                                             | `test:probe-corpus`       | 4 problems, one per stored-run suite: `an oracle listed in KNOWN_UNHELD that holds on every stored run was not reported`                                                     |
+| the listed-oracle exemption of `storedRunProblems` removed                                        | `test:probe-corpus`       | 4 problems, one per stored-run suite: `a violated oracle listed in KNOWN_UNHELD was reported`                                                                                |
+| the body of `cleanControlProblems` neutered (the `held` and `agrees` test replaced by `continue`) | `test:probe-corpus`       | 8 problems, two per stored-run suite: `a clean control outcome held with corroboration disagrees was not reported` and the `violated` one (`cleanControlSelfProblems`)       |
+| the contract rendered with the literal while the scorer reads the pattern                         | `test:contract-oracles`   | 73 fail: `agrees with workflowHoldsToken` on every stored run that quotes the commands                                                                                       |
+|                                                                                                   | `test:probe-corpus`       | 2 problems, the only two: O-031 and O-032 `scored held with corroboration disagrees on the clean control` (`cleanControlProblems` alone sees it)                             |
+| the scorer reads the literal while the contract renders the pattern                               | `test:contract-oracles`   | 73 fail, the same rows                                                                                                                                                       |
+|                                                                                                   | `test:probe-corpus`       | 4 problems: both `no longer holds` and both clean-control outcomes                                                                                                           |
+| the scorer's `RegExp` given the `i` flag                                                          | `test:contract-oracles`   | 1 fails: `an upper-case tier: the scorer of O-032 says fail`                                                                                                                 |
+| `ciScoringInputs` keeping `contractPattern`                                                       | `test:eval-replay`        | 16 fail: every plan-project case, `the ground truth moved`                                                                                                                   |
+| `expected-strength.json` with the ci `corpusDigest` as on `origin/main`                           | `test:probe-corpus`       | 1 problem: `expected-strength.json is out of date, first at line 205`                                                                                                        |
+| `isPatternAnchored` reduced to the first and last character (the old guard)                       | `test:evaluate-ci-render` | 2 of 534 fail: the top-level alternation and the escaped final `$`                                                                                                           |
+| the top-level alternation test of `isPatternAnchored` removed                                     | `test:evaluate-ci-render` | 1 fails: `contractPattern with an alternation at the top level`                                                                                                              |
+| the escaped-dollar test of `isPatternAnchored` removed                                            | `test:evaluate-ci-render` | 1 fails: `contractPattern whose final dollar is escaped`                                                                                                                     |
+| the anchor branch of `validateCorpus` removed                                                     | `test:evaluate-ci-render` | 4 of 534 fail: the pattern unanchored at its start and at its end, the top-level alternation and the escaped final `$`                                                       |
+| the check that the pattern matches its token removed                                              | `test:evaluate-ci-render` | 1 fails: `does not match its own contractToken`                                                                                                                              |
+| the check that the pattern matches the element's command removed                                  | `test:evaluate-ci-render` | 1 fails: `does not match the command` the element requests                                                                                                                   |
+| the whole `contractPattern` block of `validateCorpus` removed                                     | `test:evaluate-ci-render` | 9 of 534 fail, one per guard case                                                                                                                                            |
+| both patterns removed from the ground truth, nothing regenerated                                  | `test:contract-sources`   | fails: `test/contracts/ci.contract.json differs from its sources`; `test:probe-sources` fails on `test/probes/ci.probes.json`                                                |
 
 The acceptance criteria's scratch-copy rows ran through `test:probe-corpus` with the stored plan capture edited in place (the `CI_CORRECT_RUNS` row of the project reads it):
 
@@ -186,6 +213,7 @@ The acceptance criteria's scratch-copy rows ran through `test:probe-corpus` with
 | `--evaluation 'other/grader'`                       | the same for O-032                                                                                    |
 
 Removing the call to `knownUnheldProblems` together with the `holds now` branch leaves `test:probe-corpus` green: the machinery stays exercised while the call stays in `main`, and the branch rows above fail while it does.
+The same holds for `cleanControlSelfProblems` and the body of `cleanControlProblems`.
 
 ## Gates
 
@@ -194,7 +222,7 @@ No full local `npm test`: the hook and CI carry the chain.
 Local, macOS, on the final tree:
 
 - `node test/eval-contract-strength.js --suite ci --from-cache` on the scratch copy with the real cache: matches the recorded outcomes.
-- `test:probe-corpus`, `test:probe-sources` (15 corpus files), `test:contract-sources` (16 contracts), `test:contracts`, `test:contract-oracles` (9,262 checks), `test:ci-qualification` (459), `test:eval-ci-data`, `test:eval-replay` (185 passed, 0 moved), `test:evaluate-ci-render` (532), `test:test-design-qualification` (240), `test:test-review-qualification` (604), `test:trace-qualification` (435), `test:nfr-qualification` (415).
+- `test:probe-corpus`, `test:probe-sources` (15 corpus files), `test:contract-sources` (16 contracts), `test:contracts`, `test:contract-oracles` (9,302 checks), `test:ci-qualification` (459), `test:eval-ci-data`, `test:eval-replay` (185 passed, 0 moved), `test:evaluate-ci-render` (534), `test:test-design-qualification` (240), `test:test-review-qualification` (604), `test:trace-qualification` (435), `test:nfr-qualification` (415).
 - `lint`, `lint:md` and `format:check` clean.
 - `test:doc-counts`, `test:doc-claims`, `test:shards`, `test:ci-coverage` and `test:changelog` once at the end.
 - `git diff -- package.json package-lock.json` is empty.
@@ -211,3 +239,6 @@ It found the acceptance criteria met, the regex and generator logic correct, and
 | The generator header, `test/probes/README.md`, `test-probe-corpus.js` and `test/contracts/README.md` called every ci oracle a plain substring claim        | valid   | Fixed here: each says two oracles state a quote-tolerant regex |
 | Two sentences of the record carried an `X and not Y` and an `instead of` tail                                                                              | valid   | Fixed here                                                     |
 | New comment blocks wrapped a sentence over two lines or put two sentences on one line (`eval-ci.js`, the generator, the contracts README, the corpus test) | valid   | Fixed here: one sentence per line                              |
+
+Fix round 1 (coordinator review and adversarial reads) changed the patterns to balanced-quote alternations with `\s+` between the words, widened `checkCiCommandOraclesOnQuotedForms` to twenty-nine forms, added `cleanControlSelfProblems` and the operator's anchoring rule to `validateCorpus`, corrected the quote claim to the folder names the capture quotes, and reran every revert row above against the new patterns.
+The baseline moved in the ci `corpusDigest` only (`sha256:4943e769`), and the rerun gates and the real-cache command match the figures in Gates.

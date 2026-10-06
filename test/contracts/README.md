@@ -375,7 +375,8 @@ value to the key above it and `security` is a key in the ADR `categories` block 
 `ci.contract.json` hits the same limit from the other side: its one deliverable, the platform's own
 pipeline file, is machine-parseable YAML and the harness reads it structurally, but the contract's
 vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain
-substring claims (two state a quote-tolerant regex, below) rather than the harness's real per-element check. Each is paired with
+substring claims (two state a quote-tolerant regex, below), and the per-element check stays the harness's.
+Each is paired with
 `workflowHoldsToken`, `test/eval-ci.js`'s own document-global predicate (`workflowMentions` over the
 element's `contractToken`, or `workflowMatches` over its `contractPattern`), the same idiom `test-design`'s
 material-risk oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would
@@ -385,7 +386,7 @@ Whether a shard count is four, whether a `needs:` chain actually reaches the lin
 `actionlint` reports are the harness's alone; the contract can only say whether a token requested or
 forbidden by the project's own request appears in the document at all.
 Two elements of the evaluation-plan project, `command-evaluation-install` and `command-evaluation-ci-pr`, state a
-`contractPattern` beside the token, because a real run quotes the folder and the tier for the shell.
+`contractPattern` beside the token, because a real run quotes its folder names for the shell and may fold a command over several lines.
 The contract renders it with the `regex` operator, which accepts only a pattern that begins with `^` and ends with `$`.
 Each is therefore written as `^[\s\S]*(?:...)[\s\S]*$`.
 The paired scorer tests the same source with `new RegExp(source)` and no flags.

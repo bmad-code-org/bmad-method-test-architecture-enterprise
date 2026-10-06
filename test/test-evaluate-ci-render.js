@@ -1083,6 +1083,18 @@ async function checkCorpusGuards() {
       'contractPattern is not anchored',
     ],
     [
+      'contractPattern with an alternation at the top level',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^npm ci$|^[\s\S]*npm install --prefix evals[\s\S]*$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern whose final dollar is escaped',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm install --prefix evals\$` },
+      'contractPattern is not anchored',
+    ],
+    [
       'contractPattern that is not a regular expression',
       'command-evaluation-install',
       { contractPattern: '^(npm install$' },

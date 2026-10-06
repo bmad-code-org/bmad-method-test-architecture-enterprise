@@ -282,6 +282,59 @@ function cleanControlProblems(suite, scored, unheld = KNOWN_UNHELD) {
 }
 
 /**
+ * `cleanControlProblems` held to what it reports, over the suite's own clean control.
+ *
+ * A check whose body stopped reporting would pass every real run, so one outcome of the engine's score is set to `held` with corroboration `disagrees` and another to `violated` with `disagrees`.
+ * Both must be reported.
+ * Listing the two oracles as `KNOWN_UNHELD` entries must then silence them.
+ */
+function cleanControlSelfProblems(suite, scored) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const entry = scored.find((candidate) => candidate.probe.expectedClean);
+  if (entry === undefined) return [`${suite.id}: the corpus has no clean control, so cleanControlProblems cannot be exercised`];
+  const outcomes = entry.result.artifact.outcomes;
+  const picked = outcomes.filter((outcome) => specs.some((spec) => spec.id === outcome.oracleId && spec.elementId !== null)).slice(0, 2);
+  if (picked.length < 2)
+    return [`${suite.id}: the clean control has fewer than two element oracles, so cleanControlProblems cannot be exercised`];
+  const [contradicted, violated] = picked;
+  const mutated = {
+    ...entry,
+    result: {
+      ...entry.result,
+      artifact: {
+        ...entry.result.artifact,
+        outcomes: outcomes.map((outcome) => {
+          if (outcome === contradicted) return { ...outcome, disposition: 'held', corroboration: 'disagrees' };
+          if (outcome === violated) return { ...outcome, disposition: 'violated', corroboration: 'disagrees' };
+          return outcome;
+        }),
+      },
+    },
+  };
+  const problems = [];
+  const reported = cleanControlProblems(suite, [mutated], []);
+  for (const [outcome, what] of [
+    [contradicted, 'held with corroboration disagrees'],
+    [violated, 'violated with corroboration disagrees'],
+  ]) {
+    if (!reported.some((problem) => problem.includes(`oracle ${outcome.oracleId} `))) {
+      problems.push(`${suite.id}: a clean control outcome ${what} was not reported`);
+    }
+  }
+  const listed = picked.map((outcome) => {
+    const spec = specs.find((candidate) => candidate.id === outcome.oracleId);
+    return { suiteId: suite.id, setId: spec.setId, elementId: spec.elementId };
+  });
+  const exempt = cleanControlProblems(suite, [mutated], listed).filter((problem) =>
+    picked.some((outcome) => problem.includes(`oracle ${outcome.oracleId} `)),
+  );
+  if (exempt.length > 0)
+    problems.push(`${suite.id}: a clean control outcome of an oracle listed in KNOWN_UNHELD was reported: ${exempt.join('; ')}`);
+  return problems;
+}
+
+/**
  * `storedRunProblems` held to both of its `KNOWN_UNHELD` branches over this suite's own records, whatever the list holds.
  *
  * The list is empty, so neither branch would run otherwise and a change that removed one would pass.
@@ -1020,6 +1073,7 @@ async function main() {
     problems.push(
       ...storedRunProblems(suite, outcome.scored),
       ...cleanControlProblems(suite, outcome.scored),
+      ...cleanControlSelfProblems(suite, outcome.scored),
       ...knownUnheldProblems(suite, outcome.scored),
       ...storedRunExposureProblems(suite),
       ...(await wrongRunProblems(suite)),

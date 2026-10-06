@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "implementationDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "artifactDigest": "sha256:45d2d7fb570fa53d26a3f4698af1ba2af8a69d51222a441f3bd7fdfc18a0dd8b",
-    "commitDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "commitDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76"
+            "digest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4"
           }
         ],
         "source": "controlled-mutation",
@@ -133,9 +133,9 @@
     "probeClass": "defect",
     "behaviorId": "B-004",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "implementationDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "artifactDigest": "sha256:206be045284784a2268e2da012ce87e05c60caf48eba179a973056b9ca7d6ee4",
-    "commitDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "commitDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
@@ -174,7 +174,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76"
+            "digest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4"
           }
         ],
         "source": "controlled-mutation",
@@ -259,9 +259,9 @@
     "probeClass": "defect",
     "behaviorId": "B-022",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "implementationDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "artifactDigest": "sha256:b28995bba9f623e14346292bba0a1dc023d0ab6ccbf845fcd343b70eb9748450",
-    "commitDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "commitDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
@@ -300,7 +300,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76"
+            "digest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4"
           }
         ],
         "source": "controlled-mutation",
@@ -401,9 +401,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-017",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
-    "artifactDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
-    "commitDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+    "implementationDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
+    "artifactDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
+    "commitDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
     "rationale": "minimal-lantern-audit-log states five elements and the workflow carries exactly them, so any gap or addition the run reports against it is a false positive. It is the control that stops the suite scoring well by only ever catching an over-generous pipeline.",
     "qualification": {
       "route": "clean-control",
@@ -413,7 +413,7 @@
         "privateRef": null,
         "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
       },
-      "revisionCommitDigest": "sha256:b6f5a322163c279b77f6ea7fe773381686016aba615bc914858d88d20d6c5f76",
+      "revisionCommitDigest": "sha256:0e2aded09a11905ffb3ae45a2803640543265594a4c9ee7b034acdeba4b9eec4",
       "noKnownDefectStatement": "A backend service whose request is one job and a sentence forbidding everything else"
     },
     "expectedClean": true,

@@ -3233,7 +3233,8 @@ function ciRequestedCheck(pointer, element) {
  *
  * The workflow file is one string to this vocabulary, the same limit
  * test/contracts/README.md records for the nfr and trace deliverables, so every
- * claim here is what a substring test can reach.
+ * claim here reads the whole document as one string.
+ * The claims ask three things.
  * Does the document contain the literal a requested element states (`contractToken`),
  * or match the quote-tolerant `contractPattern` an element states beside it?
  * Does it omit the literal a forbidden element states (`mustNotEmit`)?
@@ -3286,7 +3287,7 @@ function ciOracleSpecs(groundTruth) {
             scope: `The workflow file written for ${label}, read as one document.`,
             negativeDomain:
               check.op === 'regex'
-                ? `A run whose workflow carries no ${JSON.stringify(element.contractToken)} command, whether or not it quotes the folder or the tier for the shell.`
+                ? `A run whose workflow carries no ${JSON.stringify(element.contractToken)} command, whether or not it quotes its arguments for the shell.`
                 : `A run whose workflow does not contain ${JSON.stringify(element.contractToken)}.`,
             evidenceTargets: [workflow],
           },

@@ -661,6 +661,44 @@ function npmScriptOf(command) {
   return null;
 }
 
+/** Whether a backslash run before `index` leaves the character at `index` escaped. */
+function isEscaped(pattern, index) {
+  let backslashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && pattern[cursor] === '\\'; cursor--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+/** Whether a `|` sits outside every group and character class, which would split the anchors over two alternatives. */
+function hasTopLevelAlternation(pattern) {
+  let depth = 0;
+  let inCharacterClass = false;
+  for (let index = 0; index < pattern.length; index++) {
+    const character = pattern[index];
+    if (isEscaped(pattern, index)) continue;
+    if (character === '[') {
+      inCharacterClass = true;
+      continue;
+    }
+    if (character === ']') {
+      inCharacterClass = false;
+      continue;
+    }
+    if (inCharacterClass) continue;
+    if (character === '(') depth++;
+    else if (character === ')') depth--;
+    else if (character === '|' && depth === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a pattern is anchored over the whole expression, as the contract's `regex` operator requires.
+ * The logic is the operator's own rule in eval-quality (`regexRejection`), copied here so the corpus check needs no internal import.
+ */
+function isPatternAnchored(pattern) {
+  return pattern.startsWith('^') && pattern.endsWith('$') && !isEscaped(pattern, pattern.length - 1) && !hasTopLevelAlternation(pattern);
+}
+
 /**
  * Static validation of the corpus. This is what a pull request runs, and it is
  * what stops the ground truth from rotting into assertions about rules that moved
@@ -879,7 +917,10 @@ async function validateCorpus(groundTruth) {
       }
       // A contract pattern is the quote-tolerant form of the token.
       // It is the regex source the contract's oracle reads over the workflow, and the paired scorer tests it with `new RegExp(source)`.
-      // The contract's regex operator accepts only a pattern that begins with ^ and ends with $, so this check refuses any other before compile does.
+      // The contract's regex operator accepts only a pattern anchored over the whole expression.
+      // That is `^` first, `$` last and unescaped, and no alternation at the top level.
+      // `isPatternAnchored` mirrors that rule, so this check refuses an unanchored pattern before compile does.
+      // Backreferences, lookbehind and nested quantifiers stay with compile, which `test:contracts` runs over the rendered contract.
       // The pattern states the same claim as its token and its command, so it has to match both.
       if (element.contractPattern !== undefined) {
         const pattern = element.contractPattern;
@@ -887,11 +928,7 @@ async function validateCorpus(groundTruth) {
           problems.push(`${elementLabel}: contractPattern is declared and is not a non-empty string`);
         } else if (element.contractToken === null) {
           problems.push(`${elementLabel}: declares a contractPattern and no contractToken, so there is no literal for it to agree with`);
-        } else if (!pattern.startsWith('^') || !pattern.endsWith('$')) {
-          problems.push(
-            `${elementLabel}: contractPattern is not anchored, and the contract's regex operator accepts only a pattern that begins with ^ and ends with $`,
-          );
-        } else {
+        } else if (isPatternAnchored(pattern)) {
           let compiled = null;
           try {
             compiled = new RegExp(pattern);
@@ -910,6 +947,10 @@ async function validateCorpus(groundTruth) {
               );
             }
           }
+        } else {
+          problems.push(
+            `${elementLabel}: contractPattern is not anchored, and the contract's regex operator accepts only a pattern that begins with ^, ends with an unescaped $ and has no alternation at the top level`,
+          );
         }
       }
       switch (element.kind) {
@@ -1649,11 +1690,11 @@ async function readWorkflow(directory) {
 /**
  * Whether the workflow, read as one string, carries a literal.
  *
- * This is the document-global predicate the ci contract's `containment` oracles are paired
- * with (`workflowHoldsToken` chooses it or `workflowMatches` for each element). The contract's vocabulary addresses a text artifact as one string, so a
- * `containment` oracle can ask whether the document mentions `npm test` and
- * cannot ask whether a run: block invokes it. The harness scores the second
- * question through checkElement; this function answers the first, and
+ * This is the document-global predicate the ci contract's `containment` oracles are paired with.
+ * `workflowHoldsToken` chooses it or `workflowMatches` for each element.
+ * The contract's vocabulary addresses a text artifact as one string, so a `containment` oracle can ask whether the document mentions `npm test`.
+ * It cannot ask whether a run: block invokes it.
+ * The harness scores the second question through checkElement; this function answers the first.
  * test/test-contract-oracles.js holds each oracle to agreeing with it.
  *
  * @param {string} text
@@ -1682,8 +1723,9 @@ function workflowMatches(text, source) {
  * Whether the workflow holds the claim the contract's oracle states for one requested element: its
  * `contractPattern` where the element has one, else its `contractToken` as a literal.
  *
- * A real run quotes folder names and tiers for the shell.
- * An element whose command a run may quote states a pattern, and its literal stays the unquoted spelling the pattern must also match.
+ * A real run quotes its folder names for the shell.
+ * A correct run may also quote a tier, and a folded YAML scalar can break the line between the words of a command.
+ * An element whose command a run may write that way states a pattern, and its literal stays the single-spaced unquoted spelling the pattern must also match.
  *
  * @param {string} text
  * @param {{contractToken: string, contractPattern?: string}} element

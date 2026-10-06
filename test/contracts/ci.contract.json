@@ -2278,7 +2278,7 @@
         "polarity": "expects-hold",
         "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow carries no \"npm install --prefix evals\" command, whether or not it quotes the folder or the tier for the shell.",
+        "negativeDomain": "A run whose workflow carries no \"npm install --prefix evals\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
@@ -2288,7 +2288,7 @@
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
           }
         ],
-        "pattern": "^[\\s\\S]*npm install --prefix ['\"]?evals['\"]?(?:\\s|$)[\\s\\S]*$"
+        "pattern": "^[\\s\\S]*npm\\s+install\\s+--prefix\\s+(?:'evals'|\"evals\"|evals)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {
@@ -2299,7 +2299,7 @@
         "polarity": "expects-hold",
         "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow carries no \"tea-evaluate ci --evaluation evals/grader --tier pr\" command, whether or not it quotes the folder or the tier for the shell.",
+        "negativeDomain": "A run whose workflow carries no \"tea-evaluate ci --evaluation evals/grader --tier pr\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
@@ -2309,7 +2309,7 @@
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
           }
         ],
-        "pattern": "^[\\s\\S]*tea-evaluate ci --evaluation ['\"]?evals/grader['\"]? --tier ['\"]?pr['\"]?(?:\\s|$)[\\s\\S]*$"
+        "pattern": "^[\\s\\S]*tea-evaluate\\s+ci\\s+--evaluation\\s+(?:'evals/grader'|\"evals/grader\"|evals/grader)\\s+--tier\\s+(?:'pr'|\"pr\"|pr)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {

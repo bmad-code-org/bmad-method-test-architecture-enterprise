@@ -2995,11 +2995,12 @@ function ciArtifactsOf(directory, expected) {
 /**
  * The two command oracles of the evaluation-plan project over the forms a run writes them in.
  *
- * The real capture quotes the folder and the tier for the shell.
- * The contract's `regex` oracles therefore tolerate one pair of single or double quotes and still pin the folder and the tier.
+ * The real capture quotes its folder names for the shell.
+ * The contract's `regex` oracles therefore tolerate a balanced pair of single or double quotes around the folder, which a correct run may also write around the tier, and still pin the folder and the tier.
+ * A folded YAML scalar can break the line between the words of a command, so the words are separated by `\s+`.
  * Each row here is the capture with its two command lines rewritten (or a whole workflow of one line, to reach the end-of-text branch).
  * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
- * A pattern that no longer tolerates a quote, one that matches a deviation, one that matches anything,
+ * A pattern that no longer tolerates a quote or a fold, one that matches a deviation, an unterminated or mismatched quote, or a one-character widening, one that matches anything,
  * and a literal token restored over the pattern all fail here by name.
  */
 async function checkCiCommandOraclesOnQuotedForms(evaluator) {
@@ -3083,6 +3084,69 @@ async function checkCiCommandOraclesOnQuotedForms(evaluator) {
     {
       label: 'the quoted prod tier',
       text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'prod'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a folded scalar that breaks the install command between its words',
+      text: withLines("npm install\n          --prefix\n          'evals'", ciPrLine),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'a folded scalar that breaks the ci command between its words',
+      text: withLines(
+        installLine,
+        "npm exec --prefix 'evals' -- tea-evaluate ci\n          --evaluation 'evals/grader'\n          --tier pr",
+      ),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a mismatched pair of quotes',
+      text: withLines('npm install --prefix \'evals"', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with an unterminated quote',
+      text: withLines("npm install --prefix 'evals", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a closing quote only',
+      text: withLines("npm install --prefix evals'", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a trailing digit',
+      text: withLines('npm install --prefix evals2', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an evaluation folder with a mismatched pair of quotes',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader\" --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with an unterminated quote',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with a closing quote only',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr2"),
       install: true,
       ciPr: false,
     },
