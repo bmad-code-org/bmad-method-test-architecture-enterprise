@@ -2,7 +2,7 @@
 title: 'Story 1.122: Make the ci command oracles hold on the quoted stored capture'
 type: 'bugfix'
 created: '2026-10-05'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6aed15d9'
