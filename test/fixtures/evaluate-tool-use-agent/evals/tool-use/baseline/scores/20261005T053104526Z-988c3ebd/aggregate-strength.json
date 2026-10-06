@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-tool-use-60964/repo/evals/tool-use/runs/20261005T053057717Z-9343e896/scores/20261005T053104526Z-988c3ebd/P-001/evidence-artifact.json",
+    "--evidence",
+    "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-tool-use-60964/repo/evals/tool-use/runs/20261005T053057717Z-9343e896/scores/20261005T053104526Z-988c3ebd/P-002/evidence-artifact.json",
+    "--floors",
+    "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-tool-use-60964/repo/evals/tool-use/runs/20261005T053057717Z-9343e896/scores/20261005T053104526Z-988c3ebd/strength-floors.json",
+    "--policy",
+    "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-tool-use-60964/repo/evals/tool-use/runs/20261005T053057717Z-9343e896/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-63881-xNI1vx/tea-evaluate-aggregate-rMSHfC/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

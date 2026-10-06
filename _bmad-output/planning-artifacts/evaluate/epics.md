@@ -2857,8 +2857,14 @@ So that a both run scores the probes of a behavior that has a development and a 
 **And** a both baseline accepted by `compare --accept` replays through `ci --tier pr` with both probes caught, and the held-out and development partitions keep their own scores unchanged.
 **And** a behavior with two oracles that scores `caught: false` for both probes fails the case, and a replay that reads the both view as stale or uncaught fails the replay case.
 
-**Dependencies:** 1.51.
+**Dependencies:** 1.51, eval-quality 7.2.0 (`eval-quality score --designated-oracle`, engine PR #187).
 **Gate:** `npm run test:evaluate-partition-plans`, `npm run test:evaluate-ci`, `npm test`.
+
+Amended 2026-10-05 in Story 1.110's build: the criteria hold as written, and the build adds what they leave open.
+A probe of a both run asks the engine for the one oracle its own partition's view lists for its behavior (the held-out view's when `heldOutProbes` lists the probe, the development view's otherwise); a partition view that lists none or several leaves the probe undesignated, as the partition's own run does, and a both view that lists one oracle is designated by the engine.
+A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so every committed fixture, baseline and replay of them keeps its bytes.
+The call's arguments and the in-process held-input check read the designation through one method of `HeldInputs`, so a call that drops it is refused (exit 12); the gameability probes and the evaluator qualification attempts of a both run are designated too; and `score` refuses a both run whose held-out plan cannot be read or whose folder no longer derives an oracle the run's sealed contract lists (exit 10, no score call).
+A gameability probe's `defectSignature` must admit and be satisfied by the answer at every step an oracle of either partition reads, since the both view answers every step and the engine reads a finding at a step the signature does not admit as an unwitnessed claim (the probe is Invalid, exit 3).
 
 ### Story 1.111: Guide Stage 6 preflight by partition and refuse an unpartitioned plan preflight
 

@@ -2,7 +2,7 @@
   "legId": "preflight-control-observe-2",
   "sequence": 4,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-0b375c2e-cb94-47c0-8a7f-0878ff5c9f3b/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-4d798955-2893-4a0e-b00c-dabc9b4c9b30/target",
   "request": {
     "probeId": "preflight-control-observe-2",
     "interfaceId": "answer-grade",
@@ -32,7 +32,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Sun, 04 Oct 2026 14:43:12 GMT",
+      "date": "Mon, 05 Oct 2026 05:36:45 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

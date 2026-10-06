@@ -14,9 +14,9 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261004T144023597Z-67d79329/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261005T053749794Z-46b2de62/qualification/P-002/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:eeb99d863d4077bcc0c5e17eab27be0f18fabfec986b5140ecdc95d2bb92bd3d"
+      "digest": "sha256:ba95b7d71ffaa7d0037e1a0257d481dcd23fc5893df01efd497a6489cc91f696"
     },
     "revisionCommitDigest": "sha256:4fcb16b00de7135ebaa8291b0b838afcbad5fa3edbf0ac1970a6b1acf89ff634",
     "noKnownDefectStatement": "No known defect in the frozen target revision."

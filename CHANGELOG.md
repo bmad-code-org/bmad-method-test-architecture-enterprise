@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A run with no `--partition` scores each probe against the oracle of its own partition (Story 1.110, AD-9, AD-22).
+  The both view gives a behavior its development oracle and its held-out oracle, and eval-quality designates an oracle for a probe only when its behavior lists exactly one, so a both run scored every probe of such a behavior undesignated: a probe read `caught: true` only when a finding cited the contract's first-declared oracle and `caught: false` for a defect claimed against any other oracle.
+  A probe now asks `eval-quality score --designated-oracle` for the one oracle its partition's own view lists for its behavior: the held-out view's oracle when `heldOutProbes` lists the probe, the development view's otherwise, derived by the same `contractView` the partition's own run compiles.
+  A behavior whose partition view lists no oracle or several stays undesignated, as in the partition's own run, and a behavior the both view lists with one oracle is designated by the engine.
+  A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so every committed score, baseline and replay of them keeps its bytes, and a development run never opens the held-out plan.
+  `HeldInputs` in `score-inputs.js` is the one place that reads the designation: `scoreArguments` adds the flag and `reproduce` hands the same oracle to the in-process re-score, so the CLI call and the held-input check cannot disagree, and `score`, `compare --accept`, `ci` and an evaluator qualification attempt all go through it.
+  `score` reads the folder's `contract.json` and held-out plan for a both run, and refuses with an input-check finding (exit 10, no score call) a plan that cannot be read, a probe whose behavior the contract does not hold and a folder that no longer derives an oracle the run's sealed contract lists.
+  The `partition-plan` fixture's both run now scores P-003 against O-101 and P-004 against O-002 and catches both, as the held-out and development runs do; a both baseline accepted with `compare --accept` replays through `ci --tier pr` with every probe as recorded and no stale warning; a development clean control on a behavior with several oracles stays undesignated and reads as it does in the development run; a call that drops the flag is refused as a staged artifact that differs from the held inputs'; and the gameability probes of a both run are designated too.
+  A gameability probe's `defectSignature` must admit and be satisfied by the answer at every step an oracle of either partition reads, because the both view answers every step and eval-quality reads a finding at a step the signature does not admit as an unwitnessed claim.
+  The reference and the corpus guide say so, and the fixture's development gameability probe selects any prompt.
 - A macOS Seatbelt target has no route to the host's path-based Unix sockets (Story 1.87, AD-8).
   The target profile started from `(allow default)` and refused a `connect()` to a socket under the user's private root only, so a confined process could connect to `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names or an agent socket under `/private/tmp` and ask the service behind it to run a job outside the sandbox.
   The profile now denies every `connect()` to a socket path and allows back the workspace, the call's private directories, the home and two system services: the resolver at `/var/run/mDNSResponder`, which every name lookup of the C library asks, and the BSD log socket at `/var/run/syslog`.
@@ -395,6 +405,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TeA adopts eval-quality 7.2.0, the first release whose `score` takes `--designated-oracle` (Story 1.110, AD-5).
+  The peer floor moves to `>=7.2.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, `test/test-guard-publish.js` refuses a floor of 7.1.0, and the engine-missing message, the reference and the AD-5 record name the release.
+  Every accepted baseline is re-recorded on 7.2.0 with `compare --accept` over a clean copy, since a baseline names the engine release that measured it and `test:evaluate-pr-<key>` refuses one recorded on another.
 - The dogfood suite's O-003 holds each exit's class against its row of the AD-10 table (Story 1.116, CAP-10, AD-15).
   The oracle reconciled the `/exits` records against the reference set by id and tested each class against the table's vocabulary, so a complete listing that swapped the classes of `tea-evaluate 11` and `tea-evaluate 12` passed.
   Its `for-all` predicate is now an `any` of one `all` pair of `@/id` and `@/class` per table row.

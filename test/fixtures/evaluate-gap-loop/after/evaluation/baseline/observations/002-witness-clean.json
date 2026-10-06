@@ -2,7 +2,7 @@
   "legId": "witness-clean",
   "sequence": 2,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-73bef9b2-e4b3-4dbe-95d5-07a8406c110b/target",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-ef6ca29a-28a9-4570-93d9-cc0cb5dd6d8e/target",
   "request": {
     "probeId": "witness-clean",
     "interfaceId": "review-cli",

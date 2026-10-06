@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261004T124642952Z-9a9c88f5",
-  "seed": "20261004T124642952Z-9a9c88f5",
+  "invocationId": "20261005T053041949Z-5a4e3fc8",
+  "seed": "20261005T053041949Z-5a4e3fc8",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.1.0",
+  "evalQualityVersion": "7.2.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,13 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-d83066eb-b07e-4d0d-a2ab-25ecede8fd1d/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-c5a330ac-8a66-44d7-89d7-78d1e12b26e1/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-f8d274d9-7782-436c-b299-0d4ca53742dd/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-3d5bde1f-e9f8-4adc-983a-56c64bbc7d6d/target"
   },
   "confinement": "seatbelt",
   "egress": [],
+  "logins": [],
   "adopterTree": {
-    "repository": null,
+    "repository": "/private/tmp/claude-501/-Users-murat-opensource-bmad-method-test-architecture-enterprise/c15ff0cd-e2ed-4360-b764-32d69c0f0cd5/scratchpad/rec/rec-110-mcp-54974/repo",
     "unchanged": true
   },
   "refused": [],
@@ -31,22 +32,22 @@
     "contract": "sha256:a3c2be7ef367d37e7209c7feb57552d64b54651407fb85aaac6a6ed559a66a7f",
     "operationPhases": "sha256:5edc837c87ae04cb9e32550a847c70fcbc59583fa307787bfe56f696ac8d1ccf",
     "evaluatorConfiguration": "sha256:7062067fcc066406904bd3de69de266766a70982ea03ca5d1ce62364b06371cf",
-    "preflightVerdict": "sha256:5276d2247079eda69490b2d259cb93866a810f30299d2be3ec2a57c74481b15b",
+    "preflightVerdict": "sha256:9f273f18cad6f21fec631bb2657a8c89f2225a1e16e70b4093a7e59ea8b2e21d",
     "probes": {
-      "P-001": "sha256:51f26572a8d7166783efe4152ff582f55c35bddf3b816308630e9abdd27c0898",
-      "P-002": "sha256:eae1cd3340cdf44a85648aa18983f5209edc2ea13ca762a331ca91cf9a27f423"
+      "P-001": "sha256:51668bce1589fff27420b665555de54967465bbc3e8fdeaf4b2e4a8465d9f6fa",
+      "P-002": "sha256:8a9f419f900ce334e60b4fa9a3a02b0630b99a21df1dbfc6d313b4834255a0a8"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:c556e3316a11bfdff65f1d2073a2d756786d2d5c3180f7ed370d81685ee9faa8",
-      "trial-sets/P-001/record-2.json": "sha256:bb265b6dd60106c617505eab48049a1ddc2866848ef73d56c1c9d55938ab1592",
-      "trial-sets/P-001/record-3.json": "sha256:b38cb484b41829698ac451f149e6da3436efb9f17018867108f9252026ed832f",
-      "trial-sets/P-002/record-1.json": "sha256:704f99e09a65da404000e40386e63f4108ba6871b57123b0c1e385471a484f8f",
-      "trial-sets/P-002/record-2.json": "sha256:3b0b7d6c7fe432d3ee0f991841fd40592fa2a83e31b9af335486cc385c7382f1",
-      "trial-sets/P-002/record-3.json": "sha256:54f1df100a227af61a782643fbe656be642a2cd8075cb661e8d5b18431b95eed"
+      "trial-sets/P-001/record-1.json": "sha256:96959fb9bcf70c788d07fb76065fa6dcac7c4740a59476d4c0f5734c5583da6f",
+      "trial-sets/P-001/record-2.json": "sha256:99c8990dd14a42df3e8c44e9c8280684e0b1912177e019c6408939f488f94fd6",
+      "trial-sets/P-001/record-3.json": "sha256:71e33ad4898efbb8d9d31166ff0cd8e7da5f4d537a5fd0e5b876ae6d943eeed3",
+      "trial-sets/P-002/record-1.json": "sha256:96ec9ac40f757dcb746eea1841159aa48a80bf2ec07c656c43ab3bfd28513801",
+      "trial-sets/P-002/record-2.json": "sha256:8e36d9c6bbfe464cb6893ccc2604ebaf9aaa1cfbec73972a6169cb21aedb2153",
+      "trial-sets/P-002/record-3.json": "sha256:9cd16ddb96122498a281b97094fcb24587407975a9259ff42c60a4a21e33ea70"
     },
     "isolationManifests": {
-      "P-001": "sha256:09a1a67930e3b7b0c36ddaa6bd4b9d59454bc4b387d240e3b18e2e72f97b5029",
-      "P-002": "sha256:7884cb1b1c9a4e5afddfa58d539b0f6ba569cd0c0ab040aa46ebbb9581672a3b"
+      "P-001": "sha256:71954befa20b0cad781682077f9c0056d10a16493e8e55fa87af5c0170296440",
+      "P-002": "sha256:a11dc4726dcdef1d4535f0d5469d9683713ec9805619829159b5ee68febb0598"
     }
   },
   "contractDigest": "sha256:3270d3236c9e14e97c4b487a08fbc87f4340e10f9098b20eed6d527ad376f51b",
@@ -188,12 +189,12 @@
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-04T12:46:42.461Z",
-  "durationMs": 2718,
+  "startedAt": "2026-10-05T05:30:41.430Z",
+  "durationMs": 3195,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261004T124642952Z-9a9c88f5"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261005T053041949Z-5a4e3fc8"
   }
 }

@@ -6,7 +6,7 @@
     "path": "corpus/gameability/P-009.json",
     "digest": "sha256:8c45adeaba048b6baca6100d7f7bc8e4a200110e276089104679f839c8cffb9d"
   },
-  "elapsedMs": 888,
+  "elapsedMs": 898,
   "oracles": [
     {
       "oracleId": "O-001",

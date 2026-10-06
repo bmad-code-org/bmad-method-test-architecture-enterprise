@@ -24,13 +24,13 @@
       "expectedObservableFailure": "The trajectory stdout names search_web as the first tool call.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/baseline-pass.json",
+        "path": "runs/20261005T053057717Z-9343e896/qualification/P-002/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:fbd08d1fbff02d3cda4a70f85f234ea3c635a7bb5661e66a3fa88c4b6bbb008a"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/mutated-fail.json",
+        "path": "runs/20261005T053057717Z-9343e896/qualification/P-002/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b"
       },
@@ -46,7 +46,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261004T191335891Z-0ce3e7fd/qualification/P-002/mutated-fail.json",
+            "path": "runs/20261005T053057717Z-9343e896/qualification/P-002/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:e65d5d71fdc45525ed8dc917dfe902d3c2db541fbcc3afbc0fd7499b96944a1b"
           }
