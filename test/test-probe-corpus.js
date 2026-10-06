@@ -413,32 +413,56 @@ async function readStoredCiCase(set, caseId, alter = (text) => text) {
  * `scoreRun` and its `checkElement` read those structures, so a `CI_CORRECT_RUNS` row pointed at a stored deviation fails here with the element, the lint finding or the rule that no longer holds (Story 1.123).
  * A correct run parses, draws no actionlint finding, carries every requested element, carries nothing the request did not ask for and breaks no rule.
  * `legs` is the suite's `storedRunLegs`, and `read` is the reader of a stored case, so `ciStructuralSelfProblems` can hand this the data it must report.
+ * It returns the problems and how many legs it scored.
+ * Unless `complete` is false, the legs must name every project of the ground truth exactly once, so a check handed too few legs, or none, reports the projects it never scored.
  */
-async function ciStructuralProblems(legs, read = readStoredCiCase) {
+async function ciStructuralProblems(legs, read = readStoredCiCase, { complete = true } = {}) {
   const groundTruth = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8'));
   const problems = [];
+  let scored = 0;
+  if (complete) {
+    for (const set of groundTruth.fixtureSets) {
+      const reading = legs.filter((leg) => leg.setId === set.id).length;
+      if (reading === 0) problems.push(`ci ${set.id}: no leg reads a stored run of this project, so its workflow is never scored`);
+      if (reading > 1) problems.push(`ci ${set.id}: ${reading} legs read a stored run of this project, expected one`);
+    }
+  }
   for (const leg of legs) {
     const set = groundTruth.fixtureSets.find((candidate) => candidate.id === leg.setId);
     if (set === undefined) {
       problems.push(`ci ${leg.setId}: the ground truth holds no such project, so the stored run it reads cannot be scored`);
       continue;
     }
+    scored += 1;
     const stored = await read(set, leg.caseId);
     const where = `ci ${leg.setId} reads the stored run ${leg.caseId}`;
     if (stored.problem !== undefined) {
       problems.push(`${where}: ${stored.problem}`);
       continue;
     }
-    const scored = scoreCiRun(set, stored.text, stored.lint, { files: stored.files });
-    if (!scored.parse.ok) problems.push(`${where}: the workflow does not parse (${scored.parse.errors.join('; ')})`);
-    for (const finding of scored.lint.findings) problems.push(`${where}: actionlint reports ${finding.kind}: ${finding.message}`);
-    for (const element of scored.elements.filter((candidate) => !candidate.present)) {
+    const result = scoreCiRun(set, stored.text, stored.lint, { files: stored.files });
+    if (!result.parse.ok) problems.push(`${where}: the workflow does not parse (${result.parse.errors.join('; ')})`);
+    for (const finding of result.lint.findings) problems.push(`${where}: actionlint reports ${finding.kind}: ${finding.message}`);
+    for (const element of result.elements.filter((candidate) => !candidate.present)) {
       problems.push(`${where}: the requested element ${element.id} no longer holds (${element.detail})`);
     }
-    for (const found of scored.unrequested)
+    for (const found of result.unrequested)
       problems.push(`${where}: the workflow carries an element the request did not ask for (${found})`);
-    for (const found of scored.ruleViolations) problems.push(`${where}: the workflow breaks a rule (${found})`);
+    for (const found of result.ruleViolations) problems.push(`${where}: the workflow breaks a rule (${found})`);
   }
+  return { problems, scored };
+}
+
+/**
+ * What `main` has to have run for the ci structural check to count: every project of the ground truth scored, and the self-exercise run at least one row.
+ * It is a function of two numbers so that `ciStructuralSelfProblems` can hand it the numbers of a main that ran nothing.
+ */
+function ciWiringProblems({ scored, selfRows }) {
+  const projects = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8')).fixtureSets.length;
+  const problems = [];
+  if (scored !== projects)
+    problems.push(`ci: the structural check scored ${scored} stored workflows, expected one for each of the ${projects} projects`);
+  if (!(selfRows > 0)) problems.push('ci: the self-exercise of the structural check ran no row');
   return problems;
 }
 
@@ -450,6 +474,7 @@ async function ciStructuralProblems(legs, read = readStoredCiCase) {
  * The three stored spellings that the harness scores as correct are handed to it too and must draw no report, so a check that flagged any difference from the capture would fail here.
  */
 async function ciStructuralSelfProblems() {
+  let exercised = 0;
   const full = 'full-meridian-storefront';
   const plan = 'evaluation-plan-quarry-grader';
   const edit = 'evaluation-edit-ember-ledger';
@@ -494,7 +519,8 @@ async function ciStructuralSelfProblems() {
   ];
   const problems = [];
   for (const { label, leg, read, names } of mustReport) {
-    const reported = await ciStructuralProblems([leg], read);
+    exercised += 1;
+    const { problems: reported } = await ciStructuralProblems([leg], read, { complete: false });
     for (const name of names) {
       if (!reported.some((problem) => problem.includes(name))) {
         problems.push(`ci: the structural check did not report ${label} (no problem names ${JSON.stringify(name)})`);
@@ -502,11 +528,54 @@ async function ciStructuralSelfProblems() {
     }
   }
   for (const { label, leg } of mustAccept) {
-    const reported = await ciStructuralProblems([leg]);
+    exercised += 1;
+    const { problems: reported } = await ciStructuralProblems([leg], readStoredCiCase, { complete: false });
     if (reported.length > 0)
       problems.push(`ci: the structural check reported ${label}, which the harness scores as correct: ${reported.join('; ')}`);
   }
-  return problems;
+  // Several legs: the problem names the leg that deviates and none of the legs that do not.
+  exercised += 1;
+  const { problems: two } = await ciStructuralProblems(
+    [
+      { setId: full, caseId: 'full-correct-pipeline' },
+      { setId: plan, caseId: 'evaluation-plan-continue-on-error' },
+    ],
+    readStoredCiCase,
+    { complete: false },
+  );
+  if (!two.some((problem) => problem.includes(`ci ${plan} reads the stored run evaluation-plan-continue-on-error`))) {
+    problems.push('ci: the structural check did not name the second of two legs that read a deviation');
+  }
+  if (two.some((problem) => problem.includes(`ci ${full} reads`))) {
+    problems.push('ci: the structural check reported the leg that reads a correct run when it scored two legs');
+  }
+  // Legs that do not name every project once: the projects left out, and a project read twice, are reported.
+  exercised += 1;
+  const { problems: partial } = await ciStructuralProblems([
+    { setId: full, caseId: 'full-correct-pipeline' },
+    { setId: full, caseId: 'full-correct-pipeline' },
+  ]);
+  if (!partial.some((problem) => problem.includes(`ci ${plan}: no leg reads`))) {
+    problems.push('ci: the structural check did not report a project that no leg reads');
+  }
+  if (!partial.some((problem) => problem.includes(`ci ${full}: 2 legs read`))) {
+    problems.push('ci: the structural check did not report a project that two legs read');
+  }
+  exercised += 1;
+  if ((await ciStructuralProblems([])).problems.length === 0) problems.push('ci: the structural check reported nothing for no legs at all');
+  const projects = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8')).fixtureSets.length;
+  for (const [label, wired, reported] of [
+    ['a main that scored no workflow', { scored: 0, selfRows: 3 }, true],
+    ['a main that scored one workflow of the projects', { scored: 1, selfRows: 3 }, true],
+    ['a main whose self-exercise ran no row', { scored: projects, selfRows: 0 }, true],
+    ['a main that scored every project and ran the self-exercise', { scored: projects, selfRows: 3 }, false],
+  ]) {
+    exercised += 1;
+    if (ciWiringProblems(wired).length > 0 !== reported) {
+      problems.push(`ci: the wiring check ${reported ? 'did not report' : 'reported'} ${label}`);
+    }
+  }
+  return { problems, exercised };
 }
 
 /**
@@ -1186,10 +1255,6 @@ async function main() {
   const problems = [];
   const summary = {};
   const liveShaped = [];
-  // The structural reads of the ci stored workflows run once, in the ci suite's turn, and each leaves its problems here.
-  // A main that stopped calling one would pass every real run, so `null` after the last suite is a problem of its own.
-  let ciStructural = null;
-  let ciStructuralSelf = null;
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
@@ -1221,9 +1286,10 @@ async function main() {
 
     if (suite.id === 'ci') {
       // `storedRunExposureProblems` reports a builder that exposes no legs.
-      ciStructural = await ciStructuralProblems(suite.evidence.storedRunLegs ?? []);
-      ciStructuralSelf = await ciStructuralSelfProblems();
-      problems.push(...ciStructural, ...ciStructuralSelf);
+      const legs = suite.evidence.storedRunLegs ?? [];
+      const structural = await ciStructuralProblems(legs);
+      const self = await ciStructuralSelfProblems();
+      problems.push(...structural.problems, ...self.problems, ...ciWiringProblems({ scored: structural.scored, selfRows: self.exercised }));
     }
 
     summary[suite.id] = suiteSummary(outcome, registries);
@@ -1233,10 +1299,6 @@ async function main() {
     console.log(
       `  ${suite.id.padEnd(42)} ${outcome.scored.length} probe(s)  defect ${rate(vector.defect)}  gameability ${rate(vector.gameability)}  zero-action ${rate(vector['zero-action'])}`,
     );
-  }
-
-  if (ciStructural === null || ciStructuralSelf === null) {
-    problems.push('ci: the structural score of the stored workflows, or the check of that score, did not run');
   }
 
   problems.push(...comparatorProblems(liveShaped, summary));

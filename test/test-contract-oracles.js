@@ -3288,7 +3288,7 @@ async function checkCiCommandOraclesOnQuotedForms(evaluator) {
  * The burn-in job oracle of the full project over the forms a workflow can carry the word in.
  *
  * The token was a bare `burn-in`, which the comment `# Weekly burn-in on Sundays` satisfied, so a workflow with no burn-in job held it (Story 1.123).
- * The oracle is now a `regex` that reads a mapping key or a `name:` line that carries the word and leaves a comment line, a trailing comment and a run line unsatisfied.
+ * The oracle is now a `regex` that reads a mapping key or a `name:` line that carries the word and leaves a comment line, a trailing comment, a `run:` line and a run-block line that is no key unsatisfied, while a run-block line that starts with a key carrying the word holds, as an `env` key does.
  * Each row is the stored full pipeline without its burn-in job (the schedule comment stays) with one job or line appended, or the stored pipeline itself.
  * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
  * Besides the hand-written rows, every spelling of the word with one character dropped, doubled or replaced is scored as a job id and as a job name, and the oracle has to say what the harness's own `isBurnInJob` says of it.
@@ -3382,6 +3382,13 @@ async function checkCiBurnInOracleOnForms(evaluator) {
     { label: 'no workflow text at all', text: '', holds: false },
     { label: 'the word as the first line of the file', text: 'burn-in:\n  runs-on: ubuntu-latest\n', holds: true },
     { label: 'a job id indented with a tab', text: `${withoutJob}\n\tburn-in:\n`, holds: true },
+    { label: 'a key line indented after a form feed', text: `${withoutJob}\n\f  burn-in:\n`, holds: false },
+    { label: 'a key line indented after a carriage return', text: `${withoutJob}\n\r  burn-in:\n`, holds: false },
+    {
+      label: 'a line of a run block that starts with a key that carries the word',
+      text: withJob(`  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          burn-in: skipped\n`),
+      holds: true,
+    },
     { label: 'a job id that continues after the word', text: withJob(job('burn-in-repeat')), holds: true },
     { label: 'a job name that runs the halves together', text: withJob(job('flaky', '    name: Burnin\n')), holds: true },
     { label: 'a job name that is the word alone', text: withJob(job('flaky', '    name: burn-in\n')), holds: true },

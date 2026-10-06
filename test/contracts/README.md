@@ -392,8 +392,8 @@ Each is therefore written as `^[\s\S]*(?:...)[\s\S]*$`.
 The paired scorer tests the same source with `new RegExp(source)` and no flags.
 The full project's burn-in gate, `gate-burn-in`, states one too, because its word is also one a comment carries: the schedule comment `# Weekly burn-in on Sundays` satisfied the bare token, so a workflow with no burn-in job held the oracle.
 Its token is the job id the skill's template writes, `burn-in:`, and its pattern reads a mapping key or a `name:` line that carries the word, outside a comment (a job id, a job name, a step name, and also an `env` or `with` key or an artifact name, which a line cannot tell from them; the structural score does), in any case and with a hyphen, an underscore, a space or nothing between the two halves, the spellings the harness's own `isBurnInJob` accepts.
-A comment line, a trailing comment, a run line and the value of another key leave it unsatisfied.
-`test:contract-oracles` scores 229 forms of the burn-in job through eval-quality and through the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name, which must agree with `isBurnInJob`.
+A comment line, a trailing comment, a `run:` line, a run-block line that is no key and the value of another key leave it unsatisfied, and a run-block line that starts with a key carrying the word holds, as an `env` key does.
+`test:contract-oracles` scores 232 forms of the burn-in job through eval-quality and through the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name, which must agree with `isBurnInJob`.
 
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a

@@ -1730,7 +1730,7 @@ function workflowMatches(text, source) {
  * A correct run may also quote a tier, and a folded YAML scalar can break the line between the words of a command.
  * An element whose command a run may write that way states a pattern, and its literal stays the single-spaced unquoted spelling the pattern must also match.
  * The burn-in gate states a pattern too, because its literal is also a word a comment carries.
- * Its pattern reads a mapping key or a `name:` line that carries the word, and a comment line or a run line leaves it unsatisfied.
+ * Its pattern reads a mapping key or a `name:` line that carries the word, and a comment line or a `run:` line leaves it unsatisfied while a run-block line that starts with a key carrying the word holds, as an `env` key does.
  *
  * @param {string} text
  * @param {{contractToken: string, contractPattern?: string}} element

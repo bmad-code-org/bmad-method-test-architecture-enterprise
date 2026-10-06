@@ -232,7 +232,8 @@ jobs:
       #
       # Every shard installs actionlint, bubblewrap and strace, whichever
       # scripts the weights put on it. test:eval-ci-data, test:eval-replay,
-      # test:probe-targets, test:doc-invocations and test:cli need actionlint;
+      # test:probe-corpus, test:probe-targets, test:doc-invocations and
+      # test:cli need actionlint;
       # the atdd isolation proofs, test:framework-scaffold-install-isolation,
       # test:transcript-harness, test:probe-targets, test:eval-schemas,
       # test:doc-invocations, test:cli and every test:evaluate-* suite that

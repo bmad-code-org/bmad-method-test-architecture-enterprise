@@ -3280,7 +3280,7 @@ The harness scores each as the correct run with every element present and nothin
 The second criterion therefore reads: each of the 32 pass-through deviations fails `test:probe-corpus` and names the element, the lint finding or the rule that no longer holds, and the three correct spellings pass, which `ciStructuralSelfProblems` holds so that a check that flagged any difference from the capture fails.
 The first criterion reads every expected element present, nothing unrequested, no actionlint finding and no rule firing, since `full-workflow-dispatch-added` adds a trigger that no element names and a correct run draws no finding.
 The third criterion holds with a different token: the burn-in element states the job id `burn-in:` and a `contractPattern` that reads a mapping key or a `name:` line that carries the word, outside a comment, so `test/probes/expected-strength.json` moves in the ci `corpusDigest` only, with `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` regenerated.
-`test:contract-oracles` scores 229 forms of the burn-in job through the engine and the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name.
+`test:contract-oracles` scores 232 forms of the burn-in job through the engine and the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name.
 
 **Dependencies:** 1.94.
 **Gate:** `test:probe-corpus`, `test:probe-sources` (which runs `node tools/generate-probes.js --check`), `test:contract-sources`, then `npm test`.
