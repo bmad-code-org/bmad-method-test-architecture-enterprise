@@ -204,7 +204,7 @@ The real capture of the evaluation-plan project quotes its folder names for the 
 The oracles of `command-evaluation-install` and `command-evaluation-ci-pr` therefore state a `contractPattern` beside the `contractToken` in `test/fixtures/ci-eval/ground-truth.json`, rendered with the vocabulary's `regex` operator and tested by the paired scorer with `new RegExp(source)`.
 Each pattern tolerates a balanced pair of single or double quotes around the folder, which a correct run may also write around the tier, and separates the words of the command by `\s+`, since a folded YAML scalar can break the line between them.
 Each pins the folder and the tier: an unterminated or mismatched quote, a trailing character, `--tier nightly`, `--tier prod`, another folder, another prefix and an omitted command fail their oracle.
-`test:contract-oracles` scores twenty-nine forms of the two commands through eval-quality and through the scorer, and every stored correct workflow satisfies every oracle of its set.
+`test:contract-oracles` scores forty-one forms of the two commands through eval-quality and through the scorer, and every stored correct workflow satisfies every oracle of its set.
 `KNOWN_UNHELD` in `test/test-probe-corpus.js` is empty, and `storedRunProblems` fails a listed oracle that holds, a check `test:probe-corpus` exercises on every run so the list can be refilled.
 
 ## What the vocabulary cannot say
@@ -249,7 +249,7 @@ because performance states no target. `tools/generate-probes.js` points that pro
 and says so, and the harness is where that domain's status is actually scored.
 
 The ci contract reaches the same shape from the request side.
-Its oracles are one substring claim per requested or forbidden element (two of the evaluation-plan project's are quote-tolerant regex claims), so each of the three planted probes (a missing trigger, a missing permission, the full-request template copied onto the minimal project) has an oracle of its own that a run producing the plant would violate directly; nothing here needed the gate-oracle workaround nfr's third plant does, because a missing element and a forbidden one are each their own claim rather than a consequence of a rollup.
+Its oracles are one substring claim per requested or forbidden element (two of the evaluation-plan project's are quote-tolerant regex claims), so each of the three planted probes (a missing trigger, a missing permission, the full-request template copied onto the minimal project) has an oracle of its own that a run producing the plant would violate directly; nothing here needed the gate-oracle workaround nfr's third plant does, because a missing element and a forbidden one are each their own claim.
 
 **A rejected probe now names its reason.** The qualification gate computes a closed list of twenty
 reason codes. Through eval-quality 1.3.0 none of them reached the evidence artifact or any published

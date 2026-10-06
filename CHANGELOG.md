@@ -621,7 +621,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An unterminated or mismatched quote, a folder or tier with a trailing character and an upper-case tier fail.
   `tools/generate-contracts.js` renders it with the vocabulary's `regex` operator over the workflow, and the paired scorer `workflowHoldsToken` tests the same source with `new RegExp(source)` and no flags.
   A workflow that runs `--tier nightly` or `--tier prod`, installs under another prefix, names another evaluation folder or omits either command fails its oracle.
-  `test:contract-oracles` scores twenty-nine such forms through eval-quality and through the scorer, and `test:evaluate-ci-render` holds the `contractPattern` field to being non-empty, anchored, a regular expression and a match for its own token and command.
+  `test:contract-oracles` scores forty-one such forms through eval-quality and through the scorer, and `test:evaluate-ci-render` holds the `contractPattern` field to being non-empty, anchored, a regular expression and a match for its own token and command.
   The clean control P-004 now scores `held` with corroboration `agrees` on both oracles, and `test:probe-corpus` fails a clean control outcome that is anything else.
   `KNOWN_UNHELD` is empty and its check stays: a listed oracle that holds fails, and the check runs over an empty list on every run.
   `test/probes/expected-strength.json` moves in the ci corpus digest only; `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated.

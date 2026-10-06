@@ -1307,7 +1307,7 @@ Amended 2026-10-05 in Story 1.122's build, fix round 1: the patterns of the para
 Each quote there was independent, so an unterminated quote, a closing quote only and a mismatched pair (`'evals"`) all held, and each is a shell syntax error.
 Each argument is now a whole-word alternation, `(?:'x'|"x"|x)`, inside a group and with no nested quantifier, so only a balanced pair holds.
 A folded YAML scalar (`run: >-`) can break the line between the words of a command and the harness accepts it, so the words are separated by `\s+`.
-Amended 2026-10-05 in Story 1.122's build: the second row is the table of twenty-nine forms in `test:contract-oracles` (`checkCiCommandOraclesOnQuotedForms`), each resolved by the engine and by the paired scorer, and `validateCorpus` guards the `contractPattern` field (`checkCorpusGuards` in `test:evaluate-ci-render`).
+Amended 2026-10-05 in Story 1.122's build: the second row is the table of forty-one forms in `test:contract-oracles` (`checkCiCommandOraclesOnQuotedForms`), each resolved by the engine and by the paired scorer, and `validateCorpus` guards the `contractPattern` field (`checkCorpusGuards` in `test:evaluate-ci-render`).
 The fourth row holds as `test:probe-corpus` failing a listed oracle that holds, which `knownUnheldProblems` exercises over an empty list, so a leftover entry fails and the check cannot be removed unseen.
 The sixth row is `cleanControlProblems` in `test:probe-corpus`: every engine outcome of a clean control of the four stored-run suites is `held` with corroboration `agrees`, and `cleanControlSelfProblems` exercises it over a contradicted and a violated outcome.
 

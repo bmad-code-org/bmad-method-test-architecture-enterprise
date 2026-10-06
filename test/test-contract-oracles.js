@@ -3000,8 +3000,7 @@ function ciArtifactsOf(directory, expected) {
  * A folded YAML scalar can break the line between the words of a command, so the words are separated by `\s+`.
  * Each row here is the capture with its two command lines rewritten (or a whole workflow of one line, to reach the end-of-text branch).
  * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
- * A pattern that no longer tolerates a quote or a fold, one that matches a deviation, an unterminated or mismatched quote, or a one-character widening, one that matches anything,
- * and a literal token restored over the pattern all fail here by name.
+ * A pattern that no longer tolerates a quote or a fold, one that matches a deviation, an unterminated or mismatched quote, a one-character widening of a quoted alternative, words that run together, one that matches anything, and a literal token restored over the pattern all fail here by name.
  */
 async function checkCiCommandOraclesOnQuotedForms(evaluator) {
   console.log('\nci.contract.json command oracles over the quoted and the deviating forms of the evaluation-plan capture');
@@ -3147,6 +3146,78 @@ async function checkCiCommandOraclesOnQuotedForms(evaluator) {
     {
       label: 'a tier with a trailing digit',
       text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a single-quoted install prefix with a trailing digit',
+      text: withLines("npm install --prefix 'evals'2", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'a double-quoted install prefix with a trailing digit',
+      text: withLines('npm install --prefix "evals"2', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install command whose option runs into its folder',
+      text: withLines('npm install --prefixevals', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install command whose words run together',
+      text: withLines('npminstall --prefix evals', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'a single-quoted evaluation folder with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader'2 --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a double-quoted evaluation folder with a trailing digit',
+      text: withLines(installLine, 'npm exec --prefix \'evals\' -- tea-evaluate ci --evaluation "evals/grader"2 --tier pr'),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a single-quoted tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'pr'2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a double-quoted tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier \"pr\"2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an evaluation option that runs into its folder',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation'evals/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier option that runs into its value',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier'pr'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a ci command whose subcommand runs into the binary name',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluateci --evaluation 'evals/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a ci command whose folder runs into the tier option',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader'--tier pr"),
       install: true,
       ciPr: false,
     },

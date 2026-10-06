@@ -3242,7 +3242,7 @@ A folded YAML scalar (`run: >-`) can break the line between the words of a comma
 Amended 2026-10-05 in Story 1.122's build: the paired scorer is `workflowHoldsToken` in `test/eval-ci.js`, which is `workflowMentions` over a literal `contractToken` and `workflowMatches` (`new RegExp(source)`, no flags) over a `contractPattern`.
 `validateCorpus` refuses a `contractPattern` that is empty, has no `contractToken`, is not anchored over the whole expression (`^` first, an unescaped `$` last, no alternation at the top level), is not a regular expression, or fails to match its own token or its element's command.
 The other three projects' command elements keep their literal tokens (`npm install --prefix`, `--tier pr`), which hold on their stored captures.
-`test:contract-oracles` scores twenty-nine forms of the two commands through the engine and the scorer.
+`test:contract-oracles` scores forty-one forms of the two commands through the engine and the scorer.
 `KNOWN_UNHELD` is the empty list, and `knownUnheldProblems` in `test:probe-corpus` exercises the check that fails a listed oracle which holds, so the list can be refilled.
 `cleanControlProblems` holds the third criterion: every engine outcome of a clean control of the four stored-run suites is `held` with corroboration `agrees`, and `cleanControlSelfProblems` exercises it over a contradicted and a violated outcome.
 
