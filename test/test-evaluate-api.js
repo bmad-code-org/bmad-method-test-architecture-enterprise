@@ -124,7 +124,7 @@ const relayModule = require('../cli/lib/evaluate/confinement-relay');
 const shimModule = require('../cli/lib/evaluate/confinement-status.cjs');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
-const { journalDirectory, reclaimDeadPrivateParents, requestKey } = require('../cli/lib/evaluate/workspace');
+const { journalDirectory, reclaimDeadObserverProbes, reclaimDeadPrivateParents, requestKey } = require('../cli/lib/evaluate/workspace');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
 const { recordedMount } = require('./lib/recorded-mount');
@@ -3032,8 +3032,8 @@ async function checkPortReport() {
     );
   }
 
-  // A run killed outright (SIGKILL) runs no handler: its port directory is left beneath its private parent, nothing is left in the temp
-  // directory, and the next preflight over the evaluation reclaims the parent with the directory and names it (Story 1.131).
+  // A run killed outright (SIGKILL) runs no handler, so its port directory is left beneath its private parent.
+  // Nothing is left in the temp directory, and the next preflight over the evaluation reclaims the parent with the directory and names it (Story 1.131).
   if (process.platform !== 'win32') {
     const policy = ({ root }) => path.join(root, 'rules', 'policy.txt');
     const original = fs.readFileSync(path.join(FIXTURE, 'rules', 'policy.txt'), 'utf8');
@@ -3105,16 +3105,14 @@ async function checkPortReport() {
 // ---------------------------------------------------------------- a killed run's call directories (Story 1.131)
 
 /**
- * A run killed with SIGKILL while a call is open leaves its private parent and nothing in the system's temp directory, and the next run over the
- * evaluation reclaims the parent with the three directories a confined call hands its target: the call's temp directory, a started service's port
- * directory and its bridge directory.
- * The run is `test/fixtures/evaluate/killed-call.cjs`, which makes them through the layer's own code (`createApiPort`, the confined command mechanism and
- * `makePrivateParent`) and leaves in each what a target could leave in a directory it may write: links and a hard link aimed outside, a closed directory,
- * and files shaped like the runtime's own ownership records.
+ * A run killed with SIGKILL while a call is open leaves its private parent and nothing in the system's temp directory.
+ * The next run over the evaluation reclaims the parent with the three directories a confined call hands its target: the call's temp directory, a started service's port directory and its bridge directory.
+ * The run is `test/fixtures/evaluate/killed-call.cjs`, which makes them through the layer's own code (`createApiPort`, the confined command mechanism and `makePrivateParent`).
+ * It leaves in each what a target could leave in a directory it may write: links and a hard link aimed outside, a closed directory, and files shaped like the runtime's own ownership records.
  * A call directory made in the system's temp directory again fails the first checks (the story's revert check).
- * The recovery removes what the host made beneath a parent whose journal record, marker, mode, owner and process all agree, and nothing else: a live owner,
- * a marker of the wrong mode, bytes, kind of file or run, a journal record that names another process or has the wrong mode, and another evaluation's
- * recovery each leave every directory and everything planted in it, and the canaries outside stay whole in every case.
+ * The recovery removes what the host made beneath a parent whose journal record, marker, mode, owner and process all agree, and nothing else.
+ * A live owner, a marker of the wrong mode, bytes, kind of file or run, a journal record that names another process or has the wrong mode, and another evaluation's recovery each leave every directory and everything planted in it.
+ * The canaries outside stay whole in every case.
  */
 async function checkKilledCallDirectories() {
   if (process.platform === 'win32') return;
@@ -3321,6 +3319,176 @@ async function checkKilledCallDirectories() {
       unlockDirectories(held.parent);
       fs.rmSync(held.parent, { recursive: true, force: true });
     }
+  }
+}
+
+// ---------------------------------------------------------------- a killed run's observer probe (Story 1.131)
+
+/**
+ * The observer probe of a confined run's selection makes its directory beneath the user's private root, `observer-probe-<pid>-<random>` with mode 0700, so a run killed outright while the probe runs leaves nothing in the system's temp directory.
+ * The next preflight removes the entry because its pid is dead and says what it removed.
+ * A link, a file, a directory of another mode, a directory of a live pid and a name of another shape stay, and the canary a link names stays whole.
+ * A preflight another suite starts at the same time can remove a dead run's entry before this case's own preflight does, so a cycle whose entry went before the recovery that reports it is made again.
+ */
+async function checkKilledObserverProbe() {
+  if (process.platform === 'win32') return;
+  const project = makeProject('observer-probe', { log: false });
+  const probesOf = (pid) =>
+    fs.existsSync(PRIVATE_ROOT) ? fs.readdirSync(PRIVATE_ROOT).filter((name) => name.startsWith(`observer-probe-${pid}-`)) : [];
+  fs.mkdirSync(PRIVATE_ROOT, { recursive: true, mode: 0o700 });
+  const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
+  const planting = shortDirectory();
+  const canary = path.join(planting, 'canary-directory');
+  fs.mkdirSync(canary, { mode: 0o700 });
+  fs.writeFileSync(path.join(canary, 'file.txt'), 'canary\n');
+  const forged = {
+    link: path.join(PRIVATE_ROOT, `observer-probe-${deadPid}-lnkAAA`),
+    mode: path.join(PRIVATE_ROOT, `observer-probe-${deadPid}-modAAA`),
+    file: path.join(PRIVATE_ROOT, `observer-probe-${deadPid}-filAAA`),
+    live: path.join(PRIVATE_ROOT, `observer-probe-${process.pid}-livAAA`),
+    shape: path.join(PRIVATE_ROOT, `observer-probe-${deadPid}-shapeAAA`),
+  };
+  const cycle = async () => {
+    const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    let found = [];
+    while ((found = probesOf(child.pid)).length === 0 && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+    let made = null;
+    try {
+      made = found.length === 0 ? null : fs.lstatSync(path.join(PRIVATE_ROOT, found[0]));
+    } catch {
+      made = null;
+    }
+    child.kill('SIGKILL');
+    const { name } = await ended;
+    return { pid: child.pid, found, made, name, output };
+  };
+  try {
+    fs.symlinkSync(canary, forged.link);
+    fs.mkdirSync(forged.mode, { mode: 0o755 });
+    fs.chmodSync(forged.mode, 0o755);
+    fs.writeFileSync(path.join(forged.mode, 'file.txt'), 'planted\n');
+    fs.writeFileSync(forged.file, 'planted\n', { mode: 0o700 });
+    fs.chmodSync(forged.file, 0o700);
+    fs.mkdirSync(forged.live, { mode: 0o700 });
+    fs.writeFileSync(path.join(forged.live, 'file.txt'), 'planted\n');
+    fs.mkdirSync(forged.shape, { mode: 0o700 });
+    let recovered = false;
+    let last = null;
+    for (let attempt = 1; attempt <= 3 && !recovered; attempt += 1) {
+      const killed = await cycle();
+      const entry = killed.found.length === 0 ? null : path.join(PRIVATE_ROOT, killed.found[0]);
+      check(
+        entry !== null && killed.found.length === 1 && killed.name === 'SIGKILL',
+        `a confined preflight killed by SIGKILL ended by ${killed.name} and held ${JSON.stringify(killed.found)} in the private root; expected one observer-probe-${killed.pid}-* directory while its probe ran\n${killed.output}`,
+      );
+      if (entry === null) return;
+      check(
+        killed.made !== null && killed.made.isDirectory() && (killed.made.mode & 0o777) === 0o700 && killed.made.uid === process.getuid(),
+        `the observer probe's directory ${entry} is ${killed.made === null ? 'gone' : `mode ${(killed.made.mode & 0o777).toString(8)} and ${killed.made.isDirectory() ? 'a directory' : 'no directory'}`}; expected a directory of mode 700 the user owns`,
+      );
+      const inTemp = fs.readdirSync(project.env.TMPDIR);
+      check(
+        inTemp.length === 0,
+        `a confined run killed while its observer probe ran left ${JSON.stringify(inTemp)} in its temp directory; expected nothing`,
+      );
+      if (!fs.existsSync(entry)) continue;
+      const next = evaluate(['preflight', '--evaluation', project.folder], project.env);
+      last = next;
+      check(
+        next.status === 0,
+        `the preflight after a run killed while its observer probe ran exited ${next.status}; expected 0\n${next.output.slice(0, 600)}`,
+      );
+      check(
+        !fs.existsSync(entry),
+        `the preflight after a run killed while its observer probe ran left ${entry}\n${next.output.slice(0, 600)}`,
+      );
+      recovered = next.output.includes(`removed the observer probe directory ${entry}`);
+    }
+    check(
+      recovered,
+      `three preflights after runs killed while their observer probes ran never named the directory they removed: ${JSON.stringify((last?.output ?? '').slice(0, 400))}`,
+    );
+    // A forged entry is no probe of a dead run: every one stays, the canary the link names stays whole, and no output names one.
+    const gone = Object.entries(forged).filter(([, entry]) => {
+      try {
+        fs.lstatSync(entry);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    check(
+      gone.length === 0 &&
+        fs.lstatSync(forged.link).isSymbolicLink() &&
+        fs.readFileSync(path.join(canary, 'file.txt'), 'utf8') === 'canary\n' &&
+        fs.readFileSync(path.join(forged.mode, 'file.txt'), 'utf8') === 'planted\n' &&
+        fs.readFileSync(path.join(forged.live, 'file.txt'), 'utf8') === 'planted\n' &&
+        (last?.output ?? '').split('\n').every((line) => !Object.values(forged).some((entry) => line.includes(entry))),
+      `the recovery removed or reported a forged entry: gone ${JSON.stringify(gone.map(([name]) => name))}, output ${JSON.stringify(last?.output.slice(0, 400))}`,
+    );
+
+    // The recovery on a root of its own, with every shape and no other run at work in it: the dead run's directory goes with what it holds, and each forged entry stays.
+    const root = scratch.make('observer-probe-root');
+    const logged = [];
+    const planted = (name, make) => {
+      const entry = path.join(root, name);
+      make(entry);
+      return entry;
+    };
+    const good = planted(`observer-probe-${deadPid}-goodAA`, (entry) => {
+      fs.mkdirSync(path.join(entry, 'closed'), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(path.join(entry, 'closed', 'sentinel-1'), 'sentinel\n');
+      fs.chmodSync(path.join(entry, 'closed'), 0o500);
+    });
+    const kept = [
+      planted(`observer-probe-${deadPid}-lnkBBB`, (entry) => fs.symlinkSync(canary, entry)),
+      planted(`observer-probe-${deadPid}-modBBB`, (entry) => {
+        fs.mkdirSync(entry, { mode: 0o750 });
+        fs.chmodSync(entry, 0o750);
+      }),
+      planted(`observer-probe-${deadPid}-filBBB`, (entry) => {
+        fs.writeFileSync(entry, 'planted\n', { mode: 0o700 });
+        fs.chmodSync(entry, 0o700);
+      }),
+      planted(`observer-probe-${process.pid}-livBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+      planted('observer-probe-0-zerAAA', (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+      planted(`observer-probe-${deadPid}-shrt`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+      planted(`observer-probe-${deadPid}-longBBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+      planted(`probe-${deadPid}-nameBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+    ];
+    const removed = reclaimDeadObserverProbes({ root, log: (line) => logged.push(line) });
+    check(
+      removed.length === 1 &&
+        removed[0] === good &&
+        !fs.existsSync(good) &&
+        logged.length === 1 &&
+        logged[0] === `removed the observer probe directory ${good} that a killed run left`,
+      `the recovery on a root of its own removed ${JSON.stringify(removed)} and said ${JSON.stringify(logged)}; expected only ${good}, named once`,
+    );
+    check(
+      kept.every((entry) => {
+        try {
+          fs.lstatSync(entry);
+          return true;
+        } catch {
+          return false;
+        }
+      }) && fs.readFileSync(path.join(canary, 'file.txt'), 'utf8') === 'canary\n',
+      `the recovery on a root of its own removed a forged entry or the canary a link names: ${JSON.stringify(fs.readdirSync(root))}`,
+    );
+  } finally {
+    for (const entry of Object.values(forged)) fs.rmSync(entry, { recursive: true, force: true });
   }
 }
 
@@ -5463,9 +5631,10 @@ function readSlowly(port, host, request, size) {
 
 /**
  * A stand-in for Bubblewrap that applies what the vector says about the call directories (Story 1.131) on a host that has none.
- * It records the vector and the environment it was given, answers each bind at a path under `/dev` by substituting the bound directory for that path in the
- * command and in every value of the environment, and starts the command after `--`. It is no sandbox, and it shows that every path the runtime hands the target
- * reaches the directory the runtime reads, which is what a mount at that path does.
+ * It records the vector and the environment it was given.
+ * It answers each bind at a path under `/dev` by substituting the bound directory for that path in the command and in every value of the environment, and starts the command after `--`.
+ * It is no sandbox.
+ * It shows that every path the runtime hands the target reaches the directory the runtime reads, which is what a mount at that path does.
  */
 function standInBubblewrap(directory, record) {
   const file = path.join(directory, 'standin-bwrap.cjs');
@@ -5498,12 +5667,14 @@ child.on('exit', (code, signal) => (signal ? process.kill(process.pid, signal) :
 }
 
 /**
- * The call directories reach a confined target (Story 1.131), through the real sandbox, the real confined mechanisms, the real status shim and the real HTTP port,
- * with the stand-in for Bubblewrap above in the place of `bwrap`, so every host runs it; the confined pipeline and the real-Bubblewrap case run the same on Linux.
- * A started service's call is answered: its port file, written where the vector names the directory, is read by the runtime at the directory's own path, and
- * the bridge the shim serves at `/dev/tea-nb-*` answers the runtime at its own path. A command's `TMPDIR` is named under `/dev` and is writable.
- * The call directories are beneath the run's private parent, the vector binds each at `/dev/<name>`, and a bind at a path the sandbox hides (the directory's own
- * path beneath the emptied private root) is the revert check that fails the vector case of `test:evaluate-confinement`.
+ * The call directories reach a confined target (Story 1.131), through the real sandbox, the real confined mechanisms, the real status shim and the real HTTP port.
+ * The stand-in for Bubblewrap above takes the place of `bwrap`, so every host runs it, and the confined pipeline and the real-Bubblewrap case run the same on Linux.
+ * A started service's call is answered.
+ * Its port file, written where the vector names the directory, is read by the runtime at the directory's own path.
+ * The bridge the shim serves at `/dev/tea-nb-*` answers the runtime at its own path.
+ * A command's `TMPDIR` is named under `/dev` and is writable.
+ * The call directories are beneath the run's private parent and the vector binds each at `/dev/<name>`.
+ * A bind at a path the sandbox hides (the directory's own path beneath the emptied private root) is the revert check that fails the vector case of `test:evaluate-confinement`.
  */
 async function checkCallDirectoriesStoodIn() {
   const { entry, request, projectWith, environmentOf, serverOf, listened, signal, nodeCommandMechanism } = await bridgedHarness();
@@ -6102,6 +6273,7 @@ async function main() {
     await runCase('the denials', checkDenials);
     await runCase("a started service's port", checkPortReport);
     await runCase('the call directories of a killed run', checkKilledCallDirectories);
+    await runCase('the observer probe of a killed run', checkKilledObserverProbe);
     await runCase('the bridged server', checkBridgedServer);
     await runCase('the bridged server, stood in', checkBridgedServerStandIn);
     await runCase('the call directories, stood in', checkCallDirectoriesStoodIn);

@@ -5,11 +5,11 @@
  *
  *   killed-call.cjs <evaluation folder> <launch root> <ready file> <planting directory>
  *
- * It makes its private parent the way `preflight` does (the ownership journal beside the evaluation's runs and the marker inside the parent),
- * then makes a call through the layer's own code: `createApiPort` starts a service's call, whose port directory and bridge directory it makes,
- * and the confined command mechanism makes the call's temp directory before it starts the target, which here never answers.
- * Each of the three directories holds what a target could leave in a directory it may write: a link and a hard link to paths outside it, a
- * directory it closed to itself, and a file shaped like the runtime's own ownership record, naming paths outside.
+ * It makes its private parent the way `preflight` does, with the ownership journal beside the evaluation's runs and the marker inside the parent.
+ * It then makes a call through the layer's own code.
+ * `createApiPort` starts a service's call, whose port directory and bridge directory it makes.
+ * The confined command mechanism makes the call's temp directory before it starts the target, which here never answers.
+ * Each of the three directories holds what a target could leave in a directory it may write: a link and a hard link to paths outside it, a directory it closed to itself, and a file shaped like the runtime's own ownership record, naming paths outside.
  * It writes the ready file, a JSON object naming the parent and the three directories, once all of that exists, and waits until it is killed.
  */
 

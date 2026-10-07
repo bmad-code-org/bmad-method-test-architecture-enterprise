@@ -465,15 +465,30 @@ class ReportStream {
 }
 
 /**
+ * The name of a probe's directory beneath the user's private root: `observer-probe-<pid>-<six characters>`, the pid being the runtime's.
+ * The recovery of a killed run (`workspace.js` `reclaimDeadObserverProbes`) reads the pid from it.
+ */
+const OBSERVER_PROBE_NAME = /^observer-probe-([1-9][0-9]*)-[A-Za-z0-9]{6}$/;
+
+/**
+ * A directory for one observer probe, made beneath `parent`, the user's private root (mode 0700, as `mkdtemp` makes it).
+ * A run killed outright while the probe runs leaves it, and the next preflight removes it by its name and its dead pid.
+ */
+function makeProbeDirectory(parent) {
+  return fs.mkdtempSync(path.join(parent, `observer-probe-${process.pid}-`));
+}
+
+/**
  * Whether the unified log reports a read this host's Seatbelt allowed, before
  * the run starts: `null` when it does, the reason when it does not. A host
  * whose log is unreadable (no privilege, a sandboxed shell) cannot audit.
  * One shell runs the whole probe (the stream in the background, a sandboxed
  * read of a fresh sentinel every 200 ms, a look at the stream's file after
  * each), since the selection is synchronous.
+ * The probe's directory is made beneath `parent`, the user's private root.
  */
-function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE }) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-observer-probe-'));
+function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE, parent }) {
+  const directory = makeProbeDirectory(parent);
   try {
     const token = auditToken();
     const out = path.join(directory, 'reports.ndjson');
@@ -1659,10 +1674,11 @@ function traceDecision(access, grants) {
  * @param {object} options
  * @param {string} options.strace the `strace` executable
  * @param {string[]} options.vector the Bubblewrap command (executable first) that ends before the process it runs
+ * @param {string} options.parent the user's private root, where the probe's directory is made
  * @returns {string|null}
  */
-function probeTrace({ strace, vector }) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-observer-probe-'));
+function probeTrace({ strace, vector, parent }) {
+  const directory = makeProbeDirectory(parent);
   try {
     const target = path.join(directory, 'probe.txt');
     const output = path.join(directory, 'trace.txt');
@@ -1699,6 +1715,7 @@ function probeTrace({ strace, vector }) {
 
 module.exports = {
   BARRIER_MS,
+  OBSERVER_PROBE_NAME,
   DARWIN_SYSTEM_ROOTS,
   EXACT_GRANTS,
   REQUESTED_ROOTS,
@@ -1713,6 +1730,7 @@ module.exports = {
   auditToken,
   decodeString,
   killLiveStreams,
+  makeProbeDirectory,
   nodeInstallRoot,
   parseReportLine,
   probeReportStream,

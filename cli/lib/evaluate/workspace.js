@@ -55,11 +55,11 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const { killLiveStreams } = require('./confinement-audit');
+const { OBSERVER_PROBE_NAME, killLiveStreams } = require('./confinement-audit');
 const { stopEngineStages } = require('./engine-cli');
 const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
-const { sweepMaskRecords } = require('./mask-guard');
+const { processMayRun, sweepMaskRecords } = require('./mask-guard');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
 
@@ -550,9 +550,10 @@ function heldPrivateRoot(root) {
  * for the run (the engine's, the qualification's, an evaluator's, a judge's,
  * the bridge's configuration, token and socket, the score's) is made beneath
  * the parent by `makeScratchDirectory`.
- * A directory the target is deliberately granted (its temp directory, a started service's port and bridge directories, its home, the status directory) is made beneath the parent too.
+ * A path the target is deliberately granted (its temp directory, a started service's port and bridge directories, its home, the status file) is made beneath the parent too.
  * It reaches the target at a path the sandbox keeps (`confinement.js`), so the recovery of a killed run's parent reclaims it (Story 1.131).
- * The workspace alone is in the run's temp directory.
+ * The workspace alone stays in the system's temp directory, and nothing else does.
+ * The observer probes of selection run before the parent exists, so each makes its directory beneath the root itself (`observer-probe-<pid>-<random>`), which `reclaimDeadObserverProbes` removes once its pid is dead.
  *
  * @param {string[]} scratch
  * @returns {string} the parent
@@ -678,6 +679,49 @@ function recordedPrivateRoot(entry, platform) {
 function reclaimDeadMaskRecords({ log = () => {} } = {}) {
   const root = heldPrivateRoot(path.join(privateRootBase(), privateRootName()));
   return root === null ? [] : sweepMaskRecords({ recordDirectory: root, log });
+}
+
+/**
+ * Removes the directories a killed run's observer probe left in the user's private root (Story 1.131).
+ * The probe (`confinement-audit.js` `probeReportStream` and `probeTrace`) makes `observer-probe-<pid>-<random>` there at selection, before the run's private parent exists, and removes it when it ends.
+ * An entry is removed when its name carries a pid, that process is gone, and it is a real directory (no link) the user owns with mode 0700.
+ * An entry of a live pid, a link, a file, a directory with another mode or another owner is left.
+ * The removal does not follow a link (`removeScratchDirectory`), and each removal is reported through `log`.
+ *
+ * @param {object} [options]
+ * @param {(message: string) => void} [options.log]
+ * @param {(pid: number) => boolean} [options.alive]
+ * @param {string} [options.root] the private root to read; the user's own by default
+ * @returns {string[]} the directories that were removed
+ */
+function reclaimDeadObserverProbes({
+  log = () => {},
+  alive = processMayRun,
+  root: given = path.join(privateRootBase(), privateRootName()),
+} = {}) {
+  const root = heldPrivateRoot(given);
+  const removed = [];
+  if (root === null || typeof process.getuid !== 'function') return removed;
+  let names;
+  try {
+    names = fs.readdirSync(root).filter((name) => OBSERVER_PROBE_NAME.test(name));
+  } catch {
+    return removed;
+  }
+  for (const name of names) {
+    const directory = path.join(root, name);
+    try {
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o700) continue;
+      if (alive(Number(OBSERVER_PROBE_NAME.exec(name)[1]))) continue;
+      removeScratchDirectory(directory);
+      removed.push(directory);
+      log(`removed the observer probe directory ${directory} that a killed run left`);
+    } catch (error) {
+      log(`could not remove the observer probe directory ${directory}: ${error.message}`);
+    }
+  }
+  return removed;
 }
 
 /** Reclaim a dead invocation's private parent only when its journal and in-parent marker agree. */
@@ -2339,6 +2383,7 @@ module.exports = {
   removeScratchDirectory,
   removeWorkspace,
   reclaimDeadMaskRecords,
+  reclaimDeadObserverProbes,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   repositoryOf,

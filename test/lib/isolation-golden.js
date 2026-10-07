@@ -183,9 +183,9 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
       }).wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { egress: `${egressDirectory}/s` });
-      // The call directories (the call's temp directory, a started service's port directory and its bridge directory) sit beneath the run's private parent, which the
-      // sandbox empties: under Bubblewrap each is bound at a path under the synthetic /dev, the environment, the port file and the shim's bridge name it there, and the
-      // audit grants the mount; under Seatbelt the profile allows each again beneath the denied root (Story 1.131).
+      // The call directories (the call's temp directory, a started service's port directory and its bridge directory) sit beneath the run's private parent, which the sandbox empties (Story 1.131).
+      // Under Bubblewrap each is bound at a path under the synthetic /dev, the environment, the port file and the shim's bridge name it there, and the audit grants the mount.
+      // Under Seatbelt the profile allows each again beneath the denied root.
       const callParent = `${privateRoot}/run-501-AbCdEf`;
       const callTemporary = `${callParent}/tea-evaluate-target-tmp-AbCdEf`;
       const callPortDirectory = `${callParent}/tea-evaluate-port-AbCdEf`;

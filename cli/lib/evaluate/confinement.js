@@ -215,6 +215,7 @@ const {
 const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)', bubblewrap: 'Linux Bubblewrap (bwrap)' });
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
+const ENV_PROGRAM = '/usr/bin/env';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
 
 /**
@@ -923,34 +924,38 @@ const confirmedObservers = new Map();
  * back through it, `{ failure }` with the reason otherwise (Story 1.60).
  */
 function probeObserver(mechanism, env) {
-  // The probes make a directory in the temp directory; one that is missing or unwritable is the workspace step's to name, as
-  // for the mechanism's own probe, and the observer is then confirmed by the first call that runs (the trial's start on macOS,
-  // the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
-  let tempUsable = true;
+  // The probes make a directory beneath the user's private root (Story 1.131), so a run killed outright while a probe runs leaves it to the next preflight's recovery.
+  // A root that cannot be held and a temp directory that is missing or unwritable are the workspace step's to name, as for the mechanism's own probe.
+  // The observer is then confirmed by the first call that runs (the trial's start on macOS, the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
+  const { privateRootBase, privateRootIn } = require('./workspace');
+  let probeUsable = true;
   try {
     fs.accessSync(os.tmpdir(), fs.constants.W_OK);
   } catch {
-    tempUsable = false;
+    probeUsable = false;
   }
+  const parent = probeUsable ? privateRootIn(privateRootBase()) : null;
+  probeUsable = parent !== null;
   if (mechanism.mode === 'seatbelt') {
     const logExecutable = env?.[LOG_ENV] || LOG_EXECUTABLE;
     if (!path.isAbsolute(logExecutable))
       return { failure: `${LOG_ENV} names ${JSON.stringify(logExecutable)}, which is not an absolute path` };
     const key = `${mechanism.executable}|${logExecutable}`;
-    if (!tempUsable) return { observer: { executable: logExecutable } };
+    if (!probeUsable) return { observer: { executable: logExecutable } };
     if (confirmedObservers.has(key)) return confirmedObservers.get(key);
-    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable });
+    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable, parent });
     if (failure !== null) return { failure };
     return confirmedObservers.set(key, { observer: { executable: logExecutable } }).get(key);
   }
   const strace = executableOnPath('strace', env);
   if (strace === null) return { failure: 'strace is not on PATH' };
-  if (!tempUsable) return { observer: { executable: strace } };
+  if (!probeUsable) return { observer: { executable: strace } };
   const key = `${mechanism.executable}|${strace}`;
   if (confirmedObservers.has(key)) return confirmedObservers.get(key);
   const failure = probeTrace({
     strace,
     vector: bubblewrapProbeArguments(mechanism.executable),
+    parent,
   });
   if (failure !== null) return { failure };
   return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
@@ -1465,7 +1470,12 @@ function targetSandbox({
               ? null
               : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: [...ownGitEntries(), ...linked] },
         });
-        return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
+        // `env` runs outside the sandbox and after the watchdog hop that starts every target, which is where Node adds the host's `NODE_V8_COVERAGE` to the environment; the sandbox then starts the target without it, as Bubblewrap's `--unsetenv` does.
+        return {
+          target: ENV_PROGRAM,
+          args: ['-u', 'NODE_V8_COVERAGE', confinement.executable, '-p', profile, target, ...args],
+          statusFile: null,
+        };
       }
       if (bridge !== null) {
         const granted =
@@ -1872,15 +1882,12 @@ function recordedStatus(statusFile, statusKey = null) {
 }
 
 /**
- * A private temp directory for one confined call, joined to the run's
- * `scratch` while it exists: a confined target writes nothing outside its
- * workspace, so the system's temp directory is closed to it (read-only under
- * Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP
- * point it instead. Its real path, so both mechanisms name it one way.
+ * A private temp directory for one confined call, joined to the run's `scratch` while it exists.
+ * A confined target writes nothing outside its workspace, so the system's temp directory is closed to it (read-only under Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP point it.
+ * It is made by its real path, which Seatbelt names to the target and Bubblewrap binds under the synthetic `/dev`.
  * It is made beneath the run's private parent (`scratch.privateParent`, Story 1.131).
  * A run killed outright leaves it to the recovery of that parent and leaves nothing in the system's temp directory.
  * A list with no parent keeps it in the temp directory.
- * The sandbox's `wrap` names it to the target: under Bubblewrap the path is under the synthetic `/dev`.
  */
 function callTemporary(scratch) {
   const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-tmp-')));

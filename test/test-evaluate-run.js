@@ -245,13 +245,15 @@ const {
   gitAccessOf,
   journalDirectory,
   makePrivateParent,
+  privateRootBase,
+  privateRootIn,
   reclaimDeadMaskRecords,
   reclaimDeadWorkspaces,
   removeScratchDirectory,
   removeWorkspace,
 } = require('../cli/lib/evaluate/workspace');
 const { CLOCK_SLACK_MS, removePlaceholders, startMaskGuard, sweepMaskRecords } = require('../cli/lib/evaluate/mask-guard');
-const { HttpPortError, probeHttpPort } = require('../cli/lib/evaluate/http-target');
+const { HttpPortError, makeBridgeDirectory, makePortDirectory, probeHttpPort } = require('../cli/lib/evaluate/http-target');
 const { openBridge } = require('../cli/lib/evaluate/bridge');
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage, observeAgentVersion } = require('../cli/lib/agent-adapters');
@@ -264,6 +266,9 @@ const { recordedMount } = require('./lib/recorded-mount');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
+
+/** The Seatbelt profile of a wrapped call: the argument after the `-p` that follows the `env -u NODE_V8_COVERAGE` and `sandbox-exec` prefix. */
+const seatbeltProfile = (wrapped) => wrapped.args[wrapped.args.indexOf('-p') + 1];
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -4611,17 +4616,29 @@ async function checkAuditRefusals() {
 
   if (confinement.mode === 'seatbelt') {
     const started = Date.now();
-    const silent = probeReportStream({ sandboxExec: confinement.executable, logExecutable: silentLog });
+    const silent = probeReportStream({
+      sandboxExec: confinement.executable,
+      logExecutable: silentLog,
+      parent: privateRootIn(privateRootBase()),
+    });
     check(
       typeof silent === 'string' && silent.includes('did not report a read the sandbox allowed') && Date.now() - started < 15_000,
       `a log stream that never reports was confirmed or took too long: ${JSON.stringify(silent)} after ${Date.now() - started} ms`,
     );
-    const ended = probeReportStream({ sandboxExec: confinement.executable, logExecutable: endedLog });
+    const ended = probeReportStream({
+      sandboxExec: confinement.executable,
+      logExecutable: endedLog,
+      parent: privateRootIn(privateRootBase()),
+    });
     check(
       typeof ended === 'string' && ended.includes('stream ended before it reported') && ended.includes('cannot read the unified log'),
       `a log stream that ended was not refused with its own words: ${JSON.stringify(ended)}`,
     );
-    const missing = probeReportStream({ sandboxExec: confinement.executable, logExecutable: path.join(bin, 'no-such-log') });
+    const missing = probeReportStream({
+      sandboxExec: confinement.executable,
+      logExecutable: path.join(bin, 'no-such-log'),
+      parent: privateRootIn(privateRootBase()),
+    });
     check(
       typeof missing === 'string' && missing.includes('stream ended before it reported') && missing.includes('No such file'),
       `a log executable that does not exist was not refused: ${JSON.stringify(missing)}`,
@@ -4668,7 +4685,7 @@ async function checkAuditRefusals() {
       audit: { directory: fs.realpathSync(tempDir('audit-stalled')), barrierMs: 1500 },
     });
     await stalled.start();
-    const stalledToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(stalled.wrap('/bin/true', []).args[1])[1];
+    const stalledToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(seatbeltProfile(stalled.wrap('/bin/true', [])))[1];
     const streamPids = () =>
       spawnSync('pgrep', ['-f', `CONTAINS "${stalledToken}"`], { encoding: 'utf8' })
         .stdout.split('\n')
@@ -4719,7 +4736,7 @@ async function checkAuditRefusals() {
       audit: { directory: slowDirectory },
     });
     await slow.start();
-    const slowToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(slow.wrap('/bin/true', []).args[1])[1];
+    const slowToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(seatbeltProfile(slow.wrap('/bin/true', [])))[1];
     const slowFile = path.join(fs.realpathSync(tempDir('audit-slow-outside')), 'late.txt');
     fs.writeFileSync(slowFile, 'late\n');
     const slowWrapped = slow.wrap('/bin/cat', [slowFile]);
@@ -4784,12 +4801,12 @@ async function checkAuditRefusals() {
   const vector = [stubBwrap, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', '--'];
   const untraced = script('untraced-strace', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
   const failing = script('failing-strace', 'echo "strace: ptrace(PTRACE_TRACEME): Operation not permitted" >&2; exit 1');
-  const none = probeTrace({ strace: untraced, vector });
+  const none = probeTrace({ strace: untraced, vector, parent: privateRootIn(privateRootBase()) });
   check(
     typeof none === 'string' && none.includes('no read of the probe file'),
     `a strace that traces nothing was confirmed: ${JSON.stringify(none)}`,
   );
-  const refused = probeTrace({ strace: failing, vector });
+  const refused = probeTrace({ strace: failing, vector, parent: privateRootIn(privateRootBase()) });
   check(
     typeof refused === 'string' && refused.includes('exit 1') && refused.includes('Operation not permitted'),
     `a strace that failed was not refused with its own words: ${JSON.stringify(refused)}`,
@@ -5731,8 +5748,8 @@ async function checkAuditChannelUnits() {
 async function checkObserverRefusalRun() {
   const stubs = tempDir('observer-stubs');
   const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-  // The stand-in applies each bind at a path under /dev (the status file's and each call directory's, Story 1.131) by substituting the bound path for the mount in
-  // the command and in every value of the environment, and runs the command after `--` unconfined.
+  // The stand-in applies each bind at a path under /dev (the status file's and each call directory's, Story 1.131) by substituting the bound path for the mount in the command and in every value of the environment.
+  // It runs the command after `--` unconfined.
   fs.writeFileSync(
     path.join(stubs, 'bwrap'),
     `#!${process.execPath}
@@ -5775,7 +5792,7 @@ child.on('exit', (code, signal) => (signal ? process.kill(process.pid, signal) :
     String.raw`out=""; prev=""
 for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done
 case "$prev" in
-  */tea-evaluate-observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
+  */observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
 esac
 while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
@@ -6089,11 +6106,15 @@ async function checkConfinementRefusals() {
   check(runDirectoryOf(quotedTemp.folder, 0) === null, 'a run whose temp directory no profile can carry wrote a run directory');
 }
 
-/** A confined target writes the private temp directory each call hands it, which the audit does not report (Story 1.31). */
+/**
+ * A confined target writes the private temp directory each call hands it, which the audit does not report (Story 1.31).
+ * The run holds `NODE_V8_COVERAGE`, as every run under `c8` does, and the target must not receive it: a confined Node target would write coverage files into that directory, which Seatbelt refuses and the audit reports as observed mounts (Story 1.131).
+ */
 async function checkTargetTemp() {
   const project = makeProject('confinement-temp');
   const ran = evaluate(['run', '--evaluation', project.folder], {
     ...project.env,
+    NODE_V8_COVERAGE: tempDir('confinement-temp-coverage'),
     VERDICT_WHEN: 'trial-clean-1',
     VERDICT_DO: 'write-temp',
   });
@@ -6102,8 +6123,9 @@ async function checkTargetTemp() {
   const out = trialStdout(runDirectory, 'clean', 1);
   const temp = /temp-dir: (.*)/.exec(out)?.[1] ?? '';
   check(/temp-write: allowed/.test(out), `a confined target could not write the temp directory it was handed:\n${out}`);
-  // Story 1.131: the call's temp directory is made beneath the run's private parent. Under Bubblewrap the sandbox empties the private root, so the target
-  // names the directory by a path under the synthetic /dev; under Seatbelt it names the directory's own path.
+  // Story 1.131: the call's temp directory is made beneath the run's private parent.
+  // Under Bubblewrap the sandbox empties the private root, so the target names the directory by a path under the synthetic /dev.
+  // Under Seatbelt it names the directory's own path.
   const privateRoot = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
   const parentOfTemp = path.dirname(temp);
   check(
@@ -6163,8 +6185,7 @@ async function checkCallDirectoryUnits() {
   const sandboxOf = (extra = {}) =>
     targetSandbox({ confinement: bubblewrap, workspace, status, privateRoot, home, hostSockets: () => [], ...extra });
 
-  // Each call directory is bound writable at a path under the synthetic /dev, after /dev exists and after the private root is emptied and
-  // made read-only, and at no other path.
+  // Each call directory is bound writable at a path under the synthetic /dev, after /dev exists and after the private root is emptied and made read-only, and at no other path.
   // Revert check two: a bind at the directory's own path, which the emptied root hides, fails this check.
   const wrapped = sandboxOf().wrap('/bin/true', [], grants, [], { bridge: path.join(bridgeDirectory, 'b'), environment });
   const args = wrapped.args;
@@ -6291,7 +6312,7 @@ async function checkCallDirectoryUnits() {
     privateRoot,
     home,
   }).wrap('/bin/true', [], [...grants, outside], [], { environment });
-  const profile = seatbelt.args[1];
+  const profile = seatbeltProfile(seatbelt);
   const denied = profile.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
   check(
     denied > 0 &&
@@ -6301,6 +6322,13 @@ async function checkCallDirectoryUnits() {
     `the Seatbelt profile does not allow the call directories again after the denial of the private root (denied at ${denied}):\n${profile}`,
   );
   check(!seatbelt.args.join(' ').includes('/dev/tea-'), `a Seatbelt call named a mount under /dev: ${seatbelt.args.join(' ')}`);
+  // The Seatbelt target starts through `env -u NODE_V8_COVERAGE`, which runs outside the sandbox after the watchdog hop that adds the host's coverage directory.
+  check(
+    seatbelt.target === '/usr/bin/env' &&
+      JSON.stringify(seatbelt.args.slice(0, 4)) === JSON.stringify(['-u', 'NODE_V8_COVERAGE', '/usr/bin/sandbox-exec', '-p']) &&
+      seatbelt.args.at(-1) === '/bin/true',
+    `a Seatbelt call starts ${seatbelt.target} ${seatbelt.args.slice(0, 4).join(' ')}; expected /usr/bin/env -u NODE_V8_COVERAGE /usr/bin/sandbox-exec -p and the target last`,
+  );
 
   // The mechanisms make the call's temp directory beneath the run's private parent, put it on the run's scratch list while the call runs and remove it after.
   const signal = new AbortController().signal;
@@ -6348,11 +6376,43 @@ async function checkCallDirectoryUnits() {
       );
     }
   }
+
+  // A started service's port directory and its bridge directory are made beneath the run's private parent by the same rule, and in the system's temp directory for a list with none.
+  // The parent is short, since the bridge's socket path under it must fit a Unix socket.
+  const shortParent = socketDirectory();
+  for (const [kind, make, prefix] of [
+    ['port', makePortDirectory, 'tea-evaluate-port-'],
+    ['bridge', makeBridgeDirectory, 'tea-nb-'],
+  ]) {
+    for (const [label, parentOf] of [
+      ["a list with the run's private parent", shortParent],
+      ['a list with none', undefined],
+    ]) {
+      const list = [];
+      if (parentOf !== undefined) Object.defineProperty(list, 'privateParent', { value: parentOf });
+      const directory = make(list);
+      try {
+        const beneath = fs.realpathSync.native(path.dirname(directory));
+        check(
+          path.basename(directory).startsWith(prefix) &&
+            list.length === 1 &&
+            list[0] === directory &&
+            (parentOf === undefined ? beneath !== fs.realpathSync.native(shortParent) : beneath === fs.realpathSync.native(parentOf)),
+          `the ${kind} directory over ${label} is ${directory} on the list ${JSON.stringify(list)}; expected a ${prefix}* directory on the list${
+            parentOf === undefined ? ' outside the private parent' : ` beneath ${parentOf}`
+          }`,
+        );
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  }
 }
 
 /**
- * What a confined process does with the call directories it is handed (Story 1.131): it writes its temp directory, writes the port file of a service it
- * starts, serves a loopback port and the shim's bridge answers for it, and it finds the directories at a path under `/dev` and nowhere else.
+ * What a confined process does with the call directories it is handed (Story 1.131).
+ * It writes its temp directory, writes the port file of a service it starts, serves a loopback port and the shim's bridge answers for it.
+ * It finds the directories at a path under `/dev` and nowhere else.
  * It waits for the file `go` in its temp directory, which the runtime writes once it has read the port file and asked the bridge, and prints what it saw.
  */
 const CALL_DIRECTORY_PROBE = `
@@ -6381,11 +6441,12 @@ const server = net.createServer((socket) => socket.end('hello')).listen(0, '127.
 /**
  * The call directories under real Bubblewrap (Story 1.131), which the Linux CI job runs and a host without a usable `bwrap` skips with its reason named.
  * A target is started through the real sandbox with a temp directory, a port directory and a bridge directory made beneath the run's private parent.
- * It writes `TMPDIR` (the runtime reads the marker at the directory's own path), writes the port file of a loopback server it starts (the runtime reads the port at
- * the directory's own path) and the bridge the shim serves answers for that port (`bridgeAccepts` at the bridge's own path).
+ * It writes `TMPDIR`, and the runtime reads the marker at the directory's own path.
+ * It writes the port file of a loopback server it starts, and the runtime reads the port at the directory's own path.
+ * The bridge the shim serves answers for that port (`bridgeAccepts` at the bridge's own path).
  * It names each directory under `/dev` and cannot see the directory's own path, and the parent of those paths is gone from its view.
- * The control is the vector a design that bound each directory at its own path would build, with the binds before the private root is emptied: the target cannot
- * see the directory at all, which is why the directories are bound under `/dev` (the story's second revert check fails this case when the binds name a path the sandbox hides).
+ * The control is the vector a design that bound each directory at its own path would build, with the binds before the private root is emptied, and the target cannot see the directory at all.
+ * That is why the directories are bound under `/dev`: the story's second revert check fails this case when the binds name a path the sandbox hides.
  */
 async function checkCallDirectoryRoute() {
   const label = 'call directory route';
@@ -6896,10 +6957,10 @@ async function checkTargetHomeUnits() {
   // A home outside the private root is granted as the call's temp directory is.
   const seatbelt = build('seatbelt', { privateRoot, home });
   const writeRules = (text) => text.slice(text.indexOf('(allow file-write*'), text.indexOf('(literal "/dev/null")'));
-  const profile = seatbelt.wrap('/bin/true', []).args[1];
+  const profile = seatbeltProfile(seatbelt.wrap('/bin/true', []));
   check(writeRules(profile).includes(`(subpath "${home}")`), `the Seatbelt profile grants no write to the home:\n${profile}`);
   check(
-    !writeRules(build('seatbelt', { privateRoot }).wrap('/bin/true', []).args[1]).includes(home),
+    !writeRules(seatbeltProfile(build('seatbelt', { privateRoot }).wrap('/bin/true', []))).includes(home),
     'a Seatbelt profile for a sandbox with no home grants it',
   );
   const bound = (wrapped) => wrapped.args.flatMap((argument, index) => (argument === '--bind' ? [wrapped.args[index + 1]] : []));
@@ -6907,12 +6968,14 @@ async function checkTargetHomeUnits() {
   check(!bound(build('bubblewrap', {}).wrap('/bin/true', [])).includes(home), 'a Bubblewrap vector for a sandbox with no home binds it');
   // The audit's report rule exempts the home with the other read grants, and only when the sandbox has one (Story 1.60).
   const auditedProfile = (extra) =>
-    targetSandbox({
-      confinement: { ...modes.seatbelt, observer: { executable: '/usr/bin/log' } },
-      workspace,
-      audit: { directory: root },
-      ...extra,
-    }).wrap('/bin/true', []).args[1];
+    seatbeltProfile(
+      targetSandbox({
+        confinement: { ...modes.seatbelt, observer: { executable: '/usr/bin/log' } },
+        workspace,
+        audit: { directory: root },
+        ...extra,
+      }).wrap('/bin/true', []),
+    );
   const reportRule = (text) => text.slice(text.indexOf('(allow file-read-data'), text.indexOf('(with report)'));
   check(
     reportRule(auditedProfile({ home })).includes(`(require-not (subpath "${home}"))`),
@@ -6925,7 +6988,7 @@ async function checkTargetHomeUnits() {
   // between the empty file system over the root and its read-only remount, which touches that mount alone.
   const rootHome = path.join(privateRoot, 'run-1-abc', 'tea-evaluate-target-home-x');
   fs.mkdirSync(rootHome, { recursive: true });
-  const inRoot = build('seatbelt', { privateRoot, home: rootHome }).wrap('/bin/true', []).args[1];
+  const inRoot = seatbeltProfile(build('seatbelt', { privateRoot, home: rootHome }).wrap('/bin/true', []));
   const rootDeny = inRoot.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
   const rootAllow = inRoot.indexOf(`(allow file-read* file-write*\n  (subpath "${rootHome}")`);
   check(
@@ -7062,7 +7125,7 @@ async function checkTargetHomeUnits() {
       privateRoot: scratch.privateRoot,
       home: first,
     });
-    const named = () => switching.wrap('/bin/true', []).args[1];
+    const named = () => seatbeltProfile(switching.wrap('/bin/true', []));
     const seenBefore = (
       await confinedCommandMechanism({ run: async (request) => ({ seen: request.env }) }, switching).run(
         { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
@@ -8992,7 +9055,8 @@ async function checkPrivateRootAcrossRuns() {
       // The control takes that denial out to see what the root alone withholds.
       const attempt = (sandbox, { withoutSocketDenial = false } = {}) => {
         const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
-        if (withoutSocketDenial && confinement.mode === 'seatbelt') wrapped.args[1] = mutatedSocketProfile(wrapped.args[1], 'no-rule');
+        if (withoutSocketDenial && confinement.mode === 'seatbelt')
+          wrapped.args[wrapped.args.indexOf('-p') + 1] = mutatedSocketProfile(seatbeltProfile(wrapped), 'no-rule');
         const result = spawnSync(wrapped.target, wrapped.args, {
           cwd: workspace,
           encoding: 'utf8',
@@ -11646,7 +11710,7 @@ async function checkSubscriptionLoginUnits() {
     !Object.hasOwn(plainGrants, 'linked') && !plainGrants.read.includes(file),
     'a Bubblewrap sandbox with no linked file carries the key or the file',
   );
-  const profile = sandboxFor('seatbelt', [file]).wrap(process.execPath, ['-e', '']).args[1];
+  const profile = seatbeltProfile(sandboxFor('seatbelt', [file]).wrap(process.execPath, ['-e', '']));
   check(
     profile.includes(`(require-not (subpath "${file}"))`),
     "a Seatbelt profile with a linked file does not exempt it from the audit's report",
@@ -11655,7 +11719,7 @@ async function checkSubscriptionLoginUnits() {
     profile.includes(`(deny file-write*\n  (subpath "${file}"))`),
     'a Seatbelt profile with a linked file does not quiet the audit of a refused write to it',
   );
-  const plainProfile = sandboxFor('seatbelt', []).wrap(process.execPath, ['-e', '']).args[1];
+  const plainProfile = seatbeltProfile(sandboxFor('seatbelt', []).wrap(process.execPath, ['-e', '']));
   check(!plainProfile.includes(file), 'a Seatbelt profile with no linked file names one');
 
   // The manifest's note names the variable and the file as `<credentials-file>`, and holds no value and no path.
@@ -13773,7 +13837,7 @@ async function checkEgressField() {
     String.raw`out=""; prev=""
 for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done
 case "$prev" in
-  */tea-evaluate-observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
+  */observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
 esac
 while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
@@ -18311,6 +18375,14 @@ function checkBridgeReference() {
       ['the call directories of a killed run', 'the call directory units'],
     ],
     [
+      "The probe a confined run makes while it checks that the audit works lives in the private root too (`observer-probe-<pid>-<random>`), so no call directory and no probe of a killed run stays in the system's temp directory.",
+      ['the observer probe of a killed run'],
+    ],
+    [
+      'The next preflight removes the probe directory of a dead process and names it in its output, and it leaves an entry that is a link, a file, a directory with another mode or owner, or the directory of a live process.',
+      ['the observer probe of a killed run'],
+    ],
+    [
       "The directories a target is granted beneath the root (its temp directory, a started service's port and bridge directories, its home and the status file) are granted again at paths the sandbox keeps, and its workspace is not under the root.",
       ['the call directory units', 'the call directory route'],
     ],
@@ -18395,7 +18467,7 @@ function checkBridgeReference() {
       ['the socket launcher', 'the path socket units'],
     ],
     [
-      'The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every Bubblewrap process loses, and the proxy variables a call with `egress` gains.',
+      "The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every confined target loses under either mechanism, the values that name a path inside a call directory (`TMPDIR`, `TMP`, `TEMP` and a started service's port file), which name the directory's mount under `/dev` under Bubblewrap, and the proxy variables a call with `egress` gains.",
       ['the socket launcher', 'the path socket units', 'the path socket route'],
     ],
     [
@@ -18576,8 +18648,8 @@ function checkBridgeReference() {
       confinementSection.includes('`hostSocketTruncation`'),
     "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
   );
-  // Story 1.131: the sentence that said the directories a target is granted are not under the private root is gone, and the sentences that replace it state where
-  // each call directory lives and that a killed run's are reclaimed.
+  // Story 1.131: the sentence that said the directories a target is granted are not under the private root is gone.
+  // The sentences that replace it state where each call directory lives and that a killed run's are reclaimed.
   const oldCallDirectorySentence =
     'The directories a target is granted (its workspace, its temp directory, the status and port files) are not under the root.';
   const staleCallDirectories = (text) =>
@@ -18646,7 +18718,7 @@ function checkBridgeReference() {
       section.includes('Story 1.89 closes it') ||
       ![
         'The launcher that hands Bubblewrap the mounts is a Node program the runtime starts outside the sandbox, ahead of `strace`, and no shell stands between the runtime and Bubblewrap.',
-        'The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every Bubblewrap process loses, and the proxy variables a call with `egress` gains.',
+        "The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every confined target loses under either mechanism, the values that name a path inside a call directory (`TMPDIR`, `TMP`, `TEMP` and a started service's port file), which name the directory's mount under `/dev` under Bubblewrap, and the proxy variables a call with `egress` gains.",
       ].every((claim) => section.includes(claim))
     );
   };
@@ -18800,7 +18872,7 @@ async function checkSeatbeltPathSocketUnits() {
   for (const directory of [folder, workspace, callDirectory, rootHome, outsideHome]) fs.mkdirSync(directory, { recursive: true });
   const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder };
   const profileOf = (extra = {}, writable = [callDirectory]) =>
-    targetSandbox({ confinement: seatbelt, workspace, ...extra }).wrap('/bin/true', [], writable).args[1];
+    seatbeltProfile(targetSandbox({ confinement: seatbelt, workspace, ...extra }).wrap('/bin/true', [], writable));
   const real = (candidate) => fs.realpathSync.native(candidate);
   const SYSTEM = ['/private/var/run/mDNSResponder', '/private/var/run/syslog'];
   const CLOSED = [
@@ -18868,12 +18940,14 @@ async function checkSeatbeltPathSocketUnits() {
   );
 
   // The audited profile carries the same rule, before the report rule.
-  const audited = targetSandbox({
-    confinement: { ...seatbelt, observer: { executable: '/usr/bin/log' } },
-    workspace,
-    audit: { directory: base },
-    home: outsideHome,
-  }).wrap('/bin/true', [], [callDirectory]).args[1];
+  const audited = seatbeltProfile(
+    targetSandbox({
+      confinement: { ...seatbelt, observer: { executable: '/usr/bin/log' } },
+      workspace,
+      audit: { directory: base },
+      home: outsideHome,
+    }).wrap('/bin/true', [], [callDirectory]),
+  );
   held(audited, real(outsideHome));
   check(
     audited.includes(SEATBELT_SOCKET_DENIAL) && audited.indexOf(SEATBELT_SOCKET_DENIAL) < audited.indexOf('(with report)'),
@@ -18883,7 +18957,7 @@ async function checkSeatbeltPathSocketUnits() {
   // A workspace reached through a link names both spellings, since the kernel matches the real path of the socket.
   const linked = path.join(base, 'ws-link');
   fs.symlinkSync(workspace, linked);
-  const viaLink = targetSandbox({ confinement: seatbelt, workspace: linked }).wrap('/bin/true', []).args[1];
+  const viaLink = seatbeltProfile(targetSandbox({ confinement: seatbelt, workspace: linked }).wrap('/bin/true', []));
   check(
     viaLink.includes(`(remote unix-socket (subpath "${linked}"))`) &&
       viaLink.includes(`(remote unix-socket (subpath "${real(workspace)}"))`),
@@ -19014,12 +19088,13 @@ async function checkSeatbeltPathSocketRoute() {
   const sandbox = targetSandbox({ confinement, workspace });
   const rooted = targetSandbox({ confinement, workspace, privateRoot, home: rootHome });
   const launch = (wrapped) => runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
-  /** The command with the Seatbelt profile's socket rule changed (`mutatedSocketProfile`), the profile being its second argument. */
+  /** The command with the Seatbelt profile's socket rule changed (`mutatedSocketProfile`). */
   const mutated = (wrapped, mutate) => {
     const args = [...wrapped.args];
-    const changed = mutatedSocketProfile(args[1], mutate);
-    check(changed !== args[1], `the ${mutate} control did not change the Seatbelt profile`);
-    args[1] = changed;
+    const at = args.indexOf('-p') + 1;
+    const changed = mutatedSocketProfile(args[at], mutate);
+    check(changed !== args[at], `the ${mutate} control did not change the Seatbelt profile`);
+    args[at] = changed;
     return { ...wrapped, args };
   };
   const attempt = async (target, { using = sandbox, mutate = null } = {}) => {

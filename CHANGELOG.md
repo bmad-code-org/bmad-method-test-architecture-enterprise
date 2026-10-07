@@ -685,6 +685,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The recovery removes what the host made beneath a parent whose journal record, marker and dead owner agree, and it follows no link a target left in a call directory.
   `the call directory units`, `the call directories of a killed run`, `the call directories, stood in`, `the call directory route` (the ubuntu job), the confined pipeline and the reference's claims hold it, and the isolation golden gains the vectors of a call whose directories sit beneath the private root.
   The reference's `### File-system confinement` states where each call directory lives and that a killed run's are reclaimed.
+- A run killed while it chooses its confinement mechanism leaves nothing in the system's temp directory (Story 1.131, AD-8).
+  The probe that confirms the host's audit works made `tea-evaluate-observer-probe-*` in the system's temp directory before the run's private parent existed, and only the probe's own `finally` removed it, so a run killed outright in that window (up to 5 s on macOS, up to 20 s on Linux) left it and no later run reclaimed it.
+  The probe now makes `observer-probe-<pid>-<random>` (mode 0700) beneath the user's private root.
+  The next preflight removes each entry that is a real directory the user owns with mode 0700 and a dead pid in its name, follows no link, and names what it removed in its output.
+  A link, a file, a directory of another mode or owner, a directory of a live pid and a name of another shape stay.
+  `the observer probe of a killed run` kills a real confined preflight while the directory exists and holds the rest, and `the network reference` holds the two reference sentences.
+- A confined Seatbelt target loses the host's `NODE_V8_COVERAGE` as a Bubblewrap target does (Story 1.131, AD-8).
+  Node copies its own value into every child it spawns, and the engine starts every target through a watchdog Node process that adds it again, so under Seatbelt a confined Node target wrote coverage files into the host's coverage directory, Seatbelt refused the writes and the audit listed them as observed mounts.
+  A run under `c8` or a Node parent with coverage on then gave every Seatbelt trial's isolation manifest those mounts and `score` exited 3.
+  Seatbelt now starts the target through `/usr/bin/env -u NODE_V8_COVERAGE` ahead of `sandbox-exec`, outside the sandbox and after the watchdog's hop, as Bubblewrap removes the variable with `--unsetenv`, so every confined target loses it under either mechanism.
+  `a confined target's temp directory` runs its `evaluate` with the variable set to a scratch directory and fails when the prefix is taken out, whatever the harness exports.
+  The isolation golden's eight Seatbelt target entries start with the `env` prefix, and every profile is as it was.
 - The overview of `epics.md` said 129 stories while the file holds 130, and `test/README.md` said 14 trace, 20 `nfr` and 21 `ci` replay cases when the corpus holds 15, 29 and 21 over the `full` and `minimal` projects.
   The header of `test/test-eval-replay.js` still said the `evaluation-gate` project held a constructed run until its live capture was stored; the capture is stored, and the header names the four projects whose captures the corpus holds.
   Each count in these sentences is now held by `test:doc-counts`.
@@ -703,7 +715,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ciStructuralSelfProblems` also scores two legs at once and the incomplete sets, and returns how many rows it ran, which `main` requires to be above zero.
   `test/probes/expected-strength.json` moves in the ci corpus digest only, `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated, and the three ci pre-flights still pass from the real leg cache.
   The comment in `.github/workflows/quality.yaml` that lists the scripts needing actionlint now names `test:probe-corpus`, which lints the stored workflows through `lintWorkflow` and fails without the binary.
-- A target receives exactly the environment the call gave it, whether or not the host holds sockets, apart from `PWD`, which Bubblewrap sets to the directory the call runs in, `NODE_V8_COVERAGE`, which Bubblewrap unsets for every target, and the proxy variables a call with `egress` gains (Story 1.89, AD-8).
+- A target receives exactly the environment the call gave it, whether or not the host holds sockets, apart from `PWD`, which Bubblewrap sets to the directory the call runs in, `NODE_V8_COVERAGE`, which every confined target loses under either mechanism, the values that name a path inside a call directory (`TMPDIR`, `TMP`, `TEMP` and a started service's port file), which name the directory's mount under `/dev` under Bubblewrap, and the proxy variables a call with `egress` gains (Story 1.89, AD-8).
   A call that hides host sockets started its command through `/bin/sh -c 'exec 3<"$1" ...'`, so the shell stood between the runtime and Bubblewrap.
   Under dash a variable whose name is no valid shell name (`my.setting`, `BASH_FUNC_f%%`) was dropped, and under bash as `sh` a held `PS1` was dropped while `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH` and `BASH_VERSION` were rewritten and an exported function was serialized again.
   Bubblewrap itself sets `PWD` to the directory the call runs in for every call, with sockets hidden or none, so the call's `PWD` is Bubblewrap's to set.

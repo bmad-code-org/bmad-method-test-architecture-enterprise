@@ -1200,11 +1200,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       const launched = entry?.server === undefined || deployment !== null ? null : entry;
       const reports = launched?.server.portFileEnvironmentKey !== undefined;
       // The file a server reports its port in lives in a private directory of the call's, on the run's scratch list.
-      // A signal that ends the run removes the directory with the rest of the scratch.
-      // It is made beneath the run's private parent (the system's temp directory for a list with none), so a run killed outright leaves it to the recovery of that parent (Story 1.131).
-      // A confined server names the file by the path its sandbox gives the directory.
-      const portDirectory = reports ? fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-port-')) : null;
-      if (portDirectory !== null) scratch.push(portDirectory);
+      const portDirectory = reports ? makePortDirectory(scratch) : null;
       let bridgeDirectory = null;
       let server = null;
       try {
@@ -1320,6 +1316,20 @@ function makeBridgeDirectory(scratch, { temp = os.tmpdir(), fallback = BRIDGE_FA
 }
 
 /**
+ * A private directory for the file one call's started server reports its port in, on the run's scratch list.
+ * A signal that ends the run removes it with the rest of the scratch.
+ * It is made beneath the run's private parent (the system's temp directory for a list with none), so a run killed outright leaves it to the recovery of that parent (Story 1.131).
+ * A confined server names the file by the path its sandbox gives the directory.
+ *
+ * @param {string[]} scratch
+ */
+function makePortDirectory(scratch) {
+  const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-port-'));
+  scratch.push(directory);
+  return directory;
+}
+
+/**
  * Removes a call's port-file or bridge directory and takes it off the run's scratch
  * list once it is gone; one that cannot be removed stays listed, so the run's
  * end tries it again and reports it.
@@ -1390,6 +1400,7 @@ module.exports = {
   httpPortFile,
   isApiEntry,
   makeBridgeDirectory,
+  makePortDirectory,
   bridgeDirectoryBase,
   missingCredentials,
   originKey,

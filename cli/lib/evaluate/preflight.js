@@ -138,6 +138,7 @@ const {
   removeScratchDirectory,
   removeWorkspace,
   reclaimDeadMaskRecords,
+  reclaimDeadObserverProbes,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   journalDirectory,
@@ -685,6 +686,7 @@ async function pipeline(
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
     reclaimDeadMaskRecords({ log });
+    reclaimDeadObserverProbes({ log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
     const gameability = gameabilityProbes(folder, { view, selectedProbeIds });
