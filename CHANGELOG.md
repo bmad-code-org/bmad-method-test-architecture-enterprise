@@ -689,8 +689,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The probe that confirms the host's audit works made `tea-evaluate-observer-probe-*` in the system's temp directory before the run's private parent existed, and only the probe's own `finally` removed it, so a run killed outright in that window (up to 5 s on macOS, up to 20 s on Linux) left it and no later run reclaimed it.
   The probe now makes `observer-probe-<pid>-<random>` (mode 0700) beneath the user's private root.
   The next preflight removes each entry that is a real directory the user owns with mode 0700 and a dead pid in its name, follows no link, and names what it removed in its output.
-  A link, a file, a directory of another mode or owner, a directory of a live pid and a name of another shape stay.
-  `the observer probe of a killed run` kills a real confined preflight while the directory exists and holds the rest, and `the network reference` holds the two reference sentences.
+  A link, a file, a directory of another mode or owner, a directory of a live pid and a name of another shape (one with a prefix included) stay.
+  `the observer probe of a killed run` kills a real confined preflight while the directory exists and holds the rest, with the owner check driven by a root that holds another user's directory, and `the network reference` holds the two reference sentences.
 - A confined Seatbelt target loses the host's `NODE_V8_COVERAGE` as a Bubblewrap target does (Story 1.131, AD-8).
   Node copies its own value into every child it spawns, and the engine starts every target through a watchdog Node process that adds it again, so under Seatbelt a confined Node target wrote coverage files into the host's coverage directory, Seatbelt refused the writes and the audit listed them as observed mounts.
   A run under `c8` or a Node parent with coverage on then gave every Seatbelt trial's isolation manifest those mounts and `score` exited 3.

@@ -692,12 +692,14 @@ function reclaimDeadMaskRecords({ log = () => {} } = {}) {
  * @param {(message: string) => void} [options.log]
  * @param {(pid: number) => boolean} [options.alive]
  * @param {string} [options.root] the private root to read; the user's own by default
+ * @param {number} [options.uid] the owner an entry must have; the user's own by default
  * @returns {string[]} the directories that were removed
  */
 function reclaimDeadObserverProbes({
   log = () => {},
   alive = processMayRun,
   root: given = path.join(privateRootBase(), privateRootName()),
+  uid = typeof process.getuid === 'function' ? process.getuid() : -1,
 } = {}) {
   const root = heldPrivateRoot(given);
   const removed = [];
@@ -712,7 +714,7 @@ function reclaimDeadObserverProbes({
     const directory = path.join(root, name);
     try {
       const stat = fs.lstatSync(directory);
-      if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o700) continue;
+      if (!stat.isDirectory() || stat.uid !== uid || (stat.mode & 0o777) !== 0o700) continue;
       if (alive(Number(OBSERVER_PROBE_NAME.exec(name)[1]))) continue;
       removeScratchDirectory(directory);
       removed.push(directory);

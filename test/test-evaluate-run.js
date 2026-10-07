@@ -8958,9 +8958,8 @@ function checkPrivateDirectorySources() {
     // it), the audit's directory beneath the same parent, which no target can reach (Story 1.60), and a call's egress proxy directory
     // (Story 1.83), beneath the same parent where the run has one, which the target sees read-only at a path under the synthetic /dev.
     'confinement.js': 4,
-    // The two probes that confirm an observer before a run starts: each makes a directory in the system temp directory, runs one trivial process
-    // and removes it at once; no target is ever granted either.
-    'confinement-audit.js': 2,
+    // The observer probes' one directory maker (makeProbeDirectory, Story 1.131) makes its directory beneath the user's private root, which each probe uses before a run starts and removes at once; no target is ever granted it.
+    'confinement-audit.js': 1,
     // Bubblewrap's status directory, granted to a target.
     'registry.js': 1,
     // The file a started HTTP service reports its port in, and the directory of the bridge's socket (Story 1.63), each granted to the target.

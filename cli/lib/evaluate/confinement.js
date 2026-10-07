@@ -463,14 +463,11 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
  * A `connect()` to a path-based unix socket is refused anywhere but the workspace, the private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
  * The rule names a path, so it holds for a socket bound after the call started.
  *
- * With `audit` (`{ token, exempt }`), the kernel reports what the profile
- * allows or refuses: every file rule that denies carries the sandbox's token
- * (`with message`), and one rule, placed before every rule that follows it so
- * that a later grant (the home, a call directory, the git directory's own entry) overrides it,
- * reports each `file-read-data` the profile allows outside `exempt` (the paths
- * the sandbox may read, and the root directory itself) with the same token
- * (`with report`). Without `audit` the profile is the one every earlier story
- * generated, byte for byte.
+ * With `audit` (`{ token, exempt }`), the kernel reports what the profile allows or refuses.
+ * Every file rule that denies carries the sandbox's token (`with message`).
+ * One rule reports each `file-read-data` the profile allows outside `exempt` (the paths the sandbox may read, and the root directory itself) with the same token (`with report`).
+ * That rule is placed before every rule that follows it, so a later grant (the home, a call directory, the git directory's own entry) overrides it.
+ * Without `audit` the profile is the one every earlier story generated, byte for byte.
  */
 function seatbeltTargetProfile({
   workspace,

@@ -3327,7 +3327,7 @@ async function checkKilledCallDirectories() {
 /**
  * The observer probe of a confined run's selection makes its directory beneath the user's private root, `observer-probe-<pid>-<random>` with mode 0700, so a run killed outright while the probe runs leaves nothing in the system's temp directory.
  * The next preflight removes the entry because its pid is dead and says what it removed.
- * A link, a file, a directory of another mode, a directory of a live pid and a name of another shape stay, and the canary a link names stays whole.
+ * A link, a file, a directory of another mode or another owner, a directory of a live pid and a name of another shape or with a prefix stay, and the canary a link names stays whole.
  * A preflight another suite starts at the same time can remove a dead run's entry before this case's own preflight does, so a cycle whose entry went before the recovery that reports it is made again.
  */
 async function checkKilledObserverProbe() {
@@ -3466,7 +3466,14 @@ async function checkKilledObserverProbe() {
       planted(`observer-probe-${deadPid}-shrt`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
       planted(`observer-probe-${deadPid}-longBBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
       planted(`probe-${deadPid}-nameBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
+      planted(`xobserver-probe-${deadPid}-preBBB`, (entry) => fs.mkdirSync(entry, { mode: 0o700 })),
     ];
+    // A root left by another user holds an entry of another owner: the recovery that does not own the directory removes nothing.
+    const ofAnotherOwner = reclaimDeadObserverProbes({ root, uid: process.getuid() + 1, log: (line) => logged.push(line) });
+    check(
+      ofAnotherOwner.length === 0 && logged.length === 0 && fs.existsSync(good),
+      `the recovery on a root of its own removed ${JSON.stringify(ofAnotherOwner)} and said ${JSON.stringify(logged)} for a dead run's directory the caller's user did not own; expected nothing removed`,
+    );
     const removed = reclaimDeadObserverProbes({ root, log: (line) => logged.push(line) });
     check(
       removed.length === 1 &&
