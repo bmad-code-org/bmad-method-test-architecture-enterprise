@@ -1396,10 +1396,10 @@ function targetSandbox({
      * `sockets` (Bubblewrap alone) is the list of host sockets to hide, for a call made again after a socket it hid went away:
      * the call's own earlier list without the vanished ones, so no socket another process creates meanwhile joins it. Without
      * it the call asks `hostSockets` for a list, with room for the mounts its own command leaves (`socketBudget`).
-     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile`
-     * names and the call's end removes. `environment` is the environment the call's target starts with: a call that hides sockets
-     * carries it in a second file (`environmentFile`) the launcher reads, and the wrapped call names the environment its own
-     * process starts with (`environment` of the result, the launcher's loader variables alone for a call that hides sockets), which the caller hands the engine in its place.
+     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile` names and the call's end removes.
+     * `environment` is the environment the call's target starts with.
+     * A call that hides sockets carries it in a second file (`environmentFile`) that the launcher reads.
+     * The wrapped call names the environment its own process starts with (`environment` of the result, the launcher's loader variables alone for a call that hides sockets), which the caller hands the engine in its place.
      */
     wrap(
       target,
@@ -1533,11 +1533,11 @@ function targetSandbox({
         fs.rmSync(statusFile, { force: true });
         throw new ConfinementError(`the call hides ${sockets.length} sockets and its command leaves room for ${room}`);
       }
-      // A call that hides sockets goes through the launcher (`SOCKET_LAUNCHER`), which opens the file that carries the mounts as the
-      // descriptor `--args` reads, so a host with very many sockets cannot overflow the argument limit of the call's `exec`, and
-      // which starts the command with the call's environment from a second file, since the launcher starts with none of its own.
-      // Both files are the runtime's, in the status directory (beneath the private root of a run, which the sandbox empties), and the call's end removes them; the command is
-      // built before either exists, so nothing a refusal throws leaves a file.
+      // A call that hides sockets goes through the launcher (`SOCKET_LAUNCHER`).
+      // The launcher opens the file that carries the mounts as the descriptor `--args` reads, so a host with very many sockets cannot overflow the argument limit of the call's `exec`.
+      // The launcher starts the command with the call's environment from a second file, since it starts with none of its own.
+      // Both files are the runtime's, in the status directory (beneath the private root of a run, which the sandbox empties), and the call's end removes them.
+      // The command is built before either exists, and a failed write removes what was made, so nothing a refusal throws leaves a file.
       const hiding = sockets.length > 0;
       const stamp = `${calls}-${crypto.randomBytes(8).toString('hex')}`;
       const socketFile = hiding ? path.join(status, `sockets-${stamp}.args`) : null;
@@ -1558,10 +1558,9 @@ function targetSandbox({
           throw error;
         }
       }
-      // The key, the sockets the call hides and the files that carry their mounts and the environment stay out of what a caller
-      // copies: a call whose Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away,
-      // and is made again. `environment` is what the call's process starts with: the launcher's own (loader variables alone) for a call
-      // that hides sockets, the call's for one that hides none.
+      // The key, the sockets the call hides and the files that carry their mounts and the environment stay out of what a caller copies.
+      // A call whose Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      // `environment` is what the call's process starts with: the launcher's own (loader variables alone) for a call that hides sockets, the call's for one that hides none.
       const holdKey = (wrapped) =>
         Object.defineProperties(wrapped, {
           statusKey: { value: statusKey },
@@ -2112,13 +2111,14 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
           },
           signal,
         );
-        const tooLarge = launchTooLarge(result, wrapped);
-        if (tooLarge !== null) throw tooLarge;
         const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
         read = true;
         started = status.started;
         if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
         if (!status.started) {
+          // A real E2BIG means Bubblewrap never ran, so only a call whose shim never started can carry the launcher's refusal; a started target's exit and standard error are its own.
+          const tooLarge = launchTooLarge(result, wrapped);
+          if (tooLarge !== null) throw tooLarge;
           const again = socketsToRetry(wrapped, signal, status);
           if (again !== null) {
             sockets = again;

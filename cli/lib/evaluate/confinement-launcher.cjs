@@ -1,38 +1,30 @@
 'use strict';
 
 /**
- * The launcher of a Bubblewrap call that hides host sockets (Story 1.89, which replaced the shell launcher of Story 1.82):
- * the program the runtime starts first, outside the sandbox, which gives Bubblewrap its arguments file as descriptor 3 and
- * starts the command with the environment the call was given.
+ * The launcher of a Bubblewrap call that hides host sockets (Story 1.89, which replaced the shell launcher of Story 1.82).
+ * It is the program the runtime starts first, outside the sandbox, which gives Bubblewrap its arguments file as descriptor 3 and starts the command with the environment the call was given.
  *
  *   confinement-launcher.cjs <arguments file> <environment file> <command> [argument ...]
  *
- * The runtime's `eval-quality` engine spawns the call's command, so the runtime cannot hand `bwrap --args 3` a descriptor
- * itself, and a call whose mounts ride in the argument list would overflow the 9,000 arguments Bubblewrap accepts.
- * Node cannot replace its own process image with an inherited descriptor, since it opens every file close-on-exec, so this
- * process stays as the command's parent: it opens the arguments file, starts the command with that file as its descriptor 3 and
- * its own standard streams, passes the signals it receives on, and ends as the command ended.
+ * The runtime's `eval-quality` engine spawns the call's command, so the runtime cannot hand `bwrap --args 3` a descriptor itself.
+ * A call whose mounts ride in the argument list would overflow the 9,000 arguments Bubblewrap accepts.
+ * Node cannot replace its own process image with an inherited descriptor, since it opens every file close-on-exec.
+ * So this process stays as the command's parent: it opens the arguments file, starts the command with that file as its descriptor 3 and its own standard streams, passes the signals it receives on, and ends as the command ended.
  * No shell stands between the runtime and the command, so no name a shell treats specially can change.
  *
- * The call's environment travels in the environment file (JSON, one object of strings, mode 0600), which this process reads
- * and removes before anything else runs.
- * This process is started with the loader variables the engine's own watchdog carries and nothing else: Node reads
- * `NODE_OPTIONS` and its kin, which could name a script this process would run outside the sandbox, and Node's `process.env`
- * cannot read a variable whose name is a decimal integer.
- * The command starts with the environment object from the file and nothing else, as the engine's own spawn starts a command.
+ * The call's environment travels in the environment file (JSON, one object of strings, mode 0600), which this process reads and removes before anything else runs.
+ * This process is started with the loader variables the engine's own watchdog carries and nothing else.
+ * Node reads `NODE_OPTIONS` and its kin, which could name a script this process would run outside the sandbox, and Node's `process.env` cannot read a variable whose name is a decimal integer.
+ * The command starts with the environment object from the file and nothing else, as the engine's own spawn starts a command, and a host's `NODE_V8_COVERAGE` stays out of it (`commandEnvironment`).
  *
- * The command runs in this process's group, so the engine's group kill reaches it and Bubblewrap's `--die-with-parent`
- * ties the sandbox to this process.
+ * The command runs in this process's group, so the engine's group kill reaches it and Bubblewrap's `--die-with-parent` ties the sandbox to this process.
  * A signal this process receives is passed to the command; a command a signal ended ends this process by the same signal.
- * A command that cannot start ends this process with 127 (not found) or 126 (not runnable), as a shell would, its reason on
- * standard error, and so does an arguments file this process cannot open.
- * A command whose arguments and environment the operating system refuses (`E2BIG`) ends this process with
- * `EXIT_LAUNCH_TOO_LARGE` and `LAUNCH_TOO_LARGE_TOKEN` on standard error, which the runtime reads as the engine's own refusal of a
- * launch for its size.
+ * A command that cannot start ends this process with 127 (not found) or 126 (not runnable), as a shell would, its reason on standard error, and so does an arguments file this process cannot open.
+ * A command whose arguments and environment the operating system refuses (`E2BIG`) ends this process with `EXIT_LAUNCH_TOO_LARGE` and `LAUNCH_TOO_LARGE_TOKEN` on standard error.
+ * The runtime reads that pair as the engine's own refusal of a launch for its size only from a call whose status file shows that Bubblewrap's shim never started, since a command that ran can end with the same pair itself.
  *
  * The file is also a module for the runtime's tests: required, it starts nothing.
- * It requires nothing of the repository: the runtime starts it before any sandbox exists, with the runtime's own privileges,
- * so what it reads is the two files and the command's own text.
+ * It requires nothing of the repository: the runtime starts it before any sandbox exists, with the runtime's own privileges, so what it reads is the two files and the command's own text.
  */
 
 const fs = require('node:fs');
@@ -114,6 +106,14 @@ function failedStart(command, error) {
   return error.code === 'ENOENT' ? 127 : 126;
 }
 
+/**
+ * The environment the command starts with: the call's, and a `NODE_V8_COVERAGE` only where the call holds one.
+ * Node adds its own `NODE_V8_COVERAGE` to every child it spawns unless the environment object names the variable, so an entry set to `undefined` keeps a host's coverage directory out of the command.
+ */
+function commandEnvironment(environment) {
+  return Object.hasOwn(environment, 'NODE_V8_COVERAGE') ? environment : { ...environment, NODE_V8_COVERAGE: undefined };
+}
+
 function main() {
   const parsed = parseArguments(process.argv.slice(2));
   if (parsed === null) {
@@ -140,7 +140,7 @@ function main() {
   stdio[ARGUMENTS_DESCRIPTOR] = descriptor;
   let child;
   try {
-    child = spawn(command, args, { stdio, env: read.environment });
+    child = spawn(command, args, { stdio, env: commandEnvironment(read.environment) });
   } catch (error) {
     fs.closeSync(descriptor);
     process.exitCode = failedStart(command, error);
@@ -168,8 +168,7 @@ function main() {
       return;
     }
     for (const name of FORWARDED) process.removeAllListeners(name);
-    // A signal this process ignores (SIGPIPE) leaves it running, so it then ends as a shell reports a signalled child: 128 plus
-    // the signal's number.
+    // A signal this process ignores (SIGPIPE) leaves it running, so it then ends as a shell reports a signalled child: 128 plus the signal's number.
     process.exitCode = 128 + (os.constants.signals[signal] ?? 0);
     process.kill(process.pid, signal);
   });
@@ -177,4 +176,12 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { ARGUMENTS_DESCRIPTOR, EXIT_LAUNCH_TOO_LARGE, FORWARDED, LAUNCH_TOO_LARGE_TOKEN, parseArguments, readEnvironment };
+module.exports = {
+  ARGUMENTS_DESCRIPTOR,
+  commandEnvironment,
+  EXIT_LAUNCH_TOO_LARGE,
+  FORWARDED,
+  LAUNCH_TOO_LARGE_TOKEN,
+  parseArguments,
+  readEnvironment,
+};

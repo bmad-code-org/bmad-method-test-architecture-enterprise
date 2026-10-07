@@ -14,9 +14,8 @@
  * judged as the target's behavior where the runtime reads a target that could
  * not run. Seatbelt runs the command in place and needs none of this.
  *
- * The target starts with the environment this process started with, read from
- * `/proc/self/environ` where there is one (Story 1.89), since Node's `process.env`
- * cannot read a variable whose name is a decimal integer.
+ * The target starts with the environment this process started with, read from `/proc/self/environ` where there is one (Story 1.89).
+ * Node's `process.env` cannot read a variable whose name is a decimal integer.
  *
  *   confinement-status.cjs [--bridge <socket path>] [--egress <socket path>] [--avoid <port>] <status file> <target> [argument ...]
  *
