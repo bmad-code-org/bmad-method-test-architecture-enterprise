@@ -34,6 +34,17 @@
         }
       },
       {
+        "reason": "The documentation site's mermaid renderer reaches robust-predicates through d3 > d3-delaunay > delaunator; its installed package declares Unlicense and carries a LICENSE file that dedicates the code to the public domain, which places no condition on a user or redistributor. This exception applies only while the private documentation site depends on astro-mermaid.",
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "robust-predicates",
+        "license": "Unlicense",
+        "optional": false,
+        "marker": {
+          "file": "website/package.json",
+          "contains": "\"astro-mermaid\""
+        }
+      },
+      {
         "reason": "The promptfoo devDependency reaches big-integer; its installed package declares Unlicense and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
         "lockfiles": ["package-lock.json"],
         "prefix": "big-integer",
@@ -164,6 +175,13 @@
         "readAs": "MIT",
         "evidence": "zod-to-ts 1.2.0's own published package.json carries no license field, which is why npm records none in the lockfile entry; that version's manifest is silent rather than differently licensed. The registry's current top-level license field reads MIT (inherited from the 2.x line, published years later), and the repository at github.com/sachinraja/zod-to-ts carries an MIT LICENSE file whose copyright range (2021-2025) covers 1.2.0's 2023 publish date, which is the evidence that ties the reading to the locked version itself rather than to a later release.",
         "reason": "A transitive dependency of astro 5 whose manifest declares no licence. The licence it is read as is held against the allowlist like every other entry."
+      },
+      {
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "khroma",
+        "readAs": "MIT",
+        "evidence": "The installed khroma 2.1.0 package includes a license file with the MIT permission grant and the copyright notice of Fabio Spampinato and Andrew Maney; its published package.json carries no license field, which is why npm records none in the lockfile entry, and the registry's top-level license field for khroma reads MIT.",
+        "reason": "A transitive dependency of the documentation site's mermaid renderer (mermaid > khroma) whose lockfile entry declares no licence. The licence it is read as is held against the allowlist like every other entry."
       },
       {
         "lockfiles": ["package-lock.json"],

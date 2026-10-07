@@ -716,6 +716,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The docs site renders its Mermaid diagrams, and the `llms-full.txt` bundle keeps 50,000 characters of headroom under its cap.
+  Eight explanation pages (the TEA overview among them) showed a `mermaid` fence as raw source in a `<pre data-language="mermaid">` block, because the site loaded no Mermaid renderer.
+  The Evaluate flow in How Evaluate Works is now a Mermaid flowchart that keeps the labels of its three roles (authoring skill, execution CLI, scoring engine).
+  The `astro-mermaid` integration, which renders in the reader's browser and needs no headless browser at build time, now turns each fence into a diagram on a light card in both site themes.
+  Each diagram keeps its natural width: one that fits renders as drawn at every screen width, and one wider than the column scrolls sideways inside its card instead of shrinking below a readable size. A wide table scrolls inside its own block on a phone instead of widening the page.
+  The verification-architecture diagram no longer leaves a gap in its Core group.
+  `test:docs-mermaid` parses every `mermaid` fence with Mermaid's own parser, fails on any fence spelled other than lowercase `mermaid` (the integration converts only that spelling), builds the site, and fails when any built page holds a raw mermaid block or a page with a fence lacks one container per fence or the renderer script; its revert cases include a syntax error, a capitalised fence and a real build with the integration removed.
+  The `llms-full.txt` bundle stood at 505,224 of its 600,000 characters before the Evaluate documentation, which adds about 90,000, so the next page after it would have failed the docs build.
+  The configuration, knowledge-base and live-verification-results references moved out of the bundle through `LLM_EXCLUDE_PATTERNS`, which leaves 518,871 characters with the Evaluate documentation, and `llms.txt` links them under "Reference lookups".
+  `test:llms-headroom` fails when the bundle the build would write leaves less than 50,000 characters under the cap, so the change that crosses the line trims the exclusion list; the cap stays at 600,000.
+  The build's size warning fires at that same line and names the real cap and the room left, where it once warned at 500,000 with a message that called it the limit.
 - The CI `chain` job runs on 21 shards instead of 12, and each long evaluate suite runs as several chained `--group` scripts, so no shard is projected beyond about ten minutes of scripts (about twelve with setup) against its 20-minute cap.
   The shard weights were stale and had left one shard at 19 of its 20 minutes while another timed out, because the evaluate suites had grown well past their recorded times; the weights now come from eight recent runs (the median plus 25 percent, or the maximum for a split suite) and the shard timeout is unchanged.
   The partition plans, partition plans attempts, run, evaluators, CI and arms suites each take `--group=<name>` and `--list-groups`, and `npm run test:groups` fails when a group is run by no chained script, by two, or when a chained script names a group the suite does not have.
