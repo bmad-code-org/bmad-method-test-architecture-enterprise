@@ -12,7 +12,7 @@
  *  - a failed try drops the preferred mirror of the runner's mirror list while another remains, so the next try asks the next
  *    mirror (a stalled azure.archive.ubuntu.com timed out all three tries of a shard in its downloads), and a list of one mirror,
  *    or no list, is left alone;
- *  - a restored package cache installs its packages with no update and no download; cached packages that do not install fall
+ *  - a restored package cache installs its packages through `dpkg -i`, with no apt call and so no network; cached packages that do not install fall
  *    back to the mirrors; a miss leaves its downloads in the cache, tidied for actions/cache to save;
  *  - an install that exits 0 with bwrap or strace missing from PATH is a failed try;
  *  - each workflow restores the package cache, keyed by the runner image, before the install step, and runs the script in a step that has its own `timeout-minutes` above the worst case of the tries, and no workflow
@@ -62,12 +62,12 @@ child.on('exit', (code, signal) => {
 });
 `;
 
-/** `apt-get` answers each call from the scenario's list for that call's number: `ok`, `fail` or `stall`. */
+/** `apt-get` and `dpkg` answer each call, counted across both, from the scenario's list for that call's number: `ok`, `fail` or `stall`. */
 const APT_STUB = `#!/usr/bin/env bash
 count_file="$STUB_DIR/calls"
 n=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$count_file"
-echo "apt-get $*" >> "$STUB_DIR/log"
+echo "$(basename "$0") $*" >> "$STUB_DIR/log"
 verb=ok
 IFS=, read -r -a plan <<< "$STUB_PLAN"
 [ "$n" -le "\${#plan[@]}" ] && verb="\${plan[$((n - 1))]}"
@@ -104,6 +104,7 @@ function run(plan, env = {}, mirrors = null, { cached = [], commands = SANDBOX_C
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'timeout'), TIMEOUT_STUB, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'apt-get'), APT_STUB, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'dpkg'), APT_STUB, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'sudo'), '#!/usr/bin/env bash\nexec "$@"\n', { mode: 0o755 });
   for (const command of commands) fs.writeFileSync(path.join(bin, command), '#!/usr/bin/env bash\n', { mode: 0o755 });
   try {
@@ -159,12 +160,9 @@ function checkScript() {
   check(
     hit.status === 0 &&
       hit.log.length === 1 &&
-      hit.log[0].includes(' install ') &&
-      hit.log[0].includes('--no-download') &&
-      hit.log[0].includes('-o APT::Sandbox::User=root') &&
-      hit.log[0].includes(path.join(hit.debCache, 'bubblewrap_0.9.0_amd64.deb')) &&
+      hit.log[0] === `dpkg -i ${path.join(hit.debCache, 'bubblewrap_0.9.0_amd64.deb')}` &&
       hit.output.includes('installed from the package cache'),
-    `a restored cache did not install its packages alone with no download (exit ${hit.status}, calls ${JSON.stringify(hit.log)})\n${hit.output}`,
+    `a restored cache did not install its packages through dpkg alone, with no apt call (exit ${hit.status}, calls ${JSON.stringify(hit.log)})\n${hit.output}`,
   );
   const stale = run('fail,ok,ok', {}, null, { cached: ['bubblewrap_0.9.0_amd64.deb'] });
   check(

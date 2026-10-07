@@ -10,9 +10,11 @@
 # The workflows restore DEB_CACHE (~/.cache/tea-linux-sandbox-debs) with actions/cache, keyed by the runner image, before this runs.
 # A restored cache installs from its packages with no update and no download, so a stalled mirror cannot reach a shard at all; a
 # miss, or cached packages that do not install, takes the mirror path below and leaves its downloads in DEB_CACHE for the cache to save.
-# DEB_CACHE sits in the runner user's home, which apt's `_apt` user cannot enter, so the two installs that touch it (the download
-# into it and the install from it) run apt's fetchers as root (APT::Sandbox::User=root); `_apt` fails to read a cached package
-# with "Unable to fetch some archives".
+# A restored cache installs through `dpkg -i`, which never reaches a network: `apt-get install --no-download` refuses to read a local
+# package too ("Unable to fetch some archives"). dpkg installs only what is already satisfied, so a cached package whose dependencies
+# the image lacks fails and the mirror path runs.
+# DEB_CACHE sits in the runner user's home, which apt's `_apt` user cannot enter, so the mirror install that downloads into it runs
+# apt's fetchers as root (APT::Sandbox::User=root), as apt would anyway after warning that it could not.
 # SANDBOX_COMMANDS names the commands an install must leave on PATH (bwrap and strace).
 #
 # The install used to be one `apt-get update && apt-get install` with no bound, so a mirror that accepted a connection and went
@@ -59,12 +61,12 @@ tidy_cache() {
   sudo chown -R "$(id -u):$(id -g)" "${DEB_CACHE}"
 }
 
-# A restored cache: its packages install with no update and no download, or the mirror path runs.
+# A restored cache: its packages install through dpkg with no network, or the mirror path runs.
 cached=("${DEB_CACHE}"/*.deb)
 if [ -e "${cached[0]}" ]; then
-  echo "${STEP}: installing ${#cached[@]} package(s) from the package cache, with no download"
+  echo "${STEP}: installing ${#cached[@]} package(s) from the package cache with dpkg, with no network"
   status=0
-  timeout --kill-after=10 "${TRY_SECONDS}" sudo apt-get "${APT_OPTIONS[@]}" -o APT::Sandbox::User=root install -y -q --no-install-recommends --no-download "${cached[@]}" || status=$?
+  timeout --kill-after=10 "${TRY_SECONDS}" sudo dpkg -i "${cached[@]}" || status=$?
   if [ "${status}" = 0 ] && installed; then
     echo "${STEP}: installed from the package cache"
     tidy_cache
