@@ -10,8 +10,10 @@
 # The workflows restore DEB_CACHE (~/.cache/tea-linux-sandbox-debs) with actions/cache, keyed by the runner image, before this runs.
 # A restored cache installs from its packages with no update and no download, so a stalled mirror cannot reach a shard at all; a
 # miss, or cached packages that do not install, takes the mirror path below and leaves its downloads in DEB_CACHE for the cache to save.
-# DEB_CACHE sits in the runner user's home, which apt's `_apt` download user cannot enter, so that one install downloads as root
-# (APT::Sandbox::User=root), as apt would anyway after warning that it could not.
+# DEB_CACHE sits in the runner user's home, which apt's `_apt` user cannot enter, so the two installs that touch it (the download
+# into it and the install from it) run apt's fetchers as root (APT::Sandbox::User=root); `_apt` fails to read a cached package
+# with "Unable to fetch some archives".
+# SANDBOX_COMMANDS names the commands an install must leave on PATH (bwrap and strace).
 #
 # The install used to be one `apt-get update && apt-get install` with no bound, so a mirror that accepted a connection and went
 # silent held a shard for the job's whole 20 minutes. Now:
@@ -31,6 +33,7 @@ TRIES="${TRIES:-3}"
 MIRROR_LIST="${MIRROR_LIST:-/etc/apt/apt-mirrors.txt}"
 TRY_SECONDS="${TRY_SECONDS:-180}"
 DEB_CACHE="${DEB_CACHE:-${HOME}/.cache/tea-linux-sandbox-debs}"
+SANDBOX_COMMANDS="${SANDBOX_COMMANDS:-bwrap strace}"
 WAIT_SECONDS="${WAIT_SECONDS:-5}"
 STEP='Install bubblewrap and strace'
 
@@ -42,9 +45,12 @@ install_once() {
     sudo apt-get "${APT_OPTIONS[@]}" -o "Dir::Cache::Archives=${DEB_CACHE}" -o APT::Sandbox::User=root install -y -q --no-install-recommends bubblewrap strace
 }
 
-# Both commands answer on PATH: an install that exits 0 and leaves either missing is no install.
+# Every command of SANDBOX_COMMANDS answers on PATH: an install that exits 0 and leaves one missing is no install.
 installed() {
-  command -v bwrap > /dev/null && command -v strace > /dev/null
+  local command
+  for command in ${SANDBOX_COMMANDS}; do
+    command -v "${command}" > /dev/null || return 1
+  done
 }
 
 # Leaves DEB_CACHE as packages the runner user owns, with apt's partial downloads and lock gone, so actions/cache can save it.
@@ -58,7 +64,7 @@ cached=("${DEB_CACHE}"/*.deb)
 if [ -e "${cached[0]}" ]; then
   echo "${STEP}: installing ${#cached[@]} package(s) from the package cache, with no download"
   status=0
-  timeout --kill-after=10 "${TRY_SECONDS}" sudo apt-get "${APT_OPTIONS[@]}" install -y -q --no-install-recommends --no-download "${cached[@]}" || status=$?
+  timeout --kill-after=10 "${TRY_SECONDS}" sudo apt-get "${APT_OPTIONS[@]}" -o APT::Sandbox::User=root install -y -q --no-install-recommends --no-download "${cached[@]}" || status=$?
   if [ "${status}" = 0 ] && installed; then
     echo "${STEP}: installed from the package cache"
     tidy_cache
@@ -91,7 +97,7 @@ for ((try = 1; try <= TRIES; try += 1)); do
     tidy_cache
     exit 0
   fi
-  if [ "${status}" = 0 ]; then status='0, and bwrap or strace is not on PATH'; fi
+  if [ "${status}" = 0 ]; then status="0, and one of ${SANDBOX_COMMANDS} is not on PATH"; fi
   echo "${STEP}: try ${try} ended with status ${status}$([ "${status}" = 124 ] && echo ' (timed out)')"
   if ((try < TRIES)); then
     drop_preferred_mirror

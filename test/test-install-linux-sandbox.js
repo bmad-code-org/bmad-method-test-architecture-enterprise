@@ -88,7 +88,10 @@ const MIRRORS = [
  * Runs the script against the stubs. `mirrors` is the mirror list's lines, or `null` for a host with none; the list always lives in
  * the case's own directory, so a case on a hosted runner never touches its `/etc/apt/apt-mirrors.txt`.
  */
-function run(plan, env = {}, mirrors = null, { cached = [], commands = ['bwrap', 'strace'] } = {}) {
+/** The commands the script checks for, stubbed by name so a host that has the real bwrap or strace cannot answer for them. */
+const SANDBOX_COMMANDS = ['tea-stub-bwrap', 'tea-stub-strace'];
+
+function run(plan, env = {}, mirrors = null, { cached = [], commands = SANDBOX_COMMANDS } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-install-sandbox-'));
   const mirrorList = path.join(dir, 'apt-mirrors.txt');
   if (mirrors !== null) fs.writeFileSync(mirrorList, `${mirrors.join('\n')}\n`);
@@ -114,6 +117,7 @@ function run(plan, env = {}, mirrors = null, { cached = [], commands = ['bwrap',
         WAIT_SECONDS: '0',
         MIRROR_LIST: mirrorList,
         DEB_CACHE: debCache,
+        SANDBOX_COMMANDS: SANDBOX_COMMANDS.join(' '),
         ...env,
       },
       timeout: 60_000,
@@ -157,6 +161,7 @@ function checkScript() {
       hit.log.length === 1 &&
       hit.log[0].includes(' install ') &&
       hit.log[0].includes('--no-download') &&
+      hit.log[0].includes('-o APT::Sandbox::User=root') &&
       hit.log[0].includes(path.join(hit.debCache, 'bubblewrap_0.9.0_amd64.deb')) &&
       hit.output.includes('installed from the package cache'),
     `a restored cache did not install its packages alone with no download (exit ${hit.status}, calls ${JSON.stringify(hit.log)})\n${hit.output}`,
@@ -170,9 +175,9 @@ function checkScript() {
       stale.output.includes('installed on try 1'),
     `cached packages that did not install did not fall back to the mirrors (exit ${stale.status}, calls ${JSON.stringify(stale.log)})\n${stale.output}`,
   );
-  const missing = run('ok,ok,ok,ok,ok,ok', { TRIES: '3' }, null, { commands: ['strace'] });
+  const missing = run('ok,ok,ok,ok,ok,ok', { TRIES: '3' }, null, { commands: ['tea-stub-strace'] });
   check(
-    missing.status === 1 && missing.output.includes('bwrap or strace is not on PATH'),
+    missing.status === 1 && missing.output.includes('one of tea-stub-bwrap tea-stub-strace is not on PATH'),
     `an install that left bwrap off PATH exited ${missing.status}\n${missing.output}`,
   );
 
