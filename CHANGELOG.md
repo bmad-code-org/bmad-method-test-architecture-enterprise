@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A behavior whose partition view lists no oracle or several stays undesignated, as in the partition's own run, and a behavior the both view lists with one oracle is designated by the engine.
   A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so every committed score, baseline and replay of them keeps its bytes, and a development run never opens the held-out plan.
   `HeldInputs` in `score-inputs.js` is the one place that reads the designation: `scoreArguments` adds the flag and `reproduce` hands the same oracle to the in-process re-score, so the CLI call and the held-input check cannot disagree, and `score`, `compare --accept`, `ci` and an evaluator qualification attempt all go through it.
-  `score` reads the folder's `contract.json` and held-out plan for a both run, and refuses with an input-check finding (exit 10, no score call) a plan that cannot be read, a probe whose behavior the contract does not hold and a folder that no longer derives an oracle the run's sealed contract lists.
+  `score` reads the folder's `contract.json` and held-out plan for a both run, and refuses with an input-check finding (exit 10, no score call) a plan, `evaluation.json` or `contract.json` that cannot be read, a probe whose behavior the contract does not hold, and a folder whose both view lists other oracles under a probe's behavior than the contract the run sealed, whether or not an oracle is designated (a plan that dropped or added an oracle, a `contract.json` that gained one, a `partitionPlan` that was removed).
+  A finding names the behavior by an ID of the schema's shape and quotes no byte of the plan.
   `compare --accept` reports the same findings, so a both run whose folder drifted never becomes a baseline.
   The `partition-plan` fixture's both run now scores P-003 against O-101 and P-004 against O-002 and catches both, as the held-out and development runs do; a both baseline accepted with `compare --accept` replays through `ci --tier pr` with every probe as recorded and no stale warning; a development clean control on a behavior with several oracles stays undesignated and reads as it does in the development run; a call that drops the flag is refused as a staged artifact that differs from the held inputs'; and the gameability probes of a both run are designated too.
   A gameability probe's `defectSignature` must admit and be satisfied by the answer at every step an oracle of either partition reads, because the both view answers every step and eval-quality reads a finding at a step the signature does not admit as an unwitnessed claim.
@@ -457,6 +458,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `test:evaluate-partition-plans` is split into two chained scripts so each fits a CI shard under the 20 minute cap (Story 1.110, CI).
+  `test:evaluate-partition-plans` keeps the views, `check`, and the preflight, run and score flows; `test:evaluate-partition-plans-attempts` holds the evaluator mapping, sealed-records and gameability flows.
+  Both build their fixture and helpers through `test/lib/evaluate-partition-plans-harness.js`, and `tools/test-shard-weights.json` holds a weight for each.
 - TeA adopts eval-quality 7.2.0, the first release whose `score` takes `--designated-oracle` (Story 1.110, AD-5).
   The peer floor moves to `>=7.2.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, `test/test-guard-publish.js` refuses a floor of 7.1.0, and the engine-missing message, the reference and the AD-5 record name the release.
   Every accepted baseline is re-recorded on 7.2.0 with `compare --accept` over a clean copy, since a baseline names the engine release that measured it and `test:evaluate-pr-<key>` refuses one recorded on another.

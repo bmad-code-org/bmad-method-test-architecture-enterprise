@@ -35,6 +35,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { BEHAVIOR_ID, named, oraclesListed, sameOracles } = require('./partition');
+
 /** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
 const STRUCTURAL_EXIT = 4;
 const FAULT_EXIT = 5;
@@ -138,7 +140,7 @@ class HeldInputs {
    *   Null reads the input's file as a regular file.
    *   An evaluator attempt's inputs are read through the run directory writer.
    * @param {string} [options.accepted] what a held file was accepted as, for the message of a file that cannot be read again
-   * @param {(probe: object) => { oracleId: string|null, problem: string|null }} [options.designate] the oracle a probe asks
+   * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] the oracle a probe asks
    *   `eval-quality score --designated-oracle` for (Story 1.110): `partition.js` `bothViewDesignation`, which names an oracle only for
    *   a probe of a both run under a `partitionPlan` whose behavior the both view lists with several. The CLI call's arguments and the
    *   in-process score both read it through `designation`, so they cannot disagree.
@@ -182,8 +184,10 @@ class HeldInputs {
   }
 
   /**
-   * A finding for each trial set whose designation cannot be made, or whose oracle the held contract does not list under the probe's
-   * behavior (the folder's both view and the contract the run sealed disagree, so the engine would refuse the flag with exit 64).
+   * A finding for each trial set whose designation cannot be made, or whose behavior the folder's both view lists with other oracles
+   * than the contract this run sealed does. The sealed contract of a both run is the both view the run compiled, so the folder's view
+   * has drifted from the run whenever the two lists differ, whether or not an oracle is designated: a probe would be scored under an
+   * oracle the run never held, or left undesignated where the run designated one, and a baseline of that score would be a lie.
    *
    * @returns {Array<{ relative: string, message: string }>}
    */
@@ -196,17 +200,16 @@ class HeldInputs {
       // The contract's own finding comes from the input check.
     }
     for (const set of this.index.trialSets) {
-      const { oracleId, problem } = this.designation(set);
+      const { problem, listed } = this.designation(set);
       // A problem every probe shares (the folder's views cannot be derived) is reported once.
       if (problem !== null && !findings.some((entry) => entry.message === problem))
         findings.push({ relative: set.probe, message: problem });
-      if (oracleId === null || contract === null) continue;
-      const probe = this.json(set.probe);
-      const behavior = (Array.isArray(contract.behaviors) ? contract.behaviors : []).find((entry) => entry?.id === probe.behaviorId);
-      if (!Array.isArray(behavior?.oracles) || !behavior.oracles.includes(oracleId)) {
+      if (problem !== null || listed === undefined || contract === null) continue;
+      const behaviorId = this.json(set.probe)?.behaviorId;
+      if (!sameOracles(listed, oraclesListed(contract, behaviorId))) {
         findings.push({
           relative: set.probe,
-          message: `is designated ${oracleId} by the evaluation folder's both view, which the contract this run sealed does not list under the probe's behavior; run the evaluation again`,
+          message: `names ${named(behaviorId, BEHAVIOR_ID, 'a behavior')}, whose oracles the evaluation folder's both view lists differently from the contract this run sealed; run the evaluation again`,
         });
       }
     }
@@ -398,7 +401,7 @@ class HeldInputs {
  * @param {object} options.index the parsed `trial-sets.json`
  * @param {object} options.record the parsed `run.json`
  * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
- * @param {(probe: object) => { oracleId: string|null, problem: string|null }} [options.designate] see `HeldInputs`
+ * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
  * @returns {HeldInputs}
  */
 function holdScoreInputs({ runDirectory, index, record, engine, designate }) {
@@ -429,7 +432,7 @@ function holdScoreInputs({ runDirectory, index, record, engine, designate }) {
  * @param {string} options.corpusDigest
  * @param {string} options.probeId
  * @param {{ records: string[], manifestFile: string }} options.set the attempt's sealed set: its record files and isolation manifest, run-relative
- * @param {(probe: object) => { oracleId: string|null, problem: string|null }} [options.designate] see `HeldInputs`
+ * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
  * @returns {HeldInputs}
  * @throws {AttemptInputError} naming the first input that is not what the runtime wrote
  */

@@ -37,10 +37,8 @@
  */
 
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const {
   PartitionPlanError,
@@ -50,505 +48,71 @@ const {
   loadContractView,
   mappingView,
   partitionPlanProblems,
-  readHeldOutResponse,
   selectPartition,
   stepsReadBy,
 } = require('../cli/lib/evaluate/partition');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
-const { answersForView } = require('../cli/lib/evaluate/gameability');
-const { EvaluatorLayerError, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { rowsValidator } = require('../cli/lib/evaluate/judgment-rows');
 const { declaredContent, foreignContent } = require('../cli/lib/evaluate/records-evaluator');
-const { RUN_LABELS } = require('../cli/lib/evaluate/records');
 const { MATERIAL_HEADING, evaluatorPrompt } = require('../cli/lib/evaluate/sealed-brief-agent');
-const { suite } = require('./lib/evaluate-story-121');
 
-const FIXTURE = path.join(__dirname, 'fixtures', 'evaluate', 'partition-plan');
-const CI_PLAN = path.join(__dirname, 'fixtures', 'evaluate', 'mutation', 'evals', 'verdict-ci', 'ci', 'evaluation-ci-plan.json');
-const PLAN_FILE = 'corpus/held-out/plan.json';
-const GIT = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
-const GIT_ENV = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_'))),
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_CONFIG_NOSYSTEM: '1',
-};
+const { createHarness } = require('./lib/evaluate-partition-plans-harness');
 
-const CANARY = 'canary-9c41d7e2';
-const SHARED_REQUEST = 'Judge the request.';
-const DEVELOPMENT_REQUEST = 'Judge the development case.';
-const HELD_OUT_REQUEST = `${CANARY}: judge the held-out case.`;
-/** What the contract's sensitivity witness sends, and what each partition's probe witnesses send, beside the plan's own steps. */
-const WITNESSES = ['Judge alpha.', 'Judge beta.'];
-const DEVELOPMENT_WITNESS = 'Judge the development witness.';
-const HELD_OUT_WITNESS = 'Judge the held-out witness.';
-
-/** What must stay out of each partition's artifacts: the other partition's request, step ID, oracle and witness. */
-const KEEP_OUT = {
-  development: [CANARY, 'held-out-run', 'O-101', 'judge the held-out case', HELD_OUT_WITNESS],
-  'held-out': ['development-run', 'O-002', DEVELOPMENT_REQUEST, DEVELOPMENT_WITNESS],
-};
-
-/** The rubric layer: a development criterion, a shared one in `contract.json`, and a held-out one in the plan (Story 1.105). */
-const STUB_JUDGE = path.join(__dirname, 'fixtures', 'evaluate', 'stub-judge.js');
-const STUB_AGENT = path.join(__dirname, 'fixtures', 'evaluate', 'evaluators', 'stub-evaluator-agent.js');
-const SCALE = [
-  { level: 0, anchor: 'The response does not say accepted.' },
-  { level: 1, anchor: 'The response says accepted.' },
-];
-const rubricOf = (id, criteria) => ({
-  id,
-  scaleLevels: SCALE,
-  failureModePenalties: [{ name: 'silent', description: 'No verdict is stated.' }],
-  maxLength: 100,
-  criteria,
-});
-const criterionOf = (id, text, step) => ({ id, text, evidence: `/interactions/${step}/stdout` });
-const DEVELOPMENT_CRITERION = criterionOf('RC-001', 'Does the development case state its verdict?', 'development-run');
-const SHARED_CRITERION = criterionOf('RC-002', 'Does the shared request state its verdict?', 'shared-run');
-const HELD_OUT_CRITERION = criterionOf('RC-101', `${CANARY}: does the held-out case state its verdict?`, 'held-out-run');
-/** What must stay out of each partition's artifacts once rubrics join the plan: the other partition's own criterion. */
-const RUBRIC_KEEP_OUT = {
-  development: [...KEEP_OUT.development, 'R-101', 'RC-101'],
-  'held-out': [...KEEP_OUT['held-out'], 'RC-001', DEVELOPMENT_CRITERION.text],
-};
-
-/**
- * The waiver layer: waivers of `contract.json` that read a development-only step and a shared one, and a held-out waiver in the plan
- * (Story 1.106). A waiver is complete (a rule, a rationale, an approval and an expiry), because the engine's compile refuses one that
- * is not (`waiver-incomplete`).
- */
-const waiverOf = (id, rationale, condition) => ({
-  id,
-  rule: 'omission-and-completeness',
-  rationale,
-  condition,
-  approval: 'gate-c-reviewer',
-  expiresAt: '2099-01-01T00:00:00Z',
-});
-const DEVELOPMENT_WAIVER = waiverOf('W-001', 'The development case is flaky.', '/interactions/development-run/exit-code is absent');
-const SHARED_WAIVER = waiverOf('W-002', 'The shared request has no seed here.', '/interactions/shared-run/exit-code is absent');
-const HELD_OUT_WAIVER = waiverOf('W-101', `${CANARY}: the held-out case is flaky.`, '/interactions/held-out-run/exit-code is absent');
-/** A plan waiver that reads a shared step: both of the plan's partitions may honour it, so the held-out and both views keep it. */
-const HELD_OUT_SHARED_WAIVER = waiverOf(
-  'W-103',
-  'The shared request has no exit code here.',
-  '/interactions/shared-run/exit-code is absent',
-);
-/** What must stay out of each partition's artifacts once waivers join the plan: the other partition's own waivers. */
-const WAIVER_KEEP_OUT = {
-  development: [...KEEP_OUT.development, 'W-101', 'W-103', HELD_OUT_SHARED_WAIVER.rationale],
-  'held-out': [...KEEP_OUT['held-out'], 'W-001', DEVELOPMENT_WAIVER.rationale],
-};
-
-/**
- * The mapping layer (Story 1.107): a command evaluator (`test/fixtures/evaluate/partition-plan-evaluator/`) judges every trial, and
- * `evaluator/mapping.json` binds the keys it prints. The development partition reads `contract.json`, so the file holds the rows of the
- * shared and the development-only oracle, and the held-out plan's `mappings` hold the row of the held-out oracle. With rubrics, the
- * same split holds for criterion rows.
- */
-const EVALUATOR_FIXTURE = path.join(__dirname, 'fixtures', 'evaluate', 'partition-plan-evaluator');
-const SHARED_ROW = { oracleId: 'O-001', behaviorId: 'B-001' };
-const DEVELOPMENT_ROW = { oracleId: 'O-002', behaviorId: 'B-002' };
-const HELD_OUT_ROW = { oracleId: 'O-101', behaviorId: 'B-002' };
-const criterionRow = (rubricId, criterion) => ({ rubricId, criterionId: criterion.id, levels: [0, 1] });
-/** What must stay out of each partition's artifacts once the evaluator's keys are partitioned: the other partition's keys. */
-const MAPPING_KEEP_OUT = {
-  development: [...RUBRIC_KEEP_OUT.development, 'accepted:held-out-run', 'score:held-out-run'],
-  'held-out': [...RUBRIC_KEEP_OUT['held-out'], 'accepted:development-run', 'score:development-run'],
-};
-
-const test = suite('tea-evaluate-partition-plans');
-const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-const write = (file, value) => fs.writeFileSync(file, typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`);
-
-/** Every regular file under `directory`, as absolute paths. */
-function filesUnder(directory) {
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) return filesUnder(file);
-    return entry.isFile() ? [file] : [];
-  });
-}
-
-/** The files of `directory` that hold any of `tokens`, as `relative-path: token`, case-sensitively. */
-function holding(directory, tokens) {
-  const found = [];
-  for (const file of filesUnder(directory)) {
-    const text = fs.readFileSync(file, 'utf8');
-    for (const token of tokens) if (text.includes(token)) found.push(`${path.relative(directory, file)}: ${token}`);
-  }
-  return found;
-}
-
-/** The target's launch marker lines past `from`: the workspace label and request of each launch. */
-function launchesSince(project, from) {
-  const file = project.env.VERDICT_MARKER;
-  const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean) : [];
-  return lines.slice(from).map((line) => JSON.parse(line));
-}
-const launchCount = (project) => launchesSince(project, 0).length;
-
-/** The requests each workspace launched, sorted, by workspace label. */
-function requestsByWorkspace(launches) {
-  const byWorkspace = new Map();
-  for (const { workspace, request } of launches) byWorkspace.set(workspace, [...(byWorkspace.get(workspace) ?? []), request]);
-  return byWorkspace;
-}
-
-function commit(repository, message) {
-  for (const args of [
-    ['add', '--all'],
-    ['commit', '--quiet', '-m', message],
-  ]) {
-    const run = spawnSync('git', [...GIT, '-C', repository, ...args], { encoding: 'utf8', env: GIT_ENV });
-    assert.equal(run.status, 0, `git ${args.join(' ')}: ${run.stderr}`);
-  }
-}
-
-/**
- * The rubric layer over a project's folder (Story 1.105): `contract.json` gains R-001 holding `development` criteria, the held-out
- * plan gains R-101 holding `heldOut` ones, and the stub judge, its model snapshot and one labelled file with two anchored items
- * per criterion make every rubric judgeable. The stub scores every criterion at the top level, so each criterion agrees on half
- * its items and `minimumAgreement` is one half. Stories that partition more of the contract extend a project through this layer.
- */
-function rubricLayer(
-  { folder, directory },
-  { development = [DEVELOPMENT_CRITERION, SHARED_CRITERION], heldOut = [HELD_OUT_CRITERION], judge = true } = {},
-) {
-  const edit = (file, change) => {
-    const value = read(path.join(folder, file));
-    change(value);
-    write(path.join(folder, file), value);
-  };
-  edit('contract.json', (contract) => {
-    contract.rubrics = development.length === 0 ? [] : [rubricOf('R-001', development)];
-  });
-  edit(PLAN_FILE, (plan) => {
-    if (heldOut.length > 0) plan.rubrics = [rubricOf('R-101', heldOut)];
-  });
-  edit('evaluation.json', (evaluation) => {
-    // Under another evaluator the evaluator scores the rubric itself, so a judge block would never be used (`check` refuses it).
-    if (judge) {
-      evaluation.judge = {
-        agent: 'custom',
-        agentCommand: process.execPath,
-        agentArgs: [STUB_JUDGE, '--capture', path.join(directory, 'prompts.jsonl')],
-        timeoutMs: 60_000,
-      };
-    }
-    evaluation.judgeCalibration = { minimumAgreement: 0.5 };
-  });
-  if (judge) {
-    write(path.join(folder, 'policy/evaluator-conditions.json'), {
-      schemaVersion: 1,
-      modelSnapshot: 'none',
-      systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
-      judge: { modelSnapshot: 'stub-judge-2026-09' },
-    });
-  }
-  write(path.join(folder, 'policy/judge-calibration.json'), {
-    items: [...development.map((criterion) => ['R-001', criterion]), ...heldOut.map((criterion) => ['R-101', criterion])].flatMap(
-      ([rubricId, criterion]) =>
-        [0, 1].map((level) => ({
-          rubricId,
-          criterionId: criterion.id,
-          response: `calibration response ${criterion.id} ${level}`,
-          expectedLevel: level,
-        })),
-    ),
-  });
-}
-
-/**
- * The waiver layer over a project's folder (Story 1.106): `contract.json` gains the `development` waivers and the held-out plan the
- * `heldOut` ones. Stories that partition more of the contract extend a project through this layer and `rubricLayer`.
- */
-function waiverLayer(
-  { folder },
-  { development = [DEVELOPMENT_WAIVER, SHARED_WAIVER], heldOut = [HELD_OUT_WAIVER, HELD_OUT_SHARED_WAIVER] } = {},
-) {
-  const edit = (file, change) => {
-    const value = read(path.join(folder, file));
-    change(value);
-    write(path.join(folder, file), value);
-  };
-  edit('contract.json', (contract) => {
-    contract.waivers = development;
-  });
-  edit(PLAN_FILE, (plan) => {
-    if (heldOut.length > 0) plan.waivers = heldOut;
-  });
-}
-
-/**
- * The gameability layer (Story 1.109): a development gameability probe P-005 and a held-out one P-006, both on B-002, whose naive oracle
- * is O-001, the shared oracle every view keeps. Each probe's degenerate response splits where the plan does: `corpus/gameability/` answers
- * the steps of `contract.json` (the shared one, which satisfies O-001, and the development-only one, which O-002 rejects) and
- * `corpus/held-out/gameability/`, beside the held-out plan, answers the held-out plan's step with the canary, which O-101 rejects. The
- * second probe answers the same steps from its own bytes. `heldOut` is the held-out probe's partition: it joins `heldOutProbes` unless
- * `false`. Stories that partition more of the gameability arm extend a project through this layer.
- */
-const SHARED_ANSWER = { stdout: 'request: Judge the request.\nverdict: accepted\n', stderr: '', exitCode: 0 };
-const DEVELOPMENT_ANSWER = { stdout: 'verdict: pending, development case\n', stderr: '', exitCode: 0 };
-const HELD_OUT_ANSWER = { stdout: `${CANARY}: verdict: pending\n`, stderr: '', exitCode: 0 };
-const HELD_OUT_ANSWERS_DIR = 'corpus/held-out/gameability';
-const gameabilityProbeOf = (probeId, signatureOf) => ({
-  probeId,
-  probeClass: 'gameability',
-  behaviorId: 'B-002',
-  expectedClean: false,
-  rationale: 'Gameability: a shortcut answer prints a pending verdict without judging the request.',
-  defects: [],
-  defectSignature: signatureOf,
-  qualification: {
-    route: 'gameability',
-    degenerateResponse: 'Prints a pending verdict and exits 0, without judging the request.',
-    naiveOracle: 'O-001',
-  },
-});
-function gameabilityLayer({ folder }, { heldOut = true } = {}) {
-  const signature = (probeFile) => {
-    const value = structuredClone(read(path.join(folder, 'probes', probeFile)).defectSignature);
-    value.condition.predicate.operands[1].literal = 'verdict: pending';
-    return value;
-  };
-  // The both view answers every step of the plan for every gameability probe, so an oracle the answer violates at any step files a
-  // finding that cites the probe, and the probe's signature must admit the answer there too (Story 1.110): both probes select
-  // any prompt, where a signature that selects one step's request reads the other step's finding as an unwitnessed claim.
-  const gameabilitySignature = signature('P-003.probe.json');
-  write(path.join(folder, 'probes/P-005.probe.json'), gameabilityProbeOf('P-005', gameabilitySignature));
-  write(path.join(folder, 'probes/P-006.probe.json'), gameabilityProbeOf('P-006', gameabilitySignature));
-  for (const probeId of ['P-005', 'P-006']) {
-    fs.mkdirSync(path.join(folder, 'corpus/gameability'), { recursive: true });
-    write(path.join(folder, `corpus/gameability/${probeId}.json`), {
-      schemaVersion: 1,
-      steps: { 'shared-run': SHARED_ANSWER, 'development-run': DEVELOPMENT_ANSWER },
-    });
-    fs.mkdirSync(path.join(folder, HELD_OUT_ANSWERS_DIR), { recursive: true });
-    write(path.join(folder, `${HELD_OUT_ANSWERS_DIR}/${probeId}.json`), { schemaVersion: 1, steps: { 'held-out-run': HELD_OUT_ANSWER } });
-  }
-  const evaluation = read(path.join(folder, 'evaluation.json'));
-  evaluation.arms = [...evaluation.arms, 'gameability'];
-  if (heldOut) evaluation.heldOutProbes = [...evaluation.heldOutProbes, 'P-006'];
-  write(path.join(folder, 'evaluation.json'), evaluation);
-}
-
-/**
- * The several-oracles layer (Story 1.110): a behavior B-003 that lists two development-only oracles in `contract.json` (copies of
- * O-002) and one held-out oracle in the plan (a copy of O-101), and a development clean control P-007 on it. `check` holds a defect or
- * gameability probe to a behavior of exactly one oracle, so a clean control is the probe whose partition view lists several.
- */
-function severalOraclesLayer({ folder }) {
-  const contractFile = path.join(folder, 'contract.json');
-  const contract = read(contractFile);
-  const copyOf = (list, id, to) => ({ ...structuredClone(list.find((entry) => entry.id === id)), id: to });
-  contract.oracles.push(copyOf(contract.oracles, 'O-002', 'O-004'), copyOf(contract.oracles, 'O-002', 'O-005'));
-  const behavior = copyOf(contract.behaviors, 'B-002', 'B-003');
-  behavior.requirementLinks = [{ scheme: 'tea-evaluate-fixture', id: 'strict-policy-accepts-second-case' }];
-  behavior.oracles = ['O-004', 'O-005'];
-  contract.behaviors.push(behavior);
-  write(contractFile, contract);
-  const plan = read(path.join(folder, PLAN_FILE));
-  plan.oracles.push(copyOf(plan.oracles, 'O-101', 'O-102'));
-  plan.behaviorOracles['B-003'] = ['O-102'];
-  write(path.join(folder, PLAN_FILE), plan);
-  write(path.join(folder, 'probes/P-007.probe.json'), {
-    ...read(path.join(folder, 'probes/P-001.probe.json')),
-    probeId: 'P-007',
-    behaviorId: 'B-003',
-  });
-}
-
-/**
- * Wires the stub sealed-brief agent into a folder (Story 1.107): the stub through the `custom` adapter, the qualification the adopter
- * declares, a tool-call budget for its bridged run, and the model snapshot it runs under. `capture` is the file the stub appends its
- * prompt to. The stub answers the key `verdict-accepted`, so the mapping it reads binds that key. It judges a request of its own
- * that no mutation of the fixture's target changes, so a run through it holds the qualification to a `minimumAgreement` of 0.
- */
-function sealedBriefAgentLayer(folder, capture, minimumAgreement = 0.9) {
-  const edit = (file, change) => {
-    const value = read(path.join(folder, file));
-    change(value);
-    write(path.join(folder, file), value);
-  };
-  edit('evaluation.json', (evaluation) => {
-    evaluation.evaluator = {
-      kind: 'sealed-brief-agent',
-      agent: 'custom',
-      agentCommand: process.execPath,
-      agentArgs: [STUB_AGENT, '--capture', capture],
-      timeoutMs: 60_000,
-    };
-    evaluation.evaluatorQualification = { attempts: 2, minimumAgreement };
-  });
-  edit('contract.json', (contract) => (contract.budgets.maxToolCalls = 3));
-  write(path.join(folder, 'policy/evaluator-conditions.json'), {
-    schemaVersion: 1,
-    modelSnapshot: 'none',
-    systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
-    evaluator: { modelSnapshot: 'stub-evaluator-2026-09' },
-  });
-}
-
-/**
- * The mapping layer over a project's folder (Story 1.107): the stub command evaluator in `evaluator/`, its mapping (the rows of the
- * shared and the development-only oracle, and with `rubric` those of the development and the shared criterion), and the held-out
- * plan's `mappings` (the held-out oracle's row, and with `rubric` the held-out criterion's). `rubric` joins the rubric layer with no
- * judge, since the evaluator scores the rubric itself. `agent` swaps the command for the stub sealed-brief agent. `canary` spells the plan's keys `canary-...`, for the `check` cases that never
- * run the evaluator and hold the output to none of the plan's text. `log` is the file the evaluator appends its stdin to. Stories
- * that partition more of the contract extend a project through this layer and the layers above.
- */
-function mappingLayer(
-  { folder, directory },
-  { rubric = false, canary = false, agent = false, log = path.join(directory, 'evaluator-input.jsonl') } = {},
-) {
-  if (rubric) {
-    rubricLayer({ folder, directory }, { judge: false });
-    // The stub names the key a score answers by the step the criterion reads, so each calibration response spells that key.
-    const criteria = [DEVELOPMENT_CRITERION, SHARED_CRITERION, HELD_OUT_CRITERION];
-    const file = path.join(folder, 'policy/judge-calibration.json');
-    const labelled = read(file);
-    for (const item of labelled.items) {
-      const step = /^\/interactions\/([^/]+)\//.exec(criteria.find((criterion) => criterion.id === item.criterionId).evidence)[1];
-      item.response = `calibration response score:${step} ${item.expectedLevel}`;
-    }
-    write(file, labelled);
-  }
-  fs.cpSync(EVALUATOR_FIXTURE, path.join(folder, 'evaluator'), { recursive: true });
-  const keys = { 'accepted:shared-run': SHARED_ROW, 'accepted:development-run': DEVELOPMENT_ROW };
-  const planRows = [{ key: canary ? 'canary-oracle-key' : 'accepted:held-out-run', ...HELD_OUT_ROW }];
-  if (rubric) {
-    keys['score:development-run'] = criterionRow('R-001', DEVELOPMENT_CRITERION);
-    keys['score:shared-run'] = criterionRow('R-001', SHARED_CRITERION);
-    planRows.push({ key: canary ? 'canary-criterion-key' : 'score:held-out-run', ...criterionRow('R-101', HELD_OUT_CRITERION) });
-  }
-  write(path.join(folder, 'evaluator/mapping.json'), { schemaVersion: 1, keys });
-  const plan = read(path.join(folder, PLAN_FILE));
-  plan.mappings = planRows;
-  write(path.join(folder, PLAN_FILE), plan);
-  const evaluation = read(path.join(folder, 'evaluation.json'));
-  evaluation.evaluator = {
-    kind: 'command',
-    command: 'evaluator/rows.js',
-    args: [...(rubric ? ['--rubric'] : []), '--labels', RUN_LABELS, '--log', log],
-    timeoutMs: 60_000,
-  };
-  write(path.join(folder, 'evaluation.json'), evaluation);
-  if (agent) {
-    // The stub agent answers the key `verdict-accepted` for the shared oracle, so the file binds that key beside the development-only row.
-    write(path.join(folder, 'evaluator/mapping.json'), {
-      schemaVersion: 1,
-      keys: { 'verdict-accepted': SHARED_ROW, 'accepted:development-run': DEVELOPMENT_ROW },
-    });
-    sealedBriefAgentLayer(folder, path.join(directory, 'agent-capture.jsonl'), 0);
-  }
-}
-
-/** The judge's calls since `from`: whether each was a calibration call and the `rubric/criterion` keys it was asked to score. */
-function judgeCalls(project, from = 0) {
-  const file = path.join(project.directory, 'prompts.jsonl');
-  const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean) : [];
-  const heading = 'Rubrics and evidence (JSON):';
-  return lines.slice(from).map((line) => {
-    const prompt = JSON.parse(line);
-    const material = JSON.parse(prompt.slice(prompt.indexOf(heading) + heading.length));
-    return {
-      calibration: prompt.includes('calibration response'),
-      criteria: material.rubrics.flatMap((rubric) => rubric.criteria.map((criterion) => `${rubric.rubricId}/${criterion.criterionId}`)),
-      prompt,
-    };
-  });
-}
-const judgeCallCount = (project) => judgeCalls(project).length;
-
-/** Sets `evaluation.json` `tiers` to the tiers the plan places a check on. */
-function setTiers(folder, plan) {
-  const file = path.join(folder, 'evaluation.json');
-  const evaluation = read(file);
-  const used = new Set(plan.checks.map((item) => item.placement.tier));
-  evaluation.tiers = ['pr', 'merge', 'scheduled', 'release'].filter((tier) => used.has(tier));
-  write(file, evaluation);
-}
-
-/**
- * The fixture's project, with the verdict CI plan placed on the folder (the plan names the folder by its path in the repository).
- * `layer` adds the rubric layer, `waivers` the waiver layer, `mappings` the mapping layer and `gameability` the gameability layer, each with
- * the options it takes; null leaves the fixture as it is. `several` adds the several-oracles layer.
- */
-function planProject(label, layer = null, waivers = null, mappings = null, gameability = null, several = false) {
-  return test.project(
-    label,
-    ({ folder, directory }) => {
-      // A byte-for-byte comparison of the run's contract.json with the folder's can fail only when the folder's layout is one
-      // a view would not produce.
-      if (layer !== null) rubricLayer({ folder, directory }, layer);
-      if (waivers !== null) waiverLayer({ folder, directory }, waivers);
-      if (mappings !== null) mappingLayer({ folder, directory }, mappings);
-      if (gameability !== null) gameabilityLayer({ folder, directory }, gameability);
-      if (several) severalOraclesLayer({ folder });
-      relayContract(folder);
-      fs.mkdirSync(path.join(folder, 'ci'));
-      const plan = JSON.parse(
-        fs.readFileSync(CI_PLAN, 'utf8').replaceAll('test/fixtures/evaluate/mutation/evals/verdict-ci', 'evals/verdict'),
-      );
-      // A contract that declares a rubric needs judge calibration on each live tier its plan uses (rule `applicability`).
-      if (layer !== null || mappings?.rubric === true) {
-        for (const tier of ['scheduled', 'release']) {
-          const twin = plan.checks.find((item) => item.id === 'twin-run' && item.placement.tier === tier);
-          plan.checks.push({
-            ...twin,
-            id: 'judge-calibration',
-            enforcement: 'block',
-            evidence: ['runs/<invocationId>/checks/judge-calibration/stdout'],
-            placement: { ...twin.placement, reason: 'AD-10 default: a rubric is declared, so its judge is calibrated on this tier.' },
-          });
-        }
-      }
-      write(path.join(folder, 'ci/evaluation-ci-plan.json'), plan);
-      setTiers(folder, plan);
-    },
-    { marker: true, fixture: FIXTURE },
-  );
-}
-
-const cli = (project, command, args = []) => test.cli(project.folder, command, args, project.env);
-
-/** Rewrites the folder's contract.json in a layout no view serializes (4 spaces, no final newline), the same data. */
-function relayContract(folder) {
-  const file = path.join(folder, 'contract.json');
-  write(file, JSON.stringify(read(file), null, 4));
-}
-
-/** The run's outcome by probe, from its `partitions.json`. */
-function outcomes(run) {
-  const partitions = read(path.join(run, 'partitions.json'));
-  return JSON.stringify([...partitions.development, ...partitions['held-out']].map((entry) => [entry.probeId, entry.outcome]));
-}
-
-/** The plan's steps and oracles as a run's `contract.json` holds them. */
-function viewOf(run) {
-  const contract = read(path.join(run, 'contract.json'));
-  return {
-    steps: contract.interactionPlan.map((step) => step.stepId),
-    oracles: contract.oracles.map((oracle) => oracle.id),
-    behaviors: Object.fromEntries(contract.behaviors.map((behavior) => [behavior.id, behavior.oracles])),
-  };
-}
-
-/**
- * The deterministic evaluator's output of a run, laid out as a records harness would seal it (Story 1.107): its evaluator
- * configuration, and per probe the records and the isolation manifest of the trial set. Returns the directory.
- */
-function snapshotRecords(project, run, label) {
-  const target = path.join(project.directory, `records-${label}`);
-  fs.mkdirSync(target);
-  fs.copyFileSync(path.join(run, 'evaluator-configuration.json'), path.join(target, 'evaluator-configuration.json'));
-  const sets = path.join(run, 'trial-sets');
-  for (const entry of fs.readdirSync(sets, { withFileTypes: true }).filter((candidate) => candidate.isDirectory())) {
-    fs.cpSync(path.join(sets, entry.name), path.join(target, entry.name), { recursive: true });
-  }
-  return target;
-}
+const {
+  FIXTURE,
+  PLAN_FILE,
+  CANARY,
+  SHARED_REQUEST,
+  DEVELOPMENT_REQUEST,
+  HELD_OUT_REQUEST,
+  WITNESSES,
+  DEVELOPMENT_WITNESS,
+  HELD_OUT_WITNESS,
+  KEEP_OUT,
+  criterionOf,
+  DEVELOPMENT_CRITERION,
+  HELD_OUT_CRITERION,
+  RUBRIC_KEEP_OUT,
+  waiverOf,
+  DEVELOPMENT_WAIVER,
+  SHARED_WAIVER,
+  HELD_OUT_WAIVER,
+  HELD_OUT_SHARED_WAIVER,
+  WAIVER_KEEP_OUT,
+  SHARED_ROW,
+  DEVELOPMENT_ROW,
+  HELD_OUT_ROW,
+  criterionRow,
+  MAPPING_KEEP_OUT,
+  test,
+  read,
+  write,
+  holding,
+  launchesSince,
+  launchCount,
+  requestsByWorkspace,
+  commit,
+  sealedBriefAgentLayer,
+  judgeCalls,
+  judgeCallCount,
+  setTiers,
+  planProject,
+  cli,
+  relayContract,
+  outcomes,
+  viewOf,
+  fixtureFolder,
+  contractBytes,
+  evaluation,
+  heldOutPlan,
+  rubricSource,
+  rubricBytes,
+  rubricPlan,
+  mappingSource,
+  HELD_OUT_ROWS,
+  mappingPlan,
+  designatedBy,
+} = createHarness('tea-evaluate-partition-plans');
 
 try {
   // ---- selectPartition and the pure view -------------------------------------------------------------------------------------
@@ -562,10 +126,6 @@ try {
   assert.equal(selectPartition({ partition: 'unknown', heldOutProbes: [], probes }).refusal.exitCode, 64);
   assert.equal(selectPartition({ partition: 'held-out', heldOutProbes: [], probes }).refusal.exitCode, 10);
 
-  const fixtureFolder = path.join(FIXTURE, 'evals/verdict');
-  const contractBytes = fs.readFileSync(path.join(fixtureFolder, 'contract.json'));
-  const evaluation = read(path.join(fixtureFolder, 'evaluation.json'));
-  const heldOutPlan = read(path.join(fixtureFolder, PLAN_FILE));
   const view = (partition, plan = heldOutPlan) => contractView({ contractBytes, evaluation, heldOutPlan: plan, partition });
   const development = view('development', null);
   assert.equal(development.bytes, contractBytes, 'the development view is the folder bytes, not a copy of them');
@@ -646,8 +206,16 @@ try {
       probeId: 'P-001',
       behaviorId: 'B-999',
     }),
-    { oracleId: null, problem: null },
+    { oracleId: null, problem: null, listed: null },
     'a folder with no partitionPlan refused a probe of a behavior the contract lacks',
+  );
+  // Its both view is `contract.json`, so the list it holds for a behavior is the source's, and the input check holds that list against the
+  // run's sealed contract.
+  assert.deepEqual(
+    bothViewDesignation({ contractBytes, evaluation: unplanned, heldOutPlan: null, partition: 'both', heldOutProbes: [] })(
+      probeOf('P-004'),
+    ),
+    { oracleId: null, problem: null, listed: ['O-002'] },
   );
   // The source with another behavior list: B-002 lists a second development-only oracle (O-003, a copy of O-002 that reads the same
   // development-only step), so its development view lists two oracles and its held-out view still one.
@@ -679,15 +247,49 @@ try {
     Object.fromEntries(PROBE_IDS.map((id) => [id, null])),
     'a behavior with no oracle list in the source threw or was designated',
   );
+  // A partition whose own view lists several oracles leaves its probe undesignated even when another view lists one: B-002 keeps O-002
+  // alone in the development view and gains O-101 and O-102 in the held-out view, so the held-out P-003 is handed nothing and does not
+  // fall back to the development oracle, and the development P-004 is still handed O-002.
+  assert.deepEqual(designationsOf({ heldOutPlan: twoHeldOut }), { 'P-001': null, 'P-002': null, 'P-003': null, 'P-004': 'O-002' });
+  assert.deepEqual(designationsOf({ heldOutPlan: twoHeldOut, heldOutProbes: ['P-003', 'P-004'] }), {
+    'P-001': null,
+    'P-002': null,
+    'P-003': null,
+    'P-004': null,
+  });
+  // A clean control on B-002 is designated as a defect probe is: the partition decides, and the probe's class does not.
+  const controlOf = (probeId) => ({ probeId, probeClass: 'zero-action', behaviorId: 'B-002', expectedClean: true });
+  const controls = (plan) =>
+    bothViewDesignation({ contractBytes, evaluation, heldOutPlan: plan, partition: 'both', heldOutProbes: ['P-008'] });
+  assert.equal(controls(heldOutPlan)(controlOf('P-007')).oracleId, 'O-002', 'a development clean control was handed another oracle');
+  assert.equal(controls(heldOutPlan)(controlOf('P-008')).oracleId, 'O-101', 'a held-out clean control was handed another oracle');
+  assert.equal(controls(twoHeldOut)(controlOf('P-008')).oracleId, null, 'a held-out clean control of a several-oracle view was designated');
+  // The list the both view holds for the probe's behavior is part of the answer, for the input check to hold against the sealed contract.
+  assert.deepEqual(
+    bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition: 'both', heldOutProbes: ['P-003'] })(probeOf('P-004')),
+    {
+      oracleId: 'O-002',
+      problem: null,
+      listed: ['O-002', 'O-101'],
+    },
+  );
+  assert.equal(
+    bothViewDesignation({ contractBytes, evaluation, heldOutPlan: null, partition: 'development', heldOutProbes: [] })(probeOf('P-004'))
+      .listed,
+    undefined,
+    'a development run holds a list the sealed contract is compared with',
+  );
   // A probe of a behavior the contract does not hold is refused by IDs of the schema's shape only.
   const designate = bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition: 'both', heldOutProbes: ['P-003'] });
   assert.deepEqual(designate({ probeId: 'P-003', behaviorId: 'B-999' }), {
     oracleId: null,
     problem: 'P-003 names B-999, which the contract does not hold',
+    listed: null,
   });
   assert.deepEqual(designate({ probeId: 'canary-probe', behaviorId: 'canary-behavior' }), {
     oracleId: null,
     problem: 'a probe names a behavior, which the contract does not hold',
+    listed: null,
   });
   // Over a folder, the files are read for a both run under a plan and for no other run.
   assert.deepEqual(
@@ -698,6 +300,18 @@ try {
       ]),
     ),
     { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' },
+  );
+  // The run record's `heldOutProbes` places the probes, never the folder's `evaluation.json`: the fixture's own list names P-003, and a
+  // record that names P-004 swaps the oracles.
+  assert.deepEqual(
+    Object.fromEntries(
+      PROBE_IDS.map((id) => [
+        id,
+        loadBothViewDesignation({ folder: fixtureFolder, partition: 'both', heldOutProbes: ['P-004'] })(probeOf(id)).oracleId,
+      ]),
+    ),
+    { 'P-001': null, 'P-002': null, 'P-003': 'O-002', 'P-004': 'O-101' },
+    'the designation followed the folder heldOutProbes and not the run record',
   );
   for (const partition of ['development', 'held-out', undefined]) {
     const nowhere = path.join(FIXTURE, 'no-such-folder');
@@ -776,15 +390,6 @@ try {
   );
 
   // ---- rubrics: a criterion belongs to the partition whose steps its evidence reads (Story 1.105) -------------------------------
-  const lateCriterion = criterionOf('RC-003', 'Does the development case exit cleanly?', 'development-run');
-  const rubricSource = JSON.parse(contractBytes.toString('utf8'));
-  rubricSource.rubrics = [
-    rubricOf('R-001', [DEVELOPMENT_CRITERION, SHARED_CRITERION]),
-    rubricOf('R-002', [lateCriterion]),
-    rubricOf('R-003', []),
-  ];
-  const rubricBytes = Buffer.from(JSON.stringify(rubricSource, null, 4));
-  const rubricPlan = { ...heldOutPlan, rubrics: [rubricOf('R-101', [HELD_OUT_CRITERION])] };
   const rubricView = (partition, plan = rubricPlan) =>
     contractView({ contractBytes: rubricBytes, evaluation, heldOutPlan: plan, partition });
   const criteriaIn = (partition) =>
@@ -1013,22 +618,7 @@ try {
   // `evaluator/mapping.json` holds the rows of what `contract.json` declares: the shared and the development-only oracle, and the
   // criteria RC-001 and RC-003 (development-only) and RC-002 (shared). The held-out plan's `mappings` hold the rows of what only the
   // held-out partition declares, the oracle O-101 and the criterion RC-101. A row a view does not declare leaves with it.
-  const mappingSource = {
-    schemaVersion: 1,
-    keys: {
-      'accepted:shared-run': SHARED_ROW,
-      'accepted:development-run': DEVELOPMENT_ROW,
-      'score:development-run': criterionRow('R-001', DEVELOPMENT_CRITERION),
-      'score:shared-run': criterionRow('R-001', SHARED_CRITERION),
-      'score:RC-003': criterionRow('R-002', lateCriterion),
-    },
-  };
   const mappingBytes = Buffer.from(JSON.stringify(mappingSource, null, 4));
-  const HELD_OUT_ROWS = [
-    { key: 'accepted:held-out-run', ...HELD_OUT_ROW },
-    { key: 'score:held-out-run', ...criterionRow('R-101', HELD_OUT_CRITERION) },
-  ];
-  const mappingPlan = { ...rubricPlan, mappings: HELD_OUT_ROWS };
   const mappingViewOf = (partition, { plan = mappingPlan, bytes = mappingBytes, contract = rubricBytes } = {}) => {
     const derived = contractView({ contractBytes: contract, evaluation, heldOutPlan: plan, partition });
     return mappingView({
@@ -2539,12 +2129,6 @@ try {
     }
   };
   const qualified = (run) => fs.readdirSync(path.join(run, 'qualification')).sort();
-  /** The oracle each probe's call of a run's latest score was handed through `--designated-oracle`, null for a call handed none (Story 1.110). */
-  const designatedBy = (callRecord) => {
-    const { argv } = read(callRecord);
-    const at = argv.indexOf('--designated-oracle');
-    return at === -1 ? null : argv[at + 1];
-  };
   const designatedIn = (run) => {
     const scores = path.join(run, 'scores');
     const latest = path.join(scores, fs.readdirSync(scores).sort().at(-1));
@@ -2697,7 +2281,6 @@ try {
   } finally {
     fs.writeFileSync(path.join(flow.folder, PLAN_FILE), flowPlanBytes);
   }
-  const developmentRecords = snapshotRecords(flow, developmentRun, 'development');
   const developmentOutcomes = JSON.parse(outcomes(developmentRun));
   assert.deepEqual(
     developmentOutcomes.map(([probeId, outcome]) => [probeId, outcome.caught]),
@@ -2746,7 +2329,6 @@ try {
   assert.equal(heldOutScored.status, 0, heldOutScored.output);
   heldOutLog.push(heldOutRan.output, heldOutScored.output);
   assert.deepEqual(holding(heldOutRun, KEEP_OUT['held-out']), [], 'the held-out run holds the development partition');
-  const heldOutRecords = snapshotRecords(flow, heldOutRun, 'held-out');
   const heldOutOutcome = read(path.join(heldOutRun, 'partitions.json'))['held-out'][0].outcome;
   assert.equal(heldOutOutcome.caught, true, JSON.stringify(heldOutOutcome));
   // A held-out run designates nothing either: its own view lists one oracle for the behavior, which the engine designates itself.
@@ -2833,46 +2415,125 @@ try {
   }
 
   // The designation is the folder's both view read for the run: the held-out plan is read for a both run and refused by path when it
-  // cannot be read, and a plan that lists another oracle than the run sealed is a finding of the input check, with no score call.
+  // cannot be read, and a folder whose both view lists other oracles under a behavior than the contract the run sealed is a finding of
+  // the input check, with no score call, whether or not an oracle is designated.
   const flowPlanFile = path.join(flow.folder, PLAN_FILE);
+  const flowEvaluationFile = path.join(flow.folder, 'evaluation.json');
+  const flowContractFile = path.join(flow.folder, 'contract.json');
+  const flowEvaluationBytes = fs.readFileSync(flowEvaluationFile);
+  const flowContractBytes = fs.readFileSync(flowContractFile);
+  const flowFiles = [
+    [flowPlanFile, flowPlanBytes],
+    [flowEvaluationFile, flowEvaluationBytes],
+    [flowContractFile, flowContractBytes],
+  ];
+  const restoreFlow = () => {
+    for (const [file, bytes] of flowFiles) fs.writeFileSync(file, bytes);
+  };
   const scoreCalls = (run) => fs.readdirSync(path.join(run, 'scores')).length;
   const callsBefore = scoreCalls(bothRun);
+  const bothName = path.basename(bothRun);
+  const UNSHAPED = 'canary-5e0a1c3f unshaped oracle text';
+  const planDrift = (edit) => () => {
+    const plan = JSON.parse(flowPlanBytes.toString('utf8'));
+    edit(plan);
+    write(flowPlanFile, plan);
+  };
+  const DRIFTED = /whose oracles the evaluation folder's both view lists differently from the contract this run sealed/;
+  const drifts = [
+    ['the plan drops the behavior', planDrift((plan) => delete plan.behaviorOracles['B-002']), DRIFTED],
+    [
+      'the contract lists a second development oracle',
+      () => {
+        const contract = JSON.parse(flowContractBytes.toString('utf8'));
+        contract.behaviors.find((behavior) => behavior.id === 'B-002').oracles.push('O-003');
+        write(flowContractFile, contract);
+      },
+      DRIFTED,
+    ],
+    [
+      'the folder no longer has a partitionPlan',
+      () => {
+        const manifest = JSON.parse(flowEvaluationBytes.toString('utf8'));
+        delete manifest.partitionPlan;
+        write(flowEvaluationFile, manifest);
+      },
+      DRIFTED,
+    ],
+    ['the plan lists a second held-out oracle', planDrift((plan) => (plan.behaviorOracles['B-002'] = ['O-101', 'O-102'])), DRIFTED],
+    ['the plan lists an oracle the run never listed there', planDrift((plan) => (plan.behaviorOracles['B-002'] = ['O-001'])), DRIFTED],
+    ['the plan lists an oracle ID of no oracle shape', planDrift((plan) => (plan.behaviorOracles['B-002'] = [UNSHAPED])), DRIFTED],
+    [
+      'the plan lists a number where the oracles belong',
+      planDrift((plan) => (plan.behaviorOracles['B-002'] = 5)),
+      /corpus\/held-out\/plan\.json and contract\.json do not derive the views of the both run/,
+    ],
+    [
+      'evaluation.json cannot be read',
+      () => fs.writeFileSync(flowEvaluationFile, '{'),
+      /evaluation\.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived/,
+    ],
+    [
+      'contract.json cannot be read',
+      () => fs.writeFileSync(flowContractFile, '{'),
+      /contract\.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived/,
+    ],
+  ];
   try {
     fs.writeFileSync(flowPlanFile, `${CANARY} {`);
-    const unreadablePlan = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+    const unreadablePlan = cli(flow, 'score', ['--run', bothName]);
     assert.equal(unreadablePlan.status, 10, unreadablePlan.output);
     assert.match(unreadablePlan.output, /corpus\/held-out\/plan\.json does not parse as JSON/);
     assert.equal(unreadablePlan.output.includes(CANARY), false, 'a refusal quoted a byte of the held-out plan');
-    const renamed = JSON.parse(flowPlanBytes.toString('utf8').replaceAll('O-101', 'O-102'));
-    fs.writeFileSync(flowPlanFile, `${JSON.stringify(renamed, null, 2)}\n`);
-    const drifted = cli(flow, 'score', ['--run', path.basename(bothRun)]);
-    assert.equal(drifted.status, 10, drifted.output);
-    assert.match(drifted.output, /probes\/P-003\.probe\.json.*is designated O-102 by the evaluation folder's both view/);
-    assert.equal(drifted.output.includes(CANARY), false);
-    assert.match(drifted.output, /no score call ran/);
-    // `compare --accept` reports what `score` would, so a drifted both run never becomes a baseline.
-    const driftedAccept = cli(flow, 'compare', ['--run', path.basename(bothRun), '--accept']);
-    assert.notEqual(driftedAccept.status, 0, driftedAccept.output);
-    assert.match(driftedAccept.output, /probes\/P-003\.probe\.json.*is designated O-102 by the evaluation folder's both view/);
-    assert.equal(driftedAccept.output.includes(CANARY), false);
-    // A probe whose behavior the folder's contract does not hold is named by the IDs of the schema's shape.
-    fs.writeFileSync(flowPlanFile, flowPlanBytes);
-    const contractFile = path.join(flow.folder, 'contract.json');
-    const contractBefore = fs.readFileSync(contractFile);
-    try {
-      fs.writeFileSync(contractFile, contractBefore.toString('utf8').replaceAll('"id": "B-002"', '"id": "B-902"'));
-      const unheld = cli(flow, 'score', ['--run', path.basename(bothRun)]);
-      assert.equal(unheld.status, 10, unheld.output);
-      assert.match(unheld.output, /P-003 names B-002, which the contract does not hold/);
-    } finally {
-      fs.writeFileSync(contractFile, contractBefore);
+    restoreFlow();
+    for (const [label, edit, message] of drifts) {
+      for (const [command, args] of [
+        ['score', ['--run', bothName]],
+        ['compare', ['--run', bothName, '--accept']],
+      ]) {
+        edit();
+        const refused = cli(flow, command, args);
+        const what = `${command}, ${label}: ${refused.output}`;
+        assert.equal(refused.status, 10, what);
+        assert.match(refused.output, message, what);
+        assert.equal(refused.output.includes(CANARY), false, what);
+        assert.equal(refused.output.includes(UNSHAPED), false, `a refusal quoted an oracle ID of no oracle shape: ${what}`);
+        if (message === DRIFTED) {
+          for (const probeId of ['P-003', 'P-004'])
+            assert.match(refused.output, new RegExp(`probes/${probeId}\\.probe\\.json.*names B-002, whose`), what);
+          assert.doesNotMatch(
+            refused.output,
+            /probes\/P-00[12]\.probe\.json.*whose oracles/,
+            `${what}: a probe of an unchanged behavior was refused`,
+          );
+        }
+        if (command === 'score') assert.match(refused.output, /no score call ran/, what);
+        assert.equal(holding(bothRun, [UNSHAPED]).length, 0, `${what}: a record of the run holds the plan's oracle ID`);
+        restoreFlow();
+      }
     }
+    // A probe whose behavior the folder's contract does not hold is named by the IDs of the schema's shape.
+    fs.writeFileSync(flowContractFile, flowContractBytes.toString('utf8').replaceAll('"id": "B-002"', '"id": "B-902"'));
+    const unheld = cli(flow, 'score', ['--run', bothName]);
+    assert.equal(unheld.status, 10, unheld.output);
+    assert.match(unheld.output, /P-003 names B-002, which the contract does not hold/);
   } finally {
-    fs.writeFileSync(flowPlanFile, flowPlanBytes);
+    restoreFlow();
   }
   assert.equal(scoreCalls(bothRun), callsBefore, 'a refused designation still ran a score call');
-  // A probe whose behavior the contract does not hold is named by ID, and a call the CLI makes without the designation the in-process
-  // score holds is refused: the staged artifact is not the one the held inputs produce.
+  // The run record places the probes: a folder whose `heldOutProbes` was swapped after the run scores each probe under the oracle of the
+  // partition the run gave it.
+  try {
+    write(flowEvaluationFile, { ...JSON.parse(flowEvaluationBytes.toString('utf8')), heldOutProbes: ['P-004'] });
+    const swapped = cli(flow, 'score', ['--run', bothName]);
+    assert.equal(swapped.status, 0, swapped.output);
+    assert.deepEqual(designatedIn(bothRun), { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' });
+  } finally {
+    restoreFlow();
+  }
+  // A call the CLI makes without the designation the in-process score holds is refused: the staged artifact is not the one the held
+  // inputs produce. The substituted engine program removes the flag only while its toggle is on, so the same program with the toggle off
+  // is the control.
   const dropFlag = path.join(flow.directory, 'drop-designation.js');
   fs.writeFileSync(
     dropFlag,
@@ -2880,21 +2541,31 @@ try {
       "const { spawnSync } = require('node:child_process');",
       'const args = process.argv.slice(2);',
       "const at = args.indexOf('--designated-oracle');",
-      'if (at !== -1) args.splice(at, 2);',
+      "if (at !== -1 && process.env.DROP_DESIGNATION === 'on') args.splice(at, 2);",
       `const ran = spawnSync(process.execPath, [${JSON.stringify(engineCliPath({}))}, ...args], { stdio: 'inherit' });`,
       String.raw`if (ran.status === null) process.stderr.write('drop-designation: the engine CLI was killed\n');`,
       'process.exit(ran.status ?? 1);',
       '',
     ].join('\n'),
   );
-  const undesignatedCall = test.cli(flow.folder, 'score', ['--run', path.basename(bothRun)], { ...flow.env, [ENGINE_CLI_ENV]: dropFlag });
+  const undesignatedCall = test.cli(flow.folder, 'score', ['--run', bothName], {
+    ...flow.env,
+    [ENGINE_CLI_ENV]: dropFlag,
+    DROP_DESIGNATION: 'on',
+  });
   assert.equal(undesignatedCall.status, 12, undesignatedCall.output);
   assert.match(undesignatedCall.output, /P-003: .*differs from the one the verified inputs produce/);
   assert.match(undesignatedCall.output, /P-004: .*differs from the one the verified inputs produce/);
-  const sameCall = test.cli(flow.folder, 'score', ['--run', path.basename(bothRun)], { ...flow.env, [ENGINE_CLI_ENV]: engineCliPath({}) });
+  // The probes of B-001 are handed no flag, so the removal changes nothing for them and they are not refused.
+  assert.doesNotMatch(undesignatedCall.output, /P-00[12]: .*differs from the one the verified inputs produce/);
+  const sameCall = test.cli(flow.folder, 'score', ['--run', bothName], {
+    ...flow.env,
+    [ENGINE_CLI_ENV]: dropFlag,
+    DROP_DESIGNATION: 'off',
+  });
   assert.equal(sameCall.status, 0, sameCall.output);
   // The shim's call records say a program was substituted, so the score the baseline is accepted from is a plain one.
-  const plainScore = cli(flow, 'score', ['--run', path.basename(bothRun)]);
+  const plainScore = cli(flow, 'score', ['--run', bothName]);
   assert.equal(plainScore.status, 0, plainScore.output);
 
   // A both baseline replays through `ci`: the replay scores each probe under the same designation, so every probe reads as it does in
@@ -3250,1159 +2921,6 @@ try {
   const waiverBoth = waiverRun([]);
   assert.deepEqual(waiversOf(waiverBoth.run), ['W-001', 'W-002', 'W-101', 'W-103']);
 
-  // ---- evaluator mappings through run and score: each partition's evaluator is handed and answers its own view (Story 1.107) ----
-  // A command evaluator judges every trial. `contract.json` carries the development-only and the shared oracle and criteria, the plan the
-  // held-out ones, and each run's evaluator reads the mapping of its own view: the stub prints a row for each step it is handed, so the
-  // keys a partition's evaluator prints, and the oracles and criteria its records dispose and score, are those of its view.
-  const commandFlow = planProject('plan-command-flow', null, null, { rubric: true });
-  const evaluatorLog = path.join(commandFlow.directory, 'evaluator-input.jsonl');
-  const evaluatorStdins = () =>
-    fs.existsSync(evaluatorLog)
-      ? fs
-          .readFileSync(evaluatorLog, 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => JSON.parse(line).stdin)
-      : [];
-  const STEP_IDS = ['shared-run', 'development-run', 'held-out-run'];
-  const MAPPED = {
-    development: {
-      steps: ['shared-run', 'development-run'],
-      oracles: ['O-001', 'O-002'],
-      criteria: ['R-001/RC-001', 'R-001/RC-002'],
-    },
-    'held-out': { steps: ['shared-run', 'held-out-run'], oracles: ['O-001', 'O-101'], criteria: ['R-001/RC-002', 'R-101/RC-101'] },
-    both: {
-      steps: STEP_IDS,
-      oracles: ['O-001', 'O-002', 'O-101'],
-      criteria: ['R-001/RC-001', 'R-001/RC-002', 'R-101/RC-101'],
-    },
-  };
-  const mappedRun = (partition) => {
-    const from = evaluatorStdins().length;
-    const flag = partition === 'both' ? [] : ['--partition', partition];
-    const ran = cli(commandFlow, 'run', flag);
-    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
-    const run = test.latest(commandFlow.folder);
-    const scored = cli(commandFlow, 'score', ['--run', path.basename(run)]);
-    assert.equal(scored.status, 0, `${partition}: ${scored.output}`);
-    const stdins = evaluatorStdins().slice(from);
-    const records = fs
-      .readdirSync(path.join(run, 'trial-sets'), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .flatMap((entry) => filesUnder(path.join(run, 'trial-sets', entry.name)).filter((file) => /record-\d+\.json$/.test(file)))
-      .map((file) => read(file));
-    return { run, stdins, records, output: `${ran.output}${scored.output}` };
-  };
-  const mappedChecks = (partition, { run, stdins, records, output }, keepOut, outputKeepOut) => {
-    const expected = MAPPED[partition];
-    assert.equal(stdins.length > 0, true, `${partition}: the evaluator was never called`);
-    // The evaluator's own recorded stdin, as it read it: the brief and the observations of the view, and none of the other partition.
-    const stepsHanded = new Set();
-    for (const stdin of stdins) {
-      const input = JSON.parse(stdin);
-      assert.deepEqual(Object.keys(input).sort(), ['observations', 'sealedBrief']);
-      for (const observation of input.observations) {
-        const step = STEP_IDS.find((id) => observation.observationId.endsWith(`-${id}`));
-        if (step !== undefined) stepsHanded.add(step);
-      }
-      assert.deepEqual(
-        keepOut.filter((token) => stdin.includes(token)),
-        [],
-        `${partition}: the evaluator's stdin holds the other partition`,
-      );
-    }
-    assert.deepEqual(
-      [...stepsHanded].sort(),
-      [...expected.steps].sort(),
-      `${partition}: the evaluator was handed other steps than its view's`,
-    );
-    assert.deepEqual(
-      [...new Set(records.flatMap((record) => record.oracleDispositions.map((entry) => entry.oracleId)))].sort(),
-      expected.oracles,
-      `${partition}: the records dispose other oracles than its view's`,
-    );
-    assert.deepEqual(
-      [...new Set(records.flatMap((record) => record.judgeResults.map((entry) => `${entry.rubricId}/${entry.criterionId}`)))].sort(),
-      expected.criteria,
-      `${partition}: the records score other criteria than its view's`,
-    );
-    const calibration = read(path.join(run, 'judge-calibration.json'));
-    assert.deepEqual(
-      calibration.criteria.map((entry) => `${entry.rubricId}/${entry.criterionId}`).sort(),
-      expected.criteria,
-      `${partition}: calibration judged other criteria than its view's`,
-    );
-    assert.equal(
-      stdins.filter((stdin) => stdin.includes('calibration response')).length,
-      2 * expected.criteria.length,
-      `${partition}: the evaluator calibrated other items than its view's`,
-    );
-    assert.deepEqual(holding(run, keepOut), [], `${partition}: the run directory holds the other partition`);
-    // The development partition reads, executes and digests the evaluator's own files, so they spell nothing of the held-out one.
-    if (partition === 'development')
-      assert.deepEqual(
-        holding(path.join(commandFlow.folder, 'evaluator'), keepOut),
-        [],
-        'the evaluator tree a development run reads holds the held-out partition',
-      );
-    assert.deepEqual(
-      outputKeepOut.filter((token) => output.includes(token)),
-      [],
-      `${partition}: a command named the other partition`,
-    );
-    return JSON.parse(outcomes(run)).map(([probeId, outcome]) => [probeId, outcome.caught]);
-  };
-  const mappedDevelopment = mappedRun('development');
-  assert.deepEqual(viewOf(mappedDevelopment.run).oracles, MAPPED.development.oracles);
-  assert.deepEqual(
-    mappedChecks('development', mappedDevelopment, MAPPING_KEEP_OUT.development, KEEP_OUT.development),
-    [
-      ['P-001', false],
-      ['P-002', true],
-      ['P-004', true],
-    ],
-    'the development run, judged by the command evaluator, did not catch what the deterministic evaluator catches',
-  );
-  const mappedHeldOut = mappedRun('held-out');
-  assert.deepEqual(viewOf(mappedHeldOut.run).oracles, MAPPED['held-out'].oracles);
-  assert.deepEqual(
-    mappedChecks('held-out', mappedHeldOut, MAPPING_KEEP_OUT['held-out'], KEEP_OUT['held-out']),
-    [['P-003', true]],
-    'the held-out run, judged by the command evaluator, did not catch the held-out defect',
-  );
-  const mappedBoth = mappedRun('both');
-  assert.deepEqual(viewOf(mappedBoth.run).oracles, MAPPED.both.oracles);
-  mappedChecks('both', mappedBoth, [], []);
-  const mappedPlan = read(path.join(commandFlow.folder, PLAN_FILE));
-  assert.equal(
-    holding(mappedDevelopment.run, [mappedPlan.mappings[0].key, mappedPlan.mappings[1].key]).length,
-    0,
-    'the development run holds a held-out row key',
-  );
-
-  // A sealed-brief agent is shown the keys of its view, in the prompt of every call it makes (calibration or none, qualification
-  // attempts and trials alike). Each partition's run captures every prompt its agent was handed, and none holds the other partition.
-  const agentFlow = planProject('plan-agent-flow', null, null, { agent: true });
-  const agentCapture = path.join(agentFlow.directory, 'agent-capture.jsonl');
-  const capturedPrompts = () =>
-    fs.existsSync(agentCapture)
-      ? fs
-          .readFileSync(agentCapture, 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => JSON.parse(line).prompt)
-      : [];
-  // An evaluator attempt of a both run is scored as its probe's own partition scores it (Story 1.110): the call of a probe of B-002
-  // is handed the oracle its partition lists, and an attempt of a development or held-out run is handed none.
-  const attemptDesignations = (run) => {
-    const found = {};
-    for (const file of filesUnder(path.join(run, 'evaluator-qualification')).filter((entry) => path.basename(entry) === 'score.json')) {
-      const probeId = path.basename(path.dirname(file));
-      (found[probeId] ??= new Set()).add(designatedBy(file));
-    }
-    return Object.fromEntries(Object.entries(found).map(([probeId, designated]) => [probeId, [...designated]]));
-  };
-  for (const partition of ['development', 'held-out']) {
-    const from = capturedPrompts().length;
-    const ran = cli(agentFlow, 'run', ['--partition', partition]);
-    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
-    const prompts = capturedPrompts().slice(from);
-    assert.equal(prompts.length > 0, true, `${partition}: the agent was never called`);
-    const designated = Object.values(attemptDesignations(test.latest(agentFlow.folder))).flat();
-    assert.ok(designated.length > 0, `${partition}: no evaluator attempt was scored`);
-    assert.deepEqual(
-      designated,
-      designated.map(() => null),
-      `${partition}: an evaluator attempt was handed a designated oracle`,
-    );
-    const keys = (prompt) =>
-      JSON.parse(prompt.slice(prompt.indexOf(MATERIAL_HEADING) + MATERIAL_HEADING.length)).keys.map((entry) => entry.key);
-    const expected =
-      partition === 'development' ? ['verdict-accepted', 'accepted:development-run'] : ['verdict-accepted', 'accepted:held-out-run'];
-    for (const prompt of prompts) {
-      assert.deepEqual(keys(prompt), expected, `${partition}: the agent was shown other keys than its view's`);
-      assert.deepEqual(
-        MAPPING_KEEP_OUT[partition].filter((token) => prompt.includes(token)),
-        [],
-        `${partition}: the agent's prompt holds the other partition`,
-      );
-    }
-  }
-
-  const agentBoth = cli(agentFlow, 'run');
-  assert.equal(agentBoth.status, 0, agentBoth.output);
-  assert.deepEqual(
-    attemptDesignations(test.latest(agentFlow.folder)),
-    { 'P-001': [null], 'P-002': [null], 'P-003': ['O-101'], 'P-004': ['O-002'] },
-    'an evaluator attempt of the both view was not scored against its own partition oracle',
-  );
-
-  // The tree digest a run records covers the files its partition reads: the mapping of its view in place of the file. A development
-  // run's digest therefore depends on no held-out row (the plan is never opened), a held-out run's on no development-only row, and
-  // a view that changes nothing digests the file as it is. The layer is read over a scratch evaluation folder with a stand-in
-  // engine whose digests are real hashes, so a changed byte changes the digest.
-  const standIn = {
-    digestBytes: (bytes) => `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`,
-    digestArtifact: (value, kind) =>
-      `sha256:${crypto
-        .createHash('sha256')
-        .update(`${kind}${JSON.stringify(value)}`)
-        .digest('hex')}`,
-  };
-  const layerFolder = path.join(commandFlow.directory, 'layer-unit');
-  // `indent` is the width the file's JSON is written in: the runtime serializes a view with two, so a file written with another width
-  // shows whether the digest took the view's bytes or the file's.
-  const layerOf = (partition, { mapping = mappingSource, plan = mappingPlan, planned = true, indent = 2 } = {}) => {
-    fs.rmSync(layerFolder, { recursive: true, force: true });
-    fs.cpSync(EVALUATOR_FIXTURE, path.join(layerFolder, 'evaluator'), { recursive: true });
-    fs.writeFileSync(path.join(layerFolder, 'evaluator/mapping.json'), `${JSON.stringify(mapping, null, indent)}\n`);
-    const manifest = {
-      evaluator: { kind: 'command', command: 'evaluator/rows.js', args: [], timeoutMs: 1000 },
-      ...(planned ? { partitionPlan: evaluation.partitionPlan } : {}),
-    };
-    const derived = contractView({ contractBytes: rubricBytes, evaluation: manifest, heldOutPlan: plan, partition });
-    return readEvaluatorLayer({ folder: layerFolder, evaluation: manifest, contract: derived.contract, engine: standIn, view: derived });
-  };
-  const rawDigest = (mapping) => {
-    const files = ['evaluator/frameworks.json', 'evaluator/mapping.json', 'evaluator/rows.js'].map((file) => ({
-      path: file,
-      sha256: crypto
-        .createHash('sha256')
-        .update(file === 'evaluator/mapping.json' ? JSON.stringify(mapping, null, 2) + '\n' : fs.readFileSync(path.join(layerFolder, file)))
-        .digest('hex'),
-    }));
-    return standIn.digestArtifact(files, 'evaluator-tree');
-  };
-  const edited = (key, change) => ({ ...mappingSource, keys: { ...mappingSource.keys, [key]: { ...mappingSource.keys[key], ...change } } });
-  // A key renamed in place stays a row of the same view, so each view still reads it.
-  const renamed = (key, to) => ({
-    ...mappingSource,
-    keys: Object.fromEntries(Object.entries(mappingSource.keys).map(([name, binding]) => [name === key ? to : name, binding])),
-  });
-  const developmentDigest = (mapping) => layerOf('development', { mapping }).treeDigest;
-  const heldOutDigest = (mapping, plan) => layerOf('held-out', { mapping, plan }).treeDigest;
-  const baseline = { development: developmentDigest(mappingSource), 'held-out': heldOutDigest(mappingSource, mappingPlan) };
-  assert.equal(layerOf('development').treeDigest, rawDigest(mappingSource), 'the development digest is not over the file as it is');
-  // A row only the held-out partition drops does not move the held-out digest, and one it keeps does; the development digest moves
-  // for both, and never for a plan row (it never opens the plan).
-  assert.equal(heldOutDigest(edited('accepted:development-run', { behaviorId: 'B-001' }), mappingPlan), baseline['held-out']);
-  assert.equal(heldOutDigest(edited('score:development-run', { levels: [0, 1, 2] }), mappingPlan), baseline['held-out']);
-  assert.equal(heldOutDigest(edited('score:RC-003', { levels: [0, 1, 2] }), mappingPlan), baseline['held-out']);
-  assert.notEqual(heldOutDigest(renamed('accepted:shared-run', 'accepted:shared'), mappingPlan), baseline['held-out']);
-  assert.notEqual(heldOutDigest(renamed('score:shared-run', 'score:shared'), mappingPlan), baseline['held-out']);
-  assert.notEqual(developmentDigest(renamed('accepted:development-run', 'accepted:development')), baseline.development);
-  assert.notEqual(developmentDigest(renamed('score:development-run', 'score:development')), baseline.development);
-  const otherRows = HELD_OUT_ROWS.map((row, index) => (index === 0 ? { ...row, key: 'accepted:held-out-run-2' } : row));
-  assert.notEqual(
-    heldOutDigest(mappingSource, { ...mappingPlan, mappings: otherRows }),
-    baseline['held-out'],
-    'a plan row left the digest alone',
-  );
-  assert.equal(layerOf('development', { plan: { ...mappingPlan, mappings: otherRows } }).treeDigest, baseline.development);
-  // The held-out digest moves with the rows the view holds and never with a development-only row that came or went: with no plan
-  // `mappings`, deleting every development-only row leaves it where it was.
-  const sharedOnlyMapping = {
-    schemaVersion: 1,
-    keys: { 'accepted:shared-run': SHARED_ROW, 'score:shared-run': criterionRow('R-001', SHARED_CRITERION) },
-  };
-  // Both files are written with four-space indentation, so a view that returned the file's bytes for the shared-only file would digest
-  // them as written, and the digest would move.
-  assert.equal(
-    layerOf('held-out', { mapping: sharedOnlyMapping, plan: heldOutPlan, indent: 4 }).treeDigest,
-    layerOf('held-out', { mapping: mappingSource, plan: heldOutPlan, indent: 4 }).treeDigest,
-    'the held-out digest moved when the last development-only rows were deleted',
-  );
-  // The both view digests the mapping it holds: every row of the file, then the plan's, and it moves when a plan row does.
-  const bothMapping = {
-    ...mappingSource,
-    keys: { ...mappingSource.keys, ...Object.fromEntries(HELD_OUT_ROWS.map(({ key, ...binding }) => [key, binding])) },
-  };
-  assert.equal(layerOf('both').treeDigest, rawDigest(bothMapping), 'the both digest is not over the both mapping');
-  assert.notEqual(layerOf('both').treeDigest, rawDigest(mappingSource), 'the both digest is over the file as it is');
-  assert.notEqual(
-    layerOf('both', { plan: { ...mappingPlan, mappings: otherRows } }).treeDigest,
-    layerOf('both').treeDigest,
-    'a plan row left the both digest alone',
-  );
-  // Without a plan the digest is the file's, in every partition.
-  for (const partition of ['development', 'held-out'])
-    assert.equal(layerOf(partition, { planned: false }).treeDigest, rawDigest(mappingSource), `${partition}: no plan changed the digest`);
-  // The layer's mapping is the view's, and a row the held-out view drops and the plan's row stand where `mappingView` puts them.
-  assert.deepEqual(Object.keys(layerOf('held-out').mapping.keys), [
-    'accepted:shared-run',
-    'score:shared-run',
-    'accepted:held-out-run',
-    'score:held-out-run',
-  ]);
-  assert.deepEqual(Object.keys(layerOf('development').mapping.keys), Object.keys(mappingSource.keys));
-  // A held-out row in the file the development run reads stops the run's layer, naming the file's own key.
-  assert.throws(
-    () => layerOf('development', { mapping: { ...mappingSource, keys: { ...mappingSource.keys, 'accepted:held-out-run': HELD_OUT_ROW } } }),
-    (error) =>
-      error instanceof EvaluatorLayerError &&
-      /key accepted:held-out-run binds oracle O-101, which the contract does not declare/.test(error.message),
-  );
-  // A plan row that repeats a file key stops the held-out layer with the row's place and no key.
-  assert.throws(
-    () => layerOf('held-out', { plan: { ...mappingPlan, mappings: [{ key: 'accepted:shared-run', ...HELD_OUT_ROW }] } }),
-    (error) =>
-      error instanceof EvaluatorLayerError &&
-      /mappings\[0\] has a key/.test(error.message) &&
-      !error.message.includes('accepted:shared-run'),
-  );
-
-  // ---- records through run and score: a harness's sealed records name only what the run's view declares (Story 1.107) ------------
-  // The harness here is the deterministic evaluator's own output for each partition (the records it sealed, its configuration and each
-  // set's isolation manifest), placed in `sealed-records/`. Each is a valid import for the partition it was sealed for, since the brief
-  // of a view is the brief of the same view in any run.
-  const recordsFlow = planProject('plan-records-flow');
-  write(path.join(recordsFlow.folder, 'evaluation.json'), {
-    ...read(path.join(recordsFlow.folder, 'evaluation.json')),
-    evaluator: { kind: 'records', records: 'sealed-records' },
-  });
-  fs.mkdirSync(path.join(recordsFlow.folder, 'sealed-records'));
-  assert.equal(cli(recordsFlow, 'digest').status, 0);
-  const recordsDirectory = path.join(recordsFlow.folder, 'sealed-records');
-  const placeRecords = (source) => {
-    fs.rmSync(recordsDirectory, { recursive: true, force: true });
-    fs.cpSync(source, recordsDirectory, { recursive: true });
-  };
-  const recordsRun = (partition) => {
-    const ran = cli(recordsFlow, 'run', ['--partition', partition]);
-    return { ...ran, run: fs.existsSync(path.join(recordsFlow.folder, 'runs')) ? test.latest(recordsFlow.folder) : null };
-  };
-  const recordsOutcomes = (partition) => {
-    const ran = recordsRun(partition);
-    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
-    const scored = cli(recordsFlow, 'score', ['--run', path.basename(ran.run)]);
-    assert.equal(scored.status, 0, `${partition}: ${scored.output}`);
-    assert.deepEqual(holding(ran.run, KEEP_OUT[partition]), [], `${partition}: the records run holds the other partition`);
-    return JSON.parse(outcomes(ran.run)).map(([probeId, outcome]) => [probeId, outcome.caught]);
-  };
-  // Each partition's own records import and score as the deterministic evaluator's did, so a records evaluator has a home beside a plan.
-  placeRecords(developmentRecords);
-  assert.deepEqual(recordsOutcomes('development'), [
-    ['P-001', false],
-    ['P-002', true],
-    ['P-004', true],
-  ]);
-  placeRecords(heldOutRecords);
-  assert.deepEqual(recordsOutcomes('held-out'), [['P-003', true]]);
-  // A record that names an oracle, a behavior or a criterion its view lacks is refused with nothing copied (exit 10), wherever the
-  // record keeps it: here a development record that disposes a held-out oracle, a finding that answers one and another that names a
-  // behavior no contract declares, and a score for a held-out criterion. The message names where each sits and never what it names.
-  const patchRecord = (source, probeId, edit) => {
-    placeRecords(source);
-    const file = path.join(recordsDirectory, probeId, 'record-1.json');
-    const record = read(file);
-    edit(record);
-    write(file, record);
-    return record;
-  };
-  const refused = (partition, expected, absent) => {
-    const ran = recordsRun(partition);
-    assert.equal(ran.status, 10, `${partition}: ${ran.output}`);
-    assert.match(ran.output, /the records evaluator's records cannot be scored: sealed-records\/P-00\d\/record-1\.json carries /);
-    for (const text of expected) assert.ok(ran.output.includes(text), `${partition}: the refusal does not name ${text}:\n${ran.output}`);
-    assert.deepEqual(
-      absent.filter((token) => ran.output.includes(token)),
-      [],
-      `${partition}: the refusal printed the other partition's text:\n${ran.output}`,
-    );
-    assert.deepEqual(holding(ran.run, absent), [], `${partition}: the refused run holds the other partition`);
-    assert.equal(
-      fs.existsSync(path.join(ran.run, 'trial-sets')) && filesUnder(path.join(ran.run, 'trial-sets')).length > 0,
-      false,
-      `${partition}: a refused import copied records`,
-    );
-  };
-  const developmentRecord = patchRecord(developmentRecords, 'P-002', (record) => {
-    record.oracleDispositions.push({ oracleId: 'O-101', disposition: 'held', observationIds: [], note: null });
-    record.findings.push(
-      { ...record.findings[0], findingId: 'F-091', oracleId: 'O-101' },
-      { ...record.findings[0], findingId: 'F-092', behaviorId: 'B-999' },
-    );
-    record.judgeResults.push({ rubricId: 'R-101', criterionId: 'RC-101', score: 1, note: null });
-  });
-  const recordedAt = (record) => [
-    `oracleDispositions[${record.oracleDispositions.length - 1}]`,
-    `findings[${record.findings.length - 2}].oracleId`,
-    `findings[${record.findings.length - 1}].behaviorId`,
-    'judgeResults[0]',
-  ];
-  refused('development', [...recordedAt(developmentRecord), 'the development view does not declare'], ['O-101', 'B-999', 'RC-101', CANARY]);
-  const heldOutRecord = patchRecord(heldOutRecords, 'P-003', (record) => {
-    record.oracleDispositions.unshift({ oracleId: 'O-002', disposition: 'held', observationIds: [], note: null });
-    record.findings.push({ ...record.findings[0], findingId: 'F-091', oracleId: 'O-002' });
-  });
-  refused(
-    'held-out',
-    ['oracleDispositions[0]', `findings[${heldOutRecord.findings.length - 1}].oracleId`, 'the held-out view does not declare'],
-    ['O-002', 'development-run'],
-  );
-  // A record also holds the plan steps its observations record, each with its call inputs and every response channel, named
-  // `<label>-<stepId>`. A development run never opens the plan, so it cannot know a held-out step ID, and only an allowlist (an ID
-  // is `<run label>-<a step the view declares>` or `<run label>-call-<n>`) refuses it under every spelling a harness might give it:
-  // TeA's own `trial-1-` form, the `baseline-` label of the baseline arm, no label at all and a label of the harness's own. The other
-  // partition's observation is refused wherever it sits in the array (first and last alike), the refusal names its place and no ID, and
-  // nothing of it reaches the run directory: not the step's ID and not the request that carries the canary.
-  const observationOf = (source, probeId, stepId) => {
-    const record = read(path.join(source, probeId, 'record-1.json'));
-    const found = record.observations.find((observation) => observation.observationId.endsWith(`-${stepId}`));
-    assert.ok(found, `${probeId} records no ${stepId} observation`);
-    return found;
-  };
-  const withObservation = (source, probeId, observation, position) =>
-    patchRecord(source, probeId, (record) => {
-      const added = { ...structuredClone(observation), sequence: Math.max(...record.observations.map((entry) => entry.sequence)) + 1 };
-      if (position === 'first') record.observations.unshift(added);
-      else record.observations.push(added);
-    });
-  const heldOutObservation = observationOf(heldOutRecords, 'P-003', 'held-out-run');
-  assert.ok(JSON.stringify(heldOutObservation).includes(CANARY), 'the held-out observation carries none of the held-out request');
-  const developmentObservation = observationOf(developmentRecords, 'P-002', 'development-run');
-  const respelled = (observation, spelling) => ({ ...observation, observationId: spelling(observation.observationId) });
-  const spellings = [
-    (id) => id,
-    (id) => id.replace(/^trial-1/, 'baseline'),
-    (id) => id.replace(/^trial-1-/, ''),
-    (id) => id.replace(/^trial-1/, 'obs'),
-  ];
-  for (const spelling of spellings) {
-    for (const position of ['first', 'last']) {
-      const foreign = withObservation(developmentRecords, 'P-002', respelled(heldOutObservation, spelling), position);
-      refused(
-        'development',
-        [`observations[${position === 'first' ? 0 : foreign.observations.length - 1}]`, 'the development view does not declare'],
-        [...KEEP_OUT.development, spelling(heldOutObservation.observationId)],
-      );
-      const other = withObservation(heldOutRecords, 'P-003', respelled(developmentObservation, spelling), position);
-      refused(
-        'held-out',
-        [`observations[${position === 'first' ? 0 : other.observations.length - 1}]`, 'the held-out view does not declare'],
-        [...KEEP_OUT['held-out'], spelling(developmentObservation.observationId)],
-      );
-    }
-  }
-  // A citation names an observation the record holds: a development record whose disposition or finding cites the held-out
-  // observation (which it does not hold) is refused wherever the citation sits in the list, and the step ID reaches neither the
-  // output nor the run directory, where `score` would print it.
-  for (const [where, cite] of [
-    ['oracleDispositions[0]', (record) => record.oracleDispositions[0]],
-    ['findings[0]', (record) => record.findings[0]],
-  ]) {
-    for (const position of ['first', 'last']) {
-      const record = patchRecord(developmentRecords, 'P-002', (patched) => {
-        const cited = cite(patched).observationIds;
-        if (position === 'first') cited.unshift(heldOutObservation.observationId);
-        else cited.push(heldOutObservation.observationId);
-      });
-      const cited = cite(record).observationIds;
-      refused(
-        'development',
-        [`${where}.observationIds[${position === 'first' ? 0 : cited.length - 1}]`, 'the development view does not declare'],
-        [...KEEP_OUT.development, heldOutObservation.observationId],
-      );
-    }
-  }
-
-  // ---- gameability: each view answers the steps of its own partition from the answers that partition keeps (Story 1.109) ---------
-  // The answers an arm is handed are those of the steps its view declares, whichever files were read: a view that was handed the other
-  // partition's answers, or a file that holds a step the view does not declare, passes none of them on.
-  const mainAnswers = { 'shared-run': SHARED_ANSWER, 'development-run': DEVELOPMENT_ANSWER };
-  const heldOutAnswers = { 'held-out-run': HELD_OUT_ANSWER };
-  const answersOf = (options) => Object.keys(answersForView(options));
-  assert.deepEqual(answersOf({ steps: mainAnswers, stepIds: ['shared-run', 'development-run'] }), ['shared-run', 'development-run']);
-  assert.deepEqual(
-    answersOf({ steps: { ...heldOutAnswers, ...mainAnswers }, stepIds: ['shared-run', 'development-run'] }),
-    ['shared-run', 'development-run'],
-    'a development view was handed a held-out answer that sat in the development file',
-  );
-  assert.deepEqual(
-    answersOf({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['shared-run', 'development-run'] }),
-    ['shared-run', 'development-run'],
-    'a development view was handed the held-out answers',
-  );
-  assert.deepEqual(
-    answersOf({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['shared-run', 'held-out-run'] }),
-    ['shared-run', 'held-out-run'],
-    'a held-out view keeps a development-only answer or lacks its own',
-  );
-  assert.deepEqual(
-    answersOf({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['held-out-run', 'development-run', 'shared-run'] }),
-    ['held-out-run', 'development-run', 'shared-run'],
-  );
-  assert.deepEqual(
-    answersForView({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['shared-run', 'development-run', 'held-out-run'] }),
-    { ...mainAnswers, ...heldOutAnswers },
-  );
-  assert.deepEqual(answersForView({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: [] }), {});
-  // A step ID has the shape `constructor` admits, so an answer is looked up as an own key and never as what every object inherits.
-  assert.deepEqual(
-    answersForView({ steps: mainAnswers, heldOutSteps: { constructor: HELD_OUT_ANSWER }, stepIds: ['constructor'] }),
-    { constructor: HELD_OUT_ANSWER },
-    'a held-out step named constructor was not answered from its own key',
-  );
-  assert.deepEqual(answersForView({ steps: { constructor: DEVELOPMENT_ANSWER }, heldOutSteps: {}, stepIds: ['constructor'] }), {
-    constructor: DEVELOPMENT_ANSWER,
-  });
-  assert.deepEqual(
-    answersForView({ steps: mainAnswers, heldOutSteps: heldOutAnswers, stepIds: ['constructor', 'toString'] }),
-    {},
-    'a step named after an inherited member was answered with it',
-  );
-
-  // `check` over a folder with gameability probes: the 1.51 refusal is gone, and every answer has a home.
-  const gamed = planProject('plan-gameability-check', null, null, null, {});
-  const GAME_PROBES = ['P-005', 'P-006'];
-  /** `text` as a pattern that matches it and nothing else. */
-  const exact = (text) => text.replaceAll(/[./]/g, String.raw`\$&`);
-  const gameSnapshot = path.join(gamed.directory, 'game-snapshot');
-  const GAME_PATHS = ['contract.json', 'evaluation.json', 'corpus', 'corpus-index.json', 'probes', 'mutations'];
-  for (const entry of GAME_PATHS) fs.cpSync(path.join(gamed.folder, entry), path.join(gameSnapshot, entry), { recursive: true });
-  const restoreGame = () => {
-    for (const entry of GAME_PATHS) {
-      fs.rmSync(path.join(gamed.folder, entry), { recursive: true, force: true });
-      fs.cpSync(path.join(gameSnapshot, entry), path.join(gamed.folder, entry), { recursive: true });
-    }
-  };
-  const changeGame = (file, edit) => {
-    const value = read(path.join(gamed.folder, file));
-    edit(value);
-    write(path.join(gamed.folder, file), value);
-  };
-  const answersFile = (probeId, heldOut) => `${heldOut ? HELD_OUT_ANSWERS_DIR : 'corpus/gameability'}/${probeId}.json`;
-  const changeAnswers = (probeId, heldOut, edit) => changeGame(answersFile(probeId, heldOut), (value) => edit(value.steps));
-  /**
-   * A command over an edited copy of the gameability folder, restored afterwards; the corpus index follows the edit unless `stale`.
-   * `cleanup` runs first, for an edit that leaves a path the restore could not remove (a mode that denies the owner).
-   */
-  const gameRan = (edit, { command = 'check', args = [], stale = false, cleanup = () => {} } = {}) => {
-    try {
-      edit();
-      if (!stale) assert.equal(cli(gamed, 'digest').status, 0);
-      return cli(gamed, command, args);
-    } finally {
-      cleanup();
-      restoreGame();
-    }
-  };
-  const gamePristine = cli(gamed, 'check');
-  assert.equal(gamePristine.status, 0, `check refused a gameability probe beside a partitionPlan\n${gamePristine.output}`);
-  assert.doesNotMatch(gamePristine.output, /does not partition gameability probes/);
-  const ghostKey = 'canary-/interactions/free text';
-  // A key of lower-case letters, digits and hyphens that still fails the step ID's shape (a trailing hyphen) is free text too.
-  const hyphenKey = 'canary-';
-  const gameFindings = [];
-  for (const probeId of GAME_PROBES) {
-    // P-005 comes first and P-006 last in the folder, so a rule that reads only the first or the last probe passes one of each pair.
-    const [main, heldOut] = [answersFile(probeId, false), answersFile(probeId, true)];
-    gameFindings.push(
-      [
-        `a development answer left out of ${probeId}`,
-        () => changeAnswers(probeId, false, (steps) => delete steps['development-run']),
-        new RegExp(
-          `${exact(main)}.*answers no response for interaction plan step development-run, so the gameability arm cannot run the plan`,
-        ),
-      ],
-      [
-        `a held-out answer left out of ${probeId}`,
-        () => changeAnswers(probeId, true, (steps) => delete steps['held-out-run']),
-        new RegExp(
-          `${exact(heldOut)}.*answers no response for held-out plan step held-out-run, so the gameability arm cannot run the held-out and both views`,
-        ),
-      ],
-      [
-        `the held-out answers of ${probeId} absent`,
-        () => fs.rmSync(path.join(gamed.folder, heldOut)),
-        new RegExp(
-          `probes/${probeId}\\.probe\\.json takes the gameability route under a partitionPlan whose held-out plan declares a step, and ${exact(heldOut)} is absent`,
-        ),
-      ],
-      [
-        `a development step answered in the held-out answers of ${probeId}`,
-        () => changeAnswers(probeId, true, (steps) => (steps['development-run'] = DEVELOPMENT_ANSWER)),
-        new RegExp(`${exact(heldOut)}.*answers step development-run, which the held-out plan does not declare`),
-      ],
-      [
-        `a held-out step answered in the development answers of ${probeId}`,
-        () => changeAnswers(probeId, false, (steps) => (steps['held-out-run'] = HELD_OUT_ANSWER)),
-        new RegExp(`${exact(main)}.*answers step held-out-run, which the contract's interaction plan does not declare`),
-      ],
-      [
-        `a held-out answer of another kind for ${probeId}`,
-        () => changeAnswers(probeId, true, (steps) => (steps['held-out-run'] = { status: 200 })),
-        /answers step held-out-run, a command, with an HTTP request's response, so the gameability arm cannot answer it/,
-      ],
-      [
-        `an infrastructure exit code in a held-out answer of ${probeId}`,
-        () => changeAnswers(probeId, true, (steps) => (steps['held-out-run'] = { ...HELD_OUT_ANSWER, exitCode: 3 })),
-        /step held-out-run exits 3, which its registry entry declares as an infrastructure exit code/,
-      ],
-    );
-  }
-  gameFindings.push(
-    [
-      'a free-text step in the held-out answers, first',
-      () =>
-        changeAnswers('P-005', true, (steps) => {
-          const kept = { ...steps };
-          for (const key of Object.keys(steps)) delete steps[key];
-          steps[ghostKey] = HELD_OUT_ANSWER;
-          Object.assign(steps, kept);
-        }),
-      /corpus\/held-out\/gameability\/P-005\.json.*answers step steps entry 0, which the held-out plan does not declare/,
-    ],
-    [
-      'a free-text step in the held-out answers, last',
-      () => changeAnswers('P-006', true, (steps) => (steps[ghostKey] = HELD_OUT_ANSWER)),
-      /corpus\/held-out\/gameability\/P-006\.json.*answers step steps entry 1, which the held-out plan does not declare/,
-    ],
-    [
-      'an off-shape step of lower-case letters, digits and hyphens in the held-out answers',
-      () => changeAnswers('P-006', true, (steps) => (steps[hyphenKey] = HELD_OUT_ANSWER)),
-      /corpus\/held-out\/gameability\/P-006\.json.*answers step steps entry 1, which the held-out plan does not declare/,
-    ],
-    [
-      'a held-out plan step named constructor that no answer covers',
-      () =>
-        changeGame(PLAN_FILE, (plan) => {
-          plan.interactionPlan.push({ ...structuredClone(plan.interactionPlan[0]), stepId: 'constructor' });
-        }),
-      /answers no response for held-out plan step constructor, so the gameability arm cannot run the held-out and both views/,
-    ],
-    [
-      'a held-out answer off its schema',
-      () => changeAnswers('P-005', true, (steps) => (steps['held-out-run'] = { stdout: 'canary-schema-text' })),
-      /corpus\/held-out\/gameability\/P-005\.json: \[gameability\] \/steps\/\* must/,
-    ],
-    [
-      'an unparsable held-out answers file',
-      () => write(path.join(gamed.folder, answersFile('P-006', true)), 'canary-garbage {"steps": ['),
-      /corpus\/held-out\/gameability\/P-006\.json does not parse as JSON/,
-    ],
-    [
-      'the naive oracle of a held-out probe that reads a development-only step',
-      () => {
-        changeGame('contract.json', (contract) => {
-          const oracle = structuredClone(contract.oracles.find((candidate) => candidate.id === 'O-002'));
-          contract.oracles.push({ ...oracle, id: 'O-003' });
-        });
-        changeGame('probes/P-006.probe.json', (probe) => (probe.qualification.naiveOracle = 'O-003'));
-      },
-      /probes\/P-006\.probe\.json.*qualification\.naiveOracle O-003 reads a development-only step, so the held-out view this held-out probe runs in drops it/,
-    ],
-    [
-      'the naive oracle of a held-out probe that reads a development-only step through its evidence targets alone',
-      () => {
-        changeGame('contract.json', (contract) => {
-          const oracle = structuredClone(contract.oracles.find((candidate) => candidate.id === 'O-001'));
-          oracle.direction.evidenceTargets.push('/interactions/development-run/stdout');
-          contract.oracles.push({ ...oracle, id: 'O-003' });
-        });
-        changeGame('probes/P-006.probe.json', (probe) => (probe.qualification.naiveOracle = 'O-003'));
-      },
-      /probes\/P-006\.probe\.json.*qualification\.naiveOracle O-003 reads a development-only step, so the held-out view this held-out probe runs in drops it/,
-    ],
-  );
-  for (const [name, edit, pattern] of gameFindings) {
-    const ran = gameRan(edit);
-    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
-    assert.match(ran.output, pattern, name);
-    assert.equal(ran.output.includes('canary-'), false, `${name}: check quoted a byte of the held-out answers:\n${ran.output}`);
-  }
-  // The same oracle is a fine naive oracle for a development probe, whose arm runs in the development and both views, both of
-  // which hold it.
-  const developmentNaive = gameRan(() => {
-    changeGame('contract.json', (contract) => {
-      contract.oracles.push({ ...structuredClone(contract.oracles.find((candidate) => candidate.id === 'O-002')), id: 'O-003' });
-    });
-    changeGame('probes/P-005.probe.json', (probe) => (probe.qualification.naiveOracle = 'O-003'));
-  });
-  assert.doesNotMatch(developmentNaive.output, /reads a development-only step/, developmentNaive.output);
-  // A probe whose ID is no `P-NNN` is named by its own file, and no file under corpus/held-out/gameability/ is read for it.
-  const pathProbe = gameRan(() => {
-    changeGame('probes/P-005.probe.json', (probe) => (probe.probeId = 'escape-probe'));
-    fs.renameSync(path.join(gamed.folder, 'probes/P-005.probe.json'), path.join(gamed.folder, 'probes/escape-probe.probe.json'));
-  });
-  assert.doesNotMatch(pathProbe.output, /corpus\/held-out\/gameability\/escape-probe/, pathProbe.output);
-  assert.throws(
-    () => readHeldOutResponse(gamed.folder, '../plan'),
-    (error) => error instanceof PartitionPlanError && /of the form P-NNN/.test(error.message),
-  );
-  // A held-out plan that declares no step has nothing to answer: the answers are not required, and one that answers a step is named.
-  const noHeldOutStep = (edit = () => {}) =>
-    gameRan(() => {
-      changeGame(PLAN_FILE, (plan) => {
-        plan.interactionPlan = [];
-        plan.oracles = JSON.parse(JSON.stringify(plan.oracles).replaceAll('held-out-run', 'shared-run'));
-      });
-      edit();
-    });
-  const noStepAbsent = noHeldOutStep(() => fs.rmSync(path.join(gamed.folder, HELD_OUT_ANSWERS_DIR), { recursive: true }));
-  assert.equal(noStepAbsent.status, 0, noStepAbsent.output);
-  const noStepAnswered = noHeldOutStep();
-  assert.equal(noStepAnswered.status, 10, noStepAnswered.output);
-  assert.match(
-    noStepAnswered.output,
-    /corpus\/held-out\/gameability\/P-005\.json.*answers step held-out-run, which the held-out plan does not declare/,
-  );
-  // The run reads the held-out answers only when the plan declares a step: with none, and no answers file, a held-out preflight of the
-  // one held-out probe left (a gameability probe over the shared step) qualifies it.
-  const noStepRun = gameRan(
-    () => {
-      changeGame(PLAN_FILE, (plan) => {
-        plan.interactionPlan = [];
-        // The oracle reads the shared step and wants a verdict the degenerate answer never gives, so the arm violates it.
-        plan.oracles = JSON.parse(
-          JSON.stringify(plan.oracles)
-            .replaceAll('held-out-run', 'shared-run')
-            .replaceAll('verdict: accepted', 'verdict: held-out accepted'),
-        );
-      });
-      changeGame('evaluation.json', (evaluation) => (evaluation.heldOutProbes = ['P-006']));
-      fs.rmSync(path.join(gamed.folder, 'probes/P-003.probe.json'));
-      fs.rmSync(path.join(gamed.folder, 'mutations/M-003.mutation.json'));
-      fs.rmSync(path.join(gamed.folder, HELD_OUT_ANSWERS_DIR), { recursive: true });
-    },
-    { command: 'preflight', args: ['--partition', 'held-out'] },
-  );
-  assert.equal(noStepRun.status, 0, noStepRun.output);
-  assert.match(noStepRun.output, /probes\/P-006\.probe\.json: qualified/);
-  // A held-out answers directory that is a link, and an answers file that is one, open nothing the folder does not own.
-  const elsewhereAnswers = path.join(gamed.directory, 'elsewhere-answers');
-  fs.cpSync(path.join(gamed.folder, HELD_OUT_ANSWERS_DIR), elsewhereAnswers, { recursive: true });
-  for (const [name, edit, pattern] of [
-    [
-      'a linked answers directory',
-      () => {
-        fs.rmSync(path.join(gamed.folder, HELD_OUT_ANSWERS_DIR), { recursive: true });
-        fs.symlinkSync(elsewhereAnswers, path.join(gamed.folder, HELD_OUT_ANSWERS_DIR));
-      },
-      /\[gameability\] corpus\/held-out\/gameability\/P-005\.json is not directly under corpus\/held-out\/gameability\/ of the evaluation folder$/m,
-    ],
-    [
-      'a linked answers file',
-      () => {
-        const file = path.join(gamed.folder, answersFile('P-005', true));
-        fs.rmSync(file);
-        fs.symlinkSync(path.join(elsewhereAnswers, 'P-006.json'), file);
-      },
-      /\[gameability\] corpus\/held-out\/gameability\/P-005\.json is not a regular file$/m,
-    ],
-  ]) {
-    const ran = gameRan(edit, { stale: true });
-    assert.equal(ran.status, 10, `${name}: ${ran.output}`);
-    assert.match(ran.output, pattern, name);
-  }
-  // A contract error elsewhere blames no answer: a plan that fails its schema is the only finding, whatever the answers hold.
-  const planBroken = gameRan(() => {
-    changeGame(PLAN_FILE, (plan) => (plan['canary-top-level'] = 'canary-top-value'));
-    changeAnswers('P-005', true, (steps) => delete steps['held-out-run']);
-  });
-  assert.equal(planBroken.status, 10, planBroken.output);
-  assert.doesNotMatch(planBroken.output, /\[gameability\]/, 'a plan that fails its schema was held to its answers');
-  assert.equal(planBroken.output.includes('canary-'), false, planBroken.output);
-
-  // A development partition never opens the held-out answers, so a file it cannot read, one that is absent and one edited since the
-  // index was written change nothing for it, and a held-out or both run refuses what it cannot read.
-  const onDevelopment = () => ({ args: ['--partition', 'development'] });
-  for (const [name, edit] of [
-    ['unparsable answers', () => write(path.join(gamed.folder, answersFile('P-005', true)), 'canary-garbage {"steps": [')],
-    ['absent answers', () => fs.rmSync(path.join(gamed.folder, HELD_OUT_ANSWERS_DIR), { recursive: true })],
-  ]) {
-    for (const command of ['preflight', 'run']) {
-      const before = launchCount(gamed);
-      const development = gameRan(edit, { command, ...onDevelopment() });
-      assert.equal(development.status, 0, `${name}: a development ${command} opened the held-out answers\n${development.output}`);
-      assert.ok(launchesSince(gamed, before).length > 0, `${name}: the development ${command} launched nothing`);
-      assert.equal(development.output.includes('canary-garbage'), false, development.output);
-    }
-    for (const [command, args] of [
-      ['preflight', ['--partition', 'held-out']],
-      ['run', []],
-    ]) {
-      const refused = gameRan(edit, { command, args });
-      assert.equal(refused.status, 10, `${name} ${command} ${args.join(' ')}: ${refused.output}`);
-      assert.match(
-        refused.output,
-        /corpus\/held-out\/gameability\/P-005\.json|probes\/P-005\.probe\.json takes the gameability route under a partitionPlan/,
-      );
-      assert.equal(refused.output.includes('canary-garbage'), false, refused.output);
-    }
-  }
-  // The held-out files are sealed from a development run: whatever sits at their paths, a link, a FIFO or a path nobody may open, a
-  // development run refuses none of it (the corpus index comparison neither lists nor opens it, and the tree reading lists the folder
-  // and takes `lstat` metadata alone), and a held-out run, a both run and `check` refuse it by path with no stack. A mode that denies
-  // the owner proves nothing for root.
-  const answersDirectory = path.join(gamed.folder, HELD_OUT_ANSWERS_DIR);
-  const answersPath = (probeId) => path.join(gamed.folder, answersFile(probeId, true));
-  const planPath = path.join(gamed.folder, PLAN_FILE);
-  // Whatever sits directly under `corpus/held-out/`, outside `gameability/` and not the plan, is sealed the same way: a development
-  // run's index comparison and tree reading decide the whole folder by its path.
-  const heldOutDirectory = path.join(gamed.folder, 'corpus', 'held-out');
-  const deniesOwner = process.platform !== 'win32' && typeof process.getuid === 'function' && process.getuid() !== 0;
-  const ownerHolds = (file, mode) => () => fs.chmodSync(file, mode);
-  const sealedCases = [
-    [
-      'a linked answers file',
-      () => {
-        fs.rmSync(answersPath('P-005'));
-        fs.symlinkSync(path.join(elsewhereAnswers, 'P-006.json'), answersPath('P-005'));
-      },
-      /corpus\/held-out\/gameability\/P-005\.json/,
-    ],
-    [
-      'a linked answers directory',
-      () => {
-        fs.rmSync(answersDirectory, { recursive: true });
-        fs.symlinkSync(elsewhereAnswers, answersDirectory);
-      },
-      /corpus\/held-out\/gameability/,
-    ],
-    [
-      'a FIFO in place of an answers file',
-      () => {
-        fs.rmSync(answersPath('P-005'));
-        const made = spawnSync('mkfifo', [answersPath('P-005')]);
-        assert.equal(made.status, 0, `mkfifo failed: ${made.stderr}`);
-      },
-      /corpus\/held-out\/gameability\/P-005\.json/,
-    ],
-    [
-      'a link directly under the held-out folder',
-      () => fs.symlinkSync(path.join(elsewhereAnswers, 'P-006.json'), path.join(heldOutDirectory, 'link.json')),
-      /corpus\/held-out\/link\.json/,
-      undefined,
-      'corpus/held-out/link.json',
-    ],
-    [
-      'a FIFO directly under the held-out folder',
-      () => {
-        const made = spawnSync('mkfifo', [path.join(heldOutDirectory, 'pipe.json')]);
-        assert.equal(made.status, 0, `mkfifo failed: ${made.stderr}`);
-      },
-      /corpus\/held-out\/pipe\.json/,
-      undefined,
-      'corpus/held-out/pipe.json',
-    ],
-    [
-      'an edited file directly under the held-out folder',
-      () => {
-        write(path.join(heldOutDirectory, 'other.json'), { schemaVersion: 1 });
-        assert.equal(cli(gamed, 'digest').status, 0);
-        fs.appendFileSync(path.join(heldOutDirectory, 'other.json'), '\n');
-      },
-      /corpus-index\.json is stale.*corpus\/held-out\/other\.json changed or added/,
-      undefined,
-      'corpus/held-out/other.json',
-    ],
-  ];
-  if (deniesOwner) {
-    const notesDirectory = path.join(heldOutDirectory, 'notes');
-    sealedCases.push(
-      [
-        'an answers directory nobody may open',
-        () => fs.chmodSync(answersDirectory, 0),
-        /corpus\/held-out\/gameability/,
-        ownerHolds(answersDirectory, 0o755),
-      ],
-      [
-        'an answers file nobody may open',
-        () => fs.chmodSync(answersPath('P-005'), 0),
-        /corpus\/held-out\/gameability\/P-005\.json/,
-        ownerHolds(answersPath('P-005'), 0o644),
-      ],
-      ['a held-out plan nobody may open', () => fs.chmodSync(planPath, 0), /corpus\/held-out\/plan\.json/, ownerHolds(planPath, 0o644)],
-      [
-        'a directory directly under the held-out folder nobody may list',
-        () => {
-          fs.mkdirSync(notesDirectory);
-          write(path.join(notesDirectory, 'a.json'), { schemaVersion: 1 });
-          fs.chmodSync(notesDirectory, 0);
-        },
-        /corpus\/held-out\/notes/,
-        ownerHolds(notesDirectory, 0o755),
-        'corpus/held-out/notes',
-      ],
-    );
-  }
-  for (const [name, edit, pattern, cleanup, place = 'corpus/held-out/gameability'] of sealedCases) {
-    for (const command of ['preflight', 'run']) {
-      const before = launchCount(gamed);
-      const development = gameRan(edit, { command, ...onDevelopment(), stale: true, cleanup });
-      assert.equal(development.status, 0, `${name}: a development ${command} read the sealed path\n${development.output}`);
-      assert.ok(launchesSince(gamed, before).length > 0, `${name}: the development ${command} launched nothing`);
-      assert.equal(
-        development.output.includes(place),
-        false,
-        `${name}: a development ${command} named a sealed path\n${development.output}`,
-      );
-    }
-    for (const [command, args] of [
-      ['preflight', ['--partition', 'held-out']],
-      ['run', []],
-      ['check', []],
-    ]) {
-      const refused = gameRan(edit, { command, args, stale: true, cleanup });
-      assert.equal(refused.status, 10, `${name}, ${command} ${args.join(' ')}: ${refused.output}`);
-      assert.match(refused.output, pattern, `${name}, ${command} ${args.join(' ')}`);
-      assert.doesNotMatch(
-        refused.output,
-        /\n\s+at \S+ \(|node:internal|scandir/,
-        `${name}, ${command}: the refusal is a stack\n${refused.output}`,
-      );
-    }
-  }
-  // A directory spelled in another case is no folder the answers sit in: a case-insensitive file system resolves its path to the same
-  // place, so the on-disk spelling decides, and a case-sensitive one has no such directory. Either way `check` and a held-out or both
-  // run refuse the file by path, and a development run leaves the directory alone.
-  const variantSpelling = () => {
-    fs.renameSync(answersDirectory, `${answersDirectory}-moving`);
-    fs.renameSync(`${answersDirectory}-moving`, path.join(path.dirname(answersDirectory), 'Gameability'));
-  };
-  const variantPattern = /corpus\/held-out\/gameability\/P-005\.json.*(is not directly under|is absent)/;
-  for (const command of ['preflight', 'run']) {
-    const development = gameRan(variantSpelling, { command, ...onDevelopment(), stale: true });
-    assert.equal(development.status, 0, `a case-variant answers directory reached a development ${command}\n${development.output}`);
-    assert.equal(development.output.includes('Gameability'), false, development.output);
-  }
-  for (const [command, args] of [
-    ['preflight', ['--partition', 'held-out']],
-    ['run', []],
-    ['check', []],
-  ]) {
-    const refused = gameRan(variantSpelling, { command, args, stale: true });
-    assert.equal(refused.status, 10, `a case-variant answers directory, ${command} ${args.join(' ')}: ${refused.output}`);
-    assert.match(refused.output, variantPattern, `a case-variant answers directory, ${command} ${args.join(' ')}`);
-  }
-  // The plan's directory spelled in another case is no folder the plan sits in: the on-disk spelling decides for `check` and a held-out
-  // or both run, which refuse `corpus/held-out/plan.json` by path, and a development run leaves the variant directory sealed, so a
-  // file under it that nobody may open changes nothing for it (a mode that denies the owner proves nothing for root).
-  const variantDirectory = path.join(gamed.folder, 'corpus', 'Held-Out');
-  const variantPlanDirectory = () => {
-    fs.renameSync(heldOutDirectory, `${heldOutDirectory}-moving`);
-    fs.renameSync(`${heldOutDirectory}-moving`, variantDirectory);
-  };
-  const variantPlanDenied = () => {
-    variantPlanDirectory();
-    fs.chmodSync(path.join(variantDirectory, 'plan.json'), 0);
-  };
-  const variantPlanCleanup = ownerHolds(path.join(variantDirectory, 'plan.json'), 0o644);
-  for (const [name, edit, cleanup] of [
-    ['a case-variant plan directory', variantPlanDirectory, undefined],
-    ...(deniesOwner ? [['a case-variant plan directory holding a plan nobody may open', variantPlanDenied, variantPlanCleanup]] : []),
-  ]) {
-    for (const command of ['preflight', 'run']) {
-      const development = gameRan(edit, { command, ...onDevelopment(), stale: true, cleanup });
-      assert.equal(development.status, 0, `${name} reached a development ${command}\n${development.output}`);
-      assert.equal(development.output.includes('Held-Out'), false, development.output);
-    }
-  }
-  for (const [command, args] of [
-    ['preflight', ['--partition', 'held-out']],
-    ['run', []],
-    ['check', []],
-  ]) {
-    // The index follows the edit, so the refusal is the plan reader's and no stale index stands in for it.
-    const refused = gameRan(variantPlanDirectory, { command, args });
-    assert.equal(refused.status, 10, `a case-variant plan directory, ${command} ${args.join(' ')}: ${refused.output}`);
-    assert.match(
-      refused.output,
-      /corpus\/held-out\/plan\.json (is not directly under corpus\/held-out\/ of the evaluation folder|cannot be read \(ENOENT\))/,
-      `a case-variant plan directory, ${command} ${args.join(' ')}`,
-    );
-    assert.doesNotMatch(
-      refused.output,
-      /stale/,
-      `a case-variant plan directory, ${command} ${args.join(' ')}: a stale index stood in\n${refused.output}`,
-    );
-    assert.doesNotMatch(
-      refused.output,
-      /\n\s+at \S+ \(|node:internal/,
-      `a case-variant plan directory, ${command}: a stack\n${refused.output}`,
-    );
-  }
-  const staleAnswers = () => fs.appendFileSync(path.join(gamed.folder, answersFile('P-006', true)), '\n');
-  const developmentStale = gameRan(staleAnswers, { command: 'preflight', args: ['--partition', 'development'], stale: true });
-  assert.equal(
-    developmentStale.status,
-    0,
-    `an edit to the held-out answers is a stale index for a development run\n${developmentStale.output}`,
-  );
-  for (const [command, args] of [
-    ['preflight', ['--partition', 'held-out']],
-    ['run', []],
-    ['check', []],
-  ]) {
-    const stale = gameRan(staleAnswers, { command, args, stale: true });
-    assert.equal(stale.status, 10, `${command} ${args.join(' ')}: ${stale.output}`);
-    assert.match(stale.output, /corpus-index\.json is stale.*corpus\/held-out\/gameability\/P-006\.json changed or added/);
-  }
-  // A held-out answer that satisfies the disciplined oracle does not qualify the probe (exit 11), and the message names the held-out
-  // answers beside the response file, since either could hold the answer that games nothing.
-  const wrongAnswer = gameRan(
-    () => changeAnswers('P-006', true, (steps) => (steps['held-out-run'] = { ...HELD_OUT_ANSWER, stdout: 'verdict: accepted\n' })),
-    { command: 'preflight', args: ['--partition', 'held-out'] },
-  );
-  assert.equal(wrongAnswer.status, 11, wrongAnswer.output);
-  assert.match(
-    wrongAnswer.output,
-    /over the degenerate response corpus\/gameability\/P-006\.json and corpus\/held-out\/gameability\/P-006\.json, the disciplined oracle O-101 of B-002 is held where it must be violated/,
-  );
-  // A development file never holds a held-out step: a development answer file that does is refused by a development run at `check`.
-  const misplacedAnswer = gameRan(() => changeAnswers('P-005', false, (steps) => (steps['held-out-run'] = HELD_OUT_ANSWER)), {
-    command: 'preflight',
-    args: ['--partition', 'development'],
-  });
-  assert.equal(misplacedAnswer.status, 10, misplacedAnswer.output);
-  assert.match(
-    misplacedAnswer.output,
-    /corpus\/gameability\/P-005\.json.*answers step held-out-run, which the contract's interaction plan does not declare/,
-  );
-
-  // ---- gameability through preflight, run and score: each partition answers its own steps (Story 1.109) ---------------------------
-  const gameFlow = planProject('plan-gameability-flow', null, null, null, {});
-  const GAME_KEEP_OUT = {
-    development: [...KEEP_OUT.development, 'corpus/held-out/gameability', HELD_OUT_ANSWER.stdout.trim()],
-    'held-out': [...KEEP_OUT['held-out'], DEVELOPMENT_ANSWER.stdout.trim()],
-  };
-  const sha = (file) => `sha256:${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}`;
-  const developmentFiles = filesUnder(gameFlow.folder).filter((file) => {
-    const relative = path.relative(gameFlow.folder, file).split(path.sep).join('/');
-    return !/^(runs|baseline|corpus\/held-out)\//.test(relative);
-  });
-  assert.ok(developmentFiles.length > 0);
-  assert.deepEqual(
-    developmentFiles.flatMap((file) =>
-      ['held-out-run', CANARY, 'O-101']
-        .filter((token) => fs.readFileSync(file, 'utf8').includes(token))
-        .map((token) => `${path.relative(gameFlow.folder, file)}: ${token}`),
-    ),
-    [],
-    'a development file of the gameability folder holds a held-out step',
-  );
-  /** The steps a gameability arm of `run` answered, with what each was answered, and the response record its evidence names. */
-  const arm = (run, probeId, phase) => {
-    const evidence = read(path.join(run, 'qualification', probeId, 'naive-oracle-satisfied.json'));
-    const trial = read(path.join(run, 'trials', `gameability-${probeId}`, 'trial-1.json'));
-    assert.deepEqual(
-      trial.degenerateResponse,
-      evidence.degenerateResponse,
-      `${phase}: the trial and its qualification name different answers`,
-    );
-    return {
-      steps: trial.steps.map((step) => step.stepId),
-      qualified: evidence.steps.map((step) => step.stepId),
-      stdout: Object.fromEntries(trial.steps.map((step) => [step.stepId, step.observation.stdout.value])),
-      response: trial.degenerateResponse,
-    };
-  };
-  const mainOf = (probeId) => ({
-    path: `corpus/gameability/${probeId}.json`,
-    digest: sha(path.join(gameFlow.folder, `corpus/gameability/${probeId}.json`)),
-  });
-  const heldOutOf = (probeId) => ({
-    path: answersFile(probeId, true),
-    digest: sha(path.join(gameFlow.folder, answersFile(probeId, true))),
-  });
-  const gameLog = { development: [], 'held-out': [], both: [] };
-  for (const [partition, args] of [
-    ['development', ['--partition', 'development']],
-    ['held-out', ['--partition', 'held-out']],
-    ['both', []],
-  ]) {
-    const ran = cli(gameFlow, 'run', args);
-    assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
-    gameLog[partition].push(ran.output);
-    const run = test.latest(gameFlow.folder);
-    const scored = cli(gameFlow, 'score', ['--run', path.basename(run)]);
-    assert.equal(scored.status, 0, `${partition}: ${scored.output}`);
-    gameLog[partition].push(scored.output);
-    const armed = fs.readdirSync(path.join(run, 'trials')).filter((name) => name.startsWith('gameability-'));
-    if (partition === 'development') {
-      assert.deepEqual(armed, ['gameability-P-005']);
-      const answered = arm(run, 'P-005', partition);
-      assert.deepEqual(answered.steps, ['shared-run', 'development-run']);
-      assert.deepEqual(answered.qualified, ['shared-run', 'development-run']);
-      assert.equal(answered.stdout['development-run'], DEVELOPMENT_ANSWER.stdout);
-      assert.deepEqual(answered.response, mainOf('P-005'), 'a development arm names the held-out answers');
-      assert.deepEqual(holding(run, GAME_KEEP_OUT.development), [], 'the development run holds the held-out partition');
-      assert.equal(JSON.parse(outcomes(run)).find(([probeId]) => probeId === 'P-005')[1].caught, true);
-    } else if (partition === 'held-out') {
-      assert.deepEqual(armed, ['gameability-P-006']);
-      const answered = arm(run, 'P-006', partition);
-      assert.deepEqual(answered.steps, ['shared-run', 'held-out-run']);
-      assert.deepEqual(answered.qualified, ['shared-run', 'held-out-run']);
-      assert.equal(answered.stdout['held-out-run'], HELD_OUT_ANSWER.stdout);
-      assert.deepEqual(answered.response, { ...mainOf('P-006'), heldOut: heldOutOf('P-006') });
-      assert.deepEqual(holding(run, GAME_KEEP_OUT['held-out']), [], 'the held-out run holds the development partition');
-      assert.equal(JSON.parse(outcomes(run)).find(([probeId]) => probeId === 'P-006')[1].caught, true);
-    } else {
-      assert.deepEqual(armed, ['gameability-P-005', 'gameability-P-006']);
-      for (const probeId of GAME_PROBES) {
-        const answered = arm(run, probeId, partition);
-        assert.deepEqual(answered.steps, ['shared-run', 'development-run', 'held-out-run']);
-        assert.deepEqual(answered.qualified, ['shared-run', 'development-run', 'held-out-run']);
-        assert.equal(answered.stdout['development-run'], DEVELOPMENT_ANSWER.stdout);
-        assert.equal(answered.stdout['held-out-run'], HELD_OUT_ANSWER.stdout);
-        assert.deepEqual(answered.response, { ...mainOf(probeId), heldOut: heldOutOf(probeId) });
-      }
-      // Each gameability probe of the both view is handed the oracle of its own partition (Story 1.110), so P-005 is scored against O-002
-      // and P-006 against O-101, as their partitions' own runs score them, and both are caught.
-      assert.deepEqual(
-        JSON.parse(outcomes(run))
-          .filter(([probeId]) => GAME_PROBES.includes(probeId))
-          .map(([probeId, outcome]) => [probeId, outcome.caught]),
-        GAME_PROBES.map((probeId) => [probeId, true]),
-      );
-      const bothScoreDirectory = path.join(run, 'scores', fs.readdirSync(path.join(run, 'scores')).sort().at(-1));
-      assert.deepEqual(
-        GAME_PROBES.map((probeId) => designatedBy(path.join(bothScoreDirectory, probeId, 'score.json'))),
-        ['O-002', 'O-101'],
-        'a gameability probe of the both view was not handed its own partition oracle',
-      );
-    }
-    if (partition !== 'both') {
-      // A baseline of the partition replays through `ci`, whose gameability check scores the arm over the baseline's own records.
-      const accepted = cli(gameFlow, 'compare', ['--run', path.basename(run), '--accept']);
-      assert.equal(accepted.status, 0, `${partition}: ${accepted.output}`);
-      gameLog[partition].push(accepted.output);
-      commit(gameFlow.repository, `${partition} gameability baseline`);
-      assert.deepEqual(
-        holding(path.join(gameFlow.folder, 'baseline'), GAME_KEEP_OUT[partition]),
-        [],
-        `the ${partition} gameability replay holds the other partition`,
-      );
-      const replayed = cli(gameFlow, 'ci', ['--tier', 'pr']);
-      assert.equal(replayed.status, 0, `${partition}: ${replayed.output}`);
-      assert.doesNotMatch(replayed.output, /stale/, `${partition}: the gameability baseline replays as stale`);
-      assert.match(
-        replayed.output,
-        new RegExp(`${partition === 'development' ? 'P-005' : 'P-006'}: gameability arm scored through eval-quality score, exit 0`),
-      );
-      gameLog[partition].push(replayed.output);
-    }
-  }
-  assert.deepEqual(
-    gameLog.development.flatMap((text) => GAME_KEEP_OUT.development.filter((token) => text.includes(token))),
-    [],
-    'a development command printed the held-out partition',
-  );
-  assert.deepEqual(
-    gameLog['held-out'].flatMap((text) => GAME_KEEP_OUT['held-out'].filter((token) => text.includes(token))),
-    [],
-    'a held-out command printed the development partition',
-  );
-
-  // An empty held-out set is an authoring defect for preflight, as it is for run.
-  const none = test.project('plan-none');
-  for (const command of ['preflight', 'run']) {
-    const refused = test.cli(none.folder, command, ['--partition', 'held-out'], none.env);
-    assert.equal(refused.status, 10, `${command}: ${refused.output}`);
-    assert.match(refused.output, /held-out partition has no selected probes/);
-  }
   process.stdout.write('Evaluate partition plans passed.\n');
 } finally {
   test.cleanup();
