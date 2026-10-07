@@ -3044,6 +3044,8 @@ So that the stage reads what it needs and the guide stays inside its budget.
 **And** `SKILL.md` is untouched (it is a `sessionRead` key of the live capture records), since `corpus.md` names its per-kind guides itself
 **And** moving one kind's section back into `corpus.md`, deleting a per-kind file or breaking one tagged example fails `test:evaluate-guidance`, and the builder's Analyze run reports no high finding for `corpus.md`.
 
+Amended 2026-10-06 in Story 1.114's build: each per-kind guide starts with `# <Kind> corpus`, an intro sentence, the worked interface and a pointer to `corpus.md`, and holds its four sections at the second level (`## Representative inputs`, `## Negative and malformed inputs`, `## Gameability design`, `## Held-out probe selection`). `corpus.md` gains `## Per-kind guides`, which names the six files and says to load only the one for the kind recorded as `targetKind` at inspection. The test counts tokens with tiktoken's `cl100k_base`, the encoding the builder's `count_tokens.py` reports, through `js-tiktoken`, which `package.json` lists as a devDependency at `latest`. The shared file is 4,276 tokens, so one kind returned to it stays under the budget and fails the kind-heading assertion; the budget assertion fails when the kinds return together.
+
 **Dependencies:** 1.51, 1.111.
 **Gate:** builder Analyze, `npm run test:evaluate-guidance`, `npm test`.
 
