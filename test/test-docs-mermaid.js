@@ -32,6 +32,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { randomBytes } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -225,7 +226,9 @@ async function main() {
   );
 
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-mermaid-'));
-  const brokenConfig = path.join(WEBSITE_ROOT, 'astro.config.no-mermaid.mjs');
+  // The config imports its helpers by relative path, so the broken copy sits beside the real one under a name no other run or file shares.
+  const brokenConfig = path.join(WEBSITE_ROOT, `astro.config.no-mermaid-${process.pid}-${randomBytes(6).toString('hex')}.mjs`);
+  let createdBrokenConfig = false;
   try {
     // The real site: every fenced page is wired and no built page holds a raw block.
     const site = path.join(scratch, 'site');
@@ -304,7 +307,9 @@ async function main() {
     const config = fs.readFileSync(CONFIG_FILE, 'utf8');
     const without = config.replace(/^ {4}mermaid\(\{\n[\s\S]*?^ {4}\}\),\n/m, '');
     assert.notEqual(without, config, 'the config holds a mermaid({ ... }), integration to remove');
-    fs.writeFileSync(brokenConfig, without);
+    // The `wx` flag refuses to replace a file that already exists, so this run can only ever create the file it later removes.
+    fs.writeFileSync(brokenConfig, without, { flag: 'wx' });
+    createdBrokenConfig = true;
     const brokenSite = path.join(scratch, 'broken-site');
     const brokenBuild = buildSite(brokenSite, brokenConfig);
     assert.equal(brokenBuild.status, 0, `the build without mermaid failed:\n${brokenBuild.output.slice(-2000)}`);
@@ -325,7 +330,7 @@ async function main() {
       `test-docs-mermaid: ${pages.length} pages with ${pages.reduce((sum, { fences }) => sum + fences, 0)} diagrams parse and reach the renderer`,
     );
   } finally {
-    fs.rmSync(brokenConfig, { force: true });
+    if (createdBrokenConfig) fs.rmSync(brokenConfig, { force: true });
     fs.rmSync(scratch, { recursive: true, force: true });
     fs.rmSync(path.join(WEBSITE_ROOT, 'node_modules', '.astro'), { recursive: true, force: true });
   }
