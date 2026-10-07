@@ -62,9 +62,9 @@ const FIXTURES = {
   verdict: { root: 'test/fixtures/evaluate/mutation', folder: 'evals/verdict-ci' },
   mcp: { root: 'test/fixtures/evaluate-mcp', folder: 'evals/grader' },
   api: { root: 'test/fixtures/evaluate-api', folder: 'evals/grader' },
-  // The Story 1.51 partition-plan fixture: one development-only step in contract.json and one held-out step in the sealed plan.
-  plan: { root: 'test/fixtures/evaluate/partition-plan', folder: 'evals/verdict' },
 };
+/** What a case may copy: the committed fixtures with a baseline, and the Story 1.51 partition-plan fixture (a development-only step in contract.json, a held-out step in the sealed plan), which has none. */
+const COPIES = { ...FIXTURES, plan: { root: 'test/fixtures/evaluate/partition-plan', folder: 'evals/verdict' } };
 const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_') && name !== 'TEA_EVALUATE_ENGINE_CLI'),
 );
@@ -106,7 +106,7 @@ function cli(folder, command, args = [], env = {}) {
 
 /** A copy of a committed fixture's project in a temp directory; its evaluation folder. */
 function copyFixture(name, label = name) {
-  const { root, folder } = FIXTURES[name];
+  const { root, folder } = COPIES[name];
   const directory = scratch.make(label);
   const project = path.join(directory, path.basename(root));
   fs.cpSync(path.join(ROOT, root), project, {
@@ -1592,6 +1592,58 @@ function checkEngineStageExits() {
   writePlan(undocumented, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
   const odd = ci(undocumented, 'pr', shimEnv(path.join(path.dirname(undocumented), 'shim.log'), { TEA_EVALUATE_SHIM_EXIT_COMPILE: '7' }));
   assert.equal(odd.status, 12, odd.output);
+}
+
+/**
+ * Under a `partitionPlan` the stage runs over three views, and each documented engine exit still reaches its class (Story 1.108;
+ * revert: a row that keeps one view's exit, or turns the engine's exit into another, fails the loop), and a view whose stage
+ * cannot run is infrastructure with its record listed.
+ */
+function checkStageViewExits() {
+  for (const [exit, expected] of [
+    [4, 'contract authoring defect'],
+    [5, 'runtime fault'],
+    [64, 'wiring defect'],
+    [7, 'infrastructure'],
+  ]) {
+    const folder = copyFixture('plan', `stage-views-exit-${exit}`);
+    writePlan(folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+    const log = path.join(path.dirname(folder), 'shim.log');
+    const result = ci(folder, 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_EXIT_COMPILE: String(exit) }));
+    // An exit the CLI does not document is a stage that could not run, so it is 12 whatever the view.
+    const wanted = exit === 7 ? 12 : exit;
+    assert.equal(result.status, wanted, result.output);
+    const { directory, json } = latestCi(folder);
+    const row = rowOf(json, 'compile');
+    assert.deepEqual([row.exit, row.class, row.action], [wanted, expected, 'block']);
+    assert.deepEqual(
+      shimLog(log).map((call) => call[0]),
+      ['compile', 'compile', 'compile'],
+      'the stage ran once for each of the three views',
+    );
+    assert.deepEqual(
+      row.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', 'held-out/engine.json', 'both/engine.json'].map((name) => `checks/compile/${name}`),
+    );
+    const stdout = fs.readFileSync(path.join(directory, 'checks', 'compile', 'stdout'), 'utf8');
+    for (const view of ['development', 'held-out', 'both']) {
+      assert.match(
+        stdout,
+        new RegExp(
+          exit === 7
+            ? `^compile over the ${view} view: eval-quality could not run it \\(exit 12\\)$`
+            : `^compile over the ${view} view: eval-quality exited ${exit}\\b`,
+          'm',
+        ),
+        `${view}: ${stdout}`,
+      );
+    }
+    if (exit === 7) {
+      const stderr = fs.readFileSync(path.join(directory, 'checks', 'compile', 'stderr'), 'utf8');
+      for (const view of ['development', 'held-out', 'both'])
+        assert.match(stderr, new RegExp(`^compile over the ${view} view: eval-quality compile exited 7`, 'm'));
+    }
+  }
 }
 
 /**
@@ -4739,6 +4791,7 @@ async function main() {
     ['gate limits', checkGateLimits],
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
+    ['engine stage exits over each view', checkStageViewExits],
     ['the stage evidence paths of a folder with no partitionPlan', checkStageEvidencePaths],
     ['the pr replay', checkPrReplay],
     ['the text neutralizer', checkTextNeutralizer],

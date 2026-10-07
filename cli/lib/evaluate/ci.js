@@ -18,6 +18,10 @@
  * and `ci` passes no `--strict`. The final exit is the most severe blocking result in the order 64, 12, 5, 4, 3, 13, 11,
  * 10, 2, 1, then 0.
  *
+ * The plan's `compile` and `seal` checks run the engine over `contract.json` and, under a `partitionPlan`, over each of the
+ * development, held-out and both views (`engineStageCheck`, Story 1.108), so a held-out plan the engine refuses fails the
+ * `pr` tier.
+ *
  * Persistence: `runs/<invocationId>/` is created through `RunDirectory`, so the write rules of Story 1.8 hold. Per
  * check it holds `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, and `ci.json` (the tier, whether the
  * baseline is stale, each check's exit, class, action and evidence paths, and the final exit). A replay's produced
