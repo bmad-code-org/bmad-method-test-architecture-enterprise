@@ -9,6 +9,9 @@
  *  - a failed first try is retried and the second installs;
  *  - a try that stalls past its limit is ended and the next try installs;
  *  - three failed tries exit 1 with the `::error` line that names the step;
+ *  - a failed try drops the preferred mirror of the runner's mirror list while another remains, so the next try asks the next
+ *    mirror (a stalled azure.archive.ubuntu.com timed out all three tries of a shard in its downloads), and a list of one mirror,
+ *    or no list, is left alone;
  *  - each workflow runs the script in a step that has its own `timeout-minutes` above the worst case of the tries, and no workflow
  *    keeps a bare `apt-get`.
  *
@@ -72,8 +75,20 @@ esac
 exit 0
 `;
 
-function run(plan, env = {}) {
+const MIRRORS = [
+  'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1',
+  'https://archive.ubuntu.com/ubuntu/\tpriority:2',
+  'https://security.ubuntu.com/ubuntu/\tpriority:3',
+];
+
+/**
+ * Runs the script against the stubs. `mirrors` is the mirror list's lines, or `null` for a host with none; the list always lives in
+ * the case's own directory, so a case on a hosted runner never touches its `/etc/apt/apt-mirrors.txt`.
+ */
+function run(plan, env = {}, mirrors = null) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-install-sandbox-'));
+  const mirrorList = path.join(dir, 'apt-mirrors.txt');
+  if (mirrors !== null) fs.writeFileSync(mirrorList, `${mirrors.join('\n')}\n`);
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'timeout'), TIMEOUT_STUB, { mode: 0o755 });
@@ -88,12 +103,14 @@ function run(plan, env = {}) {
         STUB_DIR: dir,
         STUB_PLAN: plan,
         WAIT_SECONDS: '0',
+        MIRROR_LIST: mirrorList,
         ...env,
       },
       timeout: 60_000,
     });
     const log = fs.existsSync(path.join(dir, 'log')) ? fs.readFileSync(path.join(dir, 'log'), 'utf8').trim().split('\n') : [];
-    return { status: result.status, output: `${result.stdout}${result.stderr}`, log };
+    const left = fs.existsSync(mirrorList) ? fs.readFileSync(mirrorList, 'utf8').split('\n').filter(Boolean) : null;
+    return { status: result.status, output: `${result.stdout}${result.stderr}`, log, mirrors: left };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -111,6 +128,35 @@ function checkScript() {
   );
   check(!first.log[0].includes('-qq'), `update is quiet: ${first.log[0]}; the log must name the source that stalls`);
   check(first.log[1].includes('bubblewrap') && first.log[1].includes('strace'), `install does not name both packages: ${first.log[1]}`);
+  check(
+    !first.log[1].includes('-qq') && first.log[1].includes('--no-install-recommends'),
+    `install is quiet or pulls recommends: ${first.log[1]}; the log must name the download that stalls`,
+  );
+
+  const listed = run('ok,ok', {}, MIRRORS);
+  check(
+    JSON.stringify(listed.mirrors) === JSON.stringify(MIRRORS),
+    `a first-try install changed the mirror list to ${JSON.stringify(listed.mirrors)}`,
+  );
+  const dropped = run('ok,fail,ok,ok', {}, MIRRORS);
+  check(
+    dropped.status === 0 &&
+      JSON.stringify(dropped.mirrors) === JSON.stringify(MIRRORS.slice(1)) &&
+      dropped.output.includes(
+        'dropping the mirror http://azure.archive.ubuntu.com/ubuntu/ for the next try; next is https://archive.ubuntu.com/ubuntu/',
+      ),
+    `a failed install did not drop the preferred mirror before the next try (exit ${dropped.status}, list ${JSON.stringify(dropped.mirrors)})\n${dropped.output}`,
+  );
+  const exhausted = run('fail,fail,fail', { TRIES: '3' }, MIRRORS.slice(0, 2));
+  check(
+    exhausted.status === 1 && JSON.stringify(exhausted.mirrors) === JSON.stringify(MIRRORS.slice(1, 2)),
+    `three failed tries over two mirrors left the list ${JSON.stringify(exhausted.mirrors)}; expected the last mirror kept`,
+  );
+  const unlisted = run('fail,ok,ok');
+  check(
+    unlisted.status === 0 && unlisted.mirrors === null && !unlisted.output.includes('dropping the mirror'),
+    `a host with no mirror list did not retry as before (exit ${unlisted.status})\n${unlisted.output}`,
+  );
 
   const retried = run('fail,ok,ok');
   check(
