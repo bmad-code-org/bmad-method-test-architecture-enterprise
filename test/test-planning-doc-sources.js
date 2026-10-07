@@ -1,32 +1,31 @@
 /**
- * The plan's counts and lane lists are held to the files that own them, and each
- * hold fails when its subject changes by one.
+ * The plan's counts and lane lists are held to the files that own them, and each hold fails when its subject changes by one.
  *
  * WHY THIS FILE EXISTS
  *
- * `test/lib/planning-doc-sources.js` refuses a plan whose lane lists disagree, and
- * `eval-quality.config.json` holds the replay totals of `test/README.md` and of
- * the header of `test/test-eval-replay.js`, the story count and the appended-story
- * count of the `epics.md` overview, and the lane count against it. A gate that
- * passes on the committed tree proves nothing about whether it would fail on a
- * drifted one, so this file hands every check data that has drifted by one and
- * requires the failure to name what moved:
+ * `test/lib/planning-doc-sources.js` refuses a plan whose lane lists disagree.
+ * `eval-quality.config.json` holds the replay totals of `test/README.md` and of the header of `test/test-eval-replay.js`.
+ * It also holds the story count, the epic count and the appended-story count of the `epics.md` overview, and the lane count of its parallel-lanes section.
+ * A gate that passes on the committed tree proves nothing about whether it would fail on a drifted one.
+ * So this file hands every check data that has drifted by one and requires the failure to name what moved:
  *
  *   - the pure checks, over the committed `epics.md` and `sprint-status.yaml`
- *     with one entry removed from each of the five lanes (in each file), a story
- *     moved to another lane in one file only, a story duplicated across two lanes
- *     and within one, an order swap at the start and at the end of each lane, a
- *     lane missing from either file, an entry with no status row, and the
- *     appended-story lists with an id dropped, added, repeated or out of order;
+ *     with one entry removed from each of the five lanes (in each file),
+ *     a story moved to another lane in one file only,
+ *     a story duplicated across two lanes and within one,
+ *     an order swap at the start and at the end of each lane,
+ *     a lane missing from either file, a sixth lane in one file only,
+ *     an entry with no status row,
+ *     and the appended-story lists with an id dropped, added, repeated or out of order;
+ *   - the fence and heading readers, over fences CommonMark opens and closes in other ways than the plain one;
  *   - the loader, over scratch roots that hold the two files;
- *   - the real `doc-counts` gate, over scratch trees of the final repository in
- *     which one sentence, one lane list, one stored replay case or one count is
- *     off by one, with the untouched tree as the negative control that proves
- *     the scratch tree itself passes.
+ *   - the real `doc-counts` gate, over scratch trees of the final repository
+ *     in which one sentence, one lane list, one stored replay case or one count is off by one,
+ *     with the untouched tree as the negative control that proves the scratch tree itself passes;
+ *   - every `doc-counts` entry and source that existed before Story 1.95, pinned by name and by what it reads.
  *
- * A scratch tree symlinks every path of the repository except the files it
- * overrides, so nothing in the working tree is ever edited and a process killed
- * mid-test leaves the real files as they were.
+ * A scratch tree symlinks every path of the repository except the files it overrides.
+ * Nothing in the working tree is ever edited, and a process killed mid-test leaves the real files as they were.
  *
  * Usage: node test/test-planning-doc-sources.js
  */
@@ -449,6 +448,11 @@ check('the lane readers refuse a paragraph or a key they cannot read', () => {
     /opens Lane 2 without a colon-delimited list of story ids/,
   );
   assert.throws(() => planning.readEpicLanes(`${epicsText}\n${lane2}\n`), /opens Lane 2 a second time/);
+  assert.throws(
+    () => planning.readEpicLanes(replaceOnce(epicsText, lane2, '**Lane 2: confinement** (own worktree) 1.62, 1.57.')),
+    /opens Lane 2 without a colon-delimited list of story ids/,
+    'a list with no colon before it',
+  );
   assert.throws(() => planning.readEpicLanes('no lane paragraph at all\n'), /holds no "\*\*Lane <n>: <title>\*\*" paragraph/);
   assert.throws(
     () => planning.readSprintLanes(replaceOnce(sprintText, '  lane-1-run-integrity-scoring-evaluators:', '  first-lane:')),
@@ -467,14 +471,38 @@ check('the lane readers refuse a paragraph or a key they cannot read', () => {
   );
 });
 
-check('a lane note in parentheses after an id stays out of the id, and the last lane entry is read', () => {
-  const lane3 = planning.readEpicLanes(epicsText).get(3);
-  assert.strictEqual(lane3.at(-1), '2.6');
-  assert.ok(epicItems(3).at(-1).startsWith('2.6 ('), 'fixture setup: lane 3 carries a note after its last id');
-  const noted = planning.readEpicLanes(
-    withEpicLane(epicsText, 4, (held) => [...held.slice(0, -1), `${held.at(-1)} (a note, with a comma)`]),
-  );
-  assert.deepStrictEqual(noted.get(4), planning.readEpicLanes(epicsText).get(4));
+check(
+  'a lane note in parentheses after an id stays out of the id, notes on two ids keep the ids between them, and the last lane entry is read',
+  () => {
+    const lane3 = planning.readEpicLanes(epicsText).get(3);
+    assert.strictEqual(lane3.at(-1), '2.6');
+    assert.ok(epicItems(3).at(-1).startsWith('2.6 ('), 'fixture setup: lane 3 carries a note after its last id');
+    const noted = planning.readEpicLanes(
+      withEpicLane(epicsText, 4, (held) => [...held.slice(0, -1), `${held.at(-1)} (a note, with a comma)`]),
+    );
+    assert.deepStrictEqual(noted.get(4), planning.readEpicLanes(epicsText).get(4));
+    const original = planning.readEpicLanes(epicsText).get(4);
+    const twoNotes = planning.readEpicLanes(
+      withEpicLane(epicsText, 4, (held) =>
+        held.map((item, index) => (index === 0 ? `${item} (after 1.98 merges, see 2.5)` : index === 2 ? `${item} (after 1.96)` : item)),
+      ),
+    );
+    assert.deepStrictEqual(
+      twoNotes.get(4),
+      original,
+      'a note must end at its own closing parenthesis, so the ids between two notes stay in the lane',
+    );
+  },
+);
+
+// A lane the file numbers beyond five is a lane: a paragraph in epics.md only and a list in sprint-status.yaml only are each named.
+check('a sixth lane in one file only is named, whichever file holds it', () => {
+  const sixth = laneProblems(`${epicsText}\n**Lane 6: extra** (own worktree): 1.200.\n`, sprintText);
+  assertProblem(sixth, 'epics.md has Lane 6 and sprint-status has no lane-6 list');
+  const row = sprintEntries(4).at(-1);
+  const sprintSixth = replaceOnce(sprintText, '\nowner_handoff:', `\n  lane-6-extra:\n    - ${row}\nowner_handoff:`);
+  assertProblem(laneProblems(epicsText, sprintSixth), 'sprint-status has lane-6 and epics.md has no Lane 6 paragraph');
+  assert.strictEqual(planning.readEpicLanes(`${epicsText}\n**Lane 6: extra** (own worktree): 1.200.\n`).size, 6);
 });
 
 // ---------------------------------------------------------------------------
@@ -488,6 +516,37 @@ check('story sections are counted outside fences, H.1 included, and an id held t
   const fenced = `${epicsText}\n\`\`\`md\n### Story 9.9: A heading inside a fence\n\`\`\`\n`;
   assert.strictEqual(planning.readStoryHeadings(fenced).length, headings.length);
   assert.strictEqual(planning.readStoryHeadings(`${epicsText}\n### Story 9.9: Outside a fence\n`).length, headings.length + 1);
+  const counted = (appended) => planning.readStoryHeadings(`${epicsText}\n${appended}\n`).length - headings.length;
+  // CommonMark: a longer fence closes only on a line at least as long, so a shorter run inside it stays in the fence.
+  assert.strictEqual(
+    counted('````md\n```\n### Story 9.9: Hidden\n````'),
+    0,
+    'a heading under a shorter fence line inside a four-backtick fence stays hidden',
+  );
+  assert.strictEqual(
+    counted('````md\n```\n````\n### Story 9.9: Example'),
+    1,
+    'the four-backtick fence closes on its own line and the heading after it counts',
+  );
+  // A line that carries an info string cannot close a fence.
+  assert.strictEqual(counted('```md\n```js is how a fence opens\n### Story 9.9: Hidden\n```'), 0);
+  assert.strictEqual(counted('```md\n```js is how a fence opens\n```\n### Story 9.9: Example'), 1);
+  // A marker line indented four spaces is indented code and opens nothing.
+  assert.strictEqual(counted('    ```\n### Story 9.9: Example'), 1);
+  assert.strictEqual(counted('   ```md\n### Story 9.9: Hidden\n   ```'), 0, 'three spaces of indentation still open a fence');
+  // A backtick line with a backtick in its info string is inline code, not a fence.
+  assert.strictEqual(counted('```code``` is inline\n### Story 9.9: Example'), 1);
+  assert.strictEqual(counted('`` is two backticks and no fence\n### Story 9.9: Example'), 1);
+  // A line indented four spaces inside a fence does not close it.
+  assert.strictEqual(counted('```md\n    ```\n### Story 9.9: Hidden\n```'), 0);
+  // Inline code that opens a line is prose.
+  assert.strictEqual(counted('``code`` opens this line\n### Story 9.9: Example'), 1);
+  // A tilde fence is not closed by backticks, and a backtick fence is not closed by tildes.
+  assert.strictEqual(counted('~~~md\n```\n### Story 9.9: Hidden\n~~~'), 0);
+  assert.strictEqual(counted('```md\n~~~\n### Story 9.9: Hidden\n```'), 0);
+  // Only a level-three heading is a story section.
+  assert.strictEqual(counted('## Story 9.9: Level two'), 0);
+  assert.strictEqual(counted('#### Story 9.9: Level four'), 0);
   assert.throws(
     () => planning.readStoryHeadings(`${epicsText}\n### Story 1.50: A second section\n`),
     /holds a second section for Story 1\.50/,
@@ -574,6 +633,11 @@ check('a sentence that is gone or stated twice is named', () => {
     appendedProblems(gone),
     `${planning.EPICS_RELATIVE} states the appended stories 0 times in the overview; the sentence has to appear exactly once`,
   );
+  const listGone = replaceOnce(epicsText, ' were appended as stories at the end of the epic: Stories ', ' came later: Stories ');
+  assertProblem(
+    appendedProblems(listGone),
+    `${planning.EPICS_RELATIVE} states the appended stories 0 times in the epic list; the sentence has to appear exactly once`,
+  );
   const twice = `${epicsText}\n(${APPENDED} stories were appended to Epic 1 from findings made while building it: 1.27 to 1.79)\n`;
   assertProblem(
     appendedProblems(twice),
@@ -651,10 +715,9 @@ check('the loader refuses a plan that disagrees with itself and lists every disa
 // ---------------------------------------------------------------------------
 
 /**
- * A scratch repository: a directory that links every path of this repository
- * except the ones `overrides` names, which are written as real files. A value is
- * the text of the file, or `{ copyOf }` for a copy of one of this repository's
- * files (a module that reads its own location has to live in the scratch tree).
+ * A scratch repository: a directory that links every path of this repository except the ones `overrides` names, which are written as real files.
+ * A value is the text of the file, or `{ copyOf }` for a copy of one of this repository's files.
+ * A module that reads its own location has to live in the scratch tree.
  */
 function scratchTree(overrides) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'planning-tree-'));
@@ -716,7 +779,10 @@ check('negative control: the scratch tree of the untouched files passes the gate
   assert.match(result.output, /0 disagreement\(s\)/);
 });
 
-/** A sentence of `file` with one count moved: `[from, to, expected failure]`. `claim` is the start of the entry's claim. */
+/**
+ * A sentence of `file` with one count moved: `[from, to, expected failure]`.
+ * `claim` is the start of the entry's claim.
+ */
 function digitsDrift(file, claim, template, count, moved) {
   return [
     template(count),
@@ -816,6 +882,11 @@ check('a stored result of another shape than null or an object is refused, and s
     { 'test/replay/ci/full-zz-odd-result/expected.json': JSON.stringify({ ...stored, result: 'scored' }) },
     /stores a result of another shape/,
     'a result of another shape',
+  );
+  assertGateFails(
+    { 'test/replay/ci/full-zz-array-result/expected.json': JSON.stringify({ ...stored, result: [] }) },
+    /stores a result of another shape/,
+    'a result that is an array',
   );
   assertGateFails(
     {
@@ -963,6 +1034,199 @@ check('gate: the fifth lane gone from both files fails the sentence that says fi
 // ---------------------------------------------------------------------------
 // The configuration
 // ---------------------------------------------------------------------------
+
+// The doc-counts entries and sources that existed before Story 1.95, as origin/main held them: what each entry reads and what each source returns.
+// A pinned entry that reads another source, and a pinned source that exports another value, fails the check that holds them.
+const PRE_EXISTING_ENTRIES = [
+  {
+    file: 'docs/explanation/eval-quality-roadmap.md',
+    claim: 'the per-suite call counts one eval:all run makes',
+    counts: [
+      'fragmentSelectionCalls',
+      'routingIntentCalls',
+      'testDesignCalls',
+      'testReviewCalls',
+      'nfrCalls',
+      'ciCalls',
+      'traceCalls',
+      'atddCalls',
+    ],
+  },
+  { file: 'README.md', claim: 'the fragment-selection case count', counts: ['fragmentSelectionCases'] },
+  {
+    file: 'README.md',
+    claim: 'how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe',
+    counts: ['agentPreflightedSuiteCount', 'totalSuiteCount'],
+  },
+  { file: 'README.md', claim: 'the npm test chain length', counts: ['npmTestChainLength', 'npmTestChainLength'] },
+  {
+    file: 'README.md',
+    claim: 'the knowledge-fragment tier breakdown',
+    counts: ['knowledgeFragmentTotal', 'knowledgeFragmentCore', 'knowledgeFragmentExtended', 'knowledgeFragmentSpecialized'],
+  },
+  {
+    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    claim: "one eval:all run's total model calls and their per-suite breakdown",
+    counts: [
+      'totalCalls',
+      'fragmentSelectionCalls',
+      'routingIntentCalls',
+      'testDesignCalls',
+      'testReviewCalls',
+      'nfrCalls',
+      'ciCalls',
+      'traceCalls',
+      'atddCalls',
+    ],
+  },
+  {
+    file: 'README.md',
+    claim: "one eval:all run's total agent calls and all three built-in runners' total",
+    counts: [
+      'totalCalls',
+      'fragmentSelectionCalls',
+      'routingIntentCalls',
+      'testReviewCalls',
+      'nfrCalls',
+      'ciCalls',
+      'testDesignCalls',
+      'traceCalls',
+      'atddCalls',
+      'totalCallsThreeRunners',
+    ],
+  },
+  {
+    file: 'docs/reference/tea-test-review-cli.md',
+    claim: 'the Advisory Observations cap on advisoryObservations',
+    counts: ['advisoryObservationsMaxItems'],
+  },
+  {
+    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    claim: 'the replay corpus row: the stored output total and its per-suite breakdown',
+    counts: [
+      'replayTotal',
+      'replayFragmentSelection',
+      'replayAtdd',
+      'replayTestReview',
+      'replayTrace',
+      'replayNfr',
+      'replayCi',
+      'replayTestDesign',
+      'replayRouting',
+    ],
+  },
+  { file: 'docs/explanation/eval-quality-adoption-guide.md', claim: "the replay section's stored output total", counts: ['replayTotal'] },
+  {
+    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    claim: 'how many stored outputs are real captures, captured and constructed',
+    counts: ['replayRealCaptures', 'replayTotal', 'replayCaptured', 'replayConstructed'],
+  },
+  {
+    file: 'docs/explanation/eval-quality-roadmap.md',
+    claim: 'the replay corpus size and its per-suite breakdown',
+    counts: [
+      'replayTotal',
+      'replayFragmentSelection',
+      'replayAtdd',
+      'replayTestReview',
+      'replayTestDesign',
+      'replayTrace',
+      'replayRouting',
+      'replayNfr',
+      'replayCi',
+    ],
+  },
+  {
+    file: 'docs/explanation/eval-quality-roadmap.md',
+    claim: 'how many stored outputs are real captures, captured and constructed',
+    counts: ['replayRealCaptures', 'replayTotal', 'replayCaptured', 'replayConstructed'],
+  },
+];
+
+const PRE_EXISTING_SOURCES = {
+  totalCalls: 'TOTAL_CALLS',
+  totalCallsThreeRunners: 'TOTAL_CALLS_THREE_RUNNERS',
+  fragmentSelectionCalls: 'FRAGMENT_SELECTION_CALLS',
+  routingIntentCalls: 'ROUTING_INTENT_CALLS',
+  testDesignCalls: 'TEST_DESIGN_CALLS',
+  testReviewCalls: 'TEST_REVIEW_CALLS',
+  nfrCalls: 'NFR_CALLS',
+  traceCalls: 'TRACE_CALLS',
+  ciCalls: 'CI_CALLS',
+  atddCalls: 'ATDD_CALLS',
+  fragmentSelectionCases: 'FRAGMENT_SELECTION_CASES',
+  totalSuiteCount: 'TOTAL_SUITE_COUNT',
+  agentPreflightedSuiteCount: 'AGENT_PREFLIGHTED_SUITE_COUNT',
+  npmTestChainLength: 'NPM_TEST_CHAIN_LENGTH',
+  knowledgeFragmentTotal: 'KNOWLEDGE_FRAGMENT_TOTAL',
+  knowledgeFragmentCore: 'KNOWLEDGE_FRAGMENT_CORE',
+  knowledgeFragmentExtended: 'KNOWLEDGE_FRAGMENT_EXTENDED',
+  knowledgeFragmentSpecialized: 'KNOWLEDGE_FRAGMENT_SPECIALIZED',
+  advisoryObservationsMaxItems: 'ADVISORY_OBSERVATIONS_MAX_ITEMS',
+  replayTotal: 'REPLAY_TOTAL',
+  replayFragmentSelection: 'REPLAY_FRAGMENT_SELECTION',
+  replayAtdd: 'REPLAY_ATDD',
+  replayTestReview: 'REPLAY_TEST_REVIEW',
+  replayTestDesign: 'REPLAY_TEST_DESIGN',
+  replayTrace: 'REPLAY_TRACE',
+  replayRouting: 'REPLAY_ROUTING',
+  replayNfr: 'REPLAY_NFR',
+  replayCi: 'REPLAY_CI',
+  replayRealCaptures: 'REPLAY_REAL_CAPTURES',
+  replayCaptured: 'REPLAY_CAPTURED',
+  replayConstructed: 'REPLAY_CONSTRUCTED',
+};
+
+/** What a configuration's `doc-counts` section does to the entries and sources that existed before Story 1.95. */
+function preExistingProblems(config) {
+  const section = config['doc-counts'];
+  const problems = [];
+  for (const [index, pinned] of PRE_EXISTING_ENTRIES.entries()) {
+    const entry = section.entries[index];
+    if (!entry || entry.file !== pinned.file || entry.claim !== pinned.claim) {
+      problems.push(`entry ${index + 1} is another entry than "${pinned.claim}" of ${pinned.file}`);
+    } else if (JSON.stringify(entry.counts) !== JSON.stringify(pinned.counts)) {
+      problems.push(`"${pinned.claim}" of ${pinned.file} reads ${entry.counts.join(', ')} and read ${pinned.counts.join(', ')}`);
+    }
+  }
+  for (const [name, exported] of Object.entries(PRE_EXISTING_SOURCES)) {
+    const source = section.sources[name];
+    if (
+      !source ||
+      source.kind !== 'module' ||
+      source.from.module !== 'test/lib/doc-count-sources.js' ||
+      source.from.export !== exported ||
+      source.from.path
+    ) {
+      problems.push(`source ${name} returns another export than ${exported} of test/lib/doc-count-sources.js`);
+    }
+  }
+  return problems;
+}
+
+check('every doc-counts entry and source that existed before Story 1.95 reads what it read, and a widened one is named', () => {
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  assert.deepStrictEqual(preExistingProblems(config), []);
+  assert.strictEqual(PRE_EXISTING_ENTRIES.length, 13);
+  assert.strictEqual(Object.keys(PRE_EXISTING_SOURCES).length, 31);
+  const widened = structuredClone(config);
+  const adoption = widened['doc-counts'].entries.find((entry) => entry.claim === "the replay section's stored output total");
+  adoption.counts = ['replayScored'];
+  assert.deepStrictEqual(preExistingProblems(widened), [
+    `"the replay section's stored output total" of docs/explanation/eval-quality-adoption-guide.md reads replayScored and read replayTotal`,
+  ]);
+  const retargeted = structuredClone(config);
+  retargeted['doc-counts'].sources.replayTotal.from.export = 'REPLAY_SCORED';
+  assert.deepStrictEqual(preExistingProblems(retargeted), [
+    'source replayTotal returns another export than REPLAY_TOTAL of test/lib/doc-count-sources.js',
+  ]);
+  const moved = structuredClone(config);
+  moved['doc-counts'].entries.splice(0, 1);
+  assert.ok(preExistingProblems(moved).length > 0, 'an entry removed or reordered is named');
+  const extraCounts = structuredClone(config);
+  extraCounts['doc-counts'].entries[1].counts.push('replayTotal');
+  assert.strictEqual(preExistingProblems(extraCounts).length, 1, 'an entry that reads one more source is named');
+});
 
 check('each new entry holds its sentence against the sources in the order its capture groups carry them', () => {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));

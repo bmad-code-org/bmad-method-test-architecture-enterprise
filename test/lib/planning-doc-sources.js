@@ -1,46 +1,45 @@
 /**
- * TEA's own answers for the `doc-counts` gate about the Evaluate plan: the
- * story count and the appended-story list in the overview of `epics.md`, and
- * the five lane lists that `epics.md` and `sprint-status.yaml` each carry.
+ * TEA's own answers for the `doc-counts` gate about the Evaluate plan.
+ * They are the story count and the appended-story list in the overview of `epics.md`, the lane count in its parallel-lanes section,
+ * and the five lane lists that `epics.md` and `sprint-status.yaml` each carry.
  *
- * Each number comes from the committed files themselves. Loading this module
- * reads `epics.md` and `sprint-status.yaml` and refuses, naming every
- * disagreement, when the two lists of any lane differ, when a story sits in two
- * lanes, when a lane entry has no status row, or when the appended-story lists
- * of the overview do not match the story sections the file holds. The gate then
- * holds the sentences that state the totals against the values returned here.
+ * Each number comes from the committed files themselves.
+ * Loading this module reads `epics.md` and `sprint-status.yaml`.
+ * It refuses, naming every disagreement, when the two lists of any lane differ, when a story sits in two lanes or twice in one, when a lane entry has no status row,
+ * or when the appended-story lists of the overview do not match the story sections the file holds.
+ * The gate then holds the sentences that state the totals against the values returned here.
  *
  * THE RULES
  *
- * Story count. A story section is a `### Story <id>: <title>` heading outside a
- * fenced block. The overview's story count is the number of those headings,
- * H.1 included, whatever epic section holds them. An id appears once.
+ * Story count.
+ * A story section is a `### Story <id>: <title>` heading outside a fenced block.
+ * The overview's story count is the number of those headings, H.1 included, whatever epic section holds them.
+ * An id appears once.
  *
- * Epic count. An epic section is a `## Epic <n>: <title>` heading outside a
- * fenced block.
+ * Epic count.
+ * An epic section is a `## Epic <n>: <title>` heading outside a fenced block.
  *
- * Appended stories. Stories 1.1 to 1.26 are the original plan and the
- * 2026-09-23 amendment. Every Epic 1 story numbered 1.27 or higher was appended
- * from a finding made while building. The two lists in `epics.md` (the overview
- * parenthesis and the Epic 1 line of the epic list) name those stories as
- * `1.a to 1.b` ranges and single ids. Both lists, expanded, equal the set of
- * appended story sections, with each id listed once and in ascending order, and
- * the overview states how many stories that is.
+ * Fenced blocks.
+ * A fence opens on a line indented up to three spaces that starts with three or more backticks (no backtick in the rest of the line) or three or more tildes.
+ * It closes on a line indented up to three spaces that holds only the same character, at least as many times as the opening, and whitespace.
  *
- * Lanes. `epics.md` gives each lane as a `**Lane <n>: <title>** (<where>):`
- * paragraph that opens with a comma-separated list of story ids, a note in
- * parentheses allowed after an id. `sprint-status.yaml` gives each lane as a
- * `parallel_lanes.lane-<n>-<slug>` list of full row keys. A row key maps to the
- * id its `<epic>-<story>-` prefix spells, so `1-93-prove-...` is Story 1.93.
- * Both files hold the same lane numbers, the same stories in each lane in the
- * same order, no story twice (in one lane or in two), and a status row in
- * `development_status` for every entry, under the exact key the lane lists.
+ * Appended stories.
+ * Stories 1.1 to 1.26 are the original plan and the 2026-09-23 amendment.
+ * Every Epic 1 story numbered 1.27 or higher was appended from a finding made while building.
+ * The two lists in `epics.md` (the overview parenthesis and the Epic 1 line of the epic list) name those stories as `1.a to 1.b` ranges and single ids.
+ * Both lists, expanded, equal the set of appended story sections, with each id listed once and in ascending order.
+ * The overview states how many stories that is.
+ *
+ * Lanes.
+ * `epics.md` gives each lane as a `**Lane <n>: <title>** (<where>):` paragraph that opens with a comma-separated list of story ids, a note in parentheses allowed after an id.
+ * `sprint-status.yaml` gives each lane as a `parallel_lanes.lane-<n>-<slug>` list of full row keys.
+ * A row key maps to the id its `<epic>-<story>-` prefix spells, so `1-93-prove-...` is Story 1.93.
+ * Both files hold the same lane numbers, the same stories in each lane in the same order, no story twice (in one lane or in two), and a status row in `development_status` for every entry, under the exact key the lane lists.
  * Every id of an `epics.md` lane maps to exactly one status row.
  *
- * Every check returns the problems it found. The loader collects them, and each
- * export it returns is computed by the check that verified it, so a check that
- * nobody calls leaves its export undefined and the sentence that holds that
- * export fails.
+ * Every check returns the problems it found.
+ * The loader collects them, and each export it returns is computed by the check that verified it.
+ * A check that nobody calls leaves its export undefined, and the sentence that holds that export fails.
  */
 
 'use strict';
@@ -54,7 +53,10 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const EPICS_RELATIVE = '_bmad-output/planning-artifacts/evaluate/epics.md';
 const SPRINT_STATUS_RELATIVE = '_bmad-output/implementation-artifacts/evaluate/sprint-status.yaml';
 
-/** The first Epic 1 story that was appended from a finding. Stories 1.17 to 1.26 came from the 2026-09-23 amendment. */
+/**
+ * The first Epic 1 story that was appended from a finding.
+ * Stories 1.17 to 1.26 came from the 2026-09-23 amendment.
+ */
 const FIRST_APPENDED_STORY = 27;
 
 function refuse(message) {
@@ -62,35 +64,45 @@ function refuse(message) {
 }
 
 /**
- * The lines of a markdown text that sit outside a fenced block, with their
- * 1-based numbers. A fence opens and closes on a line that starts (after
- * indentation) with three backticks or three tildes.
+ * The lines of a markdown text that sit outside a fenced block, with their 1-based numbers.
+ * Fences follow CommonMark: the opening line fixes the character and the run length, and only a line of that character at least as long closes it.
  */
 function proseLines(text) {
   const lines = [];
   let fence = null;
   for (const [index, line] of text.split('\n').entries()) {
-    const marker = /^\s*(```|~~~)/.exec(line);
-    if (marker) {
-      if (fence === null) fence = marker[1];
-      else if (fence === marker[1]) fence = null;
+    if (fence === null) {
+      const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (opening && !(opening[1][0] === '`' && opening[2].includes('`'))) {
+        fence = { character: opening[1][0], length: opening[1].length };
+        continue;
+      }
+      lines.push({ number: index + 1, text: line });
       continue;
     }
-    if (fence === null) lines.push({ number: index + 1, text: line });
+    const closing = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+    if (closing && closing[1][0] === fence.character && closing[1].length >= fence.length) fence = null;
   }
   return lines;
 }
 
 const STORY_ID = String.raw`\d+\.\d+`;
 
-/** Every story section of `epics.md` in file order, as `{ id, title, line }`. Refuses a heading it cannot read and an id held twice. */
+/** A level-three heading that opens with `Story`; the optional group holds a readable `<id>: <title>`. */
+const STORY_HEADING = /^### Story\b(?: (H\.\d+|\d+\.\d+): (.+)$)?/;
+
+/**
+ * Every story section of `epics.md` in file order, as `{ id, title, line }`.
+ * Refuses a heading it cannot read and an id held twice.
+ */
 function readStoryHeadings(epicsText) {
   const headings = [];
   const seen = new Map();
   for (const { number, text } of proseLines(epicsText)) {
-    if (!/^### Story\b/.test(text)) continue;
-    const match = /^### Story (H\.\d+|\d+\.\d+): (.+)$/.exec(text);
-    if (!match) refuse(`${EPICS_RELATIVE}:${number} is a story heading that does not read "### Story <id>: <title>": ${text}`);
+    const match = STORY_HEADING.exec(text);
+    if (!match) continue;
+    if (match[1] === undefined)
+      refuse(`${EPICS_RELATIVE}:${number} is a story heading that does not read "### Story <id>: <title>": ${text}`);
     if (seen.has(match[1])) {
       refuse(`${EPICS_RELATIVE}:${number} holds a second section for Story ${match[1]}, first held at line ${seen.get(match[1])}`);
     }
@@ -130,7 +142,7 @@ const APPENDED_SENTENCES = [
   },
   {
     name: 'the epic list',
-    pattern: new RegExp(String.raw`are appended as stories at the end of the epic, starting with Stories ${ITEM_LIST}\.`, 'g'),
+    pattern: new RegExp(String.raw`were appended as stories at the end of the epic: Stories ${ITEM_LIST}\.`, 'g'),
     countGroup: null,
     listGroup: 1,
   },
@@ -212,7 +224,10 @@ function laneIds(list) {
   return ids;
 }
 
-/** The lanes of `epics.md` as a map from lane number to the story ids in the order written. Refuses a lane paragraph it cannot read. */
+/**
+ * The lanes of `epics.md` as a map from lane number to the story ids in the order written.
+ * Refuses a lane paragraph it cannot read.
+ */
 function readEpicLanes(epicsText) {
   const lanes = new Map();
   for (const { number, text } of proseLines(epicsText)) {

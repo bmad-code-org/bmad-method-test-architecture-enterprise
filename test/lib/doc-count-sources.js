@@ -265,11 +265,10 @@ const REPLAY_ROOT = path.join(__dirname, '..', 'replay');
 const REPLAY_ORIGINS = new Set(['constructed', 'captured', 'real-capture']);
 
 /**
- * Whether a stored result is a number the scorers produced. A run the harness
- * could not measure stores `null` or `{ "unmeasurable": <failure class> }`
- * (test/test-eval-replay.js, `differences`), and any other object is a scored
- * result. A result of another shape throws, because a count that guessed would
- * be a wrong number.
+ * Whether a stored result is a number the scorers produced.
+ * A run the harness could not measure stores `null` or `{ "unmeasurable": <failure class> }` (test/test-eval-replay.js, `differences`).
+ * Any other object is a scored result.
+ * A result of another shape throws, because a count that guessed would be a wrong number.
  */
 function producesNumber(where, result) {
   if (result === null) return false;
@@ -327,10 +326,8 @@ exports.REPLAY_CAPTURED = replayOrigin('captured');
 exports.REPLAY_CONSTRUCTED = replayOrigin('constructed');
 
 /**
- * The counts test/README.md and the header of test/test-eval-replay.js state
- * about what the corpus can and cannot prove: the cases whose stored result is a
- * number, the constructed ones among them, and the cases that carry captured
- * bytes (an origin of `captured` or `real-capture`), in all and per suite.
+ * The counts test/README.md and the header of test/test-eval-replay.js state about what the corpus can and cannot prove.
+ * They are the cases whose stored result is a number, the constructed ones among them, and the cases that carry captured bytes (an origin of `captured` or `real-capture`), in all and per suite.
  */
 const CAPTURED_ORIGINS = new Set(['captured', 'real-capture']);
 const replayCarriesBytes = (entry) => CAPTURED_ORIGINS.has(entry.origin);

@@ -153,7 +153,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.122, 1.123, 1.130, 1.131, 1.132.
+Findings made while building it were appended as stories at the end of the epic: Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.122, 1.123, 1.130, 1.131, 1.132.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
