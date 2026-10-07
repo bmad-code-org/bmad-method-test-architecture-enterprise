@@ -264,6 +264,23 @@ if (!process.env.DOC_COUNT_SOURCES_TEA_INDEX_CSV) {
 const REPLAY_ROOT = path.join(__dirname, '..', 'replay');
 const REPLAY_ORIGINS = new Set(['constructed', 'captured', 'real-capture']);
 
+/**
+ * Whether a stored result is a number the scorers produced. A run the harness
+ * could not measure stores `null` or `{ "unmeasurable": <failure class> }`
+ * (test/test-eval-replay.js, `differences`), and any other object is a scored
+ * result. A result of another shape throws, because a count that guessed would
+ * be a wrong number.
+ */
+function producesNumber(where, result) {
+  if (result === null) return false;
+  if (typeof result !== 'object' || Array.isArray(result)) {
+    refuse(
+      `${where} stores a result of another shape (it has to be null or an object), so the replay counts cannot say whether it produces a number`,
+    );
+  }
+  return !Object.hasOwn(result, 'unmeasurable');
+}
+
 function replayCases() {
   const cases = [];
   for (const suiteEntry of fs.readdirSync(REPLAY_ROOT, { withFileTypes: true })) {
@@ -274,13 +291,19 @@ function replayCases() {
       const expectedPath = path.join(suiteRoot, caseEntry.name, 'expected.json');
       if (!fs.existsSync(expectedPath))
         refuse(`${path.relative(REPLAY_ROOT, expectedPath)} does not exist, so the replay case count would skip a case`);
-      const origin = JSON.parse(fs.readFileSync(expectedPath, 'utf8')).storedOutput?.origin;
+      const expected = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+      const origin = expected.storedOutput?.origin;
       if (!REPLAY_ORIGINS.has(origin)) {
         refuse(
           `${path.relative(REPLAY_ROOT, expectedPath)} names the origin ${JSON.stringify(origin)}; the replay counts know ${[...REPLAY_ORIGINS].join(', ')}`,
         );
       }
-      cases.push({ suite: suiteEntry.name, origin });
+      cases.push({
+        suite: suiteEntry.name,
+        origin,
+        scored: producesNumber(path.relative(REPLAY_ROOT, expectedPath), expected.result),
+        fixtureSet: expected.inputs?.fixtureSet,
+      });
     }
   }
   return cases;
@@ -302,3 +325,24 @@ exports.REPLAY_CI = replaySuite('ci');
 exports.REPLAY_REAL_CAPTURES = replayOrigin('real-capture');
 exports.REPLAY_CAPTURED = replayOrigin('captured');
 exports.REPLAY_CONSTRUCTED = replayOrigin('constructed');
+
+/**
+ * The counts test/README.md and the header of test/test-eval-replay.js state
+ * about what the corpus can and cannot prove: the cases whose stored result is a
+ * number, the constructed ones among them, and the cases that carry captured
+ * bytes (an origin of `captured` or `real-capture`), in all and per suite.
+ */
+const CAPTURED_ORIGINS = new Set(['captured', 'real-capture']);
+const replayCarriesBytes = (entry) => CAPTURED_ORIGINS.has(entry.origin);
+
+exports.REPLAY_SCORED = replay.filter((entry) => entry.scored).length;
+exports.REPLAY_SCORED_CONSTRUCTED = replay.filter((entry) => entry.scored && entry.origin === 'constructed').length;
+exports.REPLAY_CAPTURED_BYTES = replay.filter(replayCarriesBytes).length;
+exports.REPLAY_ATDD_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'atdd' && replayCarriesBytes(entry)).length;
+exports.REPLAY_TEST_REVIEW_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'test-review' && replayCarriesBytes(entry)).length;
+exports.REPLAY_CI_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'ci' && replayCarriesBytes(entry)).length;
+
+/** The `ci` cases over the `full` and `minimal` projects, whose fixture sets are named `full-...` and `minimal-...`. */
+exports.REPLAY_CI_FULL_AND_MINIMAL = replay.filter(
+  (entry) => entry.suite === 'ci' && /^(?:full|minimal)-/.test(entry.fixtureSet ?? ''),
+).length;

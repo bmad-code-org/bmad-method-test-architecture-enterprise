@@ -253,13 +253,14 @@ ceilings, the threshold checks, and the two single-check groups. A `ci` case is 
 same shape over one project: whether the workflow parsed and the parser's errors,
 every `actionlint` finding, the presence of every requested element keyed by id with
 each miss spelled out, every unrequested element, and every workflow rule violation.
-Fourteen trace cases cover both sets: a correct run of each, the two discriminating
+Fifteen trace cases cover both sets: a correct run of each, the two discriminating
 false positives with the gate flipping, a wrong percentage, a missing oracle
 source, an omitted `rejected_evidence` array, a waiver turned down for the wrong
 reasons, a matrix full of lines the parser must ignore, an invented and a
 duplicated criterion section, an empty `waivers` block on the set that has no
-register, and two artifacts the harness must refuse to score at all. Twenty `nfr` cases
-cover both bundles: a correct audit of each, the two unsupported PASS results, an omitted
+register, a run whose live records land as unverifiable, a summary whose target is shaped like a `system` run,
+and two artifacts the harness must refuse to score at all. Twenty-nine `nfr` cases
+cover both bundles, among them: a correct audit of each, the two unsupported PASS results, an omitted
 domain section, a domain assessed twice, a domain section stating no status the four-value
 enum recognises, a fabricated evidence citation and the same citation hidden under another
 label, the workflow's own worked example quoted inside a fence ahead of the run's own
@@ -269,8 +270,9 @@ grounded on a different file of the same bundle, a gate artifact contradicting i
 assessment section, a gate block declaring a domain the document never assesses, the same
 audit with no `audited_domains` block at all, a block that appears only inside the quoted
 example, a report whose gate declares four statuses under headings no domain section
-recognises, and a report the harness must refuse to score at all. Twenty-one `ci` cases cover
-both projects: a correct pipeline for each, a third correct pipeline spelling every Node
+recognises, and a report the harness must refuse to score at all. The rest pin how the reader treats the
+spelling of a citation and the shape of a heading or a nested list. Twenty-one `ci` cases cover
+the `full` and `minimal` projects: a correct pipeline for each, a third correct pipeline spelling every Node
 version the way the shipped template itself does, a run: step reading `.nvmrc` into a step
 output that `node-version` then interpolates, and every threshold-breaching deviation the
 harness scores (a missing trigger, a missing or widened permission, the wrong Node-version
@@ -302,12 +304,11 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every constructed case that produces a number was written by hand to be parsed, so a
 green run proves the scorers are deterministic and reproduce history. It proves nothing
-about whether they handle real agent output correctly. One hundred fifty-two of the one
-hundred fifty-eight cases produce a number and one hundred thirty-four of those are constructed.
-Eighteen carry captured bytes: twelve from the ATDD fixture corpus, two from
-`fixtures/test-review-cli/` and four from live `eval:ci` runs, one over each of the `evaluation-plan`,
-`evaluation-tiers`, `evaluation-edit` and `evaluation-gate` projects. The two test-review captures score zero recall because their reports document no
-finding. Stored routing replays include all four successful
+about whether they handle real agent output correctly. Of the 158 cases, 152 produce a number and 134 of those are constructed.
+18 cases carry captured bytes: 12 from the ATDD fixture corpus, 2 from
+`fixtures/test-review-cli/` and 4 from live `eval:ci` runs, one over each of the `evaluation-plan`,
+`evaluation-tiers`, `evaluation-edit` and `evaluation-gate` projects.
+The two test-review captures score zero recall because their reports document no finding. Stored routing replays include all four successful
 clarification branches, and every `bmad-tea-routing` replay remains constructed. The
 live Story 1.3 routing evidence is validated separately by `test:eval-routing-evidence`.
 

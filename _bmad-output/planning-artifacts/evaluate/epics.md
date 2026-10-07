@@ -23,7 +23,10 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred twenty-nine stories, including H.1 (Stories 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.122, 1.123, 1.130, 1.131, 1.132 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and 130 stories, including H.1 (97 stories were appended to Epic 1 from findings made while building it: 1.27 to 1.79, 1.80 to 1.89, 1.90 to 1.116, 1.120, 1.121, 1.122, 1.123, 1.130, 1.131, 1.132), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+
+Amended 2026-10-06 in Story 1.95's build: the overview counts every `### Story` section, H.1 included, and had said 129 while the file held 130 (Story 2.6's section was the one left out).
+The count, the appended-story list and the five lane lists are now held to the file by `test:doc-counts`, so a story section added or removed, or a lane list that differs between this file and `sprint-status.yaml`, fails the gate.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -2562,6 +2565,12 @@ So that a count that drifts fails where it drifts (CAP-12).
 
 **Dependencies:** 2.3.
 **Gate:** `test:eval-replay`, `test:doc-counts`, `npm test`.
+
+Amended 2026-10-06 in Story 1.95's build: the gates are `doc-counts` entries of `eval-quality.config.json`, so `test:doc-counts` runs them and no existing entry reads anything new.
+The replay counts come from `test/lib/doc-count-sources.js` (it gained the cases that produce a number, the constructed ones among them and the cases that carry captured bytes).
+The story count, the epic count, the appended-story count and the lane count come from `test/lib/planning-doc-sources.js`, which refuses a plan whose two appended-story lists or whose lane lists in this file and in `sprint-status.yaml` disagree.
+The header of `test/test-eval-replay.js` now states the totals it had left to the module, and `test/README.md` and this overview state their counts as digits where the gate renders words only up to ninety-nine.
+`test:planning-doc-sources` observes each gate failing on data changed by one.
 
 ### Story 1.96: Check the derivable fields of a CI plan
 
