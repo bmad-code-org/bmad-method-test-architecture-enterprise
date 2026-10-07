@@ -193,8 +193,21 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
         hostSockets: () => ['/run/dbus/system_bus_socket', '/run/docker.sock', '/tmp/agent/agent.sock'],
-      }).wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
+      }).wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], [], {
+        environment: { PATH: '/usr/bin', PWD: '/proj', 'my.setting': 'v', PS1: 'prompt> ' },
+      });
       const socketArguments = fs.readFileSync(bubblewrapSocketsWrapped.socketFile, 'utf8').split('\0');
+      // The launcher starts with the environment the wrapped call names (the loader variables) and reads the call's own from a file (Story 1.89).
+      const socketEnvironment = {
+        // The host's loader variables are no part of the golden: the launcher's environment holds those and the one the engine's watchdog sets.
+        launcher: {
+          ELECTRON_RUN_AS_NODE: bubblewrapSocketsWrapped.environment.ELECTRON_RUN_AS_NODE,
+          loaderVariablesOnly: Object.keys(bubblewrapSocketsWrapped.environment).every((name) =>
+            ['ELECTRON_RUN_AS_NODE', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'].includes(name),
+          ),
+        },
+        file: JSON.parse(fs.readFileSync(bubblewrapSocketsWrapped.environmentFile, 'utf8')),
+      };
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -298,6 +311,7 @@ function collectGeneratedOutputs() {
         'confinement.targetSandbox.wrap.bubblewrap.egress': { ...bubblewrapEgressWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets': { ...bubblewrapSocketsWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets.arguments': socketArguments,
+        'confinement.targetSandbox.wrap.bubblewrap.sockets.environment': socketEnvironment,
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);
@@ -321,6 +335,7 @@ function collectGeneratedOutputs() {
         .join('<node>')
         .replaceAll(/status-(\d+)-[0-9a-f]{16}\.json/g, 'status-$1-<token>.json')
         .replaceAll(/sockets-(\d+)-[0-9a-f]{16}\.args/g, 'sockets-$1-<token>.args')
+        .replaceAll(/launch-(\d+)-[0-9a-f]{16}\.json/g, 'launch-$1-<token>.json')
         .replaceAll(/trace-(\d+)-[0-9a-f]{12}\.txt/g, 'trace-$1-<token>.txt')
         .replaceAll(path.join(__dirname, '..', '..', 'cli', 'lib', 'evaluate'), '<confinement-directory>');
       const normalized = JSON.parse(text);

@@ -14,6 +14,10 @@
  * judged as the target's behavior where the runtime reads a target that could
  * not run. Seatbelt runs the command in place and needs none of this.
  *
+ * The target starts with the environment this process started with, read from
+ * `/proc/self/environ` where there is one (Story 1.89), since Node's `process.env`
+ * cannot read a variable whose name is a decimal integer.
+ *
  *   confinement-status.cjs [--bridge <socket path>] [--egress <socket path>] [--avoid <port>] <status file> <target> [argument ...]
  *
  * A signal this process receives is passed to the target. A target that
@@ -301,6 +305,34 @@ function listenEgress(socketPath) {
   });
 }
 
+/**
+ * The environment this process started with, as the kernel recorded it for the process (`/proc/self/environ`), which the target starts with.
+ * Node's `process.env` cannot read a variable whose name is a decimal integer, so a target started with `{ ...process.env }` would lose it.
+ * Where the file cannot be read (a host with no procfs, where no Bubblewrap runs) the environment is `process.env`'s.
+ * The first entry of a name wins, as `getenv` reads it, and an entry with no name or no `=` is no variable.
+ *
+ * @param {string} [file]
+ * @returns {Record<string, string>}
+ */
+function startEnvironment(file = '/proc/self/environ') {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return { ...process.env };
+  }
+  // Entries are collected as pairs and made an object at once, since assigning a name `__proto__` would set a prototype.
+  const entries = new Map();
+  for (const entry of text.split('\0')) {
+    const at = entry.indexOf('=');
+    if (at <= 0) continue;
+    const name = entry.slice(0, at);
+    if (!entries.has(name)) entries.set(name, entry.slice(at + 1));
+  }
+  const environment = Object.fromEntries(entries);
+  return environment;
+}
+
 /** The variables that point a client at the egress proxy on `port`: both spellings of the HTTPS proxy and Node's switch for reading them. */
 function egressEnvironment(port) {
   const proxy = `http://127.0.0.1:${port}`;
@@ -367,7 +399,7 @@ function main() {
   }
   let closeBridge = null;
   const run = (environment = {}) => {
-    const child = spawn(target, args, { stdio: 'inherit', env: { ...process.env, ...environment } });
+    const child = spawn(target, args, { stdio: 'inherit', env: { ...startEnvironment(), ...environment } });
     for (const name of FORWARDED) process.on(name, () => child.kill(name));
     child.once('error', (error) => {
       closeBridge?.();
@@ -456,6 +488,7 @@ module.exports = {
   parseArguments,
   parseBridgeLine,
   egressEnvironment,
+  startEnvironment,
   serveBridge,
   serveEgress,
   signedStatus,

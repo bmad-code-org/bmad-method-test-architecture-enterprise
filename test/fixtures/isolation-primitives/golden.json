@@ -1002,27 +1002,11 @@
     "statusFile": "<status>/status-1-<token>.json"
   },
   "confinement.targetSandbox.wrap.bubblewrap.sockets": {
-    "target": "/bin/sh",
+    "target": "<node>",
     "args": [
-      "-c",
-      "exec 3<\"$1\" || exit 126; shift; exec \"$@\"",
-      "sh",
+      "<confinement-directory>/confinement-launcher.cjs",
       "<status>/sockets-1-<token>.args",
-      "/usr/bin/env",
-      "-u",
-      "PWD",
-      "-u",
-      "OLDPWD",
-      "-u",
-      "SHLVL",
-      "-u",
-      "_",
-      "-u",
-      "IFS",
-      "-u",
-      "OPTIND",
-      "-u",
-      "PPID",
+      "<status>/launch-1-<token>.json",
       "/usr/bin/bwrap",
       "--unshare-user",
       "--unshare-net",
@@ -1090,5 +1074,17 @@
     "/dev/null",
     "/tmp/agent/agent.sock",
     ""
-  ]
+  ],
+  "confinement.targetSandbox.wrap.bubblewrap.sockets.environment": {
+    "launcher": {
+      "ELECTRON_RUN_AS_NODE": "1",
+      "loaderVariablesOnly": true
+    },
+    "file": {
+      "PATH": "/usr/bin",
+      "PWD": "/proj",
+      "my.setting": "v",
+      "PS1": "prompt> "
+    }
+  }
 }
