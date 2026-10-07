@@ -480,6 +480,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A relative registry root, or a relative `projectRoot` override, is resolved to an absolute path once, so a later change of working directory cannot move a target.
   `tea-evaluate check` gains three rules: `infrastructure-exit-code` refuses a defect signature or manifestation witness that could hold on an observation carrying only one of its entry's infrastructure exit codes and no output (resolved through eval-quality's own `resolveCheck`, with the contract's reference sets in scope, a witness's declared inputs, each call-input clause of a signature tried both ways, and failing closed when the engine cannot resolve it), `unregistered-executable` refuses a `cli` signature or a witness naming a target no entry declares, and `registry` refuses an interface and executable pair declared twice.
   `docs/reference/tea-evaluate-cli.md` documents the registry and the rules.
+- The bin-directory grant of a bare-name runner is tested.
+  For `tea-skill-runner` found through `PATH` outside the trial's workspace, `test-evaluate-preflight.js` now runs `preflight`, `run` and `score --run` with the documented three `systemPaths` directories (the two install directories and the bin directory that holds the runner's link) and expects exit 0 on every platform.
+  With only the bin directory's grant removed, a Linux audit lists the link, so `preflight` exits 3 naming `<bin directory>/tea-skill-runner` as `mount outside allowlist`, `run` exits 3 at the trial stage, and `score --run` on that run exits 3.
+  The macOS audit lists no link, so the same setup passes there and the case expects exit 0.
 
 ### Changed
 
