@@ -154,6 +154,7 @@ const {
 } = require('../cli/lib/evaluate/judgment-rows');
 const { runnableArgv } = require('./lib/recorded-argv');
 const { removeDeadPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
+const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -7417,8 +7418,10 @@ async function checkFrameworkProbeShapes() {
 
 /**
  * Every case in run order with the group it belongs to.
- * CI runs the groups as five scripts so no one runner carries the whole file's wall time.
- * They are `--group=evaluators`, `--group=agents` and `--group=records`.
+ * CI runs the groups as scripts of their own so no one runner carries the whole file's wall time.
+ * `--group=evaluators` and `--group=evaluators-agent-version` hold the evaluator cases and the agent version cases.
+ * `--group=agents`, `--group=agents-importers` and `--group=agents-sealed-brief` hold the installed framework cases and the sealed-brief agent's.
+ * `--group=records` holds the records evaluator and the imported calibration.
  * `--group=held-attempts` holds an evaluator attempt's score call to its inputs over real eval-quality (Story 1.69).
  * `--group=private` runs confined sealed-brief agents and signal-ended runs over the run's private directories (Story 1.58).
  * With no `--group` every case runs.
@@ -7437,14 +7440,14 @@ const CASES = [
   { name: 'npm lockfile generations and linked entries', body: checkLockfileProbeVersions, group: 'agents' },
   { name: 'tree metadata changes the install digest', body: checkTreeProbeMetadata, group: 'agents' },
   { name: 'a hoisted plugin needs its own declaration', body: checkTransitiveFrameworkDeclaration, group: 'agents' },
-  { name: 'a nested package resolves through its importer chain', body: checkNestedFrameworkResolution, group: 'agents' },
-  { name: 'a linked importer resolves from its real path', body: checkLinkedImporterResolution, group: 'agents' },
-  { name: 'separate importer trees cover same-name nested copies', body: checkSeparateImporterTrees, group: 'agents' },
-  { name: 'a missing declared install digest stops the run', body: checkMissingFrameworkInstallDigest, group: 'agents' },
-  { name: 'an installed package patch stops an in-flight run', body: checkInstalledFrameworkDigestMidRun, group: 'agents' },
-  { name: 'a lockfile edit stops an in-flight run', body: checkLockfileDigestMidRun, group: 'agents' },
-  { name: 'an install digest is held during calibration', body: checkFrameworkDigestCalibration, group: 'agents' },
-  { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents' },
+  { name: 'a nested package resolves through its importer chain', body: checkNestedFrameworkResolution, group: 'agents-importers' },
+  { name: 'a linked importer resolves from its real path', body: checkLinkedImporterResolution, group: 'agents-importers' },
+  { name: 'separate importer trees cover same-name nested copies', body: checkSeparateImporterTrees, group: 'agents-importers' },
+  { name: 'a missing declared install digest stops the run', body: checkMissingFrameworkInstallDigest, group: 'agents-importers' },
+  { name: 'an installed package patch stops an in-flight run', body: checkInstalledFrameworkDigestMidRun, group: 'agents-importers' },
+  { name: 'a lockfile edit stops an in-flight run', body: checkLockfileDigestMidRun, group: 'agents-importers' },
+  { name: 'an install digest is held during calibration', body: checkFrameworkDigestCalibration, group: 'agents-importers' },
+  { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents-importers' },
   { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
   { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
   { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
@@ -7462,43 +7465,47 @@ const CASES = [
   { name: 'evaluators outside the import contract', body: checkEvaluatorFailures, group: 'evaluators' },
   { name: 'a hung evaluator', body: checkEvaluatorTimeout, group: 'evaluators' },
   { name: 'the set recommendation', body: checkSetRecommendation, group: 'evaluators' },
-  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents' },
+  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents-sealed-brief' },
   { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
-  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents' },
+  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents-sealed-brief' },
   { name: 'the scratch removal', body: checkScratchRemoval, group: 'private' },
   { name: 'a killed command evaluator run is reclaimed', body: checkKilledCommandRecovery, group: 'private' },
   { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'private' },
-  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
-  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
-  { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators' },
-  { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators' },
+  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents-sealed-brief' },
+  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents-sealed-brief' },
+  { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators-agent-version' },
+  { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators-agent-version' },
   {
     name: 'a sealed-brief baseline replays through ci without an agent version probe',
     body: checkSealedBriefCiReplayStartsNoVersionProbe,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
-  { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults, group: 'evaluators' },
+  {
+    name: 'unreadable installed agent versions stop before qualification',
+    body: checkAgentVersionFaults,
+    group: 'evaluators-agent-version',
+  },
   {
     name: 'an agent version probe receives only declared environment keys and refuses a delimiter',
     body: checkAgentVersionEnvironmentAndDelimiter,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
   {
     name: 'post-trial and post-attempt agent version reads count in sealed resource use',
     body: checkAgentVersionPostTrialUse,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
   {
     name: 'an installed agent version changing during the run stops the attempt or trial',
     body: checkAgentVersionMoves,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
-  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents' },
-  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents' },
-  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents' },
-  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents' },
-  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents' },
-  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents' },
+  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents-sealed-brief' },
+  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents-sealed-brief' },
+  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents-sealed-brief' },
+  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents-sealed-brief' },
+  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents-sealed-brief' },
+  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents-sealed-brief' },
   { name: "an evaluator attempt's call is held to its inputs", body: checkHeldAttempts, group: 'held-attempts' },
   { name: 'a later probe, a later attempt and an Invalid attempt are held', body: checkHeldAttemptsLaterProbes, group: 'held-attempts' },
   { name: 'a call with an undocumented exit still stops the run', body: checkHeldAttemptsUndocumentedExit, group: 'held-attempts' },
@@ -7530,13 +7537,8 @@ async function runCase(name, body) {
   }
 }
 
-/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
-function requestedGroup() {
-  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
-  return argument === undefined ? null : argument.slice('--group='.length);
-}
-
 async function main() {
+  if (printGroupsWhenAsked(CASES)) return 0;
   const group = requestedGroup();
   if (group !== null && !GROUPS.has(group)) {
     console.error(
