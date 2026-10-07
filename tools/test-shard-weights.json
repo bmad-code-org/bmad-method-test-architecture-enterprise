@@ -32,6 +32,7 @@
   "test:doc-invocations": 245,
   "test:docs-build-names": 0.3,
   "test:docs-evaluate-sidebar": 0.3,
+  "test:docs-gap-reader": 0.3,
   "test:docs-mermaid": 16,
   "test:docs-tutorial": 14,
   "test:enforce-hook": 0.3,
