@@ -415,6 +415,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 Three more checks hold the Evaluate documentation:
 
 - `test:docs-build-names` scans every page under `docs/` and fails on a name from how TEA was built: a story id, a decision id, a line of epic narrative, a planning path, a pull request number or a word from the review process.
+  It also fails when an executable command block (a fenced `bash`, `sh`, `shell` or `zsh` block) holds a timestamped run or score ID, which a reader's own run never has.
 - `test:docs-evaluate-sidebar` fails when a page that names `tea-evaluate` or `bmad-testarch-evaluate` is missing from the site sidebar, and when the TEA overview links no page that Evaluate owns.
 - `test:docs-tutorial` runs the commands of the Evaluate tutorial against its fixture and fails on a command that errors or an output line the page promises and the run does not print.
 

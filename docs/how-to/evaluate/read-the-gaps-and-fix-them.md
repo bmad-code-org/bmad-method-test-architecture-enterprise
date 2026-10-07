@@ -29,7 +29,14 @@ The example follows a command that reviews test files and the two gaps its evalu
 
 Read the exit of the last command first.
 Exit 11 means the evaluation is too weak to trust, and its message names the probe and the reason.
-A preflight over the example folder prints:
+Run the preflight and keep its run ID.
+`RUN` holds the ID in the last line, `runs/<ID>`, and each later command that reads this run's evidence uses `$RUN`:
+
+```bash
+RUN=$(npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/test-review-json-stdin 2>&1 | tee /dev/stderr | tail -1 | grep -o '[0-9]\{8\}T[0-9]\{9\}Z-[0-9a-f]\{8\}' | tail -1)
+```
+
+Over the example folder it prints:
 
 ```text
 tea-evaluate preflight: probes/P-005.probe.json: qualified; the restored digest matched and the baseline passed again
@@ -43,7 +50,7 @@ The oracle was supposed to fail and it held, so it accepts output that it should
 The qualification evidence names the oracle:
 
 ```bash
-(cd evals/test-review-json-stdin/runs/20261007T090613064Z-07007bfd &&
+(cd evals/test-review-json-stdin/runs/$RUN &&
   grep -o '"verdict": "[a-z]*"\|"oracleId": "O-[0-9]*"\|"resolution": "[a-z]*"' qualification/P-007/mutated-fail.json)
 ```
 
@@ -124,9 +131,12 @@ npm exec --prefix evals -- tea-evaluate check --evaluation evals/test-review-jso
 npm exec --prefix evals -- eval-quality compile --in evals/test-review-json-stdin/contract.json --out evals/test-review-json-stdin/compiled-contract.json
 npm exec --prefix evals -- eval-quality seal --in evals/test-review-json-stdin/contract.json --out evals/test-review-json-stdin/sealed-brief.json
 npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/test-review-json-stdin
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/test-review-json-stdin --partition development
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/test-review-json-stdin --partition development 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
+
+The last two commands keep the IDs the following steps read: `RUN` is the run `run` just sealed and `SCORE` is the score invocation under `runs/$RUN/scores/`.
+Each pass through the loop replaces them with the pass's own IDs.
 
 `digest` prints the new index digest, `compile` and `seal` print nothing and exit 0, and the preflight now qualifies `P-007`:
 
@@ -145,7 +155,7 @@ tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnos
 Read each probe's verdict and the coverage rules it reports unsatisfied:
 
 ```bash
-(cd evals/test-review-json-stdin/runs/20261007T090715909Z-b5691280/scores/20261007T090748343Z-c3c536d0 &&
+(cd evals/test-review-json-stdin/runs/$RUN/scores/$SCORE &&
   grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-001/evidence-artifact.json P-002/evidence-artifact.json)
 ```
 
@@ -196,10 +206,11 @@ P-002/evidence-artifact.json:"contractVerdict":"PASS"
 ### 6. Read the Strength of Each Class
 
 `score` also writes `strength-aggregate.json` beside the probe folders.
+`$RUN` and `$SCORE` still hold the IDs of the latest pass through the loop of step 4.
 Print one line per class:
 
 ```bash
-(cd evals/test-review-json-stdin/runs/20261007T090815261Z-97564a96/scores/20261007T090849732Z-130a348f &&
+(cd evals/test-review-json-stdin/runs/$RUN/scores/$SCORE &&
   node -p "const d = require('./strength-aggregate.json').floorDecisions; Object.keys(d).map((c) => c + ' ' + JSON.stringify(d[c])).join('\n')")
 ```
 
@@ -237,15 +248,15 @@ Held-out probes stay closed during the repair loop, so a repair cannot tune itse
 Run them once the development evidence is clean and you confirm it is ready:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/test-review-json-stdin --partition held-out
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/test-review-json-stdin --partition held-out 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
 
 Read held-out results only from `gap-view.json` in the run folder.
 Each held-out row holds the probe ID, its class and the reduced outcome:
 
 ```bash
-(cd evals/test-review-json-stdin/runs/20261007T091921321Z-c7e9d976 &&
+(cd evals/test-review-json-stdin/runs/$RUN &&
   node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount).join('\n')")
 ```
 

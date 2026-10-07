@@ -130,9 +130,13 @@ Add the tool name back to `tools` after you confirm that the evaluation may call
 ### 5. Run and Score
 
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-tool-server
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-tool-server 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
+
+`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
+The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
+If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
 
 ```text
 tea-evaluate run: clean: trial 1 of 3
@@ -151,7 +155,7 @@ tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
 ### 6. Read the Result
 
 ```bash
-(cd evals/grader-tool-server/runs/20261007T091047070Z-ef078a64/scores/20261007T091049834Z-ea51f6f4 &&
+(cd evals/grader-tool-server/runs/$RUN/scores/$SCORE &&
   grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
   grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)

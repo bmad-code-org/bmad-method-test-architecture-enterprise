@@ -13,6 +13,37 @@ Evaluate is the TEA workflow (`bmad-testarch-evaluate`, menu code `EV`) built ar
 It plants known defects in your AI feature, runs the evaluation again and asks whether the evaluation noticed.
 An evaluation that caught the planted defect is sensitive to that failure, and one that stayed green has a blind spot you now know about.
 
+Evaluation moves from confirmed requirements to CI in six steps, and three roles carry them.
+The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and `eval-quality` scores it.
+You confirm the requirements and accept the baseline, and CI enforces the checks the evaluation chose.
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#fff','primaryTextColor':'#000','primaryBorderColor':'#000','lineColor':'#000','secondaryColor':'#fff','tertiaryColor':'#fff','fontSize':'16px','fontFamily':'arial'}}}%%
+graph TB
+    Requirements["<b>You confirm the requirements</b>"]
+
+    subgraph Skill["<b>Authoring skill: Evaluate</b>"]
+        Author["<b>Authors the evaluation:<br/>probes, contract, oracles, mutations</b>"]
+    end
+
+    subgraph Cli["<b>Execution CLI: tea-evaluate</b>"]
+        Run["<b>Runs the clean and mutated arms<br/>and records the evidence</b>"]
+    end
+
+    subgraph Engine["<b>Scoring engine: eval-quality</b>"]
+        Score["<b>Scores each probe and takes the verdicts</b>"]
+    end
+
+    Accept["<b>You accept the baseline</b>"]
+    Ci["<b>CI enforces the chosen checks</b>"]
+
+    Requirements --> Author
+    Author --> Run
+    Run --> Score
+    Score --> Accept
+    Accept --> Ci
+```
+
 This page explains how the pieces fit and why they are built this way.
 To run one, start with the tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md).
 For the commands and fields, use the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-cli.md).

@@ -20,7 +20,7 @@ eval-quality alone turns those judgments into a verdict.
 
 - An evaluation folder whose contract, oracles and registry pass `check` and `preflight`
 - The Evaluate skill, to author the files below with you
-- For a model judge or a sealed-brief agent: the model's exact snapshot name and its credentials
+- For a model judge or a sealed-brief agent: the model's immutable provider ID and its credentials
 
 ## Steps
 
@@ -119,21 +119,27 @@ With the `deterministic` evaluator, `evaluation.json` wires the judge and the mi
 
 ```json
 {
-  "judge": { "agent": "claude", "model": "sonnet", "timeoutMs": 120000 },
+  "judge": { "agent": "claude", "model": "claude-sonnet-5-5", "timeoutMs": 120000 },
   "judgeCalibration": { "minimumAgreement": 0.9 }
 }
 ```
 
-`policy/evaluator-conditions.json` records the judge's model as a fixed condition of every run:
+`policy/evaluator-conditions.json` records the model the judge runs as a fixed condition of every run:
 
 ```json
 {
   "schemaVersion": 1,
   "modelSnapshot": "none",
   "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "judge": { "modelSnapshot": "the-judge-model-snapshot" }
+  "judge": { "modelSnapshot": "claude-sonnet-5-5" }
 }
 ```
+
+`judge.model` selects the model, and `judge.modelSnapshot` records which model that was, so both hold the same provider model ID.
+Give an immutable ID such as `claude-sonnet-5-5`.
+An alias such as `sonnet` follows the provider's current model, so the same scoring version can mean different weights over time.
+Where an adapter's CLI offers only an alias, the alias is the most the run can record, and the scoring is as reproducible as the alias.
+`check` exits 10 when `judge.modelSnapshot` differs from `judge.model`, and its finding names both values.
 
 `check` refuses a `judge` block when the contract declares no rubric, and when the evaluator scores rubrics itself.
 
@@ -202,7 +208,8 @@ Each one has a cause you can repair:
 - A label is wrong.
   Correct the label with the skill and rerun.
 - The judge model is too weak for the scale.
-  Choose a stronger model, record its snapshot in `policy/evaluator-conditions.json` and rerun.
+  Choose a stronger model, set its immutable ID in `judge.model` in `evaluation.json`, set the same ID in `judge.modelSnapshot` in `policy/evaluator-conditions.json` and rerun.
+  Changing only `judge.modelSnapshot` records a model the judge does not run, and `check` refuses it.
 
 The calibration file's digest and the minimum agreement join the evaluator configuration, so changing either changes the scoring version.
 A lower `minimumAgreement` accepts a judge that disagrees more often, so lower it only after you decide the labels were too strict.

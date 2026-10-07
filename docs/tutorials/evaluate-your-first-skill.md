@@ -4,13 +4,13 @@ description: 'Take one small skill from a confirmed requirements statement to a 
 ---
 
 **Evaluate** (`bmad-testarch-evaluate`) scores how an AI skill, agent or feature behaves against requirements you confirm.
-This tutorial evaluates one small skill, `refund-check`, from the requirements you confirm to a scored run, an accepted baseline and a passing pull request check.
+This tutorial evaluates one small skill, `refund-check`, from its confirmed requirements to a scored run, an accepted baseline and a passing pull request check.
 
 ## What You'll Build
 
 By the end of this 15-minute tutorial, you'll have:
 
-- A confirmed requirements statement for the skill
+- A reading of the confirmed requirements statement the evaluation is held to
 - A scored run in which a seeded defect in the skill is caught and two clean controls pass
 - An accepted baseline that later runs are compared with
 - A passing `tea-evaluate ci --tier pr`, the check a pull request runs
@@ -28,7 +28,7 @@ npm ci
 
 - macOS, or Linux with `bubblewrap` and `strace` installed, since Evaluate confines every target it runs (see [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement))
 
-You need no API key, no network access and no model.
+This tutorial needs no coding agent, no API key, no network access and no model.
 A small stub agent stands in for the model that would normally follow the skill.
 
 Run every command of this tutorial from the root of the checkout, in one terminal session.
@@ -58,19 +58,18 @@ When the request gives no amount and limit, reply `{"status": "refused"}`.
 
 The rule that matters is the inclusive limit: a refund of 100 against a limit of 100 is approved.
 A careless edit of that one line, from "at or below" to "below", would decline it.
-The evaluation you build proves that Evaluate notices such an edit.
+The evaluation you run proves that Evaluate notices such an edit.
 
-## Step 1: Intake
+## Step 1: Read the Intake
 
-Evaluate starts from a conversation.
-Start it in your coding agent:
+Evaluate starts from a conversation between you and the Evaluate skill, and the evaluation is held to what you confirm in it.
+The fixture already holds the finished result of one such conversation, so this step narrates it and you run nothing yet.
+You need no coding agent for that.
+To hold the conversation yourself, see [Optional: Run the Intake Yourself](#optional-run-the-intake-yourself) at the end of this page.
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-evaluate`
-- **Codex:** `$bmad-testarch-evaluate`
-- **Inside a `/bmad-tea` chat:** `EV`
-
-Evaluate inspects the skill first and records what it finds: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TeA's `tea-skill-runner`.
-Then it asks six questions, one for each family of facts that inspection cannot settle.
+In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TeA's `tea-skill-runner`.
+Then it asked six questions, one for each family of facts that inspection cannot settle.
+The answers that went into the fixture follow.
 
 **Q: Which decisions matter most?**
 A: "Approving a refund that is exactly at the limit.
@@ -96,8 +95,8 @@ A: "A 30 second ceiling per command, a disposable copy of the project, no secret
 **Q: Which failures have happened or would hurt most?**
 A: "Someone rewords the approval rule and the limit turns exclusive."
 
-Evaluate writes the answers into a requirements statement, reads it back to you and stops until you confirm it.
-After you confirm, the exact bytes go into the evaluation folder as `requirements.md`:
+The skill wrote the answers into a requirements statement, read it back and stopped until the adopter confirmed it.
+After the confirmation, the exact bytes went into the evaluation folder as `requirements.md`, the file the fixture holds:
 
 ```markdown
 # Requirements statement: refund check
@@ -129,8 +128,8 @@ An edit to the skill's wording can turn the inclusive limit into an exclusive on
 Confirmed by: tutorial reader, 2026-10-07.
 ```
 
-The skill goes on to the corpus, the contract, the oracles and the adapters, which are stages 3 to 6 of its twelve.
-The fixture `test/fixtures/evaluate-tutorial/` already holds the finished result of that work, so the rest of this tutorial runs the evaluation and leaves its authoring to the skill.
+The skill then went on to the corpus, the contract, the oracles and the adapters, which are stages 3 to 6 of its twelve.
+The fixture `test/fixtures/evaluate-tutorial/` holds the finished result of that work, so the rest of this tutorial runs the evaluation.
 
 ## Step 2: Set Up the Project
 
@@ -160,7 +159,7 @@ The fixture's registry entry in `evaluation.json` therefore names the runner as 
 }
 ```
 
-A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and `score` then exits 3 with `isolation manifest violation: mount outside allowlist`.
+A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and the allowlist check refuses it with exit 3 and `isolation manifest violation: mount outside allowlist`, at the latest at `score`.
 Two setups avoid that: a `target` that is a path inside `launch.root`, as here, or the bare name with the install directories the audit names declared in `systemPaths` on the entry.
 The reference section [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the how-to section on [exit 3 with `mount outside allowlist`](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md#if-score-exits-3-with-mount-outside-allowlist) cover both.
 In your own project, `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality` puts the runner in `evals/node_modules`.
@@ -406,10 +405,28 @@ See [`ci`](/docs/reference/tea-evaluate-cli.md#ci).
 
 You took a skill from a confirmed requirements statement to a scored evaluation:
 
-- Intake turns your answers into a requirements statement that the evaluation is held to.
+- Intake turns the adopter's answers into a requirements statement that the evaluation is held to.
 - `check` and `digest` keep the folder consistent, and `preflight` proves the seeded defect shows and rolls back.
 - `run` and `score` measure the clean arm and the mutated arm, and the strength aggregate says whether the defect was caught.
 - `compare --accept` records the baseline, and `ci --tier pr` replays it on every pull request.
+
+## Optional: Run the Intake Yourself
+
+The steps above need none of this.
+To hold the intake conversation for your own skill, you need:
+
+- BMad with the TEA module installed in your project (`npx bmad-method install`)
+- A coding agent that runs BMad workflows, such as Claude Code, Cursor, Windsurf or Codex
+- A model that agent can use
+
+Start the Evaluate skill in the agent:
+
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-evaluate`
+- **Codex:** `$bmad-testarch-evaluate`
+- **Inside a `/bmad-tea` chat:** `EV`
+
+The skill asks the six questions of Step 1 about your skill and writes your own evaluation folder.
+[Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md) walks through that route, with a real agent behind the runner.
 
 ## Next Steps
 

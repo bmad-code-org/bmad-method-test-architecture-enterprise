@@ -15,11 +15,13 @@
  *  * the page leaves out a command of the walkthrough (`check`, `digest`, `preflight`, `run`, `score`, `compare`,
  *    `compare --accept`, `ci --tier pr`) or runs a bare `tea-evaluate` that no checkout provides,
  *  * the page quotes `SKILL.md`, `requirements.md` or the registry entry of `evaluation.json` in a form the fixture no longer holds,
- *  * a command that runs the evaluation shows no key lines.
+ *  * a command that runs the evaluation shows no key lines,
+ *  * the page drops the sentence that no coding agent is needed, invokes the Evaluate skill outside its one marked `## Optional:` section,
+ *    or leaves that section without its prerequisites or its link to the how-to.
  *
  * Revert cases run in this file: a flag changed in a command, a subcommand misspelled, a key line changed, a key line the
- * output lacks, a key block relabelled or emptied, a page that drops the `ci` command, a page with no command, and a quoted
- * file or registry entry edited. Each must make the check fail.
+ * output lacks, a key block relabelled or emptied, a page that drops the `ci` command, a page with no command, a quoted
+ * file or registry entry edited, and the framing of intake (the skill invoked in a required step, the no-agent sentence dropped, the optional route unmarked or unlinked). Each must make the check fail.
  *
  * The run shares `/tmp/tea-evaluate-p<uid>` with every other Evaluate suite, so it must not run beside one.
  */
@@ -27,7 +29,16 @@
 const fs = require('node:fs');
 
 const { scratchDirectories } = require('./lib/scratch-directories');
-const { TUTORIAL, missingLines, pageProblems, quotedFileProblems, runProblems, runSteps, tutorialSteps } = require('./lib/docs-tutorial');
+const {
+  TUTORIAL,
+  introProblems,
+  missingLines,
+  pageProblems,
+  quotedFileProblems,
+  runProblems,
+  runSteps,
+  tutorialSteps,
+} = require('./lib/docs-tutorial');
 
 /**
  * The environment of the session: the caller's, less git's own variables, the engine override and every credential-looking
@@ -67,7 +78,7 @@ function main() {
   const scratch = scratchDirectories('tea-docs-tutorial');
   try {
     const env = { ...BASE_ENV, TMPDIR: scratch.make('session') };
-    const shape = [...pageProblems(steps), ...quotedFileProblems(page)];
+    const shape = [...pageProblems(steps), ...quotedFileProblems(page), ...introProblems(page)];
     for (const problem of shape) check(false, problem);
     check(
       steps.some((step) => step.expected !== null),
@@ -132,6 +143,35 @@ function main() {
       {
         name: 'the registry entry quoted with another target',
         run: () => quotedFileProblems(edited(page, '"target": "node_modules/.bin/tea-skill-runner"', '"target": "tea-skill-runner"')),
+      },
+      {
+        name: 'the skill invocation put back into step 1',
+        run: () =>
+          introProblems(
+            edited(page, 'You need no coding agent for that.', 'Start it in your coding agent with `/bmad-testarch-evaluate`.'),
+          ),
+      },
+      {
+        name: 'the no-agent sentence dropped',
+        run: () => introProblems(edited(page, 'This tutorial needs no coding agent', 'This tutorial needs a coding agent')),
+      },
+      {
+        name: 'the optional section without its how-to link',
+        run: () =>
+          introProblems(
+            edited(page, '[Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md) walks', 'The how-to walks'),
+          ),
+      },
+      {
+        name: 'the optional section dropped',
+        run: () => introProblems(edited(page, '## Optional: Run the Intake Yourself', '## Run the Intake Yourself')),
+      },
+      {
+        name: 'a bash block that invokes the skill',
+        run: () => {
+          const extra = `${page}\n## Extra\n\n\`\`\`bash\n/bmad-testarch-evaluate\n\`\`\`\n`;
+          return [...pageProblems(tutorialSteps(extra)), ...introProblems(extra)];
+        },
       },
       { name: 'a page with no command', run: () => pageProblems(tutorialSteps('# A page\n\nNo block.\n')) },
       {

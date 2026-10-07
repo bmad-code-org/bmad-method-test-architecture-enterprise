@@ -220,9 +220,13 @@ The wrapper writes no row for it and exits non-zero, so the run stops with exit 
 ### 7. Run and Score
 
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/pantry-summary
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/pantry-summary
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/pantry-summary 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/pantry-summary --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
+
+`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
+The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
+If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
 
 ```text
 tea-evaluate run: 6 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001, mutated:M-002; score them with tea-evaluate score --run 20261007T090533030Z-498d99b8 (exit 0, /work/app/evals/pantry-summary/runs/20261007T090533030Z-498d99b8)
@@ -232,7 +236,7 @@ tea-evaluate score: eval-quality score ran for 6 probe(s) of run 20261007T090533
 Read the verdicts as [How to Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md) shows:
 
 ```bash
-(cd evals/pantry-summary/runs/20261007T090533030Z-498d99b8/scores/20261007T090543074Z-c212cfd9 &&
+(cd evals/pantry-summary/runs/$RUN/scores/$SCORE &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json)
 ```
 

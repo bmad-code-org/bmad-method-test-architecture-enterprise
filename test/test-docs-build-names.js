@@ -19,6 +19,13 @@
  * epic narrative, the build's planning folders, a pull request number and
  * the review rounds. The word lane has no user meaning, so it is scanned bare.
  *
+ * A second rule keeps the docs copyable: an executable command block (a fenced `bash`, `sh`, `shell` or `zsh` block)
+ * holds no timestamped run or score ID, which `newInvocationId` in `cli/lib/evaluate/preflight.js` writes as
+ * `YYYYMMDDTHHMMSSmmmZ-<8 hex digits>` and which names a `runs/<id>` directory.
+ * A reader's own run has another ID, so a command that names one copied from the page reads a directory the reader does not have.
+ * The reader captures the ID from the command's own output into a variable instead.
+ * Illustrative output in a `text` block may show an ID.
+ *
  * Usage: node test/test-docs-build-names.js
  */
 
@@ -86,10 +93,66 @@ function buildNameProblems(page, text, patterns = BUILD_NAME_PATTERNS) {
   return problems;
 }
 
+/** The fence languages whose blocks a reader runs. */
+const COMMAND_FENCES = new Set(['bash', 'sh', 'shell', 'zsh']);
+
+/** The shape of a run or score ID. */
+const INVOCATION_ID = /\b\d{8}T\d{9}Z-[0-9a-f]{8}\b/;
+
+/** One problem line per timestamped ID inside an executable command block of one page. */
+function commandIdProblems(page, text) {
+  const problems = [];
+  let open = null;
+  for (const [index, line] of text.split('\n').entries()) {
+    const fence = /^\s*(`{3,}|~{3,})\s*([\w-]*)/.exec(line);
+    if (open === null) {
+      if (fence) open = { marker: fence[1], language: fence[2].toLowerCase() };
+    } else if (fence && fence[1][0] === open.marker[0] && fence[1].length >= open.marker.length && fence[2] === '') {
+      open = null;
+    } else if (COMMAND_FENCES.has(open.language)) {
+      const match = INVOCATION_ID.exec(line);
+      if (match) problems.push(`${page}:${index + 1}: invocation id in a ${open.language} block: ${JSON.stringify(match[0])}`);
+    }
+  }
+  return problems;
+}
+
 function scanDocs(root = DOCS_ROOT) {
   const pages = pagesUnder(root);
-  const problems = pages.flatMap((page) => buildNameProblems(page, fs.readFileSync(path.join(root, page), 'utf8')));
+  const problems = pages.flatMap((page) => {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    return [...buildNameProblems(page, text), ...commandIdProblems(page, text)];
+  });
   return { pages, problems };
+}
+
+/** The revert cases of the command-block rule: an ID fails in each executable fence and in a runs/ path, and passes in other fences and in prose. */
+function commandIdRevertCaseProblems() {
+  const failures = [];
+  const id = '20261007T091256520Z-703c4c1e';
+  const block = (language, body) => `# Page\n\n\`\`\`${language}\n${body}\n\`\`\`\n`;
+  for (const language of COMMAND_FENCES) {
+    if (commandIdProblems('x.md', block(language, `node cli/evaluate.js score --run ${id}`)).length === 0) {
+      failures.push(`an invocation id in a ${language} block passed`);
+    }
+  }
+  if (commandIdProblems('x.md', block('bash', `ls evals/runs/${id}/scores`)).length === 0) {
+    failures.push('a runs/<id> path in a bash block passed');
+  }
+  if (commandIdProblems('x.md', `# Page\n\n  \`\`\`bash\n  cd runs/${id}\n  \`\`\`\n`).length === 0) {
+    failures.push('an invocation id in an indented bash block passed');
+  }
+  for (const language of ['text', 'json', '']) {
+    if (commandIdProblems('x.md', block(language, `sealed under runs/${id}`)).length > 0) {
+      failures.push(`an invocation id in a ${language || 'plain'} block failed`);
+    }
+  }
+  if (commandIdProblems('x.md', `The run ${id} is yours.\n\n${block('bash', 'echo "$RUN"')}`).length > 0) {
+    failures.push('an invocation id in prose, with a clean bash block, failed');
+  }
+  const closed = `${block('text', 'output')}\n${block('bash', 'echo "$RUN"')}${id}\n`;
+  if (commandIdProblems('x.md', closed).length > 0) failures.push('an invocation id after the last fence closed failed');
+  return failures;
 }
 
 /** The revert cases: each pattern fires on its own example appended to a copy of a real page. */
@@ -117,7 +180,7 @@ function main() {
   } catch (error) {
     failures.push(error.message);
   }
-  failures.push(...revertCaseProblems(pages), ...problems);
+  failures.push(...revertCaseProblems(pages), ...commandIdRevertCaseProblems(), ...problems);
   if (failures.length > 0) {
     console.error(`docs-build-names: ${failures.length} problem(s)`);
     for (const failure of failures) console.error(`  - ${failure}`);
@@ -130,4 +193,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { BUILD_NAME_PATTERNS, buildNameProblems, pagesUnder, scanDocs, revertCaseProblems };
+module.exports = { BUILD_NAME_PATTERNS, buildNameProblems, commandIdProblems, pagesUnder, scanDocs, revertCaseProblems };

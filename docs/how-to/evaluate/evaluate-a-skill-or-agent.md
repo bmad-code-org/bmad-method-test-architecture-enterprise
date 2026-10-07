@@ -183,9 +183,13 @@ Exit 0 means the registry reaches the target and the clean control passes.
 ### 5. Run and Score
 
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/stub-skill-preflight
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/stub-skill-preflight 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
+
+`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
+The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
+If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
 
 `run` repeats the preflight, qualifies each seeded defect and the clean control, then runs every arm as a set of trials in fresh copies.
 This folder holds one clean control and one trial:
@@ -212,7 +216,7 @@ Both commands exit 0 for a PASS, a WAIVED or a CONCERNS verdict.
 Read the verdict and the outcome states from the evidence artifacts in the score invocation folder:
 
 ```bash
-(cd evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d/scores/20261007T112824337Z-f2c4dcdd &&
+(cd evals/stub-skill-preflight/runs/$RUN/scores/$SCORE &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u)
 ```
@@ -230,7 +234,7 @@ The CONCERNS verdict lists coverage gaps that still need probes.
 Then read what the run executed under:
 
 ```bash
-grep -A8 '"confinement"' evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d/run.json
+grep -A8 '"confinement"' evals/stub-skill-preflight/runs/$RUN/run.json
 ```
 
 ```text
@@ -251,7 +255,7 @@ Only a `bubblewrap` run holds an agent to its `egress` list.
 ## If `score` Exits 3 With `mount outside allowlist`
 
 A confined run grants the trial its workspace.
-A runner that resolves outside the workspace is read outside the trial's grants, and `score` exits 3.
+A runner that resolves outside the workspace is read outside the trial's grants, and the allowlist check refuses it with exit 3, at the latest at `score`.
 A registry `target` of the bare name `tea-skill-runner`, found through the `evals/node_modules/.bin` that `npm exec` puts on the `PATH`, does this.
 The audit lists each path the trial read outside its grants:
 

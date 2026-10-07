@@ -1950,7 +1950,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       requireText(headingBody(adapterGuide, '## Skill runner'), marker, 'adapters.md Skill runner', failures);
     requireText(
       adapterOpening,
-      '`score` exits 3 with `isolation manifest violation: mount outside allowlist`',
+      'refuses it with exit 3 and `isolation manifest violation: mount outside allowlist`, at the latest at `score`',
       'adapters.md opening runner path',
       failures,
     );

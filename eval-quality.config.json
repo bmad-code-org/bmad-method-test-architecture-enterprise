@@ -1066,6 +1066,10 @@
     "symbols": {
       "foreign": [
         {
+          "token": "SCORE",
+          "reason": "a shell variable the how-to guides capture from the score summary line, not a TEA declaration"
+        },
+        {
           "token": "NODE_EXTRA_CA_CERTS",
           "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
         },

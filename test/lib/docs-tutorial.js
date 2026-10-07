@@ -227,12 +227,51 @@ function quotedFileProblems(markdown) {
   return problems;
 }
 
+/** The sentence that tells the reader no agent is needed, and the heading and link of the optional interactive route. */
+const NO_AGENT_SENTENCE = 'This tutorial needs no coding agent';
+const OPTIONAL_HEADING = /^## Optional: .+$/m;
+const HOW_TO_LINK = '/docs/how-to/evaluate/evaluate-a-skill-or-agent.md';
+const SKILL_INVOCATION = /\/bmad-testarch-evaluate|\$bmad-testarch-evaluate|\/bmad-tea\b/;
+
+/**
+ * The problems of how the page frames intake. The tested shell path runs the fixture, so the page must say that no coding
+ * agent is needed, must keep the interactive route in one marked `## Optional:` section that links the how-to for evaluating
+ * a skill, and must invoke the Evaluate skill nowhere else: not in required prose, not in a `bash` block.
+ *
+ * @param {string} markdown
+ */
+function introProblems(markdown) {
+  const problems = [];
+  if (!markdown.includes(NO_AGENT_SENTENCE)) problems.push(`the page does not say "${NO_AGENT_SENTENCE}"`);
+  const heading = OPTIONAL_HEADING.exec(markdown);
+  if (heading === null) {
+    problems.push('the page has no `## Optional: ...` section for the interactive route');
+    if (SKILL_INVOCATION.test(markdown)) problems.push('the page invokes the Evaluate skill outside an optional section');
+    return problems;
+  }
+  const start = heading.index;
+  const next = markdown.slice(start + heading[0].length).search(/^## /m);
+  const end = next === -1 ? markdown.length : start + heading[0].length + next;
+  const optional = markdown.slice(start, end);
+  const required = markdown.slice(0, start) + markdown.slice(end);
+  if (!optional.includes(HOW_TO_LINK)) problems.push(`the optional section does not link ${HOW_TO_LINK}`);
+  if (!/^- .*agent/im.test(optional) || !/model/i.test(optional))
+    problems.push('the optional section does not list its prerequisites (an agent and a model)');
+  if (!SKILL_INVOCATION.test(optional)) problems.push('the optional section does not show how to start the Evaluate skill');
+  if (SKILL_INVOCATION.test(required))
+    problems.push('the required part of the page invokes the Evaluate skill, which needs an agent and a model');
+  if (fencedBlocks(optional).some((block) => block.lang === 'bash'))
+    problems.push('the optional section holds a `bash` block, which the check would run as a required step');
+  return problems;
+}
+
 module.exports = {
   FIXTURE,
   REQUIRED_INVOCATIONS,
   ROOT,
   TUTORIAL,
   fencedBlocks,
+  introProblems,
   invocationsOf,
   missingLines,
   pageProblems,

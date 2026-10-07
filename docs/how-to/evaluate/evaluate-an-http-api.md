@@ -145,9 +145,13 @@ tea-evaluate check: /work/app/evals/grader-http-service has no authoring defects
 
 ```bash
 npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/grader-http-service
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-http-service
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-http-service
+RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-http-service 2>&1 | tee /dev/stderr | sed -n 's/.*score --run \([^ ]*\) .*/\1/p')
+SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-http-service --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
+
+`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
+The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
+If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
 
 ```text
 tea-evaluate preflight: probes/P-002.probe.json: qualified; the restored digest matched and the baseline passed again
@@ -172,7 +176,7 @@ tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
 ### 6. Read the Result
 
 ```bash
-(cd evals/grader-http-service/runs/20261007T092333549Z-2b79ad72/scores/20261007T092337831Z-402585f6 &&
+(cd evals/grader-http-service/runs/$RUN/scores/$SCORE &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
   grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)

@@ -483,6 +483,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate check` refuses a `judge.modelSnapshot` in `policy/evaluator-conditions.json` that differs from the model the judge runs.
+  `judge.model` selects the model of every judge call, and a recorded snapshot that named another model put a false condition on every run.
+  The `judge` finding (exit 10) names both values and says which field selects the model and which records it.
+  The model the judge runs is `judge.model`, a model in `judge.agentArgs`, or the adapter's default; the `custom` adapter takes no model, so its snapshot stays a label.
+  The `evaluator` rule refuses the same mismatch between `evaluator.model` and `evaluator.modelSnapshot` for a sealed-brief agent, with a finding that names both values.
 - `test:evaluate-partition-plans` is split into two chained scripts so each fits a CI shard under the 20 minute cap (Story 1.110, CI).
   `test:evaluate-partition-plans` keeps the views, `check`, and the preflight, run and score flows; `test:evaluate-partition-plans-attempts` holds the evaluator mapping, sealed-records and gameability flows.
   Both build their fixture and helpers through `test/lib/evaluate-partition-plans-harness.js`, and `tools/test-shard-weights.json` holds a weight for each.
