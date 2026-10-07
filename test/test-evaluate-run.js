@@ -118,9 +118,11 @@
  *   commands reaching all three with the flag taken out; the reference's
  *   network claims each name the case that backs them.
  *
- * Usage: node test/test-evaluate-run.js [--group=run|confinement|aggregate|held-inputs] [--only=<text in a case's name>]
- * CI runs the four groups as `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-aggregate` and
- * `test:evaluate-held-inputs`; with no `--group` every case runs.
+ * Usage: node test/test-evaluate-run.js [--group=<name>] [--only=<text in a case's name>]
+ * CI runs each group as its own script (`--group=run` is `test:evaluate-run`, `--group=aggregate` is `test:evaluate-aggregate`,
+ * `--group=held-inputs` is `test:evaluate-held-inputs`, and the confinement cases are the five groups `confinement`,
+ * `confinement-audit`, `confinement-history`, `confinement-git-state` and `confinement-network`, run by the
+ * `test:evaluate-confinement*` scripts); with no `--group` every case runs. `test:groups` holds every group to a chained script.
  */
 
 'use strict';
@@ -265,6 +267,7 @@ const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-arg
 const { recordedMount } = require('./lib/recorded-mount');
 const { CONFINEMENT_PAGE, REFERENCE_PAGE, readDocsPage, sectionOf } = require('./lib/docs-pages');
 const { scratchDirectories } = require('./lib/scratch-directories');
+const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -21509,9 +21512,10 @@ async function checkSeatbeltLayerSocketRoute() {
 }
 
 /**
- * Every case in run order with the group it belongs to. CI runs the groups as four scripts (`--group=run`, which is
- * `test:evaluate-run`, `--group=confinement`, which is `test:evaluate-confinement`, `--group=aggregate`, which is
- * `test:evaluate-aggregate`, and `--group=held-inputs`, which is `test:evaluate-held-inputs`, Story 1.68) so no one runner carries the whole file's wall time; with no `--group` every case runs. Story 1.31's confinement cases each stand on their own, so one that
+ * Every case in run order with the group it belongs to. CI runs the groups as eight scripts (`--group=run`, which is
+ * `test:evaluate-run`, `--group=aggregate`, which is `test:evaluate-aggregate`, `--group=held-inputs`, which is
+ * `test:evaluate-held-inputs` (Story 1.68), and the five confinement groups, which are the `test:evaluate-confinement*` scripts) so no
+ * one runner carries the whole file's wall time; with no `--group` every case runs. Story 1.31's confinement cases each stand on their own, so one that
  * cannot finish leaves the others to report.
  */
 const CASES = [
@@ -21540,68 +21544,68 @@ const CASES = [
   { name: 'the call directory route', body: checkCallDirectoryRoute, group: 'confinement' },
   { name: "a confined target's private home", body: checkTargetHome, group: 'confinement' },
   { name: "the private home's units", body: checkTargetHomeUnits, group: 'confinement' },
-  { name: "a confined target's subscription login", body: checkSubscriptionLogin, group: 'confinement', lossy: true },
-  { name: "the subscription login's units", body: checkSubscriptionLoginUnits, group: 'confinement' },
-  { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement' },
-  { name: 'the shell target audit', body: checkShellTargetAudit, group: 'confinement', lossy: true },
-  { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement' },
-  { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement' },
-  { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement' },
-  { name: "the audit's channel", body: checkAuditChannelRun, group: 'confinement', lossy: true },
-  { name: 'the host socket record', body: checkHostSocketRecordRun, group: 'confinement' },
-  { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement', lossy: true },
-  { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement', lossy: true },
-  { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement', lossy: true },
-  { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
-  { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
-  { name: 'the withheld git history pack stages', body: checkWithheldHistoryPackStages, group: 'confinement' },
-  { name: 'the withheld git history across filesystems', body: checkWithheldHistoryAcrossFilesystems, group: 'confinement' },
-  { name: "a confined target's git reach", body: checkWithheldHistoryReach, group: 'confinement' },
-  { name: "the withheld git history's reach units", body: checkWithheldHistoryReachUnits, group: 'confinement' },
-  { name: "a confined target's sparse checkout", body: checkSparseCheckout, group: 'confinement' },
-  { name: 'the shared git state across sessions', body: checkSharedStateAcrossSessions, group: 'confinement' },
-  { name: "the evaluation layer's git directory", body: checkLayerGitDirectoryUnits, group: 'confinement' },
-  { name: 'the adopter-tree readings of the shared git state', body: checkAdopterTreeModes, group: 'confinement' },
-  { name: 'the adopter-tree reading of a sealed directory', body: checkAdopterTreeSealed, group: 'confinement' },
-  { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
-  { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
-  { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },
-  { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
-  { name: 'the subscription login reference', body: checkSubscriptionLoginReference, group: 'confinement' },
-  { name: 'the workspace reference', body: checkWorkspaceReference, group: 'confinement' },
+  { name: "a confined target's subscription login", body: checkSubscriptionLogin, group: 'confinement-audit', lossy: true },
+  { name: "the subscription login's units", body: checkSubscriptionLoginUnits, group: 'confinement-audit' },
+  { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement-audit' },
+  { name: 'the shell target audit', body: checkShellTargetAudit, group: 'confinement-audit', lossy: true },
+  { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement-audit' },
+  { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement-audit' },
+  { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement-audit' },
+  { name: "the audit's channel", body: checkAuditChannelRun, group: 'confinement-audit', lossy: true },
+  { name: 'the host socket record', body: checkHostSocketRecordRun, group: 'confinement-audit' },
+  { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement-audit', lossy: true },
+  { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement-audit', lossy: true },
+  { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement-history', lossy: true },
+  { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement-history' },
+  { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement-history' },
+  { name: 'the withheld git history pack stages', body: checkWithheldHistoryPackStages, group: 'confinement-history' },
+  { name: 'the withheld git history across filesystems', body: checkWithheldHistoryAcrossFilesystems, group: 'confinement-history' },
+  { name: "a confined target's git reach", body: checkWithheldHistoryReach, group: 'confinement-history' },
+  { name: "the withheld git history's reach units", body: checkWithheldHistoryReachUnits, group: 'confinement-history' },
+  { name: "a confined target's sparse checkout", body: checkSparseCheckout, group: 'confinement-git-state' },
+  { name: 'the shared git state across sessions', body: checkSharedStateAcrossSessions, group: 'confinement-git-state' },
+  { name: "the evaluation layer's git directory", body: checkLayerGitDirectoryUnits, group: 'confinement-git-state' },
+  { name: 'the adopter-tree readings of the shared git state', body: checkAdopterTreeModes, group: 'confinement-git-state' },
+  { name: 'the adopter-tree reading of a sealed directory', body: checkAdopterTreeSealed, group: 'confinement-git-state' },
+  { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement-git-state' },
+  { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement-git-state' },
+  { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement-git-state' },
+  { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement-git-state' },
+  { name: 'the subscription login reference', body: checkSubscriptionLoginReference, group: 'confinement-git-state' },
+  { name: 'the workspace reference', body: checkWorkspaceReference, group: 'confinement-git-state' },
   { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
   { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },
   { name: 'the held strength aggregate', body: checkHeldAggregate, group: 'held-inputs' },
   { name: 'the score input reference', body: checkScoreInputReference, group: 'held-inputs' },
-  { name: "the bridge's admission token reference", body: checkBridgeTokenReference, group: 'confinement' },
-  { name: 'the bridge shim', body: checkBridgeShim, group: 'confinement' },
-  { name: 'the bridge shim streams', body: checkBridgeShimStreams, group: 'confinement' },
-  { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement' },
-  { name: 'the egress proxy units', body: checkEgressProxyUnits, group: 'confinement' },
-  { name: 'the egress shim', body: checkEgressShim, group: 'confinement' },
-  { name: 'the egress vector units', body: checkEgressVectorUnits, group: 'confinement' },
-  { name: 'the egress field', body: checkEgressField, group: 'confinement' },
-  { name: 'the egress record', body: checkEgressRecord, group: 'confinement' },
-  { name: 'the egress route', body: checkEgressRoute, group: 'confinement' },
-  { name: 'the egress run', body: checkEgressRun, group: 'confinement' },
-  { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
-  { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement' },
-  { name: 'the socket launcher', body: checkSocketLauncher, group: 'confinement' },
-  { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement' },
-  { name: 'the socket connection units', body: checkSocketConnectionUnits, group: 'confinement' },
-  { name: 'the socket connection route', body: checkSocketConnectionRoute, group: 'confinement' },
-  { name: 'the socket connection run', body: checkSocketConnectionRun, group: 'confinement' },
-  { name: 'the socket connection reference', body: checkSocketConnectionReference, group: 'confinement' },
-  { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
-  { name: 'the Seatbelt path socket units', body: checkSeatbeltPathSocketUnits, group: 'confinement' },
-  { name: 'the Seatbelt path socket route', body: checkSeatbeltPathSocketRoute, group: 'confinement' },
-  { name: 'the layer path socket units', body: checkLayerPathSocketUnits, group: 'confinement' },
-  { name: 'the layer path socket guard', body: checkLayerPathSocketGuard, group: 'confinement' },
-  { name: 'the layer path socket recovery', body: checkLayerPathSocketRecovery, group: 'confinement' },
-  { name: 'the layer path socket route', body: checkLayerPathSocketRoute, group: 'confinement' },
-  { name: 'the Seatbelt layer socket units', body: checkSeatbeltLayerSocketUnits, group: 'confinement' },
-  { name: 'the Seatbelt layer socket route', body: checkSeatbeltLayerSocketRoute, group: 'confinement' },
-  { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
+  { name: "the bridge's admission token reference", body: checkBridgeTokenReference, group: 'confinement-network' },
+  { name: 'the bridge shim', body: checkBridgeShim, group: 'confinement-network' },
+  { name: 'the bridge shim streams', body: checkBridgeShimStreams, group: 'confinement-network' },
+  { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement-network' },
+  { name: 'the egress proxy units', body: checkEgressProxyUnits, group: 'confinement-network' },
+  { name: 'the egress shim', body: checkEgressShim, group: 'confinement-network' },
+  { name: 'the egress vector units', body: checkEgressVectorUnits, group: 'confinement-network' },
+  { name: 'the egress field', body: checkEgressField, group: 'confinement-network' },
+  { name: 'the egress record', body: checkEgressRecord, group: 'confinement-network' },
+  { name: 'the egress route', body: checkEgressRoute, group: 'confinement-network' },
+  { name: 'the egress run', body: checkEgressRun, group: 'confinement-network' },
+  { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement-network' },
+  { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement-network' },
+  { name: 'the socket launcher', body: checkSocketLauncher, group: 'confinement-network' },
+  { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement-network' },
+  { name: 'the socket connection units', body: checkSocketConnectionUnits, group: 'confinement-network' },
+  { name: 'the socket connection route', body: checkSocketConnectionRoute, group: 'confinement-network' },
+  { name: 'the socket connection run', body: checkSocketConnectionRun, group: 'confinement-network' },
+  { name: 'the socket connection reference', body: checkSocketConnectionReference, group: 'confinement-network' },
+  { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement-network' },
+  { name: 'the Seatbelt path socket units', body: checkSeatbeltPathSocketUnits, group: 'confinement-network' },
+  { name: 'the Seatbelt path socket route', body: checkSeatbeltPathSocketRoute, group: 'confinement-network' },
+  { name: 'the layer path socket units', body: checkLayerPathSocketUnits, group: 'confinement-network' },
+  { name: 'the layer path socket guard', body: checkLayerPathSocketGuard, group: 'confinement-network' },
+  { name: 'the layer path socket recovery', body: checkLayerPathSocketRecovery, group: 'confinement-network' },
+  { name: 'the layer path socket route', body: checkLayerPathSocketRoute, group: 'confinement-network' },
+  { name: 'the Seatbelt layer socket units', body: checkSeatbeltLayerSocketUnits, group: 'confinement-network' },
+  { name: 'the Seatbelt layer socket route', body: checkSeatbeltLayerSocketRoute, group: 'confinement-network' },
+  { name: 'the network reference', body: checkBridgeReference, group: 'confinement-network' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
@@ -21630,12 +21634,6 @@ async function runCase(name, body, lossy = false) {
   }
 }
 
-/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
-function requestedGroup() {
-  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
-  return argument === undefined ? null : argument.slice('--group='.length);
-}
-
 /** The `--only=<text>` argument's value: with it, only the cases whose name holds the text run (a development aid). */
 function requestedCase() {
   const argument = process.argv.find((value) => value.startsWith('--only='));
@@ -21643,6 +21641,7 @@ function requestedCase() {
 }
 
 async function main() {
+  if (printGroupsWhenAsked(CASES)) return 0;
   const group = requestedGroup();
   const only = requestedCase();
   if (group !== null && !GROUPS.has(group)) {

@@ -139,7 +139,8 @@
  * - Units: the judge reply parser, the judge configuration, the synthetic
  *   port, and `createWorkspace`'s commit option.
  *
- * Usage: node test/test-evaluate-arms.js
+ * Usage: node test/test-evaluate-arms.js [--group=historical|deployments]
+ * CI runs the two groups as `test:evaluate-arms-historical` and `test:evaluate-arms-deployments`; with no `--group` every case runs.
  */
 
 'use strict';
@@ -184,6 +185,7 @@ const {
 } = require('../cli/lib/evaluate/judge');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { WorkspaceRefusal, createWorkspace, removeWorkspace } = require('../cli/lib/evaluate/workspace');
+const { printGroupsWhenAsked, runs, selectGroup, groupsOf } = require('./lib/case-groups');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -4222,7 +4224,37 @@ async function runCase(name, body) {
   }
 }
 
+/**
+ * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=historical` and
+ * `--group=deployments`) so no one runner carries the whole file's wall time. A case with a `when` runs only where it holds.
+ */
+const CASES = [
+  { name: 'the units', body: checkUnits, group: 'historical' },
+  { name: 'the gameability arm', body: checkGameability, group: 'historical' },
+  { name: 'the historical arm', body: checkHistorical, group: 'historical' },
+  { name: 'the historical arm over a partial clone', body: checkHistoricalPartialClone, group: 'historical', when: hostSkipsLazyFetch },
+  { name: 'the confined arms', body: checkConfinedArms, group: 'historical' },
+  { name: 'the one-commit refusal', body: checkOneCommit, group: 'historical' },
+  { name: 'a mutation beside a historical probe', body: checkMutationBesideHistorical, group: 'historical' },
+  { name: 'the historical refusals', body: checkHistoricalRefusals, group: 'historical' },
+  { name: 'the deployment route', body: checkDeployments, group: 'deployments' },
+  { name: 'the reported interfaces', body: checkInterfaces, group: 'deployments' },
+  { name: 'the held releases', body: checkHeld, group: 'deployments' },
+  { name: 'the units of the three points', body: checkHeldUnits, group: 'deployments' },
+  { name: 'the deployment units', body: checkDeploymentUnits, group: 'deployments' },
+  { name: 'the historical reference', body: checkHistoricalReference, group: 'deployments' },
+  { name: 'the rubric judge', body: checkRubric, group: 'deployments' },
+  { name: 'no rubric, no judge', body: checkNoRubric, group: 'deployments' },
+  { name: 'a judge call interrupted by a signal', body: checkJudgeInterrupted, group: 'deployments' },
+];
+
 async function main() {
+  if (printGroupsWhenAsked(CASES)) return 0;
+  const { group, error } = selectGroup(groupsOf(CASES));
+  if (error) {
+    console.error(`${colors.red}${error}${colors.reset}`);
+    return 2;
+  }
   try {
     if (process.argv.includes('--partial-clone-only')) {
       // Story 1.80's confined historical run over a blob-less clone alone, which its revert checks run.
@@ -4257,23 +4289,9 @@ async function main() {
       });
       return finish();
     }
-    await runCase('the units', checkUnits);
-    await runCase('the gameability arm', checkGameability);
-    await runCase('the historical arm', checkHistorical);
-    if (hostSkipsLazyFetch()) await runCase('the historical arm over a partial clone', checkHistoricalPartialClone);
-    await runCase('the confined arms', checkConfinedArms);
-    await runCase('the one-commit refusal', checkOneCommit);
-    await runCase('a mutation beside a historical probe', checkMutationBesideHistorical);
-    await runCase('the historical refusals', checkHistoricalRefusals);
-    await runCase('the deployment route', checkDeployments);
-    await runCase('the reported interfaces', checkInterfaces);
-    await runCase('the held releases', checkHeld);
-    await runCase('the units of the three points', checkHeldUnits);
-    await runCase('the deployment units', checkDeploymentUnits);
-    await runCase('the historical reference', checkHistoricalReference);
-    await runCase('the rubric judge', checkRubric);
-    await runCase('no rubric, no judge', checkNoRubric);
-    await runCase('a judge call interrupted by a signal', checkJudgeInterrupted);
+    for (const { name, body, group: caseGroup, when } of CASES) {
+      if (runs(group, caseGroup) && (when === undefined || when())) await runCase(name, body);
+    }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);
