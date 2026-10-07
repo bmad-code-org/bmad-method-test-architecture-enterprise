@@ -7,8 +7,8 @@
  * has no entry in `allowedMounts`, one `mount outside allowlist: <path>` reason
  * per path, and `score` exits 3. `mountsOutsideAllowlist` is that rule: the
  * observed values with no entry in the allowed ones, in the observed order and
- * each once. `test/test-evaluate-run.js` holds `run` to it by scoring the same
- * manifests and comparing the paths `score` and `run` each name.
+ * each once. A conformance check in the development suite holds it to the engine
+ * by scoring the same manifests through both and comparing the verdict and the paths.
  *
  * The allowlist is never widened here: a registry entry's `systemPaths` and the
  * trial's grants are the only things a target may open, and the audit already
