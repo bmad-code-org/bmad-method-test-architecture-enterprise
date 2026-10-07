@@ -288,8 +288,8 @@ function checkEngineStageErrorHoldsNoMachinePath() {
     );
     if (!missing.endsWith('.js')) {
       const failure = lostSummary.scores[0].failure;
-      assert.match(failure, /^could not run eval-quality score at no-such-engine-rv191: spawnSync no-such-engine-rv191 ENOENT$/);
-      assert.match(read(path.join(lostDirectory, 'P-001', 'score.json')).error, /^spawnSync no-such-engine-rv191 ENOENT$/);
+      assert.match(failure, /^could not run eval-quality score at no-such-engine-rv191: spawn no-such-engine-rv191 ENOENT$/);
+      assert.match(read(path.join(lostDirectory, 'P-001', 'score.json')).error, /^spawn no-such-engine-rv191 ENOENT$/);
     }
     assert.deepEqual(baselines.machinePathHits(run, needles), [], `${missing}: a file of the run directory names a path of this machine`);
     assert.deepEqual(baselines.machinePathHits(run), [], `${missing}: a file of the run directory holds a path of a Unix or macOS host`);

@@ -126,7 +126,7 @@ development_status:
   1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository: done
   1-90-verify-the-baseline-manifests-file-digests: done
   1-91-keep-machine-paths-out-of-a-committed-baseline: done
-  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
+  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: done
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
@@ -201,7 +201,6 @@ parallel_lanes:
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
-    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     - 1-108-compile-and-seal-each-partition-view-in-ci
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
@@ -249,6 +248,7 @@ parallel_lanes:
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
+    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     # Starts only once every other story has merged.
     - 2-6-document-evaluate-for-the-people-who-use-it
   lane-4-ci-plans-and-the-ci-probe-corpus:

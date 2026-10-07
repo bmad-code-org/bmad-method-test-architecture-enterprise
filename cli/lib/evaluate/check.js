@@ -1706,7 +1706,7 @@ function checkInterfaceRepeat(report, line) {
 }
 
 /** Checks every committed probe; returns the qualification routes they take. */
-function checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation) {
+async function checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation) {
   const routes = new Set();
   const reportingProbes = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
@@ -1735,7 +1735,7 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, co
     }
   }
   // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe whose report the engine's line names.
-  if (reportingProbes.length > 0) checkReportCollision(report, compiled().signatureCollision, reportingProbes);
+  if (reportingProbes.length > 0) checkReportCollision(report, (await compiled()).signatureCollision, reportingProbes);
   return routes;
 }
 
@@ -2390,9 +2390,10 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine stage runs in, so `check` uses the engine the caller's own compile uses
  * @param {string} [options.partition] the partition a run is about to execute. A `development` run neither opens the held-out plan
  *   nor hashes it for the corpus index (Story 1.51), so the plan's own findings are those of `check` and of a held-out or both run.
+ * @param {string[]} [options.scratch] the caller's list of directories it removes however it ends, a signal included, which holds the directory the engine's compile stage works in
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition } = {}) {
+async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition, scratch } = {}) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2427,9 +2428,9 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   context.contract = contractFor(folder);
   // One compile serves both refusals `check` quotes: a repeated interface identifier (Story 1.102) and a report operation's collision (Stories 1.75, 1.77). It runs only when a refusal is possible and at most once: a contract of two or more interfaces can repeat an identifier, and a probe that names a report can collide.
   let refusals;
-  const compiled = () => (refusals ??= compileRefusals(path.join(folder, CONTRACT_NAME), env));
+  const compiled = () => (refusals ??= compileRefusals(path.join(folder, CONTRACT_NAME), env, scratch));
   if (Array.isArray(context.contract?.permittedInterfaces) && context.contract.permittedInterfaces.length >= 2) {
-    checkInterfaceRepeat(report, compiled().interfaceRepeat);
+    checkInterfaceRepeat(report, (await compiled()).interfaceRepeat);
   }
   checkRequirements(report, folder, evaluation, context.contract, context.engine);
   checkOperationPhases(report, evaluation, context.contract);
@@ -2438,7 +2439,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
-  const routes = checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
+  const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });

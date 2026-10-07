@@ -82,6 +82,7 @@ const {
 const { buildCorpusIndex, corpusDigestOf } = require('./corpus-index');
 const { loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
+const { signalGroup, stopGroups } = require('./process-group');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
 const { PLAN_PATH, TIERS, classify, mostSevere, readPlan } = require('./ci-plan');
@@ -275,7 +276,8 @@ async function runCiCommand(folder, { tier, env = process.env, log = () => {} } 
     }
   };
   const context = createContext({ folder, tier, env, log, writer, scratch });
-  // An interrupting signal reaches the gate's process group and removes the scratch directory.
+  // An interrupting signal ends the engine stage that is running (`cleanUpOnSignal` does, before this handler), reaches the gate's
+  // process group and removes the scratch directory.
   const release = cleanUpOnSignal([], new AbortController(), {
     onSignal: (name) => {
       stopChildren(context, name, SIGNAL_GRACE_MS);
@@ -468,35 +470,12 @@ function finish({ folder, tier, writer, rows, baseline }) {
 // Child processes: gate checks and the conformance run
 
 /**
- * Signals the process group `child` leads (the child itself where groups do not exist). A group that is gone is not an
- * error, and neither is one whose members have all ended and wait to be reaped: macOS answers EPERM for it.
- */
-function signalGroup(child, signal) {
-  try {
-    if (process.platform === 'win32') child.kill(signal);
-    else process.kill(-child.pid, signal);
-  } catch (error) {
-    if (error.code !== 'ESRCH' && error.code !== 'EPERM') throw error;
-  }
-}
-
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-/**
- * Ends every child the invocation has running: `signal` goes to its process group first and, once `graceMs` has passed
- * (a wait that blocks, since the caller is a signal handler about to end the process), SIGKILL follows. Nothing a gate
- * started outlives `ci` that way, except when `ci` itself is killed with SIGKILL, which no handler sees.
+ * Ends every child the invocation has running (`stopGroups`, `process-group.js`): `signal` goes to its process group first and,
+ * once `graceMs` has passed, SIGKILL follows. Nothing a gate started outlives `ci` that way, except when `ci` itself is killed
+ * with SIGKILL, which no handler sees. The engine stages end through `cleanUpOnSignal`, which stops them before this runs.
  */
 function stopChildren(context, signal, graceMs) {
-  if (context.children.size === 0) return;
-  for (const child of context.children) signalGroup(child, signal);
-  if (signal !== 'SIGKILL') {
-    sleepSync(graceMs);
-    for (const child of context.children) signalGroup(child, 'SIGKILL');
-  }
-  context.children.clear();
+  stopGroups(context.children, signal, graceMs);
 }
 
 /**
@@ -610,7 +589,10 @@ async function runGate(context, entry) {
 // evaluate checks
 
 async function checkCheck(context) {
-  const findings = await checkEvaluation(context.folder, { env: context.env });
+  // The check's engine compile works in a directory on the invocation's list, beside the replay's scratch directory, which carries the
+  // owner file: a signal removes the private parent, and the next `ci` over the folder removes it after a SIGKILL.
+  invocationScratch(context);
+  const findings = await checkEvaluation(context.folder, { env: context.env, scratch: context.scratch });
   const text = findings.map((entry) => findingLine(entry.file, entry.rule, entry.message));
   text.push(
     findings.length === 0
@@ -621,10 +603,10 @@ async function checkCheck(context) {
 }
 
 /** `compile` and `seal` over the evaluation's `contract.json`, through the engine CLI; the stage's exit passes through. */
-function engineStageCheck(context, entry, stage, produced) {
+async function engineStageCheck(context, entry, stage, produced) {
   const staging = stagingDirectory(context, 'tea-evaluate-engine-');
   const output = path.join(staging, produced);
-  const called = runEngineStage(stage, ['--in', path.join(context.folder, CONTRACT_NAME), '--out', output], {
+  const called = await runEngineStage(stage, ['--in', path.join(context.folder, CONTRACT_NAME), '--out', output], {
     runDirectory: context.writer.root,
     folder: context.folder,
     recordPath: `checks/${entry.id}/engine.json`,
@@ -814,7 +796,7 @@ function staleBaseline(context, baseline) {
       }
     }
     if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);
-    const stage = runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
+    const stage = await runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
       runDirectory: context.writer.root,
       folder: context.folder,
       recordPath: 'baseline-staleness/engine.json',
@@ -942,12 +924,12 @@ function scratchRun(context, baseline) {
 
 /** eval-quality's preflight stage over the baseline's contract, probes and observations; its verdict is copied to `replay/`. */
 function replayPreflight(context, baseline) {
-  return context.once('replay-preflight', () => {
+  return context.once('replay-preflight', async () => {
     const scratch = scratchRun(context, baseline);
     const staging = path.join(scratch.directory, 'preflight');
     fs.mkdirSync(staging);
     const output = path.join(staging, 'preflight-verdict.json');
-    const stage = runEngineStage(
+    const stage = await runEngineStage(
       'preflight',
       [
         '--contract',
@@ -1040,7 +1022,7 @@ function concernsOf(files, label) {
 async function replayCheck(context) {
   const baseline = locateBaseline(context);
   if (baseline.problem !== undefined) return baseline.problem();
-  const verdict = replayPreflight(context, baseline);
+  const verdict = await replayPreflight(context, baseline);
   const scored = await replayScore(context, baseline);
   const engine = await loadEngine();
   const digest = (bytes) => engine.digestBytes(bytes);

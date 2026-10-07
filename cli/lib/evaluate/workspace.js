@@ -56,12 +56,15 @@ const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { killLiveStreams } = require('./confinement-audit');
+const { stopEngineStages } = require('./engine-cli');
 const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
 const { sweepMaskRecords } = require('./mask-guard');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
 
+/** How long an eval-quality stage that a signal stopped has before SIGKILL. */
+const ENGINE_STAGE_GRACE_MS = 500;
 /** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 /** How long one pack of a withheld repository may take: it holds the project's whole history. */
@@ -2094,7 +2097,9 @@ function removeWorkspace(workspace) {
 
 /**
  * Removes every workspace `workspaces` holds when the process is interrupted,
- * since a signal ends the process before any `finally` runs: aborts the
+ * since a signal ends the process before any `finally` runs: stops the
+ * eval-quality stages that are running (a stage still writing would recreate
+ * what the removal below deletes), aborts the
  * in-flight leg (the adapter kills its runner's process group, and the
  * runner's supervisor, dying with it, closes the lifeline that stops the
  * agent's process group), lets the caller record the interruption and
@@ -2105,7 +2110,7 @@ function removeWorkspace(workspace) {
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
  * @param {object} [options]
- * @param {(signal: string) => void} [options.onSignal] runs first, with the signal's name; it must not throw
+ * @param {(signal: string) => void} [options.onSignal] runs once the live stages are stopped and the controller is aborted, with the signal's name; it must not throw
  * @returns {() => void} removes the handlers
  */
 function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
@@ -2117,6 +2122,8 @@ function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
   for (const name of signals) {
     const handler = () => {
       release();
+      // A stage that is still running would recreate the directories `onSignal` removes, so it ends first.
+      stopEngineStages(name, ENGINE_STAGE_GRACE_MS);
       controller.abort();
       onSignal(name);
       // A signal ends the process before its `exit` event, so the audit's log streams are ended here.
