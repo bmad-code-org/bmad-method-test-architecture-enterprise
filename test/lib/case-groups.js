@@ -42,6 +42,22 @@ function runs(group, caseGroup) {
 }
 
 /**
+ * For a suite written as sections, a function that says whether the section called `name` runs. A name that `sections` does not list
+ * throws, even under `--list-groups`, so a block gated on an unlisted name cannot sit in the suite and run nowhere.
+ */
+function sectionRunner(sections, group, listed) {
+  return (name) => {
+    const section = sections.find((entry) => entry.name === name);
+    if (section === undefined) {
+      throw new Error(
+        `runsSection(${JSON.stringify(name)}): no such section; SECTIONS lists ${sections.map((entry) => JSON.stringify(entry.name)).join(', ')}`,
+      );
+    }
+    return !listed && runs(group, section.group);
+  };
+}
+
+/**
  * With `--list-groups`, prints `{ groups, cases }` as JSON and returns true so the caller exits before running anything.
  * `cases` is every case or section with its group, so a case with no group shows up as `null` instead of vanishing.
  */
@@ -55,4 +71,4 @@ function printGroupsWhenAsked(cases, argv = process.argv, write = (text) => proc
   return true;
 }
 
-module.exports = { groupsOf, printGroupsWhenAsked, requestedGroup, runs, selectGroup };
+module.exports = { groupsOf, printGroupsWhenAsked, requestedGroup, runs, sectionRunner, selectGroup };

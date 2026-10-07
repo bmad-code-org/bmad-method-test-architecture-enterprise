@@ -57,7 +57,7 @@ const { rowsValidator } = require('../cli/lib/evaluate/judgment-rows');
 const { declaredContent, foreignContent } = require('../cli/lib/evaluate/records-evaluator');
 const { MATERIAL_HEADING, evaluatorPrompt } = require('../cli/lib/evaluate/sealed-brief-agent');
 
-const { groupsOf, printGroupsWhenAsked, runs, selectGroup } = require('./lib/case-groups');
+const { groupsOf, printGroupsWhenAsked, sectionRunner, selectGroup } = require('./lib/case-groups');
 const { createHarness } = require('./lib/evaluate-partition-plans-harness');
 
 const {
@@ -131,15 +131,15 @@ const SECTIONS = [
 const listed = printGroupsWhenAsked(SECTIONS);
 const requested = selectGroup(groupsOf(SECTIONS));
 if (requested.error) throw new Error(requested.error);
-/** Whether the section of this group runs: with no `--group` every section does, and `--list-groups` runs none. */
-const runsGroup = (group) => !listed && runs(requested.group, group);
+/** Whether the section called `name` runs: with no `--group` every section does, and `--list-groups` runs none. A name not in SECTIONS throws. */
+const runsSection = sectionRunner(SECTIONS, requested.group, listed);
 
 try {
   // What the sections of more than one group read.
   const PROBE_IDS = ['P-001', 'P-002', 'P-003', 'P-004'];
   const probeOf = (probeId) => read(path.join(fixtureFolder, 'probes', `${probeId}.probe.json`));
 
-  if (runsGroup('views-and-check')) {
+  if (runsSection('the pure views, check and the held-out plan guard')) {
     // ---- selectPartition and the pure view -------------------------------------------------------------------------------------
     const probes = ['P-001', 'P-002', 'P-003'].map((probeId) => ({ probe: { probeId } }));
     assert.deepEqual(selectPartition({ partition: undefined, heldOutProbes: ['P-003'], probes }), { selectedProbeIds: null });
@@ -2188,7 +2188,7 @@ try {
     assert.match(staleRun.output, /corpus-index\.json is stale.*corpus\/held-out\/plan\.json changed or added/);
     fs.writeFileSync(planFile, originals.get(PLAN_FILE));
   }
-  if (runsGroup('preflight-and-run')) {
+  if (runsSection('preflight and run, and the folder with no partitionPlan')) {
     // ---- preflight and run, each partition launches only its own requests ------------------------------------------------------
     const flow = planProject('plan-flow');
     const PARTITION_REQUESTS = {
@@ -2835,7 +2835,7 @@ try {
       fs.writeFileSync(unplannedContract, unplannedBytes);
     }
   }
-  if (runsGroup('score')) {
+  if (runsSection('rubrics and waivers through run and score')) {
     // ---- rubrics through run and score: each partition judges and calibrates its own criteria (Story 1.105) ---------------------
     // One labelled file serves every partition. It holds two items per criterion, so the development run is handed items of the
     // held-out criterion and the held-out run items of the development one, and each must leave them unjudged.

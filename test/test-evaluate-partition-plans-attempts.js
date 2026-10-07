@@ -57,7 +57,7 @@ const { answersForView } = require('../cli/lib/evaluate/gameability');
 const { EvaluatorLayerError, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { MATERIAL_HEADING } = require('../cli/lib/evaluate/sealed-brief-agent');
 
-const { groupsOf, printGroupsWhenAsked, runs, selectGroup } = require('./lib/case-groups');
+const { groupsOf, printGroupsWhenAsked, sectionRunner, selectGroup } = require('./lib/case-groups');
 const { createHarness } = require('./lib/evaluate-partition-plans-harness');
 
 const {
@@ -113,8 +113,8 @@ const SECTIONS = [
 const listed = printGroupsWhenAsked(SECTIONS);
 const requested = selectGroup(groupsOf(SECTIONS));
 if (requested.error) throw new Error(requested.error);
-/** Whether the section called `name` runs: with no `--group` every section does, and `--list-groups` runs none. */
-const runsSection = (name) => !listed && runs(requested.group, SECTIONS.find((section) => section.name === name).group);
+/** Whether the section called `name` runs: with no `--group` every section does, and `--list-groups` runs none. A name not in SECTIONS throws. */
+const runsSection = sectionRunner(SECTIONS, requested.group, listed);
 
 try {
   if (runsSection('ci compiles and seals each view')) {
