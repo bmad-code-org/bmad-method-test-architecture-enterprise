@@ -395,7 +395,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains 139 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Fifteen of the 139 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
+`npm test` chains 139 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 139 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, the fragment-selection case count, the replay totals that the test README and the header of the replay suite state, the story count, epic count and appended-story count in the overview of the Evaluate plan, and the lane count in its parallel-lanes section.
@@ -411,6 +411,9 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 - `test:nfr-evidence-guidance` holds every NFR worker and the publication audit to the supplied-evidence ledger, exercises supported, missing, and mismatched evidence, rejects contaminating examples, and binds the protected baseline and focused remediation records by digest.
 - `test:contract-oracles` evaluates every oracle in every eval contract with `eval-quality`'s own evaluator, over the stored replay outputs and over constructed selections for all 24 fragment-selection cases, and fails when an oracle faults or disagrees with the harness scorer on the same evidence. The first run found that every regex oracle in the `test-review` contract was refused by the evaluator before it matched anything.
 - `test:evaluate-guidance` parses the Evaluate skill's `SKILL.md` stage list and fails when a stage entry is missing, out of order, or points at a `references/` guide that does not exist.
+
+Three more checks hold the Evaluate documentation:
+
 - `test:docs-build-names` scans every page under `docs/` and fails on a name from how TEA was built: a story id, a decision id, a line of epic narrative, a planning path, a pull request number or a word from the review process.
 - `test:docs-evaluate-sidebar` fails when a page that names `tea-evaluate` or `bmad-testarch-evaluate` is missing from the site sidebar, and when the TEA overview links no page that Evaluate owns.
 - `test:docs-tutorial` runs the commands of the Evaluate tutorial against its fixture and fails on a command that errors or an output line the page promises and the run does not print.

@@ -92,7 +92,7 @@ The top level is closed: a field that is not listed here fails `check` under the
 | `strengthFloor`          | yes                                        | The minimum catch rate per probe class, from 0 to 1: `defect`, `gameability` and `zero-action`. `canary` is not a class and `check` refuses it.                                            |
 
 A complete `evaluation.json` for a one-skill evaluation, where the skill decides whether a refund is within the refund limit.
-The runner sits in the project's `node_modules`, inside `launch.root`, which is one of the two setups [Where the runner lives](#where-the-runner-lives) describes:
+The runner sits in the evaluations folder's install (`evals/node_modules`), inside `launch.root`, which is one of the two setups [Where the runner lives](#where-the-runner-lives) describes:
 
 ```json
 {
@@ -108,7 +108,7 @@ The runner sits in the project's `node_modules`, inside `launch.root`, which is 
     {
       "interfaceId": "refund-skill",
       "executable": "tea-skill-runner",
-      "target": "node_modules/.bin/tea-skill-runner",
+      "target": "evals/node_modules/.bin/tea-skill-runner",
       "subcommandPaths": [[]],
       "artifacts": {},
       "environmentKeys": [],

@@ -78,10 +78,12 @@ That one is critical.
 Refusing a malformed request matters less."
 
 **Q: Which outputs can we trust as proof?**
-A: "The JSON object the skill prints. Read its `status` and `decision`."
+A: "The JSON object the skill prints.
+Read its `status` and `decision`."
 
 **Q: Which commands and resources may run?**
-A: "The skill runner over `skill/`. The agent behind it reads only the skill and the request."
+A: "The skill runner over `skill/`.
+The agent behind it reads only the skill and the request."
 
 **Q: Where does the behavior change?**
 A: "At the limit.

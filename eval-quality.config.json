@@ -546,7 +546,7 @@
         "file": "README.md",
         "claim": "the npm test chain length",
         "pattern": {
-          "match": "`npm test` chains (\\d+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Fifteen of the (\\d+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:"
+          "match": "`npm test` chains (\\d+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Twelve of the (\\d+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:"
         },
         "counts": ["npmTestChainLength", "npmTestChainLength"],
         "rendering": "digits"

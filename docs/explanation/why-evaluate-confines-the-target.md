@@ -157,7 +157,6 @@ A run with `"confinement": false` leaves the private directories as readable to 
 The run directory holds the evidence of an invocation, and a target can reach `runs/<invocationId>/` from inside its workspace in a run that opted out of confinement.
 The runtime therefore guards every write and read it makes there, and holds each directory it made.
 
-A target can reach `runs/<invocationId>/`, so the runtime guards every write and read it makes there.
 `runs/` must be a directory and `runs/.gitignore` a file, and a link at either is refused.
 The run directory is created afresh, and every directory in it is created by the runtime, recorded by device and inode, and held open until the command ends.
 A held directory keeps its inode even after it is removed, so no directory made later can take its number, which some file systems (Linux's ext4 and overlayfs among them) otherwise hand to the next directory made.
