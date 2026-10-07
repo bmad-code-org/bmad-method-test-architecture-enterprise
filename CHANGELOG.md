@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `test:doc-counts` holds the replay totals, the story count and the five lane lists of the Evaluate plan to the files that own them (Story 1.95, CAP-12).
+  The totals that `test/README.md` and the header of `test/test-eval-replay.js` state (the cases, the cases that produce a number, the constructed ones among them, the cases that carry captured bytes and where they come from, and the trace, `nfr` and `ci` case counts) equal the counts read from the `expected.json` files under `test/replay/`, so a replay case added without moving them fails.
+  The overview of `epics.md` states its story count (every `### Story` section, H.1 included), its epic count and the number of appended stories, and its Parallel lanes section states the lane count; the gate holds each to the story sections and lane lists the file holds.
+  The module `test/lib/planning-doc-sources.js` refuses a plan whose two appended-story lists do not name exactly the Epic 1 stories numbered 1.27 and up, and a plan whose five lane lists in `epics.md` and `sprint-status.yaml` differ in membership or order, hold a story twice or in two lanes, miss a lane, or name an entry with no status row.
+  `test:planning-doc-sources` observes every gate failing on data changed by one: a count off by one, an entry removed from each of the five lanes in each file, a story moved to another lane or duplicated in one file only, an order swap, a lane missing from either file, and a stored replay case added.
+
 - The evaluation layer's processes have no route to the host's path-based Unix sockets (Story 1.88, AD-7, AD-8).
   The processes that run your code or an agent for the evaluation (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge and the evaluation's HTTP port) kept every socket of the host, so a sealed-brief agent run by a user in the `docker` group could start a container that writes the evaluation folder.
   Under Bubblewrap each start of such a process now lists the host's sockets again, the list a target's call reads, and binds each socket's own path onto itself and then an empty device file over it, so `/var/run/docker.sock`, the system bus and an agent socket under `/tmp` answer `ECONNREFUSED`.
@@ -661,6 +667,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The overview of `epics.md` said 129 stories while the file holds 130, and `test/README.md` said 14 trace, 20 `nfr` and 21 `ci` replay cases when the corpus holds 15, 29 and 21 over the `full` and `minimal` projects.
+  The header of `test/test-eval-replay.js` still said the `evaluation-gate` project held a constructed run until its live capture was stored; the capture is stored, and the header names the four projects whose captures the corpus holds.
+  Each count in these sentences is now held by `test:doc-counts`.
 - `test:probe-corpus` scores each ci project's stored workflow with the harness's own scorer, and the oracle of the burn-in job reads only a key or a name line outside a comment (Story 1.123, CAP-12).
   The oracles of the ci contract read a workflow as one string, so a `CI_CORRECT_RUNS` row pointed at a stored deviation passed `test:probe-corpus` for 35 of the 48 stored constructed ci cases, among them `full-unparseable`, `full-injection-in-run`, `evaluation-plan-chained-commands` and `evaluation-gate-needs-cut`.
   One cause was the token of the burn-in job oracle, the bare `burn-in`, which the comment `# Weekly burn-in on Sundays` satisfied, so `full-burn-in-missing` held every oracle.

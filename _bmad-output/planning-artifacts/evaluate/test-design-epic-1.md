@@ -1618,6 +1618,8 @@ Added 2026-10-01 in Story 2.3's second review. Levels: static. Files: `test/test
 | All five lanes match `sprint-status.yaml`        | Read the five lane sequences (lanes 1 to 5) and `parallel_lanes`; compare order and membership, and that no story sits in two lanes | Static | P2  | Removing one entry from any lane, or moving a story in one file only, fails |
 | Existing `doc-counts` entries keep their meaning | `test:doc-counts` over the unchanged entries                                                                                        | Static | P1  | An entry widened to read a new subject fails its own case                   |
 
+Amended 2026-10-06 in Story 1.95's build: the checks are `doc-counts` entries over `test/lib/doc-count-sources.js` and `test/lib/planning-doc-sources.js`, and `test/test-planning-doc-sources.js` (`test:planning-doc-sources`) is the revert check for every row: it runs the real `doc-counts` gate over scratch trees with one count, one lane entry in each of the five lanes, one moved story, one duplicated story, one order swap or one stored replay case changed.
+
 ### Story 1.96: Check the derivable fields of a CI plan
 
 Added 2026-10-01 in Story 2.4's build. Levels: unit, integration. Files: `cli/lib/evaluate/ci-plan.js`, `cli/lib/evaluate/check.js`, `test/test-evaluate-ci.js` (`test:evaluate-ci`), `test/test-evaluate-check.js` (`test:evaluate-check`), `references/ci.md`.
