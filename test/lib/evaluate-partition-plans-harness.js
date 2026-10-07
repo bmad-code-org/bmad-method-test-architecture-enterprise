@@ -16,6 +16,14 @@ const { spawnSync } = require('node:child_process');
 const { RUN_LABELS } = require('../../cli/lib/evaluate/records');
 const { suite } = require('./evaluate-story-121');
 
+/** The `schemaVersion` a runtime schema of the Evaluate commands declares, which the files built here carry as the product's readers expect. */
+const schemaVersionOf = (name) =>
+  JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'cli', 'lib', 'evaluate', 'schemas', `${name}.schema.json`), 'utf8'))
+    .properties.schemaVersion.const;
+const CONDITIONS_VERSION = schemaVersionOf('evaluator-conditions');
+const MAPPING_VERSION = schemaVersionOf('evaluator-mapping');
+const ANSWERS_VERSION = schemaVersionOf('degenerate-response');
+
 function createHarness(suiteName) {
   const FIXTURE = path.join(__dirname, '..', 'fixtures', 'evaluate', 'partition-plan');
   const CI_PLAN = path.join(__dirname, '..', 'fixtures', 'evaluate', 'mutation', 'evals', 'verdict-ci', 'ci', 'evaluation-ci-plan.json');
@@ -194,7 +202,7 @@ function createHarness(suiteName) {
     });
     if (judge) {
       write(path.join(folder, 'policy/evaluator-conditions.json'), {
-        schemaVersion: 1,
+        schemaVersion: CONDITIONS_VERSION,
         modelSnapshot: 'none',
         systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
         judge: { modelSnapshot: 'stub-judge-2026-09' },
@@ -275,11 +283,14 @@ function createHarness(suiteName) {
     for (const probeId of ['P-005', 'P-006']) {
       fs.mkdirSync(path.join(folder, 'corpus/gameability'), { recursive: true });
       write(path.join(folder, `corpus/gameability/${probeId}.json`), {
-        schemaVersion: 1,
+        schemaVersion: ANSWERS_VERSION,
         steps: { 'shared-run': SHARED_ANSWER, 'development-run': DEVELOPMENT_ANSWER },
       });
       fs.mkdirSync(path.join(folder, HELD_OUT_ANSWERS_DIR), { recursive: true });
-      write(path.join(folder, `${HELD_OUT_ANSWERS_DIR}/${probeId}.json`), { schemaVersion: 1, steps: { 'held-out-run': HELD_OUT_ANSWER } });
+      write(path.join(folder, `${HELD_OUT_ANSWERS_DIR}/${probeId}.json`), {
+        schemaVersion: ANSWERS_VERSION,
+        steps: { 'held-out-run': HELD_OUT_ANSWER },
+      });
     }
     const evaluation = read(path.join(folder, 'evaluation.json'));
     evaluation.arms = [...evaluation.arms, 'gameability'];
@@ -337,7 +348,7 @@ function createHarness(suiteName) {
     });
     edit('contract.json', (contract) => (contract.budgets.maxToolCalls = 3));
     write(path.join(folder, 'policy/evaluator-conditions.json'), {
-      schemaVersion: 1,
+      schemaVersion: CONDITIONS_VERSION,
       modelSnapshot: 'none',
       systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
       evaluator: { modelSnapshot: 'stub-evaluator-2026-09' },
@@ -376,7 +387,7 @@ function createHarness(suiteName) {
       keys['score:shared-run'] = criterionRow('R-001', SHARED_CRITERION);
       planRows.push({ key: canary ? 'canary-criterion-key' : 'score:held-out-run', ...criterionRow('R-101', HELD_OUT_CRITERION) });
     }
-    write(path.join(folder, 'evaluator/mapping.json'), { schemaVersion: 1, keys });
+    write(path.join(folder, 'evaluator/mapping.json'), { schemaVersion: MAPPING_VERSION, keys });
     const plan = read(path.join(folder, PLAN_FILE));
     plan.mappings = planRows;
     write(path.join(folder, PLAN_FILE), plan);
@@ -391,7 +402,7 @@ function createHarness(suiteName) {
     if (agent) {
       // The stub agent answers the key `verdict-accepted` for the shared oracle, so the file binds that key beside the development-only row.
       write(path.join(folder, 'evaluator/mapping.json'), {
-        schemaVersion: 1,
+        schemaVersion: MAPPING_VERSION,
         keys: { 'verdict-accepted': SHARED_ROW, 'accepted:development-run': DEVELOPMENT_ROW },
       });
       sealedBriefAgentLayer(folder, path.join(directory, 'agent-capture.jsonl'), 0);
@@ -519,7 +530,7 @@ function createHarness(suiteName) {
   const rubricBytes = Buffer.from(JSON.stringify(rubricSource, null, 4));
   const rubricPlan = { ...heldOutPlan, rubrics: [rubricOf('R-101', [HELD_OUT_CRITERION])] };
   const mappingSource = {
-    schemaVersion: 1,
+    schemaVersion: MAPPING_VERSION,
     keys: {
       'accepted:shared-run': SHARED_ROW,
       'accepted:development-run': DEVELOPMENT_ROW,
