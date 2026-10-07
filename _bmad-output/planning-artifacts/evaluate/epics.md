@@ -2414,6 +2414,15 @@ So that a killed run leaves nothing in the temp directory (AD-8).
 **Dependencies:** 1.54, 1.83.
 **Gate:** `test:evaluate-confinement`, `test:evaluate-run`, `test:evaluate-api`, `test:isolation-primitives`, `npm test`, and the Linux CI job.
 
+Amended 2026-10-06 in Story 1.131's build: the first criterion's case runs on every host.
+`test:evaluate-api` starts `test/fixtures/evaluate/killed-call.cjs`, a run that makes its private parent as `preflight` does and a call through the layer's own code (`createApiPort`, the confined command mechanism, `makePrivateParent`), so the call's temp directory, a started service's port directory and its bridge directory exist beneath the parent, kills it with `SIGKILL` and runs the preflight of a second run over the same evaluation.
+The temp directory holds no `tea-evaluate-target-tmp-*`, `tea-evaluate-port-*` or `tea-nb-*` directory before and after the second run, and the second run's output names the reclaimed private parent and each call directory.
+A real `tea-evaluate preflight` killed while a started service's call is open holds the same case for the port directory.
+The recovery stays what Story 1.54 built: no record of call directories exists, since the parent's journal record and marker already authorize the removal of everything beneath a verified parent, and the case plants links, a hard link, a closed directory and files shaped like the runtime's records in each call directory and forges the marker and the journal record, which leaves every directory and the canaries outside whole.
+The second criterion's pipeline is the confined pipeline of `test:evaluate-api` on Linux, which now runs the new vectors, with two cases beside it: `the call directories, stood in` runs the real sandbox, mechanisms, status shim and HTTP port through a stand-in for Bubblewrap that applies each bind under `/dev` on every host, and `the call directory route` runs real Bubblewrap in the ubuntu job, where the target writes `TMPDIR`, writes a port file, answers through the bridge and cannot see the directories at their own paths, with a control that binds them at their own paths before the private root is emptied and finds them hidden.
+Under Seatbelt the profile allows each call directory again beneath the denied root, as it allows the home, and `a confined target's temp directory` runs it for real.
+The golden gains four entries (a Bubblewrap call, its environment, its audited form and a Seatbelt call, each with the directories beneath the private root) and changes none.
+
 ### Story 1.132: Pack the withheld history without writing into the adopter's repository
 
 Added 2026-10-04 in Story 1.85's review round 1.

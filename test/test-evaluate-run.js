@@ -247,6 +247,7 @@ const {
   makePrivateParent,
   reclaimDeadMaskRecords,
   reclaimDeadWorkspaces,
+  removeScratchDirectory,
   removeWorkspace,
 } = require('../cli/lib/evaluate/workspace');
 const { CLOCK_SLACK_MS, removePlaceholders, startMaskGuard, sweepMaskRecords } = require('../cli/lib/evaluate/mask-guard');
@@ -5730,26 +5731,29 @@ async function checkAuditChannelUnits() {
 async function checkObserverRefusalRun() {
   const stubs = tempDir('observer-stubs');
   const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-  stub(
-    'bwrap',
-    String.raw`dev_dst=""; dev_src=""; prev=""; last_src=""
-for a in "$@"; do
-  if [ "$prev" = "--bind" ]; then last_src="$a"
-  elif [ -n "$last_src" ]; then
-    case "$a" in /dev/*) dev_src="$last_src"; dev_dst="$a" ;; esac
-    last_src=""
-  fi
-  prev="$a"
-done
-while [ "$1" != "--" ]; do shift; done
-shift
-if [ -n "$dev_dst" ]; then
-  for a in "$@"; do
-    if [ "$a" = "$dev_dst" ]; then set -- "$@" "$dev_src"; else set -- "$@" "$a"; fi
-    shift
-  done
-fi
-exec "$@"`,
+  // The stand-in applies each bind at a path under /dev (the status file's and each call directory's, Story 1.131) by substituting the bound path for the mount in
+  // the command and in every value of the environment, and runs the command after `--` unconfined.
+  fs.writeFileSync(
+    path.join(stubs, 'bwrap'),
+    `#!${process.execPath}
+'use strict';
+const { spawn } = require('node:child_process');
+const args = process.argv.slice(2);
+const cut = args.indexOf('--');
+const mounts = [];
+for (let at = 0; at < cut; at += 1) {
+  if (args[at] === '--bind' && args[at + 2].startsWith('/dev/')) mounts.push([args[at + 2], args[at + 1]]);
+}
+const through = (text) => {
+  for (const [mount, source] of mounts) if (text === mount || text.startsWith(mount + '/')) return source + text.slice(mount.length);
+  return text;
+};
+const environment = Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, through(value)]));
+const child = spawn(args[cut + 1], args.slice(cut + 2).map(through), { env: environment, stdio: 'inherit' });
+for (const name of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(name, () => child.kill(name));
+child.on('exit', (code, signal) => (signal ? process.kill(process.pid, signal) : process.exit(code)));
+`,
+    { mode: 0o755 },
   );
   const environment = (project) => ({ ...project.env, PATH: `${stubs}${path.delimiter}${process.env.PATH}`, [PLATFORM_ENV]: 'linux' });
 
@@ -6098,14 +6102,415 @@ async function checkTargetTemp() {
   const out = trialStdout(runDirectory, 'clean', 1);
   const temp = /temp-dir: (.*)/.exec(out)?.[1] ?? '';
   check(/temp-write: allowed/.test(out), `a confined target could not write the temp directory it was handed:\n${out}`);
+  // Story 1.131: the call's temp directory is made beneath the run's private parent. Under Bubblewrap the sandbox empties the private root, so the target
+  // names the directory by a path under the synthetic /dev; under Seatbelt it names the directory's own path.
+  const privateRoot = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+  const parentOfTemp = path.dirname(temp);
   check(
-    temp !== '' && path.dirname(temp) === fs.realpathSync(project.env.TMPDIR) && !fs.existsSync(temp),
-    `a confined call's temp directory ${JSON.stringify(temp)} is not a private directory under the run's temp directory, removed after the call`,
+    path.basename(temp).startsWith('tea-evaluate-target-tmp-') &&
+      !fs.existsSync(temp) &&
+      (CONFINEMENT === 'bubblewrap'
+        ? parentOfTemp === '/dev'
+        : path.basename(parentOfTemp).startsWith('run-') && fs.realpathSync(path.dirname(parentOfTemp)) === fs.realpathSync(privateRoot)),
+    `a confined call's temp directory ${JSON.stringify(temp)} is not a private directory the target names ${
+      CONFINEMENT === 'bubblewrap' ? 'under /dev' : "beneath the run's private parent"
+    }, removed after the call`,
+  );
+  check(
+    fs.readdirSync(project.env.TMPDIR).length === 0,
+    `a confined run left ${JSON.stringify(fs.readdirSync(project.env.TMPDIR))} in its temp directory; the call's temp directory is beneath the run's private parent`,
   );
   check(
     JSON.stringify(observedMountsOf(runDirectory, 'P-001')) === '[]',
     `a write into the call's own temp directory was reported: ${JSON.stringify(observedMountsOf(runDirectory, 'P-001'))}`,
   );
+}
+
+/**
+ * The call directories a confined call hands its target (Story 1.131) sit beneath the run's private parent, so a run killed outright leaves them to the recovery of that parent.
+ * Under Bubblewrap the sandbox empties the private root, so the vector binds each directory writable at a path under the synthetic `/dev`, and the call's environment (`TMPDIR`, `TMP`, `TEMP`, a started service's port file) and the shim's bridge name it there.
+ * This case reads the argument vector, the environment, the audit's grants and the Seatbelt profile on every host, and the mechanisms' own choice of directory.
+ */
+async function checkCallDirectoryUnits() {
+  const root = fs.realpathSync(tempDir('call-directory-units'));
+  const folder = path.join(root, 'evals', 'verdict');
+  const workspace = path.join(root, 'workspace');
+  const status = path.join(root, 'status');
+  const privateRoot = path.join(root, 'private');
+  const parent = path.join(privateRoot, 'run-1-abcdef');
+  const home = path.join(parent, 'tea-evaluate-target-home-abcdef');
+  const names = { temporary: 'tea-evaluate-target-tmp-aBcDeF', port: 'tea-evaluate-port-gHiJkL', bridge: 'tea-nb-mNoPqR' };
+  const temporary = path.join(parent, names.temporary);
+  const portDirectory = path.join(parent, names.port);
+  const bridgeDirectory = path.join(parent, names.bridge);
+  const outside = path.join(root, 'elsewhere', 'tea-evaluate-port-stUvWx');
+  const audit = path.join(parent, 'tea-evaluate-audit-abcdef');
+  for (const directory of [folder, workspace, status, temporary, portDirectory, bridgeDirectory, home, outside, audit]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
+  const environment = {
+    PATH: '/usr/bin',
+    TMPDIR: temporary,
+    TMP: temporary,
+    TEMP: temporary,
+    PORT_FILE: path.join(portDirectory, 'port'),
+    RELATIVE: path.join('port', 'file'),
+    LIST: `${temporary}:${portDirectory}`,
+    COUNT: '1',
+  };
+  const grants = [temporary, portDirectory, bridgeDirectory];
+  const sandboxOf = (extra = {}) =>
+    targetSandbox({ confinement: bubblewrap, workspace, status, privateRoot, home, hostSockets: () => [], ...extra });
+
+  // Each call directory is bound writable at a path under the synthetic /dev, after /dev exists and after the private root is emptied and
+  // made read-only, and at no other path.
+  // Revert check two: a bind at the directory's own path, which the emptied root hides, fails this check.
+  const wrapped = sandboxOf().wrap('/bin/true', [], grants, [], { bridge: path.join(bridgeDirectory, 'b'), environment });
+  const args = wrapped.args;
+  const devAt = args.findIndex((argument, at) => argument === '--dev' && args[at + 1] === '/dev');
+  const emptiedAt = args.findIndex((argument, at) => argument === '--tmpfs' && args[at + 1] === privateRoot);
+  const remountAt = args.findIndex((argument, at) => argument === '--remount-ro' && args[at + 1] === privateRoot);
+  for (const [directory, name] of [
+    [temporary, names.temporary],
+    [portDirectory, names.port],
+    [bridgeDirectory, names.bridge],
+  ]) {
+    const bindAt = args.findIndex((argument, at) => argument === '--bind' && args[at + 1] === directory && args[at + 2] === `/dev/${name}`);
+    check(
+      devAt > 0 && emptiedAt > devAt && remountAt > emptiedAt && bindAt > remountAt,
+      `the vector binds ${name} at ${bindAt} (/dev at ${devAt}, the private root emptied at ${emptiedAt} and made read-only at ${remountAt}): ${args.join(' ')}; expected the bind at /dev/${name} after the root is emptied`,
+    );
+    check(
+      !args.some((argument, at) => argument === '--bind' && args[at + 2] === directory),
+      `the vector binds ${name} at its own path, which the emptied private root hides: ${args.join(' ')}`,
+    );
+  }
+  check(
+    args.filter((argument, at) => argument === '--bind' && args[at + 2].startsWith('/dev/') && !args[at + 2].startsWith('/dev/status-'))
+      .length === 3 && args.every((argument, at) => argument !== '--ro-bind' || !args[at + 2]?.startsWith('/dev/tea-')),
+    `the vector holds ${args.join(' ')}; expected exactly the three call directories bound writable under /dev`,
+  );
+  const homeAt = args.findIndex((argument, at) => argument === '--bind' && args[at + 1] === home && args[at + 2] === home);
+  check(
+    emptiedAt < homeAt && homeAt < remountAt,
+    `the private home is bound at ${homeAt}, expected at its own path between the root being emptied (${emptiedAt}) and made read-only (${remountAt})`,
+  );
+  const bridgeAt = args.indexOf('--bridge');
+  check(
+    args[bridgeAt + 1] === `/dev/${names.bridge}/b` && args[bridgeAt + 2] === wrapped.statusFile,
+    `the shim serves its bridge at ${args[bridgeAt + 1]}; expected /dev/${names.bridge}/b`,
+  );
+  check(
+    JSON.stringify(wrapped.environment) ===
+      JSON.stringify({
+        ...environment,
+        TMPDIR: `/dev/${names.temporary}`,
+        TMP: `/dev/${names.temporary}`,
+        TEMP: `/dev/${names.temporary}`,
+        PORT_FILE: `/dev/${names.port}/port`,
+      }),
+    `the call's environment is ${JSON.stringify(wrapped.environment)}; expected each value that is a path inside a call directory named under /dev, and no other value changed`,
+  );
+
+  // A call that hides sockets carries the same environment in its file.
+  const hiding = sandboxOf({ hostSockets: () => ['/run/fixture/hidden.sock'] }).wrap('/bin/true', [], grants, [], { environment });
+  const carried = JSON.parse(fs.readFileSync(hiding.environmentFile, 'utf8'));
+  check(
+    carried.TMPDIR === `/dev/${names.temporary}` &&
+      carried.PORT_FILE === `/dev/${names.port}/port` &&
+      carried.LIST === environment.LIST &&
+      hiding.environment.TMPDIR === undefined,
+    `a call that hides sockets carries ${JSON.stringify(carried)} in its environment file and ${JSON.stringify(hiding.environment)} for the launcher; expected the call's environment with the call directories named under /dev`,
+  );
+  for (const call of [hiding]) {
+    fs.rmSync(call.socketFile, { force: true });
+    fs.rmSync(call.environmentFile, { force: true });
+  }
+
+  // A directory outside the private root keeps its own path, its own bind and the environment as given.
+  const kept = sandboxOf().wrap('/bin/true', [], [outside], [], { environment: { TMPDIR: outside } });
+  check(
+    kept.args.some((argument, at) => argument === '--bind' && kept.args[at + 1] === outside && kept.args[at + 2] === outside) &&
+      !kept.args.some((argument) => argument.startsWith('/dev/tea-evaluate-port-')) &&
+      kept.environment.TMPDIR === outside,
+    `a directory outside the private root has the vector ${kept.args.join(' ')} and the environment ${JSON.stringify(kept.environment)}; expected its own bind and its own path`,
+  );
+  // A bridge outside the private root is served at its own path.
+  const keptBridge = sandboxOf().wrap('/bin/true', [], [outside], [], { bridge: path.join(outside, 'b') });
+  check(
+    keptBridge.args[keptBridge.args.indexOf('--bridge') + 1] === path.join(outside, 'b'),
+    'a bridge outside the private root was not served at its own path',
+  );
+  // One mount holds one directory: two call directories of one name are refused.
+  const twin = path.join(parent, 'twin', names.port);
+  fs.mkdirSync(twin, { recursive: true });
+  let refused = null;
+  try {
+    sandboxOf().wrap('/bin/true', [], [portDirectory, twin]);
+  } catch (error) {
+    refused = error;
+  }
+  check(refused?.name === 'ConfinementError', `two call directories of one name were not refused: ${refused}`);
+  // A call with no private root (a sandbox built with none) binds every grant at its own path.
+  const rootless = targetSandbox({ confinement: bubblewrap, workspace, status, hostSockets: () => [] }).wrap('/bin/true', [], grants, [], {
+    environment,
+  });
+  check(
+    grants.every((directory) =>
+      rootless.args.some(
+        (argument, at) => argument === '--bind' && rootless.args[at + 1] === directory && rootless.args[at + 2] === directory,
+      ),
+    ) && rootless.environment.TMPDIR === temporary,
+    `a sandbox with no private root has the vector ${rootless.args.join(' ')}; expected each grant bound at its own path`,
+  );
+
+  // The audit grants the mounts, so a write into a call directory is no observed mount, and the real paths stay granted.
+  const audited = targetSandbox({
+    confinement: { ...bubblewrap, observer: { executable: '/usr/bin/strace' } },
+    workspace,
+    status,
+    privateRoot,
+    home,
+    audit: { directory: audit },
+    hostSockets: () => [],
+  }).wrap('/bin/true', [], grants, [], { environment });
+  for (const kind of ['read', 'write']) {
+    const held = audited.trace.grants[kind];
+    check(
+      [names.temporary, names.port, names.bridge].every((name) => held.includes(`/dev/${name}`)),
+      `the audit's ${kind} grants are ${JSON.stringify(held)}; expected the three mounts under /dev`,
+    );
+  }
+  check(audited.trace.grants.connect.includes('/dev'), "the audit's connect grants do not hold /dev, where the bridge's socket is served");
+
+  // Seatbelt keeps the paths, and the profile allows each call directory again after the denial of the private root.
+  const seatbelt = targetSandbox({
+    confinement: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+    workspace,
+    privateRoot,
+    home,
+  }).wrap('/bin/true', [], [...grants, outside], [], { environment });
+  const profile = seatbelt.args[1];
+  const denied = profile.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
+  check(
+    denied > 0 &&
+      [temporary, portDirectory, bridgeDirectory].every((directory) => profile.lastIndexOf(`(subpath "${directory}")`) > denied) &&
+      profile.lastIndexOf(`(subpath "${outside}")`) < denied &&
+      profile.indexOf(`(literal "${parent}")`) > denied,
+    `the Seatbelt profile does not allow the call directories again after the denial of the private root (denied at ${denied}):\n${profile}`,
+  );
+  check(!seatbelt.args.join(' ').includes('/dev/tea-'), `a Seatbelt call named a mount under /dev: ${seatbelt.args.join(' ')}`);
+
+  // The mechanisms make the call's temp directory beneath the run's private parent, put it on the run's scratch list while the call runs and remove it after.
+  const signal = new AbortController().signal;
+  for (const [label, parentOf] of [
+    ["a list with the run's private parent", parent],
+    ['a list with none', undefined],
+  ]) {
+    for (const kind of ['command', 'tool']) {
+      const list = [];
+      if (parentOf !== undefined) Object.defineProperty(list, 'privateParent', { value: parentOf });
+      let writable = null;
+      let during = null;
+      const fake = {
+        mode: 'bubblewrap',
+        home: null,
+        wrap: (target, argv, granted) => ((writable = granted), { target, args: argv, statusFile: null }),
+        collect: async () => {},
+      };
+      const inCall = () => {
+        const directory = writable.at(-1);
+        during = { directory, listed: list.includes(directory), held: fs.existsSync(directory) };
+        return { exitCode: 0, stdout: '', stderr: '', result: {} };
+      };
+      if (kind === 'command') {
+        await confinedCommandMechanism({ run: async () => inCall() }, fake, () => [], list).run(
+          { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+          signal,
+        );
+      } else {
+        await confinedMcpMechanism({ callTool: async () => inCall() }, fake, () => [], list).callTool(
+          { target: '/bin/true', targetArgs: [], env: {} },
+          signal,
+        );
+      }
+      const expectedParent = parentOf ?? fs.realpathSync.native(os.tmpdir());
+      check(
+        during !== null &&
+          path.basename(during.directory).startsWith('tea-evaluate-target-tmp-') &&
+          fs.realpathSync.native(path.dirname(during.directory)) === fs.realpathSync.native(expectedParent) &&
+          during.listed &&
+          during.held &&
+          !fs.existsSync(during.directory) &&
+          list.length === 0,
+        `a ${kind} call over ${label} ran with ${JSON.stringify(during)}; expected a temp directory beneath ${expectedParent} on the scratch list, removed with the call (list now ${JSON.stringify(list)})`,
+      );
+    }
+  }
+}
+
+/**
+ * What a confined process does with the call directories it is handed (Story 1.131): it writes its temp directory, writes the port file of a service it
+ * starts, serves a loopback port and the shim's bridge answers for it, and it finds the directories at a path under `/dev` and nowhere else.
+ * It waits for the file `go` in its temp directory, which the runtime writes once it has read the port file and asked the bridge, and prints what it saw.
+ */
+const CALL_DIRECTORY_PROBE = `
+const fs = require('node:fs');
+const net = require('node:net');
+const path = require('node:path');
+const temporary = process.env.TMPDIR;
+const attempt = (action) => { try { return action(); } catch (error) { return error.code; } };
+const seen = {
+  temporary,
+  wrote: attempt(() => (fs.writeFileSync(path.join(temporary, 'marker'), 'written'), 'written')),
+  hostTemporaryVisible: fs.existsSync(process.argv[1]),
+  parentListing: attempt(() => fs.readdirSync(process.env.PRIVATE_PARENT)),
+};
+const server = net.createServer((socket) => socket.end('hello')).listen(0, '127.0.0.1', () => {
+  fs.writeFileSync(process.env.PORT_FILE, String(server.address().port));
+  const wait = setInterval(() => {
+    if (!fs.existsSync(path.join(temporary, 'go'))) return;
+    clearInterval(wait);
+    console.log(JSON.stringify(seen));
+    server.close();
+  }, 20);
+});
+`;
+
+/**
+ * The call directories under real Bubblewrap (Story 1.131), which the Linux CI job runs and a host without a usable `bwrap` skips with its reason named.
+ * A target is started through the real sandbox with a temp directory, a port directory and a bridge directory made beneath the run's private parent.
+ * It writes `TMPDIR` (the runtime reads the marker at the directory's own path), writes the port file of a loopback server it starts (the runtime reads the port at
+ * the directory's own path) and the bridge the shim serves answers for that port (`bridgeAccepts` at the bridge's own path).
+ * It names each directory under `/dev` and cannot see the directory's own path, and the parent of those paths is gone from its view.
+ * The control is the vector a design that bound each directory at its own path would build, with the binds before the private root is emptied: the target cannot
+ * see the directory at all, which is why the directories are bound under `/dev` (the story's second revert check fails this case when the binds name a path the sandbox hides).
+ */
+async function checkCallDirectoryRoute() {
+  const label = 'call directory route';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('call-directory-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder, root: folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = tempDir('call-directory-workspace');
+  const list = [];
+  const parent = makePrivateParent(list);
+  const made = (prefix) => fs.mkdtempSync(path.join(parent, prefix));
+  const status = made('tea-evaluate-status-');
+  const temporary = made('tea-evaluate-target-tmp-');
+  const portDirectory = made('tea-evaluate-port-');
+  const bridgeDirectory = made('tea-nb-');
+  try {
+    const sandbox = targetSandbox({ confinement, workspace, privateRoot: list.privateRoot, status, hostSockets: () => [] });
+    const environment = {
+      PATH: process.env.PATH,
+      TMPDIR: temporary,
+      TMP: temporary,
+      TEMP: temporary,
+      PORT_FILE: path.join(portDirectory, 'port'),
+      PRIVATE_PARENT: parent,
+    };
+    const wrapped = sandbox.wrap(
+      process.execPath,
+      ['-e', CALL_DIRECTORY_PROBE, temporary],
+      [temporary, portDirectory, bridgeDirectory],
+      [],
+      {
+        bridge: path.join(bridgeDirectory, 'b'),
+        environment,
+      },
+    );
+    const child = spawn(wrapped.target, wrapped.args, {
+      cwd: workspace,
+      env: { ...wrapped.environment },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const closed = new Promise((resolve) => child.once('close', (code) => resolve(code)));
+    try {
+      const reported = path.join(portDirectory, 'port');
+      // The file exists before the target has written its number, so the wait is for a number.
+      const reportedPort = () =>
+        fs.existsSync(reported) && /^\d+$/.test(fs.readFileSync(reported, 'utf8')) ? Number(fs.readFileSync(reported, 'utf8')) : null;
+      for (let waited = 0; waited < 30_000 && reportedPort() === null && child.exitCode === null; waited += 50) await sleep(50);
+      const port = reportedPort();
+      check(
+        Number.isInteger(port) && port > 0,
+        `the target wrote ${JSON.stringify(port)} to its port file; expected a port the runtime reads at the directory's own path: ${output}`,
+      );
+      const accepted = Number.isInteger(port) ? await bridgeAccepts(path.join(bridgeDirectory, 'b'), '127.0.0.1', port) : null;
+      check(
+        accepted === true,
+        `the bridge in the call's bridge directory answered ${JSON.stringify(accepted)} for the port ${port}; expected true`,
+      );
+      check(
+        fs.existsSync(path.join(temporary, 'marker')) && fs.readFileSync(path.join(temporary, 'marker'), 'utf8') === 'written',
+        "the runtime found no marker in the call's temp directory, which the target wrote",
+      );
+      fs.writeFileSync(path.join(temporary, 'go'), '');
+      const code = await Promise.race([closed, sleep(30_000).then(() => 'timeout')]);
+      let seen = null;
+      try {
+        seen = JSON.parse(output.trim());
+      } catch {
+        seen = output;
+      }
+      check(
+        code === 0 &&
+          /^\/dev\/tea-evaluate-target-tmp-/.test(seen?.temporary ?? '') &&
+          seen.wrote === 'written' &&
+          seen.hostTemporaryVisible === false &&
+          (seen.parentListing === 'ENOENT' || (Array.isArray(seen.parentListing) && seen.parentListing.length === 0)),
+        `the target ended ${code} and saw ${JSON.stringify(seen)}; expected TMPDIR under /dev, a write that succeeded, the directory's own path hidden and the private parent gone from its view`,
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+
+    // The control: each directory bound at its own path before the private root is emptied, which hides it.
+    const controlArguments = [];
+    for (let at = 0; at < wrapped.args.length; at += 1) {
+      if (wrapped.args[at] === '--bind' && wrapped.args[at + 2].startsWith('/dev/tea-')) {
+        at += 2;
+        continue;
+      }
+      if (wrapped.args[at] === '--tmpfs' && wrapped.args[at + 1] === list.privateRoot) {
+        for (const directory of [temporary, portDirectory, bridgeDirectory]) controlArguments.push('--bind', directory, directory);
+      }
+      controlArguments.push(wrapped.args[at]);
+    }
+    const control = await runToEnd(
+      wrapped.target,
+      [
+        ...controlArguments.slice(0, controlArguments.indexOf('--') + 1),
+        process.execPath,
+        '-e',
+        'process.stdout.write(String(require("node:fs").existsSync(process.argv[1])))',
+        temporary,
+      ],
+      {
+        cwd: workspace,
+        env: { ...wrapped.environment },
+      },
+    );
+    check(
+      control.stdout === 'false',
+      `a vector that binds each call directory at its own path before the private root is emptied showed the directory as ${JSON.stringify(control.stdout)} (${control.stderr.trim()}); expected it hidden, which is why the directories are bound under /dev`,
+    );
+  } finally {
+    for (const directory of list) removeScratchDirectory(directory);
+  }
 }
 
 /** What the `write-home` act printed, by name: `name: value` lines. */
@@ -13887,13 +14292,12 @@ async function checkEgressRun() {
       remaining.length === 0 && next.output.includes('reclaimed private parent from killed run'),
       `the run after a killed one left ${JSON.stringify(remaining)} beneath the private root and printed ${JSON.stringify(next.output.slice(0, 300))}; expected the killed run's private parent, its proxy directory included, reclaimed`,
     );
-    // What a killed run leaves in the temp directory is the call's own temp directory (Story 1.131 reclaims it).
+    // The call's temp directory sat beneath the killed run's private parent too (Story 1.131), so the recovery that removed the parent took it.
     const leftTemp = fs.readdirSync(killed.env.TMPDIR);
     check(
-      leftTemp.every((name) => name.startsWith('tea-evaluate-target-tmp-')),
-      `a killed run left ${JSON.stringify(leftTemp)} in its temp directory; expected nothing of the egress proxy`,
+      leftTemp.length === 0,
+      `a killed run left ${JSON.stringify(leftTemp)} in its temp directory; expected nothing, the call's temp directory and the egress proxy's directory included`,
     );
-    for (const name of leftTemp) fs.rmSync(path.join(killed.env.TMPDIR, name), { recursive: true, force: true });
   } finally {
     provider.stop();
   }
@@ -17890,6 +18294,27 @@ function checkBridgeReference() {
       ['the path socket route', 'the path socket units'],
     ],
     [
+      "Each call directory the runtime hands a confined target is made beneath the run's private parent: the call's temp directory (`tea-evaluate-target-tmp-<random>`, which `TMPDIR`, `TMP` and `TEMP` name), a started service's port directory (`tea-evaluate-port-<random>`, which holds the file the service reports its port in) and its bridge directory (`tea-nb-<random>`, which holds the bridge's socket).",
+      ['the call directory units', 'the call directories of a killed run', "a confined target's temp directory"],
+    ],
+    [
+      "Under Bubblewrap the sandbox empties the private root, so each call directory is bound writable at `/dev/<name>`, a path the sandbox keeps, and the call's environment, the port file's path and the status shim's bridge path name it there, while the runtime reads and connects through the directory's own path.",
+      ['the call directory units', 'the call directory route', 'the call directories, stood in', 'the confined pipeline'],
+    ],
+    [
+      'Under Seatbelt the profile allows each call directory again beneath the denied root, as it does the home.',
+      ['the call directory units', "a confined target's temp directory"],
+    ],
+    ['The audit lists none of them as an observed mount.', ['the call directory units', 'the confined pipeline']],
+    [
+      "The end of the call, its failure and a signal that ends the run remove each call directory, and a run killed outright leaves them to the next run over the evaluation, which reclaims them with the dead run's private parent and names that parent in its output, so a killed run leaves no call directory in the system's temp directory.",
+      ['the call directories of a killed run', 'the call directory units'],
+    ],
+    [
+      "The directories a target is granted beneath the root (its temp directory, a started service's port and bridge directories, its home and the status file) are granted again at paths the sandbox keeps, and its workspace is not under the root.",
+      ['the call directory units', 'the call directory route'],
+    ],
+    [
       "A socket inside the target's workspace or inside a private directory of the call (the bridge's directory included) stays connectable.",
       ['the path socket route', 'the path socket units', 'the confined pipeline'],
     ],
@@ -18150,6 +18575,34 @@ function checkBridgeReference() {
       confinementSection.includes('A call is refused (exit 12') &&
       confinementSection.includes('`hostSocketTruncation`'),
     "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
+  );
+  // Story 1.131: the sentence that said the directories a target is granted are not under the private root is gone, and the sentences that replace it state where
+  // each call directory lives and that a killed run's are reclaimed.
+  const oldCallDirectorySentence =
+    'The directories a target is granted (its workspace, its temp directory, the status and port files) are not under the root.';
+  const staleCallDirectories = (text) =>
+    text.includes(oldCallDirectorySentence) ||
+    !claims.filter(([, backedBy]) => backedBy.includes('the call directory units')).every(([sentence]) => text.includes(sentence));
+  check(
+    !staleCallDirectories(reference),
+    "the reference still says the directories a target is granted are not under the root, or does not state where each call directory lives and that a killed run's are reclaimed",
+  );
+  check(
+    staleCallDirectories(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldCallDirectorySentence}\n`)),
+    'the check on the call directory sentences passed with the old sentence in the confinement section',
+  );
+  check(
+    staleCallDirectories(reference.replace('The audit lists none of them as an observed mount.\n', '')),
+    'the check on the call directory sentences passed with the audit sentence removed',
+  );
+  check(
+    staleCallDirectories(
+      reference.replace(
+        "so a killed run leaves no call directory in the system's temp directory",
+        'so a killed run leaves a call directory behind',
+      ),
+    ),
+    'the check on the call directory sentences passed with the reclaim sentence changed',
   );
   // Story 1.88: the sentence that said the evaluation layer's processes keep every socket of the host is gone.
   // The sentences that replace it name the sockets the layer's processes cannot connect to and the ones they reach.
@@ -20950,6 +21403,8 @@ const CASES = [
   { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement', lossy: true },
   { name: 'the confinement refusals', body: checkConfinementRefusals, group: 'confinement' },
   { name: "a confined target's temp directory", body: checkTargetTemp, group: 'confinement' },
+  { name: 'the call directory units', body: checkCallDirectoryUnits, group: 'confinement' },
+  { name: 'the call directory route', body: checkCallDirectoryRoute, group: 'confinement' },
   { name: "a confined target's private home", body: checkTargetHome, group: 'confinement' },
   { name: "the private home's units", body: checkTargetHomeUnits, group: 'confinement' },
   { name: "a confined target's subscription login", body: checkSubscriptionLogin, group: 'confinement', lossy: true },

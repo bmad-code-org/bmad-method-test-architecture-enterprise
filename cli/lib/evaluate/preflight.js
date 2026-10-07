@@ -619,11 +619,11 @@ async function pipeline(
   const workspaces = [];
   let journal = null;
   const controller = new AbortController();
-  // Run-directory files an interrupting signal removes (the CLI's probe list
-  // until its verdict), and the private directories the command makes for
-  // the processes it starts (engine stages, an evaluator, a judge, the
-  // bridge), which are removed however it ends. They sit beneath one private
-  // parent (`makePrivateParent`) a confined target is denied.
+  // Run-directory files an interrupting signal removes (the CLI's probe list until its verdict).
+  // The private directories the command makes for the processes it starts (engine stages, an evaluator, a judge, the bridge) are removed however it ends.
+  // So are the directories it hands a confined call (its temp directory, a started service's port and bridge directories).
+  // They sit beneath one private parent (`makePrivateParent`) a confined target is denied.
+  // A run killed outright leaves them to the next run's recovery of that parent.
   const retractOnSignal = [];
   const scratch = [];
   // Each directory is tried on its own, write bits restored first, and one that cannot be removed is reported,

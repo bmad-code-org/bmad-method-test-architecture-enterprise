@@ -183,6 +183,40 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
       }).wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { egress: `${egressDirectory}/s` });
+      // The call directories (the call's temp directory, a started service's port directory and its bridge directory) sit beneath the run's private parent, which the
+      // sandbox empties: under Bubblewrap each is bound at a path under the synthetic /dev, the environment, the port file and the shim's bridge name it there, and the
+      // audit grants the mount; under Seatbelt the profile allows each again beneath the denied root (Story 1.131).
+      const callParent = `${privateRoot}/run-501-AbCdEf`;
+      const callTemporary = `${callParent}/tea-evaluate-target-tmp-AbCdEf`;
+      const callPortDirectory = `${callParent}/tea-evaluate-port-AbCdEf`;
+      const callBridgeDirectory = `${callParent}/tea-nb-AbCdEf`;
+      const callEnvironment = {
+        PATH: '/usr/bin',
+        TMPDIR: callTemporary,
+        TMP: callTemporary,
+        TEMP: callTemporary,
+        PORT_FILE: `${callPortDirectory}/port`,
+      };
+      const callWrap = (sandbox) =>
+        sandbox.wrap('/fixture/bin/node', ['server.js'], [callTemporary, callPortDirectory, callBridgeDirectory], ['/opt/toolchain'], {
+          bridge: `${callBridgeDirectory}/b`,
+          environment: callEnvironment,
+        });
+      const bubblewrapCallWrapped = callWrap(
+        sandboxOf({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory }),
+      );
+      const bubblewrapCallAuditWrapped = callWrap(
+        sandboxOf({
+          confinement: { ...bubblewrapConfinement, observer: { executable: '/usr/bin/strace' } },
+          workspace,
+          git,
+          privateRoot,
+          home: rootHome,
+          audit: { directory: `${callParent}/tea-evaluate-audit-AbCdEf` },
+          status: statusDirectory,
+        }),
+      );
+      const seatbeltCallWrapped = callWrap(sandboxOf({ confinement: seatbeltConfinement, workspace, git, privateRoot, home: rootHome }));
       // The host's path-based Unix sockets the call hides each get an empty device file over their real path (Story 1.82); the
       // mounts reach Bubblewrap through a file the launcher opens, so the golden holds the vector and the file's arguments.
       const bubblewrapSocketsWrapped = sandboxOf({
@@ -308,6 +342,10 @@ function collectGeneratedOutputs() {
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus': { ...bubblewrapOwnedStatusWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories': { ...bubblewrapCallWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.environment': bubblewrapCallWrapped.environment,
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit': { ...bubblewrapCallAuditWrapped },
+        'confinement.targetSandbox.wrap.seatbelt.callDirectories': seatbeltCallWrapped,
         'confinement.targetSandbox.wrap.bubblewrap.egress': { ...bubblewrapEgressWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets': { ...bubblewrapSocketsWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets.arguments': socketArguments,
@@ -318,6 +356,7 @@ function collectGeneratedOutputs() {
       for (const key of [
         'confinement.targetSandbox.wrap.bubblewrap.audit',
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit',
       ]) {
         const granted = [...outputs[key].trace.grants.read];
         // It is listed before the system's own directories, which can include it (a node at /usr/bin/node).
@@ -344,6 +383,7 @@ function collectGeneratedOutputs() {
       for (const key of [
         'confinement.targetSandbox.wrap.bubblewrap.audit',
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit',
       ]) {
         const audited = normalized[key].trace.grants;
         for (const name of ['read', 'write', 'connect', 'withheld', 'withheldExcept']) audited[name] = [...new Set(audited[name])];

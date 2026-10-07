@@ -674,6 +674,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A run killed with `SIGKILL` leaves no call directory in the system's temp directory (Story 1.131, AD-8).
+  The directories a confined call hands its target (the call's temp directory `tea-evaluate-target-tmp-*`, a started service's port directory `tea-evaluate-port-*` and its bridge directory `tea-nb-*`) sat in the system's temp directory, since the sandbox empties the private root and a grant beneath it would be hidden.
+  A run that ended by a signal it handles removed them, and a run killed outright left each of them behind with nothing to reclaim it.
+  Each is now made beneath the run's private parent, which the next run over the evaluation reclaims with the dead run's other scratch and names in its output.
+  Under Bubblewrap each is bound writable at `/dev/<name>`, a path the sandbox keeps, as the egress proxy's directory is.
+  The call's environment (`TMPDIR`, `TMP`, `TEMP` and the port file's path) and the status shim's bridge path name the directory there, while the runtime reads the port file and connects to the bridge through the directory's own path.
+  Under Seatbelt the profile allows each directory again beneath the denied root, as it allows the home.
+  The audit grants each mount and lists none of them as an observed mount.
+  The recovery removes what the host made beneath a parent whose journal record, marker and dead owner agree, and it follows no link a target left in a call directory.
+  `the call directory units`, `the call directories of a killed run`, `the call directories, stood in`, `the call directory route` (the ubuntu job), the confined pipeline and the reference's claims hold it, and the isolation golden gains the vectors of a call whose directories sit beneath the private root.
+  The reference's `### File-system confinement` states where each call directory lives and that a killed run's are reclaimed.
 - The overview of `epics.md` said 129 stories while the file holds 130, and `test/README.md` said 14 trace, 20 `nfr` and 21 `ci` replay cases when the corpus holds 15, 29 and 21 over the `full` and `minimal` projects.
   The header of `test/test-eval-replay.js` still said the `evaluation-gate` project held a constructed run until its live capture was stored; the capture is stored, and the header names the four projects whose captures the corpus holds.
   Each count in these sentences is now held by `test:doc-counts`.

@@ -549,9 +549,10 @@ function heldPrivateRoot(root) {
  * known to be dead. Every private directory the evaluation layer makes
  * for the run (the engine's, the qualification's, an evaluator's, a judge's,
  * the bridge's configuration, token and socket, the score's) is made beneath
- * the parent by `makeScratchDirectory`. A directory the target is deliberately
- * granted (its temp directory, the status and port
- * directories, the workspace) stays in the run's temp directory.
+ * the parent by `makeScratchDirectory`.
+ * A directory the target is deliberately granted (its temp directory, a started service's port and bridge directories, its home, the status directory) is made beneath the parent too.
+ * It reaches the target at a path the sandbox keeps (`confinement.js`), so the recovery of a killed run's parent reclaims it (Story 1.131).
+ * The workspace alone is in the run's temp directory.
  *
  * @param {string[]} scratch
  * @returns {string} the parent

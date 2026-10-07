@@ -119,15 +119,16 @@ const {
   portConfiguration,
   probeHttpPort,
 } = require('../cli/lib/evaluate/http-target');
+const { confinedCommandMechanism, targetSandbox, unlockDirectories } = require('../cli/lib/evaluate/confinement');
 const relayModule = require('../cli/lib/evaluate/confinement-relay');
 const shimModule = require('../cli/lib/evaluate/confinement-status.cjs');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
-const { requestKey } = require('../cli/lib/evaluate/workspace');
+const { journalDirectory, reclaimDeadPrivateParents, requestKey } = require('../cli/lib/evaluate/workspace');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
 const { recordedMount } = require('./lib/recorded-mount');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -136,6 +137,7 @@ const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
 const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const PORT_TEMPLATE = path.join(ASSETS, 'http-probe-port.mjs');
 const CONFORMANCE_TEMPLATE = path.join(ASSETS, 'http-probe-port.conformance.mjs');
+const KILLED_CALL = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'killed-call.cjs');
 const STUB_AGENT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'stub-api-agent.js');
 const EVALUATION = path.join('evals', 'grader');
 const TRIALS = 3;
@@ -209,6 +211,21 @@ function evaluate(args, env = {}, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
   });
   if (result.error) throw new Error(`tea-evaluate ${args.join(' ')} did not finish: ${result.error.message}`);
   return { status: result.status, signal: result.signal, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
+}
+
+/** The user's private root, beneath which every run's private parent sits. */
+const PRIVATE_ROOT = path.join('/tmp', `tea-evaluate-p${typeof process.getuid === 'function' ? process.getuid() : 'w'}`);
+
+/** The private parent the process `pid` made (`run-<pid>-*` in the private root), or null. */
+function privateParentOf(pid) {
+  const name = fs.existsSync(PRIVATE_ROOT) ? fs.readdirSync(PRIVATE_ROOT).find((entry) => entry.startsWith(`run-${pid}-`)) : undefined;
+  return name === undefined ? null : path.join(PRIVATE_ROOT, name);
+}
+
+/** What the private parent of the process `pid` holds, by name; empty when it has none. */
+function privateParentEntries(pid) {
+  const parent = privateParentOf(pid);
+  return parent === null ? [] : fs.readdirSync(parent);
 }
 
 /**
@@ -2992,18 +3009,82 @@ async function checkPortReport() {
     while (!sessions(project).some((entry) => entry.event === 'request') && Date.now() < deadline && child.exitCode === null) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    const during = fs.readdirSync(project.env.TMPDIR);
+    // The call's port directory is beneath the run's private parent (Story 1.131), so the temp directory holds no part of it.
+    const during = privateParentEntries(child.pid);
+    const temporary = fs.readdirSync(project.env.TMPDIR);
     child.kill('SIGTERM');
     const { code, name } = await ended;
     const after = fs.readdirSync(project.env.TMPDIR);
     check(
-      name === 'SIGTERM' && during.some((entry) => entry.startsWith('tea-evaluate-port-')),
-      `a run ended by SIGTERM mid-call ended with code ${code} and signal ${name}, and its temp directory held ${JSON.stringify(during)} mid-call; expected a tea-evaluate-port-* directory\n${output}`,
+      name === 'SIGTERM' &&
+        during.some((entry) => entry.startsWith('tea-evaluate-port-')) &&
+        !temporary.some((entry) => entry.startsWith('tea-evaluate-port-')),
+      `a run ended by SIGTERM mid-call ended with code ${code} and signal ${name}, its private parent held ${JSON.stringify(during)} and its temp directory ${JSON.stringify(temporary)} mid-call; expected a tea-evaluate-port-* directory in the parent and none in the temp directory\n${output}`,
     );
     check(after.length === 0, `a run ended by SIGTERM mid-call left ${JSON.stringify(after)} in its temp directory`);
     check(
+      privateParentOf(child.pid) === null,
+      `a run ended by SIGTERM mid-call left its private parent ${privateParentOf(child.pid)} beneath the private root`,
+    );
+    check(
       await eventually(() => livingSessions(project).length === 0),
       `a service outlived a run ended by SIGTERM: ${JSON.stringify(livingSessions(project))}`,
+    );
+  }
+
+  // A run killed outright (SIGKILL) runs no handler: its port directory is left beneath its private parent, nothing is left in the temp
+  // directory, and the next preflight over the evaluation reclaims the parent with the directory and names it (Story 1.131).
+  if (process.platform !== 'win32') {
+    const policy = ({ root }) => path.join(root, 'rules', 'policy.txt');
+    const original = fs.readFileSync(path.join(FIXTURE, 'rules', 'policy.txt'), 'utf8');
+    const project = makeProject('port-kill', { edit: (made) => fs.appendFileSync(policy(made), 'hang: /grade\n') });
+    const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env },
+      stdio: 'ignore',
+    });
+    // The parent this run makes is held before it exists, so the reaper of a suite running at the same time leaves it once the run is killed.
+    holdPrivateParents(child.pid);
+    const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    while (!sessions(project).some((entry) => entry.event === 'request') && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const parent = privateParentOf(child.pid);
+    const portDirectoryName = parent === null ? '' : (fs.readdirSync(parent).find((entry) => entry.startsWith('tea-evaluate-port-')) ?? '');
+    child.kill('SIGKILL');
+    const { name } = await ended;
+    const callDirectory = /^(tea-evaluate-port-|tea-nb-|tea-evaluate-target-tmp-)/;
+    check(
+      name === 'SIGKILL' &&
+        parent !== null &&
+        fs.existsSync(parent) &&
+        fs.readdirSync(parent).some((entry) => entry.startsWith('tea-evaluate-port-')),
+      `a run killed by SIGKILL mid-call ended by ${name} and its private parent ${parent} held ${JSON.stringify(parent === null || !fs.existsSync(parent) ? [] : fs.readdirSync(parent))}; expected the parent left with a tea-evaluate-port-* directory in it`,
+    );
+    const killedTemp = fs.readdirSync(project.env.TMPDIR).filter((entry) => callDirectory.test(entry));
+    check(
+      killedTemp.length === 0,
+      `a run killed by SIGKILL mid-call left ${JSON.stringify(killedTemp)} in its temp directory; expected no tea-evaluate-target-tmp-*, tea-evaluate-port-* or tea-nb-* directory`,
+    );
+    fs.writeFileSync(policy(project), original);
+    const next = evaluate(['preflight', '--evaluation', project.folder], project.env);
+    check(
+      parent !== null &&
+        next.output.includes('reclaimed private parent from killed run') &&
+        next.output.includes(parent) &&
+        next.output.includes(path.join(parent, portDirectoryName)) &&
+        !fs.existsSync(parent),
+      `the preflight after a killed run left ${parent} and printed ${JSON.stringify(next.output.slice(0, 400))}; expected the killed run's private parent reclaimed and named`,
+    );
+    const nextTemp = fs.readdirSync(project.env.TMPDIR);
+    check(
+      nextTemp.length === 0,
+      `the temp directory held ${JSON.stringify(nextTemp)} after the preflight that reclaimed a killed run's parent`,
+    );
+    check(
+      await eventually(() => livingSessions(project).length === 0),
+      `a service outlived a run killed by SIGKILL: ${JSON.stringify(livingSessions(project))}`,
     );
   }
 
@@ -3018,6 +3099,228 @@ async function checkPortReport() {
     'This handoff leaves a window: another process can take the port between its release and the service binding it',
   ]) {
     check(passage.includes(phrase), `the reference's passage under ${JSON.stringify(heading)} does not say ${JSON.stringify(phrase)}`);
+  }
+}
+
+// ---------------------------------------------------------------- a killed run's call directories (Story 1.131)
+
+/**
+ * A run killed with SIGKILL while a call is open leaves its private parent and nothing in the system's temp directory, and the next run over the
+ * evaluation reclaims the parent with the three directories a confined call hands its target: the call's temp directory, a started service's port
+ * directory and its bridge directory.
+ * The run is `test/fixtures/evaluate/killed-call.cjs`, which makes them through the layer's own code (`createApiPort`, the confined command mechanism and
+ * `makePrivateParent`) and leaves in each what a target could leave in a directory it may write: links and a hard link aimed outside, a closed directory,
+ * and files shaped like the runtime's own ownership records.
+ * A call directory made in the system's temp directory again fails the first checks (the story's revert check).
+ * The recovery removes what the host made beneath a parent whose journal record, marker, mode, owner and process all agree, and nothing else: a live owner,
+ * a marker of the wrong mode, bytes, kind of file or run, a journal record that names another process or has the wrong mode, and another evaluation's
+ * recovery each leave every directory and everything planted in it, and the canaries outside stay whole in every case.
+ */
+async function checkKilledCallDirectories() {
+  if (process.platform === 'win32') return;
+  const project = makeProject('killed-calls', { log: false });
+  const other = makeProject('killed-calls-other', { log: false });
+  const planting = shortDirectory();
+  const canary = path.join(planting, 'canary.txt');
+  fs.writeFileSync(canary, 'canary\n');
+  fs.mkdirSync(path.join(planting, 'canary-directory'));
+  fs.writeFileSync(path.join(planting, 'canary-directory', 'file.txt'), 'canary\n');
+  const ready = path.join(project.directory, 'killed-call.ready');
+  const child = spawn(process.execPath, [KILLED_CALL, project.folder, project.root, ready, planting], {
+    cwd: PROJECT_ROOT,
+    env: { ...BASE_ENV, ...project.env },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+  // The parent this run makes is held before it exists, so the reaper of a suite running at the same time leaves it once the run is killed.
+  holdPrivateParents(child.pid);
+  fs.mkdirSync(path.join(project.folder, 'runs'), { recursive: true });
+  const journal = journalDirectory(path.join(project.folder, 'runs'));
+  const recovered = [];
+  let held = null;
+  try {
+    const deadline = Date.now() + 60_000;
+    while (!fs.existsSync(ready) && Date.now() < deadline && child.exitCode === null)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    check(fs.existsSync(ready), `the run that holds a call open never reached it: ${stderr}`);
+    if (!fs.existsSync(ready)) return;
+    held = JSON.parse(fs.readFileSync(ready, 'utf8'));
+    const directories = [
+      [held.temporary, 'tea-evaluate-target-tmp-'],
+      [held.portDirectory, 'tea-evaluate-port-'],
+      [held.bridgeDirectory, 'tea-nb-'],
+    ];
+    check(
+      directories.every(
+        ([directory, prefix]) =>
+          fs.realpathSync(path.dirname(directory)) === fs.realpathSync(held.parent) && path.basename(directory).startsWith(prefix),
+      ) &&
+        fs.realpathSync(path.dirname(held.parent)) === fs.realpathSync(PRIVATE_ROOT) &&
+        path.basename(held.parent).startsWith(`run-${child.pid}-`),
+      `the call's directories are ${JSON.stringify(directories.map(([directory]) => directory))} and its parent ${held.parent}; expected each beneath the run's private parent in the private root`,
+    );
+    const callDirectory = /^(tea-evaluate-target-tmp-|tea-evaluate-port-|tea-nb-)/;
+    const inTemp = () => fs.readdirSync(project.env.TMPDIR).filter((entry) => callDirectory.test(entry));
+    check(
+      inTemp().length === 0,
+      `a run holding a call open has ${JSON.stringify(inTemp())} in its temp directory; expected no call directory there`,
+    );
+    const intact = (what) => {
+      const missing = [];
+      for (const directory of [held.parent, ...directories.map(([entry]) => entry)]) {
+        if (!fs.existsSync(directory)) missing.push(directory);
+      }
+      for (const [directory] of directories) {
+        for (const name of ['link-out', 'link-dangling', 'hard-link', 'closed', '.tea-evaluate-private-owner.json']) {
+          try {
+            fs.lstatSync(path.join(directory, name));
+          } catch {
+            missing.push(path.join(directory, name));
+          }
+        }
+      }
+      check(missing.length === 0, `${what} removed ${JSON.stringify(missing)}; expected every directory and everything planted in it left`);
+      check(
+        fs.readFileSync(canary, 'utf8') === 'canary\n' &&
+          fs.readFileSync(path.join(planting, 'canary-directory', 'file.txt'), 'utf8') === 'canary\n' &&
+          JSON.stringify(fs.readdirSync(planting).sort()) === JSON.stringify(['canary-directory', 'canary.txt']),
+        `${what} touched the canaries outside the call directories: ${JSON.stringify(fs.readdirSync(planting))}`,
+      );
+    };
+    const recover = (log, options = {}) =>
+      reclaimDeadPrivateParents({ folder: project.folder, root: project.root, journal, log: (line) => log.push(line), ...options });
+
+    // The owner still runs: its parent and call directories stay.
+    recover(recovered);
+    check(
+      recovered.every((line) => !line.includes('reclaimed')),
+      `a recovery beside a live owner reported ${JSON.stringify(recovered)}`,
+    );
+    intact('a recovery beside a live owner');
+
+    child.kill('SIGKILL');
+    check((await ended).name === 'SIGKILL', 'the run that holds a call open did not die by SIGKILL');
+    intact('the kill');
+    check(
+      inTemp().length === 0,
+      `a run killed by SIGKILL left ${JSON.stringify(inTemp())} in its temp directory; expected no tea-evaluate-target-tmp-*, tea-evaluate-port-* or tea-nb-* directory`,
+    );
+
+    // What the sandbox could write beneath a call directory is no record: forged markers and journal entries make the recovery remove nothing.
+    const marker = path.join(held.parent, '.tea-evaluate-private-owner.json');
+    const markerBytes = fs.readFileSync(marker);
+    const record = fs.readdirSync(journal.root).find((name) => /^aux-[0-9a-f-]{36}\.json$/.test(name));
+    const recordFile = path.join(journal.root, record ?? 'missing');
+    const recordBytes = fs.existsSync(recordFile) ? fs.readFileSync(recordFile) : Buffer.alloc(0);
+    check(
+      record !== undefined && JSON.parse(recordBytes.toString('utf8')).directory === held.parent,
+      `the journal has no record of ${held.parent}`,
+    );
+    const forgeries = [
+      ['a marker of mode 666', () => fs.chmodSync(marker, 0o666), () => fs.chmodSync(marker, 0o600)],
+      [
+        'a marker of another run',
+        () => fs.writeFileSync(marker, `${JSON.stringify({ ...JSON.parse(markerBytes.toString('utf8')), runId: 'forged' })}\n`),
+        () => fs.writeFileSync(marker, markerBytes),
+      ],
+      [
+        'a marker that is a link',
+        () => {
+          fs.renameSync(marker, `${marker}.parked`);
+          fs.symlinkSync(`${marker}.parked`, marker);
+        },
+        () => {
+          fs.rmSync(marker);
+          fs.renameSync(`${marker}.parked`, marker);
+        },
+      ],
+      [
+        'a journal record that names a live process',
+        () => fs.writeFileSync(recordFile, `${JSON.stringify({ ...JSON.parse(recordBytes.toString('utf8')), ownerPid: process.pid })}\n`),
+        () => fs.writeFileSync(recordFile, recordBytes),
+      ],
+      ['a journal record of mode 666', () => fs.chmodSync(recordFile, 0o666), () => fs.chmodSync(recordFile, 0o600)],
+      [
+        'a journal record and a marker that agree on another dead process',
+        () => {
+          const forged = `${JSON.stringify({ ...JSON.parse(recordBytes.toString('utf8')), ownerPid: spawnSync(process.execPath, ['-e', '']).pid })}\n`;
+          fs.writeFileSync(recordFile, forged);
+          fs.writeFileSync(marker, forged);
+        },
+        () => {
+          fs.writeFileSync(recordFile, recordBytes);
+          fs.writeFileSync(marker, markerBytes);
+        },
+      ],
+    ];
+    // A recovery that removed the parent leaves nothing to restore, and the checks after it report the removal.
+    const restoreQuietly = (restore) => {
+      try {
+        restore();
+      } catch (error) {
+        if (error.code !== 'ENOENT') check(false, `restoring after a forgery failed: ${error.message}`);
+      }
+    };
+    for (const [label, forge, restore] of forgeries) {
+      const log = [];
+      forge();
+      try {
+        recover(log);
+      } finally {
+        restoreQuietly(restore);
+      }
+      check(
+        log.every((line) => !line.includes('reclaimed')),
+        `a recovery over ${label} reported ${JSON.stringify(log)}`,
+      );
+      intact(`a recovery over ${label}`);
+    }
+    // Another evaluation's recovery owns none of this parent: the journal is this evaluation's, and the folder or the project root the recovery is asked for is another's.
+    for (const [label, asked] of [
+      ['another evaluation folder', { folder: other.folder, root: project.root }],
+      ["another evaluation's project root", { folder: project.folder, root: other.root }],
+    ]) {
+      const log = [];
+      recover(log, asked);
+      check(
+        log.every((line) => !line.includes('reclaimed')),
+        `a recovery asked for ${label} reported ${JSON.stringify(log)}`,
+      );
+      intact(`a recovery asked for ${label}`);
+    }
+
+    // The next run over the evaluation reclaims the parent with the three call directories and names it.
+    journal.close();
+    const next = evaluate(['preflight', '--evaluation', project.folder], project.env);
+    check(next.status === 0, `the preflight after a killed run exited ${next.status}\n${next.output}`);
+    check(
+      next.output.includes(`reclaimed private parent from killed run`) &&
+        next.output.includes(held.parent) &&
+        directories.every(([directory]) => next.output.includes(path.join(held.parent, path.basename(directory)))),
+      `the preflight after a killed run printed ${JSON.stringify(next.output.slice(0, 600))}; expected the reclaimed private parent and its three call directories named`,
+    );
+    check(
+      !fs.existsSync(held.parent) && directories.every(([directory]) => !fs.existsSync(directory)),
+      `the preflight after a killed run left ${JSON.stringify([held.parent, ...directories.map(([directory]) => directory)].filter((entry) => fs.existsSync(entry)))}`,
+    );
+    check(
+      fs.readFileSync(canary, 'utf8') === 'canary\n' &&
+        fs.statSync(canary).nlink === 1 &&
+        fs.readFileSync(path.join(planting, 'canary-directory', 'file.txt'), 'utf8') === 'canary\n' &&
+        JSON.stringify(fs.readdirSync(planting).sort()) === JSON.stringify(['canary-directory', 'canary.txt']),
+      `the recovery touched what the planted links led to: ${JSON.stringify(fs.readdirSync(planting))}, canary links ${fs.statSync(canary).nlink}`,
+    );
+    const left = fs.readdirSync(project.env.TMPDIR);
+    check(left.length === 0, `the temp directory held ${JSON.stringify(left)} after the preflight that reclaimed a killed run's parent`);
+  } finally {
+    child.kill('SIGKILL');
+    await Promise.race([ended, new Promise((resolve) => setTimeout(resolve, 5000))]);
+    if (held !== null && fs.existsSync(held.parent)) {
+      unlockDirectories(held.parent);
+      fs.rmSync(held.parent, { recursive: true, force: true });
+    }
   }
 }
 
@@ -5159,6 +5462,167 @@ function readSlowly(port, host, request, size) {
 }
 
 /**
+ * A stand-in for Bubblewrap that applies what the vector says about the call directories (Story 1.131) on a host that has none.
+ * It records the vector and the environment it was given, answers each bind at a path under `/dev` by substituting the bound directory for that path in the
+ * command and in every value of the environment, and starts the command after `--`. It is no sandbox, and it shows that every path the runtime hands the target
+ * reaches the directory the runtime reads, which is what a mount at that path does.
+ */
+function standInBubblewrap(directory, record) {
+  const file = path.join(directory, 'standin-bwrap.cjs');
+  fs.writeFileSync(
+    file,
+    `#!${process.execPath}
+'use strict';
+const fs = require('node:fs');
+const { spawn } = require('node:child_process');
+const args = process.argv.slice(2);
+const cut = args.indexOf('--');
+const mounts = [];
+for (let at = 0; at < cut; at += 1) {
+  if ((args[at] === '--bind' || args[at] === '--ro-bind') && args[at + 2].startsWith('/dev/')) mounts.push([args[at + 2], args[at + 1]]);
+}
+fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify({ vector: args.slice(0, cut), command: args.slice(cut + 1), environment: process.env }) + '\\n');
+const through = (text) => {
+  for (const [mount, source] of mounts) if (text === mount || text.startsWith(mount + '/')) return source + text.slice(mount.length);
+  return text;
+};
+const environment = Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, through(value)]));
+delete environment.NODE_V8_COVERAGE;
+const child = spawn(args[cut + 1], args.slice(cut + 2).map(through), { env: environment, stdio: 'inherit' });
+for (const name of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(name, () => child.kill(name));
+child.on('exit', (code, signal) => (signal ? process.kill(process.pid, signal) : process.exit(code)));
+`,
+    { mode: 0o755 },
+  );
+  return file;
+}
+
+/**
+ * The call directories reach a confined target (Story 1.131), through the real sandbox, the real confined mechanisms, the real status shim and the real HTTP port,
+ * with the stand-in for Bubblewrap above in the place of `bwrap`, so every host runs it; the confined pipeline and the real-Bubblewrap case run the same on Linux.
+ * A started service's call is answered: its port file, written where the vector names the directory, is read by the runtime at the directory's own path, and
+ * the bridge the shim serves at `/dev/tea-nb-*` answers the runtime at its own path. A command's `TMPDIR` is named under `/dev` and is writable.
+ * The call directories are beneath the run's private parent, the vector binds each at `/dev/<name>`, and a bind at a path the sandbox hides (the directory's own
+ * path beneath the emptied private root) is the revert check that fails the vector case of `test:evaluate-confinement`.
+ */
+async function checkCallDirectoriesStoodIn() {
+  const { entry, request, projectWith, environmentOf, serverOf, listened, signal, nodeCommandMechanism } = await bridgedHarness();
+  const project = projectWith('standin-call-directories');
+  const httpPort = await probeHttpPort(project.folder);
+  const privateRoot = shortDirectory();
+  const parent = path.join(privateRoot, 'run-1-abcdef');
+  const status = path.join(parent, 'tea-evaluate-status-abcdef');
+  fs.mkdirSync(status, { recursive: true });
+  const recordFile = path.join(parent, 'record.jsonl');
+  const scratchList = [];
+  Object.defineProperty(scratchList, 'privateParent', { value: parent });
+  const bwrap = standInBubblewrap(path.dirname(parent), recordFile);
+  const sandbox = targetSandbox({
+    confinement: { mode: 'bubblewrap', executable: bwrap, evaluationFolder: project.folder },
+    workspace: project.root,
+    privateRoot,
+    status,
+    hostSockets: () => [],
+  });
+  let inside = null;
+  const watching = {
+    run: async (call, mechanismSignal) => {
+      const result = await nodeCommandMechanism.run(call, mechanismSignal);
+      // After the call ends and before its directories are removed: what the target wrote in the directory it was handed.
+      const [last] = recorded().slice(-1);
+      const bound = last?.vector.findIndex(
+        (argument, at) => argument === '--bind' && last.vector[at + 2].startsWith('/dev/tea-evaluate-target-tmp-'),
+      );
+      inside = bound === undefined || bound < 0 ? null : fs.readdirSync(last.vector[bound + 1]);
+      return result;
+    },
+  };
+  const recorded = () =>
+    fs.existsSync(recordFile)
+      ? fs
+          .readFileSync(recordFile, 'utf8')
+          .split('\n')
+          .filter((line) => line.length > 0)
+          .map((line) => JSON.parse(line))
+      : [];
+  const mechanism = confinedCommandMechanism(watching, sandbox, () => [], scratchList);
+  check(mechanism.bridges === true, 'the confined mechanism of a Bubblewrap sandbox does not bridge');
+
+  // A started service: the port file and the bridge.
+  const answered = await createApiPort({
+    entries: [entry],
+    httpPort,
+    cwd: project.root,
+    targetOf: () => serverOf(project),
+    readEnvironment: environmentOf(project),
+    mechanism,
+    maxOutputBytes: 1024 * 1024,
+    scratch: scratchList,
+  })
+    .probe(request)
+    .catch((error) => error);
+  check(
+    answered?.kind === 'api' && answered.status === 200,
+    `a call through a stood-in Bubblewrap whose vector binds the call directories under /dev was answered ${JSON.stringify(answered?.status ?? answered?.message)}; expected status 200, the port file read at its own path and the bridge answering`,
+  );
+  const [call] = recorded();
+  const binds = (call?.vector ?? []).flatMap((argument, at) =>
+    argument === '--bind' && call.vector[at + 2].startsWith('/dev/tea-') ? [[call.vector[at + 1], call.vector[at + 2]]] : [],
+  );
+  const named = (prefix) => binds.find(([, mount]) => mount.startsWith(`/dev/${prefix}`));
+  check(
+    named('tea-evaluate-target-tmp-') !== undefined && named('tea-evaluate-port-') !== undefined && named('tea-nb-') !== undefined,
+    `the stood-in Bubblewrap was given the binds ${JSON.stringify(binds)}; expected the call's temp, port and bridge directories bound under /dev`,
+  );
+  check(
+    binds.every(([source, mount]) => path.dirname(source) === parent && mount === `/dev/${path.basename(source)}`),
+    `the call directories ${JSON.stringify(binds)} are not beneath the run's private parent ${parent} and bound at /dev/<name>`,
+  );
+  const portKey = entry.server.portFileEnvironmentKey;
+  const bridgeArgument = call?.command[call.command.indexOf('--bridge') + 1];
+  check(
+    call?.environment[portKey] === `${named('tea-evaluate-port-')?.[1]}/port` &&
+      call.environment.TMPDIR === named('tea-evaluate-target-tmp-')?.[1] &&
+      bridgeArgument === `${named('tea-nb-')?.[1]}/b`,
+    `the call was given ${portKey}=${call?.environment[portKey]}, TMPDIR=${call?.environment.TMPDIR} and --bridge ${bridgeArgument}; expected each under /dev, at the directory's mount`,
+  );
+  check(
+    listened(project).length === 1 &&
+      scratchList.length === 0 &&
+      fs.readdirSync(parent).every((name) => name.startsWith('tea-evaluate-status-') || name === 'record.jsonl'),
+    `the call left ${JSON.stringify(fs.readdirSync(parent))} beneath the private parent and ${JSON.stringify(scratchList)} on the scratch list; expected nothing but the status directory and the record`,
+  );
+
+  // A command: its TMPDIR is named under /dev and it writes there.
+  const ran = await mechanism.run(
+    {
+      target: process.execPath,
+      subcommandPath: [],
+      argv: ['-e', 'require("node:fs").writeFileSync(require("node:path").join(process.env.TMPDIR, "marker"), "written")'],
+      env: {},
+      cwd: project.root,
+      stdin: { kind: 'absent' },
+      maxElapsedMs: 30_000,
+      maxOutputBytes: 1024 * 1024,
+    },
+    signal(),
+  );
+  const command = recorded().at(-1);
+  check(
+    ran.exitCode === 0 &&
+      /^\/dev\/tea-evaluate-target-tmp-/.test(command?.environment.TMPDIR ?? '') &&
+      command.environment.TMP === command.environment.TMPDIR &&
+      command.environment.TEMP === command.environment.TMPDIR &&
+      JSON.stringify(inside) === JSON.stringify(['marker']),
+    `a command ran with TMPDIR=${command?.environment.TMPDIR}, exited ${ran.exitCode} and left ${JSON.stringify(inside)} in the directory it was handed; expected TMPDIR under /dev and its marker written`,
+  );
+  check(
+    fs.readdirSync(parent).every((name) => name.startsWith('tea-evaluate-status-') || name === 'record.jsonl') && scratchList.length === 0,
+    `a command's call left ${JSON.stringify(fs.readdirSync(parent))} beneath the private parent`,
+  );
+}
+
+/**
  * The bridge's two halves where the shared loopback hid them (Story 1.63), over a stood-in namespace and the real halves:
  *
  * - A server that reports a port the host has free is reached on that same number (the runtime listens on the number the
@@ -5637,8 +6101,10 @@ async function main() {
     await runCase("the confined started service's reads and HTTP port", checkConfinedServiceReads);
     await runCase('the denials', checkDenials);
     await runCase("a started service's port", checkPortReport);
+    await runCase('the call directories of a killed run', checkKilledCallDirectories);
     await runCase('the bridged server', checkBridgedServer);
     await runCase('the bridged server, stood in', checkBridgedServerStandIn);
+    await runCase('the call directories, stood in', checkCallDirectoriesStoodIn);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);
     await runCase('the check rules', checkCheckRules);
