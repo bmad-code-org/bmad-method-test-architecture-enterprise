@@ -2,7 +2,7 @@
 title: 'Story 1.110: Designate one oracle per behavior in the both view'
 type: 'feature'
 created: '2026-10-05'
-status: 'in-review'
+status: 'done'
 baseline_commit: '3fc05ccaee32809bb4c76b80afcd1a29bb7117e9'
 route: 'dispatch'
 review_loop_iteration: 0
