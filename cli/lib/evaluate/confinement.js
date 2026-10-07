@@ -175,6 +175,7 @@
 
 const crypto = require('node:crypto');
 const { startEgress } = require('./confinement-egress');
+const { EXIT_LAUNCH_TOO_LARGE, LAUNCH_TOO_LARGE_TOKEN } = require('./confinement-launcher.cjs');
 const { signedStatus } = require('./confinement-status.cjs');
 const { loadEngine } = require('./engine');
 const { CREDENTIALS_FILE } = require('./recorded-paths');
@@ -623,27 +624,40 @@ function sandboxOwnDirectories() {
 /**
  * Where a call's socket mounts reach Bubblewrap (Story 1.82): a file of NUL-separated arguments the launcher opens as this
  * descriptor and `--args` reads, so the number of sockets a host holds cannot overflow the argument limit of the call's `exec`.
+ * The launcher puts the file at this position among the command's descriptors (`ARGUMENTS_DESCRIPTOR` of `confinement-launcher.cjs`).
  */
 const SOCKET_ARGUMENTS_FD = 3;
 
 /**
- * The launcher of a call that hides sockets: it opens the arguments file named by its first argument as `SOCKET_ARGUMENTS_FD`
- * and executes the rest of its arguments in its own place, so the process Bubblewrap runs in is the one the runtime started.
+ * The launcher of a call that hides sockets (Story 1.89): a Node program the runtime starts outside the sandbox, first in the call's command and before `strace`.
+ * It opens the arguments file as `SOCKET_ARGUMENTS_FD`, starts the rest of the command with the environment the call was given and ends as the command ended.
+ * No shell stands between the runtime and Bubblewrap, so no name a shell treats specially changes on the way.
  */
-const SOCKET_LAUNCHER = Object.freeze(['/bin/sh', '-c', `exec ${SOCKET_ARGUMENTS_FD}<"$1" || exit 126; shift; exec "$@"`, 'sh']);
+const SOCKET_LAUNCHER = path.join(__dirname, 'confinement-launcher.cjs');
 
 /**
- * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on and resets
- * `IFS`, `OPTIND` and `PPID` whenever the call's environment held them, and bash (the `sh` of some hosts) decrements `SHLVL` and sets
- * `_` and `OLDPWD`.
- * `env` restores each to what the call's environment held (an unset one stays unset), so a variable whose name is a valid shell
- * identifier and that the shell does not initialize reaches the target as the call gave it.
- * A name no shell can hold, an exported shell function and the variables bash initializes itself are the shell's to change (Story 1.89).
+ * The environment the launcher itself starts with: the loader variables the engine's own watchdog carries (`ELECTRON_RUN_AS_NODE`, `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`), which a Node binary may need to start, and nothing else.
+ * Node reads `NODE_OPTIONS` and its kin from its environment and could run a script of the call's environment outside the sandbox, and its `process.env` cannot read a variable named by a decimal integer, so the call's environment travels in a file.
  */
-const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID']);
+function launcherEnvironment() {
+  const environment = { ELECTRON_RUN_AS_NODE: '1' };
+  for (const name of ['LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH']) {
+    if (process.env[name] !== undefined) environment[name] = process.env[name];
+  }
+  return environment;
+}
 
-/** The program that restores `SHELL_VARIABLES` between the launcher's shell and the command. */
-const ENVIRONMENT_PROGRAM = '/usr/bin/env';
+/**
+ * The error a launcher's refusal for the size of the command's arguments and environment is: the one Node's own `spawn` gives the operating system's `E2BIG`, or `null` when the result is no such refusal.
+ * A call that hides sockets starts the command from the launcher, so the engine's spawn of the launcher succeeds and the operating system's refusal reaches the runtime as the launcher's exit.
+ * The engine's command-line adapter maps an error whose `code` is `E2BIG` into its own `port-failure` fault with the reason `launch-too-large`, so a run reads the refusal of a call that hides sockets as it reads one of a call that hides none.
+ */
+function launchTooLarge(result, wrapped) {
+  if (typeof wrapped?.environmentFile !== 'string' || result?.exitCode !== EXIT_LAUNCH_TOO_LARGE) return null;
+  const said = String(result?.stderr?.value ?? result?.stderr ?? '');
+  if (!said.includes(LAUNCH_TOO_LARGE_TOKEN)) return null;
+  return Object.assign(new Error('spawn E2BIG'), { code: 'E2BIG', errno: -os.constants.errno.E2BIG, syscall: 'spawn' });
+}
 
 /**
  * What the probes run a trivial process under: the target's isolation, whatever
@@ -678,25 +692,22 @@ function pinnedMaskArguments(sockets) {
 }
 
 /**
- * The command a call that hides sockets starts: the launcher, the arguments file, and `env` restoring the variables the launcher's
- * shell touches to what `environment` held (an unset one stays unset), then `argv`.
- * A first word with `=` in it would be read by `env` as an assignment, so it is refused.
+ * The environment as a spawn reads it: each defined value as the string Node's `spawn` makes of it, so the launcher starts the command with what the engine's own spawn would have given it.
  */
-function launchedCommand(socketFile, environment, argv) {
-  if (String(argv[0]).includes('=')) {
-    throw new ConfinementError(
-      `the executable ${JSON.stringify(argv[0])} holds "=", which the socket launcher's env would read as an assignment`,
-    );
-  }
-  const held = (name) => typeof environment?.[name] === 'string';
-  // The options come first: `env` reads an assignment as the end of them.
-  const restore = [
-    ...SHELL_VARIABLES.filter((name) => !held(name)).flatMap((name) => ['-u', name]),
-    ...SHELL_VARIABLES.filter(held).map((name) => `${name}=${environment[name]}`),
-  ];
-  // Dash stops on an `OPTIND` that is no number (`Illegal number`), so the shell never sees one the call held.
-  const shell = held('OPTIND') ? [ENVIRONMENT_PROGRAM, '-u', 'OPTIND', ...SOCKET_LAUNCHER] : SOCKET_LAUNCHER;
-  return [...shell, socketFile, ENVIRONMENT_PROGRAM, ...restore, ...argv];
+function stringEnvironment(environment) {
+  return Object.fromEntries(
+    Object.entries(environment ?? {})
+      .filter(([, value]) => value !== undefined)
+      .map(([name, value]) => [name, String(value)]),
+  );
+}
+
+/**
+ * The command a call that hides sockets starts: Node running the launcher, the arguments file of the mounts, the file that carries the call's environment, then `argv` (Story 1.89).
+ * The launcher starts `argv` with that environment exactly, so nothing about the command's first word or the environment's names can be read as anything but themselves.
+ */
+function launchedCommand(socketFile, environmentFile, argv) {
+  return [process.execPath, SOCKET_LAUNCHER, socketFile, environmentFile, ...argv];
 }
 
 /**
@@ -1383,9 +1394,10 @@ function targetSandbox({
      * `sockets` (Bubblewrap alone) is the list of host sockets to hide, for a call made again after a socket it hid went away:
      * the call's own earlier list without the vanished ones, so no socket another process creates meanwhile joins it. Without
      * it the call asks `hostSockets` for a list, with room for the mounts its own command leaves (`socketBudget`).
-     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile`
-     * names and the call's end removes. `environment` is the environment the call's process starts with; the launcher gives
-     * the target's the variables its shell touches as they were.
+     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile` names and the call's end removes.
+     * `environment` is the environment the call's target starts with.
+     * A call that hides sockets carries it in a second file (`environmentFile`) that the launcher reads.
+     * The wrapped call names the environment its own process starts with (`environment` of the result, the launcher's loader variables alone for a call that hides sockets), which the caller hands the engine in its place.
      */
     wrap(
       target,
@@ -1519,30 +1531,44 @@ function targetSandbox({
         fs.rmSync(statusFile, { force: true });
         throw new ConfinementError(`the call hides ${sockets.length} sockets and its command leaves room for ${room}`);
       }
-      // The mounts of the hidden sockets reach Bubblewrap through a file, so a host with very many sockets cannot overflow the
-      // argument limit of the call's `exec`; the file is the runtime's, and the status directory is the target's to read at most.
-      const socketFile = sockets.length === 0 ? null : path.join(status, `sockets-${calls}-${crypto.randomBytes(8).toString('hex')}.args`);
-      if (socketFile !== null) {
-        fs.writeFileSync(
-          socketFile,
-          socketMaskArguments(sockets)
-            .map((argument) => `${argument}\0`)
-            .join(''),
-          { mode: 0o600 },
-        );
-      }
-      const vector = targetVector(sockets, socketFile === null ? null : SOCKET_ARGUMENTS_FD);
+      // A call that hides sockets goes through the launcher (`SOCKET_LAUNCHER`).
+      // The launcher opens the file that carries the mounts as the descriptor `--args` reads, so a host with very many sockets cannot overflow the argument limit of the call's `exec`.
+      // The launcher starts the command with the call's environment from a second file, since it starts with none of its own.
+      // Both files are the runtime's, in the status directory (beneath the private root of a run, which the sandbox empties), and the call's end removes them.
+      // The command is built before either exists, and a failed write removes what was made, so nothing a refusal throws leaves a file.
+      const hiding = sockets.length > 0;
+      const stamp = `${calls}-${crypto.randomBytes(8).toString('hex')}`;
+      const socketFile = hiding ? path.join(status, `sockets-${stamp}.args`) : null;
+      const environmentFile = hiding ? path.join(status, `launch-${stamp}.json`) : null;
+      const vector = targetVector(sockets, hiding ? SOCKET_ARGUMENTS_FD : null);
       const command = [...vector, ...tail];
-      // The key, the sockets the call hides and the file that carries their mounts stay out of what a caller copies: a call whose
-      // Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      if (hiding) {
+        const mounts = socketMaskArguments(sockets)
+          .map((argument) => `${argument}\0`)
+          .join('');
+        try {
+          fs.writeFileSync(socketFile, mounts, { mode: 0o600 });
+          fs.writeFileSync(environmentFile, JSON.stringify(stringEnvironment(environment)), { mode: 0o600 });
+        } catch (error) {
+          fs.rmSync(socketFile, { force: true });
+          fs.rmSync(environmentFile, { force: true });
+          fs.rmSync(statusFile, { force: true });
+          throw error;
+        }
+      }
+      // The key, the sockets the call hides and the files that carry their mounts and the environment stay out of what a caller copies.
+      // A call whose Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      // `environment` is what the call's process starts with: the launcher's own (loader variables alone) for a call that hides sockets, the call's for one that hides none.
       const holdKey = (wrapped) =>
         Object.defineProperties(wrapped, {
           statusKey: { value: statusKey },
           hiddenSockets: { value: sockets },
           socketFile: { value: socketFile },
+          environmentFile: { value: environmentFile },
+          environment: { value: hiding ? launcherEnvironment() : environment },
         });
       // The launcher goes outermost, before `strace`, so the audit traces Bubblewrap alone, as it does for a call hiding nothing.
-      const launched = (argv) => (socketFile === null ? argv : launchedCommand(socketFile, environment, argv));
+      const launched = (argv) => (hiding ? launchedCommand(socketFile, environmentFile, argv) : argv);
       if (observer === null) {
         const [first, ...rest] = launched(command);
         return holdKey({ target: first, args: rest, statusFile });
@@ -2079,7 +2105,7 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
             target: wrapped.target,
             subcommandPath: [],
             argv: wrapped.args,
-            env: environment,
+            env: wrapped.environment ?? environment,
           },
           signal,
         );
@@ -2088,6 +2114,9 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         started = status.started;
         if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
         if (!status.started) {
+          // A real E2BIG means Bubblewrap never ran, so only a call whose shim never started can carry the launcher's refusal; a started target's exit and standard error are its own.
+          const tooLarge = launchTooLarge(result, wrapped);
+          if (tooLarge !== null) throw tooLarge;
           const again = socketsToRetry(wrapped, signal, status);
           if (again !== null) {
             sockets = again;
@@ -2144,9 +2173,10 @@ function socketsToRetry(wrapped, signal, status) {
   return remaining.length < hidden.length ? remaining : null;
 }
 
-/** Removes the file that carried a call's socket mounts, once the call has ended. */
+/** Removes the files that carried a call's socket mounts and its environment, once the call has ended (the launcher removes the environment file when it starts). */
 function releaseSocketFile(wrapped) {
   if (typeof wrapped?.socketFile === 'string') fs.rmSync(wrapped.socketFile, { force: true });
+  if (typeof wrapped?.environmentFile === 'string') fs.rmSync(wrapped.environmentFile, { force: true });
 }
 
 /**
@@ -2178,7 +2208,7 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
               ...request,
               target: wrapped.target,
               targetArgs: wrapped.args,
-              env: environment,
+              env: wrapped.environment ?? environment,
             },
             signal,
           );

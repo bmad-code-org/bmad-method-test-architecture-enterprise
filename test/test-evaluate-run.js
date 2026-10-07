@@ -136,7 +136,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const { ENGINE_CLI_ENV, engineCliPath, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { ArmError, hostEnvironmentPort, runArm, stoppedFromOutside } = require('../cli/lib/evaluate/arm');
 const { uncommittedUnder } = require('../cli/lib/evaluate/preflight');
 const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
@@ -218,10 +218,26 @@ const {
   probeObserver,
   releaseTargetHome,
   selectConfinement,
-  targetSandbox,
+  targetSandbox: engineTargetSandbox,
   chmodDirectoryNoFollow,
   unlockDirectories,
 } = require('../cli/lib/evaluate/confinement');
+/** The only variables the launcher itself starts with: the ones the engine's own watchdog carries so that Node can start. */
+const LAUNCHER_LOADER_VARIABLES = Object.freeze(['ELECTRON_RUN_AS_NODE', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH']);
+
+/**
+ * A target sandbox whose `wrap` hands the call the host's environment unless the case names one, as the engine hands the call the registry's: a call that hides sockets now starts its target with the environment of the call alone, so a case that starts what `wrap` returns with the spawner's environment gives `wrap` that environment too.
+ */
+function targetSandbox(options) {
+  const sandbox = engineTargetSandbox(options);
+  return Object.create(sandbox, {
+    wrap: {
+      value: (target, args, writable, readable, extra = {}) =>
+        sandbox.wrap(target, args, writable, readable, { environment: { ...process.env }, ...extra }),
+    },
+  });
+}
+
 const {
   WorkspaceRefusal,
   adopterTreeState,
@@ -14827,7 +14843,10 @@ async function checkPathSocketUnits() {
     const masks = maskedSockets(wrapped);
     check(
       JSON.stringify(masks) === JSON.stringify(['/run/docker.sock', '/tmp/agent/agent.sock']) &&
-        wrapped.target === '/bin/sh' &&
+        wrapped.target === process.execPath &&
+        wrapped.args[0] === path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'confinement-launcher.cjs') &&
+        wrapped.args[1] === wrapped.socketFile &&
+        wrapped.args[2] === wrapped.environmentFile &&
         wrapped.args[at + 1] === '3' &&
         !wrapped.args.includes('/dev/null') &&
         at > wrapped.args.indexOf('--unsetenv') &&
@@ -14980,31 +14999,91 @@ async function checkPathSocketUnits() {
       `the retry of a call with 3100 arguments asked for the room ${sizeAsks.length} time(s) in all and held ${maskedSockets(again)?.length} sockets in ${counted(again, '/usr/bin/bwrap')} arguments; expected the first list less one, within the bound`,
     );
 
-    // The target's environment equals the call's for every variable whose name is a valid shell identifier and that the shell does
-    // not initialize, whether or not the host holds sockets: the launcher's shell leaves `PWD` (dash), `SHLVL`, `_` and `OLDPWD`
-    // (bash) in the environment of what it executes and resets `IFS`, `OPTIND` and `PPID` (dash) when the call's environment held
-    // them, and `env` puts each back as the call had it. The limit below holds what the launcher does not carry (Story 1.89). The stub
-    // stands in for Bubblewrap and is no shell (a shell would set the same variables again), and the full environment is compared.
+    // The target receives exactly the environment the call gave it, whether or not the host holds sockets (Story 1.89).
+    // No shell stands between the runtime and Bubblewrap, so a name a shell treats specially (`BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND`, `PPID`) reaches the target as the call held it.
+    // The stub stands in for Bubblewrap and is no shell (a shell would set the same variables again).
+    // The full environment is compared byte for byte.
     const envStubs = tempDir('environment-stubs');
-    const envStub = path.join(envStubs, 'bwrap');
-    fs.writeFileSync(
-      envStub,
-      `#!${process.execPath}\nconst i = process.argv.indexOf('--');\nconst ran = require('node:child_process').spawnSync(process.argv[i + 1], process.argv.slice(i + 2), { stdio: 'inherit' });\nprocess.exit(ran.status ?? 1);\n`,
-      { mode: 0o755 },
-    );
+    const stubIn = (directory) => {
+      fs.mkdirSync(directory, { recursive: true });
+      const stub = path.join(directory, 'bwrap');
+      fs.writeFileSync(
+        stub,
+        `#!${process.execPath}\nconst i = process.argv.indexOf('--');\nconst ran = require('node:child_process').spawnSync(process.argv[i + 1], process.argv.slice(i + 2), { stdio: 'inherit' });\nprocess.exit(ran.status ?? 1);\n`,
+        { mode: 0o755 },
+      );
+      return stub;
+    };
+    const envStub = stubIn(path.join(envStubs, 'plain'));
     const printEnvironment = ['-e', 'process.stdout.write(JSON.stringify(Object.entries(process.env).sort()))'];
-    const environmentOf = (sockets, environment) => {
+    // The shell launcher Story 1.82 had, which the controls below start: it opens the arguments file and executes the command, with `env` restoring the seven names its shell touches.
+    const SHELL_LAUNCHER_TEXT = 'exec 3<"$1" || exit 126; shift; exec "$@"';
+    const SHELL_TOUCHED_NAMES = ['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID'];
+    const shellLauncherCommand = (shell, socketFile, environment, argv) => {
+      const held = (name) => typeof environment?.[name] === 'string';
+      const restore = [
+        ...SHELL_TOUCHED_NAMES.filter((name) => !held(name)).flatMap((name) => ['-u', name]),
+        ...SHELL_TOUCHED_NAMES.filter(held).map((name) => `${name}=${environment[name]}`),
+      ];
+      // Dash stops on an `OPTIND` that is no number, so the shell never saw one the call held.
+      const guard = held('OPTIND') ? ['/usr/bin/env', '-u', 'OPTIND', shell] : [shell];
+      return {
+        target: guard[0],
+        args: [...guard.slice(1), '-c', SHELL_LAUNCHER_TEXT, 'sh', socketFile, '/usr/bin/env', ...restore, ...argv],
+      };
+    };
+    // Node adds its own `NODE_V8_COVERAGE` to a child unless the environment names the variable, which would make a run under coverage differ from one without: the case spawns with a copy that names it as unset unless the call holds it.
+    const spawnedEnvironment = (environment) => ({
+      ...environment,
+      ...(Object.hasOwn(environment, 'NODE_V8_COVERAGE') ? {} : { NODE_V8_COVERAGE: undefined }),
+    });
+    const environmentOf = (sockets, environment, { executable = envStub, shell = null } = {}) => {
       const wrapped = targetSandbox({
-        confinement: { mode: 'bubblewrap', executable: envStub, evaluationFolder: folder },
+        confinement: { mode: 'bubblewrap', executable, evaluationFolder: folder },
         workspace,
         status,
         hostSockets: () => sockets,
       }).wrap(process.execPath, printEnvironment, [], [], { environment });
-      const ran = spawnSync(wrapped.target, wrapped.args, { cwd: workspace, env: environment, encoding: 'utf8' });
-      return { hid: wrapped.socketFile !== null, status: ran.status, out: ran.stdout, err: ran.stderr };
+      // The control starts the command as Story 1.82's launcher did: what follows the launcher, the executable and its arguments, is the same.
+      const command =
+        shell === null || wrapped.socketFile === null
+          ? wrapped
+          : { ...shellLauncherCommand(shell, wrapped.socketFile, environment, wrapped.args.slice(3)), environment };
+      const ran = spawnSync(command.target, command.args, {
+        cwd: workspace,
+        // The engine starts the command with the environment the wrapped call names: the launcher's own for a call that hides sockets.
+        env: spawnedEnvironment(command.environment ?? wrapped.environment),
+        encoding: 'utf8',
+      });
+      return { hid: wrapped.socketFile !== null, status: ran.status, out: ran.stdout, err: ran.stderr, wrapped };
     };
-    for (const [what, environment] of [
+    const storyEnvironment = {
+      PATH: process.env.PATH,
+      'BASH_FUNC_f%%': '() { echo f; }',
+      'my.setting': 'v',
+      PS1: 'prompt> ',
+    };
+    const environmentRows = [
       ['no variable of the shell', { FOO: '1', PATH: process.env.PATH }],
+      ['the names of the story together: BASH_FUNC_f%%, my.setting and a held PS1', storyEnvironment],
+      ['a name that is no valid shell name', { PATH: process.env.PATH, 'my.setting': 'v' }],
+      ['an exported shell function', { PATH: process.env.PATH, 'BASH_FUNC_f%%': '() { echo f; }' }],
+      ['a second exported shell function and a name with a dash', { PATH: process.env.PATH, 'BASH_FUNC_g%%': '() { :; }', 'a-b': '1' }],
+      ['a held PS1', { PATH: process.env.PATH, PS1: 'prompt> ' }],
+      [
+        'the other variables bash initializes: PS2, PS4, LINENO, RANDOM, SHELLOPTS, BASHOPTS, BASH and BASH_VERSION',
+        {
+          PATH: process.env.PATH,
+          PS2: '> ',
+          PS4: '+ ',
+          LINENO: '99',
+          RANDOM: '5',
+          SHELLOPTS: 'braceexpand',
+          BASHOPTS: 'cmdhist',
+          BASH: '/odd/bash',
+          BASH_VERSION: '9.9',
+        },
+      ],
       [
         'a PWD that names another directory, a SHLVL, an OLDPWD and a _',
         { FOO: '1', PATH: process.env.PATH, PWD: '/nonexistent', SHLVL: '7', OLDPWD: '/old', _: '/usr/bin/odd' },
@@ -15017,38 +15096,114 @@ async function checkPathSocketUnits() {
         'ordinary names that are valid shell identifiers',
         { PATH: process.env.PATH, my_setting: 'a b', _x1: '', HOME: '/home/tester', LANG: 'C', TERM: 'dumb', Mixed_Case9: '=x=' },
       ],
-    ]) {
+      [
+        'values with quotes, a line break, a backslash and a non-ASCII character',
+        { PATH: process.env.PATH, QUOTED: `it's "x"\nnext\\n é` },
+      ],
+    ];
+    for (const [what, environment] of environmentRows) {
       const without = environmentOf([], environment);
       const hiding = environmentOf([hostSocket], environment);
       check(
         !without.hid && hiding.hid && without.status === 0 && hiding.status === 0 && without.out === hiding.out,
-        `with ${what} the target's environment was ${without.out} without hidden sockets and ${hiding.out} with them (exit ${without.status} and ${hiding.status}: ${without.err}${hiding.err}); expected the same`,
+        `with ${what} the target's environment was ${without.out} without hidden sockets and ${hiding.out} with them (exit ${without.status} and ${hiding.status}: ${without.err}${hiding.err}); expected the same bytes`,
       );
-    }
-    // The limit the reference states: a name no shell can hold, an exported shell function and a variable bash initializes itself
-    // are the shell's to change, so the environment of a call that hides sockets can differ from the call's. The control (no hidden
-    // socket) holds each exactly, and on any one host's `sh` at least one of the three differs; Story 1.89 replaces the launcher and
-    // turns this check into byte-identity.
-    const limitEnvironments = [
-      ['a name that is no valid shell name', { PATH: process.env.PATH, 'my.setting': 'v' }],
-      ['an exported shell function', { PATH: process.env.PATH, 'BASH_FUNC_f%%': '() { echo f; }' }],
-      ['a held PS1', { PATH: process.env.PATH, PS1: 'prompt> ' }],
-    ];
-    let limitDiffers = 0;
-    for (const [what, environment] of limitEnvironments) {
-      const without = environmentOf([], environment);
-      const hiding = environmentOf([hostSocket], environment);
-      const [key, value] = Object.entries(environment).find(([name]) => name !== 'PATH');
+      // The call that hides sockets hands the engine the launcher's loader variables (`ELECTRON_RUN_AS_NODE`, and `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` where the host sets them) and carries the call's own in a file only the launcher reads.
+      const carried = hiding.wrapped;
       check(
-        !without.hid && hiding.hid && without.status === 0 && hiding.status === 0 && without.out.includes(JSON.stringify([key, value])),
-        `with ${what} the call without hidden sockets printed ${without.out} (exit ${without.status}: ${without.err}); expected the control to hold ${key} exactly`,
+        Object.keys(carried.environment).every((name) => LAUNCHER_LOADER_VARIABLES.includes(name)) &&
+          typeof carried.environmentFile === 'string' &&
+          !fs.existsSync(carried.environmentFile) &&
+          without.wrapped.environment === environment &&
+          without.wrapped.environmentFile === null,
+        `with ${what} the call that hides sockets started the launcher with ${JSON.stringify(Object.keys(carried.environment))} and left ${carried.environmentFile} behind (the launcher removes it once read; the launcher's own environment holds the loader variables alone); a call that hides none keeps the call's environment and has no file`,
       );
-      if (without.out !== hiding.out) limitDiffers += 1;
     }
-    check(
-      limitDiffers > 0,
-      "the three environments the launcher does not carry (a name no shell holds, an exported function, a held PS1) all reached the target unchanged on this host's sh; the reference states the limit and Story 1.89 closes it, so update both together",
-    );
+    // A first word with `=` in it (the shell launcher's `env` read one as an assignment and the call was refused): the executable's own directory holds one.
+    const equalsStub = stubIn(path.join(envStubs, 'with=equals'));
+    {
+      const without = environmentOf([], storyEnvironment, { executable: equalsStub });
+      const hiding = environmentOf([hostSocket], storyEnvironment, { executable: equalsStub });
+      check(
+        hiding.hid && hiding.status === 0 && without.status === 0 && without.out === hiding.out && !hiding.err.includes('assignment'),
+        `a Bubblewrap executable whose path holds "=" gave the target ${hiding.out} (exit ${hiding.status}: ${hiding.err}) with a hidden socket and ${without.out} without; expected the same bytes, since nothing reads the first word as an assignment`,
+      );
+    }
+    // The launcher's own text holds no shell.
+    // The vector names Node and the launcher before anything of Bubblewrap's, the strings `/bin/sh`, `-c` and `env` appear nowhere before the executable, and no variable of `SHELL_VARIABLES` is named.
+    {
+      const { wrapped } = environmentOf([hostSocket], storyEnvironment);
+      const launcherPath = path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'confinement-launcher.cjs');
+      const before = wrapped.args.slice(0, wrapped.args.indexOf(envStub));
+      check(
+        wrapped.target === process.execPath &&
+          JSON.stringify(before) === JSON.stringify([launcherPath, wrapped.socketFile, wrapped.environmentFile]) &&
+          !wrapped.args.some((argument) => ['/bin/sh', 'sh', '-c', '-u', '/usr/bin/env', 'env'].includes(argument)) &&
+          !wrapped.args.some((argument) => /^(PWD|OLDPWD|SHLVL|_|IFS|OPTIND|PPID)=/.test(argument)),
+        `the command of a call that hides sockets is ${JSON.stringify([wrapped.target, ...before])} before Bubblewrap; expected Node, the launcher, the arguments file and the environment file, with no shell, no env and no restored variable`,
+      );
+      const launcherText = fs.readFileSync(launcherPath, 'utf8');
+      check(
+        !/shell\s*:/.test(launcherText) &&
+          !/['"`]\/bin\/(?:ba|da)?sh['"`]/.test(launcherText) &&
+          !/\bexecSync\b|\bexec\(/.test(launcherText),
+        "the launcher's source starts a shell or asks `spawn` for one",
+      );
+    }
+    // The shell the old launcher ran, once under dash and once under bash as `sh`, where the host has each.
+    // The control is Story 1.82's launcher, `env` restore included, so a row whose names the shell leaves alone passes through it unchanged.
+    // The story's own names do not: dash drops `my.setting` and `BASH_FUNC_f%%`, and bash as `sh` drops a held `PS1` and re-serializes `BASH_FUNC_f%%`.
+    // The comparison above fails on that shell when the shell launcher is restored, and the launcher that replaces it holds the same bytes whichever shell the host links `sh` to.
+    const shellLegs = [
+      ['dash as sh', ['/bin/dash', '/usr/bin/dash'], { dropped: ['my.setting', 'BASH_FUNC_f%%'], changed: [] }],
+      ['bash as sh', ['/bin/bash', '/usr/bin/bash'], { dropped: ['PS1'], changed: ['BASH_FUNC_f%%'] }],
+    ];
+    const namesOf = (out) => {
+      try {
+        return Object.fromEntries(JSON.parse(out));
+      } catch {
+        return null;
+      }
+    };
+    for (const [leg, candidates, expected] of shellLegs) {
+      const found = candidates.find((candidate) => fs.existsSync(candidate));
+      if (found === undefined) {
+        skipCase(
+          `environment under ${leg}`,
+          `${candidates.join(' and ')} not on this host; any host that has this shell runs the leg, and the ubuntu CI job has both shells`,
+        );
+        continue;
+      }
+      const directory = tempDir(`shell-leg-${leg.replaceAll(' ', '-')}`);
+      const asSh = path.join(directory, 'sh');
+      fs.symlinkSync(found, asSh);
+      for (const [what, environment] of environmentRows.slice(1, 6)) {
+        const without = environmentOf([], environment);
+        const throughLauncher = environmentOf([hostSocket], environment);
+        check(
+          throughLauncher.status === 0 && without.out === throughLauncher.out,
+          `under ${leg} with ${what} the launcher gave the target ${throughLauncher.out} and the control without hidden sockets ${without.out}; expected the same bytes`,
+        );
+      }
+      // A row the shell leaves alone passes through the control unchanged, so a difference below is the shell's and no variable it adds.
+      const plain = environmentRows[0][1];
+      const plainControl = environmentOf([hostSocket], plain, { shell: asSh });
+      check(
+        plainControl.status === 0 && plainControl.out === environmentOf([], plain).out,
+        `under ${leg} the control gave the plain row ${plainControl.out} (exit ${plainControl.status}: ${plainControl.err}) and the call held ${environmentOf([], plain).out}; expected the same bytes, since the restore leaves no name of its own behind`,
+      );
+      const held = namesOf(environmentOf([], storyEnvironment).out);
+      const through = environmentOf([hostSocket], storyEnvironment, { shell: asSh });
+      const seen = through.status === 0 ? namesOf(through.out) : null;
+      check(
+        held !== null &&
+          seen !== null &&
+          expected.dropped.every((name) => held[name] !== undefined && seen[name] === undefined) &&
+          expected.changed.every((name) => held[name] !== undefined && seen[name] !== undefined && seen[name] !== held[name]) &&
+          seen.PATH === held.PATH,
+        `the shell launcher of Story 1.82 under ${leg} gave the target ${through.out} (exit ${through.status}: ${through.err}) for the story's names, held as ${JSON.stringify(held)}; expected ${JSON.stringify(expected.dropped)} dropped and ${JSON.stringify(expected.changed)} changed, so the byte-identity check above would fail with the shell launcher restored`,
+      );
+    }
     // What the calls left reachable once the room ran out is counted for the run to record (`socketReport`): the calls that listed,
     // those the room cut and the most sockets one call left; a sandbox that hides none (Seatbelt) reports nothing.
     const lefts = [0, 7, 3];
@@ -15122,8 +15277,9 @@ tr '\\0' '\\n' <&3 > ${JSON.stringify(maskLog)}-$n 2>/dev/null`;
 while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`;
     writeStub(`${startOver}\n${failing}`);
     const stubbed = { mode: 'bubblewrap', executable: path.join(stubs, 'bwrap'), evaluationFolder: folder };
+    // The engine starts the command with the request's environment, which for a call that hides sockets is the launcher's own.
     const launch = (request) =>
-      runToEnd(request.target, request.argv ?? request.targetArgs, { env: { PATH: process.env.PATH }, cwd: workspace }).then((ran) => ({
+      runToEnd(request.target, request.argv ?? request.targetArgs, { env: request.env, cwd: workspace }).then((ran) => ({
         exitCode: ran.status,
         stdout: ran.stdout,
         stderr: ran.stderr,
@@ -15149,8 +15305,8 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`;
       let outcome;
       try {
         outcome = tool
-          ? await mechanism.callTool({ target: process.execPath, targetArgs: argv, env: {} }, signal)
-          : await mechanism.run({ target: process.execPath, subcommandPath: [], argv, env: {} }, signal);
+          ? await mechanism.callTool({ target: process.execPath, targetArgs: argv, env: { PATH: process.env.PATH } }, signal)
+          : await mechanism.run({ target: process.execPath, subcommandPath: [], argv, env: { PATH: process.env.PATH } }, signal);
       } catch (error) {
         outcome = error;
       }
@@ -15169,6 +15325,7 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`;
     // A socket that went away: the list names a path that is no socket now.
     const vanished = '/tmp/agent/agent.sock';
     const sockets = [vanished];
+    const filesBefore = new Set(fs.readdirSync(status));
     const once = await attempt([[vanished, hostSocket]], 1);
     check(
       once.calls === 2 &&
@@ -15177,6 +15334,33 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`;
         JSON.stringify(once.starts) === JSON.stringify([[vanished, hostSocket], [hostSocket]]),
       `a call whose Bubblewrap failed once over a hidden socket made ${once.calls} start(s) and ended ${JSON.stringify(once.outcome.message ?? once.outcome)} with the mounts ${JSON.stringify(once.starts)}; expected a second start over the call's own list without the vanished socket that ran the target`,
     );
+    // The files that carried the call's mounts and its environment are gone once the call has ended, however many starts it took.
+    const leftBehind = fs.readdirSync(status).filter((name) => /^(sockets|launch)-/.test(name) && !filesBefore.has(name));
+    check(
+      leftBehind.length === 0,
+      `a call that started twice left ${JSON.stringify(leftBehind)} in the status directory; expected the runtime to remove the arguments file and the environment file of each start`,
+    );
+    // A call the launcher never started (the engine could not spawn it) leaves nothing either: the runtime removes both files, since only a launcher that ran has read and removed the environment file.
+    {
+      const filesBeforeIdle = new Set(fs.readdirSync(status));
+      const idle = { run: async () => ({ exitCode: 0, stdout: '', stderr: '' }), callTool: async () => ({ exitCode: 0 }) };
+      let ended = null;
+      try {
+        await confinedCommandMechanism(
+          idle,
+          targetSandbox({ confinement: stubbed, workspace, status, hostSockets: () => [hostSocket] }),
+          () => [],
+          [],
+        ).run({ target: process.execPath, subcommandPath: [], argv: ran, env: { PATH: process.env.PATH } }, new AbortController().signal);
+      } catch (error) {
+        ended = error;
+      }
+      const idleLeft = fs.readdirSync(status).filter((name) => /^(sockets|launch)-/.test(name) && !filesBeforeIdle.has(name));
+      check(
+        ended?.name === 'ConfinementError' && idleLeft.length === 0,
+        `a call whose engine never started the launcher ended ${ended?.name ?? 'without a refusal'} and left ${JSON.stringify(idleLeft)} in the status directory; expected the refusal for a target that never started and no file, the environment file included`,
+      );
+    }
     // The call that started again counts once in the record of what the room left reachable, with the list of its first start.
     const cutOnce = await attempt([{ sockets: [vanished, hostSocket], left: 4, refused: null }], 1);
     check(
@@ -15303,6 +15487,537 @@ const connect = (target) => new Promise((resolve) => {
 `;
 
 /**
+ * The socket launcher (Story 1.89), on every host: the program that gives Bubblewrap its arguments file as descriptor 3 and starts the command with the call's environment, with no shell in the path.
+ * The cases run the launcher itself: descriptor 3 holds the file, a binary `env` prints the call's environment byte for byte and in order, the environment file is removed once read and a bad one refuses the call, the exit codes and signals of the command pass through, a signal sent to the launcher reaches the command, and the engine's group kill reaches it.
+ * They also run the refusal for the size of a command, a target that forges the refusal's pair, the cleanup of a failed write, and the audited vector in the order the story fixes (the launcher before `strace`, `strace` before Bubblewrap), through stand-ins for `strace` and Bubblewrap that record what they were given.
+ * The Linux cases that run the real Bubblewrap are `the path socket route`'s.
+ */
+async function checkSocketLauncher() {
+  const launcherPath = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-launcher.cjs');
+  const directory = tempDir('socket-launcher');
+  const argumentsFile = path.join(directory, 'sockets.args');
+  const argumentsText = '--ro-bind\0/dev/null\0/run/docker.sock\0';
+  fs.writeFileSync(argumentsFile, argumentsText);
+  let serial = 0;
+  /** Starts the launcher as the engine does: with no environment of its own, in a group of its own when asked. */
+  const start = (environmentText, command, { arguments: argumentsPath = argumentsFile, options = {} } = {}) => {
+    serial += 1;
+    const environmentFile = path.join(directory, `launch-${serial}.json`);
+    if (environmentText !== null) fs.writeFileSync(environmentFile, environmentText, { mode: 0o600 });
+    return { environmentFile, args: [launcherPath, argumentsPath, environmentFile, ...command], options: { env: {}, ...options } };
+  };
+  const run = (environmentText, command, extra = {}) => {
+    const started = start(environmentText, command, extra);
+    const ran = spawnSync(process.execPath, started.args, { encoding: 'buffer', timeout: SPAWN_TIMEOUT_MS, ...started.options });
+    return {
+      ...ran,
+      text: ran.stdout?.toString('utf8') ?? '',
+      error: ran.stderr?.toString('utf8') ?? '',
+      environmentFile: started.environmentFile,
+    };
+  };
+
+  // The arguments file is descriptor 3 of the command, at its start.
+  const readThree = run('{}', [process.execPath, '-e', "process.stdout.write(require('node:fs').readFileSync(3))"]);
+  check(
+    readThree.status === 0 && readThree.text === argumentsText,
+    `a command the launcher started read ${JSON.stringify(readThree.text)} from descriptor 3 (exit ${readThree.status}: ${readThree.error}); expected the arguments file's bytes, which \`bwrap --args 3\` reads`,
+  );
+
+  // The call's environment reaches the command exactly: a binary that prints its environment (no shell, no Node) shows every name, in order.
+  const printenv = ['/usr/bin/env'].find((candidate) => fs.existsSync(candidate));
+  const hardEnvironment = {
+    zeta: '1',
+    3: 'a decimal integer name, which Node.js cannot read from its own environment',
+    'BASH_FUNC_f%%': '() { echo f; }',
+    alpha: '2',
+    'my.setting': 'v',
+    PS1: 'prompt> ',
+    PS2: '> ',
+    PWD: '/nonexistent',
+    OLDPWD: '/old',
+    SHLVL: '7',
+    _: '/usr/bin/odd',
+    IFS: 'x',
+    OPTIND: 'abc',
+    PPID: '7',
+    EMPTY: '',
+    'a b': 'with a space',
+    unicode: 'é ü 日本',
+    QUOTED: `it's "x"\nnext\\n`,
+  };
+  if (printenv === undefined) {
+    skipCase(
+      'socket launcher environment',
+      '/usr/bin/env is not on this host; the hosts that have it (macOS and the ubuntu CI job) run it',
+    );
+  } else {
+    const direct = spawnSync(printenv, [], { env: hardEnvironment, encoding: 'buffer' });
+    const launched = run(JSON.stringify(hardEnvironment), [printenv]);
+    check(
+      direct.status === 0 && launched.status === 0 && Buffer.compare(direct.stdout, launched.stdout) === 0,
+      `through the launcher the command's environment was ${JSON.stringify(launched.text)} (exit ${launched.status}: ${launched.error}); expected the bytes ${JSON.stringify(direct.stdout.toString('utf8'))} a direct start with the same environment gives, names and order included`,
+    );
+    const empty = run('{}', [printenv]);
+    check(
+      empty.status === 0 && empty.text === '',
+      `an empty environment reached the command as ${JSON.stringify(empty.text)}; expected nothing`,
+    );
+    // A variable the engine gives the launcher stays out of the command's environment.
+    const own = run('{"ONLY":"mine"}', [printenv], { options: { env: { LAUNCHER_ONLY: '1' } } });
+    check(
+      own.text === 'ONLY=mine\n',
+      `the command's environment was ${JSON.stringify(own.text)} with a launcher that held LAUNCHER_ONLY; expected only the call's ONLY=mine`,
+    );
+    // A launcher that holds a coverage directory (a run under `c8`, which sets NODE_V8_COVERAGE for every process) adds none to the command, and a call that holds the variable keeps its own value.
+    const hostCoverage = { options: { env: { NODE_V8_COVERAGE: path.join(directory, 'host-coverage') } } };
+    const noCoverage = run('{"ONLY":"mine"}', [printenv], hostCoverage);
+    const ownCoverage = run('{"ONLY":"mine","NODE_V8_COVERAGE":"/call"}', [printenv], hostCoverage);
+    check(
+      noCoverage.text === 'ONLY=mine\n' && ownCoverage.text === 'ONLY=mine\nNODE_V8_COVERAGE=/call\n',
+      `with a launcher that held NODE_V8_COVERAGE the command's environment was ${JSON.stringify(noCoverage.text)} for a call that held none and ${JSON.stringify(ownCoverage.text)} for a call that held "/call"; expected ONLY=mine alone and the call's own value`,
+    );
+  }
+  // The status shim inside the sandbox starts the target with the environment it started with, read from the process's own record (`/proc/self/environ`).
+  // Node's `process.env` cannot read a variable named by a decimal integer.
+  const { startEnvironment } = require('../cli/lib/evaluate/confinement-status.cjs');
+  const environFile = path.join(directory, 'environ');
+  fs.writeFileSync(
+    environFile,
+    Buffer.from('3=int\0zeta=1\0BASH_FUNC_f%%=() { :; }\0EMPTY=\0dup=first\0dup=second\0=nameless\0noequals\0a=b=c\0'),
+  );
+  const started = startEnvironment(environFile);
+  check(
+    JSON.stringify(Object.entries(started).sort()) ===
+      JSON.stringify(Object.entries({ 3: 'int', zeta: '1', 'BASH_FUNC_f%%': '() { :; }', EMPTY: '', dup: 'first', a: 'b=c' }).sort()),
+    `the environment the shim read from a record that holds a decimal integer name, a repeated name and entries with no name or no equals sign was ${JSON.stringify(started)}; expected every named entry, a decimal integer name included, the first of a repeated name and none without a name or an equals sign`,
+  );
+  fs.writeFileSync(environFile, Buffer.from('__proto__=x\0A=1\0'));
+  const protoNamed = startEnvironment(environFile);
+  check(
+    Object.keys(protoNamed).join(',') === '__proto__,A' && Object.getPrototypeOf(protoNamed) === Object.prototype,
+    `the environment the shim read from a record that names __proto__ was ${JSON.stringify(Object.keys(protoNamed))}; expected the name as an own variable and the prototype untouched`,
+  );
+  check(
+    startEnvironment(path.join(directory, 'no-such-environ')).PATH === process.env.PATH,
+    'a shim on a host with no procfs did not start the target with the environment it had',
+  );
+  // The call's environment is wrapped as the launcher reads it: every defined value as the string a spawn makes of it.
+  const wrapOf = (environment) =>
+    targetSandbox({
+      confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: tempDir('launcher-folder') },
+      workspace: tempDir('launcher-workspace'),
+      status: tempDir('launcher-status'),
+      hostSockets: () => ['/run/docker.sock'],
+    }).wrap('/bin/true', [], [], [], { environment });
+  const wrapped = wrapOf({ KEPT: 'a', NUMBER: 5, NOTHING: undefined, FLAG: true, 3: 'three' });
+  const carried = JSON.parse(fs.readFileSync(wrapped.environmentFile, 'utf8'));
+  check(
+    JSON.stringify(carried) === JSON.stringify({ 3: 'three', KEPT: 'a', NUMBER: '5', FLAG: 'true' }) &&
+      (fs.statSync(wrapped.environmentFile).mode & 0o777) === 0o600 &&
+      (fs.statSync(wrapped.socketFile).mode & 0o777) === 0o600 &&
+      path.dirname(wrapped.environmentFile) === path.dirname(wrapped.socketFile),
+    `the environment file of a call holds ${JSON.stringify(carried)} with mode ${(fs.statSync(wrapped.environmentFile).mode & 0o777).toString(8)}; expected each defined value as a string, no undefined one, and mode 600 beside the arguments file`,
+  );
+
+  // The environment file is removed once the launcher has read it, whatever came after, and a file that is no environment refuses the call.
+  const kept = run('{"A":"1"}', [process.execPath, '-e', '0']);
+  check(!fs.existsSync(kept.environmentFile), 'the launcher left the environment file behind after a command that ran');
+  const refusals = [
+    ['an environment file that is no JSON', 'not json'],
+    ['an environment file that holds an array', '["A=1"]'],
+    ['an environment file that holds null', 'null'],
+    ['an environment value that is no string', '{"A":1}'],
+  ];
+  for (const [what, text] of refusals) {
+    const refused = run(text, [process.execPath, '-e', "process.stdout.write('ran')"]);
+    check(
+      refused.status === 126 && refused.text === '' && /environment file/.test(refused.error) && !fs.existsSync(refused.environmentFile),
+      `${what} ended with exit ${refused.status}, output ${JSON.stringify(refused.text)} and ${JSON.stringify(refused.error)}; expected exit 126, the command not run, the file named and the file removed`,
+    );
+  }
+  const missingEnvironment = run(null, [process.execPath, '-e', "process.stdout.write('ran')"]);
+  check(
+    missingEnvironment.status === 126 && missingEnvironment.text === '',
+    `a missing environment file ended with exit ${missingEnvironment.status}; expected 126 and no command`,
+  );
+
+  // Exit codes and signals pass through as a shell's exec would pass them.
+  // The command's own code passes, 127 is a command that is not found, and 126 is one that cannot run or an arguments file that cannot be opened (the command not started either).
+  const exits = [
+    ['a command that exits 7', [process.execPath, '-e', 'process.exit(7)'], {}, 7],
+    ['a command that is not found', [path.join(directory, 'no-such-command')], {}, 127],
+    ['a command that is not executable', [argumentsFile], {}, 126],
+    [
+      'an arguments file that does not exist',
+      [process.execPath, '-e', "process.stdout.write('ran')"],
+      { arguments: path.join(directory, 'missing.args') },
+      126,
+    ],
+  ];
+  for (const [what, command, extra, expected] of exits) {
+    const ended = run('{}', command, extra);
+    check(
+      ended.status === expected && ended.text === '',
+      `${what} ended with exit ${ended.status} and output ${JSON.stringify(ended.text)}; expected exit ${expected} and the command not run when the call could not start it`,
+    );
+  }
+  const signalled = run('{}', [process.execPath, '-e', "process.kill(process.pid, 'SIGTERM')"]);
+  check(
+    signalled.signal === 'SIGTERM',
+    `a command a SIGTERM ended ended the launcher with ${signalled.signal ?? `exit ${signalled.status}`}; expected the same signal, as Bubblewrap's own parent reads it`,
+  );
+  // Node starts with SIGPIPE and SIGXFSZ ignored, so these two end the launcher by the signal only when it returns them to their default action.
+  // A shell is the command, since a Node command ignores both signals itself.
+  for (const name of process.platform === 'win32' ? [] : ['SIGPIPE', 'SIGXFSZ']) {
+    const ended = run('{}', ['/bin/sh', '-c', `kill -s ${name.slice(3)} $$`]);
+    check(
+      ended.signal === name,
+      `a command a ${name} ended ended the launcher with ${ended.signal ?? `exit ${ended.status}`}; expected the same signal, as Bubblewrap's own parent reads it`,
+    );
+  }
+
+  // Each signal the launcher receives reaches the command, which ends the launcher by its own exit.
+  // The names are the ones the amendment lists, so a signal left out of the launcher's list fails here: SIGUSR1 left to Node would open a debugger outside the sandbox.
+  // The case waits for the launcher's exit and bounds every wait: a launcher that passes nothing on dies by the signal and leaves the command running.
+  for (const name of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT', 'SIGUSR1', 'SIGUSR2']) {
+    const started = start('{}', [
+      process.execPath,
+      '-e',
+      `process.on('${name}', () => { process.stdout.write('${name}'); process.exit(3); }); process.stdout.write(\`ready\${process.pid} \`); setInterval(() => {}, 1000);`,
+    ]);
+    const child = spawn(process.execPath, started.args, { ...started.options, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    let said = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (said += chunk));
+    const ended = new Promise((resolve) => child.once('exit', (status, signal) => resolve({ status, signal })));
+    const deadline = Date.now() + 25_000;
+    while (!/ready\d+ $/.test(output) && Date.now() < deadline) await sleep(20);
+    const commandPid = Number(/ready(\d+) /.exec(output)?.[1]);
+    child.kill(name);
+    const result = await Promise.race([ended, sleep(15_000).then(() => ({ status: null, signal: 'no end within 15 seconds' }))]);
+    // A command that outlived the launcher is this case's own, and it ends now.
+    if (result.status !== 3 && Number.isInteger(commandPid) && commandPid > 0) {
+      try {
+        process.kill(commandPid, 'SIGKILL');
+      } catch {
+        // It ended on its own.
+      }
+    }
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    child.stdout.destroy();
+    child.stderr.destroy();
+    check(
+      output.endsWith(name) && result.status === 3 && !said.includes('Debugger listening'),
+      `a ${name} sent to the launcher left the command's output ${JSON.stringify(output)}, the launcher's end ${JSON.stringify(result)} and standard error ${JSON.stringify(said.slice(0, 120))}; expected the command to receive it, print ${name}, end the launcher with exit 3 and no debugger opened`,
+    );
+  }
+
+  // The command stays in the launcher's process group, which the engine's group kill (a negative pid) reaches: a command in a group of its own would outlive it.
+  if (process.platform === 'win32') {
+    skipCase('socket launcher group', 'Windows has no process groups');
+  } else {
+    const started = start('{}', [process.execPath, '-e', 'process.stdout.write(String(process.pid)); setInterval(() => {}, 1000);']);
+    const child = spawn(process.execPath, started.args, { ...started.options, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    let printed = '';
+    child.stdout.on('data', (chunk) => (printed += chunk));
+    // The launcher's exit is the end to wait for: a command that left the group keeps the pipe open and `close` would never come.
+    const ended = new Promise((resolve) => child.once('exit', resolve));
+    const deadline = Date.now() + 25_000;
+    while (printed === '' && Date.now() < deadline) await sleep(20);
+    const commandPid = Number(printed);
+    process.kill(-child.pid, 'SIGKILL');
+    await ended;
+    child.stdout.destroy();
+    child.stderr.destroy();
+    // A command whose parent is gone and that nothing reaps (a bare container's process 1) stays a zombie, which is as gone as it gets.
+    const isGone = (pid) => {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        return true;
+      }
+      try {
+        return /^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+      } catch {
+        return false;
+      }
+    };
+    let alive = Number.isInteger(commandPid) && commandPid > 0;
+    for (let wait = 0; wait < 100 && alive; wait += 1) {
+      if (isGone(commandPid)) alive = false;
+      else await sleep(50);
+    }
+    if (alive) process.kill(commandPid, 'SIGKILL');
+    check(
+      Number.isInteger(commandPid) && commandPid > 0 && !alive,
+      `the command of a launcher the engine's group kill ended (pid ${commandPid}) was still running 5 seconds later, or never printed its pid`,
+    );
+  }
+
+  // A launcher that is started with the call's environment would run the script a NODE_OPTIONS of the call names, outside the sandbox: the vector hands the engine none.
+  {
+    const log = path.join(directory, 'node-options.log');
+    const hook = path.join(directory, 'hook.cjs');
+    fs.writeFileSync(hook, `require('node:fs').appendFileSync(${JSON.stringify(log)}, process.argv[1] + '\\n');\n`);
+    const environment = { PATH: process.env.PATH, NODE_OPTIONS: `--require ${hook}` };
+    const hiding = wrapOf(environment);
+    check(
+      Object.keys(hiding.environment).every((name) => LAUNCHER_LOADER_VARIABLES.includes(name)),
+      `a call that hides sockets started the launcher with ${JSON.stringify(Object.keys(hiding.environment))}; expected the loader variables alone, since NODE_OPTIONS and its kin would run a script outside the sandbox`,
+    );
+    const ran = spawnSync(
+      hiding.target,
+      [hiding.args[0], hiding.args[1], hiding.args[2], process.execPath, '-e', "process.stdout.write('ran')"],
+      { env: { ...hiding.environment }, encoding: 'utf8' },
+    );
+    const logged = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [];
+    check(
+      ran.status === 0 && ran.stdout === 'ran' && logged.length === 1 && logged[0] !== launcherPath && !logged.includes(launcherPath),
+      `a NODE_OPTIONS of the call ran its script in ${JSON.stringify(logged)}; expected it to run in the command alone and not in the launcher (${launcherPath})`,
+    );
+  }
+
+  // A command the operating system refuses for the size of its arguments and environment (`E2BIG`) ends the launcher with its own code and token.
+  // The runtime turns that into the error Node's spawn gives, from which the engine's command-line adapter builds its own `port-failure` with the reason `launch-too-large`, as for a call that hides no socket, and only for a call whose shim never started.
+  // Linux refuses one environment string over 128 KB and the whole of arguments and environment over the kernel's ceiling (6 MB at the most, a quarter of the stack limit where that is lower), and macOS refuses over 1 MB in all.
+  // Each value stays under 128 KB, so the refusal comes from the total, and 9 MB is above every host's ceiling.
+  {
+    const huge = Object.fromEntries(Array.from({ length: 90 }, (_, at) => [`BIG_${at}`, 'x'.repeat(100_000)]));
+    const refused = run(JSON.stringify(huge), [process.execPath, '-e', "process.stdout.write('ran')"]);
+    check(
+      refused.status === 125 && refused.text === '' && refused.error.includes('confinement-launcher: E2BIG'),
+      `a command whose environment was 9 MB ended the launcher with exit ${refused.status} and ${JSON.stringify(refused.error.slice(0, 120))}; expected exit 125 and the E2BIG token on standard error`,
+    );
+    // The case goes through the engine's own command-line adapter, which builds the fault a run reads from the error the mechanism throws.
+    const { createCommandLineAdapter, nodeCommandMechanism } = await loadAdapters();
+    const oversizedCall = async (hostSockets) => {
+      const sandbox = targetSandbox({
+        confinement: { mode: 'bubblewrap', executable: process.execPath, evaluationFolder: tempDir('launcher-huge-folder') },
+        workspace: tempDir('launcher-huge-workspace'),
+        status: tempDir('launcher-huge-status'),
+        hostSockets: () => hostSockets,
+      });
+      const policy = {
+        authorizations: [
+          {
+            interfaceId: 'huge',
+            executable: 'node',
+            target: process.execPath,
+            permittedSubcommandPaths: [[]],
+            permittedEnvironmentKeys: Object.keys(huge),
+            cwd: tempDir('launcher-huge-cwd'),
+            artifacts: {},
+            maxElapsedMs: SPAWN_TIMEOUT_MS,
+            maxOutputBytes: 1_000_000,
+          },
+        ],
+      };
+      try {
+        await createCommandLineAdapter(
+          policy,
+          confinedCommandMechanism(nodeCommandMechanism, sandbox, () => [], []),
+        ).probe(
+          {
+            probeId: 'huge-1',
+            interfaceId: 'huge',
+            operationId: 'run',
+            kind: 'cli',
+            executable: 'node',
+            subcommandPath: [],
+            channels: { argument: {}, option: {}, environment: huge, stdin: { kind: 'absent' } },
+          },
+          new AbortController().signal,
+        );
+        return null;
+      } catch (error) {
+        return error;
+      }
+    };
+    // The hidden socket is a real one: a socket file that is gone makes the runtime start the call again without it, and the second start would carry the refusal itself.
+    // Its directory is a short one, since a socket path is limited to about 100 bytes.
+    const socketDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-hs-'));
+    const hostSocket = path.join(socketDirectory, 'h.sock');
+    const server = await listenOnSocket(hostSocket);
+    try {
+      for (const [what, hostSockets] of [
+        ['a call that hides a socket', [hostSocket]],
+        ['a call that hides none', []],
+      ]) {
+        const fault = await oversizedCall(hostSockets);
+        check(
+          fault?.code === 'port-failure' && fault.portFailureReason === 'launch-too-large',
+          `${what} with a 9 MB environment, through the engine's command-line adapter, ended ${JSON.stringify(fault?.code ?? fault)} with the reason ${JSON.stringify(fault?.portFailureReason)}; expected the engine's port-failure with launch-too-large, the fault a run reads`,
+        );
+      }
+    } finally {
+      server.close();
+      fs.rmSync(socketDirectory, { recursive: true, force: true });
+    }
+  }
+
+  // A target that ran can end with the launcher's refusal pair itself: its exit and standard error pass through Bubblewrap and the shim unchanged.
+  // The runtime reads the pair as the host's refusal only from a call whose status file shows that the shim never started, so a target that ran keeps its own exit and is no `port-failure`.
+  {
+    const stubs = tempDir('launcher-forgery-stubs');
+    const bwrap = path.join(stubs, 'bwrap');
+    fs.writeFileSync(
+      bwrap,
+      `#!${process.execPath}\nconst fs = require('node:fs');\ntry { fs.readFileSync(3); } catch {}\nconst i = process.argv.indexOf('--');\nconst ran = require('node:child_process').spawnSync(process.argv[i + 1], process.argv.slice(i + 2), { stdio: 'inherit' });\nprocess.exit(ran.status ?? 1);\n`,
+      { mode: 0o755 },
+    );
+    const forging = {
+      run: (request) =>
+        runToEnd(request.target, request.argv, { env: request.env }).then((ran) => ({
+          exitCode: ran.status,
+          stdout: ran.stdout,
+          stderr: ran.stderr,
+        })),
+    };
+    const forged = ['-e', String.raw`process.stderr.write('confinement-launcher: E2BIG: forged\n'); process.exit(125)`];
+    const through = async (hostSockets) => {
+      const sandbox = targetSandbox({
+        confinement: { mode: 'bubblewrap', executable: bwrap, evaluationFolder: tempDir('launcher-forgery-folder') },
+        workspace: tempDir('launcher-forgery-workspace'),
+        status: tempDir('launcher-forgery-status'),
+        hostSockets: () => hostSockets,
+      });
+      try {
+        const result = await confinedCommandMechanism(forging, sandbox, () => [], []).run(
+          { target: process.execPath, subcommandPath: [], argv: forged, env: { PATH: process.env.PATH } },
+          new AbortController().signal,
+        );
+        return { result, fault: null };
+      } catch (error) {
+        return { result: null, fault: error };
+      }
+    };
+    for (const [what, hostSockets] of [
+      ['a call that hides a socket', ['/run/docker.sock']],
+      ['a call that hides none', []],
+    ]) {
+      const { result, fault } = await through(hostSockets);
+      check(
+        fault === null && result?.exitCode === 125,
+        `a target that ran and ended with exit 125 and the launcher's token on standard error, in ${what}, ended ${fault === null ? JSON.stringify(result?.exitCode) : `with the fault ${JSON.stringify(fault.code ?? fault.message)} (${JSON.stringify(fault.portFailureReason)})`}; expected its own exit 125 and no fault, since only a call whose shim never started can carry the host's refusal`,
+      );
+    }
+  }
+
+  // A write that fails removes what the call made: the arguments file, the environment file and the status file.
+  {
+    const wrapIn = (status, environment) =>
+      targetSandbox({
+        confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: tempDir('launcher-cleanup-folder') },
+        workspace: tempDir('launcher-cleanup-workspace'),
+        status,
+        hostSockets: () => ['/run/docker.sock'],
+      }).wrap('/bin/true', [], [], [], { environment });
+    const left = (status) => fs.readdirSync(status).filter((name) => /^(sockets|launch|status)-/.test(name));
+    const throwing = {
+      toString: () => {
+        throw new Error('boom');
+      },
+    };
+    const failures = [
+      ['an environment value whose text cannot be made', { X: throwing }, null],
+      ['a full disk at the environment file', { PATH: process.env.PATH }, /launch-[^/]*\.json$/],
+      ['a full disk at the arguments file', { PATH: process.env.PATH }, /sockets-[^/]*\.args$/],
+    ];
+    const realWrite = fs.writeFileSync;
+    for (const [what, environment, failing] of failures) {
+      const status = tempDir('launcher-cleanup-status');
+      let error = null;
+      if (failing !== null) {
+        fs.writeFileSync = (file, ...rest) => {
+          if (failing.test(String(file))) {
+            // A write opens its file with O_CREAT and O_TRUNC before the disk refuses the bytes, so the failed write leaves a created, partial file.
+            realWrite(file, 'partial', { mode: 0o600 });
+            throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+          }
+          return realWrite(file, ...rest);
+        };
+      }
+      try {
+        wrapIn(status, environment);
+      } catch (error_) {
+        error = error_;
+      } finally {
+        fs.writeFileSync = realWrite;
+      }
+      const remaining = left(status);
+      check(
+        error instanceof Error && remaining.length === 0,
+        `a call with ${what} threw ${JSON.stringify(error?.message ?? null)} and left ${JSON.stringify(remaining)} in its status directory; expected the error to reach the caller and no sockets-, launch- or status- file behind`,
+      );
+    }
+  }
+
+  // The audited vector: the launcher first, then strace, then Bubblewrap; strace traces Bubblewrap alone, and descriptor 3 reaches Bubblewrap through it.
+  {
+    const stubs = tempDir('launcher-audit-stubs');
+    const straceLog = path.join(stubs, 'strace.log');
+    const bwrapLog = path.join(stubs, 'bwrap.log');
+    const bwrapMounts = path.join(stubs, 'bwrap.args');
+    const script = (name, body) => {
+      const file = path.join(stubs, name);
+      fs.writeFileSync(file, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+      return file;
+    };
+    const strace = script(
+      'strace',
+      `printf '%s\\n' "$@" > ${JSON.stringify(straceLog)}\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
+    );
+    const bwrap = script(
+      'bwrap',
+      `printf '%s\\n' "$@" > ${JSON.stringify(bwrapLog)}\ntr '\\0' '\\n' <&3 > ${JSON.stringify(bwrapMounts)}\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
+    );
+    const auditDirectory = tempDir('launcher-audit');
+    const traced = targetSandbox({
+      confinement: {
+        mode: 'bubblewrap',
+        executable: bwrap,
+        observer: { executable: strace },
+        evaluationFolder: tempDir('launcher-audit-folder'),
+      },
+      workspace: tempDir('launcher-audit-workspace'),
+      status: tempDir('launcher-audit-status'),
+      audit: { directory: auditDirectory },
+      hostSockets: () => ['/run/docker.sock'],
+    }).wrap(process.execPath, ['-e', '0'], [], [], { environment: { PATH: process.env.PATH } });
+    const straceAt = traced.args.indexOf(strace);
+    const bwrapAt = traced.args.indexOf(bwrap);
+    check(
+      traced.target === process.execPath &&
+        traced.args[0] === launcherPath &&
+        traced.args[1] === traced.socketFile &&
+        traced.args[2] === traced.environmentFile &&
+        straceAt === 3 &&
+        bwrapAt > straceAt &&
+        traced.args.filter((argument) => argument === launcherPath).length === 1 &&
+        !traced.args.slice(straceAt).includes(launcherPath) &&
+        !traced.args.slice(straceAt).includes(traced.socketFile) &&
+        !traced.args.slice(straceAt).includes(traced.environmentFile),
+      `an audited call that hides sockets is ${JSON.stringify([traced.target, ...traced.args.slice(0, bwrapAt + 1)])}; expected the launcher first, then strace, then Bubblewrap, with the launcher and its two files outside strace's command`,
+    );
+    const ran = spawnSync(traced.target, traced.args, { env: { ...traced.environment }, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+    const straceSaw = fs.existsSync(straceLog) ? fs.readFileSync(straceLog, 'utf8').split('\n') : [];
+    const bwrapSaw = fs.existsSync(bwrapLog) ? fs.readFileSync(bwrapLog, 'utf8').split('\n') : [];
+    check(
+      ran.status === 0 &&
+        straceSaw.includes(bwrap) &&
+        !straceSaw.includes(launcherPath) &&
+        !straceSaw.includes(traced.socketFile) &&
+        bwrapSaw.includes('--args') &&
+        fs.existsSync(bwrapMounts) &&
+        fs.readFileSync(bwrapMounts, 'utf8') === '--ro-bind\n/dev/null\n/run/docker.sock\n',
+      `a call run through the stand-ins ended ${ran.status} (${ran.stderr}); strace was given ${JSON.stringify(straceSaw)} and Bubblewrap read ${JSON.stringify(fs.existsSync(bwrapMounts) ? fs.readFileSync(bwrapMounts, 'utf8') : null)} from descriptor 3; expected strace to trace Bubblewrap alone and descriptor 3 to reach Bubblewrap through it`,
+    );
+  }
+}
+
+/**
  * The route to the host's path-based sockets, on a Linux host with Bubblewrap and strace only (Story 1.82; the Linux CI job
  * proves it, a macOS host skips it). The runtime serves a Unix socket file under the temp directory outside every grant, and the
  * host's own `/run/dbus/system_bus_socket` and `/var/run/docker.sock` are tried where they exist and the runtime's user can
@@ -15415,6 +16130,58 @@ async function checkPathSocketRoute() {
         `a confined process connecting to its own socket ${path.relative('/tmp', socketPath)} got ${JSON.stringify(reached)}; expected connected`,
       );
     }
+
+    // The target's environment is the call's whether or not the host holds sockets (Story 1.89), through the real launcher, Bubblewrap and the status shim.
+    // The target is `/usr/bin/env`, which prints every variable it holds, so a name a shell treats specially and a decimal integer name (which Node's own `process.env` cannot read) are compared as bytes.
+    // The control hides no socket.
+    const environment = {
+      PATH: process.env.PATH,
+      3: 'int',
+      'BASH_FUNC_f%%': '() { echo f; }',
+      'my.setting': 'v',
+      PS1: 'prompt> ',
+      PWD: '/nonexistent',
+      OLDPWD: '/old',
+      SHLVL: '7',
+      _: '/usr/bin/odd',
+      IFS: 'x',
+      OPTIND: 'abc',
+      PPID: '7',
+    };
+    const printed = async (using) => {
+      const call = using.wrap('/usr/bin/env', [], [callDirectory], [], { environment });
+      const ran = await runToEnd(call.target, call.args, { cwd: workspace, env: { ...call.environment } });
+      return { hid: call.socketFile !== null, status: ran.status, out: ran.stdout, err: ran.stderr };
+    };
+    const hidingEnvironment = await printed(sandbox);
+    const plainEnvironment = await printed(
+      targetSandbox({ confinement, workspace, status: tempDir('path-socket-plain-status'), hostSockets: () => [] }),
+    );
+    // Bubblewrap sets `PWD` itself, to the directory the call runs in, whether or not sockets are hidden: the call's own `PWD` is no line to expect.
+    const expectedLines = [
+      '3=int',
+      'BASH_FUNC_f%%=() { echo f; }',
+      'my.setting=v',
+      'PS1=prompt> ',
+      'OLDPWD=/old',
+      'SHLVL=7',
+      '_=/usr/bin/odd',
+      'IFS=x',
+      'OPTIND=abc',
+      'PPID=7',
+    ];
+    check(
+      hidingEnvironment.hid &&
+        !plainEnvironment.hid &&
+        hidingEnvironment.status === 0 &&
+        plainEnvironment.status === 0 &&
+        expectedLines.every((line) => plainEnvironment.out.split('\n').includes(line)) &&
+        [hidingEnvironment, plainEnvironment].every((printedEnvironment) =>
+          printedEnvironment.out.split('\n').includes(`PWD=${workspace}`),
+        ) &&
+        hidingEnvironment.out === plainEnvironment.out,
+      `through Bubblewrap the target's environment was ${JSON.stringify(hidingEnvironment.out)} with hidden sockets (exit ${hidingEnvironment.status}: ${hidingEnvironment.err}) and ${JSON.stringify(plainEnvironment.out)} without (exit ${plainEnvironment.status}: ${plainEnvironment.err}); expected the same bytes, each name of the call among them and PWD=${workspace}, the directory Bubblewrap sets it to`,
+    );
 
     // A socket the runtime binds after the call started: the list was read when the call began, so it is reached.
     const lateSocket = path.join(outsideDirectory, 'late.sock');
@@ -17199,12 +17966,12 @@ function checkBridgeReference() {
       ['the path socket units'],
     ],
     [
-      "The launcher that hands Bubblewrap the mounts leaves the target's environment as the call gave it for every variable whose name is a valid shell identifier and that the shell does not initialize, and it restores `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` to the call's value (or leaves each unset).",
-      ['the path socket units'],
+      'The launcher that hands Bubblewrap the mounts is a Node program the runtime starts outside the sandbox, ahead of `strace`, and no shell stands between the runtime and Bubblewrap.',
+      ['the socket launcher', 'the path socket units'],
     ],
     [
-      'The limit: a call that hides sockets can change or drop a variable whose name a shell cannot hold (`my.setting`, `BASH_FUNC_f%%`), an exported shell function, and a variable bash initializes itself (`PS1`, `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH`, `BASH_VERSION`) when `sh` is bash, and Story 1.89 closes it.',
-      ['the path socket units'],
+      'The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every Bubblewrap process loses, and the proxy variables a call with `egress` gains.',
+      ['the socket launcher', 'the path socket units', 'the path socket route'],
     ],
     [
       'A call is refused (exit 12, naming the count and the room) when the sockets only root, the system accounts and the user running the call can create exceed the room, which no other user can cause.',
@@ -17414,6 +18181,34 @@ function checkBridgeReference() {
   check(
     staleLayerSockets(reference.replace('The socket the runtime serves a layer process stays connectable', 'A socket stays connectable')),
     'the check on the evaluation layer sentences passed with the sentence on the private root removed',
+  );
+
+  // Story 1.89: the sentence that stated the shell launcher's limit (a name no shell can hold, an exported function, the variables bash initializes) is gone.
+  // The sentences that replace it say no shell stands in the path and the target's environment is exact.
+  const staleLauncherEnvironment = (text) => {
+    const section = (text.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+    return (
+      section.includes('The limit: a call that hides sockets can change or drop a variable') ||
+      section.includes('and it restores `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` to the call') ||
+      section.includes('Story 1.89 closes it') ||
+      ![
+        'The launcher that hands Bubblewrap the mounts is a Node program the runtime starts outside the sandbox, ahead of `strace`, and no shell stands between the runtime and Bubblewrap.',
+        'The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every Bubblewrap process loses, and the proxy variables a call with `egress` gains.',
+      ].every((claim) => section.includes(claim))
+    );
+  };
+  check(
+    !staleLauncherEnvironment(reference),
+    "the reference's confinement section still states the shell launcher's limit, or does not say the target receives exactly the environment the call gave it",
+  );
+  const limitSentence =
+    'The limit: a call that hides sockets can change or drop a variable whose name a shell cannot hold (`my.setting`, `BASH_FUNC_f%%`), an exported shell function, and a variable bash initializes itself (`PS1`, `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH`, `BASH_VERSION`) when `sh` is bash, and Story 1.89 closes it.';
+  check(
+    staleLauncherEnvironment(reference.replace('### File-system confinement\n', `### File-system confinement\n${limitSentence}\n`)) &&
+      staleLauncherEnvironment(
+        reference.replace('The target receives exactly the environment the call gave it', 'The target receives an environment'),
+      ),
+    'the check on the launcher sentences passed with the limit sentence in the confinement section or with the exact-environment sentence removed',
   );
 
   // Story 1.87: the macOS sentence that said a Seatbelt target reaches a path-based socket outside the private root is gone.
@@ -20203,6 +20998,7 @@ const CASES = [
   { name: 'the egress run', body: checkEgressRun, group: 'confinement' },
   { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
   { name: 'the path socket units', body: checkPathSocketUnits, group: 'confinement' },
+  { name: 'the socket launcher', body: checkSocketLauncher, group: 'confinement' },
   { name: 'the path socket route', body: checkPathSocketRoute, group: 'confinement' },
   { name: 'the socket connection units', body: checkSocketConnectionUnits, group: 'confinement' },
   { name: 'the socket connection route', body: checkSocketConnectionRoute, group: 'confinement' },
