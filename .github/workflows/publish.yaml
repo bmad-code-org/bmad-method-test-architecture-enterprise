@@ -81,7 +81,8 @@ jobs:
       # with quality.yaml on system dependencies, or it fails at "Run tests"
       # on every push, the way it did from roughly 16:40 UTC today onward.
       # test:doc-invocations executes documented commands that need
-      # actionlint on PATH (test:eval-ci-data's lint half) and a working
+      # actionlint on PATH (test:eval-ci-data's lint half; test:workflows-lint
+      # also lints this repository's own workflows with it) and a working
       # bubblewrap isolation backend (the atdd preflight path, and
       # tea-evaluate's file-system confinement, which every test:evaluate-*
       # suite that runs preflight or run needs) and strace (the observer of

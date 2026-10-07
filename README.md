@@ -395,7 +395,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains 158 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 158 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
+`npm test` chains 159 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 159 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, the fragment-selection case count, the replay totals that the test README and the header of the replay suite state, the story count, epic count and appended-story count in the overview of the Evaluate plan, and the lane count in its parallel-lanes section.
@@ -419,6 +419,8 @@ Four more checks hold the Evaluate documentation:
 - `test:docs-evaluate-sidebar` fails when a page that names `tea-evaluate` or `bmad-testarch-evaluate` is missing from the site sidebar, and when the TEA overview links no page that Evaluate owns.
 - `test:docs-gap-reader` lifts the held-out reader command out of the gaps how-to, runs it over a `gap-view.json` built with a caught, an uncaught and a withheld row, and fails when it crashes or leaves a row unprinted.
 - `test:docs-tutorial` runs the commands of the Evaluate tutorial against its fixture and fails on a command that errors or an output line the page promises and the run does not print.
+
+`test:workflows-lint` runs `actionlint` over every workflow in `.github/workflows/` and the `cli/examples/pr-test-review.yml` template, and fails on any finding. It disables the shellcheck and pyflakes integrations so the answer does not depend on which of those binaries a machine has. With no `actionlint` on `PATH` it fails and names `tools/install-actionlint.sh` rather than skipping, and it proves on every run that a workflow reading a step that does not exist is refused.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
 

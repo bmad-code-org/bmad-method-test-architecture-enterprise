@@ -156,5 +156,6 @@
   "test:trace-qualification": 4.9,
   "test:transcript-harness": 3.9,
   "test:trial-set-scoring": 2.8,
+  "test:workflows-lint": 0.3,
   "validate:schemas": 0.3
 }
