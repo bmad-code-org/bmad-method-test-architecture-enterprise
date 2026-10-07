@@ -114,6 +114,7 @@
   "test:nfr-evidence-guidance": 0.2,
   "test:nfr-qualification": 3.7,
   "test:nfr-validate-corpus": 0.6,
+  "test:planning-doc-sources": 8,
   "test:port-totality": 0.5,
   "test:probe-conformance": 4.7,
   "test:probe-corpus": 4.9,

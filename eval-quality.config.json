@@ -427,6 +427,83 @@
           "module": "test/lib/doc-count-sources.js",
           "export": "REPLAY_CONSTRUCTED"
         }
+      },
+      "replayScored": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_SCORED"
+        }
+      },
+      "replayScoredConstructed": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_SCORED_CONSTRUCTED"
+        }
+      },
+      "replayCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CAPTURED_BYTES"
+        }
+      },
+      "replayAtddCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_ATDD_CAPTURED_BYTES"
+        }
+      },
+      "replayTestReviewCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TEST_REVIEW_CAPTURED_BYTES"
+        }
+      },
+      "replayCiCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CI_CAPTURED_BYTES"
+        }
+      },
+      "replayCiFullAndMinimal": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CI_FULL_AND_MINIMAL"
+        }
+      },
+      "storyCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "STORY_COUNT"
+        }
+      },
+      "epicCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "EPIC_COUNT"
+        }
+      },
+      "appendedStoryCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "APPENDED_STORY_COUNT"
+        }
+      },
+      "laneCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "LANE_COUNT"
+        }
       }
     },
     "entries": [
@@ -594,6 +671,111 @@
         },
         "counts": ["replayRealCaptures", "replayTotal", "replayCaptured", "replayConstructed"],
         "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the replay corpus size, the cases that produce a number and the constructed ones among them",
+        "pattern": {
+          "match": "Of the (\\d+) cases, (\\d+) produce a number and (\\d+) of those are constructed\\."
+        },
+        "counts": ["replayTotal", "replayScored", "replayScoredConstructed"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the cases that carry captured bytes and where they come from",
+        "pattern": {
+          "match": "(\\d+) cases carry captured bytes: (\\d+) from the ATDD fixture corpus, (\\d+) from `fixtures/test-review-cli/` and (\\d+) from live `eval:ci` runs"
+        },
+        "wrap": true,
+        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the test-review captures that score zero recall",
+        "pattern": {
+          "match": "The ([A-Za-z-]+) test-review captures score zero recall"
+        },
+        "counts": ["replayTestReviewCapturedBytes"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the trace replay cases",
+        "pattern": {
+          "match": "([A-Za-z-]+) trace cases cover both sets:"
+        },
+        "counts": ["replayTrace"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the nfr replay cases",
+        "pattern": {
+          "match": "([A-Za-z-]+) `nfr` cases cover both bundles,"
+        },
+        "wrap": true,
+        "counts": ["replayNfr"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the ci replay cases over the full and minimal projects",
+        "pattern": {
+          "match": "([A-Za-z-]+) `ci` cases cover the `full` and `minimal` projects:"
+        },
+        "wrap": true,
+        "counts": ["replayCiFullAndMinimal"]
+      },
+      {
+        "file": "test/test-eval-replay.js",
+        "claim": "the replay corpus size, the cases that produce a number and the constructed ones among them (header)",
+        "pattern": {
+          "match": "The corpus holds (\\d+) cases and (\\d+) of them produce a number; (\\d+) of those are constructed\\."
+        },
+        "counts": ["replayTotal", "replayScored", "replayScoredConstructed"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/test-eval-replay.js",
+        "claim": "the cases that carry captured bytes (header)",
+        "pattern": {
+          "match": "(\\d+) cases carry captured bytes:"
+        },
+        "counts": ["replayCapturedBytes"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "the epic count of the overview (every ## Epic section)",
+        "pattern": {
+          "match": "into ([A-Za-z-]+) epics and \\d+ stories, including H\\.1"
+        },
+        "counts": ["epicCount"]
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "the story count of the overview (every ### Story section, H.1 included)",
+        "pattern": {
+          "match": "into [A-Za-z-]+ epics and (\\d+) stories, including H\\.1"
+        },
+        "counts": ["storyCount"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "how many stories were appended to Epic 1 (every Epic 1 section from Story 1.27 up)",
+        "pattern": {
+          "match": "\\((\\d+) stories were appended to Epic 1 from findings"
+        },
+        "counts": ["appendedStoryCount"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "how many parallel lanes the plan holds (every lane list of this file and of sprint-status.yaml)",
+        "pattern": {
+          "match": "run in ([A-Za-z-]+) parallel lanes"
+        },
+        "counts": ["laneCount"]
       }
     ]
   },
