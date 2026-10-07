@@ -721,6 +721,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The verdict step reads `steps.run-review.outcome`, and the step that declares that id had been commented out until a repository secret exists.
   The "Install the pinned agent CLI" and "Run headless test review" steps are now real steps gated on `github.event_name == 'pull_request'`, so under the current `workflow_dispatch` trigger they are skipped, their outcome is `skipped` and the verdict is `failed`, exactly as before.
   Enabling the workflow is now two actions: add a secret, then switch `on:` back to `pull_request`; there is nothing to uncomment.
+  The review step passes `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN` and unsets whichever one the repository has no secret for, since a missing secret expands to an empty string that the agent runner would pass through as a set credential.
   `npm run test:workflows-lint`, chained in `npm test` and weighted in `tools/test-shard-weights.json`, runs `actionlint` over every workflow under `.github/workflows/` and `cli/examples/pr-test-review.yml` with the shellcheck and pyflakes integrations off, and fails on any finding.
   With no `actionlint` on `PATH` it fails and names `tools/install-actionlint.sh`; it never skips.
   Each run also lints a copy of `tea-test-review.yaml` clean, refuses the same copy with the `run-review` step id removed, and runs itself with an empty `PATH` to hold the missing-linter failure.
