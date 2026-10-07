@@ -1,18 +1,30 @@
 /**
- * Every Mermaid diagram in the docs reaches the reader as a diagram, not as source code.
+ * Every Mermaid diagram in the docs is spelled so the site converts it, parses, and reaches the reader as a container the
+ * renderer script draws.
  *
  * Starlight prints a ```mermaid fence as a `<pre data-language="mermaid">` block of raw source unless a renderer is
- * wired. The `astro-mermaid` integration turns each fence into `<pre class="mermaid">` at build time and injects one
- * page script that renders those blocks in the reader's browser, so the build needs no headless browser.
+ * wired. The `astro-mermaid` integration turns each fence whose language is exactly `mermaid` into `<pre class="mermaid">`
+ * at build time and injects one page script that draws those blocks in the reader's browser, so the build needs no headless
+ * browser. A fence spelled `Mermaid` is not converted, and a fence whose source does not parse draws Mermaid's "Syntax
+ * error" graphic instead of a diagram.
  *
- * This test builds the site into a temporary folder and, for every page whose source holds a mermaid fence, proves that
- *  - no raw `<pre data-language="mermaid">` block is left,
- *  - the page holds one `<pre class="mermaid">` container per fence, and
- *  - the page loads a script that finds `pre.mermaid` and imports the mermaid library chunk, and that chunk is in the build.
+ * What this test proves, for every Markdown page under `docs/`:
+ *  - every fence whose language reads `mermaid` in any case is spelled lowercase `mermaid`,
+ *  - the source of every such fence parses with Mermaid's own parser (`mermaid.parse`, run in Node through
+ *    `test/lib/mermaid-parse.mjs`).
  *
- * Revert cases keep the check honest. Each one damages a copy of a built page, or the site config, and the check must go red:
- * a raw block put back, the container class removed, the script tag removed, a script that never imports mermaid, a fence
- * count that no longer matches, and a real second build with the `mermaid(...)` integration removed from the config.
+ * It then builds the site into a temporary folder and proves, for the built pages:
+ *  - no built page, fenced or not, holds a raw `<pre data-language="...mermaid...">` block, in any case,
+ *  - a page with fences holds one `<pre class="mermaid">` container per fence, and
+ *  - such a page loads a script that finds `pre.mermaid` and imports the mermaid library chunk, and that chunk is in the build.
+ *
+ * It does not draw the diagrams: a parse that succeeds and a script that is wired do not prove the drawing looks right, so
+ * layout, size and colour are checked by looking at the rendered pages.
+ *
+ * Revert cases keep the check honest. Each one damages a copy of a fence, a built page, or the site config, and the check must go red:
+ * a syntax error in a fence, a fence spelled `Mermaid`, a raw block put back (including one spelled `Mermaid` on a page with no
+ * fence), the container class removed, the script tag removed, a script that never imports mermaid, a fence count that no longer
+ * matches, and a real second build with the `mermaid(...)` integration removed from the config.
  *
  * Usage: node test/test-docs-mermaid.js
  */
@@ -24,6 +36,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DOCS_ROOT = path.join(PROJECT_ROOT, 'docs');
@@ -31,13 +44,51 @@ const WEBSITE_ROOT = path.join(PROJECT_ROOT, 'website');
 const CONFIG_FILE = path.join(WEBSITE_ROOT, 'astro.config.mjs');
 const ASTRO_BIN = path.join(PROJECT_ROOT, 'node_modules', '.bin', 'astro');
 
-/** How many ```mermaid (or ~~~mermaid) fences a page's Markdown source holds. */
-function countFences(markdown) {
-  return (markdown.match(/^[ \t]*(?:`{3,}|~{3,})mermaid[ \t]*$/gm) ?? []).length;
+const RAW_BLOCK = /<pre\b[^>]*\bdata-language="[^"]*mermaid[^"]*"/i;
+
+/**
+ * The fences of a Markdown source whose language reads `mermaid` in any case, as `{ lang, source }`, in order. `lang` is the first
+ * word of the info string as written. Fences inside another fenced block are not fences of the page and are skipped.
+ * An unclosed fence reads to the end of the source.
+ */
+function mermaidFences(markdown) {
+  const fences = [];
+  let open = null;
+  for (const line of markdown.split('\n')) {
+    const match = /^[ \t]*(`{3,}|~{3,})[ \t]*(.*)$/.exec(line);
+    if (open === null) {
+      if (match) open = { marker: match[1], lang: match[2].trim().split(/\s+/)[0], lines: [] };
+    } else if (match && match[1][0] === open.marker[0] && match[1].length >= open.marker.length && match[2].trim() === '') {
+      if (/^mermaid$/i.test(open.lang)) fences.push({ lang: open.lang, source: open.lines.join('\n') });
+      open = null;
+    } else {
+      open.lines.push(line);
+    }
+  }
+  if (open !== null && /^mermaid$/i.test(open.lang)) fences.push({ lang: open.lang, source: open.lines.join('\n') });
+  return fences;
 }
 
-/** The pages under docs/ that hold at least one mermaid fence, as `{ page, fences }`, sorted. Pages the site never serves (an underscore part) are skipped. */
-function pagesWithFences(root = DOCS_ROOT) {
+/** What is wrong with the mermaid fences of one Markdown source: a spelling the integration does not convert, or source that does not parse. */
+async function fenceProblems(markdown, parseMermaid) {
+  const problems = [];
+  for (const [index, { lang, source }] of mermaidFences(markdown).entries()) {
+    if (lang !== 'mermaid') problems.push(`fence ${index + 1} is spelled \`${lang}\`, and the integration converts only \`mermaid\``);
+    try {
+      await parseMermaid(source);
+    } catch (error) {
+      const reason = String(error.message ?? error)
+        .split('\n')
+        .slice(0, 2)
+        .join(' ');
+      problems.push(`fence ${index + 1} does not parse: ${reason}`);
+    }
+  }
+  return problems;
+}
+
+/** The Markdown pages under docs/ the site serves (no underscore part), as `{ page, markdown }`, sorted. */
+function docsPages(root = DOCS_ROOT) {
   const found = [];
   const visit = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -45,13 +96,23 @@ function pagesWithFences(root = DOCS_ROOT) {
       if (entry.name.startsWith('_')) continue;
       if (entry.isDirectory()) visit(full);
       else if (entry.name.endsWith('.md')) {
-        const fences = countFences(fs.readFileSync(full, 'utf8'));
-        if (fences > 0) found.push({ page: path.relative(root, full).split(path.sep).join('/'), fences });
+        found.push({ page: path.relative(root, full).split(path.sep).join('/'), markdown: fs.readFileSync(full, 'utf8') });
       }
     }
   };
   visit(root);
   return found.sort((a, b) => (a.page < b.page ? -1 : 1));
+}
+
+/** The built `.html` files under `dir`, as paths relative to `dir`. */
+function builtPages(dir, base = dir) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...builtPages(full, base));
+    else if (entry.name.endsWith('.html')) found.push(path.relative(base, full).split(path.sep).join('/'));
+  }
+  return found;
 }
 
 /** The built file Starlight writes for a docs page. */
@@ -66,7 +127,7 @@ function builtFileFor(page) {
  */
 function mermaidProblems(html, fences, readAsset) {
   const problems = [];
-  if (/<pre\b[^>]*\bdata-language="mermaid"/.test(html)) problems.push('a raw <pre data-language="mermaid"> block is left');
+  if (RAW_BLOCK.test(html)) problems.push('a raw <pre data-language="mermaid"> block is left');
 
   const containers = (html.match(/<pre\b[^>]*\bclass="mermaid"/g) ?? []).length;
   if (containers !== fences) problems.push(`${containers} <pre class="mermaid"> containers for ${fences} fences`);
@@ -106,37 +167,73 @@ function buildSite(outDir, configFile = CONFIG_FILE) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-/** Every problem on every fenced page of a site built at `outDir`, as `page: problem` lines. */
+/**
+ * Every problem of a site built at `outDir`, as `page: problem` lines: the fenced pages are checked in full, and every built page,
+ * fenced or not, is scanned for a raw mermaid block.
+ */
 function siteProblems(outDir, pages) {
   const readAsset = (name) => {
     const file = path.join(outDir, '_astro', name);
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
   };
   const lines = [];
+  const fenced = new Set();
   for (const { page, fences } of pages) {
-    const file = path.join(outDir, builtFileFor(page));
+    const built = builtFileFor(page);
+    fenced.add(built);
+    const file = path.join(outDir, built);
     if (!fs.existsSync(file)) {
-      lines.push(`${page}: no built page at ${builtFileFor(page)}`);
+      lines.push(`${page}: no built page at ${built}`);
       continue;
     }
     for (const problem of mermaidProblems(fs.readFileSync(file, 'utf8'), fences, readAsset)) lines.push(`${page}: ${problem}`);
   }
+  for (const built of builtPages(outDir)) {
+    if (!fenced.has(built) && RAW_BLOCK.test(fs.readFileSync(path.join(outDir, built), 'utf8'))) {
+      lines.push(`${built}: a raw <pre data-language="mermaid"> block is left on a page with no mermaid fence`);
+    }
+  }
   return lines;
 }
 
-function main() {
-  const pages = pagesWithFences();
+async function main() {
+  const { parseMermaid } = await import(pathToFileURL(path.join(__dirname, 'lib', 'mermaid-parse.mjs')).href);
+
+  const docs = docsPages();
+  const pages = docs.map(({ page, markdown }) => ({ page, fences: mermaidFences(markdown).length })).filter(({ fences }) => fences > 0);
   assert.ok(pages.length >= 8, `the docs hold mermaid fences to check (found ${pages.length})`);
+
+  // Every fence of every page is spelled for the integration and parses.
+  const sourceProblems = [];
+  for (const { page, markdown } of docs) {
+    for (const problem of await fenceProblems(markdown, parseMermaid)) sourceProblems.push(`${page}: ${problem}`);
+  }
+  assert.deepEqual(sourceProblems, [], `mermaid fences the site cannot draw:\n${sourceProblems.join('\n')}`);
+
+  // Revert cases on the sources: a syntax error and a capitalised fence must go red, and the unmodified fence stays green.
+  const goodFence = '```mermaid\nflowchart TD\n  A --> B\n```\n';
+  assert.deepEqual(await fenceProblems(goodFence, parseMermaid), [], 'a well-formed lowercase fence passes');
+  const syntaxError = await fenceProblems('```mermaid\nflowchart TD\n  A -->> -->\n```\n', parseMermaid);
+  assert.match(syntaxError.join('\n'), /does not parse/, 'a syntax error in a fence must fail the check');
+  const capitalised = await fenceProblems(goodFence.replace('```mermaid', '```Mermaid'), parseMermaid);
+  assert.match(capitalised.join('\n'), /spelled `Mermaid`/, 'a fence spelled Mermaid must fail the check');
+  const shouting = await fenceProblems(goodFence.replace('```mermaid', '~~~MERMAID').replace(/```\n$/, '~~~\n'), parseMermaid);
+  assert.match(shouting.join('\n'), /spelled `MERMAID`/, 'a tilde fence spelled MERMAID must fail the check');
+  assert.equal(
+    mermaidFences('```text\n```mermaid\nnot a fence of the page\n```\n').length,
+    0,
+    'a fence inside another fenced block is not a fence of the page',
+  );
 
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-mermaid-'));
   const brokenConfig = path.join(WEBSITE_ROOT, 'astro.config.no-mermaid.mjs');
   try {
-    // The real site: every fenced page is wired.
+    // The real site: every fenced page is wired and no built page holds a raw block.
     const site = path.join(scratch, 'site');
     const built = buildSite(site);
     assert.equal(built.status, 0, `the site build failed:\n${built.output.slice(-2000)}`);
     const problems = siteProblems(site, pages);
-    assert.deepEqual(problems, [], `mermaid fences that do not reach the reader as diagrams:\n${problems.join('\n')}`);
+    assert.deepEqual(problems, [], `mermaid fences that do not reach the reader as containers:\n${problems.join('\n')}`);
 
     // Revert cases on a copy of one built page and its assets.
     const sample = pages[0];
@@ -151,6 +248,13 @@ function main() {
       [
         'a raw block put back',
         html.replace('<pre class="mermaid"', '<pre data-language="mermaid"'),
+        sample.fences,
+        readAsset,
+        /raw <pre data-language/,
+      ],
+      [
+        'a raw block spelled Mermaid put back',
+        html.replace('<pre class="mermaid"', '<pre data-language="Mermaid"'),
         sample.fences,
         readAsset,
         /raw <pre data-language/,
@@ -181,16 +285,26 @@ function main() {
       ['a fence count that no longer matches', html, sample.fences + 1, readAsset, /containers for/],
     ];
     for (const [name, mutated, fences, read, expected] of reverts) {
-      assert.notEqual(mutated, undefined);
       const found = mermaidProblems(mutated, fences, read).join('\n');
       assert.match(found, expected, `revert case "${name}" must fail the check`);
     }
     assert.notEqual(html.replace('<pre class="mermaid"', '<pre data-language="mermaid"'), html, 'the raw-block revert changes the page');
 
+    // A raw block on a page with no fence is found by the scan of every built page.
+    const unfenced = path.join(site, '404.html');
+    const original = fs.readFileSync(unfenced, 'utf8');
+    fs.writeFileSync(unfenced, original.replace('</body>', '<pre data-language="Mermaid"><code>graph TD</code></pre></body>'));
+    assert.match(
+      siteProblems(site, pages).join('\n'),
+      /404\.html: a raw <pre data-language="mermaid"> block is left on a page with no mermaid fence/,
+      'a raw block on an unfenced built page must fail the check',
+    );
+    fs.writeFileSync(unfenced, original);
+
     // The real revert: build again with the integration removed from the config. The raw blocks must come back and the check must go red.
     const config = fs.readFileSync(CONFIG_FILE, 'utf8');
-    const without = config.replace(/^[ \t]*mermaid\(\{[^\n]*\}\),\n/m, '');
-    assert.notEqual(without, config, 'the config holds a one-line mermaid({ ... }), integration to remove');
+    const without = config.replace(/^ {4}mermaid\(\{\n[\s\S]*?^ {4}\}\),\n/m, '');
+    assert.notEqual(without, config, 'the config holds a mermaid({ ... }), integration to remove');
     fs.writeFileSync(brokenConfig, without);
     const brokenSite = path.join(scratch, 'broken-site');
     const brokenBuild = buildSite(brokenSite, brokenConfig);
@@ -209,7 +323,7 @@ function main() {
     );
 
     console.log(
-      `test-docs-mermaid: ${pages.length} pages with ${pages.reduce((sum, { fences }) => sum + fences, 0)} diagrams render through astro-mermaid`,
+      `test-docs-mermaid: ${pages.length} pages with ${pages.reduce((sum, { fences }) => sum + fences, 0)} diagrams parse and reach the renderer`,
     );
   } finally {
     fs.rmSync(brokenConfig, { force: true });
@@ -218,4 +332,7 @@ function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

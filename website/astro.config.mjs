@@ -48,7 +48,35 @@ export default defineConfig({
     // text (several open with a `%%{init: {'theme':'base', ...}}%%` directive for GitHub), so
     // every diagram renders in mermaid's light theme and sits on a light card in both site
     // themes (see custom.css). A dark diagram theme would put light text on those pale fills.
-    mermaid({ autoTheme: false, theme: 'default', enableLog: false }),
+    mermaid({
+      autoTheme: false,
+      theme: 'default',
+      enableLog: false,
+      // Draw every diagram at its natural width. custom.css keeps that width, so a diagram wider than
+      // the column scrolls inside its card instead of shrinking below a readable size.
+      mermaidConfig: Object.fromEntries(
+        [
+          'flowchart',
+          'sequence',
+          'gantt',
+          'journey',
+          'class',
+          'state',
+          'er',
+          'pie',
+          'requirement',
+          'mindmap',
+          'timeline',
+          'gitGraph',
+          'c4',
+          'sankey',
+          'xyChart',
+          'block',
+          'quadrantChart',
+          'architecture',
+        ].map((diagram) => [diagram, { useMaxWidth: false }]),
+      ),
+    }),
     sitemap(),
     starlight({
       title: 'Test Architect (TEA)',

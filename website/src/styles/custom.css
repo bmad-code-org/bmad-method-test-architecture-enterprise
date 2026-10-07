@@ -536,16 +536,18 @@ footer {
   border-radius: 0.5rem;
 }
 
-/* astro-mermaid fits each diagram to the column. On a phone that shrinks a wide diagram
-   below a readable size, so give the diagram a floor width and let the card scroll sideways.
-   `safe center` keeps the left edge reachable when the diagram is wider than the card. */
+/* Mermaid is told not to cap a diagram's width (useMaxWidth: false in astro.config.mjs), so each diagram
+   carries its natural width and keeps it at every screen width: one that fits the card renders as drawn, and
+   one that is wider scrolls sideways inside its card instead of shrinking below a readable size.
+   astro-mermaid injects `max-width: 100%` to fit a diagram to the column, and the svg is a flex item that
+   shrinks to fit, so both are switched off. `safe center` keeps the left edge reachable when the diagram is
+   wider than the card. */
 .sl-markdown-content pre.mermaid {
   justify-content: safe center;
   overflow-x: auto;
 }
 
-@media (max-width: 50rem) {
-  .sl-markdown-content pre.mermaid svg {
-    min-width: 40rem;
-  }
+.sl-markdown-content pre.mermaid svg {
+  flex-shrink: 0;
+  max-width: none;
 }
