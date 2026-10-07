@@ -1644,6 +1644,21 @@ function checkStageViewExits() {
         assert.match(stderr, new RegExp(`^compile over the ${view} view: eval-quality compile exited 7`, 'm'));
     }
   }
+  // What each view's engine call printed: the development view's streams are the check's own, and the held-out and both views' stay in
+  // their records, since an engine message about them can quote the held-out plan (revert: streams of every view in the check's files).
+  const streams = copyFixture('plan', 'stage-views-streams');
+  writePlan(streams, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  const printed = ci(streams, 'pr', shimEnv(path.join(path.dirname(streams), 'shim.log'), { TEA_EVALUATE_SHIM_STREAMS: 'marker' }));
+  assert.equal(printed.status, 0, printed.output);
+  const printedRun = latestCi(streams).directory;
+  const count = (text) => text.split('marker stdout 2 -').length - 1;
+  assert.equal(count(fs.readFileSync(path.join(printedRun, 'checks', 'compile', 'stdout'), 'utf8')), 1);
+  assert.equal(fs.readFileSync(path.join(printedRun, 'checks', 'compile', 'stderr'), 'utf8').split('marker stderr 2 -').length - 1, 1);
+  for (const where of ['', 'held-out/', 'both/']) {
+    const record = read(path.join(printedRun, 'checks', 'compile', ...where.split('/'), 'engine.json'));
+    assert.match(record.stdout, /marker stdout 2 -/, `the ${where || 'development '}record holds the engine's stdout`);
+    assert.match(record.stderr, /marker stderr 2 -/);
+  }
 }
 
 /**

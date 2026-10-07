@@ -2869,6 +2869,14 @@ So that a development run never hands the evaluator a held-out oracle, request o
 
 Added 2026-10-03 from Story 1.51's build. Story 1.51's `ci` compile and seal checks run over `contract.json`, the development view. An engine compile or seal defect in the held-out plan surfaces only at a held-out or both preflight, where a pull request does not run it. `check` compiles nothing, because `test:evaluate-boundaries` forbids an in-process compile under `cli/`.
 
+Amended 2026-10-07 in Story 1.108: the criteria hold as written, and the build states what they leave open.
+The development view keeps the evidence paths a plan with no `partitionPlan` has, and the held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`.
+The check's exit is the most severe of the views' exits, so the engine's exit reaches `ci` unchanged.
+eval-quality recompiles a contract before it seals it, so the engine itself refuses to seal a view it refuses to compile, and the seal check leaves no brief for that view.
+A view that cannot be derived (a held-out plan that is absent, unparsable or off its shape) is a finding of that view with exit 10, its stage does not run, and every other view still runs.
+What the engine says about the held-out or both view stays in that view's `engine.json`, since it can quote the held-out plan, so the console and the development view's evidence name no held-out ID.
+`compile` and `seal` are deterministic checks that need no secret, so a plan places them on `pr` alone and no `release` row holds them.
+
 As an adopter who protects pull requests with the `pr` tier,
 I want `ci` to compile and seal every view a baseline or run uses,
 So that a held-out plan that cannot compile fails the pull request that wrote it.

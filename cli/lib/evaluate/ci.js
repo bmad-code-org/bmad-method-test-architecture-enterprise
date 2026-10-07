@@ -612,7 +612,7 @@ async function checkCheck(context) {
  * entry for each of the development, held-out and both views. Each entry names its `view` and holds `file`, the contract the stage
  * reads, or `problem`, the message of the error that kept the view from being derived. The development view is the folder's
  * `contract.json` itself, so the held-out plan is read only for the held-out and both views. A derived view is staged in a
- * directory of the invocation's scratch list, and the views are derived once per invocation, whichever checks run.
+ * directory of the invocation's scratch list.
  */
 function stageViews(context) {
   return context.once('stage-views', () => {
