@@ -215,6 +215,7 @@ const {
 const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)', bubblewrap: 'Linux Bubblewrap (bwrap)' });
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
+const ENV_PROGRAM = '/usr/bin/env';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
 
 /**
@@ -462,16 +463,22 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
  * A `connect()` to a path-based unix socket is refused anywhere but the workspace, the private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
  * The rule names a path, so it holds for a socket bound after the call started.
  *
- * With `audit` (`{ token, exempt }`), the kernel reports what the profile
- * allows or refuses: every file rule that denies carries the sandbox's token
- * (`with message`), and one rule, placed before every rule that follows it so
- * that a later grant (the home, the git directory's own entry) overrides it,
- * reports each `file-read-data` the profile allows outside `exempt` (the paths
- * the sandbox may read, and the root directory itself) with the same token
- * (`with report`). Without `audit` the profile is the one every earlier story
- * generated, byte for byte.
+ * With `audit` (`{ token, exempt }`), the kernel reports what the profile allows or refuses.
+ * Every file rule that denies carries the sandbox's token (`with message`).
+ * One rule reports each `file-read-data` the profile allows outside `exempt` (the paths the sandbox may read, and the root directory itself) with the same token (`with report`).
+ * That rule is placed before every rule that follows it, so a later grant (the home, a call directory, the git directory's own entry) overrides it.
+ * Without `audit` the profile is the one every earlier story generated, byte for byte.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null, audit = null }) {
+function seatbeltTargetProfile({
+  workspace,
+  writable,
+  evaluationFolder,
+  git = null,
+  privateRoot = null,
+  rootHome = null,
+  rootGrants = [],
+  audit = null,
+}) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
@@ -511,29 +518,29 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
             .map((entry) => `(remote unix-socket (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`)
             .join('\n  ')})`,
         ];
-  // The target's own home sits beneath the private root, so it is allowed again after the root's denial (the last
-  // matching rule wins); a sibling home, another run's parent and the root's listing stay denied.
-  // Resolving the home's path asks the root and each directory down to the home's parent for their metadata (an `lstat`
-  // while a module loads, `realpath`, `mkdir -p`, `cd`), so those directories answer a metadata request, which tells nothing
-  // a path does not already say; listing them stays denied, since a directory's entries are file data.
-  const homeAncestors = [];
-  if (rootHome !== null) {
+  // The target's own home and the call directories (Story 1.131) sit beneath the private root, so each is allowed again after the root's denial.
+  // The last matching rule wins, so a sibling home, another run's parent and the root's listing stay denied.
+  // Resolving the path of one of them asks the root and each directory down to its parent for their metadata (an `lstat` while a module loads, `realpath`, `mkdir -p`, `cd`).
+  // Those directories therefore answer a metadata request, which tells nothing a path does not already say, and listing them stays denied, since a directory's entries are file data.
+  const reachable = [rootHome, ...rootGrants].filter((entry) => entry !== null);
+  const reachableAncestors = [];
+  for (const directory of reachable) {
     for (
-      let ancestor = path.dirname(rootHome);
+      let ancestor = path.dirname(directory);
       ancestor.length > 1 && ancestor !== path.dirname(ancestor);
       ancestor = path.dirname(ancestor)
     ) {
-      if (spellings(privateRoot).some((held) => isInside(held, ancestor))) homeAncestors.push(ancestor);
-      else break;
+      if (!spellings(privateRoot).some((held) => isInside(held, ancestor))) break;
+      if (!reachableAncestors.includes(ancestor)) reachableAncestors.push(ancestor);
     }
   }
-  const homeRules =
-    rootHome === null
+  const reachableRules =
+    reachable.length === 0
       ? []
       : [
-          `(allow ${reads} file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
-          `(allow file-read-metadata\n  ${homeAncestors.flatMap(literals).join('\n  ')})`,
-          `(allow network-outbound\n  ${socketRoutes(subpaths(rootHome))})`,
+          `(allow ${reads} file-write*\n  ${reachable.flatMap(subpaths).join('\n  ')})`,
+          `(allow file-read-metadata\n  ${reachableAncestors.flatMap(literals).join('\n  ')})`,
+          `(allow network-outbound\n  ${socketRoutes(reachable.flatMap(subpaths))})`,
         ];
   // What the sandbox may read is not reported; every other read the profile allows is (macOS reports by real path, so both spellings are named).
   const reportRule =
@@ -560,7 +567,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     ...reportRule,
     ...gitRules,
     ...privateRules,
-    ...homeRules,
+    ...reachableRules,
     ...quiet,
     ...denials(withheld),
     '',
@@ -619,6 +626,28 @@ const SOCKET_REPLACED_DIRECTORIES = Object.freeze(['/dev', '/proc']);
  */
 function sandboxOwnDirectories() {
   return ['/dev', ...(fs.existsSync('/run/user') ? ['/run/user'] : [])];
+}
+
+/**
+ * Where a call directory beneath the user's private root reaches a Bubblewrap target (Story 1.131): the sandbox empties the root, so a grant beneath it would be hidden.
+ * The directory is bound at a path under the synthetic `/dev`, which the sandbox keeps and which no listing of the root shows, as the egress proxy's directory is (Story 1.83).
+ * The name is the directory's own, which `mkdtemp` made unique among the run's call directories.
+ */
+function callDirectoryMount(directory) {
+  return path.join('/dev', path.basename(directory));
+}
+
+/**
+ * The path a target names `candidate` by when it is an absolute path inside one of the `mounted` call directories (`{ directory, mount }`, Story 1.131): the mount of that directory and the rest of the path.
+ * Any other value is returned as it is, so a value that is no path, a relative path and a path outside every call directory pass through.
+ */
+function pathAsMounted(candidate, mounted) {
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) return candidate;
+  for (const { directory, mount } of mounted) {
+    const held = spellings(directory).find((spelling) => isInside(spelling, candidate));
+    if (held !== undefined) return path.join(mount, path.relative(held, path.resolve(candidate)));
+  }
+  return candidate;
 }
 
 /**
@@ -732,6 +761,9 @@ function launchedCommand(socketFile, environmentFile, argv) {
  * (Story 1.83) is bound read-only at `mount`, a path beneath the synthetic `/dev`
  * when the directory sits in the private root the sandbox empties, so the
  * call's shim reaches the proxy's socket from inside the namespace.
+ * Each of `mounted` (`{ directory, mount }`) is a call directory beneath that root (Story 1.131).
+ * It is bound writable at `mount`, a path beneath the synthetic `/dev`, so the target reaches it.
+ * The run's private parent holds the directory, so the next run's recovery reclaims it after a kill.
  */
 function bubblewrapTargetArguments({
   executable,
@@ -746,6 +778,7 @@ function bubblewrapTargetArguments({
   sockets = [],
   socketsFd = null,
   egress = null,
+  mounted = [],
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
   const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
@@ -796,6 +829,8 @@ function bubblewrapTargetArguments({
     ...(statusMount === statusFile ? [] : ['--bind', realOf(statusFile), statusMount]),
     // The egress proxy's directory is the runtime's: the target sees it read-only, and a `connect()` needs no write.
     ...(egress === null || egress.mount === egress.directory ? [] : ['--ro-bind', realOf(egress.directory), egress.mount]),
+    // A call directory beneath the private root is the call's own and writable, at a path the emptied root does not hide.
+    ...mounted.flatMap(({ directory, mount }) => ['--bind', realOf(directory), mount]),
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -886,34 +921,38 @@ const confirmedObservers = new Map();
  * back through it, `{ failure }` with the reason otherwise (Story 1.60).
  */
 function probeObserver(mechanism, env) {
-  // The probes make a directory in the temp directory; one that is missing or unwritable is the workspace step's to name, as
-  // for the mechanism's own probe, and the observer is then confirmed by the first call that runs (the trial's start on macOS,
-  // the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
-  let tempUsable = true;
+  // The probes make a directory beneath the user's private root (Story 1.131), so a run killed outright while a probe runs leaves it to the next preflight's recovery.
+  // A root that cannot be held and a temp directory that is missing or unwritable are the workspace step's to name, as for the mechanism's own probe.
+  // The observer is then confirmed by the first call that runs (the trial's start on macOS, the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
+  const { privateRootBase, privateRootIn } = require('./workspace');
+  let probeUsable = true;
   try {
     fs.accessSync(os.tmpdir(), fs.constants.W_OK);
   } catch {
-    tempUsable = false;
+    probeUsable = false;
   }
+  const parent = probeUsable ? privateRootIn(privateRootBase()) : null;
+  probeUsable = parent !== null;
   if (mechanism.mode === 'seatbelt') {
     const logExecutable = env?.[LOG_ENV] || LOG_EXECUTABLE;
     if (!path.isAbsolute(logExecutable))
       return { failure: `${LOG_ENV} names ${JSON.stringify(logExecutable)}, which is not an absolute path` };
     const key = `${mechanism.executable}|${logExecutable}`;
-    if (!tempUsable) return { observer: { executable: logExecutable } };
+    if (!probeUsable) return { observer: { executable: logExecutable } };
     if (confirmedObservers.has(key)) return confirmedObservers.get(key);
-    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable });
+    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable, parent });
     if (failure !== null) return { failure };
     return confirmedObservers.set(key, { observer: { executable: logExecutable } }).get(key);
   }
   const strace = executableOnPath('strace', env);
   if (strace === null) return { failure: 'strace is not on PATH' };
-  if (!tempUsable) return { observer: { executable: strace } };
+  if (!probeUsable) return { observer: { executable: strace } };
   const key = `${mechanism.executable}|${strace}`;
   if (confirmedObservers.has(key)) return confirmedObservers.get(key);
   const failure = probeTrace({
     strace,
     vector: bubblewrapProbeArguments(mechanism.executable),
+    parent,
   });
   if (failure !== null) return { failure };
   return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
@@ -1025,7 +1064,7 @@ function selectConfinement({ evaluation, folder, root, env = process.env, platfo
       refusal: `the evaluation folder's path ${JSON.stringify(unsafe)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the folder, ${optOut}`,
     };
   }
-  // Every workspace and private directory a target is granted is made under the temp directory.
+  // Every workspace a target is granted is made under the temp directory; the private directories it is granted are made beneath the run's private parent.
   const unsafeTemp = spellings(temp).find((entry) => !isProfileSafePath(entry));
   if (unsafeTemp !== undefined) {
     return {
@@ -1328,6 +1367,11 @@ function targetSandbox({
     rootHome = privateRoot !== null && inside(privateRoot) ? candidate : null;
   };
   if (initialHome !== null) adoptHome(initialHome);
+  // A call directory is a directory the call may write beneath the private root, other than the home (Story 1.131).
+  const isCallDirectory = (candidate) =>
+    privateRoot !== null &&
+    spellings(candidate).some((entry) => spellings(privateRoot).some((held) => isInside(held, entry))) &&
+    !(rootHome !== null && spellings(candidate).some((entry) => spellings(rootHome).some((held) => isInside(held, entry))));
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
     throw new ConfinementError('a target confined by Bubblewrap needs a status directory');
   }
@@ -1407,6 +1451,8 @@ function targetSandbox({
       { bridge = null, sockets: own = null, environment = {}, egress: egressSocket = null, listenPort = null } = {},
     ) {
       const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
+      // The call directories beneath the private root are re-granted after the root's denial (Seatbelt) or bound under the synthetic `/dev` (Bubblewrap).
+      const callDirectories = grants.filter(isCallDirectory);
       if (confinement.mode === 'seatbelt') {
         const profile = seatbeltTargetProfile({
           workspace,
@@ -1415,12 +1461,18 @@ function targetSandbox({
           git,
           privateRoot,
           rootHome,
+          rootGrants: callDirectories,
           audit:
             observer === null
               ? null
               : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: [...ownGitEntries(), ...linked] },
         });
-        return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
+        // `env` runs outside the sandbox and after the watchdog hop that starts every target, which is where Node adds the host's `NODE_V8_COVERAGE` to the environment; the sandbox then starts the target without it, as Bubblewrap's `--unsetenv` does.
+        return {
+          target: ENV_PROGRAM,
+          args: ['-u', 'NODE_V8_COVERAGE', confinement.executable, '-p', profile, target, ...args],
+          statusFile: null,
+        };
       }
       if (bridge !== null) {
         const granted =
@@ -1429,6 +1481,18 @@ function targetSandbox({
           writable.some((held) => spellings(held).some((entry) => spellings(bridge).some((socket) => isInside(entry, socket))));
         if (!granted) throw new ConfinementError('the bridge socket must be a path inside a directory the call may write');
       }
+      const mounted = callDirectories.map((directory) => ({ directory, mount: callDirectoryMount(directory) }));
+      if (new Set(mounted.map(({ mount }) => mount)).size !== mounted.length) {
+        throw new ConfinementError('two call directories of one call have one name, which one mount under the synthetic /dev cannot hold');
+      }
+      // The shim serves the bridge's socket at the path its directory has for the target, and every path in the call's environment that lies in a call directory (`TMPDIR`, a started service's port file) is that path too.
+      const bridgeSeen = bridge === null ? null : pathAsMounted(bridge, mounted);
+      const seenEnvironment =
+        mounted.length === 0
+          ? environment
+          : Object.fromEntries(
+              Object.entries(environment).map(([name, value]) => [name, typeof value === 'string' ? pathAsMounted(value, mounted) : value]),
+            );
       // The egress proxy's directory is the runtime's own and the target sees it read-only: a directory of the private root is
       // bound at a path beneath the synthetic `/dev`, which keeps it out of the target's otherwise empty private root.
       let egress = null;
@@ -1466,7 +1530,7 @@ function targetSandbox({
         bubblewrapTargetArguments({
           executable: confinement.executable,
           workspace,
-          writable: grants,
+          writable: grants.filter((directory) => !callDirectories.includes(directory)),
           evaluationFolder,
           git,
           privateRoot,
@@ -1476,11 +1540,12 @@ function targetSandbox({
           sockets: hidden,
           socketsFd,
           egress,
+          mounted,
         });
       const tail = [
         process.execPath,
         STATUS_SHIM,
-        ...(bridge === null ? [] : ['--bridge', bridge]),
+        ...(bridge === null ? [] : ['--bridge', bridgeSeen]),
         ...(egress === null ? [] : ['--egress', path.join(egress.mount, path.basename(egressSocket))]),
         // A server told to bind a port of the namespace's loopback keeps it: the egress listener asks the system for another.
         ...(egress === null || listenPort === null ? [] : ['--avoid', String(listenPort)]),
@@ -1548,7 +1613,7 @@ function targetSandbox({
           .join('');
         try {
           fs.writeFileSync(socketFile, mounts, { mode: 0o600 });
-          fs.writeFileSync(environmentFile, JSON.stringify(stringEnvironment(environment)), { mode: 0o600 });
+          fs.writeFileSync(environmentFile, JSON.stringify(stringEnvironment(seenEnvironment)), { mode: 0o600 });
         } catch (error) {
           fs.rmSync(socketFile, { force: true });
           fs.rmSync(environmentFile, { force: true });
@@ -1565,7 +1630,7 @@ function targetSandbox({
           hiddenSockets: { value: sockets },
           socketFile: { value: socketFile },
           environmentFile: { value: environmentFile },
-          environment: { value: hiding ? launcherEnvironment() : environment },
+          environment: { value: hiding ? launcherEnvironment() : seenEnvironment },
         });
       // The launcher goes outermost, before `strace`, so the audit traces Bubblewrap alone, as it does for a call hiding nothing.
       const launched = (argv) => (hiding ? launchedCommand(socketFile, environmentFile, argv) : argv);
@@ -1584,10 +1649,17 @@ function targetSandbox({
           marker: { program: process.execPath, text: path.basename(statusFile) },
           grants: {
             // The egress proxy's directory is no read grant: the shim only connects to its socket, which `connect` below covers.
-            read: readRoots([...grants, ...readable, statusMount]),
+            read: readRoots([...grants, ...mounted.map(({ mount }) => mount), ...readable, statusMount]),
             requested: REQUESTED_ROOTS.flatMap(spellings),
             // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
-            write: [workspace, ...grants, ...(home === null ? [] : [home]), statusMount, ...ownGitEntries()].flatMap(spellings),
+            write: [
+              workspace,
+              ...grants,
+              ...mounted.map(({ mount }) => mount),
+              ...(home === null ? [] : [home]),
+              statusMount,
+              ...ownGitEntries(),
+            ].flatMap(spellings),
             // A connection to a socket file in these places is the call's own (Story 1.86).
             // They are its workspace, its private directories (the bridge's among them), its home, the sandbox's own empty mounts and the egress proxy's directory, which the shim connects to.
             connect: [
@@ -1807,14 +1879,15 @@ function recordedStatus(statusFile, statusKey = null) {
 }
 
 /**
- * A private temp directory for one confined call, joined to the run's
- * `scratch` while it exists: a confined target writes nothing outside its
- * workspace, so the system's temp directory is closed to it (read-only under
- * Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP
- * point it instead. Its real path, so both mechanisms name it one way.
+ * A private temp directory for one confined call, joined to the run's `scratch` while it exists.
+ * A confined target writes nothing outside its workspace, so the system's temp directory is closed to it (read-only under Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP point it.
+ * It is made by its real path, which Seatbelt names to the target and Bubblewrap binds under the synthetic `/dev`.
+ * It is made beneath the run's private parent (`scratch.privateParent`, Story 1.131).
+ * A run killed outright leaves it to the recovery of that parent and leaves nothing in the system's temp directory.
+ * A list with no parent keeps it in the temp directory.
  */
 function callTemporary(scratch) {
-  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-target-tmp-')));
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-tmp-')));
   scratch.push(directory);
   return directory;
 }

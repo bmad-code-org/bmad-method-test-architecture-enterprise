@@ -310,6 +310,7 @@ module.exports = {
   CLOCK_SLACK_MS,
   MASK_RECORD_NAME,
   isMaskRecord,
+  processMayRun,
   removePlaceholders,
   startMaskGuard,
   sweepMaskRecords,
