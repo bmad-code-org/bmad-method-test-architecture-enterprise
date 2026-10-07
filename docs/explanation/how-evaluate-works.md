@@ -17,31 +17,34 @@ Evaluation moves from confirmed requirements to CI in six steps, and three roles
 The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and `eval-quality` scores it.
 You confirm the requirements and accept the baseline, and CI enforces the checks the evaluation chose.
 
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#fff','primaryTextColor':'#000','primaryBorderColor':'#000','lineColor':'#000','secondaryColor':'#fff','tertiaryColor':'#fff','fontSize':'16px','fontFamily':'arial'}}}%%
-graph TB
-    Requirements["<b>You confirm the requirements</b>"]
-
-    subgraph Skill["<b>Authoring skill: Evaluate</b>"]
-        Author["<b>Authors the evaluation:<br/>probes, contract, oracles, mutations</b>"]
-    end
-
-    subgraph Cli["<b>Execution CLI: tea-evaluate</b>"]
-        Run["<b>Runs the clean and mutated arms<br/>and records the evidence</b>"]
-    end
-
-    subgraph Engine["<b>Scoring engine: eval-quality</b>"]
-        Score["<b>Scores each probe and takes the verdicts</b>"]
-    end
-
-    Accept["<b>You accept the baseline</b>"]
-    Ci["<b>CI enforces the chosen checks</b>"]
-
-    Requirements --> Author
-    Author --> Run
-    Run --> Score
-    Score --> Accept
-    Accept --> Ci
+```text
+ You confirm the requirements
+              |
+              v
+ +---------------------------------------------+
+ | AUTHORING SKILL: Evaluate                   |
+ | authors the evaluation: probes, contract,   |
+ | oracles, mutations                          |
+ +---------------------------------------------+
+              |
+              v
+ +---------------------------------------------+
+ | EXECUTION CLI: tea-evaluate                 |
+ | runs the clean and mutated arms and records |
+ | the evidence                                |
+ +---------------------------------------------+
+              |
+              v
+ +---------------------------------------------+
+ | SCORING ENGINE: eval-quality                |
+ | scores each probe and takes the verdicts    |
+ +---------------------------------------------+
+              |
+              v
+ You accept the baseline
+              |
+              v
+ CI enforces the chosen checks
 ```
 
 This page explains how the pieces fit and why they are built this way.

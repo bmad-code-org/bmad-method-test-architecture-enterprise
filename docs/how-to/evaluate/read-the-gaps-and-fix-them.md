@@ -36,6 +36,8 @@ Run the preflight and keep its run ID.
 RUN=$(npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/test-review-json-stdin 2>&1 | tee /dev/stderr | tail -1 | grep -o '[0-9]\{8\}T[0-9]\{9\}Z-[0-9a-f]\{8\}' | tail -1)
 ```
 
+If `RUN` comes back empty, the preflight stopped before it made a run (an authoring defect or a host refusal), and its output says why; fix that first.
+
 Over the example folder it prints:
 
 ```text

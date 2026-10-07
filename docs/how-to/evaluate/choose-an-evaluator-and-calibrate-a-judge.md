@@ -67,8 +67,11 @@ A `command` evaluator names its executable inside the folder:
 A sealed-brief agent names its adapter:
 
 ```json
-{ "evaluator": { "kind": "sealed-brief-agent", "agent": "claude", "timeoutMs": 30000 } }
+{ "evaluator": { "kind": "sealed-brief-agent", "agent": "claude", "model": "claude-sonnet-5-5", "timeoutMs": 30000 } }
 ```
+
+`evaluator.model` selects the model the agent runs, and `evaluator.modelSnapshot` in `policy/evaluator-conditions.json` records it, so both hold the same immutable ID.
+`check` exits 10 when they differ.
 
 A records evaluator names the folder where your harness seals its records:
 
