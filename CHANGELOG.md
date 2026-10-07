@@ -684,7 +684,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The shell is gone: `confinement-launcher.cjs`, a Node program the runtime starts outside the sandbox, opens the arguments file as descriptor 3, starts the command with the call's environment and ends as the command ended, passing signals on.
   The call's environment travels in a file in the call's private status directory (mode 600, removed by the launcher once read and by the runtime when the call ends), and the launcher itself starts with the loader variables the engine's watchdog carries and nothing else, so a `NODE_OPTIONS` of the call cannot run a script outside the sandbox.
   The launcher stays outermost and before `strace`, so the audit still traces Bubblewrap alone, and the command keeps the launcher's process group, which the engine's group kill reaches.
+  The launcher ends by the signal that ended the command, SIGPIPE and SIGXFSZ included, which Node starts ignoring and the launcher returns to their default action.
+  A case sends each of SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGUSR1 and SIGUSR2 to the launcher and finds it in the command, with no debugger opened.
   A call that hides sockets and overflows the operating system's limit on arguments and environment (`E2BIG`) reaches a run as the engine's own `launch-too-large` fault, as a call that hides none does.
+  The runtime throws the error Node's `spawn` gives `E2BIG`, from which the engine's command-line adapter builds the fault, and a case drives a call that hides a socket and one that hides none through that adapter.
   The runtime reads the launcher's refusal (exit 125 and its token on standard error) only from a call whose status file shows that Bubblewrap's shim never started, so a target that ran and ends with the same exit and text keeps its own exit and cannot pass for the host's refusal.
   The launcher keeps a host's `NODE_V8_COVERAGE` out of the command's environment, since Node adds it to every child it spawns, and a call that holds the variable keeps its own value.
   `SHELL_VARIABLES`, the `env` restore and the refusal of an executable path that holds `=` are gone.
@@ -805,6 +808,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `agent-supervisor.js` appended its trace lines with one attempt and swallowed every error, so a sharing violation under load dropped a line, and the "setup race" case of `test:evaluate-preflight` failed on the `windows-agent-supervision` job although the agent had started.
   In trace mode the writer now retries `EBUSY`, `EPERM`, `EACCES` and `EMFILE` up to 50 times with a short wait, and still swallows the last error, since a diagnostic never affects supervision.
   A unit case stubs the refusals on every platform.
+
+- The Windows dual-kill and helper-death cases of `test:evaluate-preflight` ask for the process tree until it answers (Story 1.89 review round 2).
+  The cases read the process tree once, through PowerShell and WMI with a 10 s bound, and went on with an empty answer when the lookup returned none, so they killed neither the leader nor the supervisor and five checks failed on the `windows-agent-supervision` job.
+  They now ask again until the tree answers, within the supervisor's own bound for the setup (`WINDOWS_SETUP_MS`, `WINDOWS_STARTUP_SLACK_MS` and `SUPERVISOR_BACKSTOP_MS` of `agent-supervisor-bounds.js`, which the cases read from that file), and a failure names the pids the case found.
 
 - A confined run over a partial clone refuses at the pack stage on every run, and the streaming git reader no longer exits 0 after a stage failed (Story 1.120, AD-7, AD-8).
   The `pack` job counted a stage as ended when its `close` event arrived, and `close` waits until the stage's standard output has been read to its end.

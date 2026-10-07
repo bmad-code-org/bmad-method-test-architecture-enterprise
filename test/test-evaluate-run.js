@@ -136,7 +136,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const { ENGINE_CLI_ENV, engineCliPath, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { ArmError, hostEnvironmentPort, runArm, stoppedFromOutside } = require('../cli/lib/evaluate/arm');
 const { uncommittedUnder } = require('../cli/lib/evaluate/preflight');
 const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
@@ -15667,23 +15667,35 @@ async function checkSocketLauncher() {
     signalled.signal === 'SIGTERM',
     `a command a SIGTERM ended ended the launcher with ${signalled.signal ?? `exit ${signalled.status}`}; expected the same signal, as Bubblewrap's own parent reads it`,
   );
+  // Node starts with SIGPIPE and SIGXFSZ ignored, so these two end the launcher by the signal only when it returns them to their default action.
+  // A shell is the command, since a Node command ignores both signals itself.
+  for (const name of process.platform === 'win32' ? [] : ['SIGPIPE', 'SIGXFSZ']) {
+    const ended = run('{}', ['/bin/sh', '-c', `kill -s ${name.slice(3)} $$`]);
+    check(
+      ended.signal === name,
+      `a command a ${name} ended ended the launcher with ${ended.signal ?? `exit ${ended.status}`}; expected the same signal, as Bubblewrap's own parent reads it`,
+    );
+  }
 
-  // A signal the launcher receives reaches the command, which ends the launcher by its own exit.
+  // Each signal the launcher receives reaches the command, which ends the launcher by its own exit.
+  // The names are the ones the amendment lists, so a signal left out of the launcher's list fails here: SIGUSR1 left to Node would open a debugger outside the sandbox.
   // The case waits for the launcher's exit and bounds every wait: a launcher that passes nothing on dies by the signal and leaves the command running.
-  {
+  for (const name of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT', 'SIGUSR1', 'SIGUSR2']) {
     const started = start('{}', [
       process.execPath,
       '-e',
-      "process.on('SIGTERM', () => { process.stdout.write('term'); process.exit(3); }); process.stdout.write(`ready${process.pid} `); setInterval(() => {}, 1000);",
+      `process.on('${name}', () => { process.stdout.write('${name}'); process.exit(3); }); process.stdout.write(\`ready\${process.pid} \`); setInterval(() => {}, 1000);`,
     ]);
     const child = spawn(process.execPath, started.args, { ...started.options, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
+    let said = '';
     child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (said += chunk));
     const ended = new Promise((resolve) => child.once('exit', (status, signal) => resolve({ status, signal })));
     const deadline = Date.now() + 25_000;
     while (!/ready\d+ $/.test(output) && Date.now() < deadline) await sleep(20);
     const commandPid = Number(/ready(\d+) /.exec(output)?.[1]);
-    child.kill('SIGTERM');
+    child.kill(name);
     const result = await Promise.race([ended, sleep(15_000).then(() => ({ status: null, signal: 'no end within 15 seconds' }))]);
     // A command that outlived the launcher is this case's own, and it ends now.
     if (result.status !== 3 && Number.isInteger(commandPid) && commandPid > 0) {
@@ -15697,8 +15709,8 @@ async function checkSocketLauncher() {
     child.stdout.destroy();
     child.stderr.destroy();
     check(
-      output.endsWith('term') && result.status === 3,
-      `a SIGTERM sent to the launcher left the command's output ${JSON.stringify(output)} and the launcher's end ${JSON.stringify(result)}; expected the command to receive it, print term and end the launcher with exit 3`,
+      output.endsWith(name) && result.status === 3 && !said.includes('Debugger listening'),
+      `a ${name} sent to the launcher left the command's output ${JSON.stringify(output)}, the launcher's end ${JSON.stringify(result)} and standard error ${JSON.stringify(said.slice(0, 120))}; expected the command to receive it, print ${name}, end the launcher with exit 3 and no debugger opened`,
     );
   }
 
@@ -15768,7 +15780,7 @@ async function checkSocketLauncher() {
   }
 
   // A command the operating system refuses for the size of its arguments and environment (`E2BIG`) ends the launcher with its own code and token.
-  // The runtime turns that into the engine's own `port-failure` with the reason `launch-too-large`, as a call that hides no socket gets, and only for a call whose shim never started.
+  // The runtime turns that into the error Node's spawn gives, from which the engine's command-line adapter builds its own `port-failure` with the reason `launch-too-large`, as for a call that hides no socket, and only for a call whose shim never started.
   // Linux refuses one environment string over 128 KB and the whole of arguments and environment over the kernel's ceiling (6 MB at the most, a quarter of the stack limit where that is lower), and macOS refuses over 1 MB in all.
   // Each value stays under 128 KB, so the refusal comes from the total, and 9 MB is above every host's ceiling.
   {
@@ -15778,33 +15790,71 @@ async function checkSocketLauncher() {
       refused.status === 125 && refused.text === '' && refused.error.includes('confinement-launcher: E2BIG'),
       `a command whose environment was 9 MB ended the launcher with exit ${refused.status} and ${JSON.stringify(refused.error.slice(0, 120))}; expected exit 125 and the E2BIG token on standard error`,
     );
-    const oversized = targetSandbox({
-      confinement: { mode: 'bubblewrap', executable: process.execPath, evaluationFolder: tempDir('launcher-huge-folder') },
-      workspace: tempDir('launcher-huge-workspace'),
-      status: tempDir('launcher-huge-status'),
-      hostSockets: () => ['/run/docker.sock'],
-    });
-    const starting = {
-      run: (request) =>
-        runToEnd(request.target, request.argv, { env: request.env }).then((ran) => ({
-          exitCode: ran.status,
-          stdout: ran.stdout,
-          stderr: ran.stderr,
-        })),
+    // The case goes through the engine's own command-line adapter, which builds the fault a run reads from the error the mechanism throws.
+    const { createCommandLineAdapter, nodeCommandMechanism } = await loadAdapters();
+    const oversizedCall = async (hostSockets) => {
+      const sandbox = targetSandbox({
+        confinement: { mode: 'bubblewrap', executable: process.execPath, evaluationFolder: tempDir('launcher-huge-folder') },
+        workspace: tempDir('launcher-huge-workspace'),
+        status: tempDir('launcher-huge-status'),
+        hostSockets: () => hostSockets,
+      });
+      const policy = {
+        authorizations: [
+          {
+            interfaceId: 'huge',
+            executable: 'node',
+            target: process.execPath,
+            permittedSubcommandPaths: [[]],
+            permittedEnvironmentKeys: Object.keys(huge),
+            cwd: tempDir('launcher-huge-cwd'),
+            artifacts: {},
+            maxElapsedMs: SPAWN_TIMEOUT_MS,
+            maxOutputBytes: 1_000_000,
+          },
+        ],
+      };
+      try {
+        await createCommandLineAdapter(
+          policy,
+          confinedCommandMechanism(nodeCommandMechanism, sandbox, () => [], []),
+        ).probe(
+          {
+            probeId: 'huge-1',
+            interfaceId: 'huge',
+            operationId: 'run',
+            kind: 'cli',
+            executable: 'node',
+            subcommandPath: [],
+            channels: { argument: {}, option: {}, environment: huge, stdin: { kind: 'absent' } },
+          },
+          new AbortController().signal,
+        );
+        return null;
+      } catch (error) {
+        return error;
+      }
     };
-    let fault = null;
+    // The hidden socket is a real one: a socket file that is gone makes the runtime start the call again without it, and the second start would carry the refusal itself.
+    // Its directory is a short one, since a socket path is limited to about 100 bytes.
+    const socketDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-hs-'));
+    const hostSocket = path.join(socketDirectory, 'h.sock');
+    const server = await listenOnSocket(hostSocket);
     try {
-      await confinedCommandMechanism(starting, oversized, () => [], []).run(
-        { target: process.execPath, subcommandPath: [], argv: ['-e', '0'], env: huge },
-        new AbortController().signal,
-      );
-    } catch (error) {
-      fault = error;
+      for (const [what, hostSockets] of [
+        ['a call that hides a socket', [hostSocket]],
+        ['a call that hides none', []],
+      ]) {
+        const fault = await oversizedCall(hostSockets);
+        check(
+          fault?.code === 'port-failure' && fault.portFailureReason === 'launch-too-large',
+          `${what} with a 9 MB environment, through the engine's command-line adapter, ended ${JSON.stringify(fault?.code ?? fault)} with the reason ${JSON.stringify(fault?.portFailureReason)}; expected the engine's port-failure with launch-too-large, the fault a run reads`,
+        );
+      }
+    } finally {
+      server.close();
+      fs.rmSync(socketDirectory, { recursive: true, force: true });
     }
-    check(
-      fault?.code === 'port-failure' && fault.portFailureReason === 'launch-too-large',
-      `a call that hides sockets with a 9 MB environment ended ${JSON.stringify(fault?.code ?? fault)} with the reason ${JSON.stringify(fault?.portFailureReason)}; expected the engine's port-failure with launch-too-large, the fault a call that hides none gets`,
-    );
   }
 
   // A target that ran can end with the launcher's refusal pair itself: its exit and standard error pass through Bubblewrap and the shim unchanged.
@@ -15881,7 +15931,11 @@ async function checkSocketLauncher() {
       let error = null;
       if (failing !== null) {
         fs.writeFileSync = (file, ...rest) => {
-          if (failing.test(String(file))) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+          if (failing.test(String(file))) {
+            // A write opens its file with O_CREAT and O_TRUNC before the disk refuses the bytes, so the failed write leaves a created, partial file.
+            realWrite(file, 'partial', { mode: 0o600 });
+            throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+          }
           return realWrite(file, ...rest);
         };
       }

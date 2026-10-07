@@ -168,7 +168,12 @@ function main() {
       return;
     }
     for (const name of FORWARDED) process.removeAllListeners(name);
-    // A signal this process ignores (SIGPIPE) leaves it running, so it then ends as a shell reports a signalled child: 128 plus the signal's number.
+    // Node starts with SIGPIPE and SIGXFSZ ignored; a listener added and removed again returns a signal to its default action, which ends this process by it.
+    if (signal !== 'SIGKILL' && signal !== 'SIGSTOP') {
+      process.on(signal, () => {});
+      process.removeAllListeners(signal);
+    }
+    // A signal that leaves this process running ends it as a shell reports a signalled child: 128 plus the signal's number.
     process.exitCode = 128 + (os.constants.signals[signal] ?? 0);
     process.kill(process.pid, signal);
   });

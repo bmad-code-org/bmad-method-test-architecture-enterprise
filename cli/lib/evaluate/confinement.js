@@ -648,17 +648,15 @@ function launcherEnvironment() {
 }
 
 /**
- * The fault a launcher's refusal for the size of the command's arguments and environment is: the engine's own `port-failure` with the reason `launch-too-large`, which a run reads as it reads the engine's, or `null` when the result is no such refusal.
+ * The error a launcher's refusal for the size of the command's arguments and environment is: the one Node's own `spawn` gives the operating system's `E2BIG`, or `null` when the result is no such refusal.
  * A call that hides sockets starts the command from the launcher, so the engine's spawn of the launcher succeeds and the operating system's refusal reaches the runtime as the launcher's exit.
+ * The engine's command-line adapter maps an error whose `code` is `E2BIG` into its own `port-failure` fault with the reason `launch-too-large`, so a run reads the refusal of a call that hides sockets as it reads one of a call that hides none.
  */
 function launchTooLarge(result, wrapped) {
   if (typeof wrapped?.environmentFile !== 'string' || result?.exitCode !== EXIT_LAUNCH_TOO_LARGE) return null;
   const said = String(result?.stderr?.value ?? result?.stderr ?? '');
   if (!said.includes(LAUNCH_TOO_LARGE_TOKEN)) return null;
-  return Object.assign(new Error('the operating system refused the launch for the size of its arguments and environment (E2BIG)'), {
-    code: 'port-failure',
-    portFailureReason: 'launch-too-large',
-  });
+  return Object.assign(new Error('spawn E2BIG'), { code: 'E2BIG', errno: -os.constants.errno.E2BIG, syscall: 'spawn' });
 }
 
 /**
