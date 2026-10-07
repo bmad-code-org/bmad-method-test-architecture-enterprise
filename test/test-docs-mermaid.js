@@ -11,7 +11,7 @@
  * What this test proves, for every Markdown page under `docs/`:
  *  - every fence whose language reads `mermaid` in any case is spelled lowercase `mermaid`,
  *  - the source of every such fence parses with Mermaid's own parser (`mermaid.parse`, run in Node through
- *    `test/lib/mermaid-parse.mjs`).
+ *    `test/lib/mermaid-parse.js`).
  *
  * It then builds the site into a temporary folder and proves, for the built pages:
  *  - no built page, fenced or not, holds a raw `<pre data-language="...mermaid...">` block, in any case,
@@ -36,7 +36,8 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
+
+const { parseMermaid } = require('./lib/mermaid-parse');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DOCS_ROOT = path.join(PROJECT_ROOT, 'docs');
@@ -197,8 +198,6 @@ function siteProblems(outDir, pages) {
 }
 
 async function main() {
-  const { parseMermaid } = await import(pathToFileURL(path.join(__dirname, 'lib', 'mermaid-parse.mjs')).href);
-
   const docs = docsPages();
   const pages = docs.map(({ page, markdown }) => ({ page, fences: mermaidFences(markdown).length })).filter(({ fences }) => fences > 0);
   assert.ok(pages.length >= 8, `the docs hold mermaid fences to check (found ${pages.length})`);
