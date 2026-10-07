@@ -90,7 +90,7 @@ const { signalGroup, stopGroups } = require('./process-group');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
 const { PLAN_PATH, TIERS, classify, mostSevere, readPlan } = require('./ci-plan');
-const { PartitionPlanError, loadContractView } = require('./partition');
+const { PartitionPlanError, heldOutPlanName, loadContractView } = require('./partition');
 const { calibrationShortfalls } = require('./calibration');
 const { ensureRunsDirectory, newInvocationId, readJson, runPreflightCommand } = require('./preflight');
 const { createArtifactValidator } = require('./records');
@@ -626,20 +626,28 @@ function stageViews(context) {
     if (evaluation?.partitionPlan === undefined) return [{ view: null, file: contractFile }];
     const views = [{ view: 'development', file: contractFile }];
     for (const view of ['held-out', 'both']) {
+      let derived;
       try {
-        const derived = loadContractView({ folder: context.folder, evaluation, partition: view });
-        const staged = path.join(stagingDirectory(context, 'tea-evaluate-view-'), CONTRACT_NAME);
-        fs.writeFileSync(staged, derived.bytes);
-        views.push({ view, file: staged });
+        derived = loadContractView({ folder: context.folder, evaluation, partition: view });
       } catch (error) {
-        // A plan error names paths only. Any other error comes from a file that is not what its schema says, and its text can quote the file.
+        // A plan error names paths only. Any other error comes from a file that is not what its schema says, and its text can quote
+        // the file, so the message names the files and the error's class.
         views.push({
           view,
           problem:
             error instanceof PartitionPlanError
               ? error.message
-              : `the view cannot be derived (an unexpected ${error?.name ?? 'error'} while deriving it)`,
+              : `${heldOutPlanName(evaluation)} and contract.json do not derive the ${view} view (an unexpected ${error?.name ?? 'error'})`,
         });
+        continue;
+      }
+      // A view that is derived and cannot be staged is a fault of this machine, which is infrastructure and no defect of the plan.
+      try {
+        const staged = path.join(stagingDirectory(context, 'tea-evaluate-view-'), CONTRACT_NAME);
+        fs.writeFileSync(staged, derived.bytes);
+        views.push({ view, file: staged });
+      } catch (error) {
+        views.push({ view, unstaged: `the derived ${view} view could not be staged (${error?.code ?? error?.name ?? 'error'})` });
       }
     }
     return views;
@@ -686,13 +694,22 @@ async function engineStageCheck(context, entry, stage, produced) {
   }
   const exits = [];
   const artifacts = [];
-  let stdout = '';
-  let stderr = '';
+  // What each view's summary says comes first, and the development view's own streams follow, so the engine's bytes stay exact and last.
+  let summary = '';
+  let faults = '';
+  let developmentStdout = '';
+  let developmentStderr = '';
   for (const entryView of views) {
     const { view } = entryView;
     if (entryView.problem !== undefined) {
       exits.push(AUTHORING);
-      stdout += findingLine(`${view} view`, 'partition-plan', `${entryView.problem}; ${stage} did not run over the ${view} view`);
+      summary += findingLine(`${view} view`, 'partition-plan', `${entryView.problem}; ${stage} did not run over the ${view} view`);
+      continue;
+    }
+    if (entryView.unstaged !== undefined) {
+      exits.push(INFRASTRUCTURE);
+      summary += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
+      faults += `${stage} over the ${view} view: ${escapeUnprintable(entryView.unstaged)}\n`;
       continue;
     }
     let ran;
@@ -703,22 +720,24 @@ async function engineStageCheck(context, entry, stage, produced) {
       exits.push(INFRASTRUCTURE);
       // The stage wrote its record before it failed.
       artifacts.push(`${whereOf(view)}/engine.json`);
-      stdout += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
-      stderr += `${stage} over the ${view} view: ${escapeUnprintable(error.message)}\n`;
+      summary += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
+      faults += `${stage} over the ${view} view: ${escapeUnprintable(error.message)}\n`;
       continue;
     }
     const { called, artifacts: written, record } = ran;
     exits.push(called.exitCode);
     artifacts.push(...written);
-    stdout += `${stage} over the ${view} view: eval-quality exited ${called.exitCode}${
+    summary += `${stage} over the ${view} view: eval-quality exited ${called.exitCode}${
       called.exitCode === 0 ? '' : `; its record is ${relativeTo(context.folder, context.writer.pathOf(record))}`
     }\n`;
     // What an engine message of the held-out or both view says can quote the held-out plan, so it stays in that view's own record.
     if (view === 'development') {
-      stdout += called.stdout;
-      stderr += called.stderr;
+      developmentStdout = called.stdout;
+      developmentStderr = called.stderr;
     }
   }
+  const stdout = `${summary}${developmentStdout}`;
+  const stderr = `${faults}${developmentStderr}`;
   return result(mostSevere(exits), { stdout, stderr, artifacts });
 }
 

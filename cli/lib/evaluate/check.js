@@ -185,7 +185,9 @@ const {
   partitionPlanProblems,
   readHeldOutPlan,
   readHeldOutResponse,
+  readRegularFile,
   stepsReadBy,
+  NotRegularFileError,
 } = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
@@ -254,7 +256,8 @@ const RUNTIME_SCHEMA_ROOT = path.join(__dirname, 'schemas');
 const TEA_MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
 
 function readJsonFile(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  // Read without blocking, so a FIFO where a file belongs is a finding and never a wait a signal cannot end.
+  return JSON.parse(readRegularFile(file).toString('utf8'));
 }
 
 /** Ajv's errors as one line each, naming the instance location and what it broke. */
@@ -356,7 +359,7 @@ function parseInto(report, folder, relative) {
   try {
     return readJsonFile(path.join(folder, relative));
   } catch (error) {
-    report.add(relative, 'json', `does not parse as JSON: ${error.message}`);
+    report.add(relative, 'json', error instanceof NotRegularFileError ? error.message : `does not parse as JSON: ${error.message}`);
     return;
   }
 }

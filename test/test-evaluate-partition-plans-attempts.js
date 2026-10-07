@@ -40,8 +40,8 @@
  *    leaves a compiled contract and a sealed brief for each view that compiles and none for a view that does not (compiling only
  *    `contract.json` passes the plan),
  *  - a view that cannot be derived is a finding of that view and its stage never runs,
- *  - no development evidence of a `ci` run holds a held-out ID, and no development command reads the `runs/` directory that holds
- *    the held-out views' evidence.
+ *  - no development evidence of a `ci` run holds a held-out ID, and no development command reads the held-out evidence a `ci`
+ *    invocation leaves under `runs/`.
  */
 
 const assert = require('node:assert/strict');
@@ -306,6 +306,35 @@ try {
       ],
     );
 
+    // Views that fail with different exits: a development oracle the engine refuses at compile and a held-out oracle it cannot seal. The
+    // `seal` exits are 4, 5 and 4, so the row's 5 is the most severe of them and no view's exit by position (the first or the last), and
+    // the `compile` exits 4, 0 and 4 mix a refused view with one that compiles.
+    const mixed = viewProject('plan-ci-views-mixed', (project) => {
+      editJson(project, 'contract.json', (contract) => {
+        contract.oracles.find((oracle) => oracle.id === 'O-002').direction.polarity = 'expects-violation';
+      });
+      editJson(project, PLAN_FILE, (plan) => (plan.oracles[0].direction.evidenceTargets = []));
+    });
+    assert.equal(cli(mixed, 'check').status, 0, 'the mixed defects pass check');
+    const mixedRan = cli(mixed, 'ci', ['--tier', 'pr']);
+    const mixedRun = assertStageViews(mixed, {
+      ran: ['check', 'compile', 'seal'],
+      expected: {
+        compile: { development: 4, 'held-out': 0, both: 4 },
+        seal: { development: 4, 'held-out': 5, both: 4 },
+      },
+      label: 'mixed exits',
+    });
+    assert.deepEqual(
+      mixedRun.json.checks.map((row) => [row.id, row.exit]),
+      [
+        ['check', 0],
+        ['compile', 4],
+        ['seal', 5],
+      ],
+    );
+    assert.equal(mixedRan.status, 5, mixedRan.output);
+
     // A plan the engine accepts in every view: three compiled contracts and three sealed briefs, one of each per view.
     const sound = viewProject('plan-ci-views-sound', () => {});
     const soundRan = cli(sound, 'ci', ['--tier', 'pr']);
@@ -332,7 +361,7 @@ try {
     );
 
     // A view that cannot be derived is a finding of that view with exit 10, its stage never runs, and every other view still runs.
-    const underivable = (label, edit, { expectDevelopment = 0, pattern, bothPattern = pattern, secret = CANARY, scanRun = true }) => {
+    const underivable = (label, edit, { expectDevelopment = 0, pattern, secret = CANARY, scanRun = true }) => {
       const project = viewProject(label, edit);
       const ran = cli(project, 'ci', ['--tier', 'pr']);
       const run = test.latest(project.folder);
@@ -347,12 +376,15 @@ try {
         );
         assert.match(
           stdout,
-          new RegExp(`^held-out view: \\[partition-plan\\] ${pattern}; ${stage} did not run over the held-out view$`, 'm'),
+          new RegExp(
+            `^held-out view: \\[partition-plan\\] ${pattern.replace('VIEW', 'held-out')}; ${stage} did not run over the held-out view$`,
+            'm',
+          ),
           `${label}: ${stdout}`,
         );
         assert.match(
           stdout,
-          new RegExp(`^both view: \\[partition-plan\\] ${bothPattern}; ${stage} did not run over the both view$`, 'm'),
+          new RegExp(`^both view: \\[partition-plan\\] ${pattern.replace('VIEW', 'both')}; ${stage} did not run over the both view$`, 'm'),
           `${label}: ${stdout}`,
         );
         assert.deepEqual(
@@ -397,8 +429,7 @@ try {
       pattern: String.raw`corpus\/held-out\/plan\.json cannot be read \(ENOENT\)`,
     });
     underivable('plan-ci-views-off-shape-plan', (project) => editJson(project, PLAN_FILE, (plan) => (plan.behaviorOracles['B-002'] = 5)), {
-      pattern: String.raw`the view cannot be derived \(an unexpected TypeError while deriving it\)`,
-      bothPattern: String.raw`the view cannot be derived \(an unexpected TypeError while deriving it\)`,
+      pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected TypeError\)`,
     });
     // A `contract.json` that does not parse is the engine's to refuse in the development view, and no view derives from it.
     underivable(
@@ -407,7 +438,7 @@ try {
       {
         expectDevelopment: 5,
         scanRun: false,
-        pattern: String.raw`the view cannot be derived \(an unexpected SyntaxError while deriving it\)`,
+        pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected SyntaxError\)`,
       },
     );
 
@@ -424,10 +455,10 @@ try {
       ['exit-code', 'stdout', 'stderr', 'engine.json', 'eval-contract.json'].map((name) => `checks/compile/${name}`),
     );
 
-    // The held-out views' evidence sits under `runs/<invocationId>/checks/`, so a development command must never read `runs/`: after a
-    // development baseline replays through `ci`, the held-out evidence is made unreadable (a FIFO, a mode that denies the owner and a link
-    // to nothing, in each place the compile and seal checks write it), and a development `check`, `preflight`, `run`, `score` and `ci`
-    // still pass and hold none of it.
+    // The held-out views' evidence sits under `runs/<invocationId>/checks/` of a `ci` invocation, and a development command reads none of
+    // it (`score --run` reads its own run's directory, and `run` and `preflight` write theirs): after a development baseline replays through
+    // `ci`, all eight held-out evidence files are made unreadable (a FIFO, a mode that denies the owner or a link to nothing), and a
+    // development `check`, `preflight`, `run`, `score` and `ci` still pass and hold none of it.
     const runsFlow = planProject('plan-ci-runs');
     const runsDevelopment = cli(runsFlow, 'run', ['--partition', 'development']);
     assert.equal(runsDevelopment.status, 0, runsDevelopment.output);
@@ -455,14 +486,25 @@ try {
       'the held-out view of a replayed development baseline holds the held-out plan',
     );
     assert.deepEqual(holding(runsDevelopmentRun, KEEP_OUT.development), [], 'the development run holds the held-out plan');
+    // Each of the eight files the compile and seal checks wrote for the held-out and both views.
     const hostile = [
-      ['compile/held-out/eval-contract.json', 'fifo'],
-      ['compile/both/eval-contract.json', 'fifo'],
       ['compile/held-out/engine.json', 'unreadable'],
+      ['compile/held-out/eval-contract.json', 'fifo'],
+      ['compile/both/engine.json', 'unreadable'],
+      ['compile/both/eval-contract.json', 'fifo'],
+      ['seal/held-out/engine.json', 'unreadable'],
       ['seal/held-out/sealed-evaluator-brief.json', 'fifo'],
       ['seal/both/engine.json', 'unreadable'],
       ['seal/both/sealed-evaluator-brief.json', 'dangling'],
     ];
+    assert.deepEqual(
+      filesUnder(runsCi)
+        .map((file) => path.relative(path.join(runsCi, 'checks'), file).split(path.sep).join('/'))
+        .filter((file) => /^(compile|seal)\/(held-out|both)\//.test(file))
+        .sort(),
+      hostile.map(([file]) => file).sort(),
+      'the held-out evidence of the ci run is not the eight files the case makes unreadable',
+    );
     for (const [file, kind] of hostile) {
       const target = path.join(runsCi, 'checks', file);
       fs.rmSync(target);
