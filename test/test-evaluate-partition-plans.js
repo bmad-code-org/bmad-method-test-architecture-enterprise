@@ -640,6 +640,15 @@ try {
   assert.deepEqual(designationsOf({ partition: 'held-out' }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
   // With no partitionPlan every view is contract.json and the engine's own rule stands.
   assert.deepEqual(designationsOf({ evaluation: unplanned, heldOutPlan: null }), Object.fromEntries(PROBE_IDS.map((id) => [id, null])));
+  // A folder with no partitionPlan refuses no probe either: the views are the source and the designation is empty (Story 1.110).
+  assert.deepEqual(
+    bothViewDesignation({ contractBytes, evaluation: unplanned, heldOutPlan: null, partition: 'both', heldOutProbes: [] })({
+      probeId: 'P-001',
+      behaviorId: 'B-999',
+    }),
+    { oracleId: null, problem: null },
+    'a folder with no partitionPlan refused a probe of a behavior the contract lacks',
+  );
   // The source with another behavior list: B-002 lists a second development-only oracle (O-003, a copy of O-002 that reads the same
   // development-only step), so its development view lists two oracles and its held-out view still one.
   const severalSource = JSON.parse(contractBytes.toString('utf8'));
@@ -2744,6 +2753,11 @@ try {
     assert.match(drifted.output, /probes\/P-003\.probe\.json.*is designated O-102 by the evaluation folder's both view/);
     assert.equal(drifted.output.includes(CANARY), false);
     assert.match(drifted.output, /no score call ran/);
+    // `compare --accept` reports what `score` would, so a drifted both run never becomes a baseline.
+    const driftedAccept = cli(flow, 'compare', ['--run', path.basename(bothRun), '--accept']);
+    assert.notEqual(driftedAccept.status, 0, driftedAccept.output);
+    assert.match(driftedAccept.output, /probes\/P-003\.probe\.json.*is designated O-102 by the evaluation folder's both view/);
+    assert.equal(driftedAccept.output.includes(CANARY), false);
     // A probe whose behavior the folder's contract does not hold is named by the IDs of the schema's shape.
     fs.writeFileSync(flowPlanFile, flowPlanBytes);
     const contractFile = path.join(flow.folder, 'contract.json');
@@ -2818,7 +2832,6 @@ try {
   const severalRuns = {};
   for (const [partition, args] of [
     ['development', ['--partition', 'development']],
-    ['held-out', ['--partition', 'held-out']],
     ['both', []],
   ]) {
     const ran = cli(several, 'run', args);
@@ -2829,7 +2842,6 @@ try {
     severalRuns[partition] = { designated: designatedIn(run), outcomes: Object.fromEntries(JSON.parse(outcomes(run))) };
   }
   assert.deepEqual(severalRuns.development.designated, { 'P-001': null, 'P-002': null, 'P-004': null, 'P-007': null });
-  assert.deepEqual(severalRuns['held-out'].designated, { 'P-003': null });
   assert.deepEqual(severalRuns.both.designated, { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002', 'P-007': null });
   for (const probeId of ['P-001', 'P-002', 'P-004', 'P-007']) {
     assert.deepEqual(
@@ -2838,7 +2850,6 @@ try {
       `${probeId} reads differently in the both view than in the development run`,
     );
   }
-  assert.deepEqual(severalRuns.both.outcomes['P-003'], severalRuns['held-out'].outcomes['P-003']);
 
   // ---- no partitionPlan: the source bytes in every view ----------------------------------------------------------------------
   const unplannedProject = test.project(
@@ -2860,11 +2871,19 @@ try {
       `a run with no partitionPlan rewrote contract.json (${args.join(' ') || 'both'})`,
     );
   }
-  // A both run of a folder with no partitionPlan designates nothing, with no plan to derive a view from (Story 1.110).
-  assert.equal(
-    loadBothViewDesignation({ folder: unplannedProject.folder, partition: 'both', heldOutProbes: ['P-002'] })(probeOf('P-002')).oracleId,
-    null,
-  );
+  // A both run of a folder with no partitionPlan designates nothing and opens nothing but `evaluation.json`, so a `contract.json` the
+  // folder cannot parse stops no score (Story 1.110).
+  const unplannedContract = path.join(unplannedProject.folder, 'contract.json');
+  const unplannedBytes = fs.readFileSync(unplannedContract);
+  try {
+    fs.writeFileSync(unplannedContract, `${CANARY} {`);
+    assert.equal(
+      loadBothViewDesignation({ folder: unplannedProject.folder, partition: 'both', heldOutProbes: ['P-002'] })(probeOf('P-002')).oracleId,
+      null,
+    );
+  } finally {
+    fs.writeFileSync(unplannedContract, unplannedBytes);
+  }
   // ---- rubrics through run and score: each partition judges and calibrates its own criteria (Story 1.105) ---------------------
   // One labelled file serves every partition. It holds two items per criterion, so the development run is handed items of the
   // held-out criterion and the held-out run items of the development one, and each must leave them unjudged.
@@ -3277,12 +3296,29 @@ try {
           .filter(Boolean)
           .map((line) => JSON.parse(line).prompt)
       : [];
+  // An evaluator attempt of a both run is scored as its probe's own partition scores it (Story 1.110): the call of a probe of B-002
+  // is handed the oracle its partition lists, and an attempt of a development or held-out run is handed none.
+  const attemptDesignations = (run) => {
+    const found = {};
+    for (const file of filesUnder(path.join(run, 'evaluator-qualification')).filter((entry) => path.basename(entry) === 'score.json')) {
+      const probeId = path.basename(path.dirname(file));
+      (found[probeId] ??= new Set()).add(designatedBy(file));
+    }
+    return Object.fromEntries(Object.entries(found).map(([probeId, designated]) => [probeId, [...designated]]));
+  };
   for (const partition of ['development', 'held-out']) {
     const from = capturedPrompts().length;
     const ran = cli(agentFlow, 'run', ['--partition', partition]);
     assert.equal(ran.status, 0, `${partition}: ${ran.output}`);
     const prompts = capturedPrompts().slice(from);
     assert.equal(prompts.length > 0, true, `${partition}: the agent was never called`);
+    const designated = Object.values(attemptDesignations(test.latest(agentFlow.folder))).flat();
+    assert.ok(designated.length > 0, `${partition}: no evaluator attempt was scored`);
+    assert.deepEqual(
+      designated,
+      designated.map(() => null),
+      `${partition}: an evaluator attempt was handed a designated oracle`,
+    );
     const keys = (prompt) =>
       JSON.parse(prompt.slice(prompt.indexOf(MATERIAL_HEADING) + MATERIAL_HEADING.length)).keys.map((entry) => entry.key);
     const expected =
@@ -3297,16 +3333,6 @@ try {
     }
   }
 
-  // An evaluator attempt of a both run is scored as its probe's own partition scores it (Story 1.110): the call of a probe of B-002
-  // is handed the oracle its partition lists, and an attempt of a development or held-out run is handed none.
-  const attemptDesignations = (run) => {
-    const found = {};
-    for (const file of filesUnder(path.join(run, 'evaluator-qualification')).filter((entry) => path.basename(entry) === 'score.json')) {
-      const probeId = path.basename(path.dirname(file));
-      (found[probeId] ??= new Set()).add(designatedBy(file));
-    }
-    return Object.fromEntries(Object.entries(found).map(([probeId, designated]) => [probeId, [...designated]]));
-  };
   const agentBoth = cli(agentFlow, 'run');
   assert.equal(agentBoth.status, 0, agentBoth.output);
   assert.deepEqual(
@@ -3314,16 +3340,6 @@ try {
     { 'P-001': [null], 'P-002': [null], 'P-003': ['O-101'], 'P-004': ['O-002'] },
     'an evaluator attempt of the both view was not scored against its own partition oracle',
   );
-  for (const partition of ['development', 'held-out']) {
-    assert.equal(cli(agentFlow, 'run', ['--partition', partition]).status, 0);
-    const designated = Object.values(attemptDesignations(test.latest(agentFlow.folder))).flat();
-    assert.ok(designated.length > 0, `${partition}: no evaluator attempt was scored`);
-    assert.deepEqual(
-      designated,
-      designated.map(() => null),
-      `${partition}: an evaluator attempt was handed a designated oracle`,
-    );
-  }
 
   // The tree digest a run records covers the files its partition reads: the mapping of its view in place of the file. A development
   // run's digest therefore depends on no held-out row (the plan is never opened), a held-out run's on no development-only row, and
