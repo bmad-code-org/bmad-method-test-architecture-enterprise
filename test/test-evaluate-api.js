@@ -5062,9 +5062,8 @@ async function checkConfinedServiceReads() {
     const ran = evaluate(['run', '--evaluation', project.folder], {
       ...project.env,
       GRADER_TOKEN: TOKEN,
-      GRADER_READ: JSON.stringify({ contract, outside }),
+      GRADER_READ: JSON.stringify({ contract, outside, '@when': ['trial-clean-1'] }),
     });
-    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
     const runDirectory = runDirectoryOf(project.folder);
     const trial = runDirectory === null ? null : path.join(runDirectory, 'trials', 'clean', 'trial-1.json');
     const evidence = trial !== null && fs.existsSync(trial) ? fs.readFileSync(trial, 'utf8') : '';
@@ -5078,6 +5077,7 @@ async function checkConfinedServiceReads() {
     // The manifest records the audit's paths in the neutral forms the runtime writes, so the expectation is each real path put through them.
     const recorded = (real) => recordedMount(real, { folder: project.folder, env: project.env });
     return {
+      ran,
       contract,
       recordedContract: recorded(contract),
       recordedOutside: recorded(realOutside),
@@ -5088,6 +5088,13 @@ async function checkConfinedServiceReads() {
     };
   };
   const refusal = /contract: refused (EPERM|EACCES|ENOENT|EROFS)/;
+  // The read of the contract and of the file outside are mounts outside the allowlist, which a confined run refuses (exit 3) once its
+  // trials are sealed; the opted-out control observes none. Judged on the attempt the comparisons below count.
+  const checkExit = (label, run, refused) =>
+    check(
+      refused ? run.ran.status === 3 && /isolation manifest violation: the trials opened/.test(run.ran.output) : run.ran.status === 0,
+      `${label}: run exited ${run.ran.status}; expected ${refused ? 3 : 0}\n${run.ran.output}`,
+    );
 
   // The kernel's report channel on macOS can lose a report under load (Story 1.60): a run whose audit lists only what it should, but
   // not all of it, runs again (up to two more times) before the exact comparison below counts. Any extra path counts at once.
@@ -5098,6 +5105,7 @@ async function checkConfinedServiceReads() {
     wanted(run).some((entry) => !run.observed.includes(entry));
   let confined = runReading('confined-reads');
   for (let again = 0; again < 2 && process.platform === 'darwin' && lostOnly(confined); again += 1) confined = runReading('confined-reads');
+  checkExit('confined-reads', confined, true);
   check(refusal.test(confined.evidence), `a confined started service's read of contract.json was not refused: ${confined.evidence}`);
   check(
     /outside: allowed/.test(confined.evidence),
@@ -5122,6 +5130,7 @@ async function checkConfinedServiceReads() {
   ) {
     declared = runReading('confined-reads-declared', { declared: true });
   }
+  checkExit('confined-reads-declared', declared, true);
   check(
     refusal.test(declared.evidence) && /outside: allowed/.test(declared.evidence),
     `a started service under a declared system path read: ${declared.evidence}`,
@@ -5133,6 +5142,7 @@ async function checkConfinedServiceReads() {
 
   // The control: with the confinement off, the same service reads the contract and the port's write lands.
   const open = runReading('confined-reads-open', { optOut: true });
+  checkExit('confined-reads-open', open, false);
   check(/contract: allowed/.test(open.evidence), `the unconfined control could not read contract.json: ${open.evidence}`);
   check(
     open.tampered && open.attempts.length > 0 && open.attempts.every((line) => line === 'allowed'),

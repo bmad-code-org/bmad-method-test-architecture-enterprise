@@ -2462,7 +2462,13 @@ async function checkBridgePrivateDirectories() {
         VERDICT_TOUCH: announce,
         VERDICT_REPORT: String(listener.port),
       });
-      check(ran.status === 0, `${label}: the run exited ${ran.status}; expected 0\n${ran.output}`);
+      // The attempts at the bridge's private directories are mounts outside the allowlist, which a confined run refuses (exit 3) once
+      // its trials are sealed; the opted-out control observes none.
+      const refused = ran.status === 3 && /isolation manifest violation: the trials opened \d+ path\(s\)/.test(ran.output);
+      check(
+        unconfined ? ran.status === 0 : refused,
+        `${label}: the run exited ${ran.status}; expected ${unconfined ? 0 : 3}\n${ran.output}`,
+      );
       const runDirectory = runDirectoryOf(project.folder);
       const reports = runDirectory === null ? [] : agentPrivateReport(runDirectory);
       // The call's report is kept in several of the run's files; it is one report.
@@ -5021,6 +5027,59 @@ async function checkImportedFilesSealedAgainstTheConfiguration() {
   checkVotes('records sealed against the final configuration', evidence, 'P-002', 'caught');
 }
 
+/**
+ * A records harness whose sealed isolation manifest lists a mount outside its allowlist, or none at all, is one `score` reads as
+ * Invalid (exit 3), so `run` over its records exits 3 as it does over the manifests it seals itself. The run stays sealed and
+ * complete, so `score --run` prints the same finding. The control, the records as the harness wrote them, runs and scores clean.
+ */
+async function checkImportedManifestMounts() {
+  const project = await harnessProject('records-manifest-mounts');
+  if (project === null) return;
+  const records = path.join(project.folder, 'records');
+  const manifest = path.join(records, 'P-002', 'isolation-manifest.json');
+  useRecords(project);
+  const control = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(control.status === 0, `run over the harness's own records exited ${control.status}; expected 0\n${control.output}`);
+
+  const outside = '<home>/host-notes.txt';
+  const sealedManifest = fs.readFileSync(manifest);
+  editJson(manifest, (value) => (value.observedMounts = [outside]));
+  commitAll(project.repository, project.folder, 'a harness manifest that lists a mount outside its allowlist');
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    ran.status === 3 && ran.output.includes(`mount outside allowlist: ${outside}`),
+    `run over records whose manifest lists ${outside} exited ${ran.status}; expected 3 naming it\n${ran.output}`,
+  );
+  const directory = runDirectoryOf(project.folder);
+  const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
+  check(
+    record.completed === true && record.outcome?.exitCode === 3,
+    `run.json records ${JSON.stringify({ completed: record.completed, outcome: record.outcome })}; expected a completed run that ended with exit 3`,
+  );
+  if (directory !== null) {
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(directory)], project.env);
+    check(
+      scored.status === 3 && scored.output.includes(`mount outside allowlist: ${outside}`),
+      `score over the same run exited ${scored.status}; expected 3 naming ${outside}\n${scored.output}`,
+    );
+  }
+
+  // A set with no manifest reaches eval-quality as absent, which it reads as Invalid too.
+  fs.writeFileSync(manifest, sealedManifest);
+  fs.rmSync(manifest);
+  commitAll(project.repository, project.folder, 'a harness set with no manifest');
+  const bare = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    bare.status === 3 && bare.output.includes('P-002') && bare.output.includes('no isolation manifest'),
+    `run over records with no manifest for P-002 exited ${bare.status}; expected 3 naming the set\n${bare.output}`,
+  );
+  const bareDirectory = runDirectoryOf(project.folder);
+  if (bareDirectory !== null) {
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(bareDirectory)], project.env);
+    check(scored.status === 3, `score over records with no manifest for P-002 exited ${scored.status}; expected 3\n${scored.output}`);
+  }
+}
+
 /** The reference, the CLI header and the command's own help all describe the option, so the page cannot drop it unseen. */
 function checkCalibrationInputsDocumented() {
   const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -7517,6 +7576,7 @@ const CASES = [
     body: checkImportedFilesSealedAgainstTheConfiguration,
     group: 'records',
   },
+  { name: 'imported manifests list mounts outside the allowlist', body: checkImportedManifestMounts, group: 'records' },
 ];
 /** Story 1.69's cases, for `--held-attempts-only` (the revert checks, which can narrow them with `--only=<text>`). */
 const HELD_ATTEMPT_CASES = CASES.filter(({ group }) => group === 'held-attempts');

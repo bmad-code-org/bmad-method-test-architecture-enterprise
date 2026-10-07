@@ -42,6 +42,9 @@
  *   2-5 preflight, run and score: an eval-quality stage's own exit, passed through verbatim (2, FAIL, from
  *       score alone; score passes on the most severe of its per-probe exits); a sealed-brief agent
  *       qualification records its score exit 3 and stops the run with 12 on any exit other than 0, 2 or 3
+ *   3   also preflight and run: a mount outside the isolation allowlist, the check score makes of a trial set's isolation
+ *       manifest, found in the legs of the preflight's pristine workspace or in the manifests a run sealed (run seals them
+ *       and stays scoreable); the message names the paths and the two setups that work
  *   2-5 also ci: the exit of each stage it runs (compile, seal, the replay's preflight and score, a live check's
  *       preflight, run and score), passed through the same way; 2 is also a probe class below its strength floor
  *       on the release tier

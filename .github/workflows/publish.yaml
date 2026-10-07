@@ -104,7 +104,8 @@ jobs:
           sudo mv "$RUNNER_TEMP/actionlint-bin/actionlint" /usr/local/bin/
 
       - name: Install bubblewrap and strace (the linux isolation backend of tea-atdd-red-check and tea-evaluate, and the observer of tea-evaluate's audit)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
+        timeout-minutes: 11
+        run: bash tools/install-linux-sandbox.sh
 
       # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1,
       # which blocks bwrap's --unshare-net from bringing up its own loopback
