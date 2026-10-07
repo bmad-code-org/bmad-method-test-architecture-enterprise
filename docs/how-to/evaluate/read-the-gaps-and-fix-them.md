@@ -258,8 +258,8 @@ Read held-out results only from `gap-view.json` in the run folder.
 Each held-out row holds the probe ID, its class and the reduced outcome:
 
 ```bash
-(cd evals/test-review-json-stdin/runs/$RUN &&
-  node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount).join('\n')")
+(cd "evals/test-review-json-stdin/runs/$RUN" &&
+  node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + (r.outcome ? ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount : ' outcome withheld')).join('\n')")
 ```
 
 ```text
@@ -271,7 +271,7 @@ P-013 defect caught=true 3/3
 
 A row with `caught=false` means the evaluation misses a class of defect.
 Ask the skill for a new development probe of that class, repair it there, and run the held-out partition again.
-A row whose `outcome` is `null` hides its cause on purpose, so reproduce the class failure in development.
+A row that prints `outcome withheld` has a `null` outcome. It hides its cause on purpose, so reproduce the class failure in development.
 
 ## How You Know It Worked
 

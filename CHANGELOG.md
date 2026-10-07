@@ -727,6 +727,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The allowlist is the one `score` applies and nothing is granted; `score` keeps its own check, and a `run` that exits 3 stays sealed so `score --run` prints one reason per path.
   A run that opted out of confinement observes no path and is not refused.
   `npm run test:evaluate-isolation-conformance`, chained in `npm test`, scores the same manifests through eval-quality's `runScore` and through the helper and fails on any path or verdict that differs, so the copy of the rule cannot drift from the engine's.
+- The held-out reader command in the gaps how-to prints a row whose `outcome` is `null`.
+  The command read `r.outcome.caught` with no guard, so the first withheld row threw a TypeError and no row printed.
+  A withheld row now prints `<probeId> <probeClass> outcome withheld`, ordinary rows print as before, and the `cd` quotes `"$RUN"`.
+  `test:docs-gap-reader` lifts the command from the page, runs it over a `gap-view.json` that `writePartitionViews` writes with a caught, an uncaught and a withheld row, and fails when the unguarded command is restored.
 - The docs site renders its Mermaid diagrams, and the `llms-full.txt` bundle keeps 50,000 characters of headroom under its cap.
   Eight explanation pages (the TEA overview among them) showed a `mermaid` fence as raw source in a `<pre data-language="mermaid">` block, because the site loaded no Mermaid renderer.
   The Evaluate flow in How Evaluate Works is now a Mermaid flowchart that keeps the labels of its three roles (authoring skill, execution CLI, scoring engine).
