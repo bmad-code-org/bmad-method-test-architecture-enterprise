@@ -70,7 +70,7 @@ The top level is closed: a field that is not listed here fails `check` under the
 | Field                    | Required                                   | What it holds                                                                                                                                                                              |
 | ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `schemaVersion`          | yes                                        | `2`. A version the installed TeA does not know exits 10 under `check`, before anything else is read.                                                                                       |
-| `evaluationId`           | yes                                        | The evaluation's kebab-case identifier. The folder is named after it.                                                                                                                      |
+| `evaluationId`           | yes                                        | The evaluation's kebab-case identifier.                                                                                                                                                    |
 | `requirements`           | yes, `check` refuses a folder without it   | `{ "path": "requirements.md", "digest": "sha256:..." }`. The digest is the one `tea-evaluate digest --file requirements.md` prints, and the contract's `sourceSpecDigest` has to equal it. |
 | `targetKind`             | yes                                        | What is evaluated: `agent`, `skill`, `workflow`, `tool-use`, `ai-feature` or `test-review-mechanism`.                                                                                      |
 | `interface`              | yes                                        | The interface kind the contract declares: `cli`, `api` or `mcp`. A web application is evaluated through `api`.                                                                             |
@@ -91,7 +91,8 @@ The top level is closed: a field that is not listed here fails `check` under the
 | `tiers`                  | yes                                        | The CI tiers the evaluation takes part in: `pr`, `merge`, `scheduled` or `release`. They equal the tiers the CI plan places a check on.                                                    |
 | `strengthFloor`          | yes                                        | The minimum catch rate per probe class, from 0 to 1: `defect`, `gameability` and `zero-action`. `canary` is not a class and `check` refuses it.                                            |
 
-A complete `evaluation.json` for a one-skill evaluation, where the skill decides whether a refund is within the refund limit:
+A complete `evaluation.json` for a one-skill evaluation, where the skill decides whether a refund is within the refund limit.
+The runner sits in the project's `node_modules`, inside `launch.root`, which is one of the two setups [Where the runner lives](#where-the-runner-lives) describes:
 
 ```json
 {
@@ -99,7 +100,7 @@ A complete `evaluation.json` for a one-skill evaluation, where the skill decides
   "evaluationId": "refund-check",
   "requirements": {
     "path": "requirements.md",
-    "digest": "sha256:19ac4e7af94accdc880f25950e1a478ddd2789271aa2f0c5cdfe54df41c2ae8d"
+    "digest": "sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77"
   },
   "targetKind": "skill",
   "interface": "cli",
@@ -107,7 +108,7 @@ A complete `evaluation.json` for a one-skill evaluation, where the skill decides
     {
       "interfaceId": "refund-skill",
       "executable": "tea-skill-runner",
-      "target": "tea-skill-runner",
+      "target": "node_modules/.bin/tea-skill-runner",
       "subcommandPaths": [[]],
       "artifacts": {},
       "environmentKeys": [],
@@ -120,7 +121,7 @@ A complete `evaluation.json` for a one-skill evaluation, where the skill decides
     "skillRoot": "skill"
   },
   "workspace": {
-    "kind": "git",
+    "kind": "copy",
     "provision": []
   },
   "arms": ["clean", "mutated"],
@@ -286,8 +287,8 @@ tea-evaluate check: <project>/evals/my-evaluation has no authoring defects
 Output when the requirements changed after the contract was written:
 
 ```text
-requirements.md: [requirements] evaluation.json records digest sha256:19ac4e7af94accdc880f25950e1a478ddd2789271aa2f0c5cdfe54df41c2ae8d; requirements.md digests to sha256:2bdc771cbbc936e5c49b81711e08221cc6bb8899eaf0687226d791666ba39615
-contract.json: [requirements] sourceSpecDigest "sha256:19ac4e7af94accdc880f25950e1a478ddd2789271aa2f0c5cdfe54df41c2ae8d" is not the digest of requirements.md, sha256:2bdc771cbbc936e5c49b81711e08221cc6bb8899eaf0687226d791666ba39615: the requirements changed after the contract was authored, so author the contract against the committed statement again
+requirements.md: [requirements] evaluation.json records digest sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77; requirements.md digests to sha256:73b6c43d597f67df384c3de11db0ae52cddf60e46a486f348ba2b3cc9205b001
+contract.json: [requirements] sourceSpecDigest "sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77" is not the digest of requirements.md, sha256:73b6c43d597f67df384c3de11db0ae52cddf60e46a486f348ba2b3cc9205b001: the requirements changed after the contract was authored, so author the contract against the committed statement again
 tea-evaluate check: 2 authoring defect(s) in <project>/evals/my-evaluation
 ```
 
@@ -360,6 +361,7 @@ A command entry:
 - `interfaceId`, `executable`: the logical interface and executable a contract operation names; the pair is unique in the registry.
 - `target`: a POSIX path relative to the evaluated project's root, or a bare command name resolved through the adapter's own `PATH`; never absolute, with no `.`, `..` or empty segment, no trailing slash, and no control, line-separator or bidirectional formatting character.
   The runtime's target check refuses a relative target that is missing, is not a regular file, or lacks its executable bit.
+  A runner whose files lie outside `launch.root` is read outside the trial's grants, and `score` then exits 3 (see [Where the runner lives](#where-the-runner-lives)).
 - `subcommandPaths`: the exact subcommand paths allowed; `[[]]` allows none.
 - `artifacts`: the default path of each contract artifact, relative to the run's working directory, under the same path rules as `target`.
 - `environmentKeys`: the keys a request may carry into the process; `PATH` is refused.
@@ -961,14 +963,14 @@ Exit codes:
 Output of the default form, which prints the corpus digest on its second line:
 
 ```text
-tea-evaluate digest: wrote <project>/evals/my-evaluation/corpus-index.json (4 file(s))
-sha256:1726796737925ea69d5e1835ae5afe457d344de16ca50778810f352185b2a491
+tea-evaluate digest: wrote <project>/evals/my-evaluation/corpus-index.json (5 file(s))
+sha256:56758abf5e992f92843b86016265b3f51fc20665c03988f4dc40ab3274eb9f98
 ```
 
 Output of `--file requirements.md`:
 
 ```text
-sha256:19ac4e7af94accdc880f25950e1a478ddd2789271aa2f0c5cdfe54df41c2ae8d
+sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77
 ```
 
 ```bash
@@ -1011,6 +1013,7 @@ Exit codes:
 
 - `0`: the preflight passed.
 - `3`, `4`, `5`: the exit of `eval-quality preflight`, passed through verbatim: 3 is a failed preflight, 4 a contract defect and 5 a runtime fault.
+- `64`: an `eval-quality` stage's own exit 64, passed through.
 - `10`: an authoring defect: a `check` finding, a leg the registry does not authorize, or a mutation whose `find` text does not occur exactly once.
 - `11`: an evaluation weakness: a seeded probe whose clean arm does not pass or whose mutated arm does not fail, a historical probe that does not fail before its fix or pass after it, or a gameability probe whose degenerate response the naive oracle rejects or the disciplined oracle accepts.
 - `12`: infrastructure: a workspace that cannot be made, a target that cannot launch, a restore that fails, a change to your project during the run, or an engine stage that cannot run.
@@ -1019,9 +1022,9 @@ Exit codes:
 Output of a passing preflight over the one-skill evaluation above (the invocation ID differs on every run):
 
 ```text
-tea-evaluate preflight: pristine workspace, a detached worktree at 2c064b0619950a140457090afab26ccf942c3c0b: <tmp>/tea-evaluate-pristine-a001e426-6d22-4d7b-88d0-7f04aa59c0dc/worktree
-tea-evaluate preflight: run 20261007T091545089Z-22f4b02b: <project>/evals/my-evaluation/runs/20261007T091545089Z-22f4b02b
-tea-evaluate preflight: probes/P-002.probe.json: qualifying through M-001 in <tmp>/tea-evaluate-qualify-P-002-c16cfe74-8c67-44d6-b333-884410aaca0a/worktree
+tea-evaluate preflight: pristine workspace, a temp copy: <tmp>/tea-evaluate-pristine-22e1cf32-0dae-44d0-9ec0-955881f9f3c8/target
+tea-evaluate preflight: run 20261007T112706379Z-efa23a53: <project>/evals/my-evaluation/runs/20261007T112706379Z-efa23a53
+tea-evaluate preflight: probes/P-002.probe.json: qualifying through M-001 in <tmp>/tea-evaluate-qualify-P-002-0b9d75bb-0c0f-444d-86fd-f216e4d9a106/target
 tea-evaluate preflight: M-001: step 1, the clean arm
 tea-evaluate preflight: M-001: step 2, the mutation applied to skill/SKILL.md
 tea-evaluate preflight: M-001: step 3, the mutated arm
@@ -1029,7 +1032,7 @@ tea-evaluate preflight: M-001: step 4, the original bytes restored
 tea-evaluate preflight: M-001: step 5, the restored digest checked
 tea-evaluate preflight: M-001: step 6, the baseline re-run (attempt 1 of 3)
 tea-evaluate preflight: probes/P-002.probe.json: qualified; the restored digest matched and the baseline passed again
-tea-evaluate preflight: mutated workspace for M-001: <tmp>/tea-evaluate-mutated-M-001-7575bb6b-b11b-4c25-b71f-7205c6eeabd3/worktree
+tea-evaluate preflight: mutated workspace for M-001: <tmp>/tea-evaluate-mutated-M-001-71c66522-96b5-47a4-ad8a-2661098b634b/target
 tea-evaluate preflight: leg "witness-at-limit": planned
 tea-evaluate preflight: leg "witness-at-limit": observed
 tea-evaluate preflight: leg "witness-under-limit": planned
@@ -1040,7 +1043,7 @@ tea-evaluate preflight: leg "preflight-control-observe-2": planned
 tea-evaluate preflight: leg "preflight-control-observe-2": observed
 tea-evaluate preflight: leg "manifest-exclusive-limit": planned
 tea-evaluate preflight: leg "manifest-exclusive-limit": observed
-tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T091545089Z-22f4b02b (exit 0, <project>/evals/my-evaluation/runs/20261007T091545089Z-22f4b02b)
+tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T112706379Z-efa23a53 (exit 0, <project>/evals/my-evaluation/runs/20261007T112706379Z-efa23a53)
 ```
 
 With `--partition`, only that partition's seeded probes are qualified, over the contract that partition runs (`partitionPlan` above); an unknown partition exits 64 and a held-out set with no probe exits 10.
@@ -1109,23 +1112,24 @@ Exit codes:
 
 - `0`: every selected probe has its trial set.
 - `3`, `4`, `5`: the exit of the preflight stage, passed through verbatim.
+- `64`: an `eval-quality` stage's own exit 64, passed through.
 - `10`: an authoring defect: a trial request the registry does not authorize, no scoring policy, a clean control whose behavior declares no oracle, a probe `eval-quality` refuses, an evaluation layer it cannot use, or records a `records` evaluator imported that are missing or off their schema.
 - `11`: an evaluation weakness: a clean control whose baseline does not pass, a rubric scorer below `judgeCalibration.minimumAgreement`, or a sealed-brief agent below `evaluatorQualification.minimumAgreement`, besides the causes `preflight` lists.
 - `12`: infrastructure: a trial that cannot run, exits an infrastructure code or is stopped by a signal from outside, a rubric judge or an evaluator that cannot answer, a run whose every probe was refused, a change to your project during the run, or a run directory holding an entry the runtime did not write, besides the causes `preflight` lists.
 - `64`: `--evaluation` is missing, or `--partition` names an unknown partition.
 
-The last lines of a run over the one-skill evaluation above, which seals two trial sets of three trials:
+The last lines of a run over the one-skill evaluation above, which seals three trial sets of three trials:
 
 ```text
-tea-evaluate run: leg "manifest-exclusive-limit": observed
 tea-evaluate run: probes/P-001.probe.json: qualified; its baseline passed
+tea-evaluate run: probes/P-003.probe.json: qualified; its baseline passed
 tea-evaluate run: clean: trial 1 of 3
 tea-evaluate run: clean: trial 2 of 3
 tea-evaluate run: clean: trial 3 of 3
 tea-evaluate run: mutated:M-001: trial 1 of 3
 tea-evaluate run: mutated:M-001: trial 2 of 3
 tea-evaluate run: mutated:M-001: trial 3 of 3
-tea-evaluate run: 2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T091052388Z-dbc7d961 (exit 0, <project>/evals/my-evaluation/runs/20261007T091052388Z-dbc7d961)
+tea-evaluate run: 3 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T112710219Z-50f0b256 (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
 Omitting `--partition` runs both development and held-out probes. `--partition development` or `--partition held-out` selects that set before preflight, qualification and trials. An unknown partition exits 64; selecting an empty held-out set exits 10. Under a `partitionPlan` the partition also selects the contract (`## The evaluation folder`): a development run launches the shared and development-only steps, a held-out run the shared and held-out steps, and each partition's run directory and baseline hold none of the other's requests, step IDs or oracles.
@@ -1289,7 +1293,9 @@ A sealed-brief agent's qualification runs after this calibration and before the 
 ### The evaluation layer
 
 `evaluation.json`'s `evaluator` chooses what judges the trials (the deterministic evaluator above when none is declared).
-Every kind reaches `eval-quality score` as sealed run records, and the runtime checks no quote, citation or signature match: eval-quality's ingest does.
+Every kind reaches `eval-quality score` as sealed run records.
+`score` refuses a finding that cites no observation, quotes no evidence or cites an observation its record does not hold (exit 10, before any score call).
+Whether a quote, a citation or a signature supports the finding is decided by eval-quality's ingest.
 
 | `kind`               | What judges                                                            | Fields                                                                        |
 | -------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -1522,13 +1528,15 @@ Exit codes:
 Output over the run above:
 
 ```text
-tea-evaluate score: scoring run 20261007T091052388Z-dbc7d961
+tea-evaluate score: scoring run 20261007T112710219Z-50f0b256
 tea-evaluate score: P-001: eval-quality score exited 0
+tea-evaluate score: P-003: eval-quality score exited 0
 tea-evaluate score: P-002: eval-quality score exited 0
 tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
-P-001: eval-quality score exited 0; runs/20261007T091052388Z-dbc7d961/scores/20261007T091059793Z-437b4301/P-001/evidence-artifact.json
-P-002: eval-quality score exited 0; runs/20261007T091052388Z-dbc7d961/scores/20261007T091059793Z-437b4301/P-002/evidence-artifact.json
-tea-evaluate score: eval-quality score ran for 2 probe(s) of run 20261007T091052388Z-dbc7d961; each call's diagnostics and evidence are in runs/20261007T091052388Z-dbc7d961/scores/20261007T091059793Z-437b4301 (exit 0, <project>/evals/my-evaluation/runs/20261007T091052388Z-dbc7d961)
+P-001: eval-quality score exited 0; runs/20261007T112710219Z-50f0b256/scores/20261007T112718210Z-b641cefe/P-001/evidence-artifact.json
+P-003: eval-quality score exited 0; runs/20261007T112710219Z-50f0b256/scores/20261007T112718210Z-b641cefe/P-003/evidence-artifact.json
+P-002: eval-quality score exited 0; runs/20261007T112710219Z-50f0b256/scores/20261007T112718210Z-b641cefe/P-002/evidence-artifact.json
+tea-evaluate score: eval-quality score ran for 3 probe(s) of run 20261007T112710219Z-50f0b256; each call's diagnostics and evidence are in runs/20261007T112710219Z-50f0b256/scores/20261007T112718210Z-b641cefe (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
 A run that did not complete (its `run.json` does not say `completed: true`, or it has no `trial-sets.json`) has nothing to score, and `score` exits 64 naming where it stopped, or that it records no end because it is still running or was stopped before it could record one; so does a `--run` naming no run or a `preflight` invocation, and a folder with no run.
@@ -1607,24 +1615,25 @@ Exit codes:
 With no baseline the comparison ends as `first-run`:
 
 ```text
-tea-evaluate compare: comparing run 20261007T091052388Z-dbc7d961
-tea-evaluate compare: first-run: baseline/ holds no baseline to compare run 20261007T091052388Z-dbc7d961 with; accept it with tea-evaluate compare --accept (exit 0, <project>/evals/my-evaluation/runs/20261007T091052388Z-dbc7d961)
+tea-evaluate compare: comparing run 20261007T112710219Z-50f0b256
+tea-evaluate compare: first-run: baseline/ holds no baseline to compare run 20261007T112710219Z-50f0b256 with; accept it with tea-evaluate compare --accept (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
 Accepting the run creates the baseline:
 
 ```text
-tea-evaluate compare: accepting run 20261007T091052388Z-dbc7d961
-tea-evaluate compare: accepted: run 20261007T091052388Z-dbc7d961 (score invocation 20261007T091059793Z-437b4301) is the baseline, 45 file(s) under baseline/ (exit 0, <project>/evals/my-evaluation/runs/20261007T091052388Z-dbc7d961)
+tea-evaluate compare: accepting run 20261007T112710219Z-50f0b256
+tea-evaluate compare: accepted: run 20261007T112710219Z-50f0b256 (score invocation 20261007T112718210Z-b641cefe) is the baseline, 53 file(s) under baseline/ (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
 With a baseline in place, the next comparison reports each probe:
 
 ```text
-tea-evaluate compare: comparing run 20261007T091052388Z-dbc7d961
-P-001: incomparable (a is the baseline, b is run 20261007T091052388Z-dbc7d961)
-P-002: equivalent (a is the baseline, b is run 20261007T091052388Z-dbc7d961)
-tea-evaluate compare: compared: 2 probe(s) of run 20261007T091052388Z-dbc7d961 with the baseline of run 20261007T091052388Z-dbc7d961 (exit 0, <project>/evals/my-evaluation/runs/20261007T091052388Z-dbc7d961)
+tea-evaluate compare: comparing run 20261007T112710219Z-50f0b256
+P-001: incomparable (a is the baseline, b is run 20261007T112710219Z-50f0b256)
+P-002: equivalent (a is the baseline, b is run 20261007T112710219Z-50f0b256)
+P-003: incomparable (a is the baseline, b is run 20261007T112710219Z-50f0b256)
+tea-evaluate compare: compared: 3 probe(s) of run 20261007T112710219Z-50f0b256 with the baseline of run 20261007T112710219Z-50f0b256 (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
 The run is the one `--run` names, or the most recent `run` invocation.
@@ -1804,7 +1813,7 @@ The exit codes:
 | 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                                               |
 | 4    | transport: the agent failed to start or exited non-zero, a process supervising it ended before the agent or without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
 | 5    | timeout: the agent outlived `--timeout-ms`; on POSIX its process group got `SIGTERM`, then `SIGKILL` 2 s later if it was still running; on Windows the Job Object closes when the agent ends and stops its descendants    |
-| 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
+| 6    | parser: the agent's usage report could not be read (malformed or incomplete JSON from the agent CLI)                                                                                                                      |
 
 The example below runs the skill root `skill` with the `custom` adapter and `cat` as the agent, so the output is the prompt the agent received:
 
@@ -1823,7 +1832,7 @@ Review a refund of 100 against the limit of 100.
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
 A confined `--agent claude` target on a subscription declares `"login": "claude"` on its entry, which gives it the login it finds under the private home (see [A subscription login under confinement](#a-subscription-login-under-confinement)).
-Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
+Its `target` is a path to the runner or the bin name `tea-skill-runner`, and where the runner lives decides whether `score` passes (see [Where the runner lives](#where-the-runner-lives)).
 
 On POSIX the agent runs in its own process group, and when the agent exits, every process left in that group receives `SIGKILL`.
 The group is also stopped when `--timeout-ms` runs out, and when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`.
@@ -1834,6 +1843,42 @@ On Windows a Job Object owns the agent and its descendants.
 Set every leg's `--timeout-ms` below the entry's `maxElapsedMs`. On POSIX, reserve another 40 s in `maxElapsedMs` for watchdog setup, supervisor completion and runner overhead. On Windows, reserve another 120 s in `maxElapsedMs` for bounded Job Object setup, supervisor completion and runner overhead. These reserves let the runner report its own timeout as exit 5 before the adapter's ceiling fires.
 At the ceiling, the adapter kills the runner's process group, records the leg as a fault, and `preflight` exits 12.
 Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own wiring, and its preflight and oracles see it as a failed run.
+
+### Where the runner lives
+
+A confined trial reads its workspace, the system's own paths and the paths its registry entry lists in `systemPaths`.
+The runner is a program the trial starts, so the audit lists each of its files that lies outside those places, and `score` exits 3 with one `isolation manifest violation: mount outside allowlist` line per file.
+That happens when `target` is a bare name such as `tea-skill-runner` and the name resolves to an install outside the workspace.
+After `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality`, the install is `evals/node_modules`, and `score` prints:
+
+```text
+tea-evaluate score: P-001: eval-quality score exited 3
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-adapters.js
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor-bounds.js
+```
+
+The audit names 17 files, all under two directories: the TeA package and its `commander` dependency, both in `evals/node_modules`.
+Two setups work.
+
+1. Put the runner inside `launch.root` and name it by its path in `target`.
+   The path is `node_modules/.bin/tea-skill-runner` when TeA is installed in the project root, and `evals/node_modules/.bin/tea-skill-runner` for the install above.
+   A `copy` workspace holds the install.
+   A `git` workspace lacks an ignored directory, so list the install in `workspace.provision`, for example `"provision": ["evals/node_modules"]`.
+2. Keep the bare name and list the two install directories in the entry's `systemPaths`, as absolute paths:
+
+```json
+{
+  "interfaceId": "refund-skill",
+  "executable": "tea-skill-runner",
+  "target": "tea-skill-runner",
+  "subcommandPaths": [[]],
+  "artifacts": {},
+  "environmentKeys": [],
+  "maxElapsedMs": 100000,
+  "infrastructureExitCodes": [3, 4, 5, 6],
+  "systemPaths": ["/work/app/evals/node_modules/bmad-method-test-architecture-enterprise", "/work/app/evals/node_modules/commander"]
+}
+```
 
 ## Exit codes
 

@@ -14,11 +14,12 @@
  *  * a command of the page exits non-zero, or a key line the page shows is missing from that command's output,
  *  * the page leaves out a command of the walkthrough (`check`, `digest`, `preflight`, `run`, `score`, `compare`,
  *    `compare --accept`, `ci --tier pr`) or runs a bare `tea-evaluate` that no checkout provides,
- *  * the page quotes `SKILL.md` or `requirements.md` in a form the fixture no longer holds.
+ *  * the page quotes `SKILL.md`, `requirements.md` or the registry entry of `evaluation.json` in a form the fixture no longer holds,
+ *  * a command that runs the evaluation shows no key lines.
  *
  * Revert cases run in this file: a flag changed in a command, a subcommand misspelled, a key line changed, a key line the
- * output lacks, a page that drops the `ci` command, a page with no command, and a quoted file edited. Each must make
- * the check fail.
+ * output lacks, a key block relabelled or emptied, a page that drops the `ci` command, a page with no command, and a quoted
+ * file or registry entry edited. Each must make the check fail.
  *
  * The run shares `/tmp/tea-evaluate-p<uid>` with every other Evaluate suite, so it must not run beside one.
  */
@@ -118,6 +119,19 @@ function main() {
         name: 'a page that drops the ci command',
         run: () =>
           pageProblems(tutorialSteps(edited(page, 'node cli/evaluate.js ci --evaluation "$PROJECT/evaluation" --tier pr', 'echo skipped'))),
+      },
+      {
+        name: 'a key block relabelled so the parser no longer reads it',
+        run: () => pageProblems(tutorialSteps(edited(page, '```text\ntea-evaluate score: P-001', '```console\ntea-evaluate score: P-001'))),
+      },
+      {
+        name: 'a key block emptied of its lines',
+        run: () =>
+          pageProblems(tutorialSteps(edited(page, '```text\ntea-evaluate check: … has no authoring defects\n```', '```text\n```'))),
+      },
+      {
+        name: 'the registry entry quoted with another target',
+        run: () => quotedFileProblems(edited(page, '"target": "node_modules/.bin/tea-skill-runner"', '"target": "tea-skill-runner"')),
       },
       { name: 'a page with no command', run: () => pageProblems(tutorialSteps('# A page\n\nNo block.\n')) },
       {

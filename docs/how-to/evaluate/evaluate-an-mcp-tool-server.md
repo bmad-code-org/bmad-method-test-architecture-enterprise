@@ -122,7 +122,7 @@ A tool that the registry does not list fails here.
 With `grade_answer` removed from `tools`, `check` still passes and the preflight exits 10:
 
 ```text
-tea-evaluate preflight: probes/P-002.probe.json: M-001: the baseline arm was denied by the registry (tool-not-authorized): forbidden-target in ProbeRequest: tool "grade_answer" is not among the authorized tools for interface "grader" (exit 10, /work/app/evals/grader-tool-server)
+tea-evaluate preflight: probes/P-002.probe.json: M-001: the baseline arm was denied by the registry (tool-not-authorized): forbidden-target in ProbeRequest: tool "grade_answer" is not among the authorized tools for interface "grader" (exit 10, /work/app/evals/grader-tool-server/runs/20261007T091103278Z-c674ab76)
 ```
 
 Add the tool name back to `tools` after you confirm that the evaluation may call it.
@@ -151,10 +151,10 @@ tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
 ### 6. Read the Result
 
 ```bash
-cd evals/grader-tool-server/runs/20261007T091047070Z-ef078a64/scores/20261007T091049834Z-ea51f6f4
-grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-*/evidence-artifact.json
-grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u
-grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u
+(cd evals/grader-tool-server/runs/20261007T091047070Z-ef078a64/scores/20261007T091049834Z-ea51f6f4 &&
+  grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-*/evidence-artifact.json &&
+  grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
+  grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)
 ```
 
 ```text

@@ -55,9 +55,9 @@ graph TB
     subgraph Phase2["<b>Phase 2: PLANNING</b>"]
         PM["<b>PM: prd (creates PRD with FRs/NFRs)</b>"]
         PlanNote["<b>Business requirements phase</b>"]
-        NFR2["<b>NFRs captured in PRD</b>"]
-        PM -.-> NFR2
-        NFR2 -.-> PlanNote
+        PrdNfr["<b>NFRs captured in PRD</b>"]
+        PM -.-> PrdNfr
+        PrdNfr -.-> PlanNote
         PM -.-> PlanNote
     end
 

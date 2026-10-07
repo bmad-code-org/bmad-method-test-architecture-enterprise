@@ -73,7 +73,9 @@ Evaluate inspects the skill first and records what it finds: `skill/SKILL.md` ac
 Then it asks six questions, one for each family of facts that inspection cannot settle.
 
 **Q: Which decisions matter most?**
-A: "Approving a refund that is exactly at the limit. That one is critical. Refusing a malformed request matters less."
+A: "Approving a refund that is exactly at the limit.
+That one is critical.
+Refusing a malformed request matters less."
 
 **Q: Which outputs can we trust as proof?**
 A: "The JSON object the skill prints. Read its `status` and `decision`."
@@ -82,7 +84,9 @@ A: "The JSON object the skill prints. Read its `status` and `decision`."
 A: "The skill runner over `skill/`. The agent behind it reads only the skill and the request."
 
 **Q: Where does the behavior change?**
-A: "At the limit. A refund of 100 against a limit of 100 is eligible. A request with no amount and limit is refused."
+A: "At the limit.
+A refund of 100 against a limit of 100 is eligible.
+A request with no amount and limit is refused."
 
 **Q: What are the time, secret and environment limits?**
 A: "A 30 second ceiling per command, a disposable copy of the project, no secret, no network."
@@ -138,8 +142,26 @@ cp -R test/fixtures/evaluate-tutorial "$PROJECT"
 rm -rf "$PROJECT/evaluation/baseline" "$PROJECT/evaluation/runs"
 ```
 
-An evaluation runs the skill through `tea-skill-runner` inside a disposable copy of the project, so the runner has to sit inside the project.
-In your own project, `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality` puts it in `evals/node_modules`.
+An evaluation runs the skill through `tea-skill-runner` inside a disposable copy of the project, and a confined run grants the trial that copy.
+The fixture's registry entry in `evaluation.json` therefore names the runner as a path inside the project:
+
+```json
+{
+  "interfaceId": "refund-skill",
+  "executable": "tea-skill-runner",
+  "target": "node_modules/.bin/tea-skill-runner",
+  "subcommandPaths": [[]],
+  "artifacts": {},
+  "environmentKeys": [],
+  "maxElapsedMs": 100000,
+  "infrastructureExitCodes": [3, 4, 5, 6]
+}
+```
+
+A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and `score` then exits 3 with `isolation manifest violation: mount outside allowlist`.
+Two setups avoid that: a `target` that is a path inside `launch.root`, as here, or the bare name with the install directories the audit names declared in `systemPaths` on the entry.
+The reference section [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the how-to section on [exit 3 with `mount outside allowlist`](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md#if-score-exits-3-with-mount-outside-allowlist) cover both.
+In your own project, `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality` puts the runner in `evals/node_modules`.
 Here the next commands place the same files under `node_modules` from your checkout, so the tutorial needs no registry access.
 
 ```bash
@@ -177,7 +199,9 @@ Each file holds one part of the evaluation:
 
 - `evaluation.json` names the target, the way to launch it, the arms to run and the number of trials.
 - `contract.json` holds the behaviors that must hold and the oracles that read the evidence, including `B-001`, the refund at the limit.
-- `probes/` holds three probes. `P-001` and `P-003` are clean controls that the unmodified skill must pass. `P-002` is the seeded defect.
+- `probes/` holds three probes.
+  `P-001` and `P-003` are clean controls that the unmodified skill must pass.
+  `P-002` is the seeded defect.
 - `mutations/M-001.mutation.json` is the controlled edit behind `P-002`: it replaces "at or below the limit" with "below the limit" in `skill/SKILL.md`.
 - `policy/` holds the scoring policy and the conditions the run is recorded under.
 - `ci/evaluation-ci-plan.json` places each check on a CI tier.
@@ -244,7 +268,8 @@ tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnos
 ```
 
 The verdict comes from eval-quality's own `preflight`, which `tea-evaluate` calls and whose exit it passes through.
-A failed qualification exits 3 and leaves the verdict under `runs/`.
+A probe whose mutation does not make the defect show stops `preflight` with exit 11 and names the probe.
+A failed eval-quality preflight exits 3 and leaves its verdict under `runs/`.
 See [`preflight`](/docs/reference/tea-evaluate-cli.md#preflight).
 
 ## Step 6: Run the Evaluation

@@ -31,7 +31,7 @@ Four things stack on each other, and each one answers a different question.
 The system under test is always your use of something: the prompt, the wiring and the tools around a model.
 Evaluate redirects a request to evaluate a vendor model on its own, because the vendor owns that system and you cannot fix it.
 
-The evaluation is a folder (`evals/<evaluation-id>/` in the examples) that holds everything needed to repeat the measurement: the confirmed `requirements.md`, the `contract.json`, one probe file per seeded defect, one mutation file per planted defect, the scoring policy and, once you accept one, a `baseline/` of results.
+The evaluation is a folder (`evals/<evaluation-id>/` in the examples) that holds everything needed to repeat the measurement: the confirmed `requirements.md`, the `contract.json`, one probe file per probe, one mutation file per planted defect, the scoring policy and, once you accept one, a `baseline/` of results.
 Because it is committed, a reviewer reads a change to the evaluation the way they read a change to code.
 
 The contract is the test.
@@ -71,13 +71,21 @@ Every rubric criterion is calibrated before its scores count, which the next sec
 
 Who applies the oracles is the evaluator kind, and `evaluation.json` chooses it:
 
-- **`deterministic`**, the default. The runtime resolves each oracle with `eval-quality`'s own resolver over the recorded observations. A contract with a rubric also names a model judge, which scores each trial once.
-- **`command`**. Your executable under `evaluator/` receives the sealed brief and the observations and prints judgment rows. It suits a skill-specific evaluator or a wrapper around a framework you already use.
-- **`sealed-brief-agent`**. An agent reads the sealed brief alone and acts on the target only through a bridge the runtime owns, so the registry still decides what it may call. Because the agent chooses its own calls, two runs can differ, so Evaluate runs it several times on each arm first and requires its attempts to agree.
-- **`records`**. Your own harness runs the target and the scorer, and hands over sealed run records. The runtime checks they match the brief and the configuration and passes them on.
+- **`deterministic`**, the default.
+  The runtime resolves each oracle with `eval-quality`'s own resolver over the recorded observations.
+  A contract with a rubric also names a model judge, which scores each trial once.
+- **`command`**.
+  Your executable under `evaluator/` receives the sealed brief and the observations and prints judgment rows.
+  It suits a skill-specific evaluator or a wrapper around a framework you already use.
+- **`sealed-brief-agent`**.
+  An agent reads the sealed brief alone and acts on the target only through a bridge the runtime owns, so the registry still decides what it may call.
+  Because the agent chooses its own calls, two runs can differ, so Evaluate runs it several times on each arm first and requires its attempts to agree.
+- **`records`**.
+  Your own harness runs the target and the scorer, and hands over sealed run records.
+  The runtime checks they match the brief and the configuration and passes them on.
 
-Whatever the kind, the runtime checks no quote, citation or signature.
-`eval-quality` does, when it ingests the records, so an evaluator that cites evidence that does not exist is caught by the engine.
+Whatever the kind, `score` refuses a finding that cites no observation, quotes no evidence or cites an observation its record does not hold, with exit 10 before any score call.
+Whether a quote, a citation or a signature supports the finding is `eval-quality`'s decision when it ingests the records, so an evaluator that cites evidence that does not exist is caught by the engine.
 
 ## Held-out probes and judge calibration
 
@@ -126,7 +134,7 @@ The runtime qualifies it through six steps in a workspace of its own:
 5. The restored file's digest and mode are compared with the ones taken before the mutation.
 6. The clean arm runs again until it passes, within a cap the scoring policy sets.
 
-The rollback is proved, not assumed.
+The run proves the rollback:
 `rollbackVerified` is true only when the restored bytes match and the clean arm passes again.
 A workspace that no longer passes after the restore is an unfit harness, and the run stops with exit 12 because the target has drifted.
 A mutation that does not change the behavior exits 11, because an evaluation that cannot see a defect it was designed to see is the weakness Evaluate exists to find.
@@ -136,8 +144,8 @@ A historical arm runs a defect a release really fixed, either across the commit 
 A gameability arm, described above, launches nothing.
 Each arm runs the number of trials `evaluation.json` declares, in a fresh workspace each time, and the sealed trial sets go to `eval-quality score`, one call per probe.
 
-The result is a strength vector per probe class, which says how much of the planted-defect space the evaluation catches.
-`compare --accept` commits the scored run as the baseline that later runs are held to.
+The result is a strength vector per probe, and a catch rate per probe class in the run's strength aggregate, which together say how much of the planted-defect space the evaluation catches.
+`compare --accept` writes the scored run to `baseline/`, which you commit, and later runs are held to it.
 A baseline enters the repository only through a reviewed change, because it states what you accepted as the measure of the feature.
 
 ## Why the target is confined

@@ -197,9 +197,12 @@ A judge that cannot tell the levels apart looks like this.
 Read the items that disagree.
 Each one has a cause you can repair:
 
-- The anchors do not separate the levels. Ask the skill to sharpen them, then rerun.
-- A label is wrong. Correct the label with the skill and rerun.
-- The judge model is too weak for the scale. Choose a stronger model, record its snapshot in `policy/evaluator-conditions.json` and rerun.
+- The anchors do not separate the levels.
+  Ask the skill to sharpen them, then rerun.
+- A label is wrong.
+  Correct the label with the skill and rerun.
+- The judge model is too weak for the scale.
+  Choose a stronger model, record its snapshot in `policy/evaluator-conditions.json` and rerun.
 
 The calibration file's digest and the minimum agreement join the evaluator configuration, so changing either changes the scoring version.
 A lower `minimumAgreement` accepts a judge that disagrees more often, so lower it only after you decide the labels were too strict.

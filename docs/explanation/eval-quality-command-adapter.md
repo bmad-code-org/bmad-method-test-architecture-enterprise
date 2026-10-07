@@ -61,7 +61,7 @@ One runner covers eight skills because the eight contracts declare one interface
 
 - ~~`trace`~~ and ~~`automate`~~, writing into a staged tree. `trace` writes its summary and matrix. `automate` runs four hand-authored spec sets against the fixed implementation and a mutated scratch copy.
 - ~~`nfr`~~ and ~~`test-design`~~, each writing its assessment artifact. `nfr` is done (`tea-nfr-runner`, `test/eval-nfr.js`); `test-design` is done (`tea-test-design-runner`, `test/eval-test-design.js`).
-- ~~`atdd`~~, generating red-phase acceptance scaffolds scored under NFR9's isolation (`tea-atdd-runner`, `test/eval-atdd.js`).
+- ~~`atdd`~~, generating red-phase acceptance scaffolds scored under the isolation every gate that executes content runs in (`tea-atdd-runner`, `test/eval-atdd.js`).
 - ~~`framework`~~ and ~~`ci`~~, scaffolding a project or pipeline. `ci` is done (`tea-ci-runner`, `test/eval-ci.js`); `framework` installs and smoke-tests scaffolded frameworks (`test/eval-framework-scaffold.js`).
 - ~~`bmad-tea`~~ and ~~`bmad-teach-me-testing`~~. `test/lib/transcript-harness.js`'s `runTranscript` closes the multi-turn transcript mechanism gap; `bmad-tea` routes intents (`test/eval-bmad-tea-routing.js`), and `bmad-teach-me-testing` evaluates multi-turn teaching sessions (`test/eval-teach-me-testing.js`).
 

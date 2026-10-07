@@ -46,7 +46,7 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
 {
   "interfaceId": "stub-skill",
   "executable": "tea-skill-runner",
-  "target": "tea-skill-runner",
+  "target": "evals/node_modules/.bin/tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
@@ -62,7 +62,8 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
 }
 ```
 
-This entry is the working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) that runs confined with no `confinement` field and lists its model provider in `egress`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.
+This entry is the [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) entry with its `target` set to the runner's path inside `launch.root`, since a runner outside the workspace is read outside the trial's grants.
+It runs confined with no `confinement` field and lists its model provider in `egress`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.
 
 ## Declare what a confined target reads
 

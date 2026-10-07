@@ -107,10 +107,11 @@ A run whose observer fails (the log stream ended, or a read the runtime made did
 
 ## Host services
 
-The services your machine runs for you, such as the container engine, a key agent or the desktop session, are closed to a confined target.
-A target that tries to use one is recorded.
-Under Bubblewrap the runtime masks each of them when a call starts; under Seatbelt the profile closes them.
-These are the details of that masking.
+The services your machine runs for you, such as the container engine or a key agent, are closed to a confined target.
+A call to one is refused: under Bubblewrap the runtime masks each of them when a call starts and the call answers `ECONNREFUSED`, and under Seatbelt the profile answers `EPERM`.
+The audit lists only a connection the kernel did not refuse, so a refused call leaves no entry.
+macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.
+These are the details of the masking under Bubblewrap.
 
 The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break in a directory the runtime does not walk, one whose file name is no UTF-8, and a second path to the same socket file through a hard link or another mount; the audit lists a connection to any of them as an observed mount.
 A call hides at most as many sockets as its Bubblewrap command leaves room for, and at most 2,000 in any case, since Bubblewrap takes 9,000 arguments for the command line (the target's own arguments included) and the mounts together, and the runtime reads at most 2,000 directories of each scanned directory.
@@ -141,7 +142,8 @@ The token file, the configuration file that names it and the bridge's socket are
 A run makes one private parent directory when it starts, before any target runs, and makes each of those beneath it.
 Every run of your user makes its parent beneath one private root, `/tmp/tea-evaluate-p<uid>` (mode 700, a directory you own that is not a link), whatever the run's `TMPDIR` is; a root that is a link or belongs to another user stops the run with exit 12.
 On Windows, which has no confinement, the root is in the temp directory.
-A run removes its own parent when it ends, an interrupting signal included; the root stays, since another run may be using it. A later preflight reclaims a verified dead run's parent after `SIGKILL`, using the ownership record described in [The workspace](/docs/reference/tea-evaluate-cli.md#the-workspace).
+A run removes its own parent when it ends, an interrupting signal included; the root stays, since another run may be using it.
+A later preflight reclaims a verified dead run's parent after `SIGKILL`, using the ownership record described in [The workspace](/docs/reference/tea-evaluate-cli.md#the-workspace).
 
 The confinement withholds the run's private directories from every target and every process a target leaves running, those started before a directory was made included, so the token is unreadable to a confined target, which can neither take the bridge's one admission nor read an evaluator's or a judge's working files.
 It withholds the root, so a process left running by an earlier run, or a target of a run in progress elsewhere, cannot reach the parent of a run made after its sandbox was built, whatever temp directory either run uses.
@@ -199,8 +201,13 @@ The protection starts when `score` reads the inputs: a file rewritten together w
 
 Two checks follow every `eval-quality score` call, before anything is copied:
 
-- `score` reads every input again and digests it. A file that changed, stopped being a regular file or appeared where the check found none exits 12 naming the file, so a rewrite that eval-quality read and a process kept is refused.
-- `score` scores the held bytes in process with eval-quality's library the way the CLI scores a probe and compares the call with what the CLI does with those bytes. The staged artifact must equal the result serialized with the library's `serializeArtifact` byte for byte, and a call that stages no artifact must match a result with no artifact, whatever it exited. The call's exit must be the one the held bytes give: the ladder's exit for a result, 4 for a structural failure, 5 for a runtime fault, 64 for a private-storage manifest reference. The `eval-quality:` lines on the call's stderr must be the ones the result would print (the qualification failures and, for an Invalid result, its basis, which is how an exit 3 gets its reason); when the library refuses the held bytes, only the exit is compared, since the CLI renders that error itself. A rewrite that eval-quality read and a process then restored, a well-formed artifact with altered outcomes or the same artifact in other bytes, an artifact removed or staged afresh, and an exit or reason that does not follow from the held bytes, exit 12 naming the mismatch.
+- `score` reads every input again and digests it.
+  A file that changed, stopped being a regular file or appeared where the check found none exits 12 naming the file, so a rewrite that eval-quality read and a process kept is refused.
+- `score` scores the held bytes in process with eval-quality's library the way the CLI scores a probe and compares the call with what the CLI does with those bytes.
+  The staged artifact must equal the result serialized with the library's `serializeArtifact` byte for byte, and a call that stages no artifact must match a result with no artifact, whatever it exited.
+  The call's exit must be the one the held bytes give: the ladder's exit for a result, 4 for a structural failure, 5 for a runtime fault, 64 for a private-storage manifest reference.
+  The `eval-quality:` lines on the call's stderr must be the ones the result would print (the qualification failures and, for an Invalid result, its basis, which is how an exit 3 gets its reason); when the library refuses the held bytes, only the exit is compared, since the CLI renders that error itself.
+  A rewrite that eval-quality read and a process then restored, a well-formed artifact with altered outcomes or the same artifact in other bytes, an artifact removed or staged afresh, and an exit or reason that does not follow from the held bytes, exit 12 naming the mismatch.
 
 The aggregate call (see [Run-wide strength aggregate](/docs/reference/tea-evaluate-cli.md#run-wide-strength-aggregate)) is held to the same inputs.
 After it, `score` reads every input again (the run's policy among them), reads the persisted evidence artifacts back through the held directory and compares them with the bytes it copied, and exits 12 naming the file that changed, without copying the aggregate.
@@ -234,10 +241,28 @@ Stopping sends the group the signal received (`SIGTERM` for a timeout or a death
 An agent the `SIGKILL` ends is reported as killed by `SIGKILL` once it outlived the grace period after the signal that asked it to stop; a `SIGQUIT` can end that way wherever the system hands core files to a collector, since writing the core can take longer than the grace period.
 A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
 Once resumed, the runner reports how the agent ended, however long it was suspended.
-On POSIX, four processes supervise the agent: one in the runner's process group, a leader in a session of its own, a guardian that leads the agent's process group, and a detached watchdog. The guardian's lifeline closes even if the supervisor and leader receive `SIGKILL` together; it then stops its group. While the runner remains active, a missing-report transport failure is bounded by a 25 s startup reserve, the agent's `--timeout-ms` wall clock, and 7 s for supervisor backstop and output drain.
-On POSIX, a detached watchdog owns the guardian's group through a leader-only pipe. It confirms readiness before the guardian starts the agent. If the leader dies, the pipe closes and the watchdog sends `SIGKILL` to the group, even while the guardian is stopped. After a normal agent exit, the leader kills the group and releases the watchdog. The process integration gate requires the guardian, agent, and ordinary child to end within 10 s of a simultaneous leader and supervisor kill. The guardian allows 10 s for watchdog setup, and the agent's `--timeout-ms` wall clock starts when its PID is reported. If the watchdog cannot arm, the agent does not start and the runner reports a setup failure.
+On POSIX, four processes supervise the agent: one in the runner's process group, a leader in a session of its own, a guardian that leads the agent's process group, and a detached watchdog.
+The guardian's lifeline closes even if the supervisor and leader receive `SIGKILL` together; it then stops its group.
+While the runner remains active, a missing-report transport failure is bounded by a 25 s startup reserve, the agent's `--timeout-ms` wall clock, and 7 s for supervisor backstop and output drain.
+On POSIX, a detached watchdog owns the guardian's group through a leader-only pipe.
+It confirms readiness before the guardian starts the agent.
+If the leader dies, the pipe closes and the watchdog sends `SIGKILL` to the group, even while the guardian is stopped.
+After a normal agent exit, the leader kills the group and releases the watchdog.
+The process integration gate requires the guardian, agent, and ordinary child to end within 10 s of a simultaneous leader and supervisor kill.
+The guardian allows 10 s for watchdog setup, and the agent's `--timeout-ms` wall clock starts when its PID is reported.
+If the watchdog cannot arm, the agent does not start and the runner reports a setup failure.
 The agent's standard input, output and error are pipes the group leader owns, and the leader copies the runner's input to the agent and the agent's output to the runner.
 Once the agent exits, the leader copies what those pipes still hold and closes each one when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it; output any process writes after that is lost.
 A process that leaves the group, such as a daemon that starts its own session, keeps running, and the runner does not wait for it.
 If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it and the agent's group, and the runner exits 4.
-On Windows, a PowerShell helper creates a Windows Job Object with kill-on-close ownership and assigns the guardian before the agent starts. The guardian launches the helper from the host's absolute SystemRoot path, so a project-local `powershell.exe` cannot claim readiness. The agent and its ordinary descendants inherit that job. The helper holds its sole job handle until the guardian closes their pipe after the agent exits, or the pipe closes when the guardian dies. Closing the handle stops every process in the job. The guardian allows 90 s for setup. The supervisor has a 105 s startup backstop measured from its own start, covering cold Node startup before the guardian's timer begins. If the helper cannot establish ownership, the agent does not start and the runner exits 4 with the setup failure. The leader reports its guardian PID, agent readiness, and completion to the supervisor over a dedicated pipe with a 2 s write bound; a failed report stops the guardian. The `--timeout-ms` wall clock starts when the guardian reports the actual agent PID; the supervisor's 5 s agent backstop follows that clock. The Windows process integration gate requires the direct agent and its child to end within 10 s of normal agent exit or a dual leader and supervisor kill.
+On Windows, a PowerShell helper creates a Windows Job Object with kill-on-close ownership and assigns the guardian before the agent starts.
+The guardian launches the helper from the host's absolute SystemRoot path, so a project-local `powershell.exe` cannot claim readiness.
+The agent and its ordinary descendants inherit that job.
+The helper holds its sole job handle until the guardian closes their pipe after the agent exits, or the pipe closes when the guardian dies.
+Closing the handle stops every process in the job.
+The guardian allows 90 s for setup.
+The supervisor has a 105 s startup backstop measured from its own start, covering cold Node startup before the guardian's timer begins.
+If the helper cannot establish ownership, the agent does not start and the runner exits 4 with the setup failure.
+The leader reports its guardian PID, agent readiness, and completion to the supervisor over a dedicated pipe with a 2 s write bound; a failed report stops the guardian.
+The `--timeout-ms` wall clock starts when the guardian reports the actual agent PID; the supervisor's 5 s agent backstop follows that clock.
+The Windows process integration gate requires the direct agent and its child to end within 10 s of normal agent exit or a dual leader and supervisor kill.

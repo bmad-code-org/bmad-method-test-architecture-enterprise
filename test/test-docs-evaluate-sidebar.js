@@ -5,7 +5,7 @@
  * and autogenerates whole directories (the tutorials, the customization and brownfield how-tos).
  * A page the sidebar misses still builds, and no reader finds it.
  *
- * An Evaluate page is any `docs/` page whose text names `tea-evaluate` or `bmad-testarch-evaluate`.
+ * An Evaluate page is any `docs/` page whose text names `tea-evaluate` or `bmad-testarch-evaluate`, and any page whose own path names Evaluate.
  * A page whose own path names Evaluate (`how-to/evaluate/`, `tutorials/evaluate-*`, `explanation/*evaluate*`,
  * `reference/tea-evaluate-cli`) is one Evaluate owns, and the overview has to link every one of those.
  *
@@ -29,7 +29,7 @@ const OVERVIEW_PAGE = 'explanation/tea-overview';
 /** What makes a page an Evaluate page. */
 const EVALUATE_NAMES = /\btea-evaluate\b|\bbmad-testarch-evaluate\b/;
 
-/** What makes an Evaluate page one that Evaluate owns: its own path says so. */
+/** What makes an Evaluate page one that Evaluate owns: its own path says so, and that alone makes it an Evaluate page. */
 const OWNED_PATH = /evaluate/;
 
 /** The slug Starlight gives a page: its path without `.md`, and a directory's `index` is the directory. */
@@ -55,7 +55,7 @@ function readPages(root = DOCS_ROOT) {
 
 /** The slugs of the pages that name Evaluate. */
 function evaluateSlugs(pages) {
-  return pages.filter(({ text }) => EVALUATE_NAMES.test(text)).map(({ slug }) => slug);
+  return pages.filter(({ slug, text }) => OWNED_PATH.test(slug) || EVALUATE_NAMES.test(text)).map(({ slug }) => slug);
 }
 
 /** The slugs of the Evaluate pages Evaluate owns, which the overview must link. */
@@ -173,6 +173,12 @@ function revertCaseProblems(configText, overviewText, pages) {
       failures.push(`the overview check passed with its link to ${slug} removed`);
     }
   }
+  const nameless = [{ slug: 'how-to/evaluate/a-page-that-names-no-command', text: '# A page about checking results\n' }];
+  if (!evaluateSlugs(nameless).includes(nameless[0].slug) || !ownedSlugs(nameless).includes(nameless[0].slug)) {
+    failures.push('a page under how-to/evaluate/ that names neither tea-evaluate nor bmad-testarch-evaluate escaped the Evaluate pages');
+  }
+  const bystander = [{ slug: 'how-to/workflows/a-page-about-something-else', text: '# Something else\n' }];
+  if (evaluateSlugs(bystander).length > 0) failures.push('a page that names Evaluate nowhere counted as an Evaluate page');
   const newPage = 'how-to/evaluate/a-page-nobody-listed';
   if (!sidebarProblems(configText, [...slugs, newPage], [...allSlugs, newPage]).some((problem) => problem.startsWith(`${newPage} `))) {
     failures.push('a new Evaluate page the sidebar does not list passed the sidebar check');

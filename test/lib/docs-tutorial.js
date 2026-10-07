@@ -79,6 +79,11 @@ function tutorialSteps(markdown) {
   return steps;
 }
 
+/** Whether a command runs the evaluation command line, spelled as the page spells it or as the bare bin name. */
+function runsEvaluate(command) {
+  return /node cli\/evaluate\.js|\btea-evaluate\s/.test(command);
+}
+
 /** The text of a `tea-evaluate` invocation as a step spells it: `check`, `compare --accept`, `ci --tier pr`, or null. */
 function invocationsOf(command) {
   const found = [];
@@ -108,6 +113,14 @@ function pageProblems(steps) {
     const at = invoked.indexOf(name, from);
     if (at === -1) problems.push(`the page runs no "node cli/evaluate.js ${name}" after the invocations before it`);
     else from = at + 1;
+  }
+  for (const step of steps) {
+    if (step.expected !== null && step.expected.length === 0)
+      problems.push(`line ${step.line}: the \`text\` block under the command holds no key line`);
+    if (runsEvaluate(step.command) && (step.expected === null || step.expected.length === 0))
+      problems.push(
+        `line ${step.line}: the command runs the evaluation and shows no key lines; put them in a \`text\` block right under it`,
+      );
   }
   for (const step of steps) {
     if (/\btea-evaluate\s+(check|digest|preflight|run|score|compare|ci)\b/.test(step.command))
@@ -201,6 +214,16 @@ function quotedFileProblems(markdown) {
     const text = fs.readFileSync(path.join(FIXTURE, file), 'utf8').trimEnd();
     if (!markdown.includes(`\`\`\`markdown\n${text}\n\`\`\``)) problems.push(`the page does not quote ${file} as the fixture holds it`);
   }
+  const registry = JSON.parse(fs.readFileSync(path.join(FIXTURE, 'evaluation', 'evaluation.json'), 'utf8')).registry[0];
+  const quoted = fencedBlocks(markdown).find((block) => block.lang === 'json' && block.body.includes('"interfaceId": "refund-skill"'));
+  let parsed;
+  try {
+    parsed = quoted === undefined ? undefined : JSON.parse(quoted.body);
+  } catch {
+    parsed = undefined;
+  }
+  if (JSON.stringify(parsed) !== JSON.stringify(registry))
+    problems.push('the page does not quote the fixture registry entry of evaluation.json as the fixture holds it');
   return problems;
 }
 

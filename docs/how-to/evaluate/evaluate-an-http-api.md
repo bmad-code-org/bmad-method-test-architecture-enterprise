@@ -109,8 +109,7 @@ The seeded defect `M-001` replaces `mode: strict` with `mode: lenient` in `rules
 ### 3. Run the Port's Conformance Suite
 
 ```bash
-cd evals/grader-http-service
-node adapter/http-probe-port.conformance.mjs
+(cd evals/grader-http-service && node adapter/http-probe-port.conformance.mjs)
 ```
 
 ```text
@@ -173,10 +172,10 @@ tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
 ### 6. Read the Result
 
 ```bash
-cd evals/grader-http-service/runs/20261007T092333549Z-2b79ad72/scores/20261007T092337831Z-402585f6
-grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json
-grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u
-grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u
+(cd evals/grader-http-service/runs/20261007T092333549Z-2b79ad72/scores/20261007T092337831Z-402585f6 &&
+  grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
+  grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
+  grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)
 ```
 
 ```text

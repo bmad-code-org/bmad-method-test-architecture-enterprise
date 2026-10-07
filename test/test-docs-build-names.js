@@ -15,7 +15,7 @@
  * the BMad Method (epic-level test design, a story's acceptance tests, the
  * `sprint-status.yaml` file) and for a component of Evaluate (the relay a
  * sealed-brief agent talks to), so the bare words are not scanned. Their
- * build forms are: a dotted story id, an `AD-` decision id, a line of the
+ * build forms are: a dotted story id, an `AD-` decision id, a requirement id such as `NFR9` or `CAP-11`, a line of the
  * epic narrative, the build's planning folders, a pull request number and
  * the review rounds. The word lane has no user meaning, so it is scanned bare.
  *
@@ -32,6 +32,7 @@ const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 
 const BUILD_NAME_PATTERNS = [
   { name: 'story id', pattern: /\bStor(?:y|ies) \d+\.\d+/i, example: 'Evaluate authored its own suite in Story 1.42.' },
+  { name: 'requirement id', pattern: /\b(?:CAP|N?FR)-?\d+\b/, example: 'The run happens under NFR9 isolation, as CAP-11 requires.' },
   { name: 'decision id', pattern: /\bAD-\d+/, example: 'The adapter follows AD-10.' },
   {
     name: 'epic narrative',

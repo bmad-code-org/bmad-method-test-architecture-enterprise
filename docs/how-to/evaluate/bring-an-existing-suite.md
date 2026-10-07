@@ -149,12 +149,18 @@ A promptfoo evaluator holds the assertions in `evaluator/asserts.yaml`:
 ```yaml
 - type: contains
   value: apples
+  metric: required-apples
 - type: contains
   value: pears
+  metric: required-pears
 - type: not-contains
   value: shellfish
+  metric: forbidden-shellfish
 ```
 
+Each assertion carries a `metric` equal to one row key in `mapping.json`.
+The metric stays the assertion's identity when you reorder the file.
+An assertion with no metric, or with a metric that `mapping.json` does not name, stops the trial with `promptfoo returned missing, unknown, or repeated assertion metadata`.
 `mapping.json` names one row key for each assertion:
 
 ```json
@@ -226,8 +232,8 @@ tea-evaluate score: eval-quality score ran for 6 probe(s) of run 20261007T090533
 Read the verdicts as [How to Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md) shows:
 
 ```bash
-cd evals/pantry-summary/runs/20261007T090533030Z-498d99b8/scores/20261007T090543074Z-c212cfd9
-grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json
+(cd evals/pantry-summary/runs/20261007T090533030Z-498d99b8/scores/20261007T090543074Z-c212cfd9 &&
+  grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json)
 ```
 
 ```text

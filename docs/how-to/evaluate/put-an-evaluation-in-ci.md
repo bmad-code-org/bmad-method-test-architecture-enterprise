@@ -53,12 +53,15 @@ Each check in the plan has an `id`, a `tier`, a `trigger`, the `command` that ru
 
 The tiers hold these checks by default:
 
-| Tier        | Checks                                                                  | Needs                       |
-| ----------- | ----------------------------------------------------------------------- | --------------------------- |
-| `pr`        | `check`, `compile`, `seal`, `replay`, `gameability`, `oracle-agreement` | the committed baseline only |
-| `merge`     | `preflight-live`, when the target needs no secret                       | the real target             |
-| `scheduled` | `twin-run`, `held-out`, `judge-calibration`, `strength-comparison`      | the real target and a model |
-| `release`   | the same live checks, blocking where `scheduled` only warns             | the real target and a model |
+| Tier        | Checks                                                                   | Needs                       |
+| ----------- | ------------------------------------------------------------------------ | --------------------------- |
+| `pr`        | `check`, `compile`, `seal`, `replay`, `gameability`, `oracle-agreement`  | the committed baseline only |
+| `merge`     | `preflight-live`, when the target needs no secret                        | the real target             |
+| `scheduled` | `twin-run`, `held-out`, `judge-calibration`, `strength-comparison`       | the real target and a model |
+| `release`   | the same live checks; a strength floor breach and a stale baseline block | the real target and a model |
+
+On `release`, a probe class below its strength floor exits 2 and a stale baseline exits 11, and both block.
+A strength regression found by `strength-comparison` warns on `scheduled` and on `release`.
 
 A tier holds only the checks placed on it, so a pipeline triggered by a merge runs the `pr` tier as well as the `merge` tier.
 `api-conformance` joins the `pr` tier for an HTTP API.

@@ -43,8 +43,8 @@ The oracle was supposed to fail and it held, so it accepts output that it should
 The qualification evidence names the oracle:
 
 ```bash
-cd evals/test-review-json-stdin/runs/20261007T090613064Z-07007bfd
-grep -o '"verdict": "[a-z]*"\|"oracleId": "O-[0-9]*"\|"resolution": "[a-z]*"' qualification/P-007/mutated-fail.json
+(cd evals/test-review-json-stdin/runs/20261007T090613064Z-07007bfd &&
+  grep -o '"verdict": "[a-z]*"\|"oracleId": "O-[0-9]*"\|"resolution": "[a-z]*"' qualification/P-007/mutated-fail.json)
 ```
 
 ```text
@@ -145,8 +145,8 @@ tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnos
 Read each probe's verdict and the coverage rules it reports unsatisfied:
 
 ```bash
-cd evals/test-review-json-stdin/runs/20261007T090715909Z-b5691280/scores/20261007T090748343Z-c3c536d0
-grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-001/evidence-artifact.json P-002/evidence-artifact.json
+(cd evals/test-review-json-stdin/runs/20261007T090715909Z-b5691280/scores/20261007T090748343Z-c3c536d0 &&
+  grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-001/evidence-artifact.json P-002/evidence-artifact.json)
 ```
 
 ```text
@@ -196,18 +196,17 @@ P-002/evidence-artifact.json:"contractVerdict":"PASS"
 ### 6. Read the Strength of Each Class
 
 `score` also writes `strength-aggregate.json` beside the probe folders.
-Print the class decisions:
+Print one line per class:
 
 ```bash
-node -p "JSON.stringify(require('./strength-aggregate.json').floorDecisions, null, 2)"
+(cd evals/test-review-json-stdin/runs/20261007T090815261Z-97564a96/scores/20261007T090849732Z-130a348f &&
+  node -p "const d = require('./strength-aggregate.json').floorDecisions; Object.keys(d).map((c) => c + ' ' + JSON.stringify(d[c])).join('\n')")
 ```
 
-```json
-{
-  "defect": { "basis": "rate-meets-floor", "decision": "meets", "floor": 1 },
-  "gameability": { "basis": "rate-meets-floor", "decision": "meets", "floor": 1 },
-  "zero-action": { "basis": "no-eligible-probe", "decision": "does-not-meet", "floor": 1 }
-}
+```text
+defect {"basis":"rate-meets-floor","decision":"meets","floor":1}
+gameability {"basis":"rate-meets-floor","decision":"meets","floor":1}
+zero-action {"basis":"no-eligible-probe","decision":"does-not-meet","floor":1}
 ```
 
 The floors come from `strengthFloor` in `evaluation.json`.
@@ -216,7 +215,7 @@ Read each class by its `basis`:
 - `rate-meets-floor` and `rate-below-floor` compare the share of caught probes with the floor.
 - `no-eligible-probe` means the run holds no probe of that class that it can count.
   Clean controls stay outside every denominator.
-- `not-comparable` means fewer trials than `minimumTrialCount` ran.
+- `not-comparable` means fewer trials than `minimumTrialCount` completed, or an oracle of the probe was never reached.
 - `no-exercised-probe` and `unexercised-probe` mean an eligible probe did not run.
 - `no-floor-declared` reads `undeclared`: the class has no floor in `evaluation.json`.
 
@@ -224,14 +223,12 @@ Only `rate-meets-floor` is a pass.
 The example declares a `zero-action` floor of 1, and its zero-action probes are all clean controls, so no probe of that class counts.
 Two repairs close it.
 Ask the skill to add a probe of that class for a behavior where the target must act, or ask it to remove the floor and record why.
-With the floor removed and the development partition rerun, the same file reads:
+With the floor removed and the development partition rerun, the same command prints:
 
-```json
-{
-  "defect": { "basis": "rate-meets-floor", "decision": "meets", "floor": 1 },
-  "gameability": { "basis": "rate-meets-floor", "decision": "meets", "floor": 1 },
-  "zero-action": { "basis": "no-floor-declared", "decision": "undeclared", "floor": null }
-}
+```text
+defect {"basis":"rate-meets-floor","decision":"meets","floor":1}
+gameability {"basis":"rate-meets-floor","decision":"meets","floor":1}
+zero-action {"basis":"no-floor-declared","decision":"undeclared","floor":null}
 ```
 
 ### 7. Run the Held-Out Partition
@@ -248,8 +245,8 @@ Read held-out results only from `gap-view.json` in the run folder.
 Each held-out row holds the probe ID, its class and the reduced outcome:
 
 ```bash
-cd evals/test-review-json-stdin/runs/20261007T091921321Z-c7e9d976
-node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount).join('\n')"
+(cd evals/test-review-json-stdin/runs/20261007T091921321Z-c7e9d976 &&
+  node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount).join('\n')")
 ```
 
 ```text

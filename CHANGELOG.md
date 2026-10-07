@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Evaluate documentation (Story 2.6).
   A tutorial, `docs/tutorials/evaluate-your-first-skill.md`, takes one small skill from intake to a scored run, an accepted baseline and a green `ci --tier pr` against the shipped fixture `test/fixtures/evaluate-tutorial/`, and `test:docs-tutorial` runs its commands and holds its shown output.
-  Seven how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, and bringing an existing suite.
+  Eight how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, putting an evaluation in CI, and bringing an existing suite.
   Two explanation pages, `how-evaluate-works.md` and `why-evaluate-confines-the-target.md`, hold the design reasoning.
   `docs/reference/tea-evaluate-cli.md` is a user reference: each command's purpose, options, exit codes, output and one example, and the `evaluation.json` fields an adopter writes.
   `how-tea-is-tested.md` and the adoption guide describe Evaluate as shipped, and the adoption guide documents the 0/1/2 exit convention as an optional pattern.

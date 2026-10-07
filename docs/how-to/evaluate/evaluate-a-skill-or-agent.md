@@ -58,25 +58,33 @@ It writes your answers as a requirements statement and stops until you confirm i
 The confirmed text becomes `requirements.md`, and the skill records its digest in `evaluation.json`.
 
 After confirmation the skill designs the probes, authors the contract and the oracles, and writes the target entry.
-It installs the private package that provides `tea-evaluate`:
+It installs the private package that provides `tea-evaluate` and the skill runner:
 
 ```bash
 npm install --prefix evals
 ```
 
-Every evaluation folder lives under `evals/` by default:
+The install puts the runner at `evals/node_modules/.bin/tea-skill-runner`.
+Every evaluation folder lives under `evals/` by default.
+The example project below keeps its skill and its stand-in agent at the project root:
 
 ```text
-evals/stub-skill-preflight/
-  evaluation.json
-  requirements.md
-  contract.json
-  probes/P-001.probe.json
-  policy/evaluator-conditions.json
-  corpus-index.json
+app/
+  skill/SKILL.md
+  agent.js
+  evals/
+    node_modules/
+    stub-skill-preflight/
+      evaluation.json
+      requirements.md
+      contract.json
+      probes/P-001.probe.json
+      policy/evaluator-conditions.json
+      policy/scoring-policy.json
+      corpus-index.json
 ```
 
-Evaluations with seeded defects add `mutations/` and `policy/scoring-policy.json`.
+Evaluations with seeded defects add `mutations/`.
 
 ### 2. Read the Target Entry the Skill Wrote
 
@@ -87,17 +95,30 @@ A skill target registers the generic runner and names the skill in `launch.skill
 {
   "interfaceId": "stub-skill",
   "executable": "tea-skill-runner",
-  "target": "tea-skill-runner",
+  "target": "evals/node_modules/.bin/tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
   "maxElapsedMs": 160000,
-  "infrastructureExitCodes": [3, 4, 5, 6]
+  "infrastructureExitCodes": [3, 4, 5, 6],
+  "egress": [{ "host": "api.anthropic.com", "port": 443, "addresses": ["160.79.104.10", "2607:6bc0::10"] }]
 }
 ```
 
 ```json
-{ "launch": { "root": "../stub-agent", "skillRoot": "skill" } }
+{
+  "launch": { "root": "../..", "skillRoot": "skill" },
+  "workspace": { "kind": "copy", "provision": [] }
+}
+```
+
+`launch.root` is the project root.
+Each trial runs in a disposable copy of it, so the `target` path resolves inside the copy and the runner is part of the trial's workspace.
+Keep the `target` a path inside `launch.root`.
+A project whose workspace is a git checkout ignores `node_modules`, so name the install there:
+
+```json
+{ "workspace": { "kind": "git", "provision": ["evals/node_modules"] } }
 ```
 
 An agent target registers the agent's own command, which must print what the oracles read and exit with an infrastructure code when it cannot run:
@@ -118,7 +139,7 @@ An agent target registers the agent's own command, which must print what the ora
 The registry is a default-deny list.
 A request for an executable, interface or tool that no entry carries is denied before anything starts.
 
-The two examples above come from repository fixtures that call no model.
+The examples above come from repository fixtures that call no model.
 For a real agent, three entries change:
 
 - `environmentKeys` lists the credential variable names the agent needs.
@@ -152,59 +173,38 @@ tea-evaluate preflight: leg "witness-alpha": observed
 tea-evaluate preflight: leg "witness-beta": observed
 tea-evaluate preflight: leg "preflight-control-observe": observed
 tea-evaluate preflight: leg "preflight-control-observe-2": observed
-tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T090439399Z-e34f634f (exit 0, /work/app/evals/stub-skill-preflight/runs/20261007T090439399Z-e34f634f)
+tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T112819775Z-8e531f56 (exit 0, /work/app/evals/stub-skill-preflight/runs/20261007T112819775Z-8e531f56)
 ```
 
 Preflight launches the real target in a confined disposable copy.
 It sends two different requests to prove the output depends on the input, then sends the clean request twice to prove the starting state resets.
 Exit 0 means the registry reaches the target and the clean control passes.
 
-Always start `tea-evaluate` through `npm exec --prefix evals --`.
-That puts `tea-skill-runner` on the target's `PATH`.
-Without it the preflight exits 3, and the leg's observation names the cause:
-
-```text
-tea-evaluate preflight: eval-quality preflight exited 3; its verdict and diagnostics are in runs/20261007T090422506Z-d6fd4218 (exit 3, /work/app/evals/stub-skill-preflight/runs/20261007T090422506Z-d6fd4218)
-```
-
-```text
-sandbox-exec: execvp() of 'tea-skill-runner' failed: No such file or directory
-```
-
-The second block is the `stderr` of the first leg in `runs/<invocationId>/observations/001-witness-alpha.json`.
-
 ### 5. Run and Score
 
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/calling-agent-tool-use
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/calling-agent-tool-use
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/stub-skill-preflight
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight
 ```
 
-`run` repeats the preflight, qualifies each seeded defect, then runs every arm as a set of trials in fresh copies:
+`run` repeats the preflight, qualifies each seeded defect and the clean control, then runs every arm as a set of trials in fresh copies.
+This folder holds one clean control and one trial:
 
 ```text
-tea-evaluate run: probes/P-002.probe.json: qualified; the restored digest matched and the baseline passed again
 tea-evaluate run: probes/P-001.probe.json: qualified; its baseline passed
-tea-evaluate run: clean: trial 1 of 3
-tea-evaluate run: clean: trial 2 of 3
-tea-evaluate run: clean: trial 3 of 3
-tea-evaluate run: mutated:M-001: trial 1 of 3
-tea-evaluate run: mutated:M-001: trial 2 of 3
-tea-evaluate run: mutated:M-001: trial 3 of 3
-tea-evaluate run: 2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T091518964Z-9cec058c (exit 0, /work/app/evals/calling-agent-tool-use/runs/20261007T091518964Z-9cec058c)
+tea-evaluate run: clean: trial 1 of 1
+tea-evaluate run: 1 trial set(s) of 1 trial(s) sealed over clean; score them with tea-evaluate score --run 20261007T112821798Z-9c1c180d (exit 0, /work/app/evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d)
 ```
 
 `score` hands each probe to eval-quality and prints its exit:
 
 ```text
+tea-evaluate score: scoring run 20261007T112821798Z-9c1c180d
 tea-evaluate score: P-001: eval-quality score exited 0
-tea-evaluate score: P-002: eval-quality score exited 0
 tea-evaluate score: strength aggregate: eval-quality aggregate-strength exited 0
 ```
 
-The agent in this fixture has one rule file, `rules/tool.json`, that names the tool it calls.
-The seeded defect `M-001` changes that name.
-The evaluator in this folder is AgentEvals, so the folder's dependencies must be installed, as [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md) describes.
+A folder with seeded defects adds a `mutated:<id>` set of trials for each one, as [How to Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md) shows.
 
 ### 6. Read the Run
 
@@ -212,32 +212,37 @@ Both commands exit 0 for a PASS, a WAIVED or a CONCERNS verdict.
 Read the verdict and the outcome states from the evidence artifacts in the score invocation folder:
 
 ```bash
-cd evals/calling-agent-tool-use/runs/20261007T091518964Z-9cec058c/scores/20261007T091525229Z-3e5aae16
-grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json
-grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u
-grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u
+(cd evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d/scores/20261007T112824337Z-f2c4dcdd &&
+  grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
+  grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u)
 ```
 
 ```text
-P-001/evidence-artifact.json:"contractVerdict":"CONCERNS"
-P-002/evidence-artifact.json:"contractVerdict":"CONCERNS"
+"contractVerdict":"CONCERNS"
 "state":"passed-clean-control"
-"state":"caught"
 ```
 
-The clean control reads `passed-clean-control` and the seeded defect reads `caught`.
+The clean control reads `passed-clean-control`.
+A folder with a seeded defect also shows that defect as `caught`.
 The CONCERNS verdict lists coverage gaps that still need probes.
 [How to Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md) shows how to close them.
 
 Then read what the run executed under:
 
 ```bash
-grep '"confinement"\|"egress"' ../../run.json
+grep -A8 '"confinement"' evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d/run.json
 ```
 
 ```text
   "confinement": "seatbelt",
-  "egress": [],
+  "egress": [
+    {
+      "interfaceId": "stub-skill",
+      "hosts": [
+        "api.anthropic.com:443"
+      ]
+    }
+  ],
 ```
 
 `confinement` is `seatbelt` on macOS, `bubblewrap` on Linux, or `opt-out` when `evaluation.json` sets `"confinement": false`.
@@ -245,25 +250,44 @@ Only a `bubblewrap` run holds an agent to its `egress` list.
 
 ## If `score` Exits 3 With `mount outside allowlist`
 
-A confined target may read the host except for the evaluation folder.
-The audit lists each path it read outside what the trial was granted:
+A confined run grants the trial its workspace.
+A runner that resolves outside the workspace is read outside the trial's grants, and `score` exits 3.
+A registry `target` of the bare name `tea-skill-runner`, found through the `evals/node_modules/.bin` that `npm exec` puts on the `PATH`, does this.
+The audit lists each path the trial read outside its grants:
 
 ```text
 tea-evaluate score: P-001: eval-quality score exited 3
-tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <home>/app/node_modules/commander/lib/command.js
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/skill-runner.js
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/package.json
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/commander/index.js
+tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/commander/lib/command.js
+...
 tea-evaluate score: strength aggregate: no evidence artifact was copied for P-001, so no class-wide strength is aggregated
 ```
 
-Executing a tool reads its files, so a runner or toolchain outside the project appears here.
-Add each directory the lines name to `systemPaths` on the registry entry that starts the target, using the narrowest directory that holds it:
+The full run lists 17 paths, all under two directories.
+Two repairs work, and the first is the one to prefer:
+
+1. Set the registry `target` to the path inside `launch.root`, `evals/node_modules/.bin/tea-skill-runner`, as step 2 shows.
+2. Keep the bare name and list the install directories the audit names in `systemPaths` on the entry that starts the target, using the narrowest directory that holds each:
 
 ```json
-{ "systemPaths": ["/work/app/node_modules/commander", "/work/app/package.json"] }
+{
+  "systemPaths": ["/work/app/evals/node_modules/bmad-method-test-architecture-enterprise", "/work/app/evals/node_modules/commander"]
+}
+```
+
+With the bare name, the runner must also be on the target's `PATH`, so start `tea-evaluate` through `npm exec --prefix evals --`.
+Without that, the preflight exits 3 and the leg's observation in `runs/<invocationId>/observations/001-witness-alpha.json` names the cause:
+
+```text
+sandbox-exec: execvp() of 'tea-skill-runner' failed: No such file or directory
 ```
 
 A path you did not expect, such as a credential file or another project, points to a target that reads beyond its task.
 Repair the target, because declaring that path would hide the defect.
 Then run `check` and run the evaluation again.
+The reference describes both setups in [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the audit in [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement).
 
 ## How You Know It Worked
 
