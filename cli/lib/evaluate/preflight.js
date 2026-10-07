@@ -90,6 +90,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { confines, layerPrefix, selectConfinement } = require('./confinement');
+const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
@@ -926,13 +927,6 @@ async function runInWorkspaces({
       sealedBriefDigest: engine.digestArtifact(sealedBrief, 'SealedEvaluatorBrief'),
     };
   }
-  const { port: pristineAdapter } = await registry.createProbePort({
-    cwd: pristine.root,
-    projectRoot: pristine.root,
-    workspace: pristine.top,
-    git: gitAccessOf(pristine),
-    privateRoot: registry.privateRoot,
-  });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
   const treeUnchanged = (when, { record = true } = {}) => {
@@ -1158,9 +1152,21 @@ async function runInWorkspaces({
   const probesPath = writer.writeJson('probes.json', probes);
   retractOnSignal.push('probes.json');
   let settled = false;
+  // The pristine workspace's port audits what its legs open outside what they were granted, the check `score` makes of a
+  // trial set's isolation manifest. It is made here, after the qualification, so the audit watches the legs alone.
+  let pristinePort = null;
+  let observedMounts = [];
   try {
+    pristinePort = await registry.createProbePort({
+      cwd: pristine.root,
+      projectRoot: pristine.root,
+      workspace: pristine.top,
+      git: gitAccessOf(pristine),
+      privateRoot: registry.privateRoot,
+      audit: true,
+    });
     const recorder = recordingPort({
-      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: pristineAdapter },
+      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: pristinePort.port },
       routes,
       registry,
       writer,
@@ -1198,6 +1204,15 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
+    // What the audit saw the legs open outside what they were granted, read before anything else runs. An audit that cannot
+    // confirm what it saw leaves the legs unjudged, exit 12, as it does a trial. A plan the engine refused ran no leg.
+    if (recorder.calls() > 0) {
+      try {
+        observedMounts = await pristinePort.observedMounts();
+      } catch (error) {
+        throw stop({ stage: 'leg', exitCode: 12, message: `the legs yield no audit: ${error?.message ?? error}` });
+      }
+    }
     // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
     // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64). A plan
     // the engine refused before any leg ran sent nothing to a deployment since the qualification, so nothing is asked.
@@ -1233,9 +1248,20 @@ async function runInWorkspaces({
     );
     settled = true;
   } finally {
+    pristinePort?.releaseHome();
     if (!settled) writer.remove('probes.json');
   }
   for (const entry of [...qualified, ...gameabilityQualified]) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
+  // A passed verdict is refused when the legs opened a path outside the allowlist: `score` reads the same mounts of the trials as
+  // an isolation violation (exit 3), so the setup is refused here, before a run pays for trials that cannot be scored.
+  if (verdict.exitCode === 0) {
+    const refusal = mountRefusal({
+      mounts: mountsOutsideAllowlist(observedMounts, [`${pristine.kind} pristine`]),
+      folder,
+      opened: 'the preflight legs',
+    });
+    if (refusal !== null) return outcome({ stage: 'leg', exitCode: 3, message: refusal });
+  }
   if (afterVerdict === null || verdict.exitCode !== 0) {
     return outcome({
       stage: 'verdict',

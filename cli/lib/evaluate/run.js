@@ -116,6 +116,7 @@ const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
 const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
+const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
@@ -1442,6 +1443,7 @@ async function runTrialSets(given) {
   const trialSets = [];
   const recordDigests = {};
   const manifestDigests = {};
+  const mountsOutside = new Set();
   const unreportedResourceUse = [];
   const observedMountsChannel = [];
   const hostSocketTruncation = [];
@@ -1468,6 +1470,7 @@ async function runTrialSets(given) {
         runId,
       });
       manifestDigests[probe.probeId] = set.manifestDigest;
+      for (const mount of set.mountsOutsideAllowlist) mountsOutside.add(mount);
       Object.assign(recordDigests, set.recordDigests);
       trialSets.push({
         probeId: probe.probeId,
@@ -1485,6 +1488,7 @@ async function runTrialSets(given) {
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: [...mountsOutside],
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -1527,7 +1531,7 @@ function recommendationFor(kind, trials, probeId) {
  * The trial sets and the evaluator qualification's attempts (one trial each)
  * seal through here, so the two build one shape.
  *
- * @returns {Promise<{ manifestFile: string, manifestDigest: string, records: string[], recordDigests: Record<string, string> }>}
+ * @returns {Promise<{ manifestFile: string, manifestDigest: string, records: string[], recordDigests: Record<string, string>, mountsOutsideAllowlist: string[] }>}
  */
 async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, directory, runId }) {
   const { folder, evaluation, contract, registry, validate, engine, writer, stop } = context;
@@ -1617,7 +1621,14 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
     recordDigests[recordFile] = bytesDigest(recordFile);
     records.push(recordFile);
   }
-  return { manifestFile, manifestDigest: bytesDigest(manifestFile), records, recordDigests };
+  return {
+    manifestFile,
+    manifestDigest: bytesDigest(manifestFile),
+    records,
+    recordDigests,
+    // What `score` reads off this manifest as an isolation violation, one reason per path (`isolation-allowlist.js`).
+    mountsOutsideAllowlist: mountsOutsideAllowlist(manifest.observedMounts, manifest.allowedMounts),
+  };
 }
 
 /**
@@ -1944,6 +1955,7 @@ async function completeRun(
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: outsideMounts = [],
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -1998,13 +2010,20 @@ async function completeRun(
     trialSets,
   });
   retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
+  // A trial set whose manifest lists a mount outside the allowlist is one `score` reads as Invalid (exit 3), so the run does
+  // not report success. It stays sealed and complete: `score --run` prints one reason per path from the manifests as written.
+  const mountsRefusal = mountRefusal({ mounts: outsideMounts, folder: context.folder, opened: 'the trials' });
+  const sealedMessage =
+    trialCount === null
+      ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
+      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`;
   const result = outcome({
     stage: 'trial',
-    exitCode: 0,
+    exitCode: mountsRefusal === null ? 0 : 3,
     message:
-      trialCount === null
-        ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`,
+      mountsRefusal === null
+        ? sealedMessage
+        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.

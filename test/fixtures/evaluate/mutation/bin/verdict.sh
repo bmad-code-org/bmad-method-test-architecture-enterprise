@@ -10,7 +10,17 @@
 #             empty environment
 #   write     redirect output into the file, which the confinement refuses
 #   withheld  cat a file of the evaluation folder
+#
+# With VERDICT_WHEN set, the act runs only in the workspaces it names by runtime label, separated by commas (trial-clean-1, for
+# example), as it does for verdict.js; with it unset every call acts.
 here=$(cd "$(dirname "$0")" && pwd)
+if [ -n "${VERDICT_WHEN:-}" ]; then
+  workspace=$(basename "$(dirname "$(pwd)")" | sed -E 's/^tea-evaluate-(.+)-([A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/\1/')
+  case ",$VERDICT_WHEN," in
+    *",$workspace,"*) ;;
+    *) VERDICT_SH=none ;;
+  esac
+fi
 case "${VERDICT_SH:-}" in
   read | withheld)
     cat "$VERDICT_TOUCH" >/dev/null 2>&1

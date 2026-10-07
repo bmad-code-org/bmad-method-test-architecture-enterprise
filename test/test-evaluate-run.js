@@ -398,6 +398,18 @@ function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}
 }
 
 /**
+ * Whether a `run` refused the mounts its trials opened outside the allowlist: exit 3 with the violation `score` reads, and each
+ * of `named` among the paths it names. The trial sets stay sealed, so the case goes on to read them and to score.
+ */
+function refusesMounts(result, named = []) {
+  return (
+    result.status === 3 &&
+    /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(result.output) &&
+    named.every((mount) => result.output.includes(`mount outside allowlist: ${mount}`))
+  );
+}
+
+/**
  * A committed temp project from the fixture; `edit` changes it before the
  * index is digested and the commit made. With `below`, the project sits in
  * that directory of a larger repository whose top holds `other/` beside it.
@@ -4066,8 +4078,8 @@ async function checkConfinedEvaluationFolder() {
     VERDICT_DO: 'probe-confinement',
   });
   check(
-    probedRun.status === 0,
-    `a confined run whose target probed the evaluation folder exited ${probedRun.status}; expected 0\n${probedRun.output}`,
+    refusesMounts(probedRun),
+    `a confined run whose target probed the evaluation folder exited ${probedRun.status}; expected 3 with the mounts its trials opened\n${probedRun.output}`,
   );
   const probedDirectory = runDirectoryOf(probed.folder);
   const probedOut = trialStdout(probedDirectory, 'clean', 1);
@@ -4147,10 +4159,18 @@ async function checkObservedMounts() {
     VERDICT_TOUCH: outside,
   });
   check(
-    observedRun.status === 0,
-    `a confined run whose target read an ungranted file exited ${observedRun.status}; expected 0\n${observedRun.output}`,
+    refusesMounts(observedRun, [mountOf(realOutside, observed)]),
+    `a confined run whose target read an ungranted file exited ${observedRun.status}; expected 3 naming the file\n${observedRun.output}`,
   );
   const observedDirectory = runDirectoryOf(observed.folder);
+  // The refusal is the run's recorded end: sealed and complete, so `score` still reads the manifests, with the exit 3 and the path.
+  const observedRecord = observedDirectory === null ? {} : readJson(path.join(observedDirectory, 'run.json'));
+  check(
+    observedRecord.completed === true &&
+      observedRecord.outcome?.exitCode === 3 &&
+      String(observedRecord.outcome?.message).includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
+    `run.json records ${JSON.stringify({ completed: observedRecord.completed, outcome: observedRecord.outcome })}; expected a completed run that ended with exit 3 naming the file`,
+  );
   check(
     /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
     'the target could not read the ungranted file, so the case proves nothing',
@@ -5149,6 +5169,8 @@ async function checkAuditMechanism() {
  * metadata probe leave `observedMounts` empty; a process started with an empty environment and a refused write are seen too.
  */
 async function checkShellTargetAudit() {
+  /** Every trial of the fixture's two probes, the only workspaces the shell script acts in (`bin/verdict.sh`). */
+  const SHELL_TRIAL_LABELS = [1, 2, 3].flatMap((trial) => [`trial-clean-${trial}`, `trial-mutated-M-001-${trial}`]).join(',');
   const outside = path.join(tempDir('shell-audit-outside'), 'host-notes.txt');
   fs.writeFileSync(outside, 'a file no trial was granted\n');
   const realOutside = fs.realpathSync(outside);
@@ -5162,15 +5184,21 @@ async function checkShellTargetAudit() {
         }),
     });
     const file = typeof touch === 'function' ? touch(project) : touch;
-    const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_SH: act, VERDICT_TOUCH: file });
+    // The act runs in the trials alone: the legs of a preflight are audited as well, and a run refuses what they open.
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      VERDICT_SH: act,
+      VERDICT_TOUCH: file,
+      VERDICT_WHEN: SHELL_TRIAL_LABELS,
+    });
     return { ...project, ran, directory: runDirectoryOf(project.folder) };
   };
 
   // An ungranted read by a shell script: listed for both probes (every trial of the target runs the script), and score exits 3.
   const read = shellProject('shell-audit-read', 'read', outside);
   check(
-    read.ran.status === 0,
-    `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 0\n${read.ran.output}`,
+    refusesMounts(read.ran, [mountOf(realOutside, read)]),
+    `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 3 naming the file\n${read.ran.output}`,
   );
   for (const probeId of ['P-001', 'P-002']) {
     checkMounts(
@@ -5205,8 +5233,8 @@ async function checkShellTargetAudit() {
   fs.writeFileSync(`${outside}.node`, 'read by a process started with an empty environment, from Node\n');
   const cleared = shellProject('shell-audit-cleared', 'cleared', outside);
   check(
-    cleared.ran.status === 0,
-    `a run whose shell target started processes with an empty environment exited ${cleared.ran.status}\n${cleared.ran.output}`,
+    refusesMounts(cleared.ran, [mountOf(realOutside, cleared)]),
+    `a run whose shell target started processes with an empty environment exited ${cleared.ran.status}; expected 3\n${cleared.ran.output}`,
   );
   checkMounts(
     observedMountsOf(cleared.directory, 'P-001'),
@@ -5216,7 +5244,7 @@ async function checkShellTargetAudit() {
   const target = path.join(tempDir('shell-audit-write'), 'written.txt');
   const write = shellProject('shell-audit-write', 'write', target);
   check(
-    write.ran.status === 0 && !fs.existsSync(target),
+    refusesMounts(write.ran) && !fs.existsSync(target),
     `a shell target's write outside its workspace exited ${write.ran.status} and the file ${fs.existsSync(target) ? 'was written' : 'was not written'}\n${write.ran.output}`,
   );
   checkMounts(
@@ -5226,8 +5254,8 @@ async function checkShellTargetAudit() {
   );
   const withheld = shellProject('shell-audit-withheld', 'withheld', (project) => path.join(project.folder, 'contract.json'));
   check(
-    withheld.ran.status === 0,
-    `a run whose shell target read the evaluation folder's contract exited ${withheld.ran.status}\n${withheld.ran.output}`,
+    refusesMounts(withheld.ran),
+    `a run whose shell target read the evaluation folder's contract exited ${withheld.ran.status}; expected 3\n${withheld.ran.output}`,
   );
   checkMounts(
     observedMountsOf(withheld.directory, 'P-001'),
@@ -5798,11 +5826,13 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
   const untraced = makeProject('observer-untraced');
   const untracedRun = evaluate(['run', '--evaluation', untraced.folder], environment(untraced));
+  // The preflight's legs are audited as the trials are, so the first leg a trace does not cover ends the run, before any trial.
   check(
     untracedRun.status === 12 &&
       untracedRun.output.includes('holds no start of its target') &&
-      untracedRun.output.includes('yields no record'),
-    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 with no record for the trial\\n${untracedRun.output}`,
+      /leg witness-alpha could not run/.test(untracedRun.output) &&
+      !fs.existsSync(path.join(runDirectoryOf(untraced.folder) ?? '', 'trial-sets')),
+    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 at the first leg, with no trial set\\n${untracedRun.output}`,
   );
 }
 
@@ -5999,10 +6029,14 @@ async function checkEvaluatorSwap() {
     } finally {
       listener.close();
     }
-    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
     // The swapping process's own report: it saw the evaluator start, then attempted the swap.
     // Under Bubblewrap the swapper ends with the target's process namespace, before the evaluator launches.
     const namespaced = confined && process.platform === 'linux';
+    // The refused swap is an observed mount, which the run refuses; under Bubblewrap the swapper never gets that far.
+    check(
+      confined && !namespaced ? refusesMounts(ran) : ran.status === 0,
+      `${label}: run exited ${ran.status}; expected ${confined && !namespaced ? 3 : 0}\n${ran.output}`,
+    );
     check(
       confined
         ? /^swap: refused (EPERM|EACCES|ENOENT|EROFS)$/.test(reported ?? '') || (namespaced && reported === null)
@@ -6637,7 +6671,7 @@ async function checkTargetHomeRuns(hostHome, hostEnv) {
     VERDICT_WHEN: 'qualify-P-002,trial-clean-1,trial-clean-2',
     VERDICT_DO: 'write-home',
   });
-  check(ran.status === 0, `a confined run whose target kept state under HOME exited ${ran.status}; expected 0\n${ran.output}`);
+  check(refusesMounts(ran), `a confined run whose target kept state under HOME exited ${ran.status}; expected 3\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   const root = fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`));
   const homes = [];
@@ -7536,8 +7570,8 @@ async function checkWithheldHistoryRun() {
   const objectsBefore = objects();
   const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'probe-git' });
   check(
-    ran.status === 0,
-    `a confined run whose target asked its git for the committed evaluation folder exited ${ran.status}; expected 0\n${ran.output}`,
+    refusesMounts(ran),
+    `a confined run whose target asked its git for the committed evaluation folder exited ${ran.status}; expected 3\n${ran.output}`,
   );
   const runDirectory = runDirectoryOf(project.folder);
   const out = trialStdout(runDirectory, 'clean', 1);
@@ -7672,9 +7706,15 @@ async function checkWithheldHistoryRun() {
       VERDICT_WHEN: context,
       VERDICT_DO: 'probe-git',
     });
+    // The probe's reads of the project's git directory are mounts outside the allowlist wherever the audit watches: the legs of the
+    // pristine workspace and the trials. A run refuses them there (exit 3) and carries on where nothing audits.
+    const audited = context === 'pristine' || context.startsWith('trial-');
     check(
-      contextRan.status === 0,
-      `a confined run whose ${context} workspace probed git exited ${contextRan.status}\n${contextRan.output}`,
+      audited
+        ? contextRan.status === 3 &&
+            /isolation manifest violation: the (preflight legs|trials) opened \d+ path\(s\)/.test(contextRan.output)
+        : contextRan.status === 0,
+      `a confined run whose ${context} workspace probed git exited ${contextRan.status}; expected ${audited ? 3 : 0}\n${contextRan.output}`,
     );
     const reports = probeGitReports(runDirectoryOf(confined.folder));
     check(reports.length > 0, `the stub's probe in the ${context} workspace left no report`);
@@ -9860,12 +9900,17 @@ async function checkWithheldHistoryEdges() {
 const LARGE_WALK_OBJECTS = 7_000_000;
 
 /** A project that commits its evaluation folder in three commits, plus a file outside it that changes in each. */
-function reachProject(label, { drivers = false, tags = false } = {}) {
+function reachProject(label, { drivers = false, tags = false, systemPaths = [] } = {}) {
   return makeProject(label, {
     toolchain: true,
     edit: ({ project, folder }) => {
       fs.mkdirSync(path.join(project, 'docs'), { recursive: true });
       fs.copyFileSync(path.join(folder, 'contract.json'), path.join(project, 'docs', 'contract-copy.json'));
+      if (systemPaths.length > 0) {
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].systemPaths = [...(evaluation.registry[0].systemPaths ?? []), ...systemPaths];
+        });
+      }
     },
     history: ({ repository, folder }) => {
       for (const version of ['one', 'two']) {
@@ -10299,9 +10344,10 @@ async function checkWithheldHistoryReach() {
   }
 
   // A history whose object walk prints more than six million ids: the walk is read as a stream, so no buffer bounds it.
-  const large = reachProject('reach-large');
   {
-    const stubs = tempDir('reach-large-git');
+    // The stub `git` on PATH is a tool the target is meant to run, so its entry lists the directory that holds it.
+    const stubs = fs.realpathSync(tempDir('reach-large-git'));
+    const large = reachProject('reach-large', { systemPaths: [stubs] });
     const real = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
     // The store's object walk answers as git does and then prints more ids; every other git call is git's.
     fs.writeFileSync(
@@ -11006,11 +11052,11 @@ async function checkSubscriptionLogin() {
     ['beside it', path.join(home, 'notes.txt')],
   ]) {
     const widened = loginRun(loginProject(`login-second-${what.replaceAll(' ', '-')}`), { HOME: home, VERDICT_SECOND: second });
-    check(
-      widened.ran.status === 0,
-      `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
-    );
     const realSecond = recordedMount(fs.realpathSync(second), { folder: widened.folder, home });
+    check(
+      refusesMounts(widened.ran, [realSecond]),
+      `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 3 naming it\n${widened.ran.output}`,
+    );
     checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
@@ -11150,7 +11196,10 @@ async function checkSubscriptionLogin() {
     { HOME: keychainHome, CLAUDE_CODE_OAUTH_TOKEN: fakeToken, VERDICT_KEYCHAIN: keychain },
     'claude-keychain',
   );
-  check(stood.ran.status === 0, `a confined run whose agent read the host's keychain exited ${stood.ran.status}\n${stood.ran.output}`);
+  check(
+    refusesMounts(stood.ran, [recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })]),
+    `a confined run whose agent read the host's keychain exited ${stood.ran.status}; expected 3 naming it\n${stood.ran.output}`,
+  );
   const stoodOut = trialStdout(stood.directory, 'clean', 1);
   check(
     loginField(stoodOut, 'keychain-home') !== undefined && !String(loginField(stoodOut, 'keychain-home')).includes('login.keychain-db'),

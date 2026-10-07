@@ -704,6 +704,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `preflight` and `run` refuse a target that launches from outside its workspace, where they used to pass and leave `score` to fail.
+  An evaluation whose registry entry names `tea-skill-runner` by its bare name, with TeA installed under the evaluations folder's `node_modules` (outside the copy the trials run in), passed `preflight` and `run`, and then `score` exited 3 with `isolation manifest violation: mount outside allowlist` for every file of the runner, so an adopter learned the setup was wrong only after a full run.
+  `preflight` now audits the legs of its pristine workspace as a trial is audited and, once the engine's verdict passes, exits 3 when they opened a path outside what they were granted; `run` exits 3 instead of success when the isolation manifests it sealed list such a path, and its preflight stage refuses the bare-name setup before any trial.
+  The message names the first paths and the two setups that work: a registry `target` that is a path inside `launch.root` (`node_modules/.bin/tea-skill-runner` over a copy workspace, or over a git workspace with `workspace.provision`), or the bare name with the install's directories in `systemPaths`.
+  The allowlist is the one `score` applies and nothing is granted; `score` keeps its own check, and a `run` that exits 3 stays sealed so `score --run` prints one reason per path.
+  A run that opted out of confinement observes no path and is not refused.
 - A run killed with `SIGKILL` leaves no call directory in the system's temp directory (Story 1.131, AD-8).
   The directories a confined call hands its target (the call's temp directory `tea-evaluate-target-tmp-*`, a started service's port directory `tea-evaluate-port-*` and its bridge directory `tea-nb-*`) sat in the system's temp directory, since the sandbox empties the private root and a grant beneath it would be hidden.
   A run that ended by a signal it handles removed them, and a run killed outright left each of them behind with nothing to reclaim it.

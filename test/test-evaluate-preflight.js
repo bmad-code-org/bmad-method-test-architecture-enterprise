@@ -90,6 +90,12 @@ const SHIM = path.join(FIXTURES, 'engine-shim.js');
 const HIDE_ENGINE = path.join(FIXTURES, 'engine-absent', 'hide-engine.cjs');
 const WRAP_ENGINE = path.join(FIXTURES, 'engine-wrapped', 'wrap-engine.cjs');
 const DENIALS = ['forbidden-target', 'interface-not-authorized', 'executable-not-authorized'];
+/** Where the runner reads from when it runs from this repository: its sources, its manifest and the one package it requires. */
+const RUNNER_INSTALL = [
+  path.join(PROJECT_ROOT, 'cli'),
+  path.join(PROJECT_ROOT, 'package.json'),
+  path.dirname(require.resolve('commander')),
+].map((entry) => fs.realpathSync(entry));
 
 /** This process's environment with every variable the cases set themselves removed, so a developer's shell cannot reroute a case. */
 const BASE_ENV = Object.fromEntries(
@@ -1796,13 +1802,20 @@ setInterval(() => {}, 1000);
  * target in this repository: the stub project for the preflight fixture, the
  * repository itself for the check fixture.
  */
-function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT) {
+function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT, { grantRunner = true } = {}) {
   const folder = path.join(tempDir('case'), path.basename(source));
   fs.cpSync(source, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
   editJson(folder, 'evaluation.json', (value) => {
     value.launch.root = path.relative(folder, root).split(path.sep).join('/');
+    // The runner on PATH sits outside the trial's workspace, so its entry lists where the runner is installed, as an adopter's does.
+    if (grantRunner) grantRunnerInstall(value);
   });
   return folder;
+}
+
+/** Lists where the runner is installed in `systemPaths` of every registry entry that names it, as an adopter's evaluation does. */
+function grantRunnerInstall(evaluation) {
+  for (const entry of evaluation.registry ?? []) if (entry.target === 'tea-skill-runner') entry.systemPaths = RUNNER_INSTALL;
 }
 
 /**
@@ -1909,6 +1922,126 @@ function checkPasses() {
     check(fs.existsSync(path.join(runDirectory, artifact)), `the run holds no ${artifact}`);
   }
   check(!fs.existsSync(path.join(runDirectory, 'faults')), 'a passing run recorded a leg fault');
+}
+
+/** The runner's install as the Evaluate skill leaves it: inside the evaluated project, with the bin link an `npm install` makes. */
+function projectWithInstalledRunner() {
+  const project = stubProject('installed-runner');
+  const install = path.join(project, 'node_modules', 'tea');
+  fs.mkdirSync(path.join(install, 'node_modules'), { recursive: true });
+  fs.cpSync(path.join(PROJECT_ROOT, 'cli'), path.join(install, 'cli'), { recursive: true });
+  fs.copyFileSync(path.join(PROJECT_ROOT, 'package.json'), path.join(install, 'package.json'));
+  fs.cpSync(RUNNER_INSTALL[2], path.join(install, 'node_modules', 'commander'), { recursive: true });
+  fs.mkdirSync(path.join(project, 'node_modules', '.bin'));
+  fs.symlinkSync(path.join('..', 'tea', 'cli', 'skill-runner.js'), path.join(project, 'node_modules', '.bin', 'tea-skill-runner'));
+  return project;
+}
+
+/** A scoring policy for a folder that never had one, so `run` can start; one trial meets its minimum. */
+function writeScoringPolicy(folder) {
+  fs.mkdirSync(path.join(folder, 'policy'), { recursive: true });
+  fs.writeFileSync(
+    path.join(folder, 'policy', 'scoring-policy.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 2,
+        parentDigest: null,
+        revisionCount: 0,
+        policyId: 'stub-skill-preflight',
+        severityFloor: 'material',
+        confidenceThreshold: 0.5,
+        catchThreshold: 0.6,
+        minimumTrialCount: 1,
+        reExecutionCap: 2,
+        remediationCap: 3,
+        regexMatchStepBudget: 1_000_000,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/**
+ * A runner that runs from outside the trial's workspace is refused up front. The registry entry names the bare `tea-skill-runner`,
+ * so the runner and what it requires sit beside the install, not in the copy, and `score` would exit 3 on every one of them as a
+ * mount outside the allowlist. `preflight` and `run` refuse with that exit and name both setups that work.
+ */
+function checkRunnerOutsideAllowlist() {
+  const refusal = (output) => {
+    // The runner's own files are the paths it names; the first three of the sorted list, in the form the records use.
+    check(/mount outside allowlist: (<[a-z-]+>|\/)\S+/.test(output), `the refusal names no path outside the allowlist:\n${output}`);
+    const opened = Number(/opened (\d+) path/.exec(output)?.[1]);
+    check(
+      opened >= 2,
+      `the refusal counts ${opened} path(s); the runner's sources and the package it requires are at least two:\n${output}`,
+    );
+    check(
+      /isolation manifest violation: the (preflight legs|trials) opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(
+        output,
+      ),
+      `the refusal does not say score would exit 3:\n${output}`,
+    );
+    for (const setup of [
+      '`node_modules/.bin/tea-skill-runner`',
+      '`launch.root`',
+      'copy workspace',
+      '`workspace.provision`',
+      '`systemPaths`',
+    ]) {
+      check(output.includes(setup), `the refusal does not name ${setup}, so the adopter learns neither working setup:\n${output}`);
+    }
+  };
+
+  // The bare name with nothing granted: the legs pass the engine's verdict, and the mounts alone refuse the setup.
+  const bare = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+  const refused = runPreflight(bare);
+  check(refused.status === 3, `preflight over the bare runner name exited ${refused.status}; expected 3\n${refused.output}`);
+  refusal(refused.output);
+  const directory = runDirectoryOf(bare);
+  check(directory !== null, 'the refused preflight wrote no run directory');
+  if (directory !== null) {
+    const verdict = readJson(path.join(directory, 'preflight-verdict.json'));
+    check(verdict.passed === true, `the engine's verdict was ${verdict.passed}; the refusal must come from the mounts alone`);
+    const recorded = readJson(path.join(directory, 'run.json')).outcome;
+    check(
+      recorded?.exitCode === 3 && recorded?.stage === 'leg',
+      `run.json records ${JSON.stringify(recorded)}; expected exit 3 at the leg stage`,
+    );
+  }
+
+  // `run` refuses it too, before any trial: no trial set, and the same exit and message.
+  const bareRun = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+  writeScoringPolicy(bareRun);
+  const refusedRun = runEvaluate(['run', '--evaluation', bareRun]);
+  check(refusedRun.status === 3, `run over the bare runner name exited ${refusedRun.status}; expected 3\n${refusedRun.output}`);
+  refusal(refusedRun.output);
+  const runDirectory = runDirectoryOf(bareRun);
+  check(
+    runDirectory !== null && !fs.existsSync(path.join(runDirectory, 'trial-sets')),
+    'the refused run sealed a trial set, so a trial ran before the setup was refused',
+  );
+
+  // Setup one: the bare name, with the directories the runner runs from listed in `systemPaths`.
+  const listed = copyFixture();
+  const listedResult = runPreflight(listed);
+  check(
+    listedResult.status === 0,
+    `preflight with the runner's install in systemPaths exited ${listedResult.status}; expected 0\n${listedResult.output}`,
+  );
+  for (const problem of passedPreflightProblems(runDirectoryOf(listed))) check(false, `the systemPaths setup: ${problem}`);
+
+  // Setup two: the target is a path inside launch.root, over a copy workspace.
+  const inside = copyFixture(PREFLIGHT_FIXTURE, projectWithInstalledRunner(), { grantRunner: false });
+  editJson(inside, 'evaluation.json', (value) => {
+    for (const entry of value.registry) entry.target = 'node_modules/.bin/tea-skill-runner';
+  });
+  const insideResult = runPreflight(inside);
+  check(
+    insideResult.status === 0,
+    `preflight with the runner inside launch.root exited ${insideResult.status}; expected 0\n${insideResult.output}`,
+  );
+  for (const problem of passedPreflightProblems(runDirectoryOf(inside))) check(false, `the in-root setup: ${problem}`);
 }
 
 function checkRemovedEntry() {
@@ -2242,10 +2375,19 @@ function checkPrivateHome() {
       }
     });
     const result = runPreflight(folder, { env: { ...temp.env, HOME: hostHome } });
+    // The agent's attempts at the evaluation folder and the host's home are mounts outside the allowlist, which a confined preflight
+    // refuses as `score` would (exit 3) once the engine's verdict passed; an opted-out run audits nothing.
+    const expected = confinement ? 3 : 0;
     check(
-      result.status === 0,
-      `preflight whose agent keeps state under HOME (confinement ${confinement}, environmentKeys ${JSON.stringify(keys)}) exited ${result.status}; expected 0\n${result.output}`,
+      result.status === expected,
+      `preflight whose agent keeps state under HOME (confinement ${confinement}, environmentKeys ${JSON.stringify(keys)}) exited ${result.status}; expected ${expected}\n${result.output}`,
     );
+    if (confinement) {
+      check(
+        result.output.includes('mount outside allowlist: '),
+        `the refusal does not name the paths the agent tried to reach:\n${result.output}`,
+      );
+    }
     return observedStdouts(runDirectoryOf(folder));
   };
   const field = (stdout, name) => new RegExp(`^${name}: (.*)$`, 'm').exec(stdout)?.[1];
@@ -2503,6 +2645,7 @@ function checkCopyContents() {
   editJson(folder, 'evaluation.json', (value) => {
     value.launch.root = '../..';
     value.workspace.provision = ['vendor'];
+    grantRunnerInstall(value);
   });
   firstLegSays(folder, 'STUB-LIST');
   const result = runPreflight(folder);
@@ -2692,7 +2835,10 @@ function checkLinkedEvaluation() {
   fs.writeFileSync(decoySkill, fs.readFileSync(decoySkill, 'utf8').replace(/^name:.*$/m, 'name: decoy-skill'));
   const folder = path.join(real, 'evaluation');
   fs.cpSync(PREFLIGHT_FIXTURE, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
-  editJson(folder, 'evaluation.json', (value) => (value.launch.root = '../project'));
+  editJson(folder, 'evaluation.json', (value) => {
+    value.launch.root = '../project';
+    grantRunnerInstall(value);
+  });
   const link = path.join(decoy, 'evaluation');
   fs.symlinkSync(folder, link, 'dir');
   const result = runPreflight(link);
@@ -2852,6 +2998,7 @@ async function main() {
     checkSupervisorTraceRetries();
     if (process.platform !== 'win32') checkPosixRunnerReference();
     checkPasses();
+    checkRunnerOutsideAllowlist();
     checkRemovedEntry();
     checkShim();
     checkFailingControl();
