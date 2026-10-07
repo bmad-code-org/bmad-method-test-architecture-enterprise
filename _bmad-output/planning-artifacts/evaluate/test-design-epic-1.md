@@ -1324,6 +1324,13 @@ Added 2026-10-03 in Story 1.94's review. Levels: corpus, static. Files: `test/li
 
 Amended 2026-10-04 in Story 1.97's build: the second row reads 35 pass-through deviations, adding `evaluation-gate-needs-cut` and `evaluation-gate-release-job-on-pull-requests`.
 
+Amended 2026-10-06 in Story 1.123's build: the rows hold as follows.
+The first row is `ciStructuralProblems` in `test:probe-corpus`, which scores each `CI_CORRECT_RUNS` workflow with `scoreRun` and reports a parse failure, an actionlint finding, a requested element that no longer holds, an unrequested element and a rule violation, and `ciStructuralSelfProblems` hands it another project's workflow, a missing element, a parse failure, an unrequested trigger, a rule violation, an actionlint finding with nothing else wrong, a rewritten checkpoint, an absent run and an unknown project, each of which it must report.
+The second row reads 32 pass-through deviations: three of the 35 (`evaluation-plan-upload-wrapped-condition`, `full-node-version-literal` and `full-node-version-step-output`) are correct spellings that the harness scores as correct, so `ciStructuralSelfProblems` requires the check to report none of them, and a check that flagged any difference from the capture fails there.
+The third row is the table of 232 forms in `test:contract-oracles` (`checkCiBurnInOracleOnForms`), each resolved by the engine and by the paired scorer: a job id, a job name, a step name, an `env` or `with` key and an artifact name hold, and a comment, a trailing comment, a `run:` line, a run-block line that is no key and the value of another key fail while a run-block line that starts with a key carrying the word holds, as an `env` key does.
+The fourth row holds as a one-line move of the ci `corpusDigest` in `expected-strength.json`.
+`validateCorpus` binds a pattern to the command of a command element only, since the command of a gate is the one its job loops.
+
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 
 Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
@@ -1592,6 +1599,8 @@ Amended 2026-10-03 in Story 1.94: the work covers the trace, nfr, test-design an
 | Other suites' builders read a stored run through a scorer | Search `test/lib/probe-scoring.js` for fixed dispositions over a stored run; trace, nfr and test-design are scored, test-review measures its stored verdicts (payload and exit code included), fragment selection and routing read no stored run | Static | P2  | A builder left on a constant fails its `wrongRunProblems` case                                                               |
 
 Amended 2026-10-05 in Story 1.122's build: no oracle is listed in `KNOWN_UNHELD` any more, and `knownUnheldProblems` exercises the check that fails a listed oracle which holds.
+
+Amended 2026-10-06 in Story 1.123's build: the stored workflow of each project is also scored with the harness's `scoreRun` (`ciStructuralProblems`), which catches the deviations the oracles cannot state, and the burn-in job oracle reads only a key or a name line outside a comment (see Story 1.123).
 
 ### Story 1.95: Gate the replay totals, the story count and the lane lists
 

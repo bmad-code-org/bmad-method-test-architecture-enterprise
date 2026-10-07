@@ -2536,6 +2536,8 @@ So that a leg that points at the wrong workflow is caught where it is added (CAP
 
 Amended 2026-10-05 in Story 1.122's build: the two oracles hold on the real capture, so every stored correct workflow satisfies every oracle of its set and `KNOWN_UNHELD` is empty.
 `test:probe-corpus` keeps the check that fails a listed oracle which holds and exercises it on every run.
+Amended 2026-10-06 in Story 1.123's build: a deviation only a structure shows is caught as well.
+`test:probe-corpus` scores each `CI_CORRECT_RUNS` workflow with the harness's `scoreRun` over its project's ground truth, and the burn-in job oracle reads only a key or a name line outside a comment, so a row pointed at a stored constructed ci case fails for 45 of the 48 (14 of them also violate an oracle of the contract, 31 fail the structural check alone) and the other three are correct spellings that the harness scores as correct.
 
 ### Story 1.95: Gate the replay totals, the story count and the lane lists
 
@@ -3277,6 +3279,15 @@ So that a row that points at a deviation fails where it is added (CAP-12).
 
 Amended 2026-10-04 in Story 1.97's build: 35 pass through, not 33, because Story 1.97 adds two stored constructed deviations of the evaluation-gate project, `evaluation-gate-needs-cut` and `evaluation-gate-release-job-on-pull-requests`, and a `CI_CORRECT_RUNS` row pointed at either passes `test:probe-corpus` (the wait has no substring oracle and the release job's tokens are all present).
 The scratch-copy check of the second criterion covers the 35.
+
+Amended 2026-10-06 in Story 1.123's build: the second criterion holds for 32 of the 35, and the other three are not deviations.
+`evaluation-plan-upload-wrapped-condition` wraps the upload's condition as `${{ always() }}`, which means what `always()` means.
+`full-node-version-literal` writes a literal `node-version` equal to `.nvmrc`, and `full-node-version-step-output` reads the version from a step output as the shipped template does.
+The harness scores each as the correct run with every element present and nothing unrequested, and its replay cases pin that, so a row pointed at one is a correct row and `test:probe-corpus` passes it.
+The second criterion therefore reads: each of the 32 pass-through deviations fails `test:probe-corpus` and names the element, the lint finding or the rule that no longer holds, and the three correct spellings pass, which `ciStructuralSelfProblems` holds so that a check that flagged any difference from the capture fails.
+The first criterion reads every expected element present, nothing unrequested, no actionlint finding and no rule firing, since `full-workflow-dispatch-added` adds a trigger that no element names and a correct run draws no finding.
+The third criterion holds with a different token: the burn-in element states the job id `burn-in:` and a `contractPattern` that reads a mapping key or a `name:` line that carries the word, outside a comment, so `test/probes/expected-strength.json` moves in the ci `corpusDigest` only, with `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` regenerated.
+`test:contract-oracles` scores 232 forms of the burn-in job through the engine and the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name.
 
 **Dependencies:** 1.94.
 **Gate:** `test:probe-corpus`, `test:probe-sources` (which runs `node tools/generate-probes.js --check`), `test:contract-sources`, then `npm test`.

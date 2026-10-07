@@ -661,6 +661,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `test:probe-corpus` scores each ci project's stored workflow with the harness's own scorer, and the oracle of the burn-in job reads only a key or a name line outside a comment (Story 1.123, CAP-12).
+  The oracles of the ci contract read a workflow as one string, so a `CI_CORRECT_RUNS` row pointed at a stored deviation passed `test:probe-corpus` for 35 of the 48 stored constructed ci cases, among them `full-unparseable`, `full-injection-in-run`, `evaluation-plan-chained-commands` and `evaluation-gate-needs-cut`.
+  One cause was the token of the burn-in job oracle, the bare `burn-in`, which the comment `# Weekly burn-in on Sundays` satisfied, so `full-burn-in-missing` held every oracle.
+  `ciStructuralProblems` in `test/test-probe-corpus.js` runs `scoreRun` over each `CI_CORRECT_RUNS` workflow and its project's ground truth: the workflow parses, actionlint reports nothing, every requested element is present, nothing unrequested is there and no rule fires.
+  A row pointed at a stored constructed case fails for 45 of the 48 and names the element, the lint finding or the rule that no longer holds.
+  The other three (`evaluation-plan-upload-wrapped-condition`, `full-node-version-literal` and `full-node-version-step-output`) are correct spellings that the harness scores as correct, so a row pointed at one is a correct row.
+  `ciStructuralSelfProblems` hands the check another project's workflow, a missing element, a parse failure, an unrequested trigger, a rule violation, an actionlint finding, a rewritten checkpoint, an absent run and an unknown project, each of which it must report, and the three spellings, which it must not.
+  The burn-in oracle is a `contractPattern` rendered with the `regex` operator over a mapping key or a `name:` line that carries the word, outside a comment (a job id, a job name, a step name, and also an `env` or `with` key), and its token is the job id the template writes, `burn-in:`.
+  The structural score tells a job from those other lines.
+  A comment line, a trailing comment, a `run:` line, a run-block line that is no key and the value of another key leave it unsatisfied, and a run-block line that starts with a key carrying the word holds, as an `env` key does.
+  `test:contract-oracles` scores 232 forms of the burn-in job through eval-quality and through the scorer (each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name, among them), and `validateCorpus` binds a pattern to the command of a command element only.
+  The check reports a ci project that no leg reads or that two legs read, so a check handed too few legs, or none, fails.
+  `ciStructuralSelfProblems` also scores two legs at once and the incomplete sets, and returns how many rows it ran, which `main` requires to be above zero.
+  `test/probes/expected-strength.json` moves in the ci corpus digest only, `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated, and the three ci pre-flights still pass from the real leg cache.
+  The comment in `.github/workflows/quality.yaml` that lists the scripts needing actionlint now names `test:probe-corpus`, which lints the stored workflows through `lintWorkflow` and fails without the binary.
 - The two ci command oracles hold on the real capture of the evaluation-plan project (Story 1.122, CAP-12).
   The capture quotes its folder names for the shell (`npm install --prefix 'evals'`, `tea-evaluate ci --evaluation 'evals/grader' --tier pr`), and the `containment` oracles of `command-evaluation-install` and `command-evaluation-ci-pr` searched for the unquoted literals.
   The stored correct run therefore violated both with corroboration `disagrees`, and `KNOWN_UNHELD` in `test/test-probe-corpus.js` listed them.

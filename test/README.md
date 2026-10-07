@@ -523,6 +523,8 @@ case is evaluated over three constructed selections plus the stored captures, an
 stored `test-design`, `trace`, `nfr` and `ci` run is one observation of its own set's or
 bundle's plan step, evaluated under both of that suite's sets so each oracle is also seen
 resolving false.
+The `ci` contract's two evaluation-command oracles and its burn-in oracle are also evaluated over constructed
+forms of the lines they read, forty-one forms of the two commands and 232 of the burn-in job.
 The two `bmad-tea-routing` contracts are evaluated the same way, over a correct and
 a failing answer constructed for every intent plus the seventeen stored replies, and
 each of their oracles has to be seen resolving false on some answer as well as true

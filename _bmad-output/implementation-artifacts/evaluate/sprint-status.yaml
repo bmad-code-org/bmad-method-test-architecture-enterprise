@@ -158,7 +158,7 @@ development_status:
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: done
   1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: done
   1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: done
-  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: backlog
+  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: done
   epic-1-retrospective: optional
 
   epic-2: in-progress

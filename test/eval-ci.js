@@ -915,13 +915,16 @@ async function validateCorpus(groundTruth) {
       if (element.contractToken !== null && (typeof element.contractToken !== 'string' || element.contractToken.trim().length === 0)) {
         problems.push(`${elementLabel}: contractToken is neither null nor a non-empty string`);
       }
-      // A contract pattern is the quote-tolerant form of the token.
+      // A contract pattern is the tolerant form of the token.
+      // For a command it tolerates the quotes a run writes around a folder, and for the burn-in gate it reads a key or a name line outside a comment.
       // It is the regex source the contract's oracle reads over the workflow, and the paired scorer tests it with `new RegExp(source)`.
       // The contract's regex operator accepts only a pattern anchored over the whole expression.
       // That is `^` first, `$` last and unescaped, and no alternation at the top level.
       // `isPatternAnchored` mirrors that rule, so this check refuses an unanchored pattern before compile does.
       // Backreferences, lookbehind and nested quantifiers stay with compile, which `test:contracts` runs over the rendered contract.
-      // The pattern states the same claim as its token and its command, so it has to match both.
+      // The pattern states the same claim as its token, so it has to match the token.
+      // A `command` element's token is the command a run writes, so its pattern has to match that command too.
+      // A gate element's command is the one its job loops, which its pattern does not state.
       if (element.contractPattern !== undefined) {
         const pattern = element.contractPattern;
         if (typeof pattern !== 'string' || pattern.trim().length === 0) {
@@ -941,7 +944,7 @@ async function validateCorpus(groundTruth) {
                 `${elementLabel}: contractPattern does not match its own contractToken ${JSON.stringify(element.contractToken)}`,
               );
             }
-            if (typeof element.command === 'string' && !compiled.test(element.command)) {
+            if (element.kind === 'command' && typeof element.command === 'string' && !compiled.test(element.command)) {
               problems.push(
                 `${elementLabel}: contractPattern does not match the command ${JSON.stringify(element.command)} the element requests`,
               );
@@ -1726,6 +1729,8 @@ function workflowMatches(text, source) {
  * A real run quotes its folder names for the shell.
  * A correct run may also quote a tier, and a folded YAML scalar can break the line between the words of a command.
  * An element whose command a run may write that way states a pattern, and its literal stays the single-spaced unquoted spelling the pattern must also match.
+ * The burn-in gate states a pattern too, because its literal is also a word a comment carries.
+ * Its pattern reads a mapping key or a `name:` line that carries the word, and a comment line or a `run:` line leaves it unsatisfied while a run-block line that starts with a key carrying the word holds, as an `env` key does.
  *
  * @param {string} text
  * @param {{contractToken: string, contractPattern?: string}} element
@@ -3246,6 +3251,7 @@ module.exports = {
   workflowHoldsToken,
   checkElement,
   checkpointFilesOf,
+  isBurnInJob,
   guardHolds,
   jobBlockOf,
   sha256Of,
