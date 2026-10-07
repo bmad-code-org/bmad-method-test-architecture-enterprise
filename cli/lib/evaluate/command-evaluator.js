@@ -43,6 +43,7 @@
 
 const path = require('node:path');
 
+const { launchPrefix } = require('../isolation-primitives');
 const { buildMinimalEnv, runSupervised } = require('../run-agent');
 const { DEFAULT_PROBE_TIMEOUT_MS, effectiveProbeTimeoutMs, readProbeAnswer, stderrNote } = require('./frameworks');
 const { EvaluatorError, readAnswer } = require('./judgment-rows');
@@ -63,14 +64,28 @@ async function launchExecutable({ folder, evaluator, command, args, input, scrat
   const executable = path.join(folder, ...command.split('/'));
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-command-');
   try {
-    return await runSupervised({
-      command: spawnPrefix.length === 0 ? executable : spawnPrefix[0],
-      args: [...spawnPrefix.slice(1), ...(spawnPrefix.length === 0 ? [] : [executable]), ...args],
-      input,
-      cwd,
-      env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),
-      timeout: timeoutMs,
-    });
+    // The prefix as it is at this start: the evaluation layer's lists the host's sockets again, and `settle` closes the start once the process has ended (Story 1.88).
+    let launched;
+    try {
+      launched = launchPrefix(spawnPrefix);
+    } catch (error) {
+      // A layer that cannot hide the host's sockets does not start the process: the evaluator could not run, which is infrastructure.
+      if (error?.name === 'ConfinementError') throw new EvaluatorError(error.message);
+      throw error;
+    }
+    const { prefix, settle } = launched;
+    try {
+      return await runSupervised({
+        command: prefix.length === 0 ? executable : prefix[0],
+        args: [...prefix.slice(1), ...(prefix.length === 0 ? [] : [executable]), ...args],
+        input,
+        cwd,
+        env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),
+        timeout: timeoutMs,
+      });
+    } finally {
+      settle();
+    }
   } finally {
     releaseScratchDirectory(scratch, cwd);
   }

@@ -237,7 +237,8 @@ const strayParents = (before) =>
 /**
  * A stand-in for the engine CLI that runs the real one, except at the stage `KILL_AT` names (and only when an argument
  * contains `KILL_ARG`, when it is set): there it writes its pid to `KILL_MARK` and either ends by SIGKILL or, with
- * `KILL_HOW=hang`, waits to be killed. With `KILL_ONCE` it does so for the first call only.
+ * `KILL_HOW=hang`, waits to be killed, or with `KILL_HOW=write` keeps creating and writing the directory of its `--out` and ignores
+ * SIGINT and SIGTERM, so only SIGKILL ends it. With `KILL_ONCE` it does so for the first call only.
  */
 function killShim(label) {
   const wrapper = path.join(scratch.make(label), 'kill-shim.js');
@@ -246,13 +247,26 @@ function killShim(label) {
     `'use strict';
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const path = require('node:path');
 const args = process.argv.slice(2);
 const [stage] = args;
 const matches = process.env.KILL_ARG === undefined || args.join(' ').includes(process.env.KILL_ARG);
 const spent = process.env.KILL_ONCE !== undefined && fs.existsSync(process.env.KILL_MARK);
 if (process.env.KILL_AT === stage && matches && !spent) {
   fs.writeFileSync(process.env.KILL_MARK, String(process.pid));
-  if (process.env.KILL_HOW === 'hang') setTimeout(() => {}, 600000);
+  if (process.env.KILL_HOW === 'write') {
+    // A stage that is writing its output: it recreates the directory of --out and fills it, and ignores SIGINT and SIGTERM, so only
+    // the SIGKILL that follows the grace ends it.
+    process.on('SIGINT', () => {});
+    process.on('SIGTERM', () => {});
+    const out = args[args.indexOf('--out') + 1];
+    let count = 0;
+    setInterval(() => {
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, 'x'.repeat(4096));
+      fs.writeFileSync(out + '.partial-' + (count++ % 8), 'x'.repeat(4096));
+    }, 2);
+  } else if (process.env.KILL_HOW === 'hang') setTimeout(() => {}, 600000);
   else process.kill(process.pid, 'SIGKILL');
 } else {
   const run = spawnSync(process.execPath, [${JSON.stringify(engineCliPath())}, ...args], { stdio: 'inherit' });
@@ -2186,6 +2200,231 @@ function checkStaleBaselineOnPr() {
   assert.ok(rowOf(latestCi(corpus).json, 'replay').warnings.some((line) => /the corpus digest is/.test(line)));
 }
 
+/** How long `ci` has to end after a signal: the group's grace is half a second, so anything near this limit is a stage that held `ci`. */
+const SIGNAL_LIMIT_MS = 30_000;
+
+/** The pid the kill shim wrote to `mark`, once it is there in full. */
+async function markedPid(mark) {
+  assert.ok(await appears(mark), `the stage did not reach the shim (${mark})`);
+  const started = Date.now();
+  while (fs.readFileSync(mark, 'utf8') === '' && Date.now() - started < 5000) await new Promise((resolve) => setTimeout(resolve, 20));
+  return Number(fs.readFileSync(mark, 'utf8'));
+}
+
+/** `promise`'s value, or `undefined` once `limit` milliseconds have passed. */
+function within(promise, limit) {
+  let timer;
+  const expired = new Promise((resolve) => {
+    timer = setTimeout(resolve, limit);
+  });
+  return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * `tea-evaluate <args>` whose engine stage `stage` hangs (the kill shim, `KILL_HOW=hang`) or keeps writing its output
+ * (`KILL_HOW=write`), signalled with each of SIGINT and SIGTERM. The case stops no stage itself: the signal to the command alone
+ * ends it by that signal within `SIGNAL_LIMIT_MS`, the stage's process is gone and neither the temporary directory nor the user's
+ * private root holds an entry of the run (revert: a stage called with `spawnSync` blocks the handler, so the command is still running
+ * at the limit and the stage with it; a handler that removes the scratch before the stage ends finds the writing stage's entries
+ * again). A stage or a command that outlives a failing case is stopped after the assertions, and only then.
+ */
+async function signalEndsCommand(label, args, { stage, how = 'hang', once = false, during }) {
+  const { temp, env } = privateTemp(`${label}-temp`);
+  const wrapper = killShim(`${label}-shim`);
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const mark = path.join(temp, `mark-${signal}`);
+    const child = spawn(process.execPath, [CLI, ...args], {
+      cwd: ROOT,
+      env: {
+        ...BASE_ENV,
+        ...env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: stage, KILL_HOW: how, KILL_MARK: mark, ...(once ? { KILL_ONCE: '1' } : {}) }),
+      },
+      stdio: 'ignore',
+    });
+    const exited = new Promise((resolve) => child.once('exit', (code, name) => resolve({ code, signal: name })));
+    const pid = child.pid;
+    let stagePid = null;
+    try {
+      stagePid = await markedPid(mark);
+      assert.ok(alive(stagePid), `${label}, ${signal}: the stage ${stagePid} is not running before the signal`);
+      if (during !== undefined) during({ pid, temp, signal });
+      child.kill(signal);
+      const ended = await within(exited, SIGNAL_LIMIT_MS);
+      assert.notEqual(ended, undefined, `${label}, ${signal}: the command was still running ${SIGNAL_LIMIT_MS} ms after the signal`);
+      assert.equal(ended.signal, signal, `${label}: the command ended ${JSON.stringify(ended)}`);
+      assert.equal(await goneWithin([stagePid]), true, `${label}, ${signal}: the ${stage} stage outlived the command`);
+      assert.deepEqual(privateParents(pid), [], `${label}, ${signal} left ${JSON.stringify(privateParents(pid))} under ${PRIVATE_ROOT}`);
+      assert.deepEqual(scratchNames(temp), [], `${label}, ${signal} left ${JSON.stringify(scratchNames(temp))} behind`);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      if (stagePid !== null && alive(stagePid)) process.kill(stagePid, 'SIGKILL');
+      for (const name of privateParents(pid)) fs.rmSync(path.join(PRIVATE_ROOT, name), { recursive: true, force: true });
+    }
+  }
+}
+
+/** `ci --tier <tier>` over `folder`, signalled as `signalEndsCommand` does. */
+const signalEndsStage = (label, folder, { tier = 'pr', ...rest }) =>
+  signalEndsCommand(label, ['ci', '--evaluation', folder, '--tier', tier], rest);
+
+/**
+ * A signal ends `ci`, the engine stage it is waiting on and the scratch directory at once, for every stage a `ci` run calls: the
+ * replay's `score`, `aggregate-strength` and `preflight`, a plan check's `compile` and `seal`, the stale-baseline compile (after the
+ * checks of a plan that does not read the baseline, and inside the `replay` check that does) and the compile of the `check` check.
+ */
+async function checkSignalEndsStage() {
+  const replay = copyFixture('verdict', 'signal-replay');
+  writePlan(replay, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('replay', 'pr')] });
+  for (const stage of ['score', 'aggregate-strength', 'preflight', 'compile']) {
+    await signalEndsStage(`replay-${stage}`, replay, {
+      stage,
+      once: true,
+      during: stage === 'score' ? duringReplayScore : undefined,
+    });
+  }
+  const stages = copyFixture('verdict', 'signal-stages');
+  for (const stage of ['compile', 'seal']) {
+    writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry(stage, 'pr')] });
+    await signalEndsStage(`plan-${stage}`, stages, { stage });
+  }
+  // The stale-baseline rule runs once for the tier after the checks, when no check of the plan reads the baseline.
+  writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('seal', 'pr')] });
+  await signalEndsStage('stale-baseline', stages, { stage: 'compile' });
+  // The `check` check compiles the contract when it declares two interfaces.
+  const checked = twoInterfaceFolder('signal-check');
+  writePlan(checked, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  await signalEndsStage('check-check', checked, { stage: 'compile' });
+}
+
+/**
+ * A stage that is writing its output recreates the directories a removal has just deleted, so the handler stops it first
+ * (revert: a handler that removes the scratch directories before it stops the stage leaves `run-<ci pid>-*` or a temporary entry).
+ */
+async function checkSignalEndsWritingStage() {
+  const replay = copyFixture('verdict', 'signal-write-replay');
+  writePlan(replay, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('replay', 'pr')] });
+  await signalEndsStage('replay-score-write', replay, { stage: 'score', how: 'write', once: true });
+  await signalEndsStage('replay-preflight-write', replay, { stage: 'preflight', how: 'write', once: true });
+  const planned = copyFixture('verdict', 'signal-write-plan');
+  writePlan(planned, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  await signalEndsStage('plan-compile-write', planned, { stage: 'compile', how: 'write' });
+  const checked = twoInterfaceFolder('signal-write-check');
+  writePlan(checked, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  await signalEndsStage('check-check-write', checked, { stage: 'compile', how: 'write' });
+}
+
+/** A two-interface contract, so `check` compiles it (`compileRefusals`). */
+function twoInterfaceFolder(label) {
+  const folder = copyFixture('verdict', label);
+  const contractFile = path.join(folder, 'contract.json');
+  const contract = read(contractFile);
+  contract.permittedInterfaces.push(structuredClone(contract.permittedInterfaces[0]));
+  write(contractFile, contract);
+  return folder;
+}
+
+/**
+ * A command that ran the engine stage and removes its scratch directories when a signal ends it, whichever stage it hangs at and
+ * whether the stage is idle or writing: `check` (a compile in a directory of its own), `preflight` and `run` (the pipeline's
+ * engine stages, and the check that runs first), and `score`, which has no staging root of its own to hand over.
+ */
+async function checkSignalEndsStandaloneCommands() {
+  const checked = twoInterfaceFolder('signal-standalone-check');
+  await signalEndsCommand('standalone-check', ['check', '--evaluation', checked], { stage: 'compile' });
+  await signalEndsCommand('standalone-check-write', ['check', '--evaluation', checked], { stage: 'compile', how: 'write' });
+  // The pipeline's own check compiles a two-interface contract before anything else.
+  await signalEndsCommand('standalone-preflight-check', ['preflight', '--evaluation', checked], { stage: 'compile' });
+  const driven = copyFixture('verdict', 'signal-standalone-driven');
+  for (const how of ['hang', 'write']) {
+    await signalEndsCommand(`standalone-preflight-${how}`, ['preflight', '--evaluation', driven], { stage: 'compile', how });
+    await signalEndsCommand(`standalone-run-${how}`, ['run', '--evaluation', driven], { stage: 'compile', how });
+  }
+  const scored = copyFixture('verdict', 'signal-standalone-score');
+  const accepted = acceptedRun(scored);
+  baselines.placeBaseline(scored, accepted);
+  for (const how of ['hang', 'write']) {
+    await signalEndsCommand(`standalone-score-${how}`, ['score', '--evaluation', scored, '--run', accepted], { stage: 'score', how });
+  }
+}
+
+/**
+ * A `ci` killed with SIGKILL while the `check` check's compile hangs leaves the compile's directory in its private parent, and the
+ * next `ci` over the folder removes it: the check takes the invocation's scratch directory first, which carries the owner file the
+ * next run reads (revert: without it the parent has no owner file and the next run leaves it).
+ */
+async function checkKilledCheckCheckIsReclaimed() {
+  const { temp, env } = privateTemp('killed-check-temp');
+  const wrapper = killShim('killed-check-shim');
+  const mark = path.join(temp, 'mark');
+  const folder = twoInterfaceFolder('killed-check');
+  writePlan(folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  const killedRun = ciChild(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'compile', KILL_HOW: 'hang', KILL_MARK: mark }));
+  holdPrivateParents(killedRun.child.pid);
+  const killedPid = killedRun.child.pid;
+  try {
+    const stagePid = await markedPid(mark);
+    killedRun.child.kill('SIGKILL');
+    await killedRun.exited;
+    process.kill(stagePid, 'SIGKILL');
+    assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
+    const [parent] = privateParents(killedPid);
+    assert.equal(
+      fs.readdirSync(path.join(PRIVATE_ROOT, parent)).some((name) => name.startsWith('tea-evaluate-check-')),
+      true,
+      'the check check made no directory in the private parent',
+    );
+    const again = ci(folder, 'pr', env());
+    assert.match(again.stderr, /removed the replay scratch directory/, again.output);
+    assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the killed ci's parent");
+    assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+  } finally {
+    for (const name of privateParents(killedPid)) fs.rmSync(path.join(PRIVATE_ROOT, name), { recursive: true, force: true });
+  }
+}
+
+/**
+ * A process that ends through `process.exit` (an unhandled failure elsewhere in the command) leaves no stage running, since
+ * the stage leads a process group of its own (revert: without the `exit` hook in `engine-cli.js` the stage outlives the process).
+ */
+async function checkStageEndsWithItsProcess() {
+  const { temp, env } = privateTemp('exit-stage-temp');
+  const wrapper = killShim('exit-stage-shim');
+  const mark = path.join(temp, 'mark');
+  const script = `
+const { runEngineStage } = require(${JSON.stringify(path.join(ROOT, 'cli', 'lib', 'evaluate', 'engine-cli.js'))});
+runEngineStage('score', [], { runDirectory: ${JSON.stringify(temp)}, folder: ${JSON.stringify(temp)} }).catch(() => {});
+setTimeout(() => process.exit(3), 1500);
+`;
+  const child = spawn(process.execPath, ['-e', script], {
+    cwd: ROOT,
+    env: { ...BASE_ENV, ...env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_MARK: mark }) },
+    stdio: 'ignore',
+  });
+  const exited = new Promise((resolve) => child.once('exit', (code, name) => resolve({ code, signal: name })));
+  let stagePid = null;
+  try {
+    stagePid = await markedPid(mark);
+    const ended = await within(exited, SIGNAL_LIMIT_MS);
+    assert.deepEqual(ended, { code: 3, signal: null });
+    assert.equal(await goneWithin([stagePid]), true, 'the stage outlived the process that ran it');
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (stagePid !== null && alive(stagePid)) process.kill(stagePid, 'SIGKILL');
+  }
+}
+
+/** The replay's score has one private parent holding the scratch directory, with the score's staging directories inside it. */
+function duringReplayScore({ pid, temp, signal }) {
+  assert.equal(privateParents(pid).length, 1, `${signal}: ${JSON.stringify(privateParents(pid))}`);
+  assert.equal(replaysOf(pid).length, 1, `${signal}: ${JSON.stringify(privateNames())}`);
+  assert.deepEqual(scratchNames(temp), [], `${signal}: the replay made a directory in the temporary directory`);
+  assert.equal(
+    fs.readdirSync(path.join(replaysOf(pid)[0], 'score-staging')).some((name) => name.startsWith('tea-evaluate-score-')),
+    true,
+    `${signal}: the replay's score staging is not inside the scratch directory`,
+  );
+}
+
 async function checkInterruptedReplay() {
   const { temp, env } = privateTemp('interrupt-temp');
   const wrapper = killShim('kill-shim');
@@ -2206,34 +2445,6 @@ async function checkInterruptedReplay() {
     const row = rowOf(latestCi(folder).json, 'replay');
     assert.deepEqual([row.exit, row.class], [12, 'infrastructure'], stage);
     assert.match(fs.readFileSync(path.join(latestCi(folder).directory, 'checks', 'replay', 'stderr'), 'utf8'), /killed by SIGKILL/);
-  }
-
-  // `ci` is signalled mid-replay while the score stage hangs (the stage is killed after the signal, since a signal waits
-  // for the synchronous call): the scratch directory is gone with everything the score staged in it. Until then the
-  // staging directories of the replay's score sit inside the scratch directory.
-  for (const signal of ['SIGINT', 'SIGTERM']) {
-    fs.rmSync(mark, { force: true });
-    const run = ciChild(
-      folder,
-      'pr',
-      env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_ONCE: '1', KILL_MARK: mark }),
-    );
-    assert.ok(await appears(mark), `${signal}: the replay did not reach the score stage`);
-    const pid = run.child.pid;
-    // One private parent holds the scratch directory: the replay's score makes none of its own.
-    assert.equal(privateParents(pid).length, 1, `${signal}: ${JSON.stringify(privateParents(pid))}`);
-    assert.equal(replaysOf(pid).length, 1, `${signal}: ${JSON.stringify(privateNames())}`);
-    assert.deepEqual(scratchNames(temp), [], `${signal}: the replay made a directory in the temporary directory`);
-    assert.equal(
-      fs.readdirSync(path.join(replaysOf(pid)[0], 'score-staging')).some((name) => name.startsWith('tea-evaluate-score-')),
-      true,
-      `${signal}: the replay's score staging is not inside the scratch directory`,
-    );
-    run.child.kill(signal);
-    process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
-    await run.exited;
-    assert.deepEqual(privateParents(pid), [], `${signal} left ${JSON.stringify(privateParents(pid))} under ${PRIVATE_ROOT}`);
-    assert.deepEqual(scratchNames(temp), [], `${signal} left ${JSON.stringify(scratchNames(temp))} behind`);
   }
 
   // `ci` itself is killed mid-replay (SIGKILL: no cleanup runs): the scratch directory is left on the pipeline's list,
@@ -4446,6 +4657,11 @@ async function main() {
     ['the contract digest of a stale baseline', checkContractDigestOnPr],
     ['bad committed input', checkBadCommittedInput],
     ['an interrupted replay', checkInterruptedReplay],
+    ['a signal while an engine stage runs', checkSignalEndsStage],
+    ['a signal while an engine stage writes', checkSignalEndsWritingStage],
+    ['a signal to a command that runs a stage', checkSignalEndsStandaloneCommands],
+    ['a killed check check', checkKilledCheckCheckIsReclaimed],
+    ['a process that exits while a stage runs', checkStageEndsWithItsProcess],
     ['oracle agreement', checkOracleAgreement],
     ['the gameability arm', checkGameability],
     ['the fixture adopters', checkFixtureTiers],

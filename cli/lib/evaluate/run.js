@@ -1680,7 +1680,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest, desi
     const args = held.scoreArguments({ pathOf: (relative) => writer.pathOf(relative), set: heldSet, out: produced });
     let result;
     try {
-      result = runEngineStage('score', args, { runDirectory, folder, recordPath: `${directory}/score.json`, writer, env, log });
+      result = await runEngineStage('score', args, { runDirectory, folder, recordPath: `${directory}/score.json`, writer, env, log });
     } catch (error) {
       if (!(error instanceof EngineStageError)) throw error;
       throw stop({ stage: 'trial', exitCode: 12, message: `${probe.probeId}: an evaluator attempt could not be scored: ${error.message}` });

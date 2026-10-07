@@ -119,14 +119,14 @@ development_status:
   1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it: done
   1-86-list-a-connection-to-a-hosts-path-based-unix-socket-outside-the-grants-as-an-observed-mount: done
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: done
-  1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
+  1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: done
   1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
   1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: done
   1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent: backlog
   1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository: done
   1-90-verify-the-baseline-manifests-file-digests: done
   1-91-keep-machine-paths-out-of-a-committed-baseline: done
-  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
+  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: done
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
@@ -145,7 +145,7 @@ development_status:
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
   1-109-partition-gameability-degenerate-responses: done
   1-110-designate-one-oracle-per-behavior-in-the-both-view: review
-  1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
+  1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: done
   1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: done
   1-113-run-a-subscription-authenticated-agent-target-confined: done
   1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
@@ -157,8 +157,8 @@ development_status:
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: done
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: done
   1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: done
-  1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: backlog
-  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: backlog
+  1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: done
+  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: done
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -201,7 +201,6 @@ parallel_lanes:
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
-    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     - 1-108-compile-and-seal-each-partition-view-in-ci
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
@@ -249,6 +248,7 @@ parallel_lanes:
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
+    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     # Starts only once every other story has merged.
     - 2-6-document-evaluate-for-the-people-who-use-it
   lane-4-ci-plans-and-the-ci-probe-corpus:

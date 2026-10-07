@@ -45,8 +45,16 @@ const { routingWholeBodyTargets } = require('../tools/generate-contracts');
 const { baselineDifferences, cacheDirectoryFor, stagedWorkspaceFor, stagingOf } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
 const { compareStoredResults } = require('./lib/compare-dominance');
+const {
+  readWorkflow: readCiWorkflow,
+  lintWorkflow: lintCiWorkflow,
+  scoreRun: scoreCiRun,
+  checkpointFilesOf: ciCheckpointFilesOf,
+} = require('./eval-ci');
 
 const BASELINE_PATH = path.join(__dirname, 'probes', 'expected-strength.json');
+const CI_GROUND_TRUTH_PATH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-truth.json');
+const CI_REPLAY_ROOT = path.join(__dirname, 'replay', 'ci');
 
 const colors = {
   reset: '[0m',
@@ -169,22 +177,19 @@ function diagnosticProblems(suiteId, entry) {
 }
 
 /**
- * Oracles a stored correct run is known not to satisfy, each a defect of the oracle and not of the run.
+ * Oracles a stored correct run is known not to satisfy, each a defect of the oracle.
  *
- * The real capture of the `evaluation-plan-quarry-grader` project quotes the folder names for the shell
- * (`npm install --prefix 'evals'`), which the harness's structural check accepts and a substring oracle over the
- * literal `npm install --prefix evals` cannot. Both oracles read a contract token from
- * `test/fixtures/ci-eval/ground-truth.json`, whose digest `test/probes/ci.probes.json` records and
- * `expected-strength.json` pins through the corpus digest, so closing the defect moves the baseline and is a story
- * of its own (found in Story 1.94, filed with the coordinator).
+ * The list is empty.
+ * Story 1.122 closed its two entries.
+ * The real capture of the `evaluation-plan-quarry-grader` project quotes the folder names for the shell (`npm install --prefix 'evals'`).
+ * The oracles of `command-evaluation-install` and `command-evaluation-ci-pr` now read the quote-tolerant `contractPattern` of `test/fixtures/ci-eval/ground-truth.json`, which holds on it.
  *
- * The entry is exact. A listed oracle must resolve as violated, and it stops being listed in the change that fixes it:
- * a listed oracle that holds fails here, so the exception cannot outlive the defect.
+ * The machinery stays.
+ * An entry is `{ suiteId, setId, elementId }`, exact: a listed oracle must resolve as violated.
+ * It stops being listed in the change that fixes it, since a listed oracle that holds fails `storedRunProblems`, so an exception cannot outlive its defect.
+ * `knownUnheldProblems` exercises both branches on every run, so the check cannot be removed while the list is empty.
  */
-const KNOWN_UNHELD = [
-  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-install' },
-  { suiteId: 'ci', setId: 'evaluation-plan-quarry-grader', elementId: 'command-evaluation-ci-pr' },
-];
+const KNOWN_UNHELD = [];
 
 /**
  * The suites whose evidence builder scores a stored run as the correct one (Story 1.94), and so must expose the oracle
@@ -219,8 +224,10 @@ function storedRunExposureProblems(suite) {
  * Four suites score a stored run as the correct one (`STORED_RUN_SUITES`), and each states its oracle specs on
  * `storedRunSpecs`. Their records derive every disposition from the scorer `tools/generate-contracts.js` pairs
  * with the oracle (Story 1.94), so a replay case that is not the correct run of its project or set, or a row of
- * `CI_CORRECT_RUNS` pointing at another project's workflow or at a deviation the substring vocabulary can state, reads
- * here as the oracle that no longer holds. The baseline below could not say which oracle: the clean control passes
+ * `CI_CORRECT_RUNS` pointing at another project's workflow or at a deviation the oracles' vocabulary can state, reads
+ * here as the oracle that no longer holds.
+ * A deviation only a structure shows is `ciStructuralProblems`'s.
+ * The baseline below could not say which oracle: the clean control passes
  * pre-flight and scores `CONCERNS`, and `comparableResultOf` keeps only `probeId`, `state`, `severity` and
  * `trialIndex` of each outcome, so a moved oracle disposition or corroboration reaches no field of the baseline.
  * Rows of the full and minimal projects that move the run a defect probe carries do move the baseline; the
@@ -229,11 +236,11 @@ function storedRunExposureProblems(suite) {
  * The `KNOWN_UNHELD` check runs whatever the builder exposes: a builder with no specs resolves everything `held`,
  * which `storedRunExposureProblems` reports and which also trips every "holds now" entry here.
  */
-function storedRunProblems(suite, scored) {
+function storedRunProblems(suite, scored, unheld = KNOWN_UNHELD) {
   if (!STORED_RUN_SUITES.has(suite.id)) return [];
   const specs = suite.evidence.storedRunSpecs ?? [];
   const problems = [];
-  const known = KNOWN_UNHELD.filter((entry) => entry.suiteId === suite.id);
+  const known = unheld.filter((entry) => entry.suiteId === suite.id);
   const seen = new Set();
   for (const entry of scored) {
     for (const disposition of entry.record.oracleDispositions) {
@@ -255,6 +262,320 @@ function storedRunProblems(suite, scored) {
     }
   }
   return problems;
+}
+
+/**
+ * The outcomes the engine scored for a clean control that are not `held` with corroboration `agrees`, one problem each.
+ *
+ * A record's disposition is the scorer's answer, and the engine resolves the oracle's check over the same stored run.
+ * A disposition that the check does not bear out reads `disagrees`, and a `violated` oracle with no defect finding trips the engine's `disposition-contradicts-evidence` rule.
+ * Both are diagnostic and move no verdict, so the baseline never shows them.
+ * Before Story 1.122 the two command oracles of the evaluation-plan project read `disagrees` here.
+ * The oracles of `KNOWN_UNHELD` are exempt, since a listed oracle is violated by definition.
+ */
+function cleanControlProblems(suite, scored, unheld = KNOWN_UNHELD) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const known = unheld.filter((entry) => entry.suiteId === suite.id);
+  const problems = [];
+  for (const entry of scored.filter((candidate) => candidate.probe.expectedClean)) {
+    for (const outcome of entry.result.artifact.outcomes) {
+      if (outcome.disposition === 'held' && outcome.corroboration === 'agrees') continue;
+      const spec = specs.find((candidate) => candidate.id === outcome.oracleId);
+      if (known.some((item) => item.setId === spec?.setId && item.elementId === spec?.elementId)) continue;
+      problems.push(
+        `${suite.id} ${entry.probe.probeId}: oracle ${outcome.oracleId} scored ${outcome.disposition} with corroboration ${outcome.corroboration} on the clean control, which the stored correct run should hold`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * `cleanControlProblems` held to what it reports, over the suite's own clean control.
+ *
+ * A check whose body stopped reporting would pass every real run, so one outcome of the engine's score is set to `held` with corroboration `disagrees` and another to `violated` with `disagrees`.
+ * Both must be reported.
+ * Listing the two oracles as `KNOWN_UNHELD` entries must then silence them.
+ */
+function cleanControlSelfProblems(suite, scored) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const entry = scored.find((candidate) => candidate.probe.expectedClean);
+  if (entry === undefined) return [`${suite.id}: the corpus has no clean control, so cleanControlProblems cannot be exercised`];
+  const outcomes = entry.result.artifact.outcomes;
+  const picked = outcomes.filter((outcome) => specs.some((spec) => spec.id === outcome.oracleId && spec.elementId !== null)).slice(0, 2);
+  if (picked.length < 2)
+    return [`${suite.id}: the clean control has fewer than two element oracles, so cleanControlProblems cannot be exercised`];
+  const [contradicted, violated] = picked;
+  const mutated = {
+    ...entry,
+    result: {
+      ...entry.result,
+      artifact: {
+        ...entry.result.artifact,
+        outcomes: outcomes.map((outcome) => {
+          if (outcome === contradicted) return { ...outcome, disposition: 'held', corroboration: 'disagrees' };
+          if (outcome === violated) return { ...outcome, disposition: 'violated', corroboration: 'disagrees' };
+          return outcome;
+        }),
+      },
+    },
+  };
+  const problems = [];
+  const reported = cleanControlProblems(suite, [mutated], []);
+  for (const [outcome, what] of [
+    [contradicted, 'held with corroboration disagrees'],
+    [violated, 'violated with corroboration disagrees'],
+  ]) {
+    if (!reported.some((problem) => problem.includes(`oracle ${outcome.oracleId} `))) {
+      problems.push(`${suite.id}: a clean control outcome ${what} was not reported`);
+    }
+  }
+  const listed = picked.map((outcome) => {
+    const spec = specs.find((candidate) => candidate.id === outcome.oracleId);
+    return { suiteId: suite.id, setId: spec.setId, elementId: spec.elementId };
+  });
+  const exempt = cleanControlProblems(suite, [mutated], listed).filter((problem) =>
+    picked.some((outcome) => problem.includes(`oracle ${outcome.oracleId} `)),
+  );
+  if (exempt.length > 0)
+    problems.push(`${suite.id}: a clean control outcome of an oracle listed in KNOWN_UNHELD was reported: ${exempt.join('; ')}`);
+  return problems;
+}
+
+/**
+ * `storedRunProblems` held to both of its `KNOWN_UNHELD` branches over this suite's own records, whatever the list holds.
+ *
+ * The list is empty, so neither branch would run otherwise and a change that removed one would pass.
+ * One oracle of the suite is listed against the records as they are (every oracle holds, so the entry must be reported as holding now).
+ * Then the same oracle is flipped to `violated` in one record, which must be reported when unlisted and silent when listed.
+ */
+function knownUnheldProblems(suite, scored) {
+  if (!STORED_RUN_SUITES.has(suite.id)) return [];
+  const specs = suite.evidence.storedRunSpecs ?? [];
+  const first = scored[0]?.record.oracleDispositions.find((disposition) => specs.some((spec) => spec.id === disposition.oracleId));
+  const spec = specs.find((candidate) => candidate.id === first?.oracleId);
+  if (spec === undefined)
+    return [`${suite.id}: no scored record carries an oracle of storedRunSpecs, so the KNOWN_UNHELD branches cannot be exercised`];
+  const listed = [{ suiteId: suite.id, setId: spec.setId, elementId: spec.elementId }];
+  const flipped = scored.map((entry, index) =>
+    index === 0
+      ? {
+          ...entry,
+          record: {
+            ...entry.record,
+            oracleDispositions: entry.record.oracleDispositions.map((disposition) =>
+              disposition.oracleId === spec.id ? { ...disposition, disposition: 'violated' } : disposition,
+            ),
+          },
+        }
+      : entry,
+  );
+  const problems = [];
+  const holds = storedRunProblems(suite, scored, listed);
+  if (!holds.some((problem) => problem.includes('holds now'))) {
+    problems.push(`${suite.id}: an oracle listed in KNOWN_UNHELD that holds on every stored run was not reported`);
+  }
+  const unlisted = storedRunProblems(suite, flipped, []);
+  if (!unlisted.some((problem) => problem.includes(`oracle ${spec.id} no longer holds`))) {
+    problems.push(`${suite.id}: a violated oracle absent from KNOWN_UNHELD was not reported`);
+  }
+  const exempt = storedRunProblems(suite, flipped, listed).filter((problem) => problem.includes(`oracle ${spec.id} `));
+  if (exempt.length > 0) problems.push(`${suite.id}: a violated oracle listed in KNOWN_UNHELD was reported: ${exempt.join('; ')}`);
+  return problems;
+}
+
+/**
+ * One stored ci case as the replay reads it: the workflow, the actionlint findings and the project files an edit set's
+ * checkpoint element reads, each stored beside the workflow and null when the run left none.
+ * `alter` changes the workflow's text before it is linted, so a caller can hand the check a case with one thing wrong.
+ */
+async function readStoredCiCase(set, caseId, alter = (text) => text) {
+  const directory = path.join(CI_REPLAY_ROOT, caseId);
+  const workflow = await readCiWorkflow(directory);
+  if (!workflow.ok) return { problem: `${caseId} holds no workflow to score (${workflow.reason})` };
+  const text = alter(workflow.text);
+  const lint = lintCiWorkflow(text);
+  if (!lint.ok) return { problem: `${caseId} cannot be linted (${lint.reason})` };
+  const files = {};
+  for (const relative of ciCheckpointFilesOf(set)) {
+    const stored = path.join(directory, relative);
+    files[relative] = fs.existsSync(stored) ? fs.readFileSync(stored, 'utf8') : null;
+  }
+  return { text, lint, files };
+}
+
+/**
+ * Each ci project's stored correct workflow scored by the harness's own `scoreRun` over that project's ground truth, one problem for each reason it is not the correct run.
+ *
+ * The contract reads a workflow as one string, so its oracles cannot see a structure: a comment that says `burn-in`, a `needs` that names a job the file lacks, an upload under the wrong condition, a command chained into another.
+ * `scoreRun` and its `checkElement` read those structures, so a `CI_CORRECT_RUNS` row pointed at a stored deviation fails here with the element, the lint finding or the rule that no longer holds (Story 1.123).
+ * A correct run parses, draws no actionlint finding, carries every requested element, carries nothing the request did not ask for and breaks no rule.
+ * `legs` is the suite's `storedRunLegs`, and `read` is the reader of a stored case, so `ciStructuralSelfProblems` can hand this the data it must report.
+ * It returns the problems and how many legs it scored.
+ * Unless `complete` is false, the legs must name every project of the ground truth exactly once, so a check handed too few legs, or none, reports the projects it never scored.
+ */
+async function ciStructuralProblems(legs, read = readStoredCiCase, { complete = true } = {}) {
+  const groundTruth = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8'));
+  const problems = [];
+  let scored = 0;
+  if (complete) {
+    for (const set of groundTruth.fixtureSets) {
+      const reading = legs.filter((leg) => leg.setId === set.id).length;
+      if (reading === 0) problems.push(`ci ${set.id}: no leg reads a stored run of this project, so its workflow is never scored`);
+      if (reading > 1) problems.push(`ci ${set.id}: ${reading} legs read a stored run of this project, expected one`);
+    }
+  }
+  for (const leg of legs) {
+    const set = groundTruth.fixtureSets.find((candidate) => candidate.id === leg.setId);
+    if (set === undefined) {
+      problems.push(`ci ${leg.setId}: the ground truth holds no such project, so the stored run it reads cannot be scored`);
+      continue;
+    }
+    scored += 1;
+    const stored = await read(set, leg.caseId);
+    const where = `ci ${leg.setId} reads the stored run ${leg.caseId}`;
+    if (stored.problem !== undefined) {
+      problems.push(`${where}: ${stored.problem}`);
+      continue;
+    }
+    const result = scoreCiRun(set, stored.text, stored.lint, { files: stored.files });
+    if (!result.parse.ok) problems.push(`${where}: the workflow does not parse (${result.parse.errors.join('; ')})`);
+    for (const finding of result.lint.findings) problems.push(`${where}: actionlint reports ${finding.kind}: ${finding.message}`);
+    for (const element of result.elements.filter((candidate) => !candidate.present)) {
+      problems.push(`${where}: the requested element ${element.id} no longer holds (${element.detail})`);
+    }
+    for (const found of result.unrequested)
+      problems.push(`${where}: the workflow carries an element the request did not ask for (${found})`);
+    for (const found of result.ruleViolations) problems.push(`${where}: the workflow breaks a rule (${found})`);
+  }
+  return { problems, scored };
+}
+
+/**
+ * What `main` has to have run for the ci structural check to count: every project of the ground truth scored, and the self-exercise run at least one row.
+ * It is a function of two numbers so that `ciStructuralSelfProblems` can hand it the numbers of a main that ran nothing.
+ */
+function ciWiringProblems({ scored, selfRows }) {
+  const projects = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8')).fixtureSets.length;
+  const problems = [];
+  if (scored !== projects)
+    problems.push(`ci: the structural check scored ${scored} stored workflows, expected one for each of the ${projects} projects`);
+  if (!(selfRows > 0)) problems.push('ci: the self-exercise of the structural check ran no row');
+  return problems;
+}
+
+/**
+ * `ciStructuralProblems` held to what it reports, over stored cases that are not the correct run of the project that reads them.
+ *
+ * Each row names the leg it hands the check, the reader of the stored case when the row alters it, and what the report must name.
+ * A check whose body stopped reporting passes every real run, so each reason a run can fail is exercised by data that has it: another project's workflow, a missing element, a parse failure, an unrequested trigger, a rule violation, an actionlint finding with nothing else wrong and a rewritten checkpoint of an edit set.
+ * The three stored spellings that the harness scores as correct are handed to it too and must draw no report, so a check that flagged any difference from the capture would fail here.
+ */
+async function ciStructuralSelfProblems() {
+  let exercised = 0;
+  const full = 'full-meridian-storefront';
+  const plan = 'evaluation-plan-quarry-grader';
+  const edit = 'evaluation-edit-ember-ledger';
+  // The correct workflow of the full project with one top-level key actionlint does not know, which is the only thing wrong with it.
+  const lintOnly = (set, caseId) => readStoredCiCase(set, caseId, (text) => `${text}\nunexpected-key: 1\n`);
+  const mustReport = [
+    { label: "another project's workflow", leg: { setId: full, caseId: 'minimal-correct-pipeline' }, names: ['gate-burn-in'] },
+    { label: 'a workflow without its burn-in job', leg: { setId: full, caseId: 'full-burn-in-missing' }, names: ['gate-burn-in'] },
+    { label: 'a workflow that does not parse', leg: { setId: full, caseId: 'full-unparseable' }, names: ['does not parse'] },
+    {
+      label: 'a workflow with a trigger nobody asked for',
+      leg: { setId: full, caseId: 'full-workflow-dispatch-added' },
+      names: ['trigger: workflow_dispatch'],
+    },
+    {
+      label: 'a workflow that breaks a rule',
+      leg: { setId: plan, caseId: 'evaluation-plan-continue-on-error' },
+      names: ['breaks a rule', 'continue-on-error'],
+    },
+    {
+      label: 'a workflow with an actionlint finding only',
+      leg: { setId: full, caseId: 'full-correct-pipeline' },
+      read: lintOnly,
+      names: ['actionlint reports'],
+    },
+    {
+      label: 'an edit whose checkpoint was rewritten',
+      leg: { setId: edit, caseId: 'evaluation-edit-checkpoint-rewritten' },
+      names: ['checkpoint-untouched'],
+    },
+    { label: 'a stored run that is not there', leg: { setId: full, caseId: 'no-such-case' }, names: ['holds no workflow to score'] },
+    {
+      label: 'a project the ground truth does not hold',
+      leg: { setId: 'no-such-project', caseId: 'full-correct-pipeline' },
+      names: ['holds no such project'],
+    },
+  ];
+  const mustAccept = [
+    { label: 'a literal node version equal to .nvmrc', leg: { setId: full, caseId: 'full-node-version-literal' } },
+    { label: 'a node version read from a step output', leg: { setId: full, caseId: 'full-node-version-step-output' } },
+    { label: 'an upload condition wrapped in an expression', leg: { setId: plan, caseId: 'evaluation-plan-upload-wrapped-condition' } },
+  ];
+  const problems = [];
+  for (const { label, leg, read, names } of mustReport) {
+    exercised += 1;
+    const { problems: reported } = await ciStructuralProblems([leg], read, { complete: false });
+    for (const name of names) {
+      if (!reported.some((problem) => problem.includes(name))) {
+        problems.push(`ci: the structural check did not report ${label} (no problem names ${JSON.stringify(name)})`);
+      }
+    }
+  }
+  for (const { label, leg } of mustAccept) {
+    exercised += 1;
+    const { problems: reported } = await ciStructuralProblems([leg], readStoredCiCase, { complete: false });
+    if (reported.length > 0)
+      problems.push(`ci: the structural check reported ${label}, which the harness scores as correct: ${reported.join('; ')}`);
+  }
+  // Several legs: the problem names the leg that deviates and none of the legs that do not.
+  exercised += 1;
+  const { problems: two } = await ciStructuralProblems(
+    [
+      { setId: full, caseId: 'full-correct-pipeline' },
+      { setId: plan, caseId: 'evaluation-plan-continue-on-error' },
+    ],
+    readStoredCiCase,
+    { complete: false },
+  );
+  if (!two.some((problem) => problem.includes(`ci ${plan} reads the stored run evaluation-plan-continue-on-error`))) {
+    problems.push('ci: the structural check did not name the second of two legs that read a deviation');
+  }
+  if (two.some((problem) => problem.includes(`ci ${full} reads`))) {
+    problems.push('ci: the structural check reported the leg that reads a correct run when it scored two legs');
+  }
+  // Legs that do not name every project once: the projects left out, and a project read twice, are reported.
+  exercised += 1;
+  const { problems: partial } = await ciStructuralProblems([
+    { setId: full, caseId: 'full-correct-pipeline' },
+    { setId: full, caseId: 'full-correct-pipeline' },
+  ]);
+  if (!partial.some((problem) => problem.includes(`ci ${plan}: no leg reads`))) {
+    problems.push('ci: the structural check did not report a project that no leg reads');
+  }
+  if (!partial.some((problem) => problem.includes(`ci ${full}: 2 legs read`))) {
+    problems.push('ci: the structural check did not report a project that two legs read');
+  }
+  exercised += 1;
+  if ((await ciStructuralProblems([])).problems.length === 0) problems.push('ci: the structural check reported nothing for no legs at all');
+  const projects = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8')).fixtureSets.length;
+  for (const [label, wired, reported] of [
+    ['a main that scored no workflow', { scored: 0, selfRows: 3 }, true],
+    ['a main that scored one workflow of the projects', { scored: 1, selfRows: 3 }, true],
+    ['a main whose self-exercise ran no row', { scored: projects, selfRows: 0 }, true],
+    ['a main that scored every project and ran the self-exercise', { scored: projects, selfRows: 3 }, false],
+  ]) {
+    exercised += 1;
+    if (ciWiringProblems(wired).length > 0 !== reported) {
+      problems.push(`ci: the wiring check ${reported ? 'did not report' : 'reported'} ${label}`);
+    }
+  }
+  return { problems, exercised };
 }
 
 /**
@@ -281,7 +602,7 @@ const WRONG_RUN_CANNOT_FAIL = [
  * kinds that keep answering from what they read: test-design's projection-coherence reads the projection alone, so it
  * measures. It holds with the projection intact and is violated when the read is repeated with the projection's
  * `design` key dropped, so the branch is held in both directions. The ci scorer is a
- * substring search over the workflow and refuses nothing, so its entry is `null`.
+ * substring or pattern search over the workflow and refuses nothing, so its entry is `null`.
  *
  * A leg without an entry fails: the run-measured oracle of a set is failed only by a refusal of that set's run, so
  * every leg needs one for its oracle to stay pinned.
@@ -335,7 +656,7 @@ async function violatedUnder(suite, probe, storedCase, options = {}) {
  *
  * - Rotation. Leg i reads leg (i + 1) mod n, so every set reads a run other than its own. A set follows the run when
  *   an oracle that holds on its own run is violated in the rotated one. The identity record leaves the oracles of
- *   `KNOWN_UNHELD` out of that baseline, since the correct run already violates them.
+ *   `KNOWN_UNHELD` (none today) out of that baseline, since the correct run already violates them.
  * - One leg at a time through every other stored case of the suite. This is what a `CI_CORRECT_RUNS` row pointed at
  *   another project's workflow or at a stored deviation looks like to the builder.
  * - For test-design, a projection with its `design` key dropped, which only the projection-coherence oracles read.
@@ -934,6 +1255,9 @@ async function main() {
   const problems = [];
   const summary = {};
   const liveShaped = [];
+  // What the ci structural check scored and ran, read after the last suite.
+  // A main whose ci block never ran leaves the zeros, which `ciWiringProblems` reports.
+  let ciWiring = { scored: 0, selfRows: 0 };
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
@@ -953,12 +1277,24 @@ async function main() {
     for (const message of outcome.sealed.schemaProblems) problems.push(`${suite.id}: SealedEvaluatorBrief${message}`);
     problems.push(
       ...storedRunProblems(suite, outcome.scored),
+      ...cleanControlProblems(suite, outcome.scored),
+      ...cleanControlSelfProblems(suite, outcome.scored),
+      ...knownUnheldProblems(suite, outcome.scored),
       ...storedRunExposureProblems(suite),
       ...(await wrongRunProblems(suite)),
       ...(await unknownOracleProblems(suite)),
       ...(await testReviewVerdictProblems(suite)),
       ...(await routingWholeBodyProblems(suite)),
     );
+
+    if (suite.id === 'ci') {
+      // `storedRunExposureProblems` reports a builder that exposes no legs.
+      const legs = suite.evidence.storedRunLegs ?? [];
+      const structural = await ciStructuralProblems(legs);
+      const self = await ciStructuralSelfProblems();
+      problems.push(...structural.problems, ...self.problems);
+      ciWiring = { scored: structural.scored, selfRows: self.exercised };
+    }
 
     summary[suite.id] = suiteSummary(outcome, registries);
     liveShaped.push({ suiteId: suite.id, verdicts: liveShapedVerdicts(outcome, registries) });
@@ -969,7 +1305,7 @@ async function main() {
     );
   }
 
-  problems.push(...comparatorProblems(liveShaped, summary));
+  problems.push(...ciWiringProblems(ciWiring), ...comparatorProblems(liveShaped, summary));
 
   const policy = await scoringPolicy();
   problems.push(...(await dominanceComparatorProblems(summary, policy.severityFloor)));

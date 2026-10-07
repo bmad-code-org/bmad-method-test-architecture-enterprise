@@ -37,6 +37,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES, bridgedArgsRefused, resolveModel } = require('./agent-adapters');
+const { launchPrefix } = require('./isolation-primitives');
 
 const STDERR_TAIL_LINES = 20;
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
@@ -107,7 +108,8 @@ function supervisedOutcome(result) {
  * through that one MCP server (`tea-evaluate`'s sealed-brief evaluator,
  * AD-21). An adapter with no bridged argv refuses it.
  *
- * @returns {{ command: string, supervisorArgs: string[], input: string|undefined, env: object, cwd: string, timeout: number }}
+ * @returns {{ command: string, supervisorArgs: string[], input: string|undefined, env: object, cwd: string, timeout: number, settle: () => void }}
+ *   `settle` closes the start of the evaluation layer's prefix: the caller calls it once the agent has ended, however it ended
  * @throws {Error} AGENT_UNKNOWN, CAPABILITY_UNKNOWN, AGENT_COMMAND_REQUIRED, AGENT_BRIDGE_UNSUPPORTED, and AGENT_NOT_FOUND
  *   for an agent command that names no executable when it starts through `spawnPrefix`
  */
@@ -174,26 +176,35 @@ function agentInvocation(
     agentArgv = agentArgv.map((arg) => (arg === '__PROMPT__' ? prompt : arg));
     input = undefined;
   }
-  const isolated = spawnPrefix.length > 0;
-  const command = isolated ? spawnPrefix[0] : resolvedCommand;
-  const args = isolated ? [...spawnPrefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;
-  const env = buildMinimalEnv(envPass, sourceEnv, adapter.envNames);
-  // Under a wrapper the spawn that fails is the wrapper's own exec of the agent, which reports as the wrapper's exit,
-  // so a missing agent is named before anything starts, as an unwrapped spawn's ENOENT is.
-  if (isolated && !executableFound(resolvedCommand, env.PATH, cwd)) {
-    const error = new Error(`agent executable not found: ${resolvedCommand}`);
-    error.code = 'AGENT_NOT_FOUND';
+  // The prefix as it is at this start: the evaluation layer's lists the host's sockets again, and `settle` closes the start once the process has ended (Story 1.88).
+  const { prefix, settle } = launchPrefix(spawnPrefix);
+  try {
+    const isolated = prefix.length > 0;
+    const command = isolated ? prefix[0] : resolvedCommand;
+    const args = isolated ? [...prefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;
+    const env = buildMinimalEnv(envPass, sourceEnv, adapter.envNames);
+    // Under a wrapper the spawn that fails is the wrapper's own exec of the agent, which reports as the wrapper's exit.
+    // A missing agent is therefore named before anything starts, as an unwrapped spawn's ENOENT is.
+    if (isolated && !executableFound(resolvedCommand, env.PATH, cwd)) {
+      const error = new Error(`agent executable not found: ${resolvedCommand}`);
+      error.code = 'AGENT_NOT_FOUND';
+      throw error;
+    }
+    return {
+      command,
+      agentCommand: resolvedCommand,
+      supervisorArgs: [SUPERVISOR, String(process.pid), String(timeout), command, ...args],
+      input,
+      env,
+      cwd,
+      timeout,
+      settle,
+    };
+  } catch (error) {
+    // Nothing starts through a prefix the invocation was refused for.
+    settle();
     throw error;
   }
-  return {
-    command,
-    agentCommand: resolvedCommand,
-    supervisorArgs: [SUPERVISOR, String(process.pid), String(timeout), command, ...args],
-    input,
-    env,
-    cwd,
-    timeout,
-  };
 }
 
 /** Whether `command` names an executable file: a path resolved against `cwd`, or a bare name looked up on `searchPath`. */
@@ -303,6 +314,15 @@ function agentAnswer({ outcome, stdout, stderr }, { command: spawned, agentComma
  */
 function runAgent(prompt, options = {}) {
   const invocation = agentInvocation(prompt, options);
+  try {
+    return runInvocation(invocation);
+  } finally {
+    invocation.settle();
+  }
+}
+
+/** The synchronous run of an invocation `agentInvocation` made. */
+function runInvocation(invocation) {
   // The agent runs in its own process group under the supervisor, which stops
   // the group on the wall clock, on a signal, when the runner or the
   // supervisor dies, and when the agent exits; the report on file descriptor 3
@@ -423,7 +443,12 @@ function superviseAsync({ supervisorArgs, input, cwd, env }) {
  */
 async function runAgentAsync(prompt, options = {}) {
   const invocation = agentInvocation(prompt, options);
-  const ended = await superviseAsync(invocation);
+  let ended;
+  try {
+    ended = await superviseAsync(invocation);
+  } finally {
+    invocation.settle();
+  }
   const bytes = { stdoutBytes: ended.stdoutBytes, stderrBytes: ended.stderrBytes };
   try {
     return { ...agentAnswer(ended, invocation), ...bytes };

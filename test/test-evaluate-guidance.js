@@ -1704,10 +1704,9 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
     for (const marker of [
-      'Under a `partitionPlan`, add `--partition development` to that preflight',
-      'builds the both view and launches the held-out request during authoring',
+      'tea-evaluate preflight --evaluation <evaluation-folder> --partition development`. Under a `partitionPlan` the flag is required',
+      'a preflight with no `--partition` exits 64, since it would build the both view and launch the held-out request during authoring',
       'run `--partition held-out` only after the development review',
-      '<evaluation-folder>`. Under a `partitionPlan`',
       'development review. A nonzero exit halts this stage',
     ])
       requireText(adapterGuide, marker, 'adapters.md partition plan preflight', failures);
@@ -3263,9 +3262,10 @@ function checkRunGuidance(guide, failures) {
   ])
     requireText(guide, marker, 'run.md', failures);
   for (const marker of [
-    'Under a `partitionPlan`, give the `preflight` command `--partition development`',
-    'builds the both view and launches the held-out request while the gap loop is still open',
+    'The `preflight` flag is required only when `evaluation.json` declares a `partitionPlan`',
+    'A preflight with no `--partition` over one exits 64, since it would build the both view and launch the held-out request while the gap loop is still open',
     'run `--partition held-out` only after the development review',
+    'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development',
   ])
     requireText(guide, marker, 'run.md partition plan preflight', failures);
   // Story 1.61: each platform's mechanism and observer, the exit-12 refusal, the opt-out, the network namespace and what run.json records.
@@ -3309,7 +3309,10 @@ function checkRunGuidance(guide, failures) {
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
     'Read both before reading a verdict',
     // Stories 1.82 and 1.87: a socket file of the host is closed to a Bubblewrap target under either network value and to a macOS Seatbelt target, and run.json records the Bubblewrap cut.
-    'A confined target cannot connect to a socket file of the host (Bubblewrap answers `ECONNREFUSED`, macOS Seatbelt `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    // Story 1.88: a socket that exists when the call starts is out of reach, one bound afterwards is reachable where nothing masks or denies its path, and the reason is the platform's.
+    'A confined target cannot connect to a socket file of the host that exists when its call starts (Bubblewrap masks it and answers `ECONNREFUSED`, macOS Seatbelt denies it and answers `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root",
+    "The reason is that seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads, so Bubblewrap has no way to refuse a connection to a path once the process has started",
     '`hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the host held more Unix sockets than a call can hide, and is `[]` when no call was cut',
     "when an entry is listed, say so before reading that trial's verdict",
   ])
@@ -3358,7 +3361,7 @@ function checkRunGuidance(guide, failures) {
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
-    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
   ];
@@ -3397,9 +3400,10 @@ function checkIsolationViolationGuidance(guide, failures) {
     'The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route, and such a target opts out with `"confinement": false` and the adopter\'s recorded reason',
     "A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels reaches a plain-HTTP gateway on the host's loopback that its entry lists",
     // Stories 1.82 and 1.87: a host service behind a socket file is out of a confined target's reach (Bubblewrap under either `network`, macOS Seatbelt), and the escape is the opt-out.
-    'A confined target cannot reach a host service through a socket file:',
+    'A confined target cannot reach a host service through a socket file that exists when its call starts:',
     "a connection to the Docker socket (testcontainers) or to a database's Unix socket (a `.s.PGSQL.5432` file) answers `ECONNREFUSED` from a Bubblewrap target",
-    "since the runtime mounts an empty device file over every socket file outside the call's own grants",
+    "since the runtime mounts an empty device file over each socket file it lists outside the call's own grants",
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root, since seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads",
     "and `EPERM` from a macOS Seatbelt target, since its profile denies every connection to a socket path outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
@@ -4350,6 +4354,30 @@ async function main() {
   const localFailures = [];
   checkLocalStage6(removedLocalEngine, localFailures);
   if (localFailures.length === 0) failures.push('SKILL.md local Stage 6 engine removal passed its guidance check');
+  // Story 1.111: Stage 6 preflights the development partition in both forms, says when the flag is required and keeps the held-out
+  // preflight after the development review, so a worker that follows SKILL.md alone never launches the held-out request.
+  const STAGE6_DEVELOPMENT_ADOPTER =
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_DEVELOPMENT_LOCAL = 'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_FLAG_RULE =
+    'The flag is required only when `evaluation.json` declares a `partitionPlan`, and a preflight with no `--partition` over one exits 64.';
+  const STAGE6_HELD_OUT_CLAUSE = 'Held-out preflight (`--partition held-out`) runs only after the development review.';
+  const checkStage6Partition = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    for (const marker of [STAGE6_DEVELOPMENT_ADOPTER, STAGE6_DEVELOPMENT_LOCAL, STAGE6_FLAG_RULE, STAGE6_HELD_OUT_CLAUSE])
+      requireText(local, marker, 'SKILL.md Stage 6 partition', found);
+  };
+  checkStage6Partition(skillContent, failures);
+  for (const [name, removed] of [
+    ['the adopter development flag', STAGE6_DEVELOPMENT_ADOPTER],
+    ['the local development flag', STAGE6_DEVELOPMENT_LOCAL],
+    ['the flag rule', STAGE6_FLAG_RULE],
+    ['the held-out clause', STAGE6_HELD_OUT_CLAUSE],
+  ]) {
+    const found = [];
+    checkStage6Partition(skillContent.replace(removed, ''), found);
+    if (found.length === 0) failures.push(`SKILL.md Stage 6 without ${name} passed its guidance check`);
+  }
   requireText(skillContent, '{test_artifacts}/evaluate/<evaluationId>/gap-report.md', 'SKILL.md resume', failures);
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
@@ -4693,7 +4721,7 @@ async function main() {
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
-        (text) => text.replace('give the `preflight` command `--partition development`', 'give the `preflight` command no flag'),
+        (text) => text.replace('A preflight with no `--partition` over one exits 64', 'A preflight with no `--partition` over one runs'),
       ],
       ['harness confined example removal', 'harness', checkHarnessGuidance, (text) => text.replace('<!-- example:registry -->', '')],
       [

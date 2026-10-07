@@ -41,11 +41,15 @@ function withFixedHost(body) {
   stub.native = stub;
   fs.realpathSync = stub;
   fs.existsSync = (candidate) => (candidate === '/run/user' ? true : existsSync(candidate));
+  // The evaluation layer names the user's private root, `/tmp/tea-evaluate-p<uid>` (Story 1.88), so the user is fixed too.
+  const getuid = process.getuid;
+  process.getuid = () => 501;
   try {
     return body();
   } finally {
     fs.realpathSync = realpathSync;
     fs.existsSync = existsSync;
+    process.getuid = getuid;
   }
 }
 
@@ -223,7 +227,18 @@ function collectGeneratedOutputs() {
           env: { PATH: '/usr/bin:/bin', HOME: workspace },
         }),
         'confinement.layerPrefix.seatbelt': confinement.layerPrefix(seatbeltConfinement),
-        'confinement.layerPrefix.bubblewrap': confinement.layerPrefix(bubblewrapConfinement),
+        // The evaluation layer lists the host's sockets for every start (Story 1.88), so the golden fixes the list: none, and three.
+        // Both vectors bind the private root read-only and the run's own parent writable again, so the golden names the root and the parent.
+        'confinement.layerPrefix.bubblewrap': confinement.layerPrefix(bubblewrapConfinement, {
+          hostSockets: () => [],
+          recordDirectory: () => '/tmp/tea-evaluate-p501',
+          privateParents: () => ['/tmp/tea-evaluate-p501/run-4242-0123456789abcdef'],
+        }),
+        'confinement.layerPrefix.bubblewrap.sockets': confinement.layerPrefix(bubblewrapConfinement, {
+          hostSockets: () => ['/run/dbus/system_bus_socket', '/run/docker.sock', '/tmp/agent/agent.sock'],
+          recordDirectory: () => '/tmp/tea-evaluate-p501',
+          privateParents: () => ['/tmp/tea-evaluate-p501/run-4242-0123456789abcdef'],
+        }),
         'confinement.targetSandbox.wrap.seatbelt': seatbeltTarget.wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]),
         'confinement.targetSandbox.wrap.bubblewrap': { ...bubblewrapWrapped },
         'confinement.targetSandbox.wrap.seatbelt.git': seatbeltGitTarget.wrap(

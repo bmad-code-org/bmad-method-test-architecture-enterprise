@@ -1901,11 +1901,11 @@ try {
     for (const [file, bytes] of rubricOriginals) fs.writeFileSync(path.join(rubricGuarded.folder, file), bytes);
     assert.equal(cli(rubricGuarded, 'digest').status, 0);
   }
-  // Every partition's findings stay id-only through preflight too: it runs `check` first, so a held-out or both preflight over a
-  // plan with a criterion of no shape, or with an evidence pointer the labelled items cannot reach, stops with a finding that names
-  // none of the plan's text.
+  // Every partition's findings stay id-only through preflight and run too: both run `check` first, so a held-out preflight or a run of
+  // both partitions (a preflight with no `--partition` is refused under a plan) over a plan with a criterion of no shape, or with an
+  // evidence pointer the labelled items cannot reach, stops with a finding that names none of the plan's text.
   for (const [name, edit] of idOnlyCases) {
-    for (const args of [['preflight', '--partition', 'held-out'], ['preflight']]) {
+    for (const args of [['preflight', '--partition', 'held-out'], ['run']]) {
       const ran = rubricChecked(edit, args);
       assert.equal(ran.status, 10, `${name} (${args.join(' ')}): ${ran.output}`);
       assert.equal(ran.output.includes('canary-'), false, `${name} (${args.join(' ')}) quoted a byte of the held-out plan:\n${ran.output}`);
@@ -2142,9 +2142,10 @@ try {
       `${name}: check blamed a waiver for a contract error:\n${ran.output}`,
     );
   }
-  // Every partition's findings stay id-only through preflight too: it runs `check` first, so a held-out or both preflight over a
-  // waiver that reads a step no view holds, spelled as a canary, stops with a finding that names none of the plan's text.
-  for (const args of [['preflight', '--partition', 'held-out'], ['preflight']]) {
+  // Every partition's findings stay id-only through preflight and run too: both run `check` first, so a held-out preflight or a run of
+  // both partitions over a waiver that reads a step no view holds, spelled as a canary, stops with a finding that names none of the
+  // plan's text.
+  for (const args of [['preflight', '--partition', 'held-out'], ['run']]) {
     const ran = waiverChecked(
       () => waiverChange(PLAN_FILE, (plan) => (plan.waivers[0].condition = '/interactions/canary-ghost/stdout is absent')),
       args,
@@ -2155,13 +2156,13 @@ try {
   }
   // The engine compiles each view without the waivers of the other partition. A development-only waiver the engine finds incomplete
   // (no approval) fails the development and both views and leaves the held-out one compiling; a held-out waiver in the same state
-  // fails the held-out and both views and leaves the development one compiling. Compile runs inside preflight.
+  // fails the held-out and both views and leaves the development one compiling. Compile runs inside preflight and run.
   const compiled = (name, edit, failing) => {
     for (const partition of ['development', 'held-out', 'both']) {
-      const args = partition === 'both' ? ['preflight'] : ['preflight', '--partition', partition];
+      const args = partition === 'both' ? ['run'] : ['preflight', '--partition', partition];
       const ran = waiverChecked(edit, args);
       const expected = failing.includes(partition) ? 4 : 0;
-      assert.equal(ran.status, expected, `${name}, ${partition} preflight: ${ran.output}`);
+      assert.equal(ran.status, expected, `${name}, ${partition} ${args[0]}: ${ran.output}`);
       if (expected === 4)
         assert.match(ran.output, /waiver-incomplete.*waivers\[id=W-\d+\]\.approval/s, `${name}, ${partition}: ${ran.output}`);
       assert.equal(ran.output.includes('canary-'), false, `${name}, ${partition} quoted a byte of the held-out plan:\n${ran.output}`);
@@ -2466,9 +2467,12 @@ try {
     assert.equal(developmentRun.status, 0, `${name}: a development preflight opened the held-out plan\n${developmentRun.output}`);
     assert.ok(launchesSince(guarded, before).length > 0);
     assert.equal(developmentRun.output.includes('canary-'), false);
-    for (const args of [['--partition', 'held-out'], []]) {
-      const refused = cli(guarded, 'preflight', args);
-      assert.equal(refused.status, 10, `${name} ${args.join(' ')}: ${refused.output}`);
+    for (const [command, args] of [
+      ['preflight', ['--partition', 'held-out']],
+      ['run', []],
+    ]) {
+      const refused = cli(guarded, command, args);
+      assert.equal(refused.status, 10, `${name} ${command} ${args.join(' ')}: ${refused.output}`);
       assert.match(refused.output, /corpus\/held-out\/plan\.json (does not parse as JSON|cannot be read \(ENOENT\))/);
       assert.equal(refused.output.includes('canary-garbage'), false);
     }
@@ -2485,8 +2489,9 @@ try {
       assert.equal(development.status, 10, `${command}: ${development.output}`);
       assert.match(development.output, /probes\/P-006\.probe\.json/, `${command} did not report the probe`);
       assert.doesNotMatch(development.output, /plan\.json|canary-garbage/, `${command}: a development run named the held-out plan`);
-      const both = cli(guarded, command);
-      assert.match(both.output, /corpus\/held-out\/plan\.json does not parse as JSON/, `${command}: the control run skipped the plan`);
+      // A preflight reads the plan through the held-out partition, since a preflight of both partitions is refused under a plan.
+      const control = cli(guarded, command, command === 'preflight' ? ['--partition', 'held-out'] : []);
+      assert.match(control.output, /corpus\/held-out\/plan\.json does not parse as JSON/, `${command}: the control run skipped the plan`);
     }
   } finally {
     fs.rmSync(path.join(guarded.folder, 'probes/P-006.probe.json'));
@@ -2568,6 +2573,98 @@ try {
   heldOutLog.push(heldOutPreflight.output);
 
   assert.equal(cli(flow, 'preflight', ['--partition', 'unknown']).status, 64);
+
+  // A preflight that names no partition is refused under a plan (Story 1.111): it would derive the both view and launch the held-out
+  // request while the gap loop is open.
+  // The refusal is a usage error that comes before `check` and before any workspace, so nothing launches and no run directory exists
+  // to hold a byte of the held-out partition.
+  // The named partitions above still preflight, `run` with no partition still runs both, and the CI `preflight-live` check still
+  // qualifies every partition.
+  const noPartition = planProject('plan-no-partition-preflight');
+  const noPartitionRuns = path.join(noPartition.folder, 'runs');
+  const HELD_OUT_TOKENS = [CANARY, 'held-out-run', 'O-101', HELD_OUT_WITNESS];
+  for (const args of [[], ['--from-working-tree']]) {
+    const refused = cli(noPartition, 'preflight', args);
+    // The held-out scan of the run directory comes first, so a preflight that reaches the pipeline fails here, naming the step ID.
+    const heldOutInRuns = holding(noPartition.folder, HELD_OUT_TOKENS).filter((hit) => hit.startsWith('runs/'));
+    assert.deepEqual(
+      heldOutInRuns,
+      [],
+      `preflight ${args.join(' ')} left the held-out partition in a run directory: ${heldOutInRuns.join(' | ')}`,
+    );
+    assert.equal(refused.status, 64, `preflight ${args.join(' ')} over a partitionPlan: ${refused.output}`);
+    assert.match(
+      refused.output,
+      /declares a partitionPlan; name the partition with --partition development or --partition held-out/,
+      `the refusal names the flag and both values: ${refused.output}`,
+    );
+    assert.equal(launchCount(noPartition), 0, `preflight ${args.join(' ')} launched the target before refusing`);
+    assert.equal(fs.existsSync(noPartitionRuns), false, `preflight ${args.join(' ')} made a run directory before refusing`);
+  }
+  // A folder whose evaluation.json cannot be read is still `check`'s finding, so the refusal never hides an authoring defect.
+  const noPartitionManifest = path.join(noPartition.folder, 'evaluation.json');
+  const noPartitionOriginal = fs.readFileSync(noPartitionManifest);
+  fs.writeFileSync(noPartitionManifest, '{ not json');
+  try {
+    const unreadable = cli(noPartition, 'preflight');
+    assert.equal(unreadable.status, 10, `an unreadable evaluation.json: ${unreadable.output}`);
+  } finally {
+    fs.writeFileSync(noPartitionManifest, noPartitionOriginal);
+  }
+  // The refusal comes before `check`: a folder that carries a `check` finding outside `evaluation.json` still exits 64 with the refusal
+  // and none of the finding, where a refusal placed after `check` would exit 10 with the finding first.
+  const noPartitionContract = path.join(noPartition.folder, 'contract.json');
+  const noPartitionContractOriginal = fs.readFileSync(noPartitionContract);
+  try {
+    const contract = read(noPartitionContract);
+    contract.oracles[0].polarity = 'bogus';
+    write(noPartitionContract, contract);
+    const checked = cli(noPartition, 'check');
+    assert.equal(checked.status, 10, `the planted contract defect is a check finding: ${checked.output}`);
+    assert.match(checked.output, /^contract\.json: \[engine-schema\] \/oracles\/0\/polarity /m, checked.output);
+    const refusedBeforeCheck = cli(noPartition, 'preflight');
+    assert.equal(
+      refusedBeforeCheck.status,
+      64,
+      `a flagless preflight over a check finding must refuse first: ${refusedBeforeCheck.output}`,
+    );
+    assert.match(
+      refusedBeforeCheck.output,
+      /declares a partitionPlan; name the partition with --partition development or --partition held-out/,
+      `the refusal comes before check: ${refusedBeforeCheck.output}`,
+    );
+    assert.doesNotMatch(
+      refusedBeforeCheck.output,
+      /^\S+: \[[a-z-]+\] /m,
+      `the refusal ran after check and printed its finding: ${refusedBeforeCheck.output}`,
+    );
+  } finally {
+    fs.writeFileSync(noPartitionContract, noPartitionContractOriginal);
+  }
+  // The CI `preflight-live` check is no authoring step: it calls the same function with no refusal and qualifies every partition,
+  // so the plan's merge tier still launches the held-out request and exits 0.
+  const mergeTier = cli(noPartition, 'ci', ['--tier', 'merge']);
+  assert.equal(mergeTier.status, 0, `ci --tier merge over a partitionPlan: ${mergeTier.output}`);
+  assert.ok(
+    launchesSince(noPartition, 0).some(({ request }) => request === HELD_OUT_REQUEST),
+    'the preflight-live check no longer qualifies every partition',
+  );
+  // The reference tells a maintainer about the refusal where it describes `preflight`.
+  const cliReference = fs.readFileSync(path.join(__dirname, '..', 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  assert.match(
+    cliReference,
+    /declares a `partitionPlan`, `--partition` is required: a `preflight` with no `--partition` exits 64 and names the flag and both values/,
+    'the CLI reference does not describe the preflight refusal',
+  );
+  // The refusal belongs to `preflight`: `run` and `score` keep their flagless meaning, which for `run` is both partitions.
+  const beforeRun = launchCount(noPartition);
+  const noPartitionRun = cli(noPartition, 'run');
+  assert.equal(noPartitionRun.status, 0, `run with no partition over a partitionPlan: ${noPartitionRun.output}`);
+  assert.ok(
+    launchesSince(noPartition, beforeRun).some(({ request }) => request === HELD_OUT_REQUEST),
+    'a flagless run no longer runs both partitions',
+  );
+  assert.equal(cli(noPartition, 'score').status, 0);
 
   // Development first: it launches nothing of the held-out partition, and its run directory, scores and output hold none of it.
   mark = launchCount(flow);
@@ -3922,9 +4019,12 @@ try {
       assert.ok(launchesSince(gamed, before).length > 0, `${name}: the development ${command} launched nothing`);
       assert.equal(development.output.includes('canary-garbage'), false, development.output);
     }
-    for (const args of [['--partition', 'held-out'], []]) {
-      const refused = gameRan(edit, { command: 'preflight', args });
-      assert.equal(refused.status, 10, `${name} ${args.join(' ')}: ${refused.output}`);
+    for (const [command, args] of [
+      ['preflight', ['--partition', 'held-out']],
+      ['run', []],
+    ]) {
+      const refused = gameRan(edit, { command, args });
+      assert.equal(refused.status, 10, `${name} ${command} ${args.join(' ')}: ${refused.output}`);
       assert.match(
         refused.output,
         /corpus\/held-out\/gameability\/P-005\.json|probes\/P-005\.probe\.json takes the gameability route under a partitionPlan/,
@@ -4042,7 +4142,7 @@ try {
     }
     for (const [command, args] of [
       ['preflight', ['--partition', 'held-out']],
-      ['preflight', []],
+      ['run', []],
       ['check', []],
     ]) {
       const refused = gameRan(edit, { command, args, stale: true, cleanup });
@@ -4070,7 +4170,7 @@ try {
   }
   for (const [command, args] of [
     ['preflight', ['--partition', 'held-out']],
-    ['preflight', []],
+    ['run', []],
     ['check', []],
   ]) {
     const refused = gameRan(variantSpelling, { command, args, stale: true });
@@ -4102,7 +4202,7 @@ try {
   }
   for (const [command, args] of [
     ['preflight', ['--partition', 'held-out']],
-    ['preflight', []],
+    ['run', []],
     ['check', []],
   ]) {
     // The index follows the edit, so the refusal is the plan reader's and no stale index stands in for it.
@@ -4133,7 +4233,7 @@ try {
   );
   for (const [command, args] of [
     ['preflight', ['--partition', 'held-out']],
-    ['preflight', []],
+    ['run', []],
     ['check', []],
   ]) {
     const stale = gameRan(staleAnswers, { command, args, stale: true });

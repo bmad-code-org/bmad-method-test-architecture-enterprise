@@ -52,7 +52,7 @@
           "items": { "enum": ["pull-request", "merge", "schedule", "release", "manual-dispatch"] }
         },
         "kind": {
-          "description": "evaluate: run by tea-evaluate ci through the check's id, whose command records the tea-evaluate argv a reader can run by hand; a pipeline runs tea-evaluate ci --tier once per tier. gate: an eval-quality-gates command the adopter adopted, run as a child process with no shell.",
+          "description": "evaluate: run by tea-evaluate ci through the check's id, whose command records the tea-evaluate argv a reader can run by hand, except preflight-live under a partitionPlan, which ci alone runs over every partition; a pipeline runs tea-evaluate ci --tier once per tier. gate: an eval-quality-gates command the adopter adopted, run as a child process with no shell.",
           "enum": ["evaluate", "gate"]
         },
         "command": {

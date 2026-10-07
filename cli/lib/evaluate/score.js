@@ -130,6 +130,7 @@ const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes } = require('./score-inputs');
 const {
   WorkspaceRefusal,
+  cleanUpOnSignal,
   makePrivateParent,
   makeScratchDirectory,
   releaseScratchDirectory,
@@ -584,6 +585,18 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     });
   }
   const scratch = [];
+  const removeScratch = () => {
+    // A staging directory that could not be removed after its call is tried again here.
+    while (scratch.length > 0) {
+      try {
+        removeScratchDirectory(scratch.pop());
+      } catch {
+        // It stays on disk under the system's temporary directory; the score's own result is already decided.
+      }
+    }
+  };
+  // A score that makes its own private parent (a replay hands over a staging root, and its `ci` owns the cleanup) removes it on a signal.
+  const release = stagingRoot === undefined ? cleanUpOnSignal([], new AbortController(), { onSignal: removeScratch }) : () => {};
   try {
     try {
       if (stagingRoot === undefined) makePrivateParent(scratch);
@@ -610,14 +623,8 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       optedOutNote,
     });
   } finally {
-    // A staging directory that could not be removed after its call is tried again here.
-    while (scratch.length > 0) {
-      try {
-        removeScratchDirectory(scratch.pop());
-      } catch {
-        // It stays on disk under the system's temporary directory; the score's own result is already decided.
-      }
-    }
+    release();
+    removeScratch();
     writer.close();
   }
 }
@@ -643,7 +650,7 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     let failure = null;
     let stageFailed = false;
     try {
-      const result = runEngineStage('score', args, {
+      const result = await runEngineStage('score', args, {
         folder,
         scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
@@ -923,7 +930,7 @@ async function strengthAggregateStep({
     args.push('--floors', writer.pathOf(floorsRelative), '--policy', inRun(runDirectory, index.policy), '--out', produced);
     let result;
     try {
-      result = runEngineStage(AGGREGATE_STAGE, args, {
+      result = await runEngineStage(AGGREGATE_STAGE, args, {
         folder,
         scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),

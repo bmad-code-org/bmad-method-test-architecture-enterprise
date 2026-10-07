@@ -108,10 +108,11 @@ const OTHER = 3;
  * has `commandLength` arguments has room for the rest at three a mount, and for at most `MAX_HIDDEN_SOCKETS`.
  *
  * @param {number} commandLength the arguments of the call's Bubblewrap command, `--args <descriptor>` included
+ * @param {number} [argumentsPerMount] the arguments one hidden socket takes: three for the empty device file a target's call mounts, six for the bind and the empty device file of the evaluation layer (Story 1.88)
  * @returns {number}
  */
-function socketBudget(commandLength) {
-  const room = Math.floor((BUBBLEWRAP_ARGUMENT_LIMIT - commandLength - ARGUMENT_MARGIN) / ARGUMENTS_PER_MOUNT);
+function socketBudget(commandLength, argumentsPerMount = ARGUMENTS_PER_MOUNT) {
+  const room = Math.floor((BUBBLEWRAP_ARGUMENT_LIMIT - commandLength - ARGUMENT_MARGIN) / argumentsPerMount);
   return Math.max(0, Math.min(MAX_HIDDEN_SOCKETS, room));
 }
 
@@ -367,6 +368,41 @@ function listHostSockets({
   };
 }
 
+/** The socket files this process serves for the evaluation layer's processes, by real path, each with the device and inode it had when it began to listen. */
+const served = new Map();
+
+/**
+ * Records a socket this process serves, so the evaluation layer leaves it connectable (Story 1.88).
+ * `bridge.js` calls it when the bridge's socket listens.
+ * The record holds the real path, the device and the inode, so a socket another process moved to that path is a different file and `isServedSocket` refuses it.
+ *
+ * @param {string} file the socket's path
+ * @param {object} [fileSystem]
+ * @returns {() => void} the call that takes the record off when the socket closes
+ */
+function registerServedSocket(file, fileSystem = fs) {
+  const real = fileSystem.realpathSync.native(file);
+  const stat = fileSystem.lstatSync(real);
+  if (!stat.isSocket()) throw new Error(`${real} is not a socket file`);
+  const entry = { dev: stat.dev, ino: stat.ino };
+  served.set(real, entry);
+  return () => {
+    if (served.get(real) === entry) served.delete(real);
+  };
+}
+
+/** Whether `real`, a real path, is a socket this process serves: the recorded path with the recorded device and inode. */
+function isServedSocket(real, fileSystem = fs) {
+  const entry = served.get(real);
+  if (entry === undefined) return false;
+  try {
+    const stat = fileSystem.lstatSync(real);
+    return stat.isSocket() && stat.dev === entry.dev && stat.ino === entry.ino;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The real paths `listHostSockets` names, for a caller that wants no more than the list; a call the list refuses throws.
  *
@@ -389,8 +425,10 @@ module.exports = {
   SYSTEM_UID_MAX,
   UNIX_SOCKET_TABLE,
   hostPathSockets,
+  isServedSocket,
   isSocketFile,
   listHostSockets,
+  registerServedSocket,
   socketBudget,
   socketTablePaths,
 };

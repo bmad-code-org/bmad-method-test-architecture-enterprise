@@ -1194,8 +1194,8 @@ async function ciEvidence(contract, { storedCase = identity } = {}) {
         return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
       };
       // Each oracle reads the workflow of its own project's leg, through the
-      // scorer `ciOracleSpecs` pairs with it: `workflowMentions` over the
-      // literal the oracle checks. The run-measured oracle's scorer is a
+      // scorer `ciOracleSpecs` pairs with it: `workflowHoldsToken` over the
+      // literal the oracle checks, or over its `contractPattern`. The run-measured oracle's scorer is a
       // constant, and the claim it states is true by construction here: every
       // observation above exits 0 and carries a workflow artifact.
       const workflowBySet = new Map(selected.map((leg) => [leg.setId, workflowByCase.get(leg.caseId)]));
@@ -1205,7 +1205,10 @@ async function ciEvidence(contract, { storedCase = identity } = {}) {
         // Every stored workflow is meant to be a correct one: every requested
         // element present, nothing unrequested, no rule violation. A row of
         // CI_CORRECT_RUNS that names another project's workflow, or one that
-        // deviates, fails the oracle it no longer satisfies.
+        // deviates, fails the oracle it no longer satisfies where the oracles'
+        // vocabulary can state the deviation. test:probe-corpus also scores each
+        // stored workflow with the harness's own scoreRun, which reads the structures
+        // a string cannot.
         oracleDispositions: scoredDispositions(
           contract,
           specs,

@@ -111,6 +111,7 @@ const {
   PartitionPlanError,
   committedProbes,
   loadContractView,
+  partitionRequired,
   readHeldOutResponse,
   selectPartition,
   unknownPartition,
@@ -136,6 +137,7 @@ const {
   removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadMaskRecords,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   journalDirectory,
@@ -452,16 +454,23 @@ function writeQualificationEvidence(writer, directory, { probe, evidence, worksp
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @param {string} [options.partition] `development` or `held-out`; everything when absent. Only that partition's probes are
  *   qualified, over the contract that partition runs (`partition.js`, Story 1.51)
+ * @param {boolean} [options.requirePartition] refuse with exit 64 a call that names no partition over an evaluation that declares a
+ *   `partitionPlan`, since it would derive the both view and launch the held-out request (Story 1.111).
+ *   The command line sets it.
+ *   The CI `preflight-live` check, which is no authoring step, calls with the both view
  * @returns {Promise<PreflightOutcome>}
  */
-function runPreflightCommand(folder, { partition, ...options } = {}) {
+function runPreflightCommand(folder, { partition, requirePartition = false, ...options } = {}) {
   const unknown = unknownPartition(partition);
   if (unknown !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...unknown }));
   let selection;
   try {
+    const evaluation = readJson(path.join(folder, MANIFEST_NAME));
+    const missing = requirePartition ? partitionRequired(partition, evaluation) : null;
+    if (missing !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...missing }));
     selection = selectPartition({
       partition,
-      heldOutProbes: readJson(path.join(folder, MANIFEST_NAME)).heldOutProbes ?? [],
+      heldOutProbes: evaluation.heldOutProbes ?? [],
       probes: partition === undefined ? [] : committedProbes(folder),
     });
   } catch {
@@ -675,6 +684,7 @@ async function pipeline(
     const invocationId = newInvocationId();
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
+    reclaimDeadMaskRecords({ log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
     const gameability = gameabilityProbes(folder, { view, selectedProbeIds });
@@ -874,11 +884,11 @@ async function runInWorkspaces({
   // An engine stage writes its output into a private directory made for the
   // call, which no target has seen, and the runtime copies it into the run
   // directory through its writer, which holds the digest of what it wrote.
-  const engineStage = (stage, args, output) => {
+  const engineStage = async (stage, args, output) => {
     const staging = makeScratchDirectory(scratch, 'tea-evaluate-engine-');
     try {
       const produced = path.join(staging, output);
-      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
+      const result = await runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
       if (fs.existsSync(produced)) writer.copyIn(output, produced);
       return result;
     } finally {
@@ -890,7 +900,7 @@ async function runInWorkspaces({
     ['compile', 'eval-contract.json'],
     ['seal', 'sealed-evaluator-brief.json'],
   ]) {
-    const result = engineStage(stage, ['--in', contractPath], output);
+    const result = await engineStage(stage, ['--in', contractPath], output);
     if (result.exitCode !== 0) {
       return outcome({
         stage: 'engine',
@@ -1213,7 +1223,7 @@ async function runInWorkspaces({
     // The CLI reads the run directory next: it must hold what the runtime wrote, and nothing else.
     writer.verify('after the legs');
 
-    verdict = engineStage(
+    verdict = await engineStage(
       'preflight',
       ['--contract', contractPath, '--probes', probesPath, '--observations', observationsPath, '--run-id', invocationId],
       'preflight-verdict.json',

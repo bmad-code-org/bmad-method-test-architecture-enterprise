@@ -424,6 +424,7 @@ function checkFixturePlan() {
 
 const TIERS_SET_ID = 'evaluation-tiers-granite-router';
 const EDIT_SET_ID = 'evaluation-edit-ember-ledger';
+const FULL_SET_ID = 'full-meridian-storefront';
 const GATE_SET_ID = 'evaluation-gate-slate-publisher';
 /** The event a plan trigger starts, as the step maps it for a pipeline that lists no merge_group. */
 const EVENT_OF_TRIGGER = { 'pull-request': 'pull_request', merge: 'push', schedule: 'schedule', release: 'release' };
@@ -1058,6 +1059,74 @@ async function checkCorpusGuards() {
       'standaloneStep is declared and is not a boolean',
     ],
     ['checkIds that is empty', 'command-evaluation-ci-pr', { checkIds: [] }, 'checkIds is declared and is not a non-empty list'],
+    [
+      'contractPattern that is empty',
+      'command-evaluation-install',
+      { contractPattern: '' },
+      'contractPattern is declared and is not a non-empty string',
+    ],
+    [
+      'contractPattern with no contractToken',
+      'command-evaluation-install',
+      { contractToken: null, contractPattern: '^npm install --prefix evals$' },
+      'declares a contractPattern and no contractToken',
+    ],
+    [
+      'contractPattern that is not anchored at its start',
+      'command-evaluation-install',
+      { contractPattern: String.raw`[\s\S]*npm install --prefix ['"]?evals['"]?[\s\S]*$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern that is not anchored at its end',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm install --prefix ['"]?evals['"]?` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern with an alternation at the top level',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^npm ci$|^[\s\S]*npm install --prefix evals[\s\S]*$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern whose final dollar is escaped',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm install --prefix evals\$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern that is not a regular expression',
+      'command-evaluation-install',
+      { contractPattern: '^(npm install$' },
+      'is not a regular expression',
+    ],
+    [
+      'contractPattern that does not match its contractToken',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm ci[\s\S]*$` },
+      'does not match its own contractToken',
+    ],
+    [
+      "contractPattern that does not match the element's command",
+      'command-evaluation-ci-pr',
+      { contractPattern: '^tea-evaluate ci --evaluation evals/grader --tier pr$' },
+      'does not match the command',
+    ],
+    [
+      'contractPattern of a gate that does not match its contractToken',
+      'gate-burn-in',
+      { contractToken: 'burn-out:' },
+      'does not match its own contractToken',
+      FULL_SET_ID,
+    ],
+    [
+      'contractPattern of a gate that is not anchored',
+      'gate-burn-in',
+      { contractPattern: String.raw`^[\s\S]*burn-in:` },
+      'contractPattern is not anchored',
+      FULL_SET_ID,
+    ],
     ['checkIds without standaloneStep', 'command-evaluation-ci-pr', { standaloneStep: false }, 'needs standaloneStep'],
     ['condition that is empty', 'artifact-evaluation-runs', { condition: '' }, 'condition is declared and is not a non-empty string'],
     ['condition beside onFailureOnly', 'artifact-evaluation-runs', { onFailureOnly: true }, 'declares a condition and onFailureOnly'],
@@ -1133,6 +1202,15 @@ async function checkCorpusGuards() {
       `validateCorpus does not refuse ${label} (${problems.length} problems)`,
     );
   }
+  // A gate's command is the one its job loops, which the pattern of the gate does not state, so the match with the command binds a command element only.
+  const gate = structuredClone(baseline);
+  gate.fixtureSets.find((set) => set.id === FULL_SET_ID).expectedElements.find((entry) => entry.id === 'gate-burn-in').command =
+    'npm run test:e2e -- --repeat-each=10';
+  const gateProblems = (await validateCorpus(gate)).problems;
+  check(
+    !gateProblems.some((problem) => problem.includes('does not match the command')),
+    `validateCorpus holds the contractPattern of a gate to its command: ${gateProblems.join('; ')}`,
+  );
 }
 
 function checkStoredCapture() {
