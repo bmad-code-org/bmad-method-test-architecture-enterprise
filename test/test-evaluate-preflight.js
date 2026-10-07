@@ -1815,7 +1815,10 @@ function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT, { grantRun
 
 /** Lists where the runner is installed in `systemPaths` of every registry entry that names it, as an adopter's evaluation does. */
 function grantRunnerInstall(evaluation) {
-  for (const entry of evaluation.registry ?? []) if (entry.target === 'tea-skill-runner') entry.systemPaths = RUNNER_INSTALL;
+  // The install's directories and the bin directory that holds the link `PATH` resolves, which the audit lists as well.
+  runnerPath();
+  const grants = [...RUNNER_INSTALL, fs.realpathSync(binDirectory)];
+  for (const entry of evaluation.registry ?? []) if (entry.target === 'tea-skill-runner') entry.systemPaths = grants;
 }
 
 /**
@@ -1977,10 +1980,10 @@ function checkRunnerOutsideAllowlist() {
       `the refusal counts ${opened} path(s); the runner's sources and the package it requires are at least two:\n${output}`,
     );
     check(
-      /isolation manifest violation: the (preflight legs|trials) opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(
+      /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist.*so every trial will too, and `score` refuses a trial that does \(exit 3\)/.test(
         output,
-      ),
-      `the refusal does not say score would exit 3:\n${output}`,
+      ) || /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(output),
+      `the refusal does not say why score would exit 3:\n${output}`,
     );
     for (const setup of [
       '`node_modules/.bin/tea-skill-runner`',
@@ -2010,16 +2013,22 @@ function checkRunnerOutsideAllowlist() {
     );
   }
 
-  // `run` refuses it too, before any trial: no trial set, and the same exit and message.
+  // `run` refuses it from the trials it sealed, the set `score` judges: exit 3 naming the paths, the trial sets sealed and complete.
   const bareRun = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
   writeScoringPolicy(bareRun);
   const refusedRun = runEvaluate(['run', '--evaluation', bareRun]);
   check(refusedRun.status === 3, `run over the bare runner name exited ${refusedRun.status}; expected 3\n${refusedRun.output}`);
   refusal(refusedRun.output);
   const runDirectory = runDirectoryOf(bareRun);
+  const runRecord = runDirectory === null ? {} : readJson(path.join(runDirectory, 'run.json'));
   check(
-    runDirectory !== null && !fs.existsSync(path.join(runDirectory, 'trial-sets')),
-    'the refused run sealed a trial set, so a trial ran before the setup was refused',
+    runRecord.completed === true && runRecord.outcome?.exitCode === 3 && runRecord.outcome?.stage === 'trial',
+    `run.json records ${JSON.stringify({ completed: runRecord.completed, outcome: runRecord.outcome })}; expected a completed run that ended with exit 3 at the trial stage`,
+  );
+  const refusedScore = runEvaluate(['score', '--evaluation', bareRun]);
+  check(
+    refusedScore.status === 3 && refusedScore.output.includes('mount outside allowlist: '),
+    `score over the refused run exited ${refusedScore.status}; expected the same exit 3 with the isolation violation\n${refusedScore.output}`,
   );
 
   // Setup one: the bare name, with the directories the runner runs from listed in `systemPaths`.

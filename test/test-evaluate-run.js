@@ -6081,7 +6081,7 @@ async function checkEvaluatorSwap() {
     // The swapping process's own report: it saw the evaluator start, then attempted the swap.
     // Under Bubblewrap the swapper ends with the target's process namespace, before the evaluator launches.
     const namespaced = confined && process.platform === 'linux';
-    // The refused swap is an observed mount, which the run refuses; under Bubblewrap the swapper never gets that far.
+    // The refused swap is an observed mount, which the run refuses (exit 3). Under Bubblewrap (verified in the CI image) the swapper ends with the target's process namespace before it swaps, so no mount is observed and the run exits 0.
     check(
       confined && !namespaced ? refusesMounts(ran) : ran.status === 0,
       `${label}: run exited ${ran.status}; expected ${confined && !namespaced ? 3 : 0}\n${ran.output}`,
@@ -7755,13 +7755,12 @@ async function checkWithheldHistoryRun() {
       VERDICT_WHEN: context,
       VERDICT_DO: 'probe-git',
     });
-    // The probe's reads of the project's git directory are mounts outside the allowlist wherever the audit watches: the legs of the
-    // pristine workspace and the trials. A run refuses them there (exit 3) and carries on where nothing audits.
-    const audited = context === 'pristine' || context.startsWith('trial-');
+    // The probe's reads of the project's git directory are mounts outside the allowlist in a trial, which a run refuses (exit 3) once
+    // the trials are sealed; a leg of a preflight is judged on its own (`checkChanceMounts`), and the other workspaces are not audited.
+    const audited = context.startsWith('trial-');
     check(
       audited
-        ? contextRan.status === 3 &&
-            /isolation manifest violation: the (preflight legs|trials) opened \d+ path\(s\)/.test(contextRan.output)
+        ? contextRan.status === 3 && /isolation manifest violation: the trials opened \d+ path\(s\)/.test(contextRan.output)
         : contextRan.status === 0,
       `a confined run whose ${context} workspace probed git exited ${contextRan.status}; expected ${audited ? 3 : 0}\n${contextRan.output}`,
     );
@@ -7793,6 +7792,44 @@ async function checkWithheldHistoryRun() {
       );
     }
   }
+}
+
+/**
+ * A path only some preflight legs opened is chance evidence (the reviewer's reproduction): the stub reads
+ * a file outside the workspace in the pristine workspace on the legs whose request holds `alpha` and on no other leg and no trial, so
+ * `preflight` prints a note naming the path and the leg and exits 0, `run` seals trials that opened nothing and exits 0, and `score` agrees. The same
+ * ask on every leg and every trial is the structural case: `preflight` exits 3 and `run` exits 3 from the trials it sealed.
+ */
+async function checkChanceMounts() {
+  const outside = path.join(tempDir('chance-outside'), 'host-notes.txt');
+  fs.writeFileSync(outside, 'a file no leg was granted\n');
+  const some = makeProject('chance-mounts');
+  const env = { ...some.env, VERDICT_WHEN: 'pristine', VERDICT_DO: 'read-ungranted@alpha', VERDICT_TOUCH: outside };
+  const preflight = evaluate(['preflight', '--evaluation', some.folder], env);
+  check(
+    preflight.status === 0 &&
+      /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs did not/.test(preflight.output),
+    `preflight over a target that read a file on some legs exited ${preflight.status}; expected 0 with a note naming the path and the leg\n${preflight.output}`,
+  );
+  check(!preflight.output.includes('isolation manifest violation'), `preflight refused a path only some legs opened\n${preflight.output}`);
+  const ran = evaluate(['run', '--evaluation', some.folder], env);
+  check(ran.status === 0, `run over a target that read a file on some legs exited ${ran.status}; expected 0\n${ran.output}`);
+  const scored = evaluate(['score', '--evaluation', some.folder], some.env);
+  check(scored.status < 3, `score over the run exited ${scored.status}; expected the run's verdict below 3\n${scored.output}`);
+
+  const every = makeProject('every-leg-mounts');
+  const structural = evaluate(['preflight', '--evaluation', every.folder], {
+    ...every.env,
+    VERDICT_WHEN: 'pristine',
+    VERDICT_DO: 'read-ungranted',
+    VERDICT_TOUCH: outside,
+  });
+  // A leg whose read the kernel's log lost leaves no path common to every leg, so a refusal that does not come is a lost report.
+  checkReport(
+    structural.status === 3 &&
+      /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist/.test(structural.output),
+    `preflight over a target that read a file on every leg exited ${structural.status}; expected 3 naming the paths\n${structural.output}`,
+  );
 }
 
 /** Every `probe-git` report in a run directory's records (a trial, a leg, a qualification arm), parsed. */
@@ -21601,6 +21638,7 @@ const CASES = [
   { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement-audit', lossy: true },
   { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement-audit', lossy: true },
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement-history', lossy: true },
+  { name: 'the paths only some preflight legs opened', body: checkChanceMounts, group: 'confinement-history', lossy: true },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement-history' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement-history' },
   { name: 'the withheld git history pack stages', body: checkWithheldHistoryPackStages, group: 'confinement-history' },

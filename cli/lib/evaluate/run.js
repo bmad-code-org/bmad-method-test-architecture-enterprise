@@ -2012,7 +2012,7 @@ async function completeRun(
   retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
   // A trial set whose manifest lists a mount outside the allowlist is one `score` reads as Invalid (exit 3), so the run does
   // not report success. It stays sealed and complete: `score --run` prints one reason per path from the manifests as written.
-  const mountsRefusal = mountRefusal({ mounts: outsideMounts, folder: context.folder, opened: 'the trials' });
+  const mountsRefusal = mountRefusal({ mounts: outsideMounts, folder: context.folder, who: 'trials' });
   const sealedMessage =
     trialCount === null
       ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`

@@ -90,7 +90,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { confines, layerPrefix, selectConfinement } = require('./confinement');
-const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
+const { chanceMountNotes, mountRefusal, mountsOfEveryLeg } = require('./isolation-allowlist');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
@@ -1152,21 +1152,35 @@ async function runInWorkspaces({
   const probesPath = writer.writeJson('probes.json', probes);
   retractOnSignal.push('probes.json');
   let settled = false;
-  // The pristine workspace's port audits what its legs open outside what they were granted, the check `score` makes of a
-  // trial set's isolation manifest. It is made here, after the qualification, so the audit watches the legs alone.
-  let pristinePort = null;
-  let observedMounts = [];
+  // Each leg of the pristine workspace runs through a port of its own that audits what the leg opens outside what it was granted,
+  // so what every leg opened is told from what one leg did. The ports are made here, after the qualification, one at a time, so
+  // each audit watches its leg alone and ends with it.
+  const legMounts = new Map();
+  const auditedLegs = {
+    async probe(request, signal) {
+      const audited = await registry.createProbePort({
+        cwd: pristine.root,
+        projectRoot: pristine.root,
+        workspace: pristine.top,
+        git: gitAccessOf(pristine),
+        privateRoot: registry.privateRoot,
+        audit: true,
+      });
+      try {
+        const answered = await audited.port.probe(request, signal);
+        // An audit that cannot confirm what it saw leaves the leg unjudged, as it does a trial.
+        legMounts.set(request.probeId, await audited.observedMounts());
+        return answered;
+      } finally {
+        audited.releaseHome();
+      }
+    },
+    // Every leg has a port, and so a home, of its own.
+    resetHome() {},
+  };
   try {
-    pristinePort = await registry.createProbePort({
-      cwd: pristine.root,
-      projectRoot: pristine.root,
-      workspace: pristine.top,
-      git: gitAccessOf(pristine),
-      privateRoot: registry.privateRoot,
-      audit: true,
-    });
     const recorder = recordingPort({
-      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: pristinePort.port },
+      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: auditedLegs },
       routes,
       registry,
       writer,
@@ -1204,15 +1218,8 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
-    // What the audit saw the legs open outside what they were granted, read before anything else runs. An audit that cannot
-    // confirm what it saw leaves the legs unjudged, exit 12, as it does a trial. A plan the engine refused ran no leg.
-    if (recorder.calls() > 0) {
-      try {
-        observedMounts = await pristinePort.observedMounts();
-      } catch (error) {
-        throw stop({ stage: 'leg', exitCode: 12, message: `the legs yield no audit: ${error?.message ?? error}` });
-      }
-    }
+    // A path only some legs opened is chance evidence: the preflight reports it, naming the leg, and its exit does not change.
+    for (const note of chanceMountNotes(legMounts, folder)) log(note);
     // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
     // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64). A plan
     // the engine refused before any leg ran sent nothing to a deployment since the qualification, so nothing is asked.
@@ -1248,17 +1255,17 @@ async function runInWorkspaces({
     );
     settled = true;
   } finally {
-    pristinePort?.releaseHome();
     if (!settled) writer.remove('probes.json');
   }
   for (const entry of [...qualified, ...gameabilityQualified]) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
-  // A passed verdict is refused when the legs opened a path outside the allowlist: `score` reads the same mounts of the trials as
-  // an isolation violation (exit 3), so the setup is refused here, before a run pays for trials that cannot be scored.
-  if (verdict.exitCode === 0) {
+  // A passed `preflight` is refused when every leg of the pristine workspace opened a path outside the allowlist: a target that lives
+  // outside its workspace loads its own files on every launch, so every trial opens them too, and `score` refuses a trial that does
+  // (exit 3). `run` judges the trials' own manifests, the set `score` judges, so it does not refuse on the legs.
+  if (afterVerdict === null && verdict.exitCode === 0) {
     const refusal = mountRefusal({
-      mounts: mountsOutsideAllowlist(observedMounts, [`${pristine.kind} pristine`]),
+      mounts: mountsOfEveryLeg(legMounts, [`${pristine.kind} pristine`]),
       folder,
-      opened: 'the preflight legs',
+      who: 'legs',
     });
     if (refusal !== null) return outcome({ stage: 'leg', exitCode: 3, message: refusal });
   }

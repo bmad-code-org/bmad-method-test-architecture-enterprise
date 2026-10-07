@@ -582,7 +582,7 @@ Every Linux trial records `complete` with no canary sent, since `strace` reports
 A trial that launched nothing (a gameability arm), every trial of a run that opted out and the evaluator qualification attempts of a sealed-brief agent have no entry, and a `records` run has no trials to list.
 A run whose observer fails (the log stream ended, or a read the runtime made never came back through it, or the log reported lost events and the trial listed no read, or the trace of a call holds no start of its target) leaves the trial with no record and exits 12.
 The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
-`preflight` and `run` apply that check themselves: `preflight` audits the legs of its pristine workspace and `run` reads the manifests it seals, and each exits 3 with the paths it found instead of passing a setup `score` would reject.
+`preflight` and `run` apply that check themselves: `run` reads the manifests it seals, and `preflight` audits the legs of its pristine workspace and exits 3 for a path every leg opened, which every trial will open too; each exits 3 with the paths it found instead of passing a setup `score` would reject.
 A registry entry names what its target legitimately reads outside the workspace as absolute `systemPaths`:
 
 ```json
@@ -925,8 +925,9 @@ The steps run in order, each stopping the run with its own exit:
    A deployment that cannot answer stops the run with exit 12, naming the point.
 7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes that remain.
    Its `preflight-verdict.json` is the verdict, and its exit code is the command's exit code, verbatim: 0 when the preflight passed, 3 when it failed.
-8. A passed verdict is then held to the mount allowlist `score` applies to a trial set's isolation manifest. The legs of the pristine workspace run under the same audit as a trial (see [File-system confinement](#file-system-confinement)), and a path they open outside what they were granted exits 3, the exit `score` gives the same path.
-   The message names the first paths and the two setups that work for a target that launches from outside its workspace, `tea-skill-runner` named by its bare name for one: a registry `target` that is a path inside `launch.root` (`node_modules/.bin/tea-skill-runner` over a copy workspace, or over a git workspace with `workspace.provision`), or the bare name with the directories it runs from listed in `systemPaths`.
+8. A passed verdict is then held to the mount allowlist `score` applies to a trial set's isolation manifest. Each leg of the pristine workspace runs under the same audit as a trial (see [File-system confinement](#file-system-confinement)). A path that every one of those legs opened outside what it was granted exits 3, the exit `score` gives a trial that opens it: a target that lives outside its workspace loads its own files on every launch, so every trial opens them too.
+   The message names the first paths and the two setups that work for such a target, `tea-skill-runner` named by its bare name for one: a registry `target` that is a path inside `launch.root` (`node_modules/.bin/tea-skill-runner` over a copy workspace, or over a git workspace with `workspace.provision`), or the bare name with the directories it runs from listed in `systemPaths`, the bin directory that holds its link on `PATH` among them.
+   A path that only some legs opened is no refusal: `preflight` prints a note naming the path and the legs that opened it, and its exit does not change, since `score` judges the trials and not the legs.
    The check grants nothing and widens no allowlist; a run that opted out of confinement observes no path and is not refused.
 
 `runPreflight` computes a verdict of its own, and `preflight` discards it: every verdict comes from the CLI over files you can rerun by hand from the run directory.
@@ -963,7 +964,7 @@ Omitting `--partition` runs both development and held-out probes. `--partition d
 It needs `policy/scoring-policy.json` (exit 10 without it), and every probe on the `clean-control`, `controlled-mutation`, `historical` or `gameability` route (a canary exits 12, since a retry cannot pass).
 The steps run in order in one invocation, each stopping the run with its own exit:
 
-1. The whole preflight, as `preflight` runs it, in the same `runs/<invocationId>/`; a verdict that does not pass, or a mount outside the allowlist that step 8 of `preflight` refuses (exit 3), ends the run with its exit, and no trial runs.
+1. The whole preflight, as `preflight` runs it, in the same `runs/<invocationId>/`; a verdict that does not pass ends the run with its exit, and no trial runs. The mount check of step 8 is `preflight`'s alone; `run` judges the trials' own manifests.
 2. Each clean control qualified: one clean arm in a workspace of its own, whose oracles for the control's behavior must hold (exit 11 otherwise), its evidence under `qualification/<probeId>/baseline-pass.json`.
 3. A `sealed-brief-agent` qualified on the clean arm and on each mutated arm, before any trial (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)); agreement below `evaluatorQualification.minimumAgreement` exits 11 with no trial set.
 4. Each arm a probe needs, `trials` times: the clean arm (`conditionArm: clean`) for the clean controls, one mutated arm per mutation (`mutated:<mutationId>`) for the probes it seeds, one historical arm per pre-fix revision (`historical:<preFixSha>`) or pre-fix deployment (`historical:<release>`), and one gameability arm per gameability probe (`gameability:<probeId>`).
@@ -980,7 +981,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
    Your project is then read once more and the run directory verified again; a change to either exits 12, and the run is recorded as not completed, with its `trial-sets.json` removed.
    Only then does the run's last write replace `run.json` with `completed: true` and the digests of every file `score` reads.
    A run that stopped holds no `trial-sets.json`; when the runtime cannot remove it or record the end in `run.json` (a run directory moved away, say), the exit message says so, and `run.json` still does not say `completed: true`.
-   A run whose sealed isolation manifests list a mount outside the allowlist does not report success: it exits 3 with the message `preflight` gives, since `score` would read the same manifests as Invalid.
+   A run whose sealed isolation manifests list a mount outside the allowlist does not report success: it exits 3 naming the paths the trials opened, since `score` reads the same manifests as Invalid; a target that lives outside its workspace therefore runs its trials and is refused when they are sealed.
    Its trial sets stay sealed and `run.json` records `completed: true` with that exit in `outcome`, so `score --run <invocationId>` prints one `mount outside allowlist` reason per path.
 
 `run.json` records how every `preflight` and `run` invocation ended (`outcome`: the stage, the exit and the message; for an interrupting signal, the stage `signal` and the signal's name), and a `run` records `completed`, true only for a run that sealed its trial sets.

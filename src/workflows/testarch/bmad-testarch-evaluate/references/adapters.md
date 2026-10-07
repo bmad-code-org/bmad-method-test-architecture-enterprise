@@ -43,7 +43,7 @@ Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the ski
 }
 ```
 
-The bare `target` resolves through `PATH` to a TeA install outside the trial's workspace, and `score` rejects every file of that install as a mount outside the allowlist, so `preflight` and `run` refuse the entry with exit 3 until it is one of two setups. Either list the install's directories (TeA's `cli` directory and `package.json`, and the `commander` package under the same `node_modules`) in `systemPaths` of the entry, or make `target` the path `node_modules/.bin/tea-skill-runner` with TeA installed inside `launch.root`, over a copy workspace or over a git workspace with `workspace.provision`.
+The bare `target` resolves through `PATH` to a TeA install outside the trial's workspace, and `score` rejects every file of that install as a mount outside the allowlist, so `preflight` refuses the entry with exit 3 (and `run` refuses its sealed trials) until it is one of two setups. Either list the install's directories (TeA's `cli` directory and `package.json`, the `commander` package under the same `node_modules`, and the `node_modules/.bin` directory that holds the link `PATH` resolves) in `systemPaths` of the entry, or make `target` the path `node_modules/.bin/tea-skill-runner` with TeA installed inside `launch.root`, over a copy workspace or over a git workspace with `workspace.provision`.
 
 ## Agent's own non-interactive command
 

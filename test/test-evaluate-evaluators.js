@@ -2463,10 +2463,10 @@ async function checkBridgePrivateDirectories() {
         VERDICT_REPORT: String(listener.port),
       });
       // The attempts at the bridge's private directories are mounts outside the allowlist, which a confined run refuses (exit 3) once
-      // its trials are sealed; the opted-out control observes none. Under Bubblewrap the target's process namespace ends with it.
+      // its trials are sealed; the opted-out control observes none.
       const refused = ran.status === 3 && /isolation manifest violation: the trials opened \d+ path\(s\)/.test(ran.output);
       check(
-        unconfined ? ran.status === 0 : refused || (namespaced && ran.status === 0),
+        unconfined ? ran.status === 0 : refused,
         `${label}: the run exited ${ran.status}; expected ${unconfined ? 0 : 3}\n${ran.output}`,
       );
       const runDirectory = runDirectoryOf(project.folder);
