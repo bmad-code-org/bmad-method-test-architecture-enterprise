@@ -10,6 +10,8 @@
 # The workflows restore DEB_CACHE (~/.cache/tea-linux-sandbox-debs) with actions/cache, keyed by the runner image, before this runs.
 # A restored cache installs from its packages with no update and no download, so a stalled mirror cannot reach a shard at all; a
 # miss, or cached packages that do not install, takes the mirror path below and leaves its downloads in DEB_CACHE for the cache to save.
+# DEB_CACHE sits in the runner user's home, which apt's `_apt` download user cannot enter, so that one install downloads as root
+# (APT::Sandbox::User=root), as apt would anyway after warning that it could not.
 #
 # The install used to be one `apt-get update && apt-get install` with no bound, so a mirror that accepted a connection and went
 # silent held a shard for the job's whole 20 minutes. Now:
@@ -37,7 +39,7 @@ APT_OPTIONS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::http
 # shellcheck disable=SC2329 # run through `bash -c` with its body passed by `declare -f`
 install_once() {
   sudo apt-get "${APT_OPTIONS[@]}" update &&
-    sudo apt-get "${APT_OPTIONS[@]}" -o "Dir::Cache::Archives=${DEB_CACHE}" install -y -q --no-install-recommends bubblewrap strace
+    sudo apt-get "${APT_OPTIONS[@]}" -o "Dir::Cache::Archives=${DEB_CACHE}" -o APT::Sandbox::User=root install -y -q --no-install-recommends bubblewrap strace
 }
 
 # Both commands answer on PATH: an install that exits 0 and leaves either missing is no install.

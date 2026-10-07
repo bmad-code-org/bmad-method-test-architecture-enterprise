@@ -145,7 +145,9 @@ function checkScript() {
   );
 
   check(
-    first.log[1].includes(`-o Dir::Cache::Archives=${first.debCache}`) && !first.partial,
+    first.log[1].includes(`-o Dir::Cache::Archives=${first.debCache}`) &&
+      first.log[1].includes('-o APT::Sandbox::User=root') &&
+      !first.partial,
     `a mirror install did not download into the package cache or left apt's partial directory: ${first.log[1]}`,
   );
 
