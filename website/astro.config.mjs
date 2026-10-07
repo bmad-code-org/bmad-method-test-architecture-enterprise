@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import mermaid from 'astro-mermaid';
 import rehypeMarkdownLinks from './src/rehype-markdown-links.js';
 import rehypeBasePaths from './src/rehype-base-paths.js';
 import { getSiteUrl } from './src/lib/site-url.js';
@@ -18,6 +19,11 @@ export default defineConfig({
 
   // Disable aggressive caching in dev mode
   vite: {
+    build: {
+      // Mermaid's own chunks (diagram parsers, the renderer) run 400 to 700 kB each. A page loads them on
+      // demand, and only when it holds a diagram, so they are not part of any page's first load.
+      chunkSizeWarningLimit: 800,
+    },
     optimizeDeps: {
       force: true, // Always re-bundle dependencies
     },
@@ -36,6 +42,13 @@ export default defineConfig({
   },
 
   integrations: [
+    // Renders ```mermaid fences in the reader's browser, so the build needs no headless browser.
+    // It must come before starlight(): Starlight's code renderer would otherwise claim the fence
+    // first and print it as raw source. The docs draw their diagrams with light fills and black
+    // text (several open with a `%%{init: {'theme':'base', ...}}%%` directive for GitHub), so
+    // every diagram renders in mermaid's light theme and sits on a light card in both site
+    // themes (see custom.css). A dark diagram theme would put light text on those pale fills.
+    mermaid({ autoTheme: false, theme: 'default', enableLog: false }),
     sitemap(),
     starlight({
       title: 'Test Architect (TEA)',

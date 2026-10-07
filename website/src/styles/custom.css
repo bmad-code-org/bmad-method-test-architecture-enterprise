@@ -374,6 +374,14 @@ table {
   width: 100%;
 }
 
+/* A wide table scrolls inside its own block on a phone instead of widening the page. */
+@media (max-width: 50rem) {
+  .sl-markdown-content table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 :root[data-theme='dark'] table {
   border-color: rgba(59, 130, 246, 0.1);
 }
@@ -514,5 +522,30 @@ footer {
   header.header .header.sl-flex {
     padding-left: 1rem;
     padding-right: 3rem;
+  }
+}
+
+/* ============================================
+   MERMAID DIAGRAMS
+   ============================================ */
+/* The docs draw diagrams with light fills and black text, so a rendered diagram sits on a light
+   card in both themes. The selector outweighs the rules astro-mermaid injects at runtime. */
+:root .sl-markdown-content pre.mermaid[data-processed] {
+  background-color: #fff;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+}
+
+/* astro-mermaid fits each diagram to the column. On a phone that shrinks a wide diagram
+   below a readable size, so give the diagram a floor width and let the card scroll sideways.
+   `safe center` keeps the left edge reachable when the diagram is wider than the card. */
+.sl-markdown-content pre.mermaid {
+  justify-content: safe center;
+  overflow-x: auto;
+}
+
+@media (max-width: 50rem) {
+  .sl-markdown-content pre.mermaid svg {
+    min-width: 40rem;
   }
 }

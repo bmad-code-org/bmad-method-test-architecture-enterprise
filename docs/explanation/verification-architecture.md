@@ -20,7 +20,6 @@ flowchart TB
     L[Test level selection<br/>+ duplicate coverage guard]
     N[NFR criteria<br/>+ gate decision matrix]
     T[Requirements to evidence<br/>traceability]
-    G[Gate decision<br/>PASS / CONCERNS / FAIL / WAIVED]
   end
   CORE --> X{Execution target}
   X --> W[Web browser<br/>Playwright, Cypress]
@@ -33,7 +32,7 @@ flowchart TB
   M --> E
   B --> E
   O --> E
-  E --> G
+  E --> G[Gate decision, TEA Core<br/>PASS / CONCERNS / FAIL / WAIVED]
 ```
 
 ## The two layers

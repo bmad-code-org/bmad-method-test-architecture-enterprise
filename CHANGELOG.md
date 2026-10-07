@@ -704,6 +704,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The docs site renders its Mermaid diagrams, and the `llms-full.txt` bundle keeps 50,000 characters of headroom under its cap.
+  Eight explanation pages (the TEA overview among them) showed a `mermaid` fence as raw source in a `<pre data-language="mermaid">` block, because the site loaded no Mermaid renderer.
+  The `astro-mermaid` integration, which renders in the reader's browser and needs no headless browser at build time, now turns each fence into a diagram on a light card in both site themes.
+  A wide diagram keeps a readable width on a phone and scrolls sideways inside its card, and a wide table scrolls inside its own block instead of widening the page.
+  The verification-architecture diagram no longer leaves a gap in its Core group.
+  `test:docs-mermaid` builds the site and fails when a page with a `mermaid` fence still holds a raw block, lacks one container per fence, or does not load the renderer; its revert cases include a real build with the integration removed.
+  The `llms-full.txt` bundle stood at 505,224 of its 600,000 characters, and the Evaluate documentation that is coming adds about 91,000, which would have left about 4,000 characters of room, and the next page after it would have failed the docs build.
+  The configuration, knowledge-base and live-verification-results references moved out of the bundle through `LLM_EXCLUDE_PATTERNS` (428,875 characters now, about 519,000 with that documentation), and `llms.txt` links them under "Reference lookups".
+  `test:llms-headroom` fails when the bundle the build would write leaves less than 50,000 characters under the cap, so the change that crosses the line trims the exclusion list; the cap stays at 600,000.
 - The CI `chain` job runs on 21 shards instead of 12, and each long evaluate suite runs as several chained `--group` scripts, so no shard is projected beyond about ten minutes of scripts (about twelve with setup) against its 20-minute cap.
   The shard weights were stale and had left one shard at 19 of its 20 minutes while another timed out, because the evaluate suites had grown well past their recorded times; the weights now come from eight recent runs (the median plus 25 percent, or the maximum for a split suite) and the shard timeout is unchanged.
   The partition plans, partition plans attempts, run, evaluators, CI and arms suites each take `--group=<name>` and `--list-groups`, and `npm run test:groups` fails when a group is run by no chained script, by two, or when a chained script names a group the suite does not have.
