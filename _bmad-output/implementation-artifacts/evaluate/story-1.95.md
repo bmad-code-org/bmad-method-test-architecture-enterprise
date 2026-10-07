@@ -2,7 +2,7 @@
 title: 'Story 1.95: Gate the replay totals, the story count and the lane lists'
 type: 'feature'
 created: '2026-10-06'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b41d8b78'
@@ -86,7 +86,7 @@ A count changed by one passes `test:doc-counts`, `test:eval-replay` and every ot
 - [x] The planning module and its entries.
 - [x] `test:planning-doc-sources`, wired into the chain and the shard weights.
 - [x] Self-exercise of every gate, mutants of every new check, prose and counts.
-- [x] CHANGELOG, planning amendments, `sprint-status.yaml` row 1.95 `review`, this record.
+- [x] CHANGELOG, planning amendments, `sprint-status.yaml` row 1.95 `done`, this record.
 
 **Acceptance Criteria:** as in `epics.md` Story 1.95, with the amendment dated 2026-10-06 there.
 
