@@ -5,7 +5,7 @@
  * CI runs the `npm test` chain only through that tool, one shard per matrix
  * runner, so a partition that dropped a script would drop it from CI without
  * any job going red, and a matrix that skipped a shard number would do the
- * same to a whole shard. This proves, for every shard count from 1 to 12, that
+ * same to a whole shard. This proves, for every shard count from 1 to 21, that
  * the shards cover the chain exactly once, in chain order, and come out the
  * same on every run; that a script with no weight lands on the lightest shard;
  * that the weights file names no script the chain has dropped; and that the
@@ -38,7 +38,7 @@ const {
 } = require('../tools/test-shards');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const MAX_SHARDS = 12;
+const MAX_SHARDS = 21;
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 

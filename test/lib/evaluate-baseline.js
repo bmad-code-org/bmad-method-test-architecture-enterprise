@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * What `test:evaluate-compare` (Story 2.1) and `test:evaluate-ci` (Story 2.2) both need to accept a baseline and replay
+ * What `test:evaluate-compare` (Story 2.1) and `test/test-evaluate-ci.js` (Story 2.2) both need to accept a baseline and replay
  * it: a copy of a scored project, the commit a reviewed pull request makes, a clean run scored through the real CLI, and
  * the placement of an accepted baseline at `runs/<acceptedRun>/` in a scratch copy of the evaluation folder.
  */

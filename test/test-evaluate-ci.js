@@ -44,6 +44,7 @@ const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 const prTier = require('./lib/evaluate-pr-tier');
+const { groupsOf, printGroupsWhenAsked, runs, selectGroup } = require('./lib/case-groups');
 const { suite } = require('./lib/evaluate-story-121');
 const {
   holdPrivateParents,
@@ -5073,58 +5074,70 @@ function editBaseline(folder, name, edit) {
 /** A `pr` entry of `id` shaped like the plan's others, for a case that adds a check. */
 const entryFor = (plan, id) => ({ ...structuredClone(plan.checks[0]), id });
 
+/**
+ * The cases below in run order with the group each belongs to. CI runs the groups as two scripts (`--group=gates`, which is
+ * `test:evaluate-ci-gates`, and `--group=tiers`, which is `test:evaluate-ci-tiers`) so no one runner carries the whole file's wall
+ * time; with no `--group` every case runs.
+ */
 async function main() {
   const cases = [
-    ['the committed plans and baselines', checkFixturePlans],
-    ['the placement rules', checkPlacementRules],
-    ['the derivable fields', checkDerivableFields],
-    ['the gated jobs', checkGatedJobs],
-    ['wiring', checkWiring],
-    ['the AD-10 table', checkEnforcementTable],
-    ['tier membership', checkTierMembership],
-    ['static rules', checkStaticRules],
-    ['gate checks', checkGates],
-    ['gate limits', checkGateLimits],
-    ['an interrupted gate', checkInterruptedGate],
-    ['engine stage exits', checkEngineStageExits],
-    ['engine stage exits over each view', checkStageViewExits],
-    ['a FIFO contract.json', checkFifoContract],
-    ['the stage evidence paths of a folder with no partitionPlan', checkStageEvidencePaths],
-    ['the pr replay', checkPrReplay],
-    ['the text neutralizer', checkTextNeutralizer],
-    ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],
-    ['the ci run directory after a failing port and a stale baseline', checkCiRunHoldsNoMachinePathOnFailure],
-    ['the replay comparison set', checkReplayComparisonSet],
-    ['a replay stage that exits 2', checkReplayStageExit],
-    ['baseline integrity', checkBaselineIntegrity],
-    ['baseline floors', checkBaselineFloors],
-    ['a stale baseline on pr', checkStaleBaselineOnPr],
-    ['the contract digest of a stale baseline', checkContractDigestOnPr],
-    ['a renamed oracle of a stale baseline', checkRenamedOracleOnPr],
-    ['bad committed input', checkBadCommittedInput],
-    ['an interrupted replay', checkInterruptedReplay],
-    ['a signal while an engine stage runs', checkSignalEndsStage],
-    ['a signal while an engine stage writes', checkSignalEndsWritingStage],
-    ['a signal to a command that runs a stage', checkSignalEndsStandaloneCommands],
-    ['a killed check check', checkKilledCheckCheckIsReclaimed],
-    ['a process that exits while a stage runs', checkStageEndsWithItsProcess],
-    ['oracle agreement', checkOracleAgreement],
-    ['the gameability arm', checkGameability],
-    ['the fixture adopters', checkFixtureTiers],
-    ['the pr tier of TeA itself', checkTeaPrTier],
-    ['the committed live tiers', checkCommittedLiveTiers],
-    ['the plans of two repositories', checkRepositoryPlans],
-    ['the capture-record guard', checkCaptureRecordGuard],
-    ['the scratch holds', checkScratchHolds],
-    ['the live tiers', checkLiveTiers],
-    ['the strength floor', checkStrengthFloors],
-    ['a weak target', checkWeakProject],
-    ['judge calibration', checkJudgeCalibration],
+    { name: 'the committed plans and baselines', run: checkFixturePlans, group: 'gates' },
+    { name: 'the placement rules', run: checkPlacementRules, group: 'gates' },
+    { name: 'the derivable fields', run: checkDerivableFields, group: 'gates' },
+    { name: 'the gated jobs', run: checkGatedJobs, group: 'gates' },
+    { name: 'wiring', run: checkWiring, group: 'gates' },
+    { name: 'the AD-10 table', run: checkEnforcementTable, group: 'gates' },
+    { name: 'tier membership', run: checkTierMembership, group: 'gates' },
+    { name: 'static rules', run: checkStaticRules, group: 'gates' },
+    { name: 'gate checks', run: checkGates, group: 'gates' },
+    { name: 'gate limits', run: checkGateLimits, group: 'gates' },
+    { name: 'an interrupted gate', run: checkInterruptedGate, group: 'gates' },
+    { name: 'engine stage exits', run: checkEngineStageExits, group: 'gates' },
+    { name: 'engine stage exits over each view', run: checkStageViewExits, group: 'gates' },
+    { name: 'a FIFO contract.json', run: checkFifoContract, group: 'gates' },
+    { name: 'the stage evidence paths of a folder with no partitionPlan', run: checkStageEvidencePaths, group: 'gates' },
+    { name: 'the pr replay', run: checkPrReplay, group: 'gates' },
+    { name: 'the text neutralizer', run: checkTextNeutralizer, group: 'gates' },
+    { name: 'the ci run directory holds no machine path', run: checkCiRunHoldsNoMachinePath, group: 'gates' },
+    { name: 'the ci run directory after a failing port and a stale baseline', run: checkCiRunHoldsNoMachinePathOnFailure, group: 'gates' },
+    { name: 'the replay comparison set', run: checkReplayComparisonSet, group: 'gates' },
+    { name: 'a replay stage that exits 2', run: checkReplayStageExit, group: 'gates' },
+    { name: 'baseline integrity', run: checkBaselineIntegrity, group: 'gates' },
+    { name: 'baseline floors', run: checkBaselineFloors, group: 'gates' },
+    { name: 'a stale baseline on pr', run: checkStaleBaselineOnPr, group: 'gates' },
+    { name: 'the contract digest of a stale baseline', run: checkContractDigestOnPr, group: 'gates' },
+    { name: 'a renamed oracle of a stale baseline', run: checkRenamedOracleOnPr, group: 'gates' },
+    { name: 'bad committed input', run: checkBadCommittedInput, group: 'gates' },
+    { name: 'an interrupted replay', run: checkInterruptedReplay, group: 'gates' },
+    { name: 'a signal while an engine stage runs', run: checkSignalEndsStage, group: 'gates' },
+    { name: 'a signal while an engine stage writes', run: checkSignalEndsWritingStage, group: 'gates' },
+    { name: 'a signal to a command that runs a stage', run: checkSignalEndsStandaloneCommands, group: 'gates' },
+    { name: 'a killed check check', run: checkKilledCheckCheckIsReclaimed, group: 'gates' },
+    { name: 'a process that exits while a stage runs', run: checkStageEndsWithItsProcess, group: 'gates' },
+    { name: 'oracle agreement', run: checkOracleAgreement, group: 'gates' },
+    { name: 'the gameability arm', run: checkGameability, group: 'gates' },
+    { name: 'the fixture adopters', run: checkFixtureTiers, group: 'gates' },
+    { name: 'the pr tier of TeA itself', run: checkTeaPrTier, group: 'tiers' },
+    { name: 'the committed live tiers', run: checkCommittedLiveTiers, group: 'tiers' },
+    { name: 'the plans of two repositories', run: checkRepositoryPlans, group: 'tiers' },
+    { name: 'the capture-record guard', run: checkCaptureRecordGuard, group: 'tiers' },
+    { name: 'the scratch holds', run: checkScratchHolds, group: 'tiers' },
+    { name: 'the live tiers', run: checkLiveTiers, group: 'tiers' },
+    { name: 'the strength floor', run: checkStrengthFloors, group: 'tiers' },
+    { name: 'a weak target', run: checkWeakProject, group: 'tiers' },
+    { name: 'judge calibration', run: checkJudgeCalibration, group: 'tiers' },
   ];
+  if (printGroupsWhenAsked(cases)) return;
+  const { group, error } = selectGroup(groupsOf(cases));
+  if (error) {
+    console.error(error);
+    process.exitCode = 2;
+    return;
+  }
   const only = process.argv.find((argument) => argument.startsWith('--only='))?.slice('--only='.length);
   try {
-    for (const [name, run] of cases) {
-      if (only !== undefined && !name.includes(only)) continue;
+    for (const { name, run, group: caseGroup } of cases) {
+      if ((only !== undefined && !name.includes(only)) || !runs(group, caseGroup)) continue;
       const started = Date.now();
       await run();
       process.stdout.write(`  ok ${name} (${Math.round((Date.now() - started) / 1000)}s)\n`);

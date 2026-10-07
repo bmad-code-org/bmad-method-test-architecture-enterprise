@@ -50,7 +50,7 @@ function positive(given, name, fallback) {
 /** One run of the suite; resolves with its exit code, its output and the check count the suite printed. */
 function once() {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SUITE, '--group=confinement', `--only=${CASE}`], {
+    const child = spawn(process.execPath, [SUITE, '--group=confinement-history', `--only=${CASE}`], {
       cwd: ROOT,
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
