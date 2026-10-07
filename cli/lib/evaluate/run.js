@@ -1489,6 +1489,7 @@ async function runTrialSets(given) {
     recordDigests,
     manifestDigests,
     mountsOutsideAllowlist: [...mountsOutside],
+    setsWithoutManifest: [],
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -1912,9 +1913,19 @@ async function concludeImportedRecords(context) {
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   const recordDigests = {};
   const manifestDigests = {};
+  // What `score` reads off each imported manifest as an isolation violation, as it does for the manifests a run seals: the observed
+  // mounts with no entry in the allowed ones, in the order the sets come, each once. A set with no manifest reaches eval-quality as
+  // absent, which it reads as Invalid (exit 3) as well.
+  const mountsOutside = new Set();
+  const withoutManifest = [];
   const trialSets = imported.sets.map((set) => {
     for (const record of set.records) recordDigests[record] = bytesDigest(record);
-    if (set.manifest !== null) manifestDigests[set.probeId] = bytesDigest(set.manifest);
+    if (set.manifest === null) withoutManifest.push(set.probeId);
+    else {
+      manifestDigests[set.probeId] = bytesDigest(set.manifest);
+      const manifest = writer.readJson(set.manifest);
+      for (const mount of mountsOutsideAllowlist(manifest.observedMounts, manifest.allowedMounts)) mountsOutside.add(mount);
+    }
     return {
       probeId: set.probeId,
       runId: set.runId,
@@ -1934,6 +1945,8 @@ async function concludeImportedRecords(context) {
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: [...mountsOutside],
+    setsWithoutManifest: withoutManifest,
     configurationDigest: imported.configurationDigest,
     trialCount: null,
     evaluatorRecord: { kind: 'records', identity: imported.configuration.evaluatorIdentity, records: snapshot.layer.evaluator.records },
@@ -1955,7 +1968,8 @@ async function completeRun(
     trialSets,
     recordDigests,
     manifestDigests,
-    mountsOutsideAllowlist: outsideMounts = [],
+    mountsOutsideAllowlist: outsideMounts,
+    setsWithoutManifest,
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -2012,16 +2026,23 @@ async function completeRun(
   retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
   // A trial set whose manifest lists a mount outside the allowlist is one `score` reads as Invalid (exit 3), so the run does
   // not report success. It stays sealed and complete: `score --run` prints one reason per path from the manifests as written.
-  const mountsRefusal = mountRefusal({ mounts: outsideMounts, folder: context.folder, who: 'trials' });
+  const mountsRefusal = [
+    mountRefusal({ mounts: outsideMounts, folder: context.folder, who: 'trials' }),
+    setsWithoutManifest.length === 0
+      ? null
+      : `isolation manifest violation: the records of ${setsWithoutManifest.join(', ')} come with no isolation manifest, which \`score\` reads as Invalid (exit 3); the harness writes \`<records>/<probeId>/isolation-manifest.json\` beside each set's records.`,
+  ]
+    .filter((message) => message !== null)
+    .join(' ');
   const sealedMessage =
     trialCount === null
       ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
       : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`;
   const result = outcome({
     stage: 'trial',
-    exitCode: mountsRefusal === null ? 0 : 3,
+    exitCode: mountsRefusal === '' ? 0 : 3,
     message:
-      mountsRefusal === null
+      mountsRefusal === ''
         ? sealedMessage
         : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.`,
   });
