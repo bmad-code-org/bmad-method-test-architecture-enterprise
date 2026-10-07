@@ -1070,6 +1070,10 @@
           "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
         },
         {
+          "token": "NODE_V8_COVERAGE",
+          "reason": "a Node.js environment variable naming the directory V8 writes coverage to, which every Bubblewrap process loses, not a TEA declaration"
+        },
+        {
           "token": "CONNECT",
           "reason": "the HTTP method an HTTPS client asks a proxy for a tunnel with, which the egress proxy serves and no source declares"
         },
@@ -1079,43 +1083,19 @@
         },
         {
           "token": "OLDPWD",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "SHLVL",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "OPTIND",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "PPID",
-          "reason": "a shell variable the socket launcher restores"
-        },
-        {
-          "token": "LINENO",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "RANDOM",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "SHELLOPTS",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASHOPTS",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASH",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASH_VERSION",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "createCommandLineAdapter",

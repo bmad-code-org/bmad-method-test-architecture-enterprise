@@ -70,6 +70,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
+const { SUPERVISOR_BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('../cli/lib/agent-supervisor-bounds');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
@@ -481,10 +482,9 @@ async function checkWindowsSupervision() {
     carried.observation.stderr === process.env.SystemRoot,
     `the infrastructure-only SystemRoot changed the observed stderr: ${JSON.stringify(carried.observation.stderr)}`,
   );
-  // Match the guardian's separate Job Object setup bound, with room for
-  // process startup and the supervisor's missing-report backstop.
-  const windowsSetupMs = 90_000;
-  const startupWaitMs = windowsSetupMs + 20_000;
+  // The case waits as long as the supervisor's own bounds promise: the guardian's Job Object setup, the cold Node start before that clock begins and the missing-report backstop.
+  const windowsSetupMs = WINDOWS_SETUP_MS;
+  const startupWaitMs = WINDOWS_SETUP_MS + WINDOWS_STARTUP_SLACK_MS + SUPERVISOR_BACKSTOP_MS;
   const directory = tempDir('windows-job-owner');
   const agentScript = path.join(directory, 'agent.cjs');
   const childScript = path.join(directory, 'child.cjs');
@@ -532,6 +532,19 @@ const ready = setInterval(() => {
     closed.then(() => (runnerClosed = true));
     while (!fs.existsSync(file) && !runnerClosed && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? readPids(file) : null;
+  };
+  // A process tree is read through PowerShell and WMI under a bound of 10 s per call, and a call that times out or fails answers with an empty list.
+  // The tree is already up once the agent has recorded its pids, so the lookup retries until the tree answers, within the same bound the case allows the setup.
+  const waitForChildren = async (parentPid, closed, accepts = (pids) => pids.length > 0) => {
+    const deadline = Date.now() + startupWaitMs;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    let pids = childrenOf(parentPid);
+    while (!accepts(pids) && !runnerClosed && Date.now() < deadline && Number.isSafeInteger(parentPid) && parentPid > 0) {
+      await delay(200);
+      pids = childrenOf(parentPid);
+    }
+    return pids;
   };
   const observeEndBy = async (pid, deadline) => {
     if (!Number.isSafeInteger(pid) || pid <= 0) return null;
@@ -761,11 +774,11 @@ class FakePowerShell {
   let leader = null;
   try {
     dualPids = await waitForPids(dualFile, dualClosed);
-    [supervisor] = childrenOf(dual.pid);
-    [leader] = childrenOf(supervisor ?? 0);
+    [supervisor] = await waitForChildren(dual.pid, dualClosed);
+    [leader] = await waitForChildren(supervisor ?? 0, dualClosed);
     check(
       dualPids !== null && supervisor !== undefined && leader !== undefined,
-      'the Windows dual-kill case did not start the supervisor, leader, agent and child',
+      `the Windows dual-kill case did not start the supervisor, leader, agent and child: ${JSON.stringify({ dualPids, supervisor, leader })}\n${dualStderr}`,
     );
     const killedAt = Date.now();
     if (leader !== undefined) reap(leader);
@@ -821,12 +834,14 @@ class FakePowerShell {
   try {
     ownerPids = await waitForPids(ownerFile, ownerClosed);
     if (ownerPids !== null) {
-      [ownerSupervisor] = childrenOf(ownerRun.pid);
-      [ownerLeader] = childrenOf(ownerSupervisor);
-      [guardian] = childrenOf(ownerLeader);
-      guardianChildren = childrenOf(guardian);
+      [ownerSupervisor] = await waitForChildren(ownerRun.pid, ownerClosed);
+      [ownerLeader] = await waitForChildren(ownerSupervisor ?? 0, ownerClosed);
+      [guardian] = await waitForChildren(ownerLeader ?? 0, ownerClosed);
+      guardianChildren = await waitForChildren(guardian ?? 0, ownerClosed, (pids) => pids.length >= 2 && pids.includes(ownerPids.agent));
       ownerAgentVerified = guardianChildren.includes(ownerPids.agent);
-      ownerChildVerified = ownerAgentVerified && childrenOf(ownerPids.agent).includes(ownerPids.child);
+      ownerChildVerified =
+        ownerAgentVerified &&
+        (await waitForChildren(ownerPids.agent, ownerClosed, (pids) => pids.includes(ownerPids.child))).includes(ownerPids.child);
       const helpers = guardianChildren.filter((pid) => pid !== ownerPids.agent);
       if (ownerChildVerified && helpers.length === 1) [helper] = helpers;
     }
@@ -1114,12 +1129,11 @@ function checkSupervisorTraceRetries() {
 function checkWindowsRunnerReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
-  const { WINDOWS_SETUP_MS: setupBound } = require('../cli/lib/agent-supervisor-bounds');
   check(
     section.includes('Windows Job Object') &&
       section.includes('kill-on-close') &&
       section.includes('10 s') &&
-      setupBound === 90_000 &&
+      WINDOWS_SETUP_MS === 90_000 &&
       section.includes('The guardian allows 90 s for setup') &&
       section.includes('wall clock starts when the guardian reports the actual agent PID'),
     'the tea-skill-runner reference and supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
