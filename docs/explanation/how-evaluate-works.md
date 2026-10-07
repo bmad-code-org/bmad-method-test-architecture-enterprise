@@ -17,34 +17,15 @@ Evaluation moves from confirmed requirements to CI in six steps, and three roles
 The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and `eval-quality` scores it.
 You confirm the requirements and accept the baseline, and CI enforces the checks the evaluation chose.
 
-```text
- You confirm the requirements
-              |
-              v
- +---------------------------------------------+
- | AUTHORING SKILL: Evaluate                   |
- | authors the evaluation: probes, contract,   |
- | oracles, mutations                          |
- +---------------------------------------------+
-              |
-              v
- +---------------------------------------------+
- | EXECUTION CLI: tea-evaluate                 |
- | runs the clean and mutated arms and records |
- | the evidence                                |
- +---------------------------------------------+
-              |
-              v
- +---------------------------------------------+
- | SCORING ENGINE: eval-quality                |
- | scores each probe and takes the verdicts    |
- +---------------------------------------------+
-              |
-              v
- You accept the baseline
-              |
-              v
- CI enforces the chosen checks
+```mermaid
+flowchart TD
+  Confirm(["You confirm the requirements"])
+  Author["<b>AUTHORING SKILL: Evaluate</b><br/>authors the evaluation: probes, contract, oracles, mutations"]
+  Run["<b>EXECUTION CLI: tea-evaluate</b><br/>runs the clean and mutated arms and records the evidence"]
+  Score["<b>SCORING ENGINE: eval-quality</b><br/>scores each probe and takes the verdicts"]
+  Accept(["You accept the baseline"])
+  CI(["CI enforces the chosen checks"])
+  Confirm --> Author --> Run --> Score --> Accept --> CI
 ```
 
 This page explains how the pieces fit and why they are built this way.
