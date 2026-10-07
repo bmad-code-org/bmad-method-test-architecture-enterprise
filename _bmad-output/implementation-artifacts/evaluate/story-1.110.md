@@ -243,6 +243,9 @@ Each mutant was applied once in a scratch copy of the pushed tree (`mut-1.110-fi
 
 The old file ran 612 s on this machine (sections: pure and `check` 105 s, preflight, run and score flows through the rubric, waiver and evaluator-mapping sections 175 s, evaluator mapping flow 62 s, records 80 s, gameability 190 s).
 The second file takes the evaluator-mapping flow, the records flow and both gameability sections (about 330 s with the two snapshot runs its records cases now make for themselves); the first keeps the rest (about 280 s).
+Measured in CI (runs 37561739781 and 37563938202 on the split tree, under coverage): `test:evaluate-partition-plans` 572.4 s and 572.8 s, `test:evaluate-partition-plans-attempts` 537.8 s and 319.8 s.
+The old file took 1056 s in run 37553035970 against the 20 minute shard cap.
+`tools/test-shard-weights.json` now holds 572.6 and 428.8 (the mean of the two runs for each script), which replaces the single weight of 950; the shards of the green run ran 9 to 16 minutes, and the timeout is unchanged.
 Every assertion line of the old file runs in exactly one of the two files, except the lines this round replaced on purpose (the old drift and shim block and the two records snapshots, which moved with the cases that read them).
 
 ## Spec Change Log
