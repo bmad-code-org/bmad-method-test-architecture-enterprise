@@ -88,7 +88,7 @@ function resolveGameabilityPredicate(engine, predicate, observation, kind) {
     () => false,
     {},
     1000,
-    `corpus.md ${kind} P-004.defectSignature.condition.predicate`,
+    `${corpusKindFile(kind)} P-004.defectSignature.condition.predicate`,
   ).resolution;
 }
 
@@ -341,7 +341,201 @@ function checkDigestFileGuidance({ intake, contractGuide, readme }, engine, fail
     );
 }
 
-function checkCorpus(corpus, engine, failures) {
+/**
+ * The corpus guide is carved into the craft every kind shares (`corpus.md`) and one guide per target kind (Story 1.114). The kind list,
+ * the four headings each kind guide holds and the file names are fixed here, so a guide that gains, loses or renames one fails.
+ */
+const CORPUS_KINDS = [
+  ['Agent', 'agent'],
+  ['Skill', 'skill'],
+  ['Workflow', 'workflow'],
+  ['Tool-use system', 'tool-use-system'],
+  ['AI feature', 'ai-feature'],
+  ['Test-review mechanism', 'test-review-mechanism'],
+];
+const CORPUS_KIND_HEADINGS = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
+const GUIDE_TOKEN_BUDGET = 9000;
+
+function corpusKindFile(title) {
+  return `corpus-${CORPUS_KINDS.find(([name]) => name === title)[1]}.md`;
+}
+
+let tokenEncoder;
+/** The builder's metric: tiktoken `cl100k_base` (the same encoding its `count_tokens.py` reports). */
+function countTokens(text) {
+  tokenEncoder ??= require('js-tiktoken').getEncoding('cl100k_base');
+  return tokenEncoder.encode(text, [], []).length;
+}
+
+/** The metric is pinned to its encoding: this literal counts 16 tokens under `cl100k_base`, where a length-over-four estimate gives 18. */
+const TOKEN_METRIC_LITERAL = 'The floor, partition and held-out rules live in references/corpus.md.';
+const TOKEN_METRIC_COUNT = 16;
+function checkTokenMetric(failures, count = countTokens) {
+  const counted = count(TOKEN_METRIC_LITERAL);
+  if (counted !== TOKEN_METRIC_COUNT)
+    failures.push(`countTokens returns ${counted} for the pinned literal; cl100k_base returns ${TOKEN_METRIC_COUNT}`);
+}
+
+/** Reads `corpus.md`, every per-kind guide and the `corpus*.md` names `references/` holds; a missing file is a failure that names it and reads as empty. */
+function readCorpusGuides(failures, directory = path.join(SKILL_ROOT, 'references')) {
+  const read = (file) => {
+    try {
+      return fs.readFileSync(path.join(directory, file), 'utf8');
+    } catch (error) {
+      failures.push(`${file} cannot be read: ${error.code ?? error.message}`);
+      return '';
+    }
+  };
+  let present = [];
+  try {
+    present = fs.readdirSync(directory).filter((name) => /^corpus.*\.md$/.test(name));
+  } catch {
+    // An unreadable directory already failed every read above.
+  }
+  return {
+    shared: read('corpus.md'),
+    kinds: Object.fromEntries(CORPUS_KINDS.map(([title]) => [title, read(corpusKindFile(title))])),
+    present,
+  };
+}
+
+/** The carve itself: `corpus.md` names the six guides and holds no kind heading, and each of the seven files is within the budget. */
+function checkCorpusLayout(guides, failures) {
+  const { shared } = guides;
+  requireHeading(shared, '## Per-kind guides', 'corpus.md', failures);
+  const index = headingBody(shared, '## Per-kind guides');
+  requireText(
+    index,
+    'Load only the guide for the target kind recorded as `targetKind` at inspection.',
+    'corpus.md Per-kind guides',
+    failures,
+  );
+  requireLine(
+    index,
+    'Both tool-use rows of the inspection mapping (a calling agent and a tool server) load the tool-use guide, and a tool server reached over `mcp` takes its channel pointers from `references/oracles.md` and its registry shape from `references/adapters.md`.',
+    'corpus.md Per-kind guides',
+    failures,
+  );
+  try {
+    assert.deepStrictEqual(
+      [...index.matchAll(/`references\/(corpus-[a-z-]+\.md)`/g)].map((match) => match[1]),
+      CORPUS_KINDS.map(([title]) => corpusKindFile(title)),
+    );
+  } catch (error) {
+    failures.push(`corpus.md Per-kind guides must list exactly the six per-kind files: ${error.message}`);
+  }
+  try {
+    assert.deepStrictEqual(
+      [...(guides.present ?? [])].sort(),
+      ['corpus.md', ...CORPUS_KINDS.map(([title]) => corpusKindFile(title))].sort(),
+    );
+  } catch (error) {
+    failures.push(`references/ holds corpus guides other than corpus.md and the six per-kind files: ${error.message}`);
+  }
+  for (const [title] of CORPUS_KINDS)
+    requireText(index, `- ${title}: \`references/${corpusKindFile(title)}\``, 'corpus.md Per-kind guides', failures);
+  const moved = new Set([...CORPUS_KINDS.map(([title]) => title), ...CORPUS_KIND_HEADINGS]);
+  for (const level of [1, 2, 3])
+    for (const section of sections(shared, level))
+      if (moved.has(section.title) || section.title.endsWith(' corpus'))
+        failures.push(`corpus.md holds the ${section.title} heading that belongs in a per-kind guide`);
+  for (const [file, text] of [['corpus.md', shared], ...CORPUS_KINDS.map(([title]) => [corpusKindFile(title), guides.kinds[title]])]) {
+    const tokens = countTokens(text);
+    if (tokens > GUIDE_TOKEN_BUDGET) failures.push(`${file} is ${tokens} tokens, over the ${GUIDE_TOKEN_BUDGET}-token guide budget`);
+  }
+  checkTokenMetric(failures);
+}
+
+/** Every Markdown file of the skill's guides, `SKILL.md`, the assets and `docs/`, by repository-relative path. */
+function corpusReferenceSurface() {
+  const files = {};
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.md')) files[path.relative(path.join(__dirname, '..'), full)] = fs.readFileSync(full, 'utf8');
+    }
+  };
+  walk(path.join(SKILL_ROOT, 'references'));
+  walk(path.join(SKILL_ROOT, 'assets'));
+  walk(path.join(__dirname, '..', 'docs'));
+  files[path.relative(path.join(__dirname, '..'), SKILL_MD_PATH)] = fs.readFileSync(SKILL_MD_PATH, 'utf8');
+  return files;
+}
+
+/**
+ * A guide that names a per-kind file no guide holds, or names a `corpus.md` heading the file no longer has (the kind headings moved to
+ * the per-kind guides), reads a place that is not there. `corpus.md` itself is exempt from the heading rule, since it holds the headings,
+ * and its own lines are scanned for a moved section or kind named as a place below.
+ */
+function corpusReferenceProblems(files, shared) {
+  const known = new Set(CORPUS_KINDS.map(([title]) => corpusKindFile(title)));
+  const headings = new Set(sections(shared, 2).map((section) => `## ${section.title}`));
+  const problems = [];
+  for (const [file, text] of Object.entries(files)) {
+    for (const [index, line] of text.split('\n').entries()) {
+      const where = `${file}:${index + 1}`;
+      for (const [named] of line.matchAll(/corpus-[a-z0-9-]+\.md/g))
+        if (!known.has(named)) problems.push(`${where} names ${named}, which is not a per-kind corpus guide`);
+      const inShared = path.basename(file) === 'corpus.md';
+      if (!inShared && !/corpus\.md/.test(line)) continue;
+      if (!inShared)
+        for (const [, heading] of line.matchAll(/`(#{1,3} [^`]+)`/g))
+          if (!headings.has(heading)) problems.push(`${where} names the heading ${heading}, which corpus.md does not hold`);
+      for (const name of [...CORPUS_KIND_HEADINGS, ...CORPUS_KINDS.flatMap(([title]) => [`${title} section`, `${title} kind`])])
+        if (line.includes(name)) problems.push(`${where} names ${name} as part of corpus.md; it moved to a per-kind guide`);
+    }
+  }
+  return problems;
+}
+
+/** `SKILL.md` stays byte-identical: both live capture records pin its digest, and neither pins a corpus guide. */
+function checkCorpusPins(engine, failures, skillBytes = fs.readFileSync(SKILL_MD_PATH), records = readCaptureRecords()) {
+  const skillDigest = engine.digestBytes(skillBytes);
+  for (const [repository, record] of Object.entries(records)) {
+    if (record.sessionRead?.['SKILL.md'] !== skillDigest)
+      failures.push(`${repository} capture-record.json pins a SKILL.md other than the one on disk`);
+    for (const key of Object.keys(record.sessionRead ?? {}))
+      if (/(^|\/)corpus/.test(key)) failures.push(`${repository} capture-record.json pins ${key}; a corpus guide is not a session read`);
+  }
+}
+
+function readCaptureRecords() {
+  return Object.fromEntries(
+    ['tagged-release', 'nightly-deploy'].map((repository) => [
+      repository,
+      JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate-ci-repos', repository, 'capture-record.json'), 'utf8')),
+    ]),
+  );
+}
+
+function checkCorpusReferences(guides, failures) {
+  const files = corpusReferenceSurface();
+  for (const problem of corpusReferenceProblems(files, guides.shared)) failures.push(problem);
+  // The same scan raises the stale references it exists for.
+  const runGuide = Object.keys(files).find((file) => file.endsWith('references/run.md'));
+  for (const [label, planted] of [
+    ["a heading of a per-kind guide named as corpus.md's", 'See the Gameability design in corpus.md.'],
+    ["a kind heading named as corpus.md's", 'See `## Agent` in `corpus.md`.'],
+    ['a heading corpus.md does not hold', 'See `## Removed lesson` in `corpus.md`.'],
+    ['a per-kind file no guide holds', 'Load `references/corpus-agents.md`.'],
+    [
+      'a kind section named without backticks beside corpus.md',
+      'See the Workflow section of `references/corpus.md` for the held-out rule.',
+    ],
+  ]) {
+    const found = corpusReferenceProblems({ ...files, [runGuide]: `${files[runGuide]}\n${planted}\n` }, guides.shared);
+    if (found.length === 0) failures.push(`${label} passed the corpus reference scan`);
+  }
+  // corpus.md reads its own lines the same way: a moved section named as a place below.
+  const sharedFile = Object.keys(files).find((file) => file.endsWith('references/corpus.md'));
+  const plantedShared = `${files[sharedFile]}\nEach gameability probe follows the Gameability design of its kind below.\n`;
+  if (corpusReferenceProblems({ ...files, [sharedFile]: plantedShared }, guides.shared).length === 0)
+    failures.push('a moved section named inside corpus.md passed the corpus reference scan');
+}
+
+function checkCorpus(guides, engine, failures) {
+  const corpus = guides.shared;
   requireHeading(corpus, '## Corpus rules and layout', 'corpus.md', failures);
   for (const marker of [
     '`zero-action` probe with `expectedClean: true`',
@@ -371,7 +565,8 @@ function checkCorpus(corpus, engine, failures) {
     '`P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then',
     'Under a `partitionPlan` each gameability probe answers the whole plan from two files (see the partition section)',
     "under a `partitionPlan` the plan file's steps are answered in a second file (see the partition section)",
-    "Each held-out seed changes an adopter-owned rule through its mutation (`P-006` through `M-001`, and the Workflow kind's `P-008` through `M-003`)",
+    'Each held-out seed changes an adopter-owned rule through its mutation, as the held-out seeds of the per-kind guides do',
+    'The HTTP example in `references/corpus-ai-feature.md` returns JSON with a JSON content type.',
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
     'assets/scoring-policy.template.json',
@@ -379,9 +574,8 @@ function checkCorpus(corpus, engine, failures) {
   ])
     requireText(corpus, marker, 'corpus.md', failures);
   checkPartitionPlanGuidance(corpus, failures);
+  checkCorpusLayout(guides, failures);
 
-  const kinds = ['Agent', 'Skill', 'Workflow', 'Tool-use system', 'AI feature', 'Test-review mechanism'];
-  const headingNames = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
   const ordinaryTags = new Set(['representative', 'negative', 'malformed', 'gameability', 'held-out']);
   const malformedKeys = {
     Agent: 'stdin.customerId',
@@ -431,15 +625,7 @@ function checkCorpus(corpus, engine, failures) {
     'Tool-use system': [['stdout/reserveCallCount', 1]],
     'Test-review mechanism': [['stdout/decision', 'defective']],
   };
-  const kindSections = sections(corpus, 2).filter((section) => kinds.includes(section.title));
-  try {
-    assert.deepStrictEqual(
-      kindSections.map((section) => section.title),
-      kinds,
-    );
-  } catch (error) {
-    failures.push(`corpus.md kind headings changed: ${error.message}`);
-  }
+  const kindSections = CORPUS_KINDS.map(([title]) => ({ title, file: corpusKindFile(title), body: guides.kinds[title] }));
 
   const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
   const validateCommitted = ajv.compile(
@@ -463,14 +649,26 @@ function checkCorpus(corpus, engine, failures) {
   };
   let zeroActionDefectCount = 0;
   for (const kind of kindSections) {
-    const subheads = sections(kind.body, 3);
+    const subheads = sections(kind.body, 2);
     try {
       assert.deepStrictEqual(
         subheads.map((section) => section.title),
-        headingNames,
+        CORPUS_KIND_HEADINGS,
+      );
+      assert.deepStrictEqual(
+        sections(kind.body, 1).map((section) => section.title),
+        [`${kind.title} corpus`],
+      );
+      assert.deepStrictEqual(sections(kind.body, 3), []);
+      assert.ok(kind.body.startsWith(`# ${kind.title} corpus\n\n`), 'the guide starts with its kind heading');
+      assert.match(kind.body.split('\n')[3] ?? '', /^The worked interface is `(cli|api|mcp)`\.$/);
+      assert.strictEqual(
+        kind.body.split('\n')[4],
+        'The floor, partition and held-out rules live in `references/corpus.md`.',
+        'the guide names corpus.md as the home of the floor, partition and held-out rules',
       );
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} subheadings changed: ${error.message}`);
+      failures.push(`${kind.file} headings changed: ${error.message}`);
     }
     const foundTags = [];
     const probes = [];
@@ -490,7 +688,7 @@ function checkCorpus(corpus, engine, failures) {
       '/interactions/malformed-input/',
       '`O-003` checks',
     ])
-      requireText(malformedBody, marker, `corpus.md ${kind.title} malformed input`, failures);
+      requireText(malformedBody, marker, `${kind.file} malformed input`, failures);
     for (const subhead of subheads) {
       const sectionTags = [];
       for (const match of subhead.body.matchAll(/<!-- example:probe -->\s*```json\n([\s\S]*?)\n```/g)) {
@@ -498,20 +696,18 @@ function checkCorpus(corpus, engine, failures) {
         try {
           probe = JSON.parse(match[1]);
         } catch (error) {
-          failures.push(`corpus.md ${kind.title} has invalid tagged JSON: ${error.message}`);
+          failures.push(`${kind.file} has invalid tagged JSON: ${error.message}`);
           continue;
         }
         const tag = probe.rationale?.match(/^\[([a-z-]+)\]/)?.[1];
-        if (!ordinaryTags.has(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
+        if (!ordinaryTags.has(tag)) failures.push(`${kind.file} probe ${probe.probeId} has no permitted rationale tag`);
         foundTags.push(tag);
         sectionTags.push(tag);
         probes.push(probe);
         if (probe.probeClass !== 'canary' && probe.defects.some((defect) => defect.manifestationWitness == null))
-          failures.push(`corpus.md ${kind.title} ${probe.probeId} has a non-canary defect without a manifestation witness`);
+          failures.push(`${kind.file} ${probe.probeId} has a non-canary defect without a manifestation witness`);
         if (!validateCommitted(probe))
-          failures.push(
-            `corpus.md ${kind.title} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`,
-          );
+          failures.push(`${kind.file} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`);
         let qualification;
         if (probe.qualification.route === 'clean-control')
           qualification = { ...probe.qualification, baselinePassEvidence: evidence, revisionCommitDigest: baseline.commitDigest };
@@ -540,14 +736,12 @@ function checkCorpus(corpus, engine, failures) {
           qualification,
         };
         if (!validateEngine(qualified))
-          failures.push(
-            `corpus.md ${kind.title} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`,
-          );
+          failures.push(`${kind.file} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`);
       }
       try {
         assert.deepStrictEqual(sectionTags, expectedTagsByHeading[subhead.title]);
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} ${subhead.title} has the wrong worked probes: ${error.message}`);
+        failures.push(`${kind.file} ${subhead.title} has the wrong worked probes: ${error.message}`);
       }
     }
     try {
@@ -561,7 +755,7 @@ function checkCorpus(corpus, engine, failures) {
         ...(kind.title === 'Workflow' ? ['held-out'] : []),
       ]);
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} tagged corpus changed: ${error.message}`);
+      failures.push(`${kind.file} tagged corpus changed: ${error.message}`);
     }
     const seed = probes.find((probe) => probe.probeId === 'P-006');
     if (
@@ -569,10 +763,10 @@ function checkCorpus(corpus, engine, failures) {
       seed.qualification?.route !== 'controlled-mutation' ||
       seed.defects?.[0]?.manifestationWitness == null
     )
-      failures.push(`corpus.md ${kind.title} lacks a worked seeded defect with a manifestation witness`);
+      failures.push(`${kind.file} lacks a worked seeded defect with a manifestation witness`);
     const heldOut = { Skill: ['P-004', 'P-006'], Workflow: ['P-006', 'P-008'] }[kind.title] ?? ['P-006'];
     const heldOutBody = headings.get('Held-out probe selection') ?? '';
-    for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `corpus.md ${kind.title} held-out selection`, failures);
+    for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `${kind.file} held-out selection`, failures);
     if (kind.title === 'Workflow')
       for (const marker of [
         'Select an unseen two-step reservation and an unseen reporting request early. List `P-006` and `P-008` in `heldOutProbes`.',
@@ -582,7 +776,7 @@ function checkCorpus(corpus, engine, failures) {
         'No `zero-action` defect probe stays in development, so the evaluation declares the `defect` floor alone.',
         '`P-008` seeds the reporting rule for unseen reservation R-19 through `M-003`; qualify it as `P-006` is.',
       ])
-        requireText(heldOutBody, marker, 'corpus.md Workflow held-out selection', failures);
+        requireText(heldOutBody, marker, 'corpus-workflow.md held-out selection', failures);
     // The starter's floors are read on the development partition (a development baseline's twin run) and on the held-out list. The engine's
     // strength vector leaves canaries and every `expectedClean` probe out, so a floor class needs a non-clean probe of its class in each.
     const starterFloors = Object.keys(JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8')).strengthFloor);
@@ -592,15 +786,13 @@ function checkCorpus(corpus, engine, failures) {
     ])
       for (const probeClass of starterFloors)
         if (!members.some((probe) => probe.probeClass === probeClass && probe.probeClass !== 'canary' && !probe.expectedClean))
-          failures.push(
-            `corpus.md ${kind.title} worked ${partition} partition holds no eligible ${probeClass} probe for the starter's floor`,
-          );
+          failures.push(`${kind.file} worked ${partition} partition holds no eligible ${probeClass} probe for the starter's floor`);
     for (const id of heldOut) {
       const selected = probes.find((probe) => probe.probeId === id);
       if (!selected || selected.expectedClean !== false || selected.qualification?.route === 'clean-control')
-        failures.push(`corpus.md ${kind.title} held-out ${id} must be non-clean`);
+        failures.push(`${kind.file} held-out ${id} must be non-clean`);
       if (!probes.some((probe) => !heldOut.includes(probe.probeId) && probe.behaviorId === selected?.behaviorId))
-        failures.push(`corpus.md ${kind.title} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
+        failures.push(`${kind.file} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
     }
     if (Object.hasOwn(heldOutInputs, kind.title)) {
       const input = heldOutInputs[kind.title];
@@ -618,19 +810,19 @@ function checkCorpus(corpus, engine, failures) {
           expectedFaultPredicate('observed', heldOutFaultOutputs[kind.title]),
         );
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-006 must bind its held-out input and expose the seeded fault: ${error.message}`);
+        failures.push(`${kind.file} P-006 must bind its held-out input and expose the seeded fault: ${error.message}`);
       }
     }
     const malformed = probes.find((probe) => probe.probeId === 'P-003');
     if (!malformed?.rationale.startsWith('[malformed]') || !malformed.rationale.includes('type-violating'))
-      failures.push(`corpus.md ${kind.title} P-003 lacks a type-violating malformed input`);
+      failures.push(`${kind.file} P-003 lacks a type-violating malformed input`);
     const gameability = probes.find((probe) => probe.probeId === 'P-004');
     if (
       gameability?.behaviorId !== 'B-001' ||
       gameability.qualification?.naiveOracle !== 'O-002' ||
       (!(headings.get('Gameability design') ?? '').includes('different behavior') && kind.title !== 'Skill')
     )
-      failures.push(`corpus.md ${kind.title} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
+      failures.push(`${kind.file} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
     const [counterChannel, counterKey, counterValue] = gameabilityCountercaseInputs[kind.title];
     const boundCountercase = Object.entries(gameability?.defectSignature?.condition?.selector?.inputBinding ?? {}).filter(
       ([, value]) => value !== null,
@@ -638,43 +830,42 @@ function checkCorpus(corpus, engine, failures) {
     try {
       assert.deepStrictEqual(boundCountercase, [[counterChannel, { [counterKey]: { literal: counterValue } }]]);
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} P-004 must bind its concrete countercase input: ${error.message}`);
+      failures.push(`${kind.file} P-004 must bind its concrete countercase input: ${error.message}`);
     }
     const responseBlocks = [
       ...(headings.get('Gameability design') ?? '').matchAll(/<!-- example:gameability-response -->\s*```json\n([\s\S]*?)\n```/g),
     ];
     if (responseBlocks.length !== 1) {
-      failures.push(`corpus.md ${kind.title} needs exactly one tagged gameability response; found ${responseBlocks.length}`);
+      failures.push(`${kind.file} needs exactly one tagged gameability response; found ${responseBlocks.length}`);
     } else if (gameability?.defectSignature?.condition?.predicate) {
       try {
         const response = JSON.parse(responseBlocks[0][1]);
         if (!validateDegenerate(response)) {
-          failures.push(`corpus.md ${kind.title} gameability response fails runtime schema: ${JSON.stringify(validateDegenerate.errors)}`);
+          failures.push(`${kind.file} gameability response fails runtime schema: ${JSON.stringify(validateDegenerate.errors)}`);
         } else if (Object.keys(response.steps).length !== 1 || !Object.hasOwn(response.steps, 'decide')) {
-          failures.push(`corpus.md ${kind.title} gameability response must answer only the worked decide step`);
+          failures.push(`${kind.file} gameability response must answer only the worked decide step`);
         } else {
           const observed = gameabilityObservation(response.steps.decide, kind.title);
           const predicate = gameability.defectSignature.condition.predicate;
           const actual = resolveGameabilityPredicate(engine, predicate, observed, kind.title);
-          if (actual !== 'true')
-            failures.push(`corpus.md ${kind.title} P-004 signature resolves ${actual} on its committed degenerate response`);
+          if (actual !== 'true') failures.push(`${kind.file} P-004 signature resolves ${actual} on its committed degenerate response`);
           const counter =
             kind.title === 'AI feature'
               ? { responseBody: cleanCounterresponses[kind.title] }
               : { stdout: { kind: 'json', value: cleanCounterresponses[kind.title] } };
           const clean = resolveGameabilityPredicate(engine, predicate, counter, kind.title);
-          if (clean !== 'false') failures.push(`corpus.md ${kind.title} P-004 signature resolves ${clean} on its clean counterresponse`);
+          if (clean !== 'false') failures.push(`${kind.file} P-004 signature resolves ${clean} on its clean counterresponse`);
         }
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} gameability response cannot be evaluated: ${error.message}`);
+        failures.push(`${kind.file} gameability response cannot be evaluated: ${error.message}`);
       }
     }
     if (kind.title === 'Skill') {
       for (const id of ['P-002', 'P-003', 'P-006'])
         if (probes.find((probe) => probe.probeId === id)?.behaviorId !== 'B-002')
-          failures.push(`corpus.md Skill ${id} must cover critical B-002`);
+          failures.push(`corpus-skill.md ${id} must cover critical B-002`);
       if (probes.find((probe) => probe.probeId === 'P-007')?.behaviorId !== 'B-001')
-        failures.push('corpus.md Skill needs a B-001 development seed');
+        failures.push('corpus-skill.md needs a B-001 development seed');
       const eligibleSeed = probes.find((probe) => probe.probeId === 'P-007');
       if (
         eligibleSeed?.defects?.[0]?.manifestationWitness?.inputs?.stdin?.value !==
@@ -687,8 +878,13 @@ function checkCorpus(corpus, engine, failures) {
         eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/decision' ||
         eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'declined'
       )
-        failures.push('corpus.md Skill P-007 must bind the eligible input and false decline');
-      requireText(headings.get('Gameability design') ?? '', "O-002` is B-002's naive decline oracle", 'corpus.md Skill', failures);
+        failures.push('corpus-skill.md P-007 must bind the eligible input and false decline');
+      requireText(
+        headings.get('Gameability design') ?? '',
+        "O-002` is B-002's naive decline oracle",
+        'corpus-skill.md Gameability design',
+        failures,
+      );
       if (
         !gameability?.rationale?.includes("B-002's refusal-only oracle") ||
         seed?.defects?.[0]?.severity !== 'critical' ||
@@ -702,11 +898,11 @@ function checkCorpus(corpus, engine, failures) {
         seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/reservationCallCount' ||
         seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 1
       )
-        failures.push('corpus.md Skill must show B-002 no-call evidence and B-001 gameability relation');
+        failures.push('corpus-skill.md must show B-002 no-call evidence and B-001 gameability relation');
     } else {
       const comparisonSeed = probes.find((probe) => probe.probeId === 'P-007');
       if (seed?.behaviorId !== 'B-001' || seed?.defects?.[0]?.behaviorId !== 'B-001' || seed?.defects?.[0]?.severity !== 'material')
-        failures.push(`corpus.md ${kind.title} P-006 must hold out material B-001`);
+        failures.push(`${kind.file} P-006 must hold out material B-001`);
       if (
         comparisonSeed?.behaviorId !== 'B-002' ||
         comparisonSeed?.expectedClean !== false ||
@@ -716,11 +912,11 @@ function checkCorpus(corpus, engine, failures) {
         comparisonSeed?.defects?.[0]?.severity !== 'low' ||
         comparisonSeed?.defects?.[0]?.manifestationWitness == null
       )
-        failures.push(`corpus.md ${kind.title} P-007 must seed B-002 with a non-null manifestation witness`);
+        failures.push(`${kind.file} P-007 must seed B-002 with a non-null manifestation witness`);
       requireText(
         headings.get('Negative and malformed inputs') ?? '',
         'B-002 is the low-severity requirement',
-        `corpus.md ${kind.title} B-002 rank`,
+        `${kind.file} B-002 rank`,
         failures,
       );
       const [inputChannel, inputKey, positiveInput] = comparisonSeedInputs[kind.title];
@@ -733,7 +929,7 @@ function checkCorpus(corpus, engine, failures) {
         assert.strictEqual(witnessInput, positiveInput);
         assert.deepStrictEqual(boundInput, [[inputChannel, { [inputKey]: { literal: positiveInput } }]]);
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-007 witness and signature must bind the same positive input: ${error.message}`);
+        failures.push(`${kind.file} P-007 witness and signature must bind the same positive input: ${error.message}`);
       }
       try {
         assert.strictEqual(comparisonSeed.defects[0].manifestationWitness.legId, 'manifest-b002-fault');
@@ -746,7 +942,7 @@ function checkCorpus(corpus, engine, failures) {
           expectedFaultPredicate('observed', comparisonFaultOutputs[kind.title]),
         );
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-007 witness and signature must expose the B-002 fault: ${error.message}`);
+        failures.push(`${kind.file} P-007 witness and signature must expose the B-002 fault: ${error.message}`);
       }
     }
     if (
@@ -758,7 +954,7 @@ function checkCorpus(corpus, engine, failures) {
         JSON.stringify(seed.defectSignature?.condition?.predicate) !==
           JSON.stringify(expectedFaultPredicate('observed', heldOutFaultOutputs.Workflow)))
     )
-      failures.push('corpus.md Workflow P-006 must skip all required actions while claiming success');
+      failures.push('corpus-workflow.md P-006 must skip all required actions while claiming success');
     if (kind.title === 'Workflow') {
       const heldOutReport = probes.find((probe) => probe.probeId === 'P-008');
       const input = 'Create reservation R-19 and read it back.';
@@ -780,7 +976,7 @@ function checkCorpus(corpus, engine, failures) {
         );
       } catch (error) {
         failures.push(
-          `corpus.md Workflow P-008 must hold out a B-002 defect probe that reports failure after both actions: ${error.message}`,
+          `corpus-workflow.md P-008 must hold out a B-002 defect probe that reports failure after both actions: ${error.message}`,
         );
       }
     }
@@ -796,10 +992,11 @@ function checkCorpus(corpus, engine, failures) {
         seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/response-body/decision' ||
         seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'pass')
     )
-      failures.push('corpus.md AI feature P-006 must pass the bound restricted answer');
+      failures.push('corpus-ai-feature.md P-006 must pass the bound restricted answer');
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
-  if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
+  if (zeroActionDefectCount === 0)
+    failures.push('the per-kind corpus guides lack a worked zero-action defect for a mandatory-action behavior');
 }
 
 /**
@@ -4382,7 +4579,7 @@ async function main() {
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
-  const corpus = fs.readFileSync(REFERENCE('corpus'), 'utf8');
+  const corpusGuides = readCorpusGuides(failures);
   const engine = await loadEngine();
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
@@ -4417,7 +4614,9 @@ async function main() {
     checkDigestFileGuidance(corrupted, engine, rejected);
     if (rejected.length === 0) failures.push(`${label} passed the digest guidance gate`);
   }
-  checkCorpus(corpus, engine, failures);
+  checkCorpus(corpusGuides, engine, failures);
+  checkCorpusReferences(corpusGuides, failures);
+  checkCorpusPins(engine, failures);
   checkRetiredNetwork(fs.readFileSync(REFERENCE('adapters'), 'utf8'), failures, 'adapters.md');
   try {
     checkContractGuidance(
@@ -5661,6 +5860,133 @@ async function main() {
       else if (expected !== undefined && !rejected.some((failure) => failure.includes(expected)))
         failures.push(`${label} failed the guidance gate without the failure it targets (${expected}): ${JSON.stringify(rejected)}`);
     }
+    // The carve (Story 1.114): each mutation edits the file that holds the text and must raise the failure that names it.
+    const guides = corpusGuides;
+    const kindBody = (title) => guides.kinds[title].replace(/^# .+\n\n/, `## ${title}\n\n`);
+    const carveCases = [
+      [
+        'corpus.md with the Workflow section moved back',
+        (copy) => void (copy.shared += `\n${kindBody('Workflow')}`),
+        checkCorpusLayout,
+        'corpus.md holds the Workflow heading',
+      ],
+      [
+        'corpus.md with every kind section moved back',
+        (copy) => void (copy.shared += CORPUS_KINDS.map(([title]) => `\n${kindBody(title)}`).join('')),
+        checkCorpusLayout,
+        'corpus.md is ',
+      ],
+      [
+        'corpus.md without the Per-kind guides section',
+        (copy) => void (copy.shared = copy.shared.replace('## Per-kind guides', '## Removed lesson')),
+        checkCorpusLayout,
+        'corpus.md lacks exact heading ## Per-kind guides',
+      ],
+      [
+        'corpus.md without the load-one instruction',
+        (copy) =>
+          void (copy.shared = copy.shared.replace(
+            'Load only the guide for the target kind recorded as `targetKind` at inspection.',
+            'Load the guides.',
+          )),
+        checkCorpusLayout,
+        'Load only the guide for the target kind',
+      ],
+      [
+        'corpus.md pointing a tool server at adapters.md for its channel pointers',
+        (copy) =>
+          void (copy.shared = copy.shared.replace(
+            'takes its channel pointers from `references/oracles.md` and its registry shape from `references/adapters.md`.',
+            'takes its channel pointers from `references/adapters.md`.',
+          )),
+        checkCorpusLayout,
+        'corpus.md Per-kind guides lacks the whole line',
+      ],
+      [
+        'a seventh corpus guide in references',
+        (copy) => void (copy.present = [...copy.present, 'corpus-plugin.md']),
+        checkCorpusLayout,
+        'references/ holds corpus guides other than corpus.md and the six per-kind files',
+      ],
+      [
+        'corpus.md without one per-kind file',
+        (copy) => void (copy.shared = copy.shared.replace('- Skill: `references/corpus-skill.md`\n', '')),
+        checkCorpusLayout,
+        'must list exactly the six per-kind files',
+      ],
+      [
+        'a per-kind guide that is missing',
+        (copy) => void (copy.kinds.Skill = ''),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-skill.md headings changed',
+      ],
+      [
+        'a per-kind guide without its kind heading',
+        (copy) => void (copy.kinds['AI feature'] = copy.kinds['AI feature'].replace('# AI feature corpus', '# AI corpus')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-ai-feature.md headings changed',
+      ],
+      [
+        'a per-kind guide with a subsection back at the third level',
+        (copy) => void (copy.kinds.Agent = copy.kinds.Agent.replace('## Gameability design', '### Gameability design')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-agent.md headings changed',
+      ],
+      [
+        'a per-kind guide with a renamed subsection',
+        (copy) => void (copy.kinds.Workflow = copy.kinds.Workflow.replace('## Held-out probe selection', '## Held-out selection')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-workflow.md headings changed',
+      ],
+      [
+        'a tagged example that the probe schema refuses',
+        (copy) =>
+          void (copy.kinds['Tool-use system'] = copy.kinds['Tool-use system'].replace(
+            '"probeClass": "zero-action"',
+            '"probeClass": "no-such-class"',
+          )),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-tool-use-system.md P-001 fails committed-probe schema',
+      ],
+      [
+        'a per-kind guide padded past the budget',
+        (copy) => void (copy.kinds.Agent += `\n${'A sentence that pads the guide past its token budget. '.repeat(3000)}\n`),
+        checkCorpusLayout,
+        'corpus-agent.md is ',
+      ],
+      [
+        'a tagged gameability response that answers another step',
+        (copy) => void (copy.kinds.Skill = copy.kinds.Skill.replace('"decide": {', '"other": {')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-skill.md gameability response must answer only the worked decide step',
+      ],
+    ];
+    for (const [label, corrupt, check, expected] of carveCases) {
+      const copy = { shared: guides.shared, kinds: { ...guides.kinds }, present: [...guides.present] };
+      corrupt(copy);
+      const rejected = [];
+      check(copy, rejected);
+      if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+      else if (!rejected.some((failure) => failure.includes(expected)))
+        failures.push(`${label} failed the guidance gate without the failure it targets (${expected}): ${JSON.stringify(rejected)}`);
+    }
+    const meteredFailures = [];
+    checkTokenMetric(meteredFailures, (text) => Math.ceil(text.length / 4));
+    if (meteredFailures.length === 0) failures.push('a length-over-four token count passed the cl100k_base pin');
+    const pinFailures = [];
+    checkCorpusPins(engine, pinFailures, Buffer.concat([fs.readFileSync(SKILL_MD_PATH), Buffer.from('\n')]));
+    if (!pinFailures.some((failure) => failure.includes('pins a SKILL.md other than the one on disk')))
+      failures.push('a SKILL.md with another byte passed the capture record pins');
+    const pinnedGuide = readCaptureRecords();
+    pinnedGuide['tagged-release'].sessionRead['references/corpus.md'] = 'sha256:0';
+    const guidePinFailures = [];
+    checkCorpusPins(engine, guidePinFailures, undefined, pinnedGuide);
+    if (!guidePinFailures.some((failure) => failure.includes('pins references/corpus.md')))
+      failures.push('a capture record that pins a corpus guide passed the pins check');
+    const unreadable = [];
+    readCorpusGuides(unreadable, path.join(os.tmpdir(), 'tea-no-such-guide-directory'));
+    if (unreadable.length !== 7 || !unreadable.every((failure) => failure.includes('cannot be read: ENOENT')))
+      failures.push(`seven missing guides must each fail with their name: ${JSON.stringify(unreadable)}`);
   } catch (error) {
     failures.push(`guidance negative checks: ${error.stack}`);
   }

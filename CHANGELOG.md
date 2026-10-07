@@ -469,6 +469,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TeA adopts eval-quality 7.2.0, the first release whose `score` takes `--designated-oracle` (Story 1.110, AD-5).
   The peer floor moves to `>=7.2.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, `test/test-guard-publish.js` refuses a floor of 7.1.0, and the engine-missing message, the reference and the AD-5 record name the release.
   Every accepted baseline is re-recorded on 7.2.0 with `compare --accept` over a clean copy, since a baseline names the engine release that measured it and `test:evaluate-pr-<key>` refuses one recorded on another.
+- The Evaluate skill's corpus guide is carved into one guide per target kind (Story 1.114).
+  `references/corpus.md` held the craft every kind shares and six target-kind sections, and at 16,799 tokens it ran past the 9,000-token budget of a single-purpose guide.
+  `corpus.md` keeps the shared craft (the layout rules, the partition plans and held-out steps) and gains a `Per-kind guides` section that names `references/corpus-agent.md`, `corpus-skill.md`, `corpus-workflow.md`, `corpus-tool-use-system.md`, `corpus-ai-feature.md` and `corpus-test-review-mechanism.md`.
+  Stage 3 loads `corpus.md` and then only the guide for the kind recorded as `targetKind` at inspection, so the stage reads at most 7,298 tokens of the guide where it read 16,799.
+  Each guide holds its kind's four sections and tagged worked examples, moved word for word, and each of the seven files is within the 9,000-token budget.
+  `test:evaluate-guidance` counts the tokens of every file, asserts each heading in its own file, checks every tagged example through the engine or runtime schema it meets, and fails when a guide names a heading that moved, when a kind section returns to `corpus.md`, or when `references/` holds a `corpus*.md` file other than the seven.
+  `SKILL.md` is unchanged.
 - `tea-evaluate` records neutral path forms, so a committed baseline names no machine (Story 1.91, AD-12).
   `compare --accept` copied every file byte for byte, and `run.json`, the observations and the score call records carried the workspace paths, the repository path, the evaluation checkout's path and the private staging path of the machine that produced the run.
   The runtime now writes `<workspace>`, `<repository>` and `<credentials-file>` in `run.json`, the observations and the isolation manifests, and each engine call record states its executable as `eval-quality/<path below the package>` and its argv with the evaluation folder's files by their path below the folder, the staging file as `<staging>/<file name>` and the score invocation's directory as `<score-invocation>`.

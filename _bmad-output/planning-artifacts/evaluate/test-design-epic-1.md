@@ -1927,6 +1927,8 @@ Added 2026-10-03 from Story 1.46's Analyze run. Levels: guidance contract and th
 | No stale reference                   | Assert no guide names a heading that moved and `SKILL.md` bytes are unchanged                                         | Guidance contract | P1  | A reference to the old heading fails                   |
 | The Analyze run clears the high      | Run the builder's Analyze over the skill; assert no high finding names `corpus.md`                                    | Review gate       | P1  | The uncarved guide reports the high again              |
 
+Amended 2026-10-06 in Story 1.114's build: the count is tiktoken's `cl100k_base` (`js-tiktoken`), which matches the builder's `count_tokens.py`. `corpus.md` is 4,276 tokens, so moving one kind's section back leaves it under 9,000 and fails the first row through the kind-heading assertion (`corpus.md holds the <Kind> heading`); moving every kind back fails it through the budget. The cases are in `test:evaluate-guidance` (`checkCorpusLayout`, `checkCorpusReferences`, `checkCorpusPins` and the carve cases of the negative table).
+
 ### Story 1.115: Give the skill a command that prints a file's digest
 
 Added 2026-10-03 from Story 1.46's Analyze run. Levels: CLI integration and guidance contract.
