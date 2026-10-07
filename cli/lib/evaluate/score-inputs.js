@@ -185,9 +185,11 @@ class HeldInputs {
 
   /**
    * A finding for each trial set whose designation cannot be made, or whose behavior the folder's both view lists with other oracles
-   * than the contract this run sealed does. The sealed contract of a both run is the both view the run compiled, so the folder's view
-   * has drifted from the run whenever the two lists differ, whether or not an oracle is designated: a probe would be scored under an
-   * oracle the run never held, or left undesignated where the run designated one, and a baseline of that score would be a lie.
+   * than the contract this run sealed does, where that can change the designation. The sealed contract of a both run is the both view
+   * the run compiled. A sealed list of several oracles may have been designated one, so a folder that lists it differently would score
+   * the probe under an oracle the run never held or leave it undesignated; a folder that designates an oracle the sealed list does not
+   * hold is refused too. A sealed list of exactly one oracle is designated by the engine from the sealed contract whatever the folder
+   * says, so a folder that changed such a behavior is the stale-baseline rule's to report.
    *
    * @returns {Array<{ relative: string, message: string }>}
    */
@@ -200,18 +202,21 @@ class HeldInputs {
       // The contract's own finding comes from the input check.
     }
     for (const set of this.index.trialSets) {
-      const { problem, listed } = this.designation(set);
+      const { oracleId, problem, listed } = this.designation(set);
       // A problem every probe shares (the folder's views cannot be derived) is reported once.
       if (problem !== null && !findings.some((entry) => entry.message === problem))
         findings.push({ relative: set.probe, message: problem });
       if (problem !== null || listed === undefined || contract === null) continue;
       const behaviorId = this.json(set.probe)?.behaviorId;
-      if (!sameOracles(listed, oraclesListed(contract, behaviorId))) {
-        findings.push({
-          relative: set.probe,
-          message: `names ${named(behaviorId, BEHAVIOR_ID, 'a behavior')}, whose oracles the evaluation folder's both view lists differently from the contract this run sealed; run the evaluation again`,
-        });
-      }
+      const sealed = oraclesListed(contract, behaviorId);
+      if (sameOracles(listed, sealed)) continue;
+      // A list the sealed contract holds with exactly one oracle is designated by the engine from the sealed contract whatever the
+      // folder says, so only a folder that designates an oracle or a sealed list of several (which may have designated one) can differ.
+      if (oracleId === null && !(Array.isArray(sealed) && sealed.length > 1)) continue;
+      findings.push({
+        relative: set.probe,
+        message: `names ${named(behaviorId, BEHAVIOR_ID, 'a behavior')}, whose oracles the evaluation folder's both view lists differently from the contract this run sealed; run the evaluation again`,
+      });
     }
     return findings;
   }

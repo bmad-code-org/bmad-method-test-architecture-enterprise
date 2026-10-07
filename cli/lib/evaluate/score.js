@@ -282,8 +282,14 @@ function phaseSnapshotProblems(run, contract) {
  * through this one function, so the call's arguments and the in-process check hold the same designation. A designation that cannot be
  * derived is a finding of the input check, and no score call runs.
  */
-function holdRunInputs({ folder, runDirectory, index, record, engine }) {
+function holdRunInputs({ folder, runDirectory, index, record, engine, designations = null }) {
   let designate;
+  if (designations !== null) {
+    // A replay reproduces a baseline: each probe is scored under the oracle the baseline's own call record handed it, and the folder is
+    // not read, so a folder that changed since is the stale-baseline rule's to report and no designation finding is.
+    designate = (probe) => ({ oracleId: designations.get(probe?.probeId) ?? null, problem: null, listed: undefined });
+    return holdScoreInputs({ runDirectory, index, record, engine, designate });
+  }
   try {
     designate = loadBothViewDesignation({ folder, partition: record?.partition, heldOutProbes: record?.heldOutProbes });
   } catch (error) {
@@ -497,7 +503,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
  *   user's private root (`workspace.js` `makePrivateParent`) and removes it at its end
  * @returns {Promise<ScoreOutcome>}
  */
-async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot } = {}) {
+async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot, designations = null } = {}) {
   const located = runDirectoryFor(folder, invocationId);
   if (located.wiring !== undefined)
     return new ScoreOutcome({ exitCode: WIRING, message: located.wiring, runDirectory: located.directory ?? null });
@@ -534,7 +540,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
 
   const engine = await loadEngine();
-  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine });
+  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine, designations });
   const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine, held });
   if (findings.length === 0) {
     const contract = held.json(index.contract);

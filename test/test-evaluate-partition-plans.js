@@ -51,6 +51,7 @@ const {
   selectPartition,
   stepsReadBy,
 } = require('../cli/lib/evaluate/partition');
+const { HeldInputs } = require('../cli/lib/evaluate/score-inputs');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { rowsValidator } = require('../cli/lib/evaluate/judgment-rows');
 const { declaredContent, foreignContent } = require('../cli/lib/evaluate/records-evaluator');
@@ -291,6 +292,34 @@ try {
     problem: 'a probe names a behavior, which the contract does not hold',
     listed: null,
   });
+  // The input check holds the folder's list against the sealed contract's where that can change a designation (Story 1.110): a sealed
+  // list of several, or a folder that designates an oracle. A behavior ID of no schema shape is named as "a behavior".
+  const drift = ({ behaviorId = 'B-002', sealed, answer }) =>
+    new HeldInputs({
+      engine: null,
+      index: { contract: 'sealed-contract.json', trialSets: [{ probe: 'held-probe.json' }] },
+      entries: [
+        { relative: 'sealed-contract.json', bytes: Buffer.from(JSON.stringify({ behaviors: [{ id: behaviorId, oracles: sealed }] })) },
+        { relative: 'held-probe.json', bytes: Buffer.from(JSON.stringify({ probeId: 'P-003', behaviorId })) },
+      ],
+      designate: () => ({ oracleId: null, problem: null, listed: undefined, ...answer }),
+    }).designationFindings();
+  const messagesOf = (findings) => findings.map(({ message }) => message);
+  assert.deepEqual(drift({ sealed: ['O-002', 'O-101'], answer: { listed: ['O-002', 'O-101'] } }), [], 'the same list was refused');
+  assert.equal(drift({ sealed: ['O-002', 'O-101'], answer: { listed: ['O-002'] } }).length, 1, 'a sealed list of several was not held');
+  assert.equal(drift({ sealed: ['O-002', 'O-101'], answer: { listed: null } }).length, 1, 'a folder without the behavior was not held');
+  assert.deepEqual(drift({ sealed: ['O-001'], answer: { listed: ['O-009'] } }), [], 'a sealed list of one oracle was refused');
+  assert.deepEqual(drift({ sealed: ['O-001'], answer: { listed: null } }), [], 'a folder without a single-oracle behavior was refused');
+  assert.deepEqual(drift({ sealed: null, answer: { listed: null } }), [], 'a behavior neither side lists was refused');
+  assert.equal(
+    drift({ sealed: ['O-001'], answer: { listed: ['O-001', 'O-102'], oracleId: 'O-001' } }).length,
+    1,
+    'a designation was not held',
+  );
+  assert.deepEqual(drift({ sealed: ['O-002', 'O-101'], answer: { listed: undefined } }), [], 'a run that is not a both run was held');
+  const unshaped = drift({ behaviorId: 'canary-behavior-2e7a', sealed: ['O-002', 'O-101'], answer: { listed: ['O-002'] } });
+  assert.match(messagesOf(unshaped).join('\n'), /^names a behavior, whose oracles/);
+  assert.equal(JSON.stringify(unshaped).includes('canary-behavior-2e7a'), false, 'a finding printed a behavior ID of no schema shape');
   // Over a folder, the files are read for a both run under a plan and for no other run.
   assert.deepEqual(
     Object.fromEntries(
@@ -2464,6 +2493,22 @@ try {
     ['the plan lists an oracle the run never listed there', planDrift((plan) => (plan.behaviorOracles['B-002'] = ['O-001'])), DRIFTED],
     ['the plan lists an oracle ID of no oracle shape', planDrift((plan) => (plan.behaviorOracles['B-002'] = [UNSHAPED])), DRIFTED],
     [
+      'the folder has no partitionPlan and no longer holds the behavior',
+      () => {
+        const manifest = JSON.parse(flowEvaluationBytes.toString('utf8'));
+        delete manifest.partitionPlan;
+        write(flowEvaluationFile, manifest);
+        fs.writeFileSync(flowContractFile, flowContractBytes.toString('utf8').replaceAll('"id": "B-002"', '"id": "B-902"'));
+      },
+      DRIFTED,
+    ],
+    [
+      'the plan gives a single-oracle behavior a second oracle, so its development probes would be designated',
+      planDrift((plan) => (plan.behaviorOracles['B-001'] = ['O-102'])),
+      DRIFTED,
+      { probes: ['P-001', 'P-002'], behavior: 'B-001', unchanged: ['P-003', 'P-004'] },
+    ],
+    [
       'the plan lists a number where the oracles belong',
       planDrift((plan) => (plan.behaviorOracles['B-002'] = 5)),
       /corpus\/held-out\/plan\.json and contract\.json do not derive the views of the both run/,
@@ -2486,7 +2531,7 @@ try {
     assert.match(unreadablePlan.output, /corpus\/held-out\/plan\.json does not parse as JSON/);
     assert.equal(unreadablePlan.output.includes(CANARY), false, 'a refusal quoted a byte of the held-out plan');
     restoreFlow();
-    for (const [label, edit, message] of drifts) {
+    for (const [label, edit, message, scope = { probes: ['P-003', 'P-004'], behavior: 'B-002', unchanged: ['P-001', 'P-002'] }] of drifts) {
       for (const [command, args] of [
         ['score', ['--run', bothName]],
         ['compare', ['--run', bothName, '--accept']],
@@ -2499,13 +2544,14 @@ try {
         assert.equal(refused.output.includes(CANARY), false, what);
         assert.equal(refused.output.includes(UNSHAPED), false, `a refusal quoted an oracle ID of no oracle shape: ${what}`);
         if (message === DRIFTED) {
-          for (const probeId of ['P-003', 'P-004'])
-            assert.match(refused.output, new RegExp(`probes/${probeId}\\.probe\\.json.*names B-002, whose`), what);
-          assert.doesNotMatch(
-            refused.output,
-            /probes\/P-00[12]\.probe\.json.*whose oracles/,
-            `${what}: a probe of an unchanged behavior was refused`,
-          );
+          for (const probeId of scope.probes)
+            assert.match(refused.output, new RegExp(`probes/${probeId}\\.probe\\.json.*names ${scope.behavior}, whose`), what);
+          for (const probeId of scope.unchanged)
+            assert.doesNotMatch(
+              refused.output,
+              new RegExp(`probes/${probeId}\\.probe\\.json.*whose oracles`),
+              `${what}: a probe of an unchanged behavior was refused`,
+            );
         }
         if (command === 'score') assert.match(refused.output, /no score call ran/, what);
         assert.equal(holding(bothRun, [UNSHAPED]).length, 0, `${what}: a record of the run holds the plan's oracle ID`);
@@ -2527,6 +2573,16 @@ try {
     write(flowEvaluationFile, { ...JSON.parse(flowEvaluationBytes.toString('utf8')), heldOutProbes: ['P-004'] });
     const swapped = cli(flow, 'score', ['--run', bothName]);
     assert.equal(swapped.status, 0, swapped.output);
+    assert.deepEqual(designatedIn(bothRun), { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' });
+  } finally {
+    restoreFlow();
+  }
+  // A folder that changed a behavior whose sealed list names one oracle changes no designation (the engine designates it from the sealed
+  // contract), so `score` does not refuse it: the stale-baseline rule reports such a folder where a baseline is replayed.
+  try {
+    fs.writeFileSync(flowContractFile, flowContractBytes.toString('utf8').replaceAll('"O-001"', '"O-009"'));
+    const renamedSingle = cli(flow, 'score', ['--run', bothName]);
+    assert.equal(renamedSingle.status, 0, renamedSingle.output);
     assert.deepEqual(designatedIn(bothRun), { 'P-001': null, 'P-002': null, 'P-003': 'O-101', 'P-004': 'O-002' });
   } finally {
     restoreFlow();
@@ -2577,6 +2633,21 @@ try {
   assert.equal(bothCi.status, 0, bothCi.output);
   assert.doesNotMatch(bothCi.output, /stale/, 'a both baseline replays as stale');
   assert.match(bothCi.output, /12 baseline file\(s\) compared, 0 difference\(s\)/);
+  // A plan edited after the baseline was accepted is a stale baseline, a warning on `pr`: the replay scores each probe under the
+  // designation the baseline's call records name and reads no view of the folder, so it still reproduces the baseline.
+  const flowPlanAtBaseline = fs.readFileSync(flowPlanFile);
+  try {
+    fs.writeFileSync(flowPlanFile, flowPlanAtBaseline.toString('utf8').replaceAll('O-101', 'O-103'));
+    assert.equal(cli(flow, 'digest').status, 0);
+    const staleCi = cli(flow, 'ci', ['--tier', 'pr']);
+    assert.equal(staleCi.status, 0, staleCi.output);
+    assert.match(staleCi.output, /the baseline is stale/, staleCi.output);
+    assert.match(staleCi.output, /12 baseline file\(s\) compared, 0 difference\(s\)/, staleCi.output);
+    assert.doesNotMatch(staleCi.output, /\[designation\]|\[drift\]/, staleCi.output);
+  } finally {
+    fs.writeFileSync(flowPlanFile, flowPlanAtBaseline);
+    assert.equal(cli(flow, 'digest').status, 0);
+  }
   const replayScores = path.join(test.latest(flow.folder), 'replay/scores');
   const replayCaught = Object.fromEntries(
     PROBE_IDS.map((probeId) => {
@@ -2639,8 +2710,8 @@ try {
       `a run with no partitionPlan rewrote contract.json (${args.join(' ') || 'both'})`,
     );
   }
-  // A both run of a folder with no partitionPlan designates nothing and opens nothing but `evaluation.json`, so a `contract.json` the
-  // folder cannot parse stops no score (Story 1.110).
+  // A both run of a folder with no partitionPlan designates nothing and opens no plan, so a `contract.json` the folder cannot parse
+  // stops no score (Story 1.110).
   const unplannedContract = path.join(unplannedProject.folder, 'contract.json');
   const unplannedBytes = fs.readFileSync(unplannedContract);
   try {
@@ -2649,6 +2720,25 @@ try {
       loadBothViewDesignation({ folder: unplannedProject.folder, partition: 'both', heldOutProbes: ['P-002'] })(probeOf('P-002')).oracleId,
       null,
     );
+  } finally {
+    fs.writeFileSync(unplannedContract, unplannedBytes);
+  }
+  // A both run of a folder with no partitionPlan scores after the folder's contract changed: its sealed list names one oracle, which the
+  // engine designates from the sealed contract whatever the folder says, so neither a renamed oracle nor a renamed behavior is refused.
+  const unplannedRan = test.cli(unplannedProject.folder, 'run', [], unplannedProject.env);
+  assert.equal(unplannedRan.status, 0, unplannedRan.output);
+  const unplannedRunName = path.basename(test.latest(unplannedProject.folder));
+  const unplannedScore = () => test.cli(unplannedProject.folder, 'score', ['--run', unplannedRunName], unplannedProject.env);
+  assert.equal(unplannedScore().status, 0);
+  try {
+    for (const [from, to] of [
+      ['"O-001"', '"O-009"'],
+      ['"id": "B-001"', '"id": "B-901"'],
+    ]) {
+      fs.writeFileSync(unplannedContract, unplannedBytes.toString('utf8').replaceAll(from, to));
+      const scored = unplannedScore();
+      assert.equal(scored.status, 0, `${from} renamed in the folder of a planless both run: ${scored.output}`);
+    }
   } finally {
     fs.writeFileSync(unplannedContract, unplannedBytes);
   }

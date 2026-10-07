@@ -2143,6 +2143,25 @@ function checkContractDigestOnPr() {
   assert.equal(rowOf(latestCi(folder).json, 'check').exit, 0);
 }
 
+function checkRenamedOracleOnPr() {
+  // An oracle renamed in contract.json after a both baseline was accepted, over a folder with no partitionPlan: the contract digest
+  // differs, so the baseline is stale (a warning on pr), and the replay scores each probe under the designation the baseline's own call
+  // records name, so it still reproduces the baseline and files no designation finding (Story 1.110; revert: a replay that reads the
+  // folder's views refuses the changed folder with exit 10).
+  const folder = copyFixture('verdict', 'renamed-oracle-stale');
+  const file = path.join(folder, 'contract.json');
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replaceAll('"O-001"', '"O-009"'));
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 0, result.output);
+  const row = rowOf(latestCi(folder).json, 'replay');
+  assert.deepEqual([row.exit, row.action], [0, 'warn']);
+  assert.ok(
+    row.warnings.some((line) => /the baseline is stale \(the contract digest is sha256:/.test(line)),
+    JSON.stringify(row.warnings),
+  );
+  assert.doesNotMatch(result.output, /\[designation\]|\[drift\]/, result.output);
+}
+
 function checkBadCommittedInput() {
   const noStack = (text, label) => assert.doesNotMatch(text, /\n\s+at .*\(.*:\d+:\d+\)/, `${label}: a stack trace reached the output`);
   // A baseline probe that is not JSON: an authoring finding of the gameability check.
@@ -4655,6 +4674,7 @@ async function main() {
     ['baseline floors', checkBaselineFloors],
     ['a stale baseline on pr', checkStaleBaselineOnPr],
     ['the contract digest of a stale baseline', checkContractDigestOnPr],
+    ['a renamed oracle of a stale baseline', checkRenamedOracleOnPr],
     ['bad committed input', checkBadCommittedInput],
     ['an interrupted replay', checkInterruptedReplay],
     ['a signal while an engine stage runs', checkSignalEndsStage],

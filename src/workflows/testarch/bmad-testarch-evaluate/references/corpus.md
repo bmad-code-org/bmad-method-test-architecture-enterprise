@@ -193,10 +193,10 @@ The development and both views answer from the first file, and the held-out and 
 Give every gameability probe both files, each answering every step its own source declares (the steps of `contract.json` in the first, the steps of the plan file in the second), because the both view runs each probe over both.
 Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step, since the held-out view drops the others.
 When every oracle another behavior has reads a development-only step, add an oracle on a shared step to `contract.json` for it, or keep that behavior's gameability probe in the development partition.
-The both view answers every step of `contract.json` and of the plan file for every gameability probe, so those answers can violate an oracle of either partition, and each violation files a finding that cites the probe.
+Those answers can violate an oracle of either partition that belongs to the probe's behaviors, and each violation files a finding that cites the probe.
 eval-quality reads a finding at a step the signature does not admit, or whose predicate the answer does not satisfy, as an unwitnessed claim and scores the probe Invalid (exit 3).
-Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step.
-Make the answer at every step where an oracle is violated satisfy the signature's predicate.
+Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step, and make the answer at every step where such an oracle is violated satisfy the signature's predicate.
+The per-kind guides' gameability probes select a literal input, so replace that selector under a `partitionPlan`.
 
 <!-- example:held-out-gameability-response -->
 
@@ -211,6 +211,6 @@ Make the answer at every step where an oracle is violated satisfy the signature'
 
 `tea-evaluate check` validates the pair, names every defect by path and ID without quoting the plan, and refuses a `partitionPlan` beside a records evaluator and a rubric, and `mappings` beside an evaluator that reads none. It names a rubric criterion that no view can reach by its criterion ID. It names a waiver that no view can reach by its waiver ID. It names a gameability answer left out, misplaced or unreadable by probe and step ID, and a held-out step by its ID only when the ID has the schema's shape, and a held-out probe whose naive oracle reads a development-only step. It names a plan mapping row by its place in `mappings`: a key another row has, an oracle or criterion the held-out view does not declare or another key already binds, and a held-out criterion no key binds. It compiles nothing, so an engine compile defect in the plan file surfaces at the first held-out preflight or run with no `--partition`.
 
-A run with no `--partition` scores each probe against the oracle of its own partition.
-A probe is in the held-out partition when `heldOutProbes` lists it and in the development partition otherwise, and its oracle is the one oracle its partition's view lists for its behavior, so probes of one behavior in the two partitions are each scored against their own partition's oracle in the same run.
+A run with no `--partition` scores each probe against the oracle of its own partition: the one oracle that partition's view lists for its behavior (held-out when `heldOutProbes` lists the probe, development otherwise), so probes of one behavior in the two partitions meet different oracles in the same run.
 When that view lists none or several, the probe is scored with no designated oracle, as in its partition's own run, and reads `caught: true` only when a finding cites the contract's first-declared oracle.
+When the both view lists exactly one oracle, eval-quality designates it.
