@@ -22,7 +22,8 @@
  *   - the real `doc-counts` gate, over scratch trees of the final repository
  *     in which one sentence, one lane list, one stored replay case or one count is off by one,
  *     with the untouched tree as the negative control that proves the scratch tree itself passes;
- *   - every `doc-counts` entry and source that existed before Story 1.95, pinned by name and by what it reads.
+ *   - every `doc-counts` entry that existed before Story 1.95, pinned as its whole object (file, claim, pattern, counts, rendering and any other key),
+ *     and every source of those entries, pinned by the module and the export it reads.
  *
  * A scratch tree symlinks every path of the repository except the files it overrides.
  * Nothing in the working tree is ever edited, and a process killed mid-test leaves the real files as they were.
@@ -33,6 +34,7 @@
 'use strict';
 
 const assert = require('node:assert');
+const { isDeepStrictEqual } = require('node:util');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -534,7 +536,7 @@ check('story sections are counted outside fences, H.1 included, and an id held t
   // A marker line indented four spaces is indented code and opens nothing.
   assert.strictEqual(counted('    ```\n### Story 9.9: Example'), 1);
   assert.strictEqual(counted('   ```md\n### Story 9.9: Hidden\n   ```'), 0, 'three spaces of indentation still open a fence');
-  // A backtick line with a backtick in its info string is inline code, not a fence.
+  // A backtick line with a backtick in its info string is inline code and opens no fence.
   assert.strictEqual(counted('```code``` is inline\n### Story 9.9: Example'), 1);
   assert.strictEqual(counted('`` is two backticks and no fence\n### Story 9.9: Example'), 1);
   // A line indented four spaces inside a fence does not close it.
@@ -544,6 +546,14 @@ check('story sections are counted outside fences, H.1 included, and an id held t
   // A tilde fence is not closed by backticks, and a backtick fence is not closed by tildes.
   assert.strictEqual(counted('~~~md\n```\n### Story 9.9: Hidden\n~~~'), 0);
   assert.strictEqual(counted('```md\n~~~\n### Story 9.9: Hidden\n```'), 0);
+  // A closing run longer than the opening run closes the fence.
+  assert.strictEqual(counted('````md\n`````\n### Story 9.9: Example'), 1);
+  // A tilde fence may carry a backtick in its info string.
+  assert.strictEqual(counted('~~~ `x`\n### Story 9.9: Hidden\n~~~'), 0);
+  // A fence that is left open runs to the end of the file.
+  assert.strictEqual(counted('```md\n### Story 9.9: Hidden'), 0);
+  // A word that only starts with Story is not a story heading and is not refused.
+  assert.strictEqual(counted('### Storyline notes'), 0);
   // Only a level-three heading is a story section.
   assert.strictEqual(counted('## Story 9.9: Level two'), 0);
   assert.strictEqual(counted('#### Story 9.9: Level four'), 0);
@@ -1035,12 +1045,16 @@ check('gate: the fifth lane gone from both files fails the sentence that says fi
 // The configuration
 // ---------------------------------------------------------------------------
 
-// The doc-counts entries and sources that existed before Story 1.95, as origin/main held them: what each entry reads and what each source returns.
-// A pinned entry that reads another source, and a pinned source that exports another value, fails the check that holds them.
+// The doc-counts entries and sources that existed before Story 1.95, as origin/main held them.
+// Each entry is pinned as its whole object (file, claim, pattern, counts, rendering and any other key), and each source by the module and export it reads.
+// An entry that changes in any key, and a source that exports another value, fails the check that holds them.
 const PRE_EXISTING_ENTRIES = [
   {
     file: 'docs/explanation/eval-quality-roadmap.md',
     claim: 'the per-suite call counts one eval:all run makes',
+    pattern: {
+      match: String.raw`It runs (\d+) fragment selections, (\d+) routing intents, (\d+) complete test designs, (\d+) complete reviews, (\d+) complete audits, (\d+) complete pipelines, (\d+) complete traces, and (\d+) generations for one runner\.`,
+    },
     counts: [
       'fragmentSelectionCalls',
       'routingIntentCalls',
@@ -1051,22 +1065,53 @@ const PRE_EXISTING_ENTRIES = [
       'traceCalls',
       'atddCalls',
     ],
+    rendering: 'digits',
   },
-  { file: 'README.md', claim: 'the fragment-selection case count', counts: ['fragmentSelectionCases'] },
+  {
+    file: 'README.md',
+    claim: 'the fragment-selection case count',
+    pattern: {
+      match: '`test:eval-data` checks that all (\\d+) fragment-selection cases are structurally usable',
+    },
+    counts: ['fragmentSelectionCases'],
+    rendering: 'digits',
+  },
   {
     file: 'README.md',
     claim: 'how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe',
+    pattern: {
+      match:
+        'for ([a-z-]+) of the ([a-z-]+) suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential\\.',
+    },
     counts: ['agentPreflightedSuiteCount', 'totalSuiteCount'],
   },
-  { file: 'README.md', claim: 'the npm test chain length', counts: ['npmTestChainLength', 'npmTestChainLength'] },
+  {
+    file: 'README.md',
+    claim: 'the npm test chain length',
+    pattern: {
+      match:
+        '`npm test` chains (\\d+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Twelve of the (\\d+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:',
+    },
+    counts: ['npmTestChainLength', 'npmTestChainLength'],
+    rendering: 'digits',
+  },
   {
     file: 'README.md',
     claim: 'the knowledge-fragment tier breakdown',
+    pattern: {
+      match:
+        '`tea-index.csv` classifies all (\\d+) fragments into three tiers: \\*\\*core\\*\\* \\((\\d+), always loaded\\), \\*\\*extended\\*\\* \\((\\d+), loaded when deeper analysis is called for\\), and \\*\\*specialized\\*\\* \\((\\d+), loaded only when the case matches, such as contract testing on a real consumer-provider boundary\\)\\.',
+    },
     counts: ['knowledgeFragmentTotal', 'knowledgeFragmentCore', 'knowledgeFragmentExtended', 'knowledgeFragmentSpecialized'],
+    rendering: 'digits',
   },
   {
     file: 'docs/explanation/eval-quality-adoption-guide.md',
     claim: "one eval:all run's total model calls and their per-suite breakdown",
+    pattern: {
+      match:
+        'One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\.',
+    },
     counts: [
       'totalCalls',
       'fragmentSelectionCalls',
@@ -1078,10 +1123,15 @@ const PRE_EXISTING_ENTRIES = [
       'traceCalls',
       'atddCalls',
     ],
+    rendering: 'digits',
   },
   {
     file: 'README.md',
     claim: "one eval:all run's total agent calls and all three built-in runners' total",
+    pattern: {
+      match:
+        '`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, and (\\d+) ATDD generations\\. All three built-in runners make (\\d+) calls\\.',
+    },
     counts: [
       'totalCalls',
       'fragmentSelectionCalls',
@@ -1094,15 +1144,22 @@ const PRE_EXISTING_ENTRIES = [
       'atddCalls',
       'totalCallsThreeRunners',
     ],
+    rendering: 'digits',
   },
   {
     file: 'docs/reference/tea-test-review-cli.md',
     claim: 'the Advisory Observations cap on advisoryObservations',
+    pattern: {
+      match: String.raw`capped at (\w+) items`,
+    },
     counts: ['advisoryObservationsMaxItems'],
   },
   {
     file: 'docs/explanation/eval-quality-adoption-guide.md',
     claim: 'the replay corpus row: the stored output total and its per-suite breakdown',
+    pattern: {
+      match: String.raw`(\d+) stored outputs scored with no model call: (\d+) selections, (\d+) atdd reports, (\d+) verdicts, (\d+) trace pairs, (\d+) nfr reports, (\d+) ci runs, (\d+) test-design documents, (\d+) replies`,
+    },
     counts: [
       'replayTotal',
       'replayFragmentSelection',
@@ -1114,16 +1171,33 @@ const PRE_EXISTING_ENTRIES = [
       'replayTestDesign',
       'replayRouting',
     ],
+    rendering: 'digits',
   },
-  { file: 'docs/explanation/eval-quality-adoption-guide.md', claim: "the replay section's stored output total", counts: ['replayTotal'] },
+  {
+    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    claim: "the replay section's stored output total",
+    pattern: {
+      match: '`test/replay/` holds (\\d+) stored outputs',
+    },
+    counts: ['replayTotal'],
+    rendering: 'digits',
+  },
   {
     file: 'docs/explanation/eval-quality-adoption-guide.md',
     claim: 'how many stored outputs are real captures, captured and constructed',
+    pattern: {
+      match: String.raw`(\d+) of the (\d+) stored outputs are real captures, (\d+) are captured reports and the other (\d+) are constructed\.`,
+    },
     counts: ['replayRealCaptures', 'replayTotal', 'replayCaptured', 'replayConstructed'],
+    rendering: 'digits',
   },
   {
     file: 'docs/explanation/eval-quality-roadmap.md',
     claim: 'the replay corpus size and its per-suite breakdown',
+    pattern: {
+      match:
+        'score (\\d+) stored cases with no model call and no network: (\\d+) fragment-selection outputs, (\\d+) `atdd` reports, (\\d+) `test-review` verdicts, (\\d+) `test-design` documents, (\\d+) `trace` artifact pairs, (\\d+) `bmad-tea-routing` replies, (\\d+) `nfr` reports, and (\\d+) `ci` runs under `test/replay/`',
+    },
     counts: [
       'replayTotal',
       'replayFragmentSelection',
@@ -1135,11 +1209,16 @@ const PRE_EXISTING_ENTRIES = [
       'replayNfr',
       'replayCi',
     ],
+    rendering: 'digits',
   },
   {
     file: 'docs/explanation/eval-quality-roadmap.md',
     claim: 'how many stored outputs are real captures, captured and constructed',
+    pattern: {
+      match: String.raw`(\d+) of the (\d+) stored outputs are real captures, (\d+) are captured reports and (\d+) are constructed\.`,
+    },
     counts: ['replayRealCaptures', 'replayTotal', 'replayCaptured', 'replayConstructed'],
+    rendering: 'digits',
   },
 ];
 
@@ -1185,8 +1264,14 @@ function preExistingProblems(config) {
     const entry = section.entries[index];
     if (!entry || entry.file !== pinned.file || entry.claim !== pinned.claim) {
       problems.push(`entry ${index + 1} is another entry than "${pinned.claim}" of ${pinned.file}`);
-    } else if (JSON.stringify(entry.counts) !== JSON.stringify(pinned.counts)) {
-      problems.push(`"${pinned.claim}" of ${pinned.file} reads ${entry.counts.join(', ')} and read ${pinned.counts.join(', ')}`);
+      continue;
+    }
+    for (const key of new Set([...Object.keys(pinned), ...Object.keys(entry)])) {
+      if (!isDeepStrictEqual(entry[key], pinned[key])) {
+        problems.push(
+          `"${pinned.claim}" of ${pinned.file}: ${key} is ${JSON.stringify(entry[key])} and was ${JSON.stringify(pinned[key])}`,
+        );
+      }
     }
   }
   for (const [name, exported] of Object.entries(PRE_EXISTING_SOURCES)) {
@@ -1209,12 +1294,26 @@ check('every doc-counts entry and source that existed before Story 1.95 reads wh
   assert.deepStrictEqual(preExistingProblems(config), []);
   assert.strictEqual(PRE_EXISTING_ENTRIES.length, 13);
   assert.strictEqual(Object.keys(PRE_EXISTING_SOURCES).length, 31);
+  const entryOf = (copy, claim) => copy['doc-counts'].entries.find((entry) => entry.claim === claim);
+  const ADOPTION = "the replay section's stored output total";
   const widened = structuredClone(config);
-  const adoption = widened['doc-counts'].entries.find((entry) => entry.claim === "the replay section's stored output total");
-  adoption.counts = ['replayScored'];
+  entryOf(widened, ADOPTION).counts = ['replayScored'];
   assert.deepStrictEqual(preExistingProblems(widened), [
-    `"the replay section's stored output total" of docs/explanation/eval-quality-adoption-guide.md reads replayScored and read replayTotal`,
+    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: counts is ["replayScored"] and was ["replayTotal"]`,
   ]);
+  const retargetedPattern = structuredClone(config);
+  entryOf(retargetedPattern, ADOPTION).pattern.match = String.raw`6 of the (\d+) stored outputs are real captures`;
+  assert.deepStrictEqual(preExistingProblems(retargetedPattern), [
+    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: pattern is {"match":"6 of the (\\\\d+) stored outputs are real captures"} and was {"match":"\`test/replay/\` holds (\\\\d+) stored outputs"}`,
+  ]);
+  const flipped = structuredClone(config);
+  entryOf(flipped, ADOPTION).rendering = 'word';
+  assert.deepStrictEqual(preExistingProblems(flipped), [
+    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: rendering is "word" and was "digits"`,
+  ]);
+  const wrapped = structuredClone(config);
+  entryOf(wrapped, ADOPTION).wrap = true;
+  assert.strictEqual(preExistingProblems(wrapped).length, 1, 'a key the pinned entry did not carry is named');
   const retargeted = structuredClone(config);
   retargeted['doc-counts'].sources.replayTotal.from.export = 'REPLAY_SCORED';
   assert.deepStrictEqual(preExistingProblems(retargeted), [
