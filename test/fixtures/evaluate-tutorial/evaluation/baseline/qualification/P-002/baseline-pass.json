@@ -1,0 +1,112 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "phase": "baseline-pass",
+  "workspace": "qualify-P-002",
+  "targetArtifact": "skill/SKILL.md",
+  "targetArtifactDigest": "sha256:16f3f5d27bb33d492cbeb5b01c8f60bd45013395cd477820d6c8381b7d0a5581",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-review-refund"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "review-refund",
+      "request": {
+        "probeId": "baseline-review-refund",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "skill-root": "skill",
+            "agent": "custom",
+            "agent-cmd": "./agent.js",
+            "timeout-ms": "30000"
+          },
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Review a refund of 100 against the limit of 100."
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-review-refund",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "status": "answered",
+            "decision": "approved",
+            "amount": 100
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "request": {
+        "probeId": "baseline-reject-malformed",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "skill-root": "skill",
+            "agent": "custom",
+            "agent-cmd": "./agent.js",
+            "timeout-ms": "30000"
+          },
+          "environment": [],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-reject-malformed",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "status": "refused"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate documentation (Story 2.6).
+  A tutorial, `docs/tutorials/evaluate-your-first-skill.md`, takes one small skill from intake to a scored run, an accepted baseline and a green `ci --tier pr` against the shipped fixture `test/fixtures/evaluate-tutorial/`, and `test:docs-tutorial` runs its commands and holds its shown output.
+  Eight how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, putting an evaluation in CI, and bringing an existing suite.
+  Two explanation pages, `how-evaluate-works.md` and `why-evaluate-confines-the-target.md`, hold the design reasoning.
+  `docs/reference/tea-evaluate-cli.md` is a user reference: each command's purpose, options, exit codes, output and one example, and the `evaluation.json` fields an adopter writes.
+  `how-tea-is-tested.md` and the adoption guide describe Evaluate as shipped, and the adoption guide documents the 0/1/2 exit convention as an optional pattern.
+  `test:docs-evaluate-sidebar` fails when an Evaluate page has no site sidebar entry or no link from the TEA overview, and `test:docs-build-names` fails when a docs page names a story, decision id, lane, pull request or planning path.
 - `ci` compiles and seals each partition view (Story 1.108, AD-9, AD-22).
   The plan's `compile` and `seal` checks ran over `contract.json`, the development view, so an engine refusal of the held-out plan surfaced only at a held-out or both preflight, which a pull request does not run, and `check` compiles nothing.
   Under a `partitionPlan` each check now runs its stage over the development, held-out and both views, and a held-out oracle eval-quality refuses fails the pull request that wrote it with the engine's own exit (4 or 5).
@@ -476,6 +483,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate check` refuses a `judge.modelSnapshot` in `policy/evaluator-conditions.json` that differs from the model the judge runs.
+  `judge.model` selects the model of every judge call, and a recorded snapshot that named another model put a false condition on every run.
+  The `judge` finding (exit 10) names both values and says which field selects the model and which records it.
+  The model the judge runs is `judge.model`, a model in `judge.agentArgs`, or the adapter's default; the `custom` adapter takes no model, so its snapshot stays a label.
+  The `evaluator` rule refuses the same mismatch between `evaluator.model` and `evaluator.modelSnapshot` for a sealed-brief agent, with a finding that names both values.
 - `test:evaluate-partition-plans` is split into two chained scripts so each fits a CI shard under the 20 minute cap (Story 1.110, CI).
   `test:evaluate-partition-plans` keeps the views, `check`, and the preflight, run and score flows; `test:evaluate-partition-plans-attempts` holds the evaluator mapping, sealed-records and gameability flows.
   Both build their fixture and helpers through `test/lib/evaluate-partition-plans-harness.js`, and `tools/test-shard-weights.json` holds a weight for each.
@@ -706,12 +718,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The docs site renders its Mermaid diagrams, and the `llms-full.txt` bundle keeps 50,000 characters of headroom under its cap.
   Eight explanation pages (the TEA overview among them) showed a `mermaid` fence as raw source in a `<pre data-language="mermaid">` block, because the site loaded no Mermaid renderer.
+  The Evaluate flow in How Evaluate Works is now a Mermaid flowchart that keeps the labels of its three roles (authoring skill, execution CLI, scoring engine).
   The `astro-mermaid` integration, which renders in the reader's browser and needs no headless browser at build time, now turns each fence into a diagram on a light card in both site themes.
   A wide diagram keeps a readable width on a phone and scrolls sideways inside its card, and a wide table scrolls inside its own block instead of widening the page.
   The verification-architecture diagram no longer leaves a gap in its Core group.
   `test:docs-mermaid` builds the site and fails when a page with a `mermaid` fence still holds a raw block, lacks one container per fence, or does not load the renderer; its revert cases include a real build with the integration removed.
-  The `llms-full.txt` bundle stood at 505,224 of its 600,000 characters, and the Evaluate documentation that is coming adds about 91,000, which would have left about 4,000 characters of room, and the next page after it would have failed the docs build.
-  The configuration, knowledge-base and live-verification-results references moved out of the bundle through `LLM_EXCLUDE_PATTERNS` (428,875 characters now, about 519,000 with that documentation), and `llms.txt` links them under "Reference lookups".
+  The `llms-full.txt` bundle stood at 505,224 of its 600,000 characters before the Evaluate documentation, which adds about 90,000, so the next page after it would have failed the docs build.
+  The configuration, knowledge-base and live-verification-results references moved out of the bundle through `LLM_EXCLUDE_PATTERNS`, which leaves 518,871 characters with the Evaluate documentation, and `llms.txt` links them under "Reference lookups".
   `test:llms-headroom` fails when the bundle the build would write leaves less than 50,000 characters under the cap, so the change that crosses the line trims the exclusion list; the cap stays at 600,000.
 - The CI `chain` job runs on 21 shards instead of 12, and each long evaluate suite runs as several chained `--group` scripts, so no shard is projected beyond about ten minutes of scripts (about twelve with setup) against its 20-minute cap.
   The shard weights were stale and had left one shard at 19 of its 20 minutes while another timed out, because the evaluate suites had grown well past their recorded times; the weights now come from eight recent runs (the median plus 25 percent, or the maximum for a split suite) and the shard timeout is unchanged.

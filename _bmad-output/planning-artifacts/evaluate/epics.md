@@ -3517,6 +3517,10 @@ So that I can use Evaluate without knowing how it was built.
 **Dependencies:** every other Epic 1 and Epic 2 story.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, `npm run lint:md`, `npm run format:check`.
 
+Amended 2026-10-07 in Story 2.6's build: the scan for build names matches the forms in which the build appears (story ids, decision ids, requirement ids, a line of epic narrative, planning paths, pull request numbers and the review process's own words), each pattern with its own failing example.
+The bare words epic, story, sprint and relay stay allowed, since TEA's user documentation uses them for the BMad Method and for the sealed-brief relay.
+The tutorial runs against `test/fixtures/evaluate-tutorial/`, authored for the story because no existing fixture was a runnable skill evaluation.
+
 ## Owner Hand-off
 
 ### Story H.1: Accept the dogfood baseline and turn its `pr` replay green

@@ -112,6 +112,7 @@ TEA evaluates runs with strict separation between test failures and infrastructu
 
 Exit 1 records measured quality failures across workflow, model, harness, corpus, or oracle defects.
 Exit 2 records environment or unexpected runtime errors, preventing infrastructure failures from skewing quality metrics.
+The convention is optional and belongs to TEA's own harnesses; [Adopting eval-quality](/docs/explanation/eval-quality-adoption-guide.md#the-012-exit-convention-an-optional-pattern) describes it for a harness of your own.
 
 ### 7. Recorded Results and Provenance
 
@@ -145,12 +146,15 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 | Evidence & execution | Driving workflow execution and capturing generated artifacts       | Preflighting environments, verifying evidence integrity, and contract sealing |
 | Scoring & strength   | Interpreting domain-specific gaps and triage                       | Mathematical scoring, metric aggregation, and `compareDominance` calculation  |
 
-## Evaluate, In Progress
+## Evaluate
 
-The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) helps users build evaluations on top of `eval-quality`, and it is being built story by story.
-It is registered as TEA's tenth workflow, and its runtime, `tea-evaluate`, already validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
+The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is TEA's tenth workflow.
+It takes a described target (a skill, an agent, a workflow, a tool-use system, an AI feature) through a scored development and held-out evaluation built on `eval-quality`, names the gaps the scores expose, helps repair them, and finishes with the CI plan that enforces the evaluation.
+Its runtime, `tea-evaluate`, validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
 `bmad-testarch-ci` renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
-Evaluate authored and ran its own suite in Story 1.16; `test/evaluations/bmad-testarch-evaluate/` is the reference for an Evaluate-authored evaluation, and TEA's generator-owned suites remain the reference for hand-built ones.
+The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks one small skill from requirements to a scored run and an accepted baseline.
+[How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains the stack and the rules behind it.
+Evaluate authored and ran its own suite; `test/evaluations/bmad-testarch-evaluate/` is the reference for an Evaluate-authored evaluation, and TEA's generator-owned suites are the reference for hand-built ones.
 
 ## Further Reading
 

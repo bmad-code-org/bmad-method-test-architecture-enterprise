@@ -1,0 +1,78 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "[negative] Seeded defect: M-001 makes the limit exclusive, so a refund exactly at the limit is declined.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The reworded rule declines a refund exactly at the limit.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-exclusive-limit",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "custom",
+            "agent-cmd": "./agent.js",
+            "skill-root": "skill",
+            "timeout-ms": "30000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Review a refund of 100 against the limit of 100."
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            { "pointer": "/interactions/manifest-exclusive-limit/stdout/decision" },
+            { "literal": "declined" }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": { "literal": "Review a refund of 100 against the limit of 100." }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          { "pointer": "/interactions/observed/stdout/decision" },
+          { "literal": "declined" }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

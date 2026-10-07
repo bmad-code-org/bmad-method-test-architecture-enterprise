@@ -309,6 +309,7 @@ jobs:
             test/fixtures/evaluate-mcp/evals/grader/runs
             test/fixtures/evaluate-promptfoo/evals/summary/runs
             test/fixtures/evaluate-tool-use-agent/evals/tool-use/runs
+            test/fixtures/evaluate-tutorial/evaluation/runs
             test/fixtures/evaluate-workflow/evals/records/runs
           retention-days: 7
           if-no-files-found: ignore
