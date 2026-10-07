@@ -331,6 +331,49 @@ function checkMounts(observed, expected, what) {
   checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
 }
 
+/**
+ * `checkMounts` for the mounts of one audited trial, judged with the audit's own account of that trial (`run.json`'s
+ * `observedMountsChannel`). A path the list lacks is a lost report the case may run again for only when the audit said it lost
+ * something: the log reported lost events or delivered fewer canaries than were sent (`lossy`). A path missing from a trial whose
+ * audit reported no loss fails at once and is not retried, since an audit that loses a read without saying so is the defect its
+ * loss signal exists to catch (the burst case's rule, `judgeBurst`).
+ */
+function checkTrialMounts(directory, trial, observed, expected, what) {
+  const extra = observed.filter((entry) => !expected.includes(entry));
+  check(extra.length === 0, `${what}: the audit listed ${JSON.stringify(extra)} beyond ${JSON.stringify(expected)}`);
+  const missing = expected.filter((entry) => !observed.includes(entry));
+  if (missing.length === 0) return;
+  const entry = (readJson(path.join(directory, 'run.json')).observedMountsChannel ?? []).find(
+    (candidate) => candidate.conditionArm === trial.conditionArm && candidate.trialIndex === trial.trialIndex,
+  );
+  const account = JSON.stringify(entry ?? null);
+  const message = `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`;
+  if (entry?.completeness === 'lossy') checkReport(false, `${message}, and it reported the loss (${account})`);
+  else
+    check(
+      false,
+      `${message}, and it reported no loss (${account}); a log that drops a read without saying so is the defect the audit's loss signal exists to catch`,
+    );
+}
+
+/**
+ * The run's refusal of an audited trial's mounts (`refusesMounts`), judged as `checkTrialMounts` judges a missing path: a run that
+ * did not refuse because the trial's audit reported a loss is a lost report the case may run again for, and one that did not refuse
+ * with no loss reported fails at once.
+ */
+function checkTrialRefusal(result, directory, trial, named, what) {
+  if (refusesMounts(result, named)) {
+    checks += 1;
+    return;
+  }
+  const entry = (directory === null ? [] : (readJson(path.join(directory, 'run.json')).observedMountsChannel ?? [])).find(
+    (candidate) => candidate.conditionArm === trial.conditionArm && candidate.trialIndex === trial.trialIndex,
+  );
+  const message = `${what} exited ${result.status}; expected 3 naming ${JSON.stringify(named)}\n${result.output}`;
+  if (entry?.completeness === 'lossy') checkReport(false, `${message}\nthe audit reported the loss (${JSON.stringify(entry)})`);
+  else check(false, `${message}\nthe audit reported no loss (${JSON.stringify(entry ?? null)}), so a read it lost went unsaid`);
+}
+
 /** An observed mount of a project's run as its manifest records it: the real path through the runtime's substitution under the run's own environment. */
 function mountOf(real, project) {
   return recordedMount(real, { folder: project.folder, env: project.env });
@@ -4158,14 +4201,17 @@ async function checkObservedMounts() {
     VERDICT_DO: 'read-ungranted',
     VERDICT_TOUCH: outside,
   });
-  check(
-    refusesMounts(observedRun, [mountOf(realOutside, observed)]),
-    `a confined run whose target read an ungranted file exited ${observedRun.status}; expected 3 naming the file\n${observedRun.output}`,
-  );
   const observedDirectory = runDirectoryOf(observed.folder);
+  checkTrialRefusal(
+    observedRun,
+    observedDirectory,
+    { conditionArm: 'clean', trialIndex: 1 },
+    [mountOf(realOutside, observed)],
+    'a confined run whose target read an ungranted file',
+  );
   // The refusal is the run's recorded end: sealed and complete, so `score` still reads the manifests, with the exit 3 and the path.
   const observedRecord = observedDirectory === null ? {} : readJson(path.join(observedDirectory, 'run.json'));
-  check(
+  (refusesMounts(observedRun) ? check : checkReport)(
     observedRecord.completed === true &&
       observedRecord.outcome?.exitCode === 3 &&
       String(observedRecord.outcome?.message).includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
@@ -10968,6 +11014,7 @@ async function checkSubscriptionLogin() {
   };
   // The act runs in the first clean trial, which P-001's trial set holds; P-002's trials run the plain verdict stub.
   const actMounts = (directory) => observedMountsOf(directory, 'P-001');
+  const ACT_TRIAL = { conditionArm: 'clean', trialIndex: 1 };
   const plainMounts = (directory) => observedMountsOf(directory, 'P-002');
 
   // File login under HOME: the call authenticates, the grant is the one file, read-only, and the record names it and holds none of it.
@@ -11053,11 +11100,14 @@ async function checkSubscriptionLogin() {
   ]) {
     const widened = loginRun(loginProject(`login-second-${what.replaceAll(' ', '-')}`), { HOME: home, VERDICT_SECOND: second });
     const realSecond = recordedMount(fs.realpathSync(second), { folder: widened.folder, home });
-    check(
-      refusesMounts(widened.ran, [realSecond]),
-      `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 3 naming it\n${widened.ran.output}`,
+    checkTrialRefusal(widened.ran, widened.directory, ACT_TRIAL, [realSecond], `a confined run whose agent read a second file ${what}`);
+    checkTrialMounts(
+      widened.directory,
+      ACT_TRIAL,
+      actMounts(widened.directory),
+      [realSecond],
+      `a second file ${what} (the login file is the only grant)`,
     );
-    checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
     checkReport(
@@ -11196,9 +11246,12 @@ async function checkSubscriptionLogin() {
     { HOME: keychainHome, CLAUDE_CODE_OAUTH_TOKEN: fakeToken, VERDICT_KEYCHAIN: keychain },
     'claude-keychain',
   );
-  check(
-    refusesMounts(stood.ran, [recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })]),
-    `a confined run whose agent read the host's keychain exited ${stood.ran.status}; expected 3 naming it\n${stood.ran.output}`,
+  checkTrialRefusal(
+    stood.ran,
+    stood.directory,
+    ACT_TRIAL,
+    [recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })],
+    "a confined run whose agent read the host's keychain",
   );
   const stoodOut = trialStdout(stood.directory, 'clean', 1);
   check(
@@ -11209,7 +11262,9 @@ async function checkSubscriptionLogin() {
     /^refused (EPERM|EACCES|EROFS)$/.test(loginField(stoodOut, 'keychain-sidecar-write') ?? ''),
     `the keychain's sidecar write was ${loginField(stoodOut, 'keychain-sidecar-write')}; expected a refusal`,
   );
-  checkMounts(
+  checkTrialMounts(
+    stood.directory,
+    ACT_TRIAL,
     actMounts(stood.directory),
     [
       recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome }),

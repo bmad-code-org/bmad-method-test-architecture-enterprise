@@ -74,6 +74,7 @@
   "test:evaluate-held-attempts": 328.9,
   "test:evaluate-held-inputs": 75.7,
   "test:evaluate-interpret": 55.1,
+  "test:evaluate-isolation-conformance": 3,
   "test:evaluate-learned-framework": 120.9,
   "test:evaluate-mcp": 91.5,
   "test:evaluate-mutation": 260.4,
