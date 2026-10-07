@@ -1811,22 +1811,22 @@ setInterval(() => {}, 1000);
  * target in this repository: the stub project for the preflight fixture, the
  * repository itself for the check fixture.
  */
-function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT, { grantRunner = true } = {}) {
+function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT, { grantRunner = true, grantBin = true } = {}) {
   const folder = path.join(tempDir('case'), path.basename(source));
   fs.cpSync(source, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
   editJson(folder, 'evaluation.json', (value) => {
     value.launch.root = path.relative(folder, root).split(path.sep).join('/');
     // The runner on PATH sits outside the trial's workspace, so its entry lists where the runner is installed, as an adopter's does.
-    if (grantRunner) grantRunnerInstall(value);
+    if (grantRunner) grantRunnerInstall(value, { bin: grantBin });
   });
   return folder;
 }
 
 /** Lists where the runner is installed in `systemPaths` of every registry entry that names it, as an adopter's evaluation does. */
-function grantRunnerInstall(evaluation) {
-  // The install's directories and the bin directory that holds the link `PATH` resolves, which the audit lists as well.
+function grantRunnerInstall(evaluation, { bin = true } = {}) {
+  // The install's directories and the bin directory that holds the link `PATH` resolves, which a Linux audit lists as well.
   runnerPath();
-  const grants = [...RUNNER_INSTALL, fs.realpathSync(binDirectory)];
+  const grants = bin ? [...RUNNER_INSTALL, fs.realpathSync(binDirectory)] : [...RUNNER_INSTALL];
   for (const entry of evaluation.registry ?? []) if (entry.target === 'tea-skill-runner') entry.systemPaths = grants;
 }
 
@@ -2104,8 +2104,13 @@ function checkRunnerOutsideAllowlist() {
   const directory = runDirectoryOf(bare);
   check(directory !== null, 'the refused preflight wrote no run directory');
   if (directory !== null) {
-    const verdict = readJson(path.join(directory, 'preflight-verdict.json'));
-    check(verdict.passed === true, `the engine's verdict was ${verdict.passed}; the refusal must come from the mounts alone`);
+    // A preflight that stopped before the engine's verdict (a lossy audit under host load, say) leaves none; report it with the exit above.
+    const verdictPath = path.join(directory, 'preflight-verdict.json');
+    const verdict = fs.existsSync(verdictPath) ? readJson(verdictPath) : null;
+    check(
+      verdict?.passed === true,
+      `the engine's verdict was ${verdict?.passed ?? 'missing'}; the refusal must come from the mounts alone`,
+    );
     const recorded = readJson(path.join(directory, 'run.json')).outcome;
     check(
       recorded?.exitCode === 3 && recorded?.stage === 'leg',
@@ -2151,6 +2156,96 @@ function checkRunnerOutsideAllowlist() {
     `preflight with the runner inside launch.root exited ${insideResult.status}; expected 0\n${insideResult.output}`,
   );
   for (const problem of passedPreflightProblems(runDirectoryOf(inside))) check(false, `the in-root setup: ${problem}`);
+}
+
+/**
+ * The bare-name runner's three `systemPaths` directories: the two install directories and the bin directory that holds the link
+ * `PATH` resolves. With all three granted, `preflight`, `run` and `score --run` pass on every platform. The bin directory is the
+ * third because a Linux audit lists the link itself (an `execve` or `readlink` of `<bin>/tea-skill-runner`), so without its grant
+ * `preflight` refuses the setup with exit 3 naming that path, `run` ends at the trial stage with exit 3, and `score --run` on that
+ * run exits 3. The macOS audit lists the runner's files in the two install directories and not the link, so the same setup
+ * without the bin grant passes there; each platform's expectation follows what its audit lists.
+ */
+function checkRunnerBinDirectory() {
+  const linuxAudit = process.platform === 'linux';
+  const stages = (label, options) => {
+    const preflight = runPreflight(copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, options));
+    const runFolder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, options);
+    writeScoringPolicy(runFolder);
+    const run = runEvaluate(['run', '--evaluation', runFolder]);
+    const runDirectory = runDirectoryOf(runFolder);
+    check(runDirectory !== null, `${label}: the run wrote no single runs/<invocationId>/ directory`);
+    const score = runDirectory === null ? null : runEvaluate(['score', '--evaluation', runFolder, '--run', path.basename(runDirectory)]);
+    return { preflight, run, runDirectory, score };
+  };
+
+  // All three directories granted: the documented setup.
+  const granted = stages('three directories granted', {});
+  check(
+    granted.preflight.status === 0,
+    `preflight over the bare runner name with its three directories granted exited ${granted.preflight.status}; expected 0\n${granted.preflight.output}`,
+  );
+  check(
+    granted.run.status === 0,
+    `run over the bare runner name with its three directories granted exited ${granted.run.status}; expected 0\n${granted.run.output}`,
+  );
+  check(
+    granted.score?.status === 0,
+    `score --run over the bare runner name with its three directories granted exited ${granted.score?.status}; expected 0\n${granted.score?.output}`,
+  );
+  if (granted.runDirectory !== null) {
+    const recorded = readJson(path.join(granted.runDirectory, 'run.json'));
+    check(
+      recorded.completed === true && recorded.outcome?.exitCode === 0,
+      `run.json records ${JSON.stringify({ completed: recorded.completed, outcome: recorded.outcome })}; expected a completed run that exited 0`,
+    );
+  }
+
+  // Only the bin directory's grant removed.
+  const withoutBin = stages('bin directory not granted', { grantBin: false });
+  if (!linuxAudit) {
+    for (const [name, result] of [
+      ['preflight', withoutBin.preflight],
+      ['run', withoutBin.run],
+      ['score --run', withoutBin.score],
+    ]) {
+      check(
+        result?.status === 0,
+        `${name} without the bin directory's grant exited ${result?.status} on ${process.platform}, whose audit does not list the link; expected 0\n${result?.output}`,
+      );
+    }
+    return;
+  }
+  // The audit lists the link in the bin directory, so the refusal names that one path, the one the bin grant covers.
+  const link = new RegExp(`mount outside allowlist: \\S*${path.basename(binDirectory)}/tea-skill-runner(?=[;)\\s]|$)`);
+  const refusal = (name, output) => {
+    check(link.test(output), `${name} without the bin directory's grant does not name the link as 'mount outside allowlist':\n${output}`);
+    check(
+      /opened 1 path\(s\) outside the allowlist/.test(output),
+      `${name} without the bin directory's grant refused more than the link; the install directories are granted:\n${output}`,
+    );
+  };
+  check(
+    withoutBin.preflight.status === 3,
+    `preflight without the bin directory's grant exited ${withoutBin.preflight.status}; expected 3\n${withoutBin.preflight.output}`,
+  );
+  refusal('preflight', withoutBin.preflight.output);
+  check(
+    withoutBin.run.status === 3,
+    `run without the bin directory's grant exited ${withoutBin.run.status}; expected 3\n${withoutBin.run.output}`,
+  );
+  refusal('run', withoutBin.run.output);
+  if (withoutBin.runDirectory !== null) {
+    const recorded = readJson(path.join(withoutBin.runDirectory, 'run.json'));
+    check(
+      recorded.completed === true && recorded.outcome?.exitCode === 3 && recorded.outcome?.stage === 'trial',
+      `run.json records ${JSON.stringify({ completed: recorded.completed, outcome: recorded.outcome })}; expected a completed run that ended with exit 3 at the trial stage`,
+    );
+  }
+  check(
+    withoutBin.score?.status === 3 && link.test(withoutBin.score.output),
+    `score --run over the run without the bin directory's grant exited ${withoutBin.score?.status}; expected 3 naming the link\n${withoutBin.score?.output}`,
+  );
 }
 
 function checkRemovedEntry() {
@@ -3110,6 +3205,7 @@ async function main() {
     checkLegMountRules();
     checkLossyLegAudit();
     checkRunnerOutsideAllowlist();
+    checkRunnerBinDirectory();
     checkRemovedEntry();
     checkShim();
     checkFailingControl();
