@@ -716,6 +716,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `npm test` lints this repository's own GitHub Actions workflows with `actionlint`, and `tea-test-review.yaml` is lint clean again.
+  `test/eval-ci.js` lints the workflows an agent writes, but nothing linted the ones in `.github/workflows/`, so `actionlint` failed on `tea-test-review.yaml` (`property "run-review" is not defined`) while every gate stayed green.
+  The verdict step reads `steps.run-review.outcome`, and the step that declares that id had been commented out until a repository secret exists.
+  The "Install the pinned agent CLI" and "Run headless test review" steps are now real steps gated on `github.event_name == 'pull_request'`, so under the current `workflow_dispatch` trigger they are skipped, their outcome is `skipped` and the verdict is `failed`, exactly as before.
+  Enabling the workflow is now two actions: add a secret, then switch `on:` back to `pull_request`; there is nothing to uncomment.
+  `npm run test:workflows-lint`, chained in `npm test` and weighted in `tools/test-shard-weights.json`, runs `actionlint` over every workflow under `.github/workflows/` and `cli/examples/pr-test-review.yml` with the shellcheck and pyflakes integrations off, and fails on any finding.
+  With no `actionlint` on `PATH` it fails and names `tools/install-actionlint.sh`; it never skips.
+  Each run also lints a copy of `tea-test-review.yaml` clean, refuses the same copy with the `run-review` step id removed, and runs itself with an empty `PATH` to hold the missing-linter failure.
 - The CI step that installs `bubblewrap` and `strace` can no longer hold a shard for the job's whole 20 minutes.
   `quality.yaml`, `publish.yaml` and `failing-pack-loop.yaml` ran `sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace` with no bound, so a mirror that accepted the connection and went silent, or a held dpkg lock, left `chain (14/21)` cancelled at the timeout on three attempts with no output after the command began.
   The three steps now run `tools/install-linux-sandbox.sh` under `timeout-minutes: 11`: up to three tries, each cut off after 180 seconds, with apt's own retries, 30 second network timeouts and a 120 second dpkg lock wait on both `update` and `install`, `update` printing the sources it reads, and a final `::error` line that names the step.
