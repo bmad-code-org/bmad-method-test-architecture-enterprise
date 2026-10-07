@@ -72,7 +72,8 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # or: CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Whichever of the two secrets exists; the other expands to an empty string.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           BASE_REF: origin/${{ github.base_ref }}
         run: node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root src/workflows/testarch/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
 
