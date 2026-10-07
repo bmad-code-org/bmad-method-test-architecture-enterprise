@@ -289,6 +289,7 @@ sandbox-exec: execvp() of 'tea-skill-runner' failed: No such file or directory
 
 A path you did not expect, such as a credential file or another project, points to a target that reads beyond its task.
 A path that only some legs opened is no refusal: `preflight` prints a note naming it and the legs, and a trial that opens it exits `run` with 3.
+A leg whose audit lost reports (the macOS log is lossy under load) is left out of that check and named in a note; when every leg's audit lost reports, `preflight` exits 12 with `the legs yield no audit`, and the fix is to run it again on a quieter host.
 Repair the target, because declaring that path would hide the defect.
 Then run `check` and run the evaluation again.
 The reference describes both setups in [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the audit in [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement).

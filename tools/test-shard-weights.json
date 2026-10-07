@@ -124,6 +124,7 @@
   "test:guard-publish": 0.4,
   "test:install": 4.3,
   "test:install-actionlint": 3.1,
+  "test:install-linux-sandbox": 4,
   "test:isolation-primitives": 0.6,
   "test:knowledge": 0.3,
   "test:layering-boundary-lineage": 9.5,
