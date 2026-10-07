@@ -30,6 +30,8 @@ const SKILL_ROOT = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'b
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
 const REFERENCE = (name) => path.join(SKILL_ROOT, 'references', `${name}.md`);
 const ASSET = (name) => path.join(SKILL_ROOT, 'assets', name);
+/** The runner's registry `target` in the guide and the starter: a path inside `launch.root`, since a bare name resolves outside the workspace and `score` exits 3. */
+const RUNNER_TARGET_IN_ROOT = 'evals/node_modules/.bin/tea-skill-runner';
 
 const EXPECTED_STAGES = [
   'inspection',
@@ -1935,10 +1937,21 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'lists its host in `egress` on its entry on Linux',
     ])
       requireText(agentFallback, marker, 'adapters.md Agent fallback', failures);
-    requireText(
-      headingBody(adapterGuide, '## Skill runner'),
+    for (const marker of [
       "on Linux list the provider's host, port and addresses in `egress` on its registry entry",
-      'adapters.md Skill runner',
+      'register it as a path inside `launch.root`',
+      '`target` is `evals/node_modules/.bin/tea-skill-runner`',
+      '`"provision": ["evals/node_modules"]`',
+      'bare name `tea-skill-runner` as the `target` and declares the install directories in `systemPaths`',
+      'npm exec --prefix {tea_evaluations_folder} --',
+      'is a `preflight` fixture',
+      'test/fixtures/evaluate-tutorial/evaluation/evaluation.json',
+    ])
+      requireText(headingBody(adapterGuide, '## Skill runner'), marker, 'adapters.md Skill runner', failures);
+    requireText(
+      adapterOpening,
+      'refuses it with exit 3 and `isolation manifest violation: mount outside allowlist`, at the latest at `score`',
+      'adapters.md opening runner path',
       failures,
     );
     const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
@@ -1977,7 +1990,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     );
     const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(evaluationSchema);
     const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
-    assert.strictEqual(starter.registry[0].target, 'tea-skill-runner');
+    assert.strictEqual(starter.registry[0].target, RUNNER_TARGET_IN_ROOT);
     const registryFixtures = [
       'evaluate/preflight/evaluation.json',
       'evaluate-tool-use-agent/evals/tool-use/evaluation.json',
@@ -1993,7 +2006,10 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       if (!validateEvaluation(candidate))
         failures.push('adapters.md registry ' + (index + 1) + ' fails runtime schema: ' + JSON.stringify(validateEvaluation.errors));
       const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', registryFixtures[index]), 'utf8'));
-      assert.deepStrictEqual(entry, fixture.registry[0], 'adapters.md registry ' + (index + 1) + ' differs from its working fixture');
+      // The preflight fixture registers the runner by its bare name; the guide registers the same entry at its path inside `launch.root`.
+      const expected =
+        fixture.registry[0].target === 'tea-skill-runner' ? { ...fixture.registry[0], target: RUNNER_TARGET_IN_ROOT } : fixture.registry[0];
+      assert.deepStrictEqual(entry, expected, 'adapters.md registry ' + (index + 1) + ' differs from its working fixture');
     }
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -3255,11 +3271,13 @@ function checkConfinedSkillExample(guide, failures) {
     failures.push(`harness.md confined skill registry fails runtime schema: ${JSON.stringify(validate.errors)}`);
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'preflight', 'evaluation.json'), 'utf8'));
   if (
-    JSON.stringify(examples[0]) !== JSON.stringify(fixture.registry[0]) ||
+    JSON.stringify(examples[0]) !== JSON.stringify({ ...fixture.registry[0], target: RUNNER_TARGET_IN_ROOT }) ||
     examples[0].executable !== 'tea-skill-runner' ||
     fixture.confinement === false
   )
-    failures.push('harness.md confined skill registry differs from its working confined fixture');
+    failures.push(
+      'harness.md confined skill registry differs from its working confined fixture with the runner at its path inside launch.root',
+    );
 }
 
 /**
@@ -4927,7 +4945,13 @@ async function main() {
         'harness confined example corruption',
         'harness',
         checkHarnessGuidance,
-        (text) => text.replace('"target": "tea-skill-runner"', '"target": "stub-skill-runner"'),
+        (text) => text.replace('"target": "evals/node_modules/.bin/tea-skill-runner"', '"target": "stub-skill-runner"'),
+      ],
+      [
+        'harness confined example bare runner name',
+        'harness',
+        checkHarnessGuidance,
+        (text) => text.replace('"target": "evals/node_modules/.bin/tea-skill-runner"', '"target": "tea-skill-runner"'),
       ],
       [
         'harness home sentence removal',
@@ -6102,6 +6126,10 @@ async function main() {
   if (!validateEvaluation(template))
     failures.push(`assets/evaluation.json fails runtime schema: ${JSON.stringify(validateEvaluation.errors)}`);
   if (template.interface === 'web') failures.push('assets/evaluation.json emits web');
+  if (template.registry?.[0]?.target !== RUNNER_TARGET_IN_ROOT || template.launch?.root !== '../..')
+    failures.push(
+      'assets/evaluation.json registers the runner outside launch.root; its target is a path inside the project root launch.root names',
+    );
   try {
     assert.deepStrictEqual(template.registry?.[0]?.infrastructureExitCodes, [3, 4, 5, 6]);
   } catch (error) {

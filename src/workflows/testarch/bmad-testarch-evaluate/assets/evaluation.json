@@ -7,7 +7,7 @@
     {
       "interfaceId": "reservation-review-runner",
       "executable": "tea-skill-runner",
-      "target": "tea-skill-runner",
+      "target": "evals/node_modules/.bin/tea-skill-runner",
       "subcommandPaths": [[]],
       "artifacts": {},
       "environmentKeys": [],
@@ -17,7 +17,7 @@
     }
   ],
   "launch": {
-    "root": ".",
+    "root": "../..",
     "skillRoot": "skills/reservation-review"
   },
   "workspace": {

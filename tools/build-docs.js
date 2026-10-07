@@ -63,6 +63,15 @@ const LLM_EXCLUDE_PATTERNS = [
   // them 499,446.
   'reference/tea-evaluate-cli',
   'reference/tea-test-review-cli',
+  // Evaluate's tutorial and its two explanation pages: a fixture walkthrough and
+  // the reasons behind the runtime's rules, about 72k characters together. An
+  // agent that runs an evaluation follows the how-to guides, which stay in the
+  // bundle, and looks the reasons up when a rule needs one, so llms.txt links
+  // these three under "Evaluate". With them in, the bundle measured 652,450
+  // characters before the CI how-to joined it, and the build fails on the cap.
+  'tutorials/evaluate-your-first-skill',
+  'explanation/how-evaluate-works',
+  'explanation/why-evaluate-confines-the-target',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -201,6 +210,13 @@ function generateLlmsTxt(docsDir, outputDir) {
     `- **[CI (CI)](${SITE_URL}/how-to/workflows/setup-ci)** - CI/CD quality pipeline`,
     `- **[Test Review (RV)](${SITE_URL}/how-to/workflows/run-test-review)** - Quality audit`,
     `- **[NFR Assess (NR)](${SITE_URL}/how-to/workflows/run-nfr-assess)** - Non-functional requirements`,
+    '',
+    '## Evaluate',
+    '',
+    `- **[Evaluate Your First Skill](${SITE_URL}/tutorials/evaluate-your-first-skill)** - Tutorial: one skill from requirements to a scored run and an accepted baseline`,
+    `- **[Evaluate a Skill or Agent](${SITE_URL}/how-to/evaluate/evaluate-a-skill-or-agent)** - First how-to guide of the Evaluate group`,
+    `- **[How Evaluate Works](${SITE_URL}/explanation/how-evaluate-works)** - The stack, the rules and the reasons behind an evaluation`,
+    `- **[Why Evaluate Confines the Target](${SITE_URL}/explanation/why-evaluate-confines-the-target)** - Why the target of an evaluation runs under file-system confinement`,
     '',
     '## Command-line references',
     '',

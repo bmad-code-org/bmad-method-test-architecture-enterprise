@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "test/fixtures/evaluate-tutorial/evaluation"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The check is deterministic and needs no secret, so it runs on every pull request."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate-tutorial/evaluation",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The check is deterministic and needs no secret, so it runs on every pull request."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate-tutorial/evaluation",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The check is deterministic and needs no secret, so it runs on every pull request."
+      }
+    },
+    {
+      "id": "oracle-agreement",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate-tutorial/evaluation",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "baseline/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The check is deterministic and needs no secret, so it runs on every pull request."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate-tutorial/evaluation",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The check is deterministic and needs no secret, so it runs on every pull request."
+      }
+    }
+  ]
+}

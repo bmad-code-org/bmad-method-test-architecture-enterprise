@@ -35,6 +35,7 @@ const EVALUATIONS = Object.freeze([
   { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {}, baseline: true },
   { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {}, baseline: true },
   { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {}, baseline: true },
+  { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {}, baseline: true },
 ]);
 
 const scriptOf = (entry) => `test:evaluate-pr-${entry.key}`;

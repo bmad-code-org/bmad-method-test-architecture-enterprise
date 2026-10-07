@@ -1066,6 +1066,10 @@
     "symbols": {
       "foreign": [
         {
+          "token": "SCORE",
+          "reason": "a shell variable the how-to guides capture from the score summary line, not a TEA declaration"
+        },
+        {
           "token": "NODE_EXTRA_CA_CERTS",
           "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
         },
@@ -1864,6 +1868,18 @@
         {
           "token": "behaviorOracles",
           "reason": "a field of the held-out plan that the runtime schema `held-out-plan.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "evaluationId",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "targetKind",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "judgeCalibration",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
         }
       ]
     },

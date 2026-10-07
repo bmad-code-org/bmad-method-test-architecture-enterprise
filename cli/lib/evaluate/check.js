@@ -80,7 +80,9 @@
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
  *   does not have, one that cannot run read-only, the `custom` adapter with no `agentCommand`, or a `model`
  *   its adapter refuses. Story 1.17 narrows it to the `deterministic` evaluator: under any other kind the
- *   evaluator scores the rubric, so neither file may carry a `judge` block.
+ *   evaluator scores the rubric, so neither file may carry a `judge` block. A `judge.modelSnapshot` that
+ *   differs from the model the judge's adapter runs (`judge.model`, a model its `agentArgs` set, or the
+ *   adapter's default) is refused too: `judge.model` selects the model and the snapshot only records it.
  * - `evaluator` (Story 1.34): a `sealed-brief-agent` evaluator whose `evaluation.json` has no
  *   `evaluatorQualification` (`attempts`, `minimumAgreement`), which `run` needs to qualify the agent
  *   before its verdicts count; and an `evaluatorQualification` beside any other kind, where nothing would use it.
@@ -95,7 +97,8 @@
  *   holds a link or special file; a `command` evaluator's executable is not a regular executable file; a
  *   `sealed-brief-agent` names an adapter TeA lacks or one with no bridged run, the `custom` adapter
  *   with no `agentCommand`, a `model` its adapter refuses, passthrough `agentArgs` that reopen what the
- *   bridged run closes, or no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, where an
+ *   bridged run closes, no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, or one that differs
+ *   from the model the agent runs (`evaluator.model`, a model its `agentArgs` set, or the adapter's default), where an
  *   `evaluator` block beside the `deterministic` or `records` kind is refused as unused; a `records`
  *   evaluator's directory is absent or reached through a link. An unknown kind, and a `command` or
  *   `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
@@ -1364,10 +1367,27 @@ function checkJudge(report, evaluation, contract, conditions, { partial = false 
   if (AGENT_ADAPTERS[judge.agent].command === null && typeof judge.agentCommand !== 'string') {
     report.add(MANIFEST_NAME, 'judge', `judge.agent ${judge.agent} runs no command of its own, so judge.agentCommand must name one`);
   }
+  let runs;
   try {
-    resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
+    runs = resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
   } catch (error) {
     report.add(MANIFEST_NAME, 'judge', `judge's model cannot run: ${error.message}`);
+    return;
+  }
+  // `judge.model` selects the model every judge call runs; `judge.modelSnapshot` only records it. A recorded identity that
+  // differs from the model the adapter runs would put a false condition on every run, so the two must name one model.
+  // An adapter with no model flag (`custom`) resolves to no model, so its snapshot is a label `check` cannot compare.
+  const recorded = conditions?.judge?.modelSnapshot;
+  if (typeof runs === 'string' && typeof recorded === 'string' && recorded.length > 0 && recorded !== runs) {
+    const source =
+      typeof judge.model === 'string'
+        ? 'judge.model'
+        : `a model in judge.agentArgs or the default of the ${judge.agent} adapter, since evaluation.json sets no judge.model`;
+    report.add(
+      CONDITIONS_NAME,
+      'judge',
+      `judge.modelSnapshot ${JSON.stringify(recorded)} differs from the model every judge call runs, ${JSON.stringify(runs)} (${source}); judge.model selects the model and judge.modelSnapshot records it, so set both to the same provider model ID`,
+    );
   }
 }
 
@@ -1653,10 +1673,26 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
         `evaluator.agent ${evaluator.agent} runs no command of its own, so evaluator.agentCommand must name one`,
       );
     }
+    let runs = null;
     try {
-      resolveModel(evaluator.agent, evaluator.model, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
+      runs = resolveModel(evaluator.agent, evaluator.model, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
     } catch (error) {
       report.add(MANIFEST_NAME, 'evaluator', `the evaluator's model cannot run: ${error.message}`);
+    }
+    // `evaluator.model` selects the model the sealed-brief agent runs; `evaluator.modelSnapshot` only records it. A recorded
+    // identity that differs from the model the adapter runs would put a false condition on every run, so the two must name
+    // one model. An adapter with no model flag (`custom`) resolves to no model, so its snapshot is a label `check` cannot compare.
+    const recorded = conditions?.evaluator?.modelSnapshot;
+    if (typeof runs === 'string' && typeof recorded === 'string' && recorded.length > 0 && recorded !== runs) {
+      const source =
+        typeof evaluator.model === 'string'
+          ? 'evaluator.model'
+          : `a model in evaluator.agentArgs or the default of the ${evaluator.agent} adapter, since evaluation.json sets no evaluator.model`;
+      report.add(
+        CONDITIONS_NAME,
+        'evaluator',
+        `evaluator.modelSnapshot ${JSON.stringify(recorded)} differs from the model the sealed-brief agent runs, ${JSON.stringify(runs)} (${source}); evaluator.model selects the model and evaluator.modelSnapshot records it, so set both to the same provider model ID`,
+      );
     }
   }
   if (typeof conditions?.evaluator?.modelSnapshot !== 'string' || conditions.evaluator.modelSnapshot.length === 0) {

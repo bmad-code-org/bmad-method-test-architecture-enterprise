@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate documentation (Story 2.6).
+  A tutorial, `docs/tutorials/evaluate-your-first-skill.md`, takes one small skill from intake to a scored run, an accepted baseline and a green `ci --tier pr` against the shipped fixture `test/fixtures/evaluate-tutorial/`, and `test:docs-tutorial` runs its commands and holds its shown output.
+  Eight how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, putting an evaluation in CI, and bringing an existing suite.
+  Two explanation pages, `how-evaluate-works.md` and `why-evaluate-confines-the-target.md`, hold the design reasoning.
+  `docs/reference/tea-evaluate-cli.md` is a user reference: each command's purpose, options, exit codes, output and one example, and the `evaluation.json` fields an adopter writes.
+  `how-tea-is-tested.md` and the adoption guide describe Evaluate as shipped, and the adoption guide documents the 0/1/2 exit convention as an optional pattern.
+  `test:docs-evaluate-sidebar` fails when an Evaluate page has no site sidebar entry or no link from the TEA overview, and `test:docs-build-names` fails when a docs page names a story, decision id, lane, pull request or planning path.
 - `ci` compiles and seals each partition view (Story 1.108, AD-9, AD-22).
   The plan's `compile` and `seal` checks ran over `contract.json`, the development view, so an engine refusal of the held-out plan surfaced only at a held-out or both preflight, which a pull request does not run, and `check` compiles nothing.
   Under a `partitionPlan` each check now runs its stage over the development, held-out and both views, and a held-out oracle eval-quality refuses fails the pull request that wrote it with the engine's own exit (4 or 5).
@@ -476,6 +483,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-evaluate check` refuses a `judge.modelSnapshot` in `policy/evaluator-conditions.json` that differs from the model the judge runs.
+  `judge.model` selects the model of every judge call, and a recorded snapshot that named another model put a false condition on every run.
+  The `judge` finding (exit 10) names both values and says which field selects the model and which records it.
+  The model the judge runs is `judge.model`, a model in `judge.agentArgs`, or the adapter's default; the `custom` adapter takes no model, so its snapshot stays a label.
+  The `evaluator` rule refuses the same mismatch between `evaluator.model` and `evaluator.modelSnapshot` for a sealed-brief agent, with a finding that names both values.
 - `test:evaluate-partition-plans` is split into two chained scripts so each fits a CI shard under the 20 minute cap (Story 1.110, CI).
   `test:evaluate-partition-plans` keeps the views, `check`, and the preflight, run and score flows; `test:evaluate-partition-plans-attempts` holds the evaluator mapping, sealed-records and gameability flows.
   Both build their fixture and helpers through `test/lib/evaluate-partition-plans-harness.js`, and `tools/test-shard-weights.json` holds a weight for each.

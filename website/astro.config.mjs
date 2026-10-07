@@ -111,6 +111,19 @@ export default defineConfig({
               ],
             },
             {
+              label: 'Evaluate',
+              items: [
+                { label: 'Evaluate a Skill or Agent', slug: 'how-to/evaluate/evaluate-a-skill-or-agent' },
+                { label: 'Evaluate an MCP Tool Server', slug: 'how-to/evaluate/evaluate-an-mcp-tool-server' },
+                { label: 'Evaluate an HTTP API', slug: 'how-to/evaluate/evaluate-an-http-api' },
+                { label: 'Choose an Evaluator and Calibrate a Judge', slug: 'how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge' },
+                { label: 'Read the Gaps and Fix Them', slug: 'how-to/evaluate/read-the-gaps-and-fix-them' },
+                { label: 'Compare Runs and Accept a Baseline', slug: 'how-to/evaluate/compare-runs-and-accept-a-baseline' },
+                { label: 'Put an Evaluation in CI', slug: 'how-to/evaluate/put-an-evaluation-in-ci' },
+                { label: 'Bring an Existing Suite', slug: 'how-to/evaluate/bring-an-existing-suite' },
+              ],
+            },
+            {
               label: 'Customization',
               autogenerate: { directory: 'how-to/customization' },
             },
@@ -128,6 +141,8 @@ export default defineConfig({
             { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
             { label: 'Verification Architecture', slug: 'explanation/verification-architecture' },
             { label: 'How TEA Is Tested', slug: 'explanation/how-tea-is-tested' },
+            { label: 'How Evaluate Works', slug: 'explanation/how-evaluate-works' },
+            { label: 'Why Evaluate Confines the Target', slug: 'explanation/why-evaluate-confines-the-target' },
             { label: 'Engagement Models', slug: 'explanation/engagement-models' },
             { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
             { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "refund-check",
+  "implementationDigest": "sha256:4baeb74e1eb99e6edade003e62e02799e83b74b821d7293425aae9c6be68cea0",
+  "artifactDigest": "sha256:16f3f5d27bb33d492cbeb5b01c8f60bd45013395cd477820d6c8381b7d0a5581",
+  "commitDigest": "sha256:76c39e5b0d97335d7d48b5e8f689a51d74a1f1cb173054dd4418e00176a21bff",
+  "rationale": "[negative] Seeded defect: M-001 makes the limit exclusive, so a refund exactly at the limit is declined.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "Rewording of the skill's approval rule that turns the inclusive limit into an exclusive one.",
+    "mutationOperator": "replace-exact: \"Approve a refund when its amount is at or below the limit.\" -> \"Approve a refund when its amount is below the limit.\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "skill/SKILL.md",
+      "privateRef": null,
+      "digest": "sha256:16f3f5d27bb33d492cbeb5b01c8f60bd45013395cd477820d6c8381b7d0a5581"
+    },
+    "expectedObservableFailure": "A refund of 100 against the limit of 100 prints decision \"declined\", so the approval oracle fails.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261007T091245668Z-181adf58/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:120a71cdfeb29ec72a0261465e2eb1ef68b5de1e1a6b49441821283ca3ea85a9"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261007T091245668Z-181adf58/qualification/P-002/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:4650b51831676e42d5c5b04c9fb4b5948b0ad03f861f93cb0f3a1ddd79527aba"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The reworded rule declines a refund exactly at the limit.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261007T091245668Z-181adf58/qualification/P-002/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:4650b51831676e42d5c5b04c9fb4b5948b0ad03f861f93cb0f3a1ddd79527aba"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-exclusive-limit",
+        "interfaceId": "refund-skill",
+        "operationId": "review-refund",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "custom",
+            "agent-cmd": "./agent.js",
+            "skill-root": "skill",
+            "timeout-ms": "30000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Review a refund of 100 against the limit of 100."
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-exclusive-limit/stdout/decision"
+            },
+            {
+              "literal": "declined"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Review a refund of 100 against the limit of 100."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/decision"
+          },
+          {
+            "literal": "declined"
+          }
+        ]
+      }
+    }
+  }
+}

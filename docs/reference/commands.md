@@ -1,6 +1,6 @@
 ---
 title: 'TEA Command Reference'
-description: Quick reference for all 9 TEA workflows - inputs, outputs, and links to detailed guides
+description: Quick reference for all 10 TEA workflows - inputs, outputs, and links to detailed guides
 ---
 
 # TEA Command Reference
@@ -29,6 +29,7 @@ This page uses short workflow names. Two do not map to a command by adding a pre
 | `ci`               | `/bmad-testarch-ci` · `$bmad-testarch-ci`                   | `CI`      |
 | `atdd`             | `/bmad-testarch-atdd` · `$bmad-testarch-atdd`               | `AT`      |
 | `automate`         | `/bmad-testarch-automate` · `$bmad-testarch-automate`       | `TA`      |
+| `evaluate`         | `/bmad-testarch-evaluate` · `$bmad-testarch-evaluate`       | `EV`      |
 | `test-review`      | `/bmad-testarch-test-review` · `$bmad-testarch-test-review` | `RV`      |
 | `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
 | `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
@@ -45,6 +46,7 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 - [`ci`](#ci) - Setup CI/CD pipeline
 - [`atdd`](#atdd) - Acceptance TDD
 - [`automate`](#automate) - Test automation
+- [`evaluate`](#evaluate) - Scored behavioral evaluation
 - [`test-review`](#test-review) - Quality audit
 - [`nfr-assess`](#nfr-assess) - NFR Evidence Audit
 - [`trace`](#trace) - Coverage traceability
@@ -246,6 +248,34 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ---
 
+## evaluate
+
+**Purpose:** Build a scored, evidence-backed evaluation of a skill, agent, workflow, tool-use system, AI feature, or test-review mechanism, name the gaps it exposes, and finish with the CI plan that enforces it
+
+**Phase:** Phase 4 (Implementation), after `automate` and before `ci`
+
+**Frequency:** Once per evaluated target, then again when the target's behavior changes
+
+**Key Inputs:**
+
+- The target to evaluate, which the workflow inspects
+- Behavioral requirements you confirm
+- The `tea_evaluations_folder` config value (default `evals`)
+
+**Key Outputs:**
+
+- `{tea_evaluations_folder}/<evaluationId>/`: `evaluation.json`, `requirements.md`, `contract.json`, probes, corpus, scored runs under `runs/`, and the committed `baseline/`
+- `{tea_evaluations_folder}/<evaluationId>/ci/evaluation-ci-plan.json`, which `ci` renders into a pipeline
+- `{test_artifacts}/evaluate/<evaluationId>/inspection-record.md`
+
+**Runtime:** [`tea-evaluate`](/docs/reference/tea-evaluate-cli.md) validates, digests, preflights, runs, scores and compares the folder and runs its CI tiers.
+
+**Tutorial:** [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md)
+
+**How-To Guides:** [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md), and the other Evaluate guides under See Also
+
+---
+
 ## test-review
 
 **Purpose:** Audit test quality with 0-100 scoring
@@ -360,17 +390,18 @@ The agent asks which evidence is available and routes to the right workflow. It 
 
 ## Summary Table
 
-| Command            | Phase      | Frequency                 | Primary Output             |
-| ------------------ | ---------- | ------------------------- | -------------------------- |
-| `teach-me-testing` | Learning   | Once per learner          | Progress + notes + summary |
-| `test-design`      | 3, 4       | System + per epic         | Test design + NFR plan     |
-| `framework`        | 3          | Once                      | Test infrastructure        |
-| `ci`               | 3          | Once                      | CI/CD pipeline             |
-| `atdd`             | 4          | Per story (optional)      | Failing tests              |
-| `automate`         | 4          | Per story                 | Passing tests              |
-| `test-review`      | 4, Gate    | Per epic/release          | Quality report             |
-| `nfr-assess`       | Gate       | Per release               | NFR evidence audit         |
-| `trace`            | 2, 4, Gate | Baseline + refresh + gate | Coverage matrix + decision |
+| Command            | Phase      | Frequency                 | Primary Output              |
+| ------------------ | ---------- | ------------------------- | --------------------------- |
+| `teach-me-testing` | Learning   | Once per learner          | Progress + notes + summary  |
+| `test-design`      | 3, 4       | System + per epic         | Test design + NFR plan      |
+| `framework`        | 3          | Once                      | Test infrastructure         |
+| `ci`               | 3          | Once                      | CI/CD pipeline              |
+| `atdd`             | 4          | Per story (optional)      | Failing tests               |
+| `automate`         | 4          | Per story                 | Passing tests               |
+| `evaluate`         | 4          | Per evaluated target      | Scored evaluation + CI plan |
+| `test-review`      | 4, Gate    | Per epic/release          | Quality report              |
+| `nfr-assess`       | Gate       | Per release               | NFR evidence audit          |
+| `trace`            | 2, 4, Gate | Baseline + refresh + gate | Coverage matrix + decision  |
 
 ---
 
@@ -388,6 +419,20 @@ The agent asks which evidence is available and routes to the right workflow. It 
 - [Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md)
 - [Run Trace](/docs/how-to/workflows/run-trace.md)
 
+**Evaluate:**
+
+- [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) - tutorial
+- [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md)
+- [Evaluate an MCP Tool Server](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md)
+- [Evaluate an HTTP API](/docs/how-to/evaluate/evaluate-an-http-api.md)
+- [Choose an Evaluator and Calibrate a Judge](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md)
+- [Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md)
+- [Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md)
+- [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md)
+- [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md)
+- [How Evaluate Works](/docs/explanation/how-evaluate-works.md) - explanation
+- [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md) - explanation
+
 **Explanation:**
 
 - [TEA Overview](/docs/explanation/tea-overview.md) - Complete TEA lifecycle
@@ -395,5 +440,6 @@ The agent asks which evidence is available and routes to the right workflow. It 
 
 **Reference:**
 
+- [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md) - Evaluate runtime
 - [TEA Configuration](/docs/reference/configuration.md) - Config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Pattern fragments

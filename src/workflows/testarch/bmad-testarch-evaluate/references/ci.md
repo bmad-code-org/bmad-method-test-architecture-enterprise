@@ -68,6 +68,7 @@ On Linux the live checks also need the target's registry entry to carry the `egr
 A confined Linux target runs in a network namespace with a loopback and nothing else, so read the entry's `egress` and add the model provider's host, port and the addresses the host resolves to now when an item is missing, as the example shows.
 The runtime's proxy carries `CONNECT` tunnels for a listed host and port, so a client that opens none has no route.
 An entry that lists no `egress` reaches no host, and macOS ignores the field.
+The `target` is the runner's path inside `launch.root`: with the default `evals` folder and a `launch.root` of `../..`, it is `evals/node_modules/.bin/tea-skill-runner`.
 
 <!-- example:ci-registry -->
 
@@ -75,7 +76,7 @@ An entry that lists no `egress` reaches no host, and macOS ignores the field.
 {
   "interfaceId": "reservation-review-skill",
   "executable": "tea-skill-runner",
-  "target": "tea-skill-runner",
+  "target": "evals/node_modules/.bin/tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": ["RESERVATION_MODEL_KEY"],
