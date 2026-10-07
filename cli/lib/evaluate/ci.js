@@ -962,6 +962,34 @@ function replayPreflight(context, baseline) {
 }
 
 /**
+ * The oracle each probe of the baseline was scored under (Story 1.110): the `--designated-oracle` argument of the probe's call record in
+ * the accepted score invocation, by probe ID. A probe whose record names none, or cannot be read, is scored under the engine's own rule,
+ * and a replay that then differs from the baseline is evidence drift.
+ *
+ * @returns {Map<string, string>}
+ */
+function recordedDesignations(baseline) {
+  const designations = new Map();
+  const directory = path.join(baseline.directory, 'scores', baseline.manifest.scoreInvocationId);
+  let entries;
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return designations;
+  }
+  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+    try {
+      const { argv } = JSON.parse(regularFileBytes(path.join(directory, entry.name, 'score.json')).toString('utf8'));
+      const at = Array.isArray(argv) ? argv.indexOf('--designated-oracle') : -1;
+      if (at !== -1 && typeof argv[at + 1] === 'string') designations.set(entry.name, argv[at + 1]);
+    } catch {
+      // A call record that cannot be read leaves the probe to the engine's own rule.
+    }
+  }
+  return designations;
+}
+
+/**
  * `score` over the placed baseline in the scratch copy; every file it wrote is copied to `replay/scores/`. The produced
  * subtree is the one `scores/` entry that is new after the call, so no entry already there (the accepted one, or a
  * planted one) is ever read as produced. The call's staging directories live in the scratch directory.
@@ -972,6 +1000,7 @@ function replayScore(context, baseline) {
     const logged = [];
     const before = new Set(scoreInvocations(scratch.runDirectory) ?? []);
     const outcome = await runScoreCommand(scratch.folder, {
+      designations: recordedDesignations(baseline),
       run: scratch.acceptedRun,
       env: context.env,
       stagingRoot: scratch.stagingRoot,

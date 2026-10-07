@@ -144,7 +144,7 @@ development_status:
   1-107-partition-evaluator-mappings-in-a-partition-plan: done
   1-108-compile-and-seal-each-partition-view-in-ci: backlog
   1-109-partition-gameability-degenerate-responses: done
-  1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
+  1-110-designate-one-oracle-per-behavior-in-the-both-view: done
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: done
   1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: done
   1-113-run-a-subscription-authenticated-agent-target-confined: done

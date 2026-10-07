@@ -24,7 +24,7 @@
  * It also refuses a manifest that would ship Evaluate broken: the
  * `tea-evaluate` bin must point at a file the package carries, and
  * `eval-quality` must be an optional peer whose range admits no release older
- * than 7.1.0: 4.0.0 is the first engine carrying the target-policy export and
+ * than 7.2.0: 4.0.0 is the first engine carrying the target-policy export and
  * trial-set scoring Evaluate needs, 4.1.1 the first whose command-line adapter
  * kills the target's process group at its ceiling, 4.1.2 the first that also
  * kills it when the host dies, by `SIGKILL` included, all of which
@@ -56,7 +56,9 @@
  * before its shape is read, and 7.0.1 the first whose `compile` and `preflight` refuse two interfaces that
  * share a `logicalId`, which `tea-evaluate check` quotes, and 7.1.0 the first whose
  * `success-indicator-separation` coverage rule counts only an oracle some behavior lists, which
- * `tea-evaluate score` records as a coverage gap. Optional,
+ * `tea-evaluate score` records as a coverage gap, and 7.2.0 the first whose `score`
+ * takes `--designated-oracle`, which `tea-evaluate` hands a both-view probe so each probe is scored against its own
+ * partition's oracle. Optional,
  * because npm 7 and later install a
  * required peer automatically and would pull the engine into every project that
  * installs TeA for its other workflows.
@@ -75,7 +77,7 @@ const semver = require('semver');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '7.1.0';
+const ENGINE_FLOOR = '7.2.0';
 
 const EXPECTED_REPOSITORY = 'bmad-code-org/bmad-method-test-architecture-enterprise';
 const EXPECTED_WORKFLOW = 'Publish';

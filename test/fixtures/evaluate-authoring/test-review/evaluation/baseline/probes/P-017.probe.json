@@ -15,13 +15,13 @@
     "degenerateResponse": "Report every test clean.",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20261005T003249653Z-94a4d2b7/qualification/P-017/naive-oracle-satisfied.json",
+      "path": "runs/20261006T211922974Z-aff01bf6/qualification/P-017/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:3a8d5504825029f66565664082841133571cc534a94839e0e272d51a9a8c9b7e"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20261005T003249653Z-94a4d2b7/qualification/P-017/disciplined-oracle-rejected.json",
+      "path": "runs/20261006T211922974Z-aff01bf6/qualification/P-017/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:eebfe8f54c26a2fd0a56f99368b7e55d4eeccd33ae44d87cadc26f9fac0629fc"
     }

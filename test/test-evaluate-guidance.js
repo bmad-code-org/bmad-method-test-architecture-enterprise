@@ -1027,7 +1027,8 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'and a held-out probe whose naive oracle reads a development-only step',
     "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step",
     'It names a gameability answer left out, misplaced or unreadable by probe and step ID',
-    'has no designated oracle there',
+    'A run with no `--partition` scores each probe against the oracle of its own partition',
+    'Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step',
     'selects with an `any` matcher',
     'witnesses with a non-private input',
     'under one, replace it that way',
@@ -4707,7 +4708,27 @@ async function main() {
         'corpus partition plan held-out probe move removal',
         'corpus',
         checkPartitionPlanGuidance,
-        (text) => text.replace('selects with an `any` matcher', 'selects with the private literal'),
+        (text) => text.replaceAll('selects with an `any` matcher', 'selects with the private literal'),
+      ],
+      [
+        'corpus partition plan both view designation removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'A run with no `--partition` scores each probe against the oracle of its own partition',
+            'A run with no `--partition` scores no probe of a behavior with two oracles',
+          ),
+      ],
+      [
+        'corpus partition plan gameability signature removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step',
+            'Give a gameability probe a `defectSignature` that selects one step',
+          ),
       ],
       [
         'corpus partition plan closed baseline removal',

@@ -73,6 +73,7 @@ No engine change is needed.
 - `cli/lib/evaluate/check.js` -- the 1.51 refusal is gone; `checkPlanMappings` runs the plan-row rules over a held-out view that passed the engine's contract schema; a records evaluator beside a rubric and `mappings` beside an evaluator that reads none are findings; a `mapping.json` row binding what `contract.json` lacks carries where it belongs.
 - `cli/lib/evaluate/schemas/held-out-plan.schema.json` -- optional `mappings` (strict row shapes with ID and key patterns); `evaluation.schema.json` description.
 - `test/test-evaluate-partition-plans.js` -- `mappingLayer`, the pure cases (`mappingView`, the row validators, the sealed-agent prompt, `foreignContent`), the layer unit with the tree digest, nine `check` cases, the command evaluator flow over split oracle and criterion rows in all three partitions, and the records flow. `test/fixtures/evaluate/partition-plan-evaluator/` (new: `rows.js`, `mapping.json`, `frameworks.json`). `test/test-evaluate-guidance.js` -- the tagged mapping example, five markers and five mutants.
+  Story 1.110 split the suite for CI: the evaluator mapping flow, the sealed-record cases and the helpers of `mappingLayer` now sit in `test/test-evaluate-partition-plans-attempts.js` and `test/lib/evaluate-partition-plans-harness.js`; the pure and `check` cases stay in `test/test-evaluate-partition-plans.js`.
 - `docs/reference/tea-evaluate-cli.md`, skill `references/corpus.md`, `CHANGELOG.md`, `epics.md`, `ARCHITECTURE-SPINE.md` (AD-22), `test-design-epic-1.md`, `sprint-status.yaml`.
 
 ## Tasks & Acceptance

@@ -2905,7 +2905,7 @@ So that a gameability probe works under a partition plan without leaking a held-
 
 ### Story 1.110: Designate one oracle per behavior in the both view
 
-Added 2026-10-03 from Story 1.51's build. eval-quality designates an oracle for a probe only when its behavior names exactly one. The held-out view keeps that rule, and the both view gives a behavior its development oracle and its held-out oracle, so the probes of such a behavior are scored without a designated oracle (`caught: false`) in a run with no `--partition`. Story 1.51 documents the limit and scores each partition apart.
+Added 2026-10-03 from Story 1.51's build. eval-quality designates an oracle for a probe only when its behavior names exactly one. The held-out view keeps that rule, and the both view gives a behavior its development oracle and its held-out oracle, so, before Story 1.110, the probes of such a behavior were scored in a run with no `--partition` with no designated oracle: a probe read `caught: true` only through a finding that cites the contract's first-declared oracle. Story 1.51 documented that and scored each partition apart; Story 1.110 hands each probe its own partition's oracle.
 
 As an adopter who runs everything with no `--partition`, or a baseline of `both` replayed by `ci`,
 I want the both view to give each behavior one oracle per probe,
@@ -2919,8 +2919,14 @@ So that a both run scores the probes of a behavior that has a development and a 
 **And** a both baseline accepted by `compare --accept` replays through `ci --tier pr` with both probes caught, and the held-out and development partitions keep their own scores unchanged.
 **And** a behavior with two oracles that scores `caught: false` for both probes fails the case, and a replay that reads the both view as stale or uncaught fails the replay case.
 
-**Dependencies:** 1.51.
+**Dependencies:** 1.51, eval-quality 7.2.0 (`eval-quality score --designated-oracle`, engine PR #187).
 **Gate:** `npm run test:evaluate-partition-plans`, `npm run test:evaluate-ci`, `npm test`.
+
+Amended 2026-10-05 in Story 1.110's build: the criteria hold as written, and the build adds what they leave open.
+A probe of a both run asks the engine for the one oracle its own partition's view lists for its behavior (the held-out view's when `heldOutProbes` lists the probe, the development view's otherwise); a partition view that lists none or several leaves the probe undesignated, as the partition's own run does, and a both view that lists one oracle is designated by the engine.
+A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so every committed fixture, baseline and replay of them keeps its bytes.
+The call's arguments and the in-process held-input check read the designation through one method of `HeldInputs`, so a call that drops it is refused (exit 12); the gameability probes and the evaluator qualification attempts of a both run are designated too; and `score` and `compare --accept` refuse a both run whose held-out plan, `evaluation.json` or `contract.json` cannot be read, or whose folder's both view lists other oracles under a probe's behavior than the contract the run sealed where that can change the designation (the sealed list names several oracles, or the folder designates one; exit 10, no score call), while a `ci` replay scores each probe under the oracle the baseline's own call record names and leaves a changed folder to the stale-baseline rule.
+A gameability probe's `defectSignature` must admit and be satisfied by the answer at every step an oracle of either partition reads, since the both view answers every step and the engine reads a finding at a step the signature does not admit as an unwitnessed claim (the probe is Invalid, exit 3).
 
 ### Story 1.111: Guide Stage 6 preflight by partition and refuse an unpartitioned plan preflight
 

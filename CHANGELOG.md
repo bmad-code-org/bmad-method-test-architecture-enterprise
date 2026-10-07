@@ -9,12 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A run with no `--partition` scores each probe against the oracle of its own partition (Story 1.110, AD-9, AD-22).
+  The both view gives a behavior its development oracle and its held-out oracle, and eval-quality designates an oracle for a probe only when its behavior lists exactly one, so a both run scored every probe of such a behavior undesignated: a probe read `caught: true` only when a finding cited the contract's first-declared oracle and `caught: false` for a defect claimed against any other oracle.
+  A probe now asks `eval-quality score --designated-oracle` for the one oracle its partition's own view lists for its behavior: the held-out view's oracle when `heldOutProbes` lists the probe, the development view's otherwise, derived by the same `contractView` the partition's own run compiles.
+  A behavior whose partition view lists no oracle or several stays undesignated, as in the partition's own run, and a behavior the both view lists with one oracle is designated by the engine.
+  A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so every committed score, baseline and replay of them keeps its bytes, and a development run never opens the held-out plan.
+  `HeldInputs` in `score-inputs.js` is the one place that reads the designation: `scoreArguments` adds the flag and `reproduce` hands the same oracle to the in-process re-score, so the CLI call and the held-input check cannot disagree, and `score`, `compare --accept`, `ci` and an evaluator qualification attempt all go through it.
+  `score` reads the folder's `contract.json` and held-out plan for a both run, and refuses with an input-check finding (exit 10, no score call) a plan, `evaluation.json` or `contract.json` that cannot be read, a probe whose behavior the contract does not hold, and a folder whose both view lists other oracles under a probe's behavior than the contract the run sealed where that can change the designation: the sealed list names several oracles (a plan that dropped or added an oracle, a `contract.json` that gained one, a removed `partitionPlan`) or the folder designates an oracle.
+  A sealed list of one oracle is designated by the engine whatever the folder says, so such a folder is scored.
+  A finding names the behavior by an ID of the schema's shape and quotes no byte of the plan.
+  `compare --accept` reports the same findings, so a both run whose folder drifted never becomes a baseline.
+  A `ci` replay scores each probe of a both baseline under the oracle the baseline's own call record names and reads no view of the folder, so a folder changed since the baseline is reported by the stale-baseline rule (a warning on `pr`, exit 11 on `release`) and not refused.
+  The `partition-plan` fixture's both run now scores P-003 against O-101 and P-004 against O-002 and catches both, as the held-out and development runs do; a both baseline accepted with `compare --accept` replays through `ci --tier pr` with every probe as recorded and no stale warning; a development clean control on a behavior with several oracles stays undesignated and reads as it does in the development run; a call that drops the flag is refused as a staged artifact that differs from the held inputs'; and the gameability probes of a both run are designated too.
+  A gameability probe's `defectSignature` must admit and be satisfied by the answer at every step an oracle of either partition reads, because the both view answers every step and eval-quality reads a finding at a step the signature does not admit as an unwitnessed claim.
+  The reference and the corpus guide say so, and the fixture's development gameability probe selects any prompt.
 - `test:doc-counts` holds the replay totals, the story count and the five lane lists of the Evaluate plan to the files that own them (Story 1.95, CAP-12).
   The totals that `test/README.md` and the header of `test/test-eval-replay.js` state (the cases, the cases that produce a number, the constructed ones among them, the cases that carry captured bytes and where they come from, and the trace, `nfr` and `ci` case counts) equal the counts read from the `expected.json` files under `test/replay/`, so a replay case added without moving them fails.
   The overview of `epics.md` states its story count (every `### Story` section, H.1 included), its epic count and the number of appended stories, and its Parallel lanes section states the lane count; the gate holds each to the story sections and lane lists the file holds.
   The module `test/lib/planning-doc-sources.js` refuses a plan whose two appended-story lists do not name exactly the Epic 1 stories numbered 1.27 and up, and a plan whose five lane lists in `epics.md` and `sprint-status.yaml` differ in membership or order, hold a story twice or in two lanes, miss a lane, or name an entry with no status row.
   `test:planning-doc-sources` observes every gate failing on data changed by one: a count off by one, an entry removed from each of the five lanes in each file, a story moved to another lane or duplicated in one file only, an order swap, a lane missing from either file, and a stored replay case added.
-
 - The evaluation layer's processes have no route to the host's path-based Unix sockets (Story 1.88, AD-7, AD-8).
   The processes that run your code or an agent for the evaluation (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge and the evaluation's HTTP port) kept every socket of the host, so a sealed-brief agent run by a user in the `docker` group could start a container that writes the evaluation folder.
   Under Bubblewrap each start of such a process now lists the host's sockets again, the list a target's call reads, and binds each socket's own path onto itself and then an empty device file over it, so `/var/run/docker.sock`, the system bus and an agent socket under `/tmp` answer `ECONNREFUSED`.
@@ -452,6 +465,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `test:evaluate-partition-plans` is split into two chained scripts so each fits a CI shard under the 20 minute cap (Story 1.110, CI).
+  `test:evaluate-partition-plans` keeps the views, `check`, and the preflight, run and score flows; `test:evaluate-partition-plans-attempts` holds the evaluator mapping, sealed-records and gameability flows.
+  Both build their fixture and helpers through `test/lib/evaluate-partition-plans-harness.js`, and `tools/test-shard-weights.json` holds a weight for each.
+- TeA adopts eval-quality 7.2.0, the first release whose `score` takes `--designated-oracle` (Story 1.110, AD-5).
+  The peer floor moves to `>=7.2.0` in `package.json`, `package-lock.json`, `tools/guard-publish.js` and `test/test-release-metadata.js`, `test/test-guard-publish.js` refuses a floor of 7.1.0, and the engine-missing message, the reference and the AD-5 record name the release.
+  Every accepted baseline is re-recorded on 7.2.0 with `compare --accept` over a clean copy, since a baseline names the engine release that measured it and `test:evaluate-pr-<key>` refuses one recorded on another.
 - The Evaluate skill's corpus guide is carved into one guide per target kind (Story 1.114).
   `references/corpus.md` held the craft every kind shares and six target-kind sections, and at 16,799 tokens it ran past the 9,000-token budget of a single-purpose guide.
   `corpus.md` keeps the shared craft (the layout rules, the partition plans and held-out steps) and gains a `Per-kind guides` section that names `references/corpus-agent.md`, `corpus-skill.md`, `corpus-workflow.md`, `corpus-tool-use-system.md`, `corpus-ai-feature.md` and `corpus-test-review-mechanism.md`.
