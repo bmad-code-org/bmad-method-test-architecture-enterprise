@@ -74,6 +74,7 @@ const { SUPERVISOR_BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = r
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
+const { chanceMountNotes, lossyLegs, mountsOfEveryLeg } = require('../cli/lib/evaluate/isolation-allowlist');
 const { scratchDirectories } = require('./lib/scratch-directories');
 const { CONFINEMENT_PAGE, REFERENCE_PAGE, readDocsPage, sectionOf } = require('./lib/docs-pages');
 
@@ -1978,6 +1979,97 @@ function writeScoringPolicy(folder) {
  * so the runner and what it requires sit beside the install, not in the copy, and `score` would exit 3 on every one of them as a
  * mount outside the allowlist. `preflight` and `run` refuse with that exit and name both setups that work.
  */
+/**
+ * The rules that tell a path every leg opened from one some legs did, over legs the audit watched in full and legs it lost reports
+ * on: a lossy leg's list may lack a path the leg opened, so it takes no part in the intersection and no note says the other legs did
+ * not open a path on its word. The workspace grants are allowed, and every leg lossy leaves nothing common (the command then exits 12).
+ */
+function checkLegMountRules() {
+  const leg = (mounts, lossy = false) => ({ mounts, lossy });
+  const both = ['/i/cli/a.js', '/i/cli/b.js'];
+  const all = new Map([
+    ['alpha', leg([...both, '/only/alpha'])],
+    ['beta', leg(both)],
+    ['control', leg([...both, 'copy pristine'])],
+  ]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(all, ['copy pristine'])) === JSON.stringify(both),
+    `the paths every leg opened are ${JSON.stringify(mountsOfEveryLeg(all, ['copy pristine']))}; expected ${JSON.stringify(both)}`,
+  );
+  const notes = chanceMountNotes(all, PROJECT_ROOT);
+  check(
+    notes.length === 2 && notes[0].includes('"alpha"') && notes[0].includes('/only/alpha') && notes[1].includes('copy pristine'),
+    `the notes on paths only some legs opened are ${JSON.stringify(notes)}`,
+  );
+
+  // A leg whose audit lost every report of a path every other leg opened: left out, not counted as a leg that did not open it.
+  const withLoss = new Map([...all, ['gamma', leg(['/i/cli/a.js'], true)]]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(withLoss, ['copy pristine'])) === JSON.stringify(both),
+    `a lossy leg shrank the paths every leg opened to ${JSON.stringify(mountsOfEveryLeg(withLoss, ['copy pristine']))}`,
+  );
+  const lossNotes = chanceMountNotes(withLoss, PROJECT_ROOT);
+  check(
+    lossNotes.length === 3 &&
+      !lossNotes.some((note) => note.includes('"gamma"') && note.includes('opened') && note.includes('/i/cli/b.js')) &&
+      lossNotes.at(-1).includes('"gamma"') &&
+      lossNotes.at(-1).includes('left out of the check') &&
+      lossNotes.slice(0, -1).every((note) => note.includes('audit watched in full')),
+    `the notes beside a lossy leg are ${JSON.stringify(lossNotes)}; expected the same two and one naming the lossy leg as left out`,
+  );
+  check(JSON.stringify(lossyLegs(withLoss)) === JSON.stringify(['gamma']), `the lossy legs are ${JSON.stringify(lossyLegs(withLoss))}`);
+
+  // A lossy leg that lost every read, with the others agreeing, does not turn the structural case into a pass.
+  const dropped = new Map([...all, ['delta', leg([], true)]]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(dropped, ['copy pristine'])) === JSON.stringify(both),
+    `a lossy leg that listed nothing emptied the paths every leg opened to ${JSON.stringify(mountsOfEveryLeg(dropped, ['copy pristine']))}`,
+  );
+
+  // Every leg lossy, and no leg at all: nothing is vouched for.
+  const lost = new Map([
+    ['alpha', leg(both, true)],
+    ['beta', leg([], true)],
+  ]);
+  check(
+    mountsOfEveryLeg(lost, []).length === 0 && lossyLegs(lost).length === 2 && mountsOfEveryLeg(new Map(), []).length === 0,
+    'legs whose audits all lost reports vouched for a path',
+  );
+}
+
+/**
+ * A log that loses every second report (`fixtures/evaluate/lossy-log.cjs`, macOS): over the bare-name setup `preflight` would refuse,
+ * every leg's audit says it lost reports, so no leg can say what it opened. The audit-loss outcome applies (exit 12, the legs yield no
+ * audit) in place of a pass on the shrunken set the dropped lines leave, which is the defect the refusal exists to catch.
+ */
+function checkLossyLegAudit() {
+  if (process.platform !== 'darwin') return;
+  const pids = tempDir('lossy-log-pids');
+  const executable = path.join(tempDir('lossy-log'), 'log');
+  fs.writeFileSync(executable, `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'lossy-log.cjs')}" 2 "${pids}" "$@"\n`, {
+    mode: 0o755,
+  });
+  try {
+    const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+    const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: executable } });
+    check(
+      result.status === 12 && result.output.includes('the legs yield no audit: the audit lost reports while every leg ran'),
+      `preflight over a log that loses every second report exited ${result.status}; expected 12 naming the audit's loss\n${result.output}`,
+    );
+    check(
+      !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),
+      `preflight judged the paths of legs whose audit lost reports\n${result.output}`,
+    );
+  } finally {
+    // The real `log` the stub started outlives the runtime's SIGKILL of the stub; end each one this case started.
+    for (const name of fs.readdirSync(pids)) {
+      const pid = Number(fs.readFileSync(path.join(pids, name), 'utf8'));
+      const command = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' }).stdout;
+      if (command.includes('/usr/bin/log stream') && command.includes('tea-evaluate-audit-')) reap(pid);
+    }
+  }
+}
+
 function checkRunnerOutsideAllowlist() {
   const refusal = (output) => {
     // The runner's own files are the paths it names; the first three of the sorted list, in the form the records use.
@@ -3015,6 +3107,8 @@ async function main() {
     checkSupervisorTraceRetries();
     if (process.platform !== 'win32') checkPosixRunnerReference();
     checkPasses();
+    checkLegMountRules();
+    checkLossyLegAudit();
     checkRunnerOutsideAllowlist();
     checkRemovedEntry();
     checkShim();

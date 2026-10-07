@@ -263,7 +263,8 @@ A registry `target` of the bare name `tea-skill-runner`, found through the `eval
 tea-evaluate preflight: isolation manifest violation: every preflight leg opened 17 path(s) outside the allowlist (mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-adapters.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor-bounds.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor.js; and 14 more), so every trial will too, and `score` refuses a trial that does (exit 3). If they are the files of a target that launches from outside its workspace, use one of two setups: make the registry `target` a path inside `launch.root` (for example `node_modules/.bin/tea-skill-runner` over a copy workspace, or a git workspace with `workspace.provision`), or keep the bare name and list the directories it runs from in `systemPaths`, with the bin directory that holds its link on `PATH`.
 ```
 
-The audit lists 17 paths, all under two directories.
+On macOS the audit lists 17 paths, all under two directories: the TeA package and `commander`.
+On Linux it lists 18, the third being the link `node_modules/.bin/tea-skill-runner` in a third directory, `evals/node_modules/.bin`.
 Two repairs work, and the first is the one to prefer:
 
 1. Set the registry `target` to the path inside `launch.root`, `evals/node_modules/.bin/tea-skill-runner`, as step 2 shows.

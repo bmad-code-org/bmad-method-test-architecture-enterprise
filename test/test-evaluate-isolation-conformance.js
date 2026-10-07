@@ -160,7 +160,7 @@ async function main() {
         continue;
       }
       const ours = mountsOutsideAllowlist(observed, allowed);
-      const refusal = mountRefusal({ mounts: ours, folder: scratch, opened: 'the trials' });
+      const refusal = mountRefusal({ mounts: ours, folder: scratch, who: 'trials' });
       if (engineSays.paths.length > 0) refused += 1;
       check(
         JSON.stringify(ours) === JSON.stringify(engineSays.paths),

@@ -5872,13 +5872,22 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
   const untraced = makeProject('observer-untraced');
   const untracedRun = evaluate(['run', '--evaluation', untraced.folder], environment(untraced));
-  // The preflight's legs are audited as the trials are, so the first leg a trace does not cover ends the run, before any trial.
+  // A `run` audits its trials and not its legs (it judges the trials' manifests), so an audit that fails ends it at its first trial, with
+  // no record for it, exactly as it did before `preflight` audited its legs: the failing leg audit of a `preflight` cannot change a run.
   check(
     untracedRun.status === 12 &&
       untracedRun.output.includes('holds no start of its target') &&
-      /leg witness-alpha could not run/.test(untracedRun.output) &&
-      !fs.existsSync(path.join(runDirectoryOf(untraced.folder) ?? '', 'trial-sets')),
-    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 at the first leg, with no trial set\\n${untracedRun.output}`,
+      untracedRun.output.includes('yields no record') &&
+      !/leg witness-alpha could not run/.test(untracedRun.output),
+    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 with no record for the trial\n${untracedRun.output}`,
+  );
+  // A `preflight` audits each leg, so the first leg the trace does not cover ends it, before any trial could run.
+  const untracedPreflight = evaluate(['preflight', '--evaluation', untraced.folder], environment(untraced));
+  check(
+    untracedPreflight.status === 12 &&
+      untracedPreflight.output.includes('holds no start of its target') &&
+      /leg witness-alpha could not run/.test(untracedPreflight.output),
+    `a preflight whose observer traced nothing exited ${untracedPreflight.status}; expected 12 at the first leg\n${untracedPreflight.output}`,
   );
 }
 
@@ -7805,7 +7814,9 @@ async function checkChanceMounts() {
   const preflight = evaluate(['preflight', '--evaluation', some.folder], env);
   check(
     preflight.status === 0 &&
-      /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs did not/.test(preflight.output),
+      /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs the audit watched in full did not/.test(
+        preflight.output,
+      ),
     `preflight over a target that read a file on some legs exited ${preflight.status}; expected 0 with a note naming the path and the leg\n${preflight.output}`,
   );
   check(!preflight.output.includes('isolation manifest violation'), `preflight refused a path only some legs opened\n${preflight.output}`);
@@ -18252,9 +18263,12 @@ async function checkSocketConnectionRun() {
       },
       { act: 'hold-connect', env: { VERDICT_TOUCH: [hidden, late, `link:${viaLink}`].join(',') } },
     );
+    // The two late sockets are observed mounts (Story 1.86), so the run refuses them with exit 3 naming each, and not the refused one.
     check(
-      held.held && held.status === 0,
-      `a confined run whose target connected to late sockets exited ${held.status}; expected 0\n${held.output}`,
+      held.held &&
+        refusesMounts(held, [mountOf(late, project), mountOf(viaLink, project)]) &&
+        !held.output.includes(mountOf(hidden, project)),
+      `a confined run whose target connected to late sockets exited ${held.status}; expected 3 naming each late socket and not the refused one\n${held.output}`,
     );
     const out = trialStdout(held.runDirectory, 'clean', 1);
     for (const [name, expected] of [
@@ -18287,7 +18301,7 @@ async function checkSocketConnectionRun() {
       JSON.stringify(other) === '[]',
       `P-002's trials connected to nothing outside the grants, yet its manifest lists ${JSON.stringify(other)}`,
     );
-    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(held.runDirectory)], project.env);
     check(
       scored.status === 3 &&
         scored.output.includes(`mount outside allowlist: ${mountOf(late, project)}`) &&

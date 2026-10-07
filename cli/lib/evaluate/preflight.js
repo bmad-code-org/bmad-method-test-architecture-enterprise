@@ -90,7 +90,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { confines, layerPrefix, selectConfinement } = require('./confinement');
-const { chanceMountNotes, mountRefusal, mountsOfEveryLeg } = require('./isolation-allowlist');
+const { chanceMountNotes, lossyLegs, mountRefusal, mountsOfEveryLeg } = require('./isolation-allowlist');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
@@ -1154,7 +1154,9 @@ async function runInWorkspaces({
   let settled = false;
   // Each leg of the pristine workspace runs through a port of its own that audits what the leg opens outside what it was granted,
   // so what every leg opened is told from what one leg did. The ports are made here, after the qualification, one at a time, so
-  // each audit watches its leg alone and ends with it.
+  // each audit watches its leg alone and ends with it. Only `preflight` audits its legs: `run` judges its trials' manifests, so
+  // its legs run unaudited as they always did, and an audit that fails cannot change a run's outcome.
+  const auditLegs = afterVerdict === null;
   const legMounts = new Map();
   const auditedLegs = {
     async probe(request, signal) {
@@ -1164,12 +1166,20 @@ async function runInWorkspaces({
         workspace: pristine.top,
         git: gitAccessOf(pristine),
         privateRoot: registry.privateRoot,
-        audit: true,
+        audit: auditLegs,
       });
       try {
         const answered = await audited.port.probe(request, signal);
-        // An audit that cannot confirm what it saw leaves the leg unjudged, as it does a trial.
-        legMounts.set(request.probeId, await audited.observedMounts());
+        if (auditLegs) {
+          // An audit that cannot confirm what it saw leaves the leg unjudged, as it does a trial. One that lost reports says so
+          // (the log's lost events, or canaries it did not deliver), and no verdict rests on that leg (`isolation-allowlist.js`).
+          const mounts = await audited.observedMounts();
+          const channel = audited.auditChannel();
+          legMounts.set(request.probeId, {
+            mounts,
+            lossy: channel !== null && (channel.canariesDelivered < channel.canariesSent || channel.logReportedLoss),
+          });
+        }
         return answered;
       } finally {
         audited.releaseHome();
@@ -1218,8 +1228,19 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
-    // A path only some legs opened is chance evidence: the preflight reports it, naming the leg, and its exit does not change.
-    for (const note of chanceMountNotes(legMounts, folder)) log(note);
+    if (auditLegs) {
+      // Every leg's audit lost reports: no leg can say what it opened, so the check is not passed over in silence. The existing
+      // audit-loss outcome applies, as it does to a trial whose audit cannot confirm itself.
+      if (legMounts.size > 0 && lossyLegs(legMounts).length === legMounts.size) {
+        throw stop({
+          stage: 'leg',
+          exitCode: 12,
+          message: `the legs yield no audit: the audit lost reports while every leg ran (${lossyLegs(legMounts).join(', ')}), so what the legs opened is unknown; run again on a quieter host`,
+        });
+      }
+      // A path only some legs opened is chance evidence: the preflight reports it, naming the leg, and its exit does not change.
+      for (const note of chanceMountNotes(legMounts, folder)) log(note);
+    }
     // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
     // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64). A plan
     // the engine refused before any leg ran sent nothing to a deployment since the qualification, so nothing is asked.
