@@ -22,7 +22,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, buildLlmsFullText } = require('../tools/build-docs');
+const { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, LLM_WARN_CHARS, buildLlmsFullText, llmSizeStatus } = require('../tools/build-docs');
 
 const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 
@@ -75,6 +75,24 @@ function main() {
   // The edge: exactly the required headroom passes, one character fewer fails.
   assert.equal(headroomProblem('x'.repeat(LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS)), null);
   assert.notEqual(headroomProblem('x'.repeat(LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS + 1)), null);
+
+  // The build's warning starts where this test starts to fail, and names the real cap and the room left.
+  assert.equal(LLM_WARN_CHARS, LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS, 'the warning threshold is the cap minus the headroom floor');
+  assert.equal(llmSizeStatus(LLM_WARN_CHARS).level, 'ok', 'a bundle exactly at the headroom floor passes without a warning');
+  assert.equal(llmSizeStatus(text.length).level, 'ok', 'the bundle the build writes today prints no warning');
+  const warned = llmSizeStatus(LLM_WARN_CHARS + 1);
+  assert.equal(warned.level, 'warn', 'one character past the headroom floor warns');
+  assert.equal(
+    warned.message,
+    `${(LLM_WARN_CHARS + 1).toLocaleString()} chars leaves ${(LLM_MIN_HEADROOM_CHARS - 1).toLocaleString()} under the ${LLM_MAX_CHARS.toLocaleString()} char limit`,
+  );
+  assert.equal(llmSizeStatus(LLM_MAX_CHARS).level, 'warn', 'a bundle exactly at the cap warns');
+  assert.equal(llmSizeStatus(LLM_MAX_CHARS + 1).level, 'error', 'a bundle past the cap fails the build');
+  assert.equal(
+    headroomProblem('x'.repeat(LLM_WARN_CHARS + 1)) === null,
+    llmSizeStatus(LLM_WARN_CHARS + 1).level === 'ok',
+    'the warning and the test agree',
+  );
 
   console.log('test-llms-headroom: ok');
 }

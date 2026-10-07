@@ -32,11 +32,12 @@ const REPO_URL = 'https://github.com/bmad-code-org/bmad-method-test-architecture
 // llms-full.txt is consumed by AI agents as context. Most LLMs have ~200k token limits.
 // 600k chars ≈ 150k tokens (safe margin). Exceeding this breaks AI agent functionality.
 const LLM_MAX_CHARS = 600_000;
-const LLM_WARN_CHARS = 500_000;
 // The bundle must stay this far under the cap so the next page that lands has room. test/test-llms-headroom.js
 // fails when the bundle gets closer: a page that fills the last of the budget would break the build for whoever
 // adds the next one, so the exclusion list below is trimmed in the change that crosses this line.
 const LLM_MIN_HEADROOM_CHARS = 50_000;
+// The build warns exactly where test/test-llms-headroom.js starts to fail.
+const LLM_WARN_CHARS = LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS;
 
 // Every pattern must match at least one document: the build fails on one that
 // matches nothing, so a renamed or deleted page cannot leave a dead exclusion
@@ -428,14 +429,33 @@ function compactTables(content) {
     .join('\n');
 }
 
-function validateLlmSize(content) {
-  const charCount = content.length;
-
+/**
+ * Classifies a bundle size against the cap and the headroom floor.
+ * @param {number} charCount - Characters in the bundle.
+ * @returns {{level: 'error'|'warn'|'ok', message: string}} `error` past the cap, `warn` when less than the headroom floor is left, else `ok`.
+ */
+function llmSizeStatus(charCount) {
+  const left = LLM_MAX_CHARS - charCount;
   if (charCount > LLM_MAX_CHARS) {
-    console.error(`    ERROR: ${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit`);
+    return { level: 'error', message: `${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit` };
+  }
+  if (charCount > LLM_WARN_CHARS) {
+    return {
+      level: 'warn',
+      message: `${charCount.toLocaleString()} chars leaves ${left.toLocaleString()} under the ${LLM_MAX_CHARS.toLocaleString()} char limit`,
+    };
+  }
+  return { level: 'ok', message: '' };
+}
+
+function validateLlmSize(content) {
+  const { level, message } = llmSizeStatus(content.length);
+
+  if (level === 'error') {
+    console.error(`    ERROR: ${message}`);
     process.exit(1);
-  } else if (charCount > LLM_WARN_CHARS) {
-    console.warn(`    \u001B[33mWARNING: Approaching ${LLM_WARN_CHARS.toLocaleString()} char limit\u001B[0m`);
+  } else if (level === 'warn') {
+    console.warn(`    \u001B[33mWARNING: ${message}\u001B[0m`);
   }
 }
 
@@ -689,4 +709,4 @@ function checkDocLinks() {
   }
 }
 
-module.exports = { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, LLM_EXCLUDE_PATTERNS, buildLlmsFullText };
+module.exports = { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, LLM_WARN_CHARS, LLM_EXCLUDE_PATTERNS, buildLlmsFullText, llmSizeStatus };
