@@ -610,7 +610,8 @@ async function checkCheck(context) {
  * The views the engine stage checks run over (Story 1.108): one entry, `contract.json`, for a folder with no `partitionPlan`
  * (and for one whose `evaluation.json` cannot be read, which is the `check` check's finding), and under a `partitionPlan` one
  * entry for each of the development, held-out and both views. Each entry names its `view` and holds `file`, the contract the stage
- * reads, or `problem`, the message of the error that kept the view from being derived. The development view is the folder's
+ * reads, or `problem`, the message of the error that kept the view from being derived (authoring, exit 10), or `unstaged`, a message
+ * naming the code of the error that kept a derived view from being staged (infrastructure, exit 12). The development view is the folder's
  * `contract.json` itself, so the held-out plan is read only for the held-out and both views. A derived view is staged in a
  * directory of the invocation's scratch list.
  */
@@ -903,15 +904,25 @@ function staleBaseline(context, baseline) {
       // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is compiled as before.
     }
     if (evaluation?.partitionPlan !== undefined && baseline.manifest.partition !== 'development') {
+      let view = null;
       try {
-        const view = loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition });
-        const staged = path.join(staging, CONTRACT_NAME);
-        fs.writeFileSync(staged, view.bytes);
-        // The compile reads the staged view only once it is written.
-        contractFile = staged;
+        view = loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition });
       } catch (error) {
         // Every failure to derive the view is a reason, so a baseline is never passed without its digest comparison.
         viewProblem = error instanceof PartitionPlanError ? error.message : `an unexpected ${error?.name ?? 'error'} while deriving it`;
+      }
+      if (view !== null) {
+        const staged = path.join(staging, CONTRACT_NAME);
+        try {
+          fs.writeFileSync(staged, view.bytes);
+        } catch (error) {
+          // A view that is derived and cannot be staged is a fault of this machine, which is infrastructure and no reason of staleness.
+          throw new Error(
+            `the ${baseline.manifest.partition} view of the contract could not be staged (${error?.code ?? error?.name ?? 'error'})`,
+          );
+        }
+        // The compile reads the staged view only once it is written.
+        contractFile = staged;
       }
     }
     if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);

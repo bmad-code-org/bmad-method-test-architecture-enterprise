@@ -1597,11 +1597,13 @@ function checkEngineStageExits() {
 /**
  * Under a `partitionPlan` the stage runs over three views (Story 1.108). A substituted engine that gives every view one exit shows the
  * exit and its class reaching the row (4, 5, 64 and an undocumented 7 that is 12) with one call and one record per view. The cases below
- * it give the views different results, since a row whose exit is the first, the last or the numerically largest of them would pass the
- * loop: the staged views alone failing to run (12 beside a development view that ran), a development view that exits 4 beside staged
- * views that exit 64 (the row is 64), and a staged view that cannot be written. The real-engine mix of 4, 5 and 4 is in
- * `test-evaluate-partition-plans-attempts.js`. The last cases hold what each view's streams do: the summary lines come first and end
- * in a newline, and the development view's own bytes follow them exactly.
+ * it give the views different results, since a row whose exit is the first or the last of them would pass the loop: the staged views
+ * alone failing to run (12 beside a development view that ran), a development view that exits 4 beside staged views that exit 64 (the
+ * row is 64), and a staged view that cannot be written. Over engine exits the numerically largest is the most severe (4 and 5 order
+ * so, and 64 outranks both), so a row that takes the largest exit passes all of these; the unparsable-contract case of
+ * `test-evaluate-partition-plans-attempts.js` (the engine's 5 beside the findings' 10) holds that mutant. The real-engine mix of 4, 5
+ * and 4 is in the same file. The last cases hold what each view's streams do: the summary lines come first and end in a newline, and
+ * the development view's own bytes follow them exactly.
  */
 function checkStageViewExits() {
   for (const [exit, expected] of [
@@ -1736,39 +1738,72 @@ function checkStageViewExits() {
   assert.match(killedStdout, /^compile over the development view: eval-quality exited 0$/m);
   assert.match(killedStdout, /^compile over the held-out view: eval-quality could not run it \(exit 12\)$/m);
   assert.match(killedStdout, /^compile over the both view: eval-quality exited 0$/m);
-  // A staged view that cannot be written is a fault of the machine: 12 for that view, its error code and none of the plan's bytes, and the
-  // development view still runs.
-  const preload = path.join(scratch.make('stage-views-enospc'), 'preload.js');
+  // A staged view that cannot be written, or whose directory cannot be made, is a fault of the machine: 12 for that view, its error code and
+  // none of the plan's bytes, and the development view still runs and keeps its record and its line.
+  for (const [label, call] of [
+    ['write', 'writeFileSync'],
+    ['directory', 'mkdtempSync'],
+  ]) {
+    const full = copyFixture('plan', `stage-views-enospc-${label}`);
+    writePlan(full, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+    const unwritten = ci(full, 'pr', {
+      NODE_OPTIONS: `--require=${enospcPreload(`stage-views-enospc-${label}`, call, 'tea-evaluate-view-')}`,
+    });
+    assert.equal(unwritten.status, 12, `${label}: ${unwritten.output}`);
+    const unwrittenRun = latestCi(full);
+    const unwrittenRow = rowOf(unwrittenRun.json, 'compile');
+    assert.deepEqual([unwrittenRow.exit, unwrittenRow.class], [12, 'infrastructure']);
+    assert.deepEqual(
+      unwrittenRow.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', 'eval-contract.json'].map((name) => `checks/compile/${name}`),
+    );
+    const unwrittenStdout = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stdout'), 'utf8');
+    assert.match(unwrittenStdout, /^compile over the development view: eval-quality exited 0$/m);
+    for (const view of ['held-out', 'both']) {
+      assert.match(unwrittenStdout, new RegExp(`^compile over the ${view} view: eval-quality could not run it \\(exit 12\\)$`, 'm'));
+    }
+    const unwrittenStderr = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stderr'), 'utf8');
+    for (const view of ['held-out', 'both']) {
+      assert.match(
+        unwrittenStderr,
+        new RegExp(`^compile over the ${view} view: the derived ${view} view could not be staged \\(ENOSPC\\)$`, 'm'),
+      );
+    }
+    assert.doesNotMatch(unwrittenStdout + unwrittenStderr, /canary|held-out-run|O-101|\[partition-plan\]/);
+  }
+  // A baseline of the held-out partition under a plan: the view its compile reads is staged by the stale-baseline rule. A view that is
+  // derived and cannot be staged is infrastructure (12), and the same folder with a staging directory that works reports a stale
+  // baseline as a warning (Story 1.51).
+  const stale = copyFixture('plan', 'stage-views-stale');
+  fs.cpSync(path.join(ROOT, FIXTURES.verdict.root, FIXTURES.verdict.folder, 'baseline'), path.join(stale, 'baseline'), { recursive: true });
+  editManifest(stale, (manifest) => (manifest.partition = 'held-out'));
+  writePlan(stale, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  const warned = ci(stale, 'pr');
+  assert.equal(warned.status, 0, warned.output);
+  assert.match(warned.output, /warning: the baseline is stale/);
+  const faulted = ci(stale, 'pr', {
+    NODE_OPTIONS: `--require=${enospcPreload('stage-views-stale-enospc', 'writeFileSync', 'tea-evaluate-engine-')}`,
+  });
+  assert.equal(faulted.status, 12, faulted.output);
+  assert.match(faulted.output, /the held-out view of the contract could not be staged \(ENOSPC\)/);
+  assert.doesNotMatch(faulted.output, /warning: the baseline is stale/);
+}
+
+/** A preload for `NODE_OPTIONS` that makes `fs[call]` fail with ENOSPC for a path that holds `part`. */
+function enospcPreload(label, call, part) {
+  const file = path.join(scratch.make(label), 'preload.js');
   fs.writeFileSync(
-    preload,
+    file,
     `'use strict';
 const fs = require('node:fs');
-const write = fs.writeFileSync;
-fs.writeFileSync = function (file, ...rest) {
-  if (String(file).includes('tea-evaluate-view-')) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
-  return write.call(this, file, ...rest);
+const real = fs[${JSON.stringify(call)}];
+fs[${JSON.stringify(call)}] = function (target, ...rest) {
+  if (String(target).includes(${JSON.stringify(part)})) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+  return real.call(this, target, ...rest);
 };
 `,
   );
-  const full = copyFixture('plan', 'stage-views-enospc');
-  writePlan(full, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
-  const unwritten = ci(full, 'pr', { NODE_OPTIONS: `--require=${preload}` });
-  assert.equal(unwritten.status, 12, unwritten.output);
-  const unwrittenRun = latestCi(full);
-  const unwrittenRow = rowOf(unwrittenRun.json, 'compile');
-  assert.deepEqual([unwrittenRow.exit, unwrittenRow.class], [12, 'infrastructure']);
-  assert.deepEqual(
-    unwrittenRow.files,
-    ['exit-code', 'stdout', 'stderr', 'engine.json', 'eval-contract.json'].map((name) => `checks/compile/${name}`),
-  );
-  const unwrittenStdout = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stdout'), 'utf8');
-  assert.match(unwrittenStdout, /^compile over the development view: eval-quality exited 0$/m);
-  for (const view of ['held-out', 'both']) {
-    assert.match(unwrittenStdout, new RegExp(`^compile over the ${view} view: eval-quality could not run it \\(exit 12\\)$`, 'm'));
-  }
-  const unwrittenStderr = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stderr'), 'utf8');
-  assert.match(unwrittenStderr, /^compile over the held-out view: the derived held-out view could not be staged \(ENOSPC\)$/m);
-  assert.doesNotMatch(unwrittenStdout + unwrittenStderr, /canary|held-out-run|O-101|\[partition-plan\]/);
+  return file;
 }
 
 /** A stand-in engine CLI that answers by its input: `STAGED_EXIT` for a staged view (an `--in` below `tea-evaluate-view-`), `DEV_EXIT` for any other, with `DEV_STDOUT` and `DEV_STDERR` printed with no final newline. */
@@ -1875,6 +1910,35 @@ async function checkFifoContract() {
   const calibrated = refuse(['ci', '--evaluation', calibration, '--tier', 'scheduled'], 'judge calibration');
   assert.equal(calibrated.status, 10, calibrated.output);
   assert.match(calibrated.output, /contract\.json: \[json\] cannot be read as JSON: is not a regular file/);
+  // The calibration inputs read `contract.json` after `evaluation.json`.
+  const inputs = refuse(['digest', '--evaluation', folder, '--calibration-inputs'], 'digest --calibration-inputs');
+  assert.equal(inputs.status, 10, inputs.output);
+  assert.match(inputs.output, /contract\.json: it cannot be read as JSON: is not a regular file/);
+  // Something that is not a file but is not a FIFO is refused the same way: a link to a device and a directory.
+  for (const [label, make] of [
+    ['a link to /dev/null', (file) => fs.symlinkSync('/dev/null', file)],
+    ['a directory', (file) => fs.mkdirSync(file)],
+  ]) {
+    const odd = copyFixture('plan', 'odd-contract');
+    fs.rmSync(path.join(odd, 'contract.json'));
+    make(path.join(odd, 'contract.json'));
+    const oddChecked = refuse(['check', '--evaluation', odd], `check over ${label}`);
+    assert.equal(oddChecked.status, 10, `${label}: ${oddChecked.output}`);
+    assert.match(oddChecked.output, /^contract\.json: \[json\] is not a regular file$/m, label);
+  }
+  // A `score` of a both run reads the folder's `contract.json` to derive the designation, and a folder whose contract is a FIFO does not
+  // hold it: the run is scored with the designation the folder gives, which is none (revert: a blocking read waits for SIGKILL).
+  const scored = copyFixture('verdict', 'fifo-contract-score');
+  const accepted = acceptedRun(scored);
+  assert.equal(
+    read(path.join(scored, 'baseline', 'run.json')).partition ?? 'both',
+    'both',
+    'the committed verdict baseline is not a both run',
+  );
+  baselines.placeBaseline(scored, accepted);
+  makeFifo(path.join(scored, 'contract.json'));
+  const rescoredFifo = refuse(['score', '--evaluation', scored, '--run', accepted], 'score over a FIFO contract.json');
+  assert.equal(rescoredFifo.status, 0, rescoredFifo.output);
 }
 
 /**

@@ -431,6 +431,40 @@ try {
     underivable('plan-ci-views-off-shape-plan', (project) => editJson(project, PLAN_FILE, (plan) => (plan.behaviorOracles['B-002'] = 5)), {
       pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected TypeError\)`,
     });
+    // A folder with no `contract.json` is an error of the system, which is no file of a kind the finding may call not regular: the development
+    // view is the engine's to refuse, and each derived view names the files and the class of the error.
+    underivable('plan-ci-views-absent-contract', (project) => fs.rmSync(path.join(project.folder, 'contract.json')), {
+      expectDevelopment: 64,
+      scanRun: false,
+      pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected Error\)`,
+    });
+    // A plan path off the schema's shape is never printed: the finding names the field of `evaluation.json` that holds it, whatever it
+    // holds (revert: the typed path reaches the output).
+    const typedName = 'SECRET-NAME-5b9e';
+    const offShape = underivable(
+      'plan-ci-views-off-shape-plan-path',
+      (project) => {
+        fs.rmSync(path.join(project.folder, 'contract.json'));
+        editJson(
+          project,
+          'evaluation.json',
+          (manifest) => (manifest.partitionPlan.heldOutPlan = `corpus/held-out/../../${typedName}.json`),
+        );
+      },
+      {
+        expectDevelopment: 64,
+        scanRun: false,
+        secret: typedName,
+        pattern: String.raw`the partitionPlan of evaluation\.json and contract\.json do not derive the VIEW view \(an unexpected Error\)`,
+      },
+    );
+    for (const stage of ['compile', 'seal']) {
+      assert.equal(
+        filesUnder(path.join(offShape.run, 'checks', stage)).some((file) => fs.readFileSync(file, 'utf8').includes(typedName)),
+        false,
+        `the ${stage} row prints the typed plan path`,
+      );
+    }
     // A `contract.json` that does not parse is the engine's to refuse in the development view, and no view derives from it.
     underivable(
       'plan-ci-views-unparsable-contract',
@@ -538,6 +572,31 @@ try {
       [],
       'a development command printed the held-out plan',
     );
+    // A `score` of a both run under a plan reads the folder's `contract.json` and plan to derive each probe's oracle: a FIFO in its place is
+    // refused at once, naming the file (revert: a blocking read waits for SIGKILL).
+    const bothRun = cli(runsFlow, 'run');
+    assert.equal(bothRun.status, 0, bothRun.output);
+    const bothRunId = path.basename(test.latest(runsFlow.folder));
+    const contractFile = path.join(runsFlow.folder, 'contract.json');
+    const contractBytes = fs.readFileSync(contractFile);
+    fs.rmSync(contractFile);
+    assert.equal(spawnSync('mkfifo', [contractFile]).status, 0);
+    try {
+      const fifoScore = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'score', '--evaluation', runsFlow.folder, '--run', bothRunId],
+        { encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL', env: { ...process.env, ...runsFlow.env } },
+      );
+      assert.equal(fifoScore.error, undefined, `score over a FIFO contract.json: ${fifoScore.error?.message}`);
+      assert.equal(fifoScore.status, 10, `${fifoScore.stdout}${fifoScore.stderr}`);
+      assert.match(
+        `${fifoScore.stdout}${fifoScore.stderr}`,
+        /contract\.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived/,
+      );
+    } finally {
+      fs.rmSync(contractFile);
+      fs.writeFileSync(contractFile, contractBytes);
+    }
   }
 
   // The records of one development run and one held-out run of the plan flow, which the sealed-record cases below patch and judge.
