@@ -335,6 +335,49 @@ function checkMounts(observed, expected, what) {
   checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
 }
 
+/**
+ * `checkMounts` for the mounts of one audited trial, judged with the audit's own account of that trial (`run.json`'s
+ * `observedMountsChannel`). A path the list lacks is a lost report the case may run again for only when the audit said it lost
+ * something: the log reported lost events or delivered fewer canaries than were sent (`lossy`). A path missing from a trial whose
+ * audit reported no loss fails at once and is not retried, since an audit that loses a read without saying so is the defect its
+ * loss signal exists to catch (the burst case's rule, `judgeBurst`).
+ */
+function checkTrialMounts(directory, trial, observed, expected, what) {
+  const extra = observed.filter((entry) => !expected.includes(entry));
+  check(extra.length === 0, `${what}: the audit listed ${JSON.stringify(extra)} beyond ${JSON.stringify(expected)}`);
+  const missing = expected.filter((entry) => !observed.includes(entry));
+  if (missing.length === 0) return;
+  const entry = (readJson(path.join(directory, 'run.json')).observedMountsChannel ?? []).find(
+    (candidate) => candidate.conditionArm === trial.conditionArm && candidate.trialIndex === trial.trialIndex,
+  );
+  const account = JSON.stringify(entry ?? null);
+  const message = `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`;
+  if (entry?.completeness === 'lossy') checkReport(false, `${message}, and it reported the loss (${account})`);
+  else
+    check(
+      false,
+      `${message}, and it reported no loss (${account}); a log that drops a read without saying so is the defect the audit's loss signal exists to catch`,
+    );
+}
+
+/**
+ * The run's refusal of an audited trial's mounts (`refusesMounts`), judged as `checkTrialMounts` judges a missing path: a run that
+ * did not refuse because the trial's audit reported a loss is a lost report the case may run again for, and one that did not refuse
+ * with no loss reported fails at once.
+ */
+function checkTrialRefusal(result, directory, trial, named, what) {
+  if (refusesMounts(result, named)) {
+    checks += 1;
+    return;
+  }
+  const entry = (directory === null ? [] : (readJson(path.join(directory, 'run.json')).observedMountsChannel ?? [])).find(
+    (candidate) => candidate.conditionArm === trial.conditionArm && candidate.trialIndex === trial.trialIndex,
+  );
+  const message = `${what} exited ${result.status}; expected 3 naming ${JSON.stringify(named)}\n${result.output}`;
+  if (entry?.completeness === 'lossy') checkReport(false, `${message}\nthe audit reported the loss (${JSON.stringify(entry)})`);
+  else check(false, `${message}\nthe audit reported no loss (${JSON.stringify(entry ?? null)}), so a read it lost went unsaid`);
+}
+
 /** An observed mount of a project's run as its manifest records it: the real path through the runtime's substitution under the run's own environment. */
 function mountOf(real, project) {
   return recordedMount(real, { folder: project.folder, env: project.env });
@@ -399,6 +442,18 @@ function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}
   });
   if (result.error) throw new Error(`tea-evaluate ${args.join(' ')} did not finish: ${result.error.message}`);
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
+}
+
+/**
+ * Whether a `run` refused the mounts its trials opened outside the allowlist: exit 3 with the violation `score` reads, and each
+ * of `named` among the paths it names. The trial sets stay sealed, so the case goes on to read them and to score.
+ */
+function refusesMounts(result, named = []) {
+  return (
+    result.status === 3 &&
+    /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(result.output) &&
+    named.every((mount) => result.output.includes(`mount outside allowlist: ${mount}`))
+  );
 }
 
 /**
@@ -4066,8 +4121,8 @@ async function checkConfinedEvaluationFolder() {
     VERDICT_DO: 'probe-confinement',
   });
   check(
-    probedRun.status === 0,
-    `a confined run whose target probed the evaluation folder exited ${probedRun.status}; expected 0\n${probedRun.output}`,
+    refusesMounts(probedRun),
+    `a confined run whose target probed the evaluation folder exited ${probedRun.status}; expected 3 with the mounts its trials opened\n${probedRun.output}`,
   );
   const probedDirectory = runDirectoryOf(probed.folder);
   const probedOut = trialStdout(probedDirectory, 'clean', 1);
@@ -4146,11 +4201,22 @@ async function checkObservedMounts() {
     VERDICT_DO: 'read-ungranted',
     VERDICT_TOUCH: outside,
   });
-  check(
-    observedRun.status === 0,
-    `a confined run whose target read an ungranted file exited ${observedRun.status}; expected 0\n${observedRun.output}`,
-  );
   const observedDirectory = runDirectoryOf(observed.folder);
+  checkTrialRefusal(
+    observedRun,
+    observedDirectory,
+    { conditionArm: 'clean', trialIndex: 1 },
+    [mountOf(realOutside, observed)],
+    'a confined run whose target read an ungranted file',
+  );
+  // The refusal is the run's recorded end: sealed and complete, so `score` still reads the manifests, with the exit 3 and the path.
+  const observedRecord = observedDirectory === null ? {} : readJson(path.join(observedDirectory, 'run.json'));
+  (refusesMounts(observedRun) ? check : checkReport)(
+    observedRecord.completed === true &&
+      observedRecord.outcome?.exitCode === 3 &&
+      String(observedRecord.outcome?.message).includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
+    `run.json records ${JSON.stringify({ completed: observedRecord.completed, outcome: observedRecord.outcome })}; expected a completed run that ended with exit 3 naming the file`,
+  );
   check(
     /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
     'the target could not read the ungranted file, so the case proves nothing',
@@ -5149,6 +5215,8 @@ async function checkAuditMechanism() {
  * metadata probe leave `observedMounts` empty; a process started with an empty environment and a refused write are seen too.
  */
 async function checkShellTargetAudit() {
+  /** Every trial of the fixture's two probes, the only workspaces the shell script acts in (`bin/verdict.sh`). */
+  const SHELL_TRIAL_LABELS = [1, 2, 3].flatMap((trial) => [`trial-clean-${trial}`, `trial-mutated-M-001-${trial}`]).join(',');
   const outside = path.join(tempDir('shell-audit-outside'), 'host-notes.txt');
   fs.writeFileSync(outside, 'a file no trial was granted\n');
   const realOutside = fs.realpathSync(outside);
@@ -5162,15 +5230,21 @@ async function checkShellTargetAudit() {
         }),
     });
     const file = typeof touch === 'function' ? touch(project) : touch;
-    const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_SH: act, VERDICT_TOUCH: file });
+    // The act runs in the trials alone: the legs of a preflight are audited as well, and a run refuses what they open.
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      VERDICT_SH: act,
+      VERDICT_TOUCH: file,
+      VERDICT_WHEN: SHELL_TRIAL_LABELS,
+    });
     return { ...project, ran, directory: runDirectoryOf(project.folder) };
   };
 
   // An ungranted read by a shell script: listed for both probes (every trial of the target runs the script), and score exits 3.
   const read = shellProject('shell-audit-read', 'read', outside);
   check(
-    read.ran.status === 0,
-    `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 0\n${read.ran.output}`,
+    refusesMounts(read.ran, [mountOf(realOutside, read)]),
+    `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 3 naming the file\n${read.ran.output}`,
   );
   for (const probeId of ['P-001', 'P-002']) {
     checkMounts(
@@ -5205,8 +5279,8 @@ async function checkShellTargetAudit() {
   fs.writeFileSync(`${outside}.node`, 'read by a process started with an empty environment, from Node\n');
   const cleared = shellProject('shell-audit-cleared', 'cleared', outside);
   check(
-    cleared.ran.status === 0,
-    `a run whose shell target started processes with an empty environment exited ${cleared.ran.status}\n${cleared.ran.output}`,
+    refusesMounts(cleared.ran, [mountOf(realOutside, cleared)]),
+    `a run whose shell target started processes with an empty environment exited ${cleared.ran.status}; expected 3\n${cleared.ran.output}`,
   );
   checkMounts(
     observedMountsOf(cleared.directory, 'P-001'),
@@ -5216,7 +5290,7 @@ async function checkShellTargetAudit() {
   const target = path.join(tempDir('shell-audit-write'), 'written.txt');
   const write = shellProject('shell-audit-write', 'write', target);
   check(
-    write.ran.status === 0 && !fs.existsSync(target),
+    refusesMounts(write.ran) && !fs.existsSync(target),
     `a shell target's write outside its workspace exited ${write.ran.status} and the file ${fs.existsSync(target) ? 'was written' : 'was not written'}\n${write.ran.output}`,
   );
   checkMounts(
@@ -5226,8 +5300,8 @@ async function checkShellTargetAudit() {
   );
   const withheld = shellProject('shell-audit-withheld', 'withheld', (project) => path.join(project.folder, 'contract.json'));
   check(
-    withheld.ran.status === 0,
-    `a run whose shell target read the evaluation folder's contract exited ${withheld.ran.status}\n${withheld.ran.output}`,
+    refusesMounts(withheld.ran),
+    `a run whose shell target read the evaluation folder's contract exited ${withheld.ran.status}; expected 3\n${withheld.ran.output}`,
   );
   checkMounts(
     observedMountsOf(withheld.directory, 'P-001'),
@@ -5798,11 +5872,22 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
   );
   const untraced = makeProject('observer-untraced');
   const untracedRun = evaluate(['run', '--evaluation', untraced.folder], environment(untraced));
+  // A `run` audits its trials and not its legs (it judges the trials' manifests), so an audit that fails ends it at its first trial, with
+  // no record for it, exactly as it did before `preflight` audited its legs: the failing leg audit of a `preflight` cannot change a run.
   check(
     untracedRun.status === 12 &&
       untracedRun.output.includes('holds no start of its target') &&
-      untracedRun.output.includes('yields no record'),
-    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 with no record for the trial\\n${untracedRun.output}`,
+      untracedRun.output.includes('yields no record') &&
+      !/leg witness-alpha could not run/.test(untracedRun.output),
+    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 with no record for the trial\n${untracedRun.output}`,
+  );
+  // A `preflight` audits each leg, so the first leg the trace does not cover ends it, before any trial could run.
+  const untracedPreflight = evaluate(['preflight', '--evaluation', untraced.folder], environment(untraced));
+  check(
+    untracedPreflight.status === 12 &&
+      untracedPreflight.output.includes('holds no start of its target') &&
+      /leg witness-alpha could not run/.test(untracedPreflight.output),
+    `a preflight whose observer traced nothing exited ${untracedPreflight.status}; expected 12 at the first leg\n${untracedPreflight.output}`,
   );
 }
 
@@ -5999,10 +6084,14 @@ async function checkEvaluatorSwap() {
     } finally {
       listener.close();
     }
-    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
     // The swapping process's own report: it saw the evaluator start, then attempted the swap.
     // Under Bubblewrap the swapper ends with the target's process namespace, before the evaluator launches.
     const namespaced = confined && process.platform === 'linux';
+    // The refused swap is an observed mount, which the run refuses (exit 3). Under Bubblewrap (verified in the CI image) the swapper ends with the target's process namespace before it swaps, so no mount is observed and the run exits 0.
+    check(
+      confined && !namespaced ? refusesMounts(ran) : ran.status === 0,
+      `${label}: run exited ${ran.status}; expected ${confined && !namespaced ? 3 : 0}\n${ran.output}`,
+    );
     check(
       confined
         ? /^swap: refused (EPERM|EACCES|ENOENT|EROFS)$/.test(reported ?? '') || (namespaced && reported === null)
@@ -6637,7 +6726,7 @@ async function checkTargetHomeRuns(hostHome, hostEnv) {
     VERDICT_WHEN: 'qualify-P-002,trial-clean-1,trial-clean-2',
     VERDICT_DO: 'write-home',
   });
-  check(ran.status === 0, `a confined run whose target kept state under HOME exited ${ran.status}; expected 0\n${ran.output}`);
+  check(refusesMounts(ran), `a confined run whose target kept state under HOME exited ${ran.status}; expected 3\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   const root = fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`));
   const homes = [];
@@ -7536,8 +7625,8 @@ async function checkWithheldHistoryRun() {
   const objectsBefore = objects();
   const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'probe-git' });
   check(
-    ran.status === 0,
-    `a confined run whose target asked its git for the committed evaluation folder exited ${ran.status}; expected 0\n${ran.output}`,
+    refusesMounts(ran),
+    `a confined run whose target asked its git for the committed evaluation folder exited ${ran.status}; expected 3\n${ran.output}`,
   );
   const runDirectory = runDirectoryOf(project.folder);
   const out = trialStdout(runDirectory, 'clean', 1);
@@ -7672,9 +7761,14 @@ async function checkWithheldHistoryRun() {
       VERDICT_WHEN: context,
       VERDICT_DO: 'probe-git',
     });
+    // The probe's reads of the project's git directory are mounts outside the allowlist in a trial, which a run refuses (exit 3) once
+    // the trials are sealed; a leg of a preflight is judged on its own (`checkChanceMounts`), and the other workspaces are not audited.
+    const audited = context.startsWith('trial-');
     check(
-      contextRan.status === 0,
-      `a confined run whose ${context} workspace probed git exited ${contextRan.status}\n${contextRan.output}`,
+      audited
+        ? contextRan.status === 3 && /isolation manifest violation: the trials opened \d+ path\(s\)/.test(contextRan.output)
+        : contextRan.status === 0,
+      `a confined run whose ${context} workspace probed git exited ${contextRan.status}; expected ${audited ? 3 : 0}\n${contextRan.output}`,
     );
     const reports = probeGitReports(runDirectoryOf(confined.folder));
     check(reports.length > 0, `the stub's probe in the ${context} workspace left no report`);
@@ -7704,6 +7798,46 @@ async function checkWithheldHistoryRun() {
       );
     }
   }
+}
+
+/**
+ * A path only some preflight legs opened is chance evidence (the reviewer's reproduction): the stub reads
+ * a file outside the workspace in the pristine workspace on the legs whose request holds `alpha` and on no other leg and no trial, so
+ * `preflight` prints a note naming the path and the leg and exits 0, `run` seals trials that opened nothing and exits 0, and `score` agrees. The same
+ * ask on every leg and every trial is the structural case: `preflight` exits 3 and `run` exits 3 from the trials it sealed.
+ */
+async function checkChanceMounts() {
+  const outside = path.join(tempDir('chance-outside'), 'host-notes.txt');
+  fs.writeFileSync(outside, 'a file no leg was granted\n');
+  const some = makeProject('chance-mounts');
+  const env = { ...some.env, VERDICT_WHEN: 'pristine', VERDICT_DO: 'read-ungranted@alpha', VERDICT_TOUCH: outside };
+  const preflight = evaluate(['preflight', '--evaluation', some.folder], env);
+  check(
+    preflight.status === 0 &&
+      /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs the audit watched in full did not/.test(
+        preflight.output,
+      ),
+    `preflight over a target that read a file on some legs exited ${preflight.status}; expected 0 with a note naming the path and the leg\n${preflight.output}`,
+  );
+  check(!preflight.output.includes('isolation manifest violation'), `preflight refused a path only some legs opened\n${preflight.output}`);
+  const ran = evaluate(['run', '--evaluation', some.folder], env);
+  check(ran.status === 0, `run over a target that read a file on some legs exited ${ran.status}; expected 0\n${ran.output}`);
+  const scored = evaluate(['score', '--evaluation', some.folder], some.env);
+  check(scored.status < 3, `score over the run exited ${scored.status}; expected the run's verdict below 3\n${scored.output}`);
+
+  const every = makeProject('every-leg-mounts');
+  const structural = evaluate(['preflight', '--evaluation', every.folder], {
+    ...every.env,
+    VERDICT_WHEN: 'pristine',
+    VERDICT_DO: 'read-ungranted',
+    VERDICT_TOUCH: outside,
+  });
+  // A leg whose read the kernel's log lost leaves no path common to every leg, so a refusal that does not come is a lost report.
+  checkReport(
+    structural.status === 3 &&
+      /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist/.test(structural.output),
+    `preflight over a target that read a file on every leg exited ${structural.status}; expected 3 naming the paths\n${structural.output}`,
+  );
 }
 
 /** Every `probe-git` report in a run directory's records (a trial, a leg, a qualification arm), parsed. */
@@ -9860,12 +9994,17 @@ async function checkWithheldHistoryEdges() {
 const LARGE_WALK_OBJECTS = 7_000_000;
 
 /** A project that commits its evaluation folder in three commits, plus a file outside it that changes in each. */
-function reachProject(label, { drivers = false, tags = false } = {}) {
+function reachProject(label, { drivers = false, tags = false, systemPaths = [] } = {}) {
   return makeProject(label, {
     toolchain: true,
     edit: ({ project, folder }) => {
       fs.mkdirSync(path.join(project, 'docs'), { recursive: true });
       fs.copyFileSync(path.join(folder, 'contract.json'), path.join(project, 'docs', 'contract-copy.json'));
+      if (systemPaths.length > 0) {
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].systemPaths = [...(evaluation.registry[0].systemPaths ?? []), ...systemPaths];
+        });
+      }
     },
     history: ({ repository, folder }) => {
       for (const version of ['one', 'two']) {
@@ -10299,9 +10438,10 @@ async function checkWithheldHistoryReach() {
   }
 
   // A history whose object walk prints more than six million ids: the walk is read as a stream, so no buffer bounds it.
-  const large = reachProject('reach-large');
   {
-    const stubs = tempDir('reach-large-git');
+    // The stub `git` on PATH is a tool the target is meant to run, so its entry lists the directory that holds it.
+    const stubs = fs.realpathSync(tempDir('reach-large-git'));
+    const large = reachProject('reach-large', { systemPaths: [stubs] });
     const real = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
     // The store's object walk answers as git does and then prints more ids; every other git call is git's.
     fs.writeFileSync(
@@ -10922,6 +11062,7 @@ async function checkSubscriptionLogin() {
   };
   // The act runs in the first clean trial, which P-001's trial set holds; P-002's trials run the plain verdict stub.
   const actMounts = (directory) => observedMountsOf(directory, 'P-001');
+  const ACT_TRIAL = { conditionArm: 'clean', trialIndex: 1 };
   const plainMounts = (directory) => observedMountsOf(directory, 'P-002');
 
   // File login under HOME: the call authenticates, the grant is the one file, read-only, and the record names it and holds none of it.
@@ -11006,12 +11147,15 @@ async function checkSubscriptionLogin() {
     ['beside it', path.join(home, 'notes.txt')],
   ]) {
     const widened = loginRun(loginProject(`login-second-${what.replaceAll(' ', '-')}`), { HOME: home, VERDICT_SECOND: second });
-    check(
-      widened.ran.status === 0,
-      `a confined run whose agent read a second file ${what} exited ${widened.ran.status}; expected 0\n${widened.ran.output}`,
-    );
     const realSecond = recordedMount(fs.realpathSync(second), { folder: widened.folder, home });
-    checkMounts(actMounts(widened.directory), [realSecond], `a second file ${what} (the login file is the only grant)`);
+    checkTrialRefusal(widened.ran, widened.directory, ACT_TRIAL, [realSecond], `a confined run whose agent read a second file ${what}`);
+    checkTrialMounts(
+      widened.directory,
+      ACT_TRIAL,
+      actMounts(widened.directory),
+      [realSecond],
+      `a second file ${what} (the login file is the only grant)`,
+    );
     checkMounts(plainMounts(widened.directory), [], `the plain trials beside a second file ${what}`);
     const scored = evaluate(['score', '--evaluation', widened.folder], { ...widened.env, ...noLogin });
     checkReport(
@@ -11150,7 +11294,13 @@ async function checkSubscriptionLogin() {
     { HOME: keychainHome, CLAUDE_CODE_OAUTH_TOKEN: fakeToken, VERDICT_KEYCHAIN: keychain },
     'claude-keychain',
   );
-  check(stood.ran.status === 0, `a confined run whose agent read the host's keychain exited ${stood.ran.status}\n${stood.ran.output}`);
+  checkTrialRefusal(
+    stood.ran,
+    stood.directory,
+    ACT_TRIAL,
+    [recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome })],
+    "a confined run whose agent read the host's keychain",
+  );
   const stoodOut = trialStdout(stood.directory, 'clean', 1);
   check(
     loginField(stoodOut, 'keychain-home') !== undefined && !String(loginField(stoodOut, 'keychain-home')).includes('login.keychain-db'),
@@ -11160,7 +11310,9 @@ async function checkSubscriptionLogin() {
     /^refused (EPERM|EACCES|EROFS)$/.test(loginField(stoodOut, 'keychain-sidecar-write') ?? ''),
     `the keychain's sidecar write was ${loginField(stoodOut, 'keychain-sidecar-write')}; expected a refusal`,
   );
-  checkMounts(
+  checkTrialMounts(
+    stood.directory,
+    ACT_TRIAL,
     actMounts(stood.directory),
     [
       recordedMount(fs.realpathSync(keychain), { folder: stood.folder, home: keychainHome }),
@@ -18111,9 +18263,12 @@ async function checkSocketConnectionRun() {
       },
       { act: 'hold-connect', env: { VERDICT_TOUCH: [hidden, late, `link:${viaLink}`].join(',') } },
     );
+    // The two late sockets are observed mounts (Story 1.86), so the run refuses them with exit 3 naming each, and not the refused one.
     check(
-      held.held && held.status === 0,
-      `a confined run whose target connected to late sockets exited ${held.status}; expected 0\n${held.output}`,
+      held.held &&
+        refusesMounts(held, [mountOf(late, project), mountOf(viaLink, project)]) &&
+        !held.output.includes(mountOf(hidden, project)),
+      `a confined run whose target connected to late sockets exited ${held.status}; expected 3 naming each late socket and not the refused one\n${held.output}`,
     );
     const out = trialStdout(held.runDirectory, 'clean', 1);
     for (const [name, expected] of [
@@ -18146,7 +18301,7 @@ async function checkSocketConnectionRun() {
       JSON.stringify(other) === '[]',
       `P-002's trials connected to nothing outside the grants, yet its manifest lists ${JSON.stringify(other)}`,
     );
-    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(held.runDirectory)], project.env);
     check(
       scored.status === 3 &&
         scored.output.includes(`mount outside allowlist: ${mountOf(late, project)}`) &&
@@ -21556,6 +21711,7 @@ const CASES = [
   { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement-audit', lossy: true },
   { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement-audit', lossy: true },
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement-history', lossy: true },
+  { name: 'the paths only some preflight legs opened', body: checkChanceMounts, group: 'confinement-history', lossy: true },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement-history' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement-history' },
   { name: 'the withheld git history pack stages', body: checkWithheldHistoryPackStages, group: 'confinement-history' },

@@ -1346,9 +1346,16 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const manifestPath = path.join(evaluationRoot, 'evaluation.json');
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
       manifest.requirements = { path: 'requirements.md', digest: contract.sourceSpecDigest };
-      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       const shimDirectory = path.join(tempRoot, 'bin');
       fs.mkdirSync(shimDirectory);
+      // The runner sits outside the trial's workspace, so the entry lists where it is installed, as an adopter's does.
+      manifest.registry[0].systemPaths = [
+        shimDirectory,
+        path.join(__dirname, '..', 'cli'),
+        path.join(__dirname, '..', 'package.json'),
+        path.dirname(require.resolve('commander')),
+      ].map((entry) => fs.realpathSync(entry));
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       const runnerShim = path.join(shimDirectory, 'tea-skill-runner');
       fs.writeFileSync(
         runnerShim,
@@ -1950,7 +1957,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       requireText(headingBody(adapterGuide, '## Skill runner'), marker, 'adapters.md Skill runner', failures);
     requireText(
       adapterOpening,
-      'refuses it with exit 3 and `isolation manifest violation: mount outside allowlist`, at the latest at `score`',
+      'each refuses it with exit 3 and `isolation manifest violation: ... mount outside allowlist`, before any score',
       'adapters.md opening runner path',
       failures,
     );

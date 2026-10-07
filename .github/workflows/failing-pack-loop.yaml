@@ -55,7 +55,8 @@ jobs:
       # The case builds a withheld repository under bubblewrap and reads the host's git, which must be 2.44 or later for a
       # partial clone to build without a fetch; the loop fails if the runner's git is older.
       - name: Install bubblewrap and strace
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
+        timeout-minutes: 11
+        run: bash tools/install-linux-sandbox.sh
 
       - name: Allow bubblewrap to create its own network namespace
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

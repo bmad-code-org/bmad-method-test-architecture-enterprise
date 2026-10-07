@@ -159,9 +159,9 @@ The fixture's registry entry in `evaluation.json` therefore names the runner as 
 }
 ```
 
-A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and the allowlist check refuses it with exit 3 and `isolation manifest violation: mount outside allowlist`, at the latest at `score`.
-Two setups avoid that: a `target` that is a path inside `launch.root`, as here, or the bare name with the install directories the audit names declared in `systemPaths` on the entry.
-The reference section [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the how-to section on [exit 3 with `mount outside allowlist`](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md#if-score-exits-3-with-mount-outside-allowlist) cover both.
+A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and `preflight` refuses it with exit 3 and `isolation manifest violation: mount outside allowlist` before any trial.
+Two setups avoid that: a `target` that is a path inside `launch.root`, as here, or the bare name with the install directories the audit names, and the `node_modules/.bin` directory that holds the runner's link, declared in `systemPaths` on the entry.
+The reference section [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the how-to section on [exit 3 with `mount outside allowlist`](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md#if-preflight-exits-3-with-mount-outside-allowlist) cover both.
 In your own project, `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality` puts the runner in `evals/node_modules`.
 Here the next commands place the same files under `node_modules` from your checkout, so the tutorial needs no registry access.
 

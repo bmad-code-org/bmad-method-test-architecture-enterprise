@@ -252,32 +252,31 @@ grep -A8 '"confinement"' evals/stub-skill-preflight/runs/$RUN/run.json
 `confinement` is `seatbelt` on macOS, `bubblewrap` on Linux, or `opt-out` when `evaluation.json` sets `"confinement": false`.
 Only a `bubblewrap` run holds an agent to its `egress` list.
 
-## If `score` Exits 3 With `mount outside allowlist`
+## If `preflight` Exits 3 With `mount outside allowlist`
 
 A confined run grants the trial its workspace.
-A runner that resolves outside the workspace is read outside the trial's grants, and the allowlist check refuses it with exit 3, at the latest at `score`.
+A runner that resolves outside the workspace is read outside the trial's grants, and `preflight` refuses it with exit 3 before any trial; `run` and `score` refuse the same paths from the trials' manifests.
 A registry `target` of the bare name `tea-skill-runner`, found through the `evals/node_modules/.bin` that `npm exec` puts on the `PATH`, does this.
-The audit lists each path the trial read outside its grants:
+`preflight` audits each leg and refuses the paths every leg opened, with the first three and a count of the rest:
 
 ```text
-tea-evaluate score: P-001: eval-quality score exited 3
-tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/skill-runner.js
-tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/package.json
-tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/commander/index.js
-tea-evaluate score: P-001: eval-quality: invalid: isolation manifest violation: mount outside allowlist: <project>/evals/node_modules/commander/lib/command.js
-...
-tea-evaluate score: strength aggregate: no evidence artifact was copied for P-001, so no class-wide strength is aggregated
+tea-evaluate preflight: isolation manifest violation: every preflight leg opened 17 path(s) outside the allowlist (mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-adapters.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor-bounds.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor.js; and 14 more), so every trial will too, and `score` refuses a trial that does (exit 3). If they are the files of a target that launches from outside its workspace, use one of two setups: make the registry `target` a path inside `launch.root` (for example `node_modules/.bin/tea-skill-runner` over a copy workspace, or a git workspace with `workspace.provision`), or keep the bare name and list the directories it runs from in `systemPaths`, with the bin directory that holds its link on `PATH`.
 ```
 
-The full run lists 17 paths, all under two directories.
+On macOS the audit lists 17 paths, all under two directories: the TeA package and `commander`.
+On Linux it lists 18, the third being the link `node_modules/.bin/tea-skill-runner` in a third directory, `evals/node_modules/.bin`.
 Two repairs work, and the first is the one to prefer:
 
 1. Set the registry `target` to the path inside `launch.root`, `evals/node_modules/.bin/tea-skill-runner`, as step 2 shows.
-2. Keep the bare name and list the install directories the audit names in `systemPaths` on the entry that starts the target, using the narrowest directory that holds each:
+2. Keep the bare name and list the install directories the audit names in `systemPaths` on the entry that starts the target, using the narrowest directory that holds each, and the `evals/node_modules/.bin` directory that holds the runner's link (a Linux audit lists it):
 
 ```json
 {
-  "systemPaths": ["/work/app/evals/node_modules/bmad-method-test-architecture-enterprise", "/work/app/evals/node_modules/commander"]
+  "systemPaths": [
+    "/work/app/evals/node_modules/bmad-method-test-architecture-enterprise",
+    "/work/app/evals/node_modules/commander",
+    "/work/app/evals/node_modules/.bin"
+  ]
 }
 ```
 
@@ -289,6 +288,8 @@ sandbox-exec: execvp() of 'tea-skill-runner' failed: No such file or directory
 ```
 
 A path you did not expect, such as a credential file or another project, points to a target that reads beyond its task.
+A path that only some legs opened is no refusal: `preflight` prints a note naming it and the legs, and a trial that opens it exits `run` with 3.
+A leg whose audit lost reports (the macOS log is lossy under load) is left out of that check and named in a note; when every leg's audit lost reports, `preflight` exits 12 with `the legs yield no audit`, and the fix is to run it again on a quieter host.
 Repair the target, because declaring that path would hide the defect.
 Then run `check` and run the evaluation again.
 The reference describes both setups in [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the audit in [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement).

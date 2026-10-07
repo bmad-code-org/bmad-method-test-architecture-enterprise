@@ -66,6 +66,7 @@ The next preflight removes the probe directory of a dead process and names it in
 
 The audit is what turns confinement into evidence.
 It lists every path a trial's processes opened outside what they were granted, and `score` exits 3 when that list is not empty.
+`run` exits 3 with the same paths once its trials are sealed, and `preflight` exits 3 for a path every one of its legs opened, so a setup `score` would refuse stops before a full run.
 The reference lists what the audit reports and how to grant a path; these are the mechanisms behind it, and what each mechanism can miss.
 
 On macOS the Seatbelt profile reports each read it allows outside the grants and tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
