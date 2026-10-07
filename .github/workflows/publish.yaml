@@ -104,6 +104,18 @@ jobs:
           bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"
           sudo mv "$RUNNER_TEMP/actionlint-bin/actionlint" /usr/local/bin/
 
+      # The runner image names the package cache, so each new image downloads its own bubblewrap and strace once and every
+      # later shard installs them from the cache with no mirror (tools/install-linux-sandbox.sh).
+      - name: Name the runner image for the package cache
+        id: sandbox-image
+        run: echo "image=${ImageOS:-unknown}-${ImageVersion:-$(date -u +%G-%V)}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the bubblewrap and strace packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tea-linux-sandbox-debs
+          key: linux-sandbox-debs-${{ runner.os }}-${{ runner.arch }}-${{ steps.sandbox-image.outputs.image }}
+
       - name: Install bubblewrap and strace (the linux isolation backend of tea-atdd-red-check and tea-evaluate, and the observer of tea-evaluate's audit)
         timeout-minutes: 11
         run: bash tools/install-linux-sandbox.sh
