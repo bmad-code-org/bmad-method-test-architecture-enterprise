@@ -704,6 +704,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The CI `chain` job runs on 17 shards instead of 12, with per-script weights refreshed from eight recent runs' measured timings, so no shard that carries more than one script is projected beyond about ten minutes of scripts.
+  The stale weights had left one shard at 19 of its 20 minutes and another timed out, because the evaluate partition suites had grown well past their recorded times; the shard timeout is unchanged.
 - A run killed with `SIGKILL` leaves no call directory in the system's temp directory (Story 1.131, AD-8).
   The directories a confined call hands its target (the call's temp directory `tea-evaluate-target-tmp-*`, a started service's port directory `tea-evaluate-port-*` and its bridge directory `tea-nb-*`) sat in the system's temp directory, since the sandbox empties the private root and a grant beneath it would be hidden.
   A run that ended by a signal it handles removed them, and a run killed outright left each of them behind with nothing to reclaim it.

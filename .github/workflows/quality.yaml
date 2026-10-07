@@ -8,11 +8,12 @@ name: Quality & Validation
 # - The whole `npm test` chain, split across the `chain` matrix
 # - Coverage over that chain, merged from every shard
 #
-# The `chain` job runs every script in `npm test`, split twelve ways by
+# The `chain` job runs every script in `npm test`, split seventeen ways by
 # tools/test-shards.js. The split is deterministic: tools/test-shard-weights.json
 # holds each script's measured seconds under coverage, and the tool packs them
-# heaviest first onto the lightest shard. The slowest script measures about
-# thirteen minutes; the other shards carry about eight minutes of the chain.
+# heaviest first onto the lightest shard. Seven scripts measure over ten
+# minutes alone and each takes a shard to itself; the other shards carry about
+# ten minutes of the chain.
 # Each shard runs its scripts serially and records raw V8 coverage
 # and uploads it; the `coverage` job merges every shard's files with
 # `c8 report` and holds the package.json thresholds against the whole chain.
@@ -162,7 +163,7 @@ jobs:
       - name: Build documentation
         run: npm run docs:build
 
-  # The whole `npm test` chain, split across twelve runners. tools/test-shards.js
+  # The whole `npm test` chain, split across seventeen runners. tools/test-shards.js
   # picks this shard's scripts from the chain and the committed weights, runs
   # them one at a time in chain order (several bind fixed ports or write fixed
   # temp paths), keeps going past a failure so one run names every failing
@@ -170,8 +171,8 @@ jobs:
   # $RUNNER_TEMP/v8 under a shard-and-script prefix for the coverage job.
   #
   # The shard count appears three times: in the matrix list, in the tool's
-  # `--shard ${{ matrix.shard }}/12` argument, and in the coverage job's
-  # `--shards 12`. test:shards and test:ci-coverage fail when the list is not
+  # `--shard ${{ matrix.shard }}/17` argument, and in the coverage job's
+  # `--shards 17`. test:shards and test:ci-coverage fail when the list is not
   # exactly 1 through that count, and test:shards when the coverage job's count
   # differs. They also refuse each setting that lets a green run skip a shard
   # or hide its failure: a matrix with include, exclude or any key besides
@@ -188,15 +189,15 @@ jobs:
   # defense against a hostile editor of this file, who could change the
   # guards in the same pull request.
   chain:
-    name: chain (${{ matrix.shard }}/12)
+    name: chain (${{ matrix.shard }}/17)
     runs-on: ubuntu-latest
-    # Current measured weights put the slowest script alone; other shards take about eight minutes, plus setup.
+    # Current measured weights put each of the seven scripts over ten minutes alone on a shard (the slowest about sixteen); other shards take about ten minutes, plus setup.
     # The cap allows loaded runners while bounding a stalled request or child.
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -283,7 +284,7 @@ jobs:
         run: npm run test:shards
 
       - name: Run this shard of the npm test chain under coverage
-        run: node tools/test-shards.js --shard ${{ matrix.shard }}/12 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
+        run: node tools/test-shards.js --shard ${{ matrix.shard }}/17 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
 
       # TeA's own `pr` tier (Story 2.5): each evaluation's chained script,
       # test:evaluate-pr-<key>, runs `tea-evaluate ci --tier pr` over its
@@ -467,7 +468,7 @@ jobs:
           path: ${{ runner.temp }}/v8
 
       - name: Prove every shard's coverage arrived and together covers the chain
-        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 12
+        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 17
 
       - name: Merge the shards' coverage and enforce the threshold
         run: npx c8 report --temp-directory "$RUNNER_TEMP/v8"
