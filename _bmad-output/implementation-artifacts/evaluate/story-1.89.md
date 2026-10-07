@@ -2,7 +2,7 @@
 title: "Story 1.89: Pass the target's exact environment through the socket launcher"
 type: 'feature'
 created: '2026-10-06'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 2
 baseline_commit: '31206cd2e50ddb6309149afbb2df323323df95ed'
@@ -233,7 +233,7 @@ On this host both legs of the shell controls ran (macOS has `/bin/dash` and `/bi
 | No `env` restore, no `SHELL_VARIABLES` pair                          | the Node launcher with `/usr/bin/env -u PWD` back in front of the command                                                                           | `the path socket units` 4 of 124; `the socket launcher` 1 of 41                             |
 | No shell in the path (the launcher's source)                         | `shell: true` in the launcher's `spawn`                                                                                                             | `the path socket units` 27 of 110; `the socket launcher` 16 of 29                           |
 | The launcher stays before `strace` (the audit's trace case)          | `launched(...)` applied inside `strace`'s command                                                                                                   | `the socket launcher` 2 of 41                                                               |
-| The command stays in the launcher's group                            | `detached: true` on the command's `spawn`                                                                                                           | `the socket launcher` 1 of 41                                                               |
+| The command stays in the launcher's group                            | `detached: true` on the command's `spawn`                                                                                                           | `the socket launcher` 1 of 41, 3 of 41 with `NODE_V8_COVERAGE` exported                     |
 | The launcher starts with the loader variables alone                  | `wrapped.environment` is the call's environment                                                                                                     | `the path socket units` 14 of 124; `the socket launcher` 2 of 41                            |
 | The call's environment reaches the command                           | the environment file holds `{}`                                                                                                                     | `the path socket units` 25 of 124; `the socket launcher` 4 of 41                            |
 | Values reach the command as a spawn makes them                       | the values written as given                                                                                                                         | `the socket launcher` 2 of 41                                                               |
@@ -256,7 +256,7 @@ On this host both legs of the shell controls ran (macOS has `/bin/dash` and `/bi
 | A failed write leaves no environment file                            | the environment file's removal taken out of the catch                                                                                               | `the socket launcher` 1 of 41 (the full disk at the environment file, which created it)     |
 | A failed write leaves no arguments file                              | the arguments file's removal taken out of the catch                                                                                                 | `the socket launcher` 3 of 41                                                               |
 | A failed write leaves no status file                                 | the status file's removal taken out of the catch                                                                                                    | `the socket launcher` 3 of 41                                                               |
-| A host's coverage directory stays out of the command                 | the command started with the environment object as read, with no `NODE_V8_COVERAGE` entry                                                           | `the socket launcher` 1 of 41                                                               |
+| A host's coverage directory stays out of the command                 | the command started with the environment object as read, with no `NODE_V8_COVERAGE` entry                                                           | `the socket launcher` 1 of 41, 3 of 41 with `NODE_V8_COVERAGE` exported                     |
 | The shell control can fail                                           | the story's names replaced by the plain row in the per-leg control                                                                                  | `the path socket units` 2 of 124 (one per leg)                                              |
 | The shell control restores the seven names                           | the control's `env` restore taken out                                                                                                               | `the path socket units` 2 of 124 (the plain row gains `PWD`, bash also `SHLVL`)             |
 | The shim starts the target with its recorded environment             | `startEnvironment` returns `process.env`; a `__proto__` name assigned as a property                                                                 | `the socket launcher` 2 of 41 and 1 of 41                                                   |
@@ -374,3 +374,12 @@ The failure message names the pids the case found and the runner's standard erro
 The job on the fix push is the proof for the Windows cases; if the lookup is empty for the whole 110 s, the message now says which of the supervisor and the leader was missing.
 
 Round 2 left no finding open.
+
+## Review round 3
+
+Two Opus reviewers (code lens, tests and records lens) read the tree at 24c22553 for regressions and material defects.
+Neither found a code defect: the E2BIG error shape, the signal re-raise, the failed-write stand-in, the six forwarded signals and the Windows retry loops held under their mutations with the counts the rows state, and the Linux route case was read line by line.
+Both found that three statements of the exact-environment guarantee (the CHANGELOG headline, the CHANGELOG sentence on `NODE_V8_COVERAGE` and the Story 1.82 amendment in `epics.md`) left out the exceptions the reference states: Bubblewrap sets `PWD` to the directory the call runs in, every Bubblewrap vector carries `--unsetenv NODE_V8_COVERAGE`, and a call with `egress` gains the proxy variables.
+Each of the three now names the exceptions, as the reference's `### File-system confinement` passage does.
+The tests lens also found the revert row for `commandEnvironment` stating 1 of 41 where the case fails 3 of 41 with `NODE_V8_COVERAGE` exported; the row states both counts.
+The sprint row and this record's status are `done`.

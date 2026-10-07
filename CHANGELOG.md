@@ -676,7 +676,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ciStructuralSelfProblems` also scores two legs at once and the incomplete sets, and returns how many rows it ran, which `main` requires to be above zero.
   `test/probes/expected-strength.json` moves in the ci corpus digest only, `test/contracts/ci.contract.json` and `test/probes/ci.probes.json` are regenerated, and the three ci pre-flights still pass from the real leg cache.
   The comment in `.github/workflows/quality.yaml` that lists the scripts needing actionlint now names `test:probe-corpus`, which lints the stored workflows through `lintWorkflow` and fails without the binary.
-- A target receives exactly the environment the call gave it, whether or not the host holds sockets (Story 1.89, AD-8).
+- A target receives exactly the environment the call gave it, whether or not the host holds sockets, apart from `PWD`, which Bubblewrap sets to the directory the call runs in, `NODE_V8_COVERAGE`, which Bubblewrap unsets for every target, and the proxy variables a call with `egress` gains (Story 1.89, AD-8).
   A call that hides host sockets started its command through `/bin/sh -c 'exec 3<"$1" ...'`, so the shell stood between the runtime and Bubblewrap.
   Under dash a variable whose name is no valid shell name (`my.setting`, `BASH_FUNC_f%%`) was dropped, and under bash as `sh` a held `PS1` was dropped while `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH` and `BASH_VERSION` were rewritten and an exported function was serialized again.
   Bubblewrap itself sets `PWD` to the directory the call runs in for every call, with sockets hidden or none, so the call's `PWD` is Bubblewrap's to set.
@@ -689,7 +689,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A call that hides sockets and overflows the operating system's limit on arguments and environment (`E2BIG`) reaches a run as the engine's own `launch-too-large` fault, as a call that hides none does.
   The runtime throws the error Node's `spawn` gives `E2BIG`, from which the engine's command-line adapter builds the fault, and a case drives a call that hides a socket and one that hides none through that adapter.
   The runtime reads the launcher's refusal (exit 125 and its token on standard error) only from a call whose status file shows that Bubblewrap's shim never started, so a target that ran and ends with the same exit and text keeps its own exit and cannot pass for the host's refusal.
-  The launcher keeps a host's `NODE_V8_COVERAGE` out of the command's environment, since Node adds it to every child it spawns, and a call that holds the variable keeps its own value.
+  The launcher keeps a host's `NODE_V8_COVERAGE` out of Bubblewrap's environment, since Node adds it to every child it spawns, and passes a call's own value to Bubblewrap, which removes it from every target as it did before.
   `SHELL_VARIABLES`, the `env` restore and the refusal of an executable path that holds `=` are gone.
   The status shim inside the sandbox now starts the target with the environment recorded for its own process (`/proc/self/environ`), since Node's `process.env` cannot read a variable whose name is a decimal integer.
   The reference's sentence that stated the launcher's limit is replaced by the exact-environment sentence, and `the network reference` fails while the limit sentence remains.
