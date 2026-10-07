@@ -5031,7 +5031,7 @@ async function checkImportedFilesSealedAgainstTheConfiguration() {
 function checkCalibrationInputsDocumented() {
   const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   for (const text of [
-    'npx tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
+    'npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
     '`calibrationDigest`',
     '`scorerConfigurationDigest`',
     'bind `tea.judgeCalibrationDigest` in the configuration to its `calibrationDigest`',

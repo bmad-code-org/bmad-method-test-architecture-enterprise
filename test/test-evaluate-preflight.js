@@ -75,6 +75,7 @@ const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { scratchDirectories } = require('./lib/scratch-directories');
+const { CONFINEMENT_PAGE, REFERENCE_PAGE, readDocsPage, sectionOf } = require('./lib/docs-pages');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -1133,8 +1134,7 @@ function checkSupervisorTraceRetries() {
   }
 }
 function checkWindowsRunnerReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
   check(
     section.includes('Windows Job Object') &&
       section.includes('kill-on-close') &&
@@ -1142,13 +1142,17 @@ function checkWindowsRunnerReference() {
       WINDOWS_SETUP_MS === 90_000 &&
       section.includes('The guardian allows 90 s for setup') &&
       section.includes('wall clock starts when the guardian reports the actual agent PID'),
-    'the tea-skill-runner reference and supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+    'the confinement page and the supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+  );
+  const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
+  check(
+    runner.includes('On Windows') && runner.includes('120 s in `maxElapsedMs`'),
+    "the reference's tea-skill-runner section must name the Windows Job Object and the 120 s reserve a registry entry leaves for bounded Job Object setup",
   );
 }
 
 function checkPosixRunnerReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
   check(
     section.includes('detached watchdog') &&
       section.includes('leader-only pipe') &&
@@ -1156,9 +1160,13 @@ function checkPosixRunnerReference() {
       section.includes('before the guardian starts the agent') &&
       section.includes('four processes supervise the agent') &&
       section.includes('25 s startup reserve') &&
-      section.includes('7 s for supervisor backstop and output drain') &&
-      section.includes('40 s in `maxElapsedMs`'),
-    'the tea-skill-runner reference must name POSIX watchdog ownership, its four-process layout, startup and completion bound, 40 s adapter reserve, and 10 s descendant bound',
+      section.includes('7 s for supervisor backstop and output drain'),
+    'the confinement page must name POSIX watchdog ownership, its four-process layout, startup and completion bound and 10 s descendant bound',
+  );
+  const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
+  check(
+    runner.includes('40 s in `maxElapsedMs`'),
+    'the reference must name the 40 s POSIX reserve a registry entry leaves in maxElapsedMs for watchdog setup, supervisor completion and runner overhead',
   );
 }
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "Rewording of the skill's approval rule that turns the inclusive limit into an exclusive one.",
+  "targetArtifact": "skill/SKILL.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "Approve a refund when its amount is at or below the limit.",
+    "replace": "Approve a refund when its amount is below the limit.",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "A refund of 100 against the limit of 100 prints decision \"declined\", so the approval oracle fails."
+}

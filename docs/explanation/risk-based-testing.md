@@ -130,7 +130,7 @@ Risk scores inform priority; they are not the only input. Usage frequency, reven
 | **P2**   | 2-4           | Secondary features, admin functionality, reporting                       | 50%              | API happy path only | Export features, advanced settings |
 | **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                      | 20% (smoke test) | E2E smoke test only | Theme customization, experiments   |
 
-See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality-standards) for the complete criteria.
+See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality--standards) for the complete criteria.
 
 ## What It Changes
 
