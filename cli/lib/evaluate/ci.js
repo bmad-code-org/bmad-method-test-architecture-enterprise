@@ -81,7 +81,7 @@ const {
 } = require('./compare');
 const { buildCorpusIndex, corpusDigestOf } = require('./corpus-index');
 const { loadEngine } = require('./engine');
-const { runEngineStage } = require('./engine-cli');
+const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { signalGroup, stopGroups } = require('./process-group');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
@@ -602,24 +602,120 @@ async function checkCheck(context) {
   return result(findings.length === 0 ? OK : AUTHORING, { stdout: text.join('') });
 }
 
-/** `compile` and `seal` over the evaluation's `contract.json`, through the engine CLI; the stage's exit passes through. */
-async function engineStageCheck(context, entry, stage, produced) {
-  const staging = stagingDirectory(context, 'tea-evaluate-engine-');
-  const output = path.join(staging, produced);
-  const called = await runEngineStage(stage, ['--in', path.join(context.folder, CONTRACT_NAME), '--out', output], {
-    runDirectory: context.writer.root,
-    folder: context.folder,
-    recordPath: `checks/${entry.id}/engine.json`,
-    writer: context.writer,
-    env: context.env,
-    log: context.log,
+/**
+ * The views the engine stage checks run over (Story 1.108): one entry, `contract.json`, for a folder with no `partitionPlan`
+ * (and for one whose `evaluation.json` cannot be read, which is the `check` check's finding), and under a `partitionPlan` one
+ * entry for each of the development, held-out and both views. Each entry names its `view` and holds `file`, the contract the stage
+ * reads, or `problem`, the message of the error that kept the view from being derived. The development view is the folder's
+ * `contract.json` itself, so the held-out plan is read only for the held-out and both views. A derived view is staged in a
+ * directory of the invocation's scratch list, and the views are derived once per invocation, whichever checks run.
+ */
+function stageViews(context) {
+  return context.once('stage-views', () => {
+    const contractFile = path.join(context.folder, CONTRACT_NAME);
+    let evaluation = null;
+    try {
+      evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+    } catch {
+      // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is compiled as before.
+    }
+    if (evaluation?.partitionPlan === undefined) return [{ view: null, file: contractFile }];
+    const views = [{ view: 'development', file: contractFile }];
+    for (const view of ['held-out', 'both']) {
+      try {
+        const derived = loadContractView({ folder: context.folder, evaluation, partition: view });
+        const staged = path.join(stagingDirectory(context, 'tea-evaluate-view-'), CONTRACT_NAME);
+        fs.writeFileSync(staged, derived.bytes);
+        views.push({ view, file: staged });
+      } catch (error) {
+        // A plan error names paths only. Any other error comes from a file that is not what its schema says, and its text can quote the file.
+        views.push({
+          view,
+          problem:
+            error instanceof PartitionPlanError
+              ? error.message
+              : `the view cannot be derived (an unexpected ${error?.name ?? 'error'} while deriving it)`,
+        });
+      }
+    }
+    return views;
   });
-  const artifacts = [`checks/${entry.id}/engine.json`];
-  if (fs.existsSync(output)) {
-    context.writer.copyIn(`checks/${entry.id}/${produced}`, output);
-    artifacts.push(`checks/${entry.id}/${produced}`);
+}
+
+/**
+ * `compile` and `seal` over the contract each view of the evaluation runs, through the engine CLI; the stage's exit passes through.
+ *
+ * A folder with no `partitionPlan` runs the stage once over `contract.json`, writes `checks/<id>/engine.json` and the produced artifact
+ * beside it, and prints what the engine printed. Under a `partitionPlan` the development view keeps exactly those paths, and the
+ * held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`. The stdout names each view
+ * and its exit. The development view's own stdout and stderr pass through as the check's, and what the engine said about the held-out
+ * or both view stays in that view's `engine.json`, since it can quote the held-out plan. The exit is the most severe of the views'
+ * exits, so the engine's exit class reaches `ci` unchanged. A view that cannot be derived is a finding of that view with exit 10, its
+ * stage does not run, and every other view still runs. Sealing recompiles first (eval-quality's own rule), so the engine refuses to seal
+ * a view it refuses to compile, and a refused view leaves no produced artifact.
+ */
+async function engineStageCheck(context, entry, stage, produced) {
+  const views = stageViews(context);
+  const whereOf = (view) => (view === null || view === 'development' ? `checks/${entry.id}` : `checks/${entry.id}/${view}`);
+  const run = async ({ view, file }) => {
+    const where = whereOf(view);
+    const staging = stagingDirectory(context, 'tea-evaluate-engine-');
+    const output = path.join(staging, produced);
+    const called = await runEngineStage(stage, ['--in', file, '--out', output], {
+      runDirectory: context.writer.root,
+      folder: context.folder,
+      recordPath: `${where}/engine.json`,
+      writer: context.writer,
+      env: context.env,
+      log: context.log,
+    });
+    const artifacts = [`${where}/engine.json`];
+    if (fs.existsSync(output)) {
+      context.writer.copyIn(`${where}/${produced}`, output);
+      artifacts.push(`${where}/${produced}`);
+    }
+    return { called, artifacts, record: `${where}/engine.json` };
+  };
+  if (views[0].view === null) {
+    const { called, artifacts } = await run(views[0]);
+    return result(called.exitCode, { stdout: called.stdout, stderr: called.stderr, artifacts });
   }
-  return result(called.exitCode, { stdout: called.stdout, stderr: called.stderr, artifacts });
+  const exits = [];
+  const artifacts = [];
+  let stdout = '';
+  let stderr = '';
+  for (const entryView of views) {
+    const { view } = entryView;
+    if (entryView.problem !== undefined) {
+      exits.push(AUTHORING);
+      stdout += findingLine(`${view} view`, 'partition-plan', `${entryView.problem}; ${stage} did not run over the ${view} view`);
+      continue;
+    }
+    let ran;
+    try {
+      ran = await run(entryView);
+    } catch (error) {
+      if (!(error instanceof EngineStageError)) throw error;
+      exits.push(INFRASTRUCTURE);
+      // The stage wrote its record before it failed.
+      artifacts.push(`${whereOf(view)}/engine.json`);
+      stdout += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
+      stderr += `${stage} over the ${view} view: ${escapeUnprintable(error.message)}\n`;
+      continue;
+    }
+    const { called, artifacts: written, record } = ran;
+    exits.push(called.exitCode);
+    artifacts.push(...written);
+    stdout += `${stage} over the ${view} view: eval-quality exited ${called.exitCode}${
+      called.exitCode === 0 ? '' : `; its record is ${relativeTo(context.folder, context.writer.pathOf(record))}`
+    }\n`;
+    // What an engine message of the held-out or both view says can quote the held-out plan, so it stays in that view's own record.
+    if (view === 'development') {
+      stdout += called.stdout;
+      stderr += called.stderr;
+    }
+  }
+  return result(mostSevere(exits), { stdout, stderr, artifacts });
 }
 
 /** eval-quality's environment-probe conformance suite over the evaluation's HTTP port, against a loopback stub it starts and closes itself. */

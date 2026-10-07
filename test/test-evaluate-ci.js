@@ -62,6 +62,8 @@ const FIXTURES = {
   verdict: { root: 'test/fixtures/evaluate/mutation', folder: 'evals/verdict-ci' },
   mcp: { root: 'test/fixtures/evaluate-mcp', folder: 'evals/grader' },
   api: { root: 'test/fixtures/evaluate-api', folder: 'evals/grader' },
+  // The Story 1.51 partition-plan fixture: one development-only step in contract.json and one held-out step in the sealed plan.
+  plan: { root: 'test/fixtures/evaluate/partition-plan', folder: 'evals/verdict' },
 };
 const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_') && name !== 'TEA_EVALUATE_ENGINE_CLI'),
@@ -1593,6 +1595,60 @@ function checkEngineStageExits() {
 }
 
 /**
+ * A folder with no `partitionPlan` compiles and seals once, over `contract.json`, with the evidence paths the committed plans have
+ * always had (Story 1.108; revert: a stage that also runs over a view, or writes its record anywhere else, changes the file list, the
+ * directory listing, the recorded argv or the stdout, and the committed replay with them).
+ */
+function checkStageEvidencePaths() {
+  const folder = copyFixture('verdict', 'stage-paths');
+  assert.equal(
+    read(path.join(folder, 'evaluation.json')).partitionPlan,
+    undefined,
+    'the committed verdict fixture declares a partitionPlan',
+  );
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 0, result.output);
+  const { directory, json } = latestCi(folder);
+  for (const [stage, produced] of [
+    ['compile', 'eval-contract.json'],
+    ['seal', 'sealed-evaluator-brief.json'],
+  ]) {
+    const row = rowOf(json, stage);
+    assert.deepEqual(
+      row.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', produced].map((name) => `checks/${stage}/${name}`),
+      `${stage}: the row's evidence paths`,
+    );
+    assert.deepEqual(
+      fs.readdirSync(path.join(directory, 'checks', stage)).sort(),
+      ['engine.json', 'exit-code', produced, 'stderr', 'stdout'].sort(),
+      `${stage}: what the check wrote`,
+    );
+    const record = read(path.join(directory, 'checks', stage, 'engine.json'));
+    assert.deepEqual(
+      [record.stage, ...record.argv.slice(1, 3)],
+      [stage, '--in', 'contract.json'],
+      `${stage}: the stage runs over contract.json`,
+    );
+    assert.equal(fs.readFileSync(path.join(directory, 'checks', stage, 'stdout'), 'utf8'), '', `${stage}: the stdout is the engine's own`);
+  }
+  // The same stages over a contract the engine refuses keep one record at the same path, so a plan with no partitionPlan never grows a view.
+  const broken = copyFixture('verdict', 'stage-paths-broken');
+  const contract = read(path.join(broken, 'contract.json'));
+  delete contract.behaviors;
+  write(path.join(broken, 'contract.json'), contract);
+  ci(broken, 'pr');
+  const refused = latestCi(broken);
+  for (const stage of ['compile', 'seal']) {
+    assert.deepEqual(
+      fs.readdirSync(path.join(refused.directory, 'checks', stage)).sort(),
+      ['engine.json', 'exit-code', 'stderr', 'stdout'],
+      `${stage}: a refused contract of a folder with no partitionPlan`,
+    );
+  }
+}
+
+/**
  * `ci --tier pr` over a project under a distinctive path leaves a run directory that names no path of this machine: the
  * project's own paths, the temporary and home directories and the private root, and any path of a Unix or macOS host, are
  * absent from every file of `runs/<invocationId>/` (the directory the `chain` job uploads). The scan finds a project path
@@ -2247,7 +2303,7 @@ function within(promise, limit) {
  * at the limit and the stage with it; a handler that removes the scratch before the stage ends finds the writing stage's entries
  * again). A stage or a command that outlives a failing case is stopped after the assertions, and only then.
  */
-async function signalEndsCommand(label, args, { stage, how = 'hang', once = false, during }) {
+async function signalEndsCommand(label, args, { stage, how = 'hang', once = false, during, arg }) {
   const { temp, env } = privateTemp(`${label}-temp`);
   const wrapper = killShim(`${label}-shim`);
   for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -2256,7 +2312,14 @@ async function signalEndsCommand(label, args, { stage, how = 'hang', once = fals
       cwd: ROOT,
       env: {
         ...BASE_ENV,
-        ...env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: stage, KILL_HOW: how, KILL_MARK: mark, ...(once ? { KILL_ONCE: '1' } : {}) }),
+        ...env({
+          TEA_EVALUATE_ENGINE_CLI: wrapper,
+          KILL_AT: stage,
+          KILL_HOW: how,
+          KILL_MARK: mark,
+          ...(once ? { KILL_ONCE: '1' } : {}),
+          ...(arg === undefined ? {} : { KILL_ARG: arg }),
+        }),
       },
       stdio: 'ignore',
     });
@@ -2306,6 +2369,14 @@ async function checkSignalEndsStage() {
     writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry(stage, 'pr')] });
     await signalEndsStage(`plan-${stage}`, stages, { stage });
   }
+  // Under a partitionPlan the checks also run over the held-out and both views, which a derived view stages in a directory of the
+  // scratch list: `arg` makes the shim hang the first stage whose input is a staged view, so the held-out view's stage is the one
+  // the signal ends (Story 1.108; the development view's stage ran before it and its record is written).
+  const views = copyFixture('plan', 'signal-views');
+  for (const stage of ['compile', 'seal']) {
+    writePlan(views, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry(stage, 'pr')] });
+    await signalEndsStage(`plan-held-out-${stage}`, views, { stage, once: true, arg: 'tea-evaluate-view-' });
+  }
   // The stale-baseline rule runs once for the tier after the checks, when no check of the plan reads the baseline.
   writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('seal', 'pr')] });
   await signalEndsStage('stale-baseline', stages, { stage: 'compile' });
@@ -2327,6 +2398,10 @@ async function checkSignalEndsWritingStage() {
   const planned = copyFixture('verdict', 'signal-write-plan');
   writePlan(planned, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
   await signalEndsStage('plan-compile-write', planned, { stage: 'compile', how: 'write' });
+  // The held-out view's stage writes its output while the signal arrives (Story 1.108).
+  const views = copyFixture('plan', 'signal-write-views');
+  writePlan(views, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  await signalEndsStage('plan-held-out-compile-write', views, { stage: 'compile', how: 'write', once: true, arg: 'tea-evaluate-view-' });
   const checked = twoInterfaceFolder('signal-write-check');
   writePlan(checked, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
   await signalEndsStage('check-check-write', checked, { stage: 'compile', how: 'write' });
@@ -4664,6 +4739,7 @@ async function main() {
     ['gate limits', checkGateLimits],
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
+    ['the stage evidence paths of a folder with no partitionPlan', checkStageEvidencePaths],
     ['the pr replay', checkPrReplay],
     ['the text neutralizer', checkTextNeutralizer],
     ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],
