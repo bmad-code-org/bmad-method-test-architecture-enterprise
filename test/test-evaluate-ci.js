@@ -63,6 +63,8 @@ const FIXTURES = {
   mcp: { root: 'test/fixtures/evaluate-mcp', folder: 'evals/grader' },
   api: { root: 'test/fixtures/evaluate-api', folder: 'evals/grader' },
 };
+/** What a case may copy: the committed fixtures with a baseline, and the Story 1.51 partition-plan fixture (a development-only step in contract.json, a held-out step in the sealed plan), which has none. */
+const COPIES = { ...FIXTURES, plan: { root: 'test/fixtures/evaluate/partition-plan', folder: 'evals/verdict' } };
 const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_') && name !== 'TEA_EVALUATE_ENGINE_CLI'),
 );
@@ -104,7 +106,7 @@ function cli(folder, command, args = [], env = {}) {
 
 /** A copy of a committed fixture's project in a temp directory; its evaluation folder. */
 function copyFixture(name, label = name) {
-  const { root, folder } = FIXTURES[name];
+  const { root, folder } = COPIES[name];
   const directory = scratch.make(label);
   const project = path.join(directory, path.basename(root));
   fs.cpSync(path.join(ROOT, root), project, {
@@ -1593,6 +1595,408 @@ function checkEngineStageExits() {
 }
 
 /**
+ * Under a `partitionPlan` the stage runs over three views (Story 1.108). A substituted engine that gives every view one exit shows the
+ * exit and its class reaching the row (4, 5, 64 and an undocumented 7 that is 12) with one call and one record per view. The cases below
+ * it give the views different results, since a row whose exit is the first or the last of them would pass the loop: the staged views
+ * alone failing to run (12 beside a development view that ran), a development view that exits 4 beside staged views that exit 64 (the
+ * row is 64), and a staged view that cannot be written. Over engine exits the numerically largest is the most severe (4 and 5 order
+ * so, and 64 outranks both), so a row that takes the largest exit passes all of these; the unparsable-contract case of
+ * `test-evaluate-partition-plans-attempts.js` (the engine's 5 beside the findings' 10) holds that mutant. The real-engine mix of 4, 5
+ * and 4 is in the same file. The last cases hold what each view's streams do: the summary lines come first and end in a newline, and
+ * the development view's own bytes follow them exactly.
+ */
+function checkStageViewExits() {
+  for (const [exit, expected] of [
+    [4, 'contract authoring defect'],
+    [5, 'runtime fault'],
+    [64, 'wiring defect'],
+    [7, 'infrastructure'],
+  ]) {
+    const folder = copyFixture('plan', `stage-views-exit-${exit}`);
+    writePlan(folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+    const log = path.join(path.dirname(folder), 'shim.log');
+    const result = ci(folder, 'pr', shimEnv(log, { TEA_EVALUATE_SHIM_EXIT_COMPILE: String(exit) }));
+    // An exit the CLI does not document is a stage that could not run, so it is 12 whatever the view.
+    const wanted = exit === 7 ? 12 : exit;
+    assert.equal(result.status, wanted, result.output);
+    const { directory, json } = latestCi(folder);
+    const row = rowOf(json, 'compile');
+    assert.deepEqual([row.exit, row.class, row.action], [wanted, expected, 'block']);
+    assert.deepEqual(
+      shimLog(log).map((call) => call[0]),
+      ['compile', 'compile', 'compile'],
+      'the stage ran once for each of the three views',
+    );
+    assert.deepEqual(
+      row.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', 'held-out/engine.json', 'both/engine.json'].map((name) => `checks/compile/${name}`),
+    );
+    const stdout = fs.readFileSync(path.join(directory, 'checks', 'compile', 'stdout'), 'utf8');
+    for (const view of ['development', 'held-out', 'both']) {
+      assert.match(
+        stdout,
+        new RegExp(
+          exit === 7
+            ? `^compile over the ${view} view: eval-quality could not run it \\(exit 12\\)$`
+            : `^compile over the ${view} view: eval-quality exited ${exit}\\b`,
+          'm',
+        ),
+        `${view}: ${stdout}`,
+      );
+    }
+    if (exit === 7) {
+      const stderr = fs.readFileSync(path.join(directory, 'checks', 'compile', 'stderr'), 'utf8');
+      for (const view of ['development', 'held-out', 'both'])
+        assert.match(stderr, new RegExp(`^compile over the ${view} view: eval-quality compile exited 7`, 'm'));
+    }
+  }
+  // What each view's engine call printed (a shim that prints three lines to each stream, the last with no newline): the development view's
+  // streams are the check's own, and the held-out and both views' stay in their records, since an engine message about them can quote the
+  // held-out plan. The summary line of every view stays on a line of its own whatever the engine's last byte was.
+  const streams = copyFixture('plan', 'stage-views-streams');
+  writePlan(streams, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  const printed = ci(streams, 'pr', shimEnv(path.join(path.dirname(streams), 'shim.log'), { TEA_EVALUATE_SHIM_STREAMS: 'marker' }));
+  assert.equal(printed.status, 0, printed.output);
+  const printedRun = latestCi(streams).directory;
+  const printedStdout = fs.readFileSync(path.join(printedRun, 'checks', 'compile', 'stdout'), 'utf8');
+  const count = (text) => text.split('marker stdout 2 -').length - 1;
+  assert.equal(count(printedStdout), 1);
+  for (const view of ['development', 'held-out', 'both']) {
+    assert.match(printedStdout, new RegExp(`^compile over the ${view} view: eval-quality exited 0$`, 'm'), `${view}: ${printedStdout}`);
+  }
+  assert.equal(printedStdout.endsWith('marker stdout 3 -'), true, 'the development stdout is not last and exact');
+  assert.equal(fs.readFileSync(path.join(printedRun, 'checks', 'compile', 'stderr'), 'utf8').split('marker stderr 2 -').length - 1, 1);
+  for (const where of ['', 'held-out/', 'both/']) {
+    const record = read(path.join(printedRun, 'checks', 'compile', ...where.split('/'), 'engine.json'));
+    assert.match(record.stdout, /marker stdout 2 -/, `the ${where || 'development '}record holds the engine's stdout`);
+    assert.match(record.stderr, /marker stderr 2 -/);
+  }
+
+  // An engine that gives the development view and the staged views (held-out and both) different results: `inputShim` answers by whether
+  // `--in` is a staged view.
+  const wrapper = inputShim('stage-views-input-shim');
+  const staged = (label, env, plan = ['compile']) => {
+    const folder = copyFixture('plan', label);
+    writePlan(folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: plan.map((id) => entry(id, 'pr')) });
+    const result = ci(folder, 'pr', { TEA_EVALUATE_ENGINE_CLI: wrapper, ...env });
+    const { directory, json } = latestCi(folder);
+    return { result, directory, json, row: rowOf(json, plan[0]) };
+  };
+  // The development view exits 4 and the staged views 64: the row is 64, which outranks the first exit of the list.
+  const outranked = staged('stage-views-outranked', { DEV_EXIT: '4', STAGED_EXIT: '64' });
+  assert.equal(outranked.result.status, 64, outranked.result.output);
+  assert.deepEqual([outranked.row.exit, outranked.row.class], [64, 'wiring defect']);
+  // The staged views end in an exit the CLI does not document while the development view exits 0 with output that has no final newline:
+  // the row is 12, the faults come first and start on lines of their own, and the development bytes are last and exact.
+  const faulty = staged('stage-views-faulty', { DEV_EXIT: '0', STAGED_EXIT: '7', DEV_STDOUT: 'dev-out', DEV_STDERR: 'dev-err' });
+  assert.equal(faulty.result.status, 12, faulty.result.output);
+  const faultyStdout = fs.readFileSync(path.join(faulty.directory, 'checks', 'compile', 'stdout'), 'utf8');
+  assert.equal(
+    faultyStdout,
+    [
+      'compile over the development view: eval-quality exited 0',
+      'compile over the held-out view: eval-quality could not run it (exit 12)',
+      'compile over the both view: eval-quality could not run it (exit 12)',
+      'dev-out',
+    ].join('\n'),
+  );
+  const faultyStderr = fs.readFileSync(path.join(faulty.directory, 'checks', 'compile', 'stderr'), 'utf8');
+  assert.match(faultyStderr, /^compile over the held-out view: eval-quality compile exited 7/m);
+  assert.match(faultyStderr, /^compile over the both view: eval-quality compile exited 7/m);
+  assert.equal(faultyStderr.endsWith('\ndev-err'), true, faultyStderr);
+  assert.equal(faultyStderr.split('\n').filter((line) => line.startsWith('compile over the')).length, 2);
+  // Only the first staged view's stage cannot run (the kill shim ends it by SIGKILL): the row is 12 and the development and both views, which
+  // ran, keep their records and compiled contracts.
+  const killed = copyFixture('plan', 'stage-views-killed');
+  writePlan(killed, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  const killedMark = path.join(path.dirname(killed), 'mark');
+  const ended = ci(killed, 'pr', {
+    TEA_EVALUATE_ENGINE_CLI: killShim('stage-views-kill-shim'),
+    KILL_AT: 'compile',
+    KILL_ARG: 'tea-evaluate-view-',
+    KILL_ONCE: '1',
+    KILL_MARK: killedMark,
+  });
+  assert.equal(ended.status, 12, ended.output);
+  const killedRun = latestCi(killed);
+  const killedRow = rowOf(killedRun.json, 'compile');
+  assert.deepEqual([killedRow.exit, killedRow.class], [12, 'infrastructure']);
+  assert.deepEqual(
+    killedRow.files,
+    [
+      'exit-code',
+      'stdout',
+      'stderr',
+      'engine.json',
+      'eval-contract.json',
+      'held-out/engine.json',
+      'both/engine.json',
+      'both/eval-contract.json',
+    ].map((name) => `checks/compile/${name}`),
+  );
+  const killedStdout = fs.readFileSync(path.join(killedRun.directory, 'checks', 'compile', 'stdout'), 'utf8');
+  assert.match(killedStdout, /^compile over the development view: eval-quality exited 0$/m);
+  assert.match(killedStdout, /^compile over the held-out view: eval-quality could not run it \(exit 12\)$/m);
+  assert.match(killedStdout, /^compile over the both view: eval-quality exited 0$/m);
+  // A staged view that cannot be written, or whose directory cannot be made, is a fault of the machine: 12 for that view, its error code and
+  // none of the plan's bytes, and the development view still runs and keeps its record and its line.
+  for (const [label, call] of [
+    ['write', 'writeFileSync'],
+    ['directory', 'mkdtempSync'],
+  ]) {
+    const full = copyFixture('plan', `stage-views-enospc-${label}`);
+    writePlan(full, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+    const unwritten = ci(full, 'pr', {
+      NODE_OPTIONS: `--require=${enospcPreload(`stage-views-enospc-${label}`, call, 'tea-evaluate-view-')}`,
+    });
+    assert.equal(unwritten.status, 12, `${label}: ${unwritten.output}`);
+    const unwrittenRun = latestCi(full);
+    const unwrittenRow = rowOf(unwrittenRun.json, 'compile');
+    assert.deepEqual([unwrittenRow.exit, unwrittenRow.class], [12, 'infrastructure']);
+    assert.deepEqual(
+      unwrittenRow.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', 'eval-contract.json'].map((name) => `checks/compile/${name}`),
+    );
+    const unwrittenStdout = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stdout'), 'utf8');
+    assert.match(unwrittenStdout, /^compile over the development view: eval-quality exited 0$/m);
+    for (const view of ['held-out', 'both']) {
+      assert.match(unwrittenStdout, new RegExp(`^compile over the ${view} view: eval-quality could not run it \\(exit 12\\)$`, 'm'));
+    }
+    const unwrittenStderr = fs.readFileSync(path.join(unwrittenRun.directory, 'checks', 'compile', 'stderr'), 'utf8');
+    for (const view of ['held-out', 'both']) {
+      assert.match(
+        unwrittenStderr,
+        new RegExp(`^compile over the ${view} view: the derived ${view} view could not be staged \\(ENOSPC\\)$`, 'm'),
+      );
+    }
+    assert.doesNotMatch(unwrittenStdout + unwrittenStderr, /canary|held-out-run|O-101|\[partition-plan\]/);
+  }
+  // A baseline of the held-out partition under a plan: the view its compile reads is staged by the stale-baseline rule. A view that is
+  // derived and cannot be staged is infrastructure (12), and the same folder with a staging directory that works reports a stale
+  // baseline as a warning (Story 1.51).
+  const stale = copyFixture('plan', 'stage-views-stale');
+  fs.cpSync(path.join(ROOT, FIXTURES.verdict.root, FIXTURES.verdict.folder, 'baseline'), path.join(stale, 'baseline'), { recursive: true });
+  editManifest(stale, (manifest) => (manifest.partition = 'held-out'));
+  writePlan(stale, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  const warned = ci(stale, 'pr');
+  assert.equal(warned.status, 0, warned.output);
+  assert.match(warned.output, /warning: the baseline is stale/);
+  const faulted = ci(stale, 'pr', {
+    NODE_OPTIONS: `--require=${enospcPreload('stage-views-stale-enospc', 'writeFileSync', 'tea-evaluate-engine-')}`,
+  });
+  assert.equal(faulted.status, 12, faulted.output);
+  assert.match(faulted.output, /the held-out view of the contract could not be staged \(ENOSPC\)/);
+  assert.doesNotMatch(faulted.output, /warning: the baseline is stale/);
+}
+
+/** A preload for `NODE_OPTIONS` that makes `fs[call]` fail with ENOSPC for a path that holds `part`. */
+function enospcPreload(label, call, part) {
+  const file = path.join(scratch.make(label), 'preload.js');
+  fs.writeFileSync(
+    file,
+    `'use strict';
+const fs = require('node:fs');
+const real = fs[${JSON.stringify(call)}];
+fs[${JSON.stringify(call)}] = function (target, ...rest) {
+  if (String(target).includes(${JSON.stringify(part)})) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+  return real.call(this, target, ...rest);
+};
+`,
+  );
+  return file;
+}
+
+/** A stand-in engine CLI that answers by its input: `STAGED_EXIT` for a staged view (an `--in` below `tea-evaluate-view-`), `DEV_EXIT` for any other, with `DEV_STDOUT` and `DEV_STDERR` printed with no final newline. */
+function inputShim(label) {
+  const file = path.join(scratch.make(label), 'input-shim.js');
+  fs.writeFileSync(
+    file,
+    `'use strict';
+const args = process.argv.slice(2);
+const staged = args.join(' ').includes('tea-evaluate-view-');
+if (staged) process.exitCode = Number(process.env.STAGED_EXIT ?? 0);
+else {
+  process.exitCode = Number(process.env.DEV_EXIT ?? 0);
+  if (process.env.DEV_STDOUT) process.stdout.write(process.env.DEV_STDOUT);
+  if (process.env.DEV_STDERR) process.stderr.write(process.env.DEV_STDERR);
+}
+`,
+  );
+  return file;
+}
+
+/**
+ * A `contract.json` that is a FIFO must not hold `ci`, `check`, `preflight` or the judge calibration check in a blocking read: the command
+ * ends on a signal (Story 1.92) or refuses the file at once (revert: `readFileSync` over the file holds the event loop, so a SIGTERM
+ * is not handled and the command is still running at the limit).
+ */
+async function checkFifoContract() {
+  const makeFifo = (file) => {
+    fs.rmSync(file);
+    assert.equal(spawnSync('mkfifo', [file]).status, 0);
+  };
+  const folder = copyFixture('plan', 'fifo-contract');
+  makeFifo(path.join(folder, 'contract.json'));
+  writePlan(folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  const { temp, env } = privateTemp('fifo-contract-temp');
+  const child = spawn(process.execPath, [CLI, 'ci', '--evaluation', folder, '--tier', 'pr'], {
+    cwd: ROOT,
+    env: { ...BASE_ENV, ...env() },
+    stdio: 'ignore',
+  });
+  const exited = new Promise((resolve) => child.once('exit', (code, name) => resolve({ code, signal: name })));
+  const pid = child.pid;
+  try {
+    // The development view's stage reads the FIFO in the engine's own process and waits; the derived views are refused at once.
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    child.kill('SIGTERM');
+    const result = await within(exited, SIGNAL_LIMIT_MS);
+    assert.notEqual(result, undefined, `ci was still running ${SIGNAL_LIMIT_MS} ms after SIGTERM over a FIFO contract.json`);
+    assert.equal(result.signal, 'SIGTERM', `ci ended ${JSON.stringify(result)}`);
+    assert.deepEqual(privateParents(pid), [], 'the signalled ci left a private parent');
+    assert.deepEqual(scratchNames(temp), [], 'the signalled ci left a scratch directory');
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    for (const name of privateParents(pid)) fs.rmSync(path.join(PRIVATE_ROOT, name), { recursive: true, force: true });
+  }
+  // The derived views are refused at once with a finding that names the file: an engine that reads nothing shows it (the development view
+  // would otherwise wait on the FIFO inside the real engine).
+  const viaShim = copyFixture('plan', 'fifo-contract-views');
+  makeFifo(path.join(viaShim, 'contract.json'));
+  writePlan(viaShim, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  const refusedViews = ci(viaShim, 'pr', { TEA_EVALUATE_ENGINE_CLI: inputShim('fifo-contract-shim') });
+  assert.equal(refusedViews.status, 10, refusedViews.output);
+  for (const view of ['held-out', 'both']) {
+    assert.match(
+      refusedViews.output,
+      new RegExp(
+        `^ {2}${view} view: \\[partition-plan\\] contract\\.json is not a regular file; compile did not run over the ${view} view$`,
+        'm',
+      ),
+    );
+  }
+  // The commands that read `contract.json` themselves refuse the file at once, naming it and no byte of it.
+  const refuse = (args, label) => {
+    const run = spawnSync(process.execPath, [CLI, ...args], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      timeout: 60_000,
+      killSignal: 'SIGKILL',
+      env: BASE_ENV,
+    });
+    assert.equal(run.error, undefined, `${label}: ${run.error?.message}`);
+    return { status: run.status, output: `${run.stdout}${run.stderr}` };
+  };
+  const checked = refuse(['check', '--evaluation', folder], 'check');
+  assert.equal(checked.status, 10, checked.output);
+  assert.match(checked.output, /^contract\.json: \[json\] is not a regular file$/m);
+  const preflight = refuse(['preflight', '--evaluation', folder, '--partition', 'development'], 'preflight');
+  assert.equal(preflight.status, 10, preflight.output);
+  assert.match(preflight.output, /^contract\.json: \[json\] is not a regular file$/m);
+  const ciCheck = copyFixture('plan', 'fifo-contract-check');
+  makeFifo(path.join(ciCheck, 'contract.json'));
+  // A plan with `check` alone: the check row refuses the file at once.
+  writePlan(ciCheck, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
+  const viaCi = refuse(['ci', '--evaluation', ciCheck, '--tier', 'pr'], 'ci check');
+  assert.equal(viaCi.status, 10, viaCi.output);
+  assert.match(viaCi.output, /contract\.json: \[json\] is not a regular file/);
+  // The judge calibration check reads `contract.json` before it calibrates anything.
+  const calibration = copyFixture('plan', 'fifo-contract-calibration');
+  makeFifo(path.join(calibration, 'contract.json'));
+  writePlan(calibration, {
+    schemaVersion: planModule.PLAN_SCHEMA_VERSION,
+    checks: [entry('judge-calibration', 'scheduled', { reason: 'AD-10 default' })],
+  });
+  const calibrated = refuse(['ci', '--evaluation', calibration, '--tier', 'scheduled'], 'judge calibration');
+  assert.equal(calibrated.status, 10, calibrated.output);
+  assert.match(calibrated.output, /contract\.json: \[json\] cannot be read as JSON: is not a regular file/);
+  // The calibration inputs read `contract.json` after `evaluation.json`.
+  const inputs = refuse(['digest', '--evaluation', folder, '--calibration-inputs'], 'digest --calibration-inputs');
+  assert.equal(inputs.status, 10, inputs.output);
+  assert.match(inputs.output, /contract\.json: it cannot be read as JSON: is not a regular file/);
+  // Something that is not a file but is not a FIFO is refused the same way: a link to a device and a directory.
+  for (const [label, make] of [
+    ['a link to /dev/null', (file) => fs.symlinkSync('/dev/null', file)],
+    ['a directory', (file) => fs.mkdirSync(file)],
+  ]) {
+    const odd = copyFixture('plan', 'odd-contract');
+    fs.rmSync(path.join(odd, 'contract.json'));
+    make(path.join(odd, 'contract.json'));
+    const oddChecked = refuse(['check', '--evaluation', odd], `check over ${label}`);
+    assert.equal(oddChecked.status, 10, `${label}: ${oddChecked.output}`);
+    assert.match(oddChecked.output, /^contract\.json: \[json\] is not a regular file$/m, label);
+  }
+  // A `score` of a both run reads the folder's `contract.json` to derive the designation, and a folder whose contract is a FIFO does not
+  // hold it: the run is scored with the designation the folder gives, which is none (revert: a blocking read waits for SIGKILL).
+  const scored = copyFixture('verdict', 'fifo-contract-score');
+  const accepted = acceptedRun(scored);
+  assert.equal(
+    read(path.join(scored, 'baseline', 'run.json')).partition ?? 'both',
+    'both',
+    'the committed verdict baseline is not a both run',
+  );
+  baselines.placeBaseline(scored, accepted);
+  makeFifo(path.join(scored, 'contract.json'));
+  const rescoredFifo = refuse(['score', '--evaluation', scored, '--run', accepted], 'score over a FIFO contract.json');
+  assert.equal(rescoredFifo.status, 0, rescoredFifo.output);
+}
+
+/**
+ * A folder with no `partitionPlan` compiles and seals once, over `contract.json`, with the evidence paths the committed plans have
+ * always had (Story 1.108; revert: a stage that also runs over a view, or writes its record anywhere else, changes the file list, the
+ * directory listing, the recorded argv or the stdout of a fresh `pr` run over the committed verdict fixture, which this case reads. The
+ * committed baselines and their replay do not hold those paths, so a second evidence path leaves them as they were).
+ */
+function checkStageEvidencePaths() {
+  const folder = copyFixture('verdict', 'stage-paths');
+  assert.equal(
+    read(path.join(folder, 'evaluation.json')).partitionPlan,
+    undefined,
+    'the committed verdict fixture declares a partitionPlan',
+  );
+  const result = ci(folder, 'pr');
+  assert.equal(result.status, 0, result.output);
+  const { directory, json } = latestCi(folder);
+  for (const [stage, produced] of [
+    ['compile', 'eval-contract.json'],
+    ['seal', 'sealed-evaluator-brief.json'],
+  ]) {
+    const row = rowOf(json, stage);
+    assert.deepEqual(
+      row.files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', produced].map((name) => `checks/${stage}/${name}`),
+      `${stage}: the row's evidence paths`,
+    );
+    assert.deepEqual(
+      fs.readdirSync(path.join(directory, 'checks', stage)).sort(),
+      ['engine.json', 'exit-code', produced, 'stderr', 'stdout'].sort(),
+      `${stage}: what the check wrote`,
+    );
+    const record = read(path.join(directory, 'checks', stage, 'engine.json'));
+    assert.deepEqual(
+      [record.stage, ...record.argv.slice(1, 3)],
+      [stage, '--in', 'contract.json'],
+      `${stage}: the stage runs over contract.json`,
+    );
+    assert.equal(fs.readFileSync(path.join(directory, 'checks', stage, 'stdout'), 'utf8'), '', `${stage}: the stdout is the engine's own`);
+  }
+  // The same stages over a contract the engine refuses keep one record at the same path, so a plan with no partitionPlan never grows a view.
+  const broken = copyFixture('verdict', 'stage-paths-broken');
+  const contract = read(path.join(broken, 'contract.json'));
+  delete contract.behaviors;
+  write(path.join(broken, 'contract.json'), contract);
+  ci(broken, 'pr');
+  const refused = latestCi(broken);
+  for (const stage of ['compile', 'seal']) {
+    assert.deepEqual(
+      fs.readdirSync(path.join(refused.directory, 'checks', stage)).sort(),
+      ['engine.json', 'exit-code', 'stderr', 'stdout'],
+      `${stage}: a refused contract of a folder with no partitionPlan`,
+    );
+  }
+}
+
+/**
  * `ci --tier pr` over a project under a distinctive path leaves a run directory that names no path of this machine: the
  * project's own paths, the temporary and home directories and the private root, and any path of a Unix or macOS host, are
  * absent from every file of `runs/<invocationId>/` (the directory the `chain` job uploads). The scan finds a project path
@@ -2247,7 +2651,7 @@ function within(promise, limit) {
  * at the limit and the stage with it; a handler that removes the scratch before the stage ends finds the writing stage's entries
  * again). A stage or a command that outlives a failing case is stopped after the assertions, and only then.
  */
-async function signalEndsCommand(label, args, { stage, how = 'hang', once = false, during }) {
+async function signalEndsCommand(label, args, { stage, how = 'hang', once = false, during, arg }) {
   const { temp, env } = privateTemp(`${label}-temp`);
   const wrapper = killShim(`${label}-shim`);
   for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -2256,7 +2660,14 @@ async function signalEndsCommand(label, args, { stage, how = 'hang', once = fals
       cwd: ROOT,
       env: {
         ...BASE_ENV,
-        ...env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: stage, KILL_HOW: how, KILL_MARK: mark, ...(once ? { KILL_ONCE: '1' } : {}) }),
+        ...env({
+          TEA_EVALUATE_ENGINE_CLI: wrapper,
+          KILL_AT: stage,
+          KILL_HOW: how,
+          KILL_MARK: mark,
+          ...(once ? { KILL_ONCE: '1' } : {}),
+          ...(arg === undefined ? {} : { KILL_ARG: arg }),
+        }),
       },
       stdio: 'ignore',
     });
@@ -2306,6 +2717,14 @@ async function checkSignalEndsStage() {
     writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry(stage, 'pr')] });
     await signalEndsStage(`plan-${stage}`, stages, { stage });
   }
+  // Under a partitionPlan the checks also run over the held-out and both views, which a derived view stages in a directory of the
+  // scratch list: `arg` makes the shim hang the first stage whose input is a staged view, so the held-out view's stage is the one
+  // the signal ends (Story 1.108; the development view's stage ran before it and its record is written).
+  const views = copyFixture('plan', 'signal-views');
+  for (const stage of ['compile', 'seal']) {
+    writePlan(views, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry(stage, 'pr')] });
+    await signalEndsStage(`plan-held-out-${stage}`, views, { stage, once: true, arg: 'tea-evaluate-view-' });
+  }
   // The stale-baseline rule runs once for the tier after the checks, when no check of the plan reads the baseline.
   writePlan(stages, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('seal', 'pr')] });
   await signalEndsStage('stale-baseline', stages, { stage: 'compile' });
@@ -2327,6 +2746,10 @@ async function checkSignalEndsWritingStage() {
   const planned = copyFixture('verdict', 'signal-write-plan');
   writePlan(planned, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
   await signalEndsStage('plan-compile-write', planned, { stage: 'compile', how: 'write' });
+  // The held-out view's stage writes its output while the signal arrives (Story 1.108).
+  const views = copyFixture('plan', 'signal-write-views');
+  writePlan(views, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('compile', 'pr')] });
+  await signalEndsStage('plan-held-out-compile-write', views, { stage: 'compile', how: 'write', once: true, arg: 'tea-evaluate-view-' });
   const checked = twoInterfaceFolder('signal-write-check');
   writePlan(checked, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('check', 'pr')] });
   await signalEndsStage('check-check-write', checked, { stage: 'compile', how: 'write' });
@@ -4664,6 +5087,9 @@ async function main() {
     ['gate limits', checkGateLimits],
     ['an interrupted gate', checkInterruptedGate],
     ['engine stage exits', checkEngineStageExits],
+    ['engine stage exits over each view', checkStageViewExits],
+    ['a FIFO contract.json', checkFifoContract],
+    ['the stage evidence paths of a folder with no partitionPlan', checkStageEvidencePaths],
     ['the pr replay', checkPrReplay],
     ['the text neutralizer', checkTextNeutralizer],
     ['the ci run directory holds no machine path', checkCiRunHoldsNoMachinePath],

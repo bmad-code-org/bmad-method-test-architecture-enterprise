@@ -34,6 +34,14 @@
  *    a held-out step in a development artifact), and a development run reads no byte of the held-out answers,
  *  - `check` names a missing, misplaced or unreadable answer by probe and step ID, and a step of the held-out plan by an ID only when
  *    it has the schema's shape, and never by a byte of the sealed file.
+ *
+ * Story 1.108 runs `ci` over the same fixture, whose `compile` and `seal` checks run over each view (development, held-out and both):
+ *  - a held-out oracle the engine refuses and `check` accepts fails the `ci` row with the engine's exit, names the refused view, and
+ *    leaves a compiled contract and a sealed brief for each view that compiles and none for a view that does not (compiling only
+ *    `contract.json` passes the plan),
+ *  - a view that cannot be derived is a finding of that view and its stage never runs,
+ *  - no development evidence of a `ci` run holds a held-out ID, and no development command reads the held-out evidence a `ci`
+ *    invocation leaves under `runs/`.
  */
 
 const assert = require('node:assert/strict');
@@ -42,7 +50,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { PartitionPlanError, contractView, readHeldOutResponse } = require('../cli/lib/evaluate/partition');
+const { PartitionPlanError, contractView, loadContractView, readHeldOutResponse } = require('../cli/lib/evaluate/partition');
+const { engineCliPath } = require('../cli/lib/evaluate/engine');
+const { mostSevere } = require('../cli/lib/evaluate/ci-plan');
 const { answersForView } = require('../cli/lib/evaluate/gameability');
 const { EvaluatorLayerError, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { MATERIAL_HEADING } = require('../cli/lib/evaluate/sealed-brief-agent');
@@ -83,9 +93,512 @@ const {
   HELD_OUT_ROWS,
   mappingPlan,
   designatedBy,
+  setTiers,
 } = createHarness('tea-evaluate-partition-plans-attempts');
 
 try {
+  {
+    // ---- ci compiles and seals each view: a held-out oracle the engine refuses fails the pull request that wrote it (Story 1.108) ------
+    const VIEWS = ['development', 'held-out', 'both'];
+    const STAGES = [
+      ['compile', 'eval-contract.json'],
+      ['seal', 'sealed-evaluator-brief.json'],
+    ];
+    /** The project's CI plan cut to the `pr` checks named, in the plan's own order. */
+    const cutPlan = (project, ids) => {
+      const file = path.join(project.folder, 'ci/evaluation-ci-plan.json');
+      const plan = read(file);
+      plan.checks = plan.checks.filter((item) => ids.includes(item.id) && item.placement.tier === 'pr');
+      write(file, plan);
+      setTiers(project.folder, plan);
+    };
+    const editJson = (project, file, edit) => {
+      const value = read(path.join(project.folder, file));
+      edit(value);
+      write(path.join(project.folder, file), value);
+    };
+    /** A fresh project whose `pr` plan runs `ids`, after `edit` changed its files and the corpus index followed. */
+    const viewProject = (label, edit, ids = ['check', 'compile', 'seal']) => {
+      const project = planProject(label);
+      cutPlan(project, ids);
+      edit(project);
+      assert.equal(cli(project, 'digest').status, 0);
+      return project;
+    };
+    /** The engine CLI over one view of the project, run by hand: its exit and the bytes it wrote. */
+    const engineOver = (project, partition, stage) => {
+      const view = loadContractView({ folder: project.folder, evaluation: read(path.join(project.folder, 'evaluation.json')), partition });
+      const input = path.join(project.directory, `${partition}-${stage}-in.json`);
+      const output = path.join(project.directory, `${partition}-${stage}-out.json`);
+      fs.writeFileSync(input, view.bytes);
+      const run = spawnSync(process.execPath, [engineCliPath(), stage, '--in', input, '--out', output], { encoding: 'utf8' });
+      return { status: run.status, stderr: run.stderr, produced: fs.existsSync(output) ? fs.readFileSync(output) : null };
+    };
+    /**
+     * What `ci --tier pr` leaves for the stages the plan runs over each view, held against the engine run by hand over the same view:
+     * `expected[stage][view]` is the exit the engine gives (the premise of the case, so a fixture the engine stops refusing fails here),
+     * the row's exit is the most severe of them, each view writes its own record and, only when the engine accepted the view, its
+     * artifact (the development view at the check's own paths, the others under `held-out/` and `both/`), and the stdout names each view.
+     */
+    const assertStageViews = (project, { ran, expected, label }) => {
+      const run = test.latest(project.folder);
+      const json = read(path.join(run, 'ci.json'));
+      assert.deepEqual(
+        json.checks.map((row) => row.id),
+        ran,
+        `${label}: the rows of the plan`,
+      );
+      for (const [stage, produced] of STAGES.filter(([name]) => ran.includes(name))) {
+        const row = json.checks.find((item) => item.id === stage);
+        const exits = VIEWS.map((view) => expected[stage][view]);
+        assert.equal(row.exit, mostSevere(exits), `${label}: the ${stage} row's exit is the most severe of the views' exits`);
+        const files = [`checks/${stage}/exit-code`, `checks/${stage}/stdout`, `checks/${stage}/stderr`];
+        const stdout = fs.readFileSync(path.join(run, 'checks', stage, 'stdout'), 'utf8');
+        for (const view of VIEWS) {
+          const direct = engineOver(project, view, stage);
+          assert.equal(direct.status, expected[stage][view], `${label}: the engine's ${stage} of the ${view} view exits ${direct.status}`);
+          const where = view === 'development' ? `checks/${stage}` : `checks/${stage}/${view}`;
+          files.push(`${where}/engine.json`);
+          const record = read(path.join(run, where, 'engine.json'));
+          assert.equal(record.stage, stage);
+          assert.equal(record.exitCode, direct.status, `${label}: the ${view} record of ${stage}`);
+          assert.equal(record.stderr, direct.stderr, `${label}: the ${view} record of ${stage} holds the engine's own stderr`);
+          const artifact = path.join(run, where, produced);
+          if (direct.status === 0) {
+            files.push(`${where}/${produced}`);
+            assert.equal(fs.readFileSync(artifact).equals(direct.produced), true, `${label}: the ${view} ${produced} is the engine's`);
+          } else {
+            assert.equal(fs.existsSync(artifact), false, `${label}: a ${view} view ${stage} the engine refused left a ${produced}`);
+          }
+          assert.match(
+            stdout,
+            new RegExp(`^${stage} over the ${view} view: eval-quality exited ${direct.status}\\b`, 'm'),
+            `${label}: ${view}`,
+          );
+        }
+        assert.deepEqual(row.files, files, `${label}: the files of the ${stage} row`);
+      }
+      return { run, json };
+    };
+    const ABSENT = { development: 0, 'held-out': 0, both: 0 };
+
+    // A held-out oracle whose direction disagrees with its polarity: `check` accepts the plan, and eval-quality refuses the held-out and
+    // both views at compile and at seal while the development view compiles.
+    const refusedHeldOut = viewProject('plan-ci-views-held-out', (project) =>
+      editJson(project, PLAN_FILE, (plan) => (plan.oracles[0].direction.polarity = 'expects-violation')),
+    );
+    const accepted = cli(refusedHeldOut, 'check');
+    assert.equal(accepted.status, 0, `the defect is one \`check\` lets through: ${accepted.output}`);
+    const refused = cli(refusedHeldOut, 'ci', ['--tier', 'pr']);
+    assert.equal(refused.status, 4, `ci --tier pr over a held-out oracle the engine refuses: ${refused.output}`);
+    const refusedRun = assertStageViews(refusedHeldOut, {
+      ran: ['check', 'compile', 'seal'],
+      expected: {
+        compile: { development: 0, 'held-out': 4, both: 4 },
+        seal: { development: 0, 'held-out': 4, both: 4 },
+      },
+      label: 'held-out oracle refused',
+    });
+    for (const stage of ['compile', 'seal']) {
+      const row = refusedRun.json.checks.find((item) => item.id === stage);
+      assert.deepEqual([row.exit, row.class, row.action], [4, 'contract authoring defect', 'block']);
+    }
+    assert.match(
+      refused.output,
+      /^ {2}compile over the held-out view: eval-quality exited 4; its record is runs\/\S+\/checks\/compile\/held-out\/engine\.json$/m,
+    );
+    assert.match(
+      refused.output,
+      /^ {2}seal over the both view: eval-quality exited 4; its record is runs\/\S+\/checks\/seal\/both\/engine\.json$/m,
+    );
+    // The held-out plan's own text sits only in the records of the views built from it; the development view's evidence, the check's own
+    // stdout and stderr and the console hold none of it.
+    const developmentEvidence = (run) =>
+      ['compile', 'seal'].flatMap((stage) =>
+        fs
+          .readdirSync(path.join(run, 'checks', stage), { withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .map((entry) => path.join(run, 'checks', stage, entry.name)),
+      );
+    const KEEP_OUT_TOKENS = [CANARY, 'held-out-run', 'O-101'];
+    const heldOutTokensIn = (files) =>
+      files.flatMap((file) =>
+        KEEP_OUT_TOKENS.filter((token) => fs.readFileSync(file, 'utf8').includes(token)).map((token) => `${file}: ${token}`),
+      );
+    assert.deepEqual(
+      heldOutTokensIn(developmentEvidence(refusedRun.run)),
+      [],
+      'the development evidence of the compile and seal checks holds the held-out plan',
+    );
+    assert.deepEqual(
+      KEEP_OUT_TOKENS.filter((token) => refused.output.includes(token)),
+      [],
+      'the ci summary printed the held-out plan',
+    );
+    assert.match(
+      fs.readFileSync(path.join(refusedRun.run, 'checks/compile/held-out/engine.json'), 'utf8'),
+      /O-101/,
+      'the refused view keeps the engine message in its record',
+    );
+
+    // The same plan with only one of the two checks: a `seal` entry alone still refuses each view it seals, and a `compile` entry alone
+    // never runs a seal.
+    for (const [stage, other] of [
+      ['seal', 'compile'],
+      ['compile', 'seal'],
+    ]) {
+      const alone = viewProject(
+        `plan-ci-views-${stage}-only`,
+        (project) => editJson(project, PLAN_FILE, (plan) => (plan.oracles[0].direction.polarity = 'expects-violation')),
+        [stage],
+      );
+      const aloneRan = cli(alone, 'ci', ['--tier', 'pr']);
+      assert.equal(aloneRan.status, 4, `${stage} alone: ${aloneRan.output}`);
+      const { run } = assertStageViews(alone, {
+        ran: [stage],
+        expected: { [stage]: { development: 0, 'held-out': 4, both: 4 } },
+        label: `${stage} alone`,
+      });
+      assert.equal(fs.existsSync(path.join(run, 'checks', other)), false, `${stage} alone: the ${other} check left evidence`);
+    }
+
+    // The mirror: a development-only oracle the engine refuses fails the development and both views, and the held-out view, which drops
+    // that oracle with the step it reads, compiles and seals.
+    const refusedDevelopment = viewProject('plan-ci-views-development', (project) =>
+      editJson(project, 'contract.json', (contract) => {
+        contract.oracles.find((oracle) => oracle.id === 'O-002').direction.polarity = 'expects-violation';
+      }),
+    );
+    assert.equal(cli(refusedDevelopment, 'check').status, 0, 'a development oracle the engine refuses passes check');
+    const developmentRefused = cli(refusedDevelopment, 'ci', ['--tier', 'pr']);
+    assert.equal(developmentRefused.status, 4, developmentRefused.output);
+    assertStageViews(refusedDevelopment, {
+      ran: ['check', 'compile', 'seal'],
+      expected: {
+        compile: { development: 4, 'held-out': 0, both: 4 },
+        seal: { development: 4, 'held-out': 0, both: 4 },
+      },
+      label: 'development oracle refused',
+    });
+
+    // A view the engine compiles and cannot seal: the compile row passes with an artifact for each view, and the seal row carries the
+    // engine's exit for the views it refuses.
+    const unsealable = viewProject('plan-ci-views-unsealable', (project) =>
+      editJson(project, PLAN_FILE, (plan) => (plan.oracles[0].direction.evidenceTargets = [])),
+    );
+    assert.equal(cli(unsealable, 'check').status, 0, 'an oracle the engine cannot seal passes check');
+    const unsealed = cli(unsealable, 'ci', ['--tier', 'pr']);
+    const unsealedRun = assertStageViews(unsealable, {
+      ran: ['check', 'compile', 'seal'],
+      expected: {
+        compile: ABSENT,
+        seal: { development: 0, 'held-out': 5, both: 5 },
+      },
+      label: 'held-out oracle that cannot be sealed',
+    });
+    assert.equal(unsealed.status, 5, unsealed.output);
+    assert.deepEqual(
+      unsealedRun.json.checks.map((row) => [row.id, row.exit]),
+      [
+        ['check', 0],
+        ['compile', 0],
+        ['seal', 5],
+      ],
+    );
+
+    // Views that fail with different exits: a development oracle the engine refuses at compile and a held-out oracle it cannot seal. The
+    // `seal` exits are 4, 5 and 4, so the row's 5 is the most severe of them and no view's exit by position (the first or the last), and
+    // the `compile` exits 4, 0 and 4 mix a refused view with one that compiles.
+    const mixed = viewProject('plan-ci-views-mixed', (project) => {
+      editJson(project, 'contract.json', (contract) => {
+        contract.oracles.find((oracle) => oracle.id === 'O-002').direction.polarity = 'expects-violation';
+      });
+      editJson(project, PLAN_FILE, (plan) => (plan.oracles[0].direction.evidenceTargets = []));
+    });
+    assert.equal(cli(mixed, 'check').status, 0, 'the mixed defects pass check');
+    const mixedRan = cli(mixed, 'ci', ['--tier', 'pr']);
+    const mixedRun = assertStageViews(mixed, {
+      ran: ['check', 'compile', 'seal'],
+      expected: {
+        compile: { development: 4, 'held-out': 0, both: 4 },
+        seal: { development: 4, 'held-out': 5, both: 4 },
+      },
+      label: 'mixed exits',
+    });
+    assert.deepEqual(
+      mixedRun.json.checks.map((row) => [row.id, row.exit]),
+      [
+        ['check', 0],
+        ['compile', 4],
+        ['seal', 5],
+      ],
+    );
+    assert.equal(mixedRan.status, 5, mixedRan.output);
+
+    // A plan the engine accepts in every view: three compiled contracts and three sealed briefs, one of each per view.
+    const sound = viewProject('plan-ci-views-sound', () => {});
+    const soundRan = cli(sound, 'ci', ['--tier', 'pr']);
+    assert.equal(soundRan.status, 0, soundRan.output);
+    assertStageViews(sound, {
+      ran: ['check', 'compile', 'seal'],
+      expected: { compile: ABSENT, seal: ABSENT },
+      label: 'sound plan',
+    });
+    assert.deepEqual(
+      heldOutTokensIn(developmentEvidence(test.latest(sound.folder))),
+      [],
+      "the sound plan's development evidence holds the held-out plan",
+    );
+    assert.match(
+      fs.readFileSync(path.join(test.latest(sound.folder), 'checks/compile/held-out/eval-contract.json'), 'utf8'),
+      /O-101/,
+      'the held-out view of a sound plan holds its own oracle',
+    );
+    assert.equal(
+      fs.readFileSync(path.join(test.latest(sound.folder), 'checks/compile/eval-contract.json'), 'utf8').includes('O-101'),
+      false,
+      'the development contract holds a held-out oracle',
+    );
+
+    // A view that cannot be derived is a finding of that view with exit 10, its stage never runs, and every other view still runs.
+    const underivable = (label, edit, { expectDevelopment = 0, pattern, secret = CANARY, scanRun = true }) => {
+      const project = viewProject(label, edit);
+      const ran = cli(project, 'ci', ['--tier', 'pr']);
+      const run = test.latest(project.folder);
+      const json = read(path.join(run, 'ci.json'));
+      for (const [stage, produced] of STAGES) {
+        const row = json.checks.find((item) => item.id === stage);
+        const stdout = fs.readFileSync(path.join(run, 'checks', stage, 'stdout'), 'utf8');
+        assert.match(
+          stdout,
+          new RegExp(`^${stage} over the development view: eval-quality exited ${expectDevelopment}\\b`, 'm'),
+          `${label}: ${stdout}`,
+        );
+        assert.match(
+          stdout,
+          new RegExp(
+            `^held-out view: \\[partition-plan\\] ${pattern.replace('VIEW', 'held-out')}; ${stage} did not run over the held-out view$`,
+            'm',
+          ),
+          `${label}: ${stdout}`,
+        );
+        assert.match(
+          stdout,
+          new RegExp(`^both view: \\[partition-plan\\] ${pattern.replace('VIEW', 'both')}; ${stage} did not run over the both view$`, 'm'),
+          `${label}: ${stdout}`,
+        );
+        assert.deepEqual(
+          [row.exit, row.action],
+          [mostSevere([expectDevelopment, 10]), 'block'],
+          `${label}: the ${stage} row of a view that cannot be derived`,
+        );
+        for (const view of ['held-out', 'both']) {
+          assert.equal(
+            fs.existsSync(path.join(run, 'checks', stage, view)),
+            false,
+            `${label}: ${stage} ran over the ${view} view that cannot be derived`,
+          );
+        }
+        assert.equal(
+          fs.existsSync(path.join(run, 'checks', stage, 'engine.json')),
+          true,
+          `${label}: ${stage} did not run over the development view`,
+        );
+        assert.equal(
+          fs.existsSync(path.join(run, 'checks', stage, produced)),
+          expectDevelopment === 0,
+          `${label}: the development ${produced}`,
+        );
+      }
+      assert.equal(ran.status, mostSevere([expectDevelopment, 10]), ran.output);
+      // The finding names the plan's path and no byte of it. The `check` row prints the parse error of a contract.json that does not parse,
+      // and the engine's record of the development view quotes it, so a case that breaks that file scans the stage rows' stdout alone.
+      const scanned = scanRun ? filesUnder(run) : ['compile', 'seal'].map((stage) => path.join(run, 'checks', stage, 'stdout'));
+      assert.equal(
+        scanned.some((file) => fs.readFileSync(file, 'utf8').includes(secret)),
+        false,
+        `${label}: the scanned files quote the file`,
+      );
+      if (scanRun) assert.equal(ran.output.includes(secret), false, `${label}: the output quotes the file`);
+      return { project, run };
+    };
+    underivable('plan-ci-views-unparsable-plan', (project) => fs.writeFileSync(path.join(project.folder, PLAN_FILE), `${CANARY} {`), {
+      pattern: String.raw`corpus\/held-out\/plan\.json does not parse as JSON`,
+    });
+    underivable('plan-ci-views-absent-plan', (project) => fs.rmSync(path.join(project.folder, PLAN_FILE)), {
+      pattern: String.raw`corpus\/held-out\/plan\.json cannot be read \(ENOENT\)`,
+    });
+    underivable('plan-ci-views-off-shape-plan', (project) => editJson(project, PLAN_FILE, (plan) => (plan.behaviorOracles['B-002'] = 5)), {
+      pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected TypeError\)`,
+    });
+    // A folder with no `contract.json` is an error of the system, which is no file of a kind the finding may call not regular: the development
+    // view is the engine's to refuse, and each derived view names the files and the class of the error.
+    underivable('plan-ci-views-absent-contract', (project) => fs.rmSync(path.join(project.folder, 'contract.json')), {
+      expectDevelopment: 64,
+      scanRun: false,
+      pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected Error\)`,
+    });
+    // A plan path off the schema's shape is never printed: the finding names the field of `evaluation.json` that holds it, whatever it
+    // holds (revert: the typed path reaches the output).
+    const typedName = 'SECRET-NAME-5b9e';
+    const offShape = underivable(
+      'plan-ci-views-off-shape-plan-path',
+      (project) => {
+        fs.rmSync(path.join(project.folder, 'contract.json'));
+        editJson(
+          project,
+          'evaluation.json',
+          (manifest) => (manifest.partitionPlan.heldOutPlan = `corpus/held-out/../../${typedName}.json`),
+        );
+      },
+      {
+        expectDevelopment: 64,
+        scanRun: false,
+        secret: typedName,
+        pattern: String.raw`the partitionPlan of evaluation\.json and contract\.json do not derive the VIEW view \(an unexpected Error\)`,
+      },
+    );
+    for (const stage of ['compile', 'seal']) {
+      assert.equal(
+        filesUnder(path.join(offShape.run, 'checks', stage)).some((file) => fs.readFileSync(file, 'utf8').includes(typedName)),
+        false,
+        `the ${stage} row prints the typed plan path`,
+      );
+    }
+    // A `contract.json` that does not parse is the engine's to refuse in the development view, and no view derives from it.
+    underivable(
+      'plan-ci-views-unparsable-contract',
+      (project) => fs.writeFileSync(path.join(project.folder, 'contract.json'), `${CANARY} {`),
+      {
+        expectDevelopment: 5,
+        scanRun: false,
+        pattern: String.raw`corpus\/held-out\/plan\.json and contract\.json do not derive the VIEW view \(an unexpected SyntaxError\)`,
+      },
+    );
+
+    // A folder whose `evaluation.json` cannot be read is `check`'s finding: the stages compile `contract.json` once, as before.
+    const unreadable = viewProject('plan-ci-views-unreadable-evaluation', (project) =>
+      fs.writeFileSync(path.join(project.folder, 'evaluation.json'), '{'),
+    );
+    const unreadableRan = cli(unreadable, 'ci', ['--tier', 'pr']);
+    const unreadableRun = test.latest(unreadable.folder);
+    assert.equal(read(path.join(unreadableRun, 'ci.json')).checks.find((row) => row.id === 'compile').exit, 0, unreadableRan.output);
+    assert.equal(fs.existsSync(path.join(unreadableRun, 'checks/compile/held-out')), false);
+    assert.deepEqual(
+      read(path.join(unreadableRun, 'ci.json')).checks.find((row) => row.id === 'compile').files,
+      ['exit-code', 'stdout', 'stderr', 'engine.json', 'eval-contract.json'].map((name) => `checks/compile/${name}`),
+    );
+
+    // The held-out views' evidence sits under `runs/<invocationId>/checks/` of a `ci` invocation, and a development command reads none of
+    // it (`score --run` reads its own run's directory, and `run` and `preflight` write theirs): after a development baseline replays through
+    // `ci`, all eight held-out evidence files are made unreadable (a FIFO, a mode that denies the owner or a link to nothing), and a
+    // development `check`, `preflight`, `run`, `score` and `ci` still pass and hold none of it.
+    const runsFlow = planProject('plan-ci-runs');
+    const runsDevelopment = cli(runsFlow, 'run', ['--partition', 'development']);
+    assert.equal(runsDevelopment.status, 0, runsDevelopment.output);
+    const runsDevelopmentRun = test.latest(runsFlow.folder);
+    assert.equal(cli(runsFlow, 'score', ['--run', path.basename(runsDevelopmentRun)]).status, 0);
+    assert.equal(cli(runsFlow, 'compare', ['--run', path.basename(runsDevelopmentRun), '--accept']).status, 0);
+    commit(runsFlow.repository, 'development baseline');
+    const runsReplayed = cli(runsFlow, 'ci', ['--tier', 'pr']);
+    assert.equal(runsReplayed.status, 0, runsReplayed.output);
+    const runsCi = test.latest(runsFlow.folder);
+    const developmentRows = read(path.join(runsCi, 'ci.json')).checks;
+    for (const stage of ['compile', 'seal']) {
+      const files = developmentRows.find((row) => row.id === stage).files;
+      for (const view of ['held-out', 'both']) {
+        assert.equal(
+          files.some((file) => file.startsWith(`checks/${stage}/${view}/`)),
+          true,
+          `the ${stage} row of a development baseline lists no ${view} view`,
+        );
+      }
+    }
+    assert.match(
+      fs.readFileSync(path.join(runsCi, 'checks/compile/held-out/eval-contract.json'), 'utf8'),
+      new RegExp(CANARY),
+      'the held-out view of a replayed development baseline holds the held-out plan',
+    );
+    assert.deepEqual(holding(runsDevelopmentRun, KEEP_OUT.development), [], 'the development run holds the held-out plan');
+    // Each of the eight files the compile and seal checks wrote for the held-out and both views.
+    const hostile = [
+      ['compile/held-out/engine.json', 'unreadable'],
+      ['compile/held-out/eval-contract.json', 'fifo'],
+      ['compile/both/engine.json', 'unreadable'],
+      ['compile/both/eval-contract.json', 'fifo'],
+      ['seal/held-out/engine.json', 'unreadable'],
+      ['seal/held-out/sealed-evaluator-brief.json', 'fifo'],
+      ['seal/both/engine.json', 'unreadable'],
+      ['seal/both/sealed-evaluator-brief.json', 'dangling'],
+    ];
+    assert.deepEqual(
+      filesUnder(runsCi)
+        .map((file) => path.relative(path.join(runsCi, 'checks'), file).split(path.sep).join('/'))
+        .filter((file) => /^(compile|seal)\/(held-out|both)\//.test(file))
+        .sort(),
+      hostile.map(([file]) => file).sort(),
+      'the held-out evidence of the ci run is not the eight files the case makes unreadable',
+    );
+    for (const [file, kind] of hostile) {
+      const target = path.join(runsCi, 'checks', file);
+      fs.rmSync(target);
+      if (kind === 'fifo') assert.equal(spawnSync('mkfifo', [target]).status, 0);
+      else if (kind === 'dangling') fs.symlinkSync(path.join(runsFlow.directory, 'nothing-here'), target);
+      else {
+        fs.writeFileSync(target, `${CANARY} held-out-run O-101`);
+        fs.chmodSync(target, 0);
+      }
+    }
+    const runsOutputs = [];
+    const developmentCommand = (command, args = []) => {
+      const ran = cli(runsFlow, command, args);
+      assert.equal(ran.status, 0, `development ${command} over held-out evidence nobody can read: ${ran.output}`);
+      runsOutputs.push(ran.output);
+      return ran;
+    };
+    developmentCommand('check');
+    developmentCommand('preflight', ['--partition', 'development']);
+    developmentCommand('run', ['--partition', 'development']);
+    const hostileRun = test.latest(runsFlow.folder);
+    developmentCommand('score', ['--run', path.basename(hostileRun)]);
+    developmentCommand('ci', ['--tier', 'pr']);
+    assert.deepEqual(
+      holding(hostileRun, KEEP_OUT.development),
+      [],
+      'a development run beside the held-out evidence holds the held-out plan',
+    );
+    assert.deepEqual(
+      runsOutputs.flatMap((text) => KEEP_OUT.development.filter((token) => text.includes(token))),
+      [],
+      'a development command printed the held-out plan',
+    );
+    // A `score` of a both run under a plan reads the folder's `contract.json` and plan to derive each probe's oracle: a FIFO in its place is
+    // refused at once, naming the file (revert: a blocking read waits for SIGKILL).
+    const bothRun = cli(runsFlow, 'run');
+    assert.equal(bothRun.status, 0, bothRun.output);
+    const bothRunId = path.basename(test.latest(runsFlow.folder));
+    const contractFile = path.join(runsFlow.folder, 'contract.json');
+    const contractBytes = fs.readFileSync(contractFile);
+    fs.rmSync(contractFile);
+    assert.equal(spawnSync('mkfifo', [contractFile]).status, 0);
+    try {
+      const fifoScore = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'score', '--evaluation', runsFlow.folder, '--run', bothRunId],
+        { encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL', env: { ...process.env, ...runsFlow.env } },
+      );
+      assert.equal(fifoScore.error, undefined, `score over a FIFO contract.json: ${fifoScore.error?.message}`);
+      assert.equal(fifoScore.status, 10, `${fifoScore.stdout}${fifoScore.stderr}`);
+      assert.match(
+        `${fifoScore.stdout}${fifoScore.stderr}`,
+        /contract\.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived/,
+      );
+    } finally {
+      fs.rmSync(contractFile);
+      fs.writeFileSync(contractFile, contractBytes);
+    }
+  }
+
   // The records of one development run and one held-out run of the plan flow, which the sealed-record cases below patch and judge.
   const snapshotFlow = planProject('plan-snapshot-flow');
   const recordsOf = (partition) => {

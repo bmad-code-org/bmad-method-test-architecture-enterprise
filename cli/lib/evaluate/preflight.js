@@ -113,6 +113,7 @@ const {
   loadContractView,
   partitionRequired,
   readHeldOutResponse,
+  readRegularFile,
   selectPartition,
   unknownPartition,
 } = require('./partition');
@@ -197,7 +198,7 @@ function newInvocationId() {
 }
 
 function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return JSON.parse(readRegularFile(file).toString('utf8'));
 }
 
 function writeJson(file, value) {

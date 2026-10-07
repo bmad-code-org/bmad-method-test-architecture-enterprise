@@ -2888,6 +2888,16 @@ So that a development run never hands the evaluator a held-out oracle, request o
 
 Added 2026-10-03 from Story 1.51's build. Story 1.51's `ci` compile and seal checks run over `contract.json`, the development view. An engine compile or seal defect in the held-out plan surfaces only at a held-out or both preflight, where a pull request does not run it. `check` compiles nothing, because `test:evaluate-boundaries` forbids an in-process compile under `cli/`.
 
+Amended 2026-10-07 in Story 1.108: the criteria hold as written, and the build states what they leave open.
+The development view keeps the evidence paths a plan with no `partitionPlan` has, and the held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`.
+The check's exit is the most severe of the views' exits, so the engine's exit reaches `ci` unchanged.
+eval-quality recompiles a contract before it seals it, so the engine itself refuses to seal a view it refuses to compile, and the seal check leaves no brief for that view.
+A view that cannot be derived (a held-out plan that is absent, unparsable or off its shape) is a finding of that view with exit 10, its stage does not run, and every other view still runs.
+What the engine says about the held-out or both view stays in that view's `engine.json`, since it can quote the held-out plan, so the console and the development view's evidence name no held-out ID.
+`compile` and `seal` are deterministic checks that need no secret, so a plan places them on `pr` alone and no `release` row holds them.
+A second evidence path leaves the committed baselines and their replay as they were, so the evidence-path case and not the replay holds it.
+A `contract.json` that is a FIFO is refused at once by every reader this story touches, so a signal still ends `ci` (Story 1.92).
+
 As an adopter who protects pull requests with the `pr` tier,
 I want `ci` to compile and seal every view a baseline or run uses,
 So that a held-out plan that cannot compile fails the pull request that wrote it.
@@ -2898,7 +2908,7 @@ So that a held-out plan that cannot compile fails the pull request that wrote it
 **When** `tea-evaluate ci --tier pr` runs
 **Then** the `compile` and `seal` checks run once for each view (development, held-out and both), name the view whose compile the engine refused with the engine's exit and its evidence, and write `eval-contract.json` and the sealed brief under the check's evidence path for each view that compiles; a view that fails to compile is never sealed
 **And** a plan with no `partitionPlan` compiles once, as today, with no new evidence path.
-**And** compiling only `contract.json` passes the broken plan and fails the case, and a second evidence path for a plan with no `partitionPlan` changes the committed replay and fails the replay case.
+**And** compiling only `contract.json` passes the broken plan and fails the case, and a second evidence path for a plan with no `partitionPlan` fails the case that runs the committed verdict fixture's `pr` tier and reads its evidence paths.
 
 **Dependencies:** 1.51, 2.2.
 **Gate:** `npm run test:evaluate-ci`, `npm run test:evaluate-partition-plans`, `npm test`.
