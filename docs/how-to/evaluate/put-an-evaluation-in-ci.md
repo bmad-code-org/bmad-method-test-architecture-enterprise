@@ -100,6 +100,11 @@ The final exit is the most severe blocking result, in this order: 64, 12, 5, 4, 
 - `checks/<id>/exit-code`, `stdout` and `stderr` hold what each check printed
 - `replay/` holds the engine's preflight verdict and the scores of the replay
 
+With a `partitionPlan`, the `compile` and `seal` checks run over each view: the development view, the held-out view and the both view.
+The development view writes its files under `checks/<id>/`, and the held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`.
+The check's output names each view and its exit, and a held-out plan the engine refuses fails the pull request that wrote it.
+What the engine said about the held-out or both view stays in that view's `engine.json`, so the console summary and the development files carry no held-out ID.
+
 Open `ci.json` first.
 A failing check names its exit, and the [exit table](/docs/reference/tea-evaluate-cli.md#exit-codes) says what each exit means.
 

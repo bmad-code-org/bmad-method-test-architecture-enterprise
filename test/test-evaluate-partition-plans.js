@@ -2387,6 +2387,20 @@ try {
   assert.equal(heldOutCi.status, 0, heldOutCi.output);
   assert.doesNotMatch(heldOutCi.output, /stale/, 'a held-out baseline replays as stale: its contract is compiled from the wrong view');
   heldOutLog.push(heldOutCi.output);
+  // The replay's `compile` and `seal` checks ran over each view of the plan (Story 1.108): a compiled contract and a sealed brief for each.
+  const heldOutCiRows = read(path.join(test.latest(flow.folder), 'ci.json')).checks;
+  for (const [stage, produced] of [
+    ['compile', 'eval-contract.json'],
+    ['seal', 'sealed-evaluator-brief.json'],
+  ]) {
+    const row = heldOutCiRows.find((item) => item.id === stage);
+    assert.equal(row.exit, 0, `${stage}: ${heldOutCi.output}`);
+    assert.deepEqual(
+      row.files.filter((file) => file.endsWith(produced)),
+      [`checks/${stage}/${produced}`, `checks/${stage}/held-out/${produced}`, `checks/${stage}/both/${produced}`],
+      `${stage} did not run over each view`,
+    );
+  }
   // A view that cannot be derived is a stale reason of its own: the baseline never passes without its digest comparison.
   const sourceContractFile = path.join(flow.folder, 'contract.json');
   const sourceContract = fs.readFileSync(sourceContractFile);

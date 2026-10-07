@@ -57,6 +57,41 @@ const HELD_OUT_PLAN_PATH = new RegExp(
     .heldOutPlan.pattern,
 );
 
+/** The error of a path that holds something other than a regular file where one is required. */
+class NotRegularFileError extends Error {
+  constructor() {
+    super('is not a regular file');
+    this.name = 'NotRegularFileError';
+  }
+}
+
+/**
+ * The bytes of `file`, which must be a regular file (a link to one is followed). The file is opened without blocking and checked
+ * through the descriptor, so a FIFO or a device is refused at once and never waited on: a blocking read would hold the event loop, and a
+ * signal to the command could not end it (Story 1.92).
+ *
+ * @returns {Buffer}
+ * @throws {NotRegularFileError} when the path is not a regular file; any other failure to open or read is the system's own error
+ */
+function readRegularFile(file) {
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) throw new NotRegularFileError();
+    return fs.readFileSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/**
+ * The held-out plan's path as a message may name it: the relative path when `evaluation.json` gives one of the schema's shape,
+ * otherwise the `partitionPlan` field that holds it, so no byte a reader typed outside that shape reaches a message.
+ */
+function heldOutPlanName(evaluation) {
+  const relative = evaluation?.partitionPlan?.heldOutPlan;
+  return typeof relative === 'string' && HELD_OUT_PLAN_PATH.test(relative) ? relative : 'the partitionPlan of evaluation.json';
+}
+
 /** Every committed probe, sorted by file name, parsed. */
 function committedProbes(folder) {
   const directory = path.join(folder, 'probes');
@@ -380,7 +415,13 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
  * @throws {PartitionPlanError}
  */
 function loadContractView({ folder, evaluation, partition }) {
-  const contractBytes = fs.readFileSync(path.join(folder, 'contract.json'));
+  let contractBytes;
+  try {
+    contractBytes = readRegularFile(path.join(folder, 'contract.json'));
+  } catch (error) {
+    if (error instanceof NotRegularFileError) throw new PartitionPlanError('contract.json is not a regular file');
+    throw error;
+  }
   const needsPlan = evaluation.partitionPlan !== undefined && partition !== 'development';
   return contractView({ contractBytes, evaluation, heldOutPlan: needsPlan ? readHeldOutPlan(folder, evaluation) : null, partition });
 }
@@ -481,7 +522,7 @@ function loadBothViewDesignation({ folder, partition, heldOutProbes }) {
   const planned = evaluation?.partitionPlan !== undefined;
   let contractBytes;
   try {
-    contractBytes = fs.readFileSync(path.join(folder, 'contract.json'));
+    contractBytes = readRegularFile(path.join(folder, 'contract.json'));
     JSON.parse(contractBytes.toString('utf8'));
   } catch {
     // A folder with no plan is scored as the engine scores it, and the input check reports its contract on its own.
@@ -854,6 +895,7 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
 module.exports = {
   HELD_OUT_DIRECTORY,
   HELD_OUT_PLAN_VERSION,
+  NotRegularFileError,
   PARTITIONS,
   BEHAVIOR_ID,
   PROBE_ID,
@@ -864,6 +906,7 @@ module.exports = {
   bothViewDesignation,
   committedProbes,
   contractView,
+  heldOutPlanName,
   heldOutResponsePath,
   loadBothViewDesignation,
   loadContractView,
@@ -875,6 +918,7 @@ module.exports = {
   planCriterionName,
   readHeldOutPlan,
   readHeldOutResponse,
+  readRegularFile,
   selectPartition,
   stepsReadBy,
   unknownPartition,
