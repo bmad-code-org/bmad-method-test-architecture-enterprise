@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate documentation (Story 2.6).
+  A tutorial, `docs/tutorials/evaluate-your-first-skill.md`, takes one small skill from intake to a scored run, an accepted baseline and a green `ci --tier pr` against the shipped fixture `test/fixtures/evaluate-tutorial/`, and `test:docs-tutorial` runs its commands and holds its shown output.
+  Seven how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, and bringing an existing suite.
+  Two explanation pages, `how-evaluate-works.md` and `why-evaluate-confines-the-target.md`, hold the design reasoning.
+  `docs/reference/tea-evaluate-cli.md` is a user reference: each command's purpose, options, exit codes, output and one example, and the `evaluation.json` fields an adopter writes.
+  `how-tea-is-tested.md` and the adoption guide describe Evaluate as shipped, and the adoption guide documents the 0/1/2 exit convention as an optional pattern.
+  `test:docs-evaluate-sidebar` fails when an Evaluate page has no site sidebar entry or no link from the TEA overview, and `test:docs-build-names` fails when a docs page names a story, decision id, lane, pull request or planning path.
 - A run with no `--partition` scores each probe against the oracle of its own partition (Story 1.110, AD-9, AD-22).
   The both view gives a behavior its development oracle and its held-out oracle, and eval-quality designates an oracle for a probe only when its behavior lists exactly one, so a both run scored every probe of such a behavior undesignated: a probe read `caught: true` only when a finding cited the contract's first-declared oracle and `caught: false` for a defect claimed against any other oracle.
   A probe now asks `eval-quality score --designated-oracle` for the one oracle its partition's own view lists for its behavior: the held-out view's oracle when `heldOutProbes` lists the probe, the development view's otherwise, derived by the same `contractView` the partition's own run compiles.

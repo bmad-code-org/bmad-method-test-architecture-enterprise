@@ -4354,6 +4354,7 @@ function checkTeaPrTier() {
     '1.24',
     '1.25',
     '1.26',
+    '2.6',
   ]);
   for (const entry of prTier.EVALUATIONS) {
     const ignored = spawnSync('git', ['check-ignore', '-q', `${entry.folder}/runs/probe/ci.json`], { cwd: ROOT });

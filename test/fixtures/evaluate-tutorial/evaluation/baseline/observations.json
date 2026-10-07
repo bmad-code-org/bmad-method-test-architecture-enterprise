@@ -1,0 +1,102 @@
+[
+  {
+    "probeId": "witness-at-limit",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "approved",
+        "amount": 100
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "witness-under-limit",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "approved",
+        "amount": 60
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "approved",
+        "amount": 100
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "approved",
+        "amount": 100
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-exclusive-limit",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "declined",
+        "amount": 100
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+]

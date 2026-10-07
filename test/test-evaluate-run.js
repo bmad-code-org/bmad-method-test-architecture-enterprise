@@ -263,6 +263,7 @@ const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
 const { STAGING } = require('../cli/lib/evaluate/recorded-paths');
 const { recordedArgv, runnableArgv, scoreContext } = require('./lib/recorded-argv');
 const { recordedMount } = require('./lib/recorded-mount');
+const { CONFINEMENT_PAGE, REFERENCE_PAGE, readDocsPage, sectionOf } = require('./lib/docs-pages');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -3098,15 +3099,13 @@ function checkUnverifiedEvidence() {
   check(fs.readdirSync(readBackTarget).length === 0, 'a score wrote through the link a probe directory was swapped for');
 }
 
-/** The reference describes the score-output integrity refusal: its section, the exit and the safe location (Story 1.41). */
+/** The explanation page describes the score-output integrity refusal: its section, the exit and the safe location (Story 1.41); the reference's exit table names it. */
 function checkScoreOutputReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const heading = '### Score output integrity\n';
-  const start = reference.indexOf(heading);
-  check(start !== -1, 'the reference has no "### Score output integrity" section');
-  if (start === -1) return;
-  const next = reference.slice(start + heading.length).search(/^#{1,3} /m);
-  const section = reference.slice(start + heading.length, next === -1 ? undefined : start + heading.length + next);
+  const reference = readDocsPage(REFERENCE_PAGE);
+  const confinement = readDocsPage(CONFINEMENT_PAGE);
+  const section = sectionOf(confinement, '### Score output integrity');
+  check(section !== null, `the confinement page has no "### Score output integrity" section`);
+  if (section === null) return;
   for (const [pattern, what] of [
     [/exits 12/, 'the exit, 12'],
     [/inside the run directory/, 'the safe location, inside the run directory'],
@@ -3117,11 +3116,11 @@ function checkScoreOutputReference() {
     [/\[Score input integrity\]\(#score-input-integrity\)/, 'the link to the check that decides whether the staged artifact is the engine'],
     [/carries an outcome for the probe/, 'what the copy check covers'],
   ]) {
-    check(pattern.test(section), `the reference's score output integrity section does not name ${what}`);
+    check(pattern.test(section), `the confinement page's score output integrity section does not name ${what}`);
   }
   check(
-    !/can substitute an artifact that passes it/.test(reference),
-    'the reference still says a process that can write the staging directory can substitute an artifact that passes the copy check',
+    !/can substitute an artifact that passes it/.test(reference) && !/can substitute an artifact that passes it/.test(confinement),
+    'the documentation still says a process that can write the staging directory can substitute an artifact that passes the copy check',
   );
   const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
   check(
@@ -3132,14 +3131,12 @@ function checkScoreOutputReference() {
   );
 }
 
-/** The reference states the score input check and no longer says a process that can write the run directory can rewrite a file and its digest (Story 1.68). */
+/** The confinement page states the score input check and no longer says a process that can write the run directory can rewrite a file and its digest (Story 1.68); the reference's exit rows and qualification section name it. */
 function checkScoreInputReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const heading = '### Score input integrity\n';
-  const start = reference.indexOf(heading);
-  check(start !== -1, 'the reference has no "### Score input integrity" section');
-  const next = start === -1 ? -1 : reference.slice(start + heading.length).search(/^#{1,3} /m);
-  const section = start === -1 ? '' : reference.slice(start + heading.length, next === -1 ? undefined : start + heading.length + next);
+  const reference = readDocsPage(REFERENCE_PAGE);
+  const confinement = readDocsPage(CONFINEMENT_PAGE);
+  const section = sectionOf(confinement, '### Score input integrity');
+  check(section !== null, 'the confinement page has no "### Score input integrity" section');
   for (const [pattern, what] of [
     [/once, as a regular file/, 'the single read of each input without following a link'],
     [/digestBytes/, "the engine's digest the bytes are compared with run.json by"],
@@ -3182,7 +3179,7 @@ function checkScoreInputReference() {
       'that the staged bytes are copied and read once',
     ],
   ]) {
-    check(pattern.test(section), `the reference's score input integrity section does not name ${what}`);
+    check(pattern.test(section ?? ''), `the confinement page's score input integrity section does not name ${what}`);
   }
   for (const [pattern, what] of [
     [/can rewrite both/, 'the sentence that a process able to write the run directory can rewrite a file and its digest'],
@@ -3191,7 +3188,7 @@ function checkScoreInputReference() {
     [/Story 1\.68/, 'a pointer to the story that has now closed the limit'],
     [/unless it exits 4, 5 or 64/, 'the exemption of the exits that state no verdict'],
   ]) {
-    check(!pattern.test(reference), `the reference still carries ${what}`);
+    check(!pattern.test(reference) && !pattern.test(confinement), `the documentation still carries ${what}`);
   }
   const qualifying = reference.slice(reference.indexOf('### Qualifying a sealed-brief agent\n'));
   check(
@@ -11819,13 +11816,17 @@ function checkSubscriptionLoginReference() {
   );
 }
 
-/** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
+/**
+ * The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31); the
+ * confinement page holds how the runtime builds the target's private repository, audits what a target opens and reads the
+ * kernel's log. A sentence is read on the page that holds it, and an old sentence stays gone from both.
+ */
 function checkConfinementReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const heading = '### File-system confinement\n';
-  const start = reference.indexOf(heading);
-  const section = start === -1 ? '' : reference.slice(start + heading.length, reference.indexOf('\n## ', start));
-  check(start !== -1, 'the reference has no "### File-system confinement" section');
+  const reference = readDocsPage(REFERENCE_PAGE);
+  const section = sectionOf(reference, '### File-system confinement') ?? '';
+  const mechanism = readDocsPage(CONFINEMENT_PAGE);
+  const both = `${section}\n${mechanism}`;
+  check(section !== '', 'the reference has no "### File-system confinement" section');
   check(
     /^- macOS: Seatbelt, through `\/usr\/bin\/sandbox-exec`/m.test(section),
     "the reference's confinement section does not name macOS's mechanism, Seatbelt through sandbox-exec",
@@ -11837,10 +11838,10 @@ function checkConfinementReference() {
   check(section.includes('"confinement": "opt-out"'), "the reference's confinement section does not say what an opted-out run records");
   // The git history is withheld (Story 1.57): the passage saying it stays readable is gone, and the section says what replaces it.
   check(
-    !/git directory included/.test(section) &&
-      !/still reads the committed contract/.test(section) &&
-      !/against the commit still reads/.test(section),
-    "the reference's confinement section still says the project's git history stays readable",
+    !/git directory included/.test(both) &&
+      !/still reads the committed contract/.test(both) &&
+      !/against the commit still reads/.test(both),
+    "the confinement documentation still says the project's git history stays readable",
   );
   check(
     section.includes("user's private root directory") && section.includes('connect to a unix socket'),
@@ -11854,10 +11855,10 @@ function checkConfinementReference() {
   );
   // Story 1.80: the three limits the withheld repository had are gone, and the section says what replaces each.
   check(
-    !/no branches or tags/.test(section) &&
-      !/six million objects/.test(section) &&
-      !/A project that is a partial clone[^\n]*is refused/.test(section) &&
-      !/Five limits apply/.test(section) &&
+    !/no branches or tags/.test(both) &&
+      !/six million objects/.test(both) &&
+      !/A project that is a partial clone[^\n]*is refused/.test(both) &&
+      !/Five limits apply/.test(both) &&
       /^ {2}Two limits apply\.$/m.test(section),
     "the reference's confinement section still lists the partial-clone, tag or very-large-history limit, or does not count the two limits that remain",
   );
@@ -11865,36 +11866,41 @@ function checkConfinementReference() {
     section.includes('A project cloned with a promisor remote') &&
       section.includes('no process of a confined run fetches from the remote') &&
       section.includes('lists the tags of your project that point into the evaluated commit') &&
-      section.includes('reads every walk that grows with the history as a stream') &&
-      section.includes('a driver whose name holds a space and a `required` written with no value') &&
       section.includes('an older git makes a partial-clone project exit 12, with the way out named'),
-    "the reference's confinement section does not say a promisor-remote project runs without a fetch, that the target's git lists the project's tags, that the history is read as a stream and that a filter driver's whole configuration is carried",
+    "the reference's confinement section does not say a promisor-remote project runs without a fetch, that an older git makes a partial-clone project exit 12 and that the target's git lists the project's tags",
+  );
+  check(
+    mechanism.includes('reads every walk that grows with the history as a stream') &&
+      mechanism.includes('a driver whose name holds a space and a `required` written with no value'),
+    "the confinement page does not say the history is read as a stream and that a filter driver's whole configuration is carried",
   );
   // Story 1.132: the build writes nothing into the project's object store, whichever filesystem its temp directory is on.
   check(
-    section.includes(
+    mechanism.includes(
       "The build writes nothing into your repository's object store: git prints the pack and the private repository indexes it on the temp directory's own filesystem",
     ) &&
-      section.includes('a project and a temp directory on different filesystems (a host whose `/tmp` is a tmpfs) work') &&
-      section.includes('your `objects/pack` gets no file, even for a moment'),
-    "the reference's confinement section does not say the build writes nothing into the project's object store and works across filesystems",
+      mechanism.includes('a project and a temp directory on different filesystems (a host whose `/tmp` is a tmpfs) work') &&
+      mechanism.includes('your `objects/pack` gets no file, even for a moment'),
+    "the confinement page does not say the build writes nothing into the project's object store and works across filesystems",
   );
   // Story 1.85: a sparse-checkout project shows the target the project's status.
   check(
-    section.includes(
+    mechanism.includes(
       "(`git sparse-checkout set` in cone mode or with a pattern list, a sparse index, and a clone made with `--sparse`) shows the target the project's status",
     ) &&
-      section.includes(
+      mechanism.includes(
         'the private repository carries `core.sparseCheckout`, `core.sparseCheckoutCone` and, when your worktree keeps a sparse index, `index.sparse`',
       ) &&
-      section.includes('The long form of `git status` reports the sparse checkout as it does in your project, a sparse index included.') &&
-      section.includes('marks every tracked file outside the cone as skip-worktree') &&
-      section.includes(
+      mechanism.includes(
+        'The long form of `git status` reports the sparse checkout as it does in your project, a sparse index included.',
+      ) &&
+      mechanism.includes('marks every tracked file outside the cone as skip-worktree') &&
+      mechanism.includes(
         "The target's `git status` lists no deletion, `git ls-files` lists the files outside the cone, and `git sparse-checkout list` prints your patterns.",
       ) &&
-      section.includes('A project that is not sparse keeps the index it has') &&
-      section.includes('The runtime removes the `config.worktree` that `git worktree add` copies into the worktree'),
-    "the reference's confinement section does not say a sparse-checkout project shows the target the project's status (no deletion, the files outside the cone listed, the cone's patterns) and that a project that is not sparse keeps its index",
+      mechanism.includes('A project that is not sparse keeps the index it has') &&
+      mechanism.includes('The runtime removes the `config.worktree` that `git worktree add` copies into the worktree'),
+    "the confinement page does not say a sparse-checkout project shows the target the project's status (no deletion, the files outside the cone listed, the cone's patterns) and that a project that is not sparse keeps its index",
   );
   // Story 1.59: the one private home a confined trial may write, and the variables that name it.
   check(
@@ -11910,25 +11916,28 @@ function checkConfinementReference() {
   // Story 1.60: the audit is the mechanism's, for every process, and the passages that said only Node processes write it are gone.
   check(
     section.includes('through the mechanism itself and for every process the target starts, whatever its language or environment') &&
-      section.includes('`/usr/bin/log stream`') &&
-      section.includes('`strace -f --seccomp-bpf --decode-pids=pidns`') &&
-      section.includes('no code runs inside the target') &&
-      section.includes('cannot confirm itself stops the command with exit 12') &&
-      section.includes('`io_uring`') &&
-      section.includes("the kernel's reports are lossy") &&
-      !/covers Node processes alone/.test(section) &&
-      !/the one file of the audit a target may write/.test(section) &&
-      !/Every Node process of the trial loads/.test(section) &&
-      !section.includes('confinement-guard') &&
-      !section.includes('NODE_OPTIONS'),
-    "the reference's confinement section does not say the audit is the mechanism's for every process of the target (the log stream on macOS, strace on Linux, no code in the target, exit 12 for an observer that cannot confirm itself, what it does not see), or still describes the Node preload and its report file",
+      section.includes('cannot confirm itself stops the command with exit 12'),
+    "the reference's confinement section does not say the audit is the mechanism's for every process of the target, and that a host whose observer cannot confirm itself exits 12",
+  );
+  check(
+    mechanism.includes('`/usr/bin/log stream`') &&
+      mechanism.includes('`strace -f --seccomp-bpf --decode-pids=pidns`') &&
+      mechanism.includes('no code runs inside the target') &&
+      mechanism.includes('`io_uring`') &&
+      mechanism.includes("the kernel's reports are lossy") &&
+      !/covers Node processes alone/.test(both) &&
+      !/the one file of the audit a target may write/.test(both) &&
+      !/Every Node process of the trial loads/.test(both) &&
+      !both.includes('confinement-guard') &&
+      !both.includes('NODE_OPTIONS'),
+    'the confinement page does not say the audit reads the log stream on macOS and traces on Linux with no code in the target, what it does not see, or still describes the Node preload and its report file',
   );
   // Story 1.81: macOS reports are lossy, with the measurements, and the run records how much each trial lost.
   check(
-    section.includes("the kernel's reports are lossy: the log lost none of 3,000 reports at a quiet host's 440 a second") &&
-      section.includes('one to five of 1,600 on a host saturated by other work') &&
-      section.includes('7 to 20 percent of a burst of 40,000 a second') &&
-      section.includes("`run.json`'s `observedMountsChannel`") &&
+    mechanism.includes("the kernel's reports are lossy: the log lost none of 3,000 reports at a quiet host's 440 a second") &&
+      mechanism.includes('one to five of 1,600 on a host saturated by other work') &&
+      mechanism.includes('7 to 20 percent of a burst of 40,000 a second') &&
+      mechanism.includes("`run.json`'s `observedMountsChannel`") &&
       [
         '`conditionArm`',
         '`trialIndex`',
@@ -11938,14 +11947,21 @@ function checkConfinementReference() {
         '`completeness`',
         '`complete`',
         '`lossy`',
-      ].every((name) => section.includes(name)) &&
-      section.includes('every 50 ms') &&
-      section.includes('a single report of the target can still drop between two canaries') &&
-      section.includes('The summary line of `run` names every `lossy` trial') &&
-      section.includes('Every Linux trial records `complete` with no canary sent') &&
-      !section.includes('No run records the loss yet') &&
-      !section.includes('Story 1.81 adds'),
-    "the reference's confinement section does not state that macOS reports are lossy with the measurements, name the `observedMountsChannel` field of run.json with its entries and the 50 ms canary, say the summary names each lossy trial and a Linux trial is complete with no canary, or still says no run records the loss",
+      ].every((name) => mechanism.includes(name)) &&
+      mechanism.includes('every 50 ms') &&
+      mechanism.includes('a single report of the target can still drop between two canaries') &&
+      mechanism.includes('The summary line of `run` names every `lossy` trial') &&
+      mechanism.includes('Every Linux trial records `complete` with no canary sent') &&
+      !both.includes('No run records the loss yet') &&
+      !both.includes('Story 1.81 adds'),
+    'the confinement page does not state that macOS reports are lossy with the measurements, name the `observedMountsChannel` field of run.json with its entries and the 50 ms canary, say the summary names each lossy trial and a Linux trial is complete with no canary, or still says no run records the loss',
+  );
+  // The reference keeps what an adopter reads of the audit's completeness.
+  check(
+    section.includes("`run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`") &&
+      section.includes('the summary line of `run` names every `lossy` trial') &&
+      section.includes('Every Linux trial is `complete`.'),
+    "the reference's confinement section does not say that `observedMountsChannel` marks each audited trial complete or lossy, that the summary names each lossy trial and that a Linux trial is complete",
   );
 }
 
@@ -11980,34 +11996,35 @@ function checkWorkspaceReference() {
 }
 
 /**
- * The bridge passage of the reference, read under its exact heading, states that the confinement withholds the run's private
+ * The bridge passage of the confinement page, read under its exact heading, states that the confinement withholds the run's private
  * directories, so the token is unreadable to a confined target, and the sentence saying a target can read it is gone (Story 1.58).
+ * The reference's evaluation layer section points to the passage.
  */
 function checkBridgeTokenReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const heading = "#### The bridge's admission token\n";
-  const start = reference.indexOf(heading);
-  const layer = reference.indexOf('\n### The evaluation layer\n');
-  const end = start === -1 ? -1 : reference.slice(start + heading.length).search(/\n#{1,4} /);
-  const passage = start === -1 ? '' : reference.slice(start + heading.length, end === -1 ? undefined : start + heading.length + end);
-  check(start !== -1, `the reference has no "${heading.trim()}" section`);
-  const layerEnd = layer === -1 ? -1 : reference.indexOf('\n### ', layer + 1);
+  const reference = readDocsPage(REFERENCE_PAGE);
+  const confinement = readDocsPage(CONFINEMENT_PAGE);
+  const heading = "## The bridge's admission token";
+  const passage = sectionOf(confinement, heading);
+  check(passage !== null, `the confinement page has no "${heading}" section`);
   check(
-    layer !== -1 && start > layer && (layerEnd === -1 || start < layerEnd),
-    `the reference's "${heading.trim()}" section is not under "### The evaluation layer"`,
+    sectionOf(reference, '### The evaluation layer')?.includes(
+      '(/docs/explanation/why-evaluate-confines-the-target.md#the-bridges-admission-token)',
+    ) === true,
+    `the reference's "### The evaluation layer" section does not link the confinement page's "${heading}" section`,
   );
   check(
-    passage.includes("The confinement withholds the run's private directories from every target") &&
+    (passage ?? '').includes("The confinement withholds the run's private directories from every target") &&
       passage.includes('the token is unreadable to a confined target') &&
       passage.includes('one private parent directory') &&
       passage.includes('one private root') &&
       passage.includes('SIGKILL') &&
       passage.includes('connection to a unix socket'),
-    "the reference's bridge passage does not state that the confinement withholds the run's private directories, so the token is unreadable to a confined target",
+    "the confinement page's bridge passage does not state that the confinement withholds the run's private directories, so the token is unreadable to a confined target",
   );
   check(
-    !/can read that token before the agent connects/.test(reference) && !/private directory lies outside it/.test(reference),
-    'the reference still says a confined target can read the bridge token',
+    !/can read that token before the agent connects/.test(reference + confinement) &&
+      !/private directory lies outside it/.test(reference + confinement),
+    'the documentation still says a confined target can read the bridge token',
   );
 }
 
@@ -18140,17 +18157,16 @@ async function checkSocketConnectionRun() {
 }
 
 /**
- * The reference names the audit's connection (Story 1.86).
- * The audit passage of `### File-system confinement` lists a connection, or a datagram sent, to a Unix socket file as an observed access and says which connections it leaves out.
+ * The confinement page names the audit's connection (Story 1.86).
+ * The audit passages of the page list a connection, or a datagram sent, to a Unix socket file as an observed access and say which connections they leave out.
  * The sentence on the table's limit (a socket bound after the call started stays reachable) points to it, and the sentence on `--seccomp-bpf` names every socket call the filter stops at.
- * The section is found by its exact heading, and any of these sentences missing fails the case.
+ * The sections are found by their exact headings, and any of these sentences missing fails the case.
  */
 function checkSocketConnectionReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const heading = '### File-system confinement\n';
-  const start = reference.indexOf(heading);
-  check(start !== -1, 'the reference has no "### File-system confinement" section');
-  const section = start === -1 ? '' : reference.slice(start + heading.length).split(/\n#{2,3} /)[0];
+  const confinement = readDocsPage(CONFINEMENT_PAGE);
+  const parts = ['## What the audit watches', '## Host services'].map((heading) => sectionOf(confinement, heading));
+  check(!parts.includes(null), 'the confinement page has no "## What the audit watches" or no "## Host services" section');
+  const section = parts.filter((part) => part !== null).join('\n');
   const sentences = section
     .split('\n')
     .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
@@ -18188,6 +18204,14 @@ function checkSocketConnectionReference() {
   );
 }
 
+/** The sections of the confinement page that hold what the reference's `### File-system confinement` section held before the page took the mechanism over. */
+const MOVED_CONFINEMENT_SECTIONS = [
+  "## The target's view of your repository",
+  '## Call directories',
+  '## What the audit watches',
+  '## Host services',
+];
+
 /**
  * The sentences of the reference that speak of the network, namespaces, sockets or the reach of a target, service or process,
  * and are neither a claim of the table nor one of the earlier stories' sentences listed beside it: what a claim no case backs
@@ -18196,14 +18220,17 @@ function checkSocketConnectionReference() {
  * host's network); outside it the screen is the words only this story's claims use.
  *
  * @param {string} reference the reference's text
+ * @param {string} mechanism the confinement page's text
  * @param {Array<[string, string[]]>} claims
  * @returns {string[]}
  */
-function unbackedNetworkSentences(reference, claims) {
+function unbackedNetworkSentences(reference, mechanism, claims) {
   const heading = '### File-system confinement\n';
   const start = reference.indexOf(heading);
   const next = start === -1 ? -1 : reference.indexOf('\n## ', start);
   const section = start === -1 ? '' : reference.slice(start + heading.length, next === -1 ? undefined : next);
+  // The sections of the confinement page that carry what the reference's confinement section once held are screened as widely as it is.
+  const moved = MOVED_CONFINEMENT_SECTIONS.map((moved) => sectionOf(mechanism, moved) ?? '').join('\n');
   const sentencesOf = (text) =>
     text
       .split('\n')
@@ -18232,10 +18259,13 @@ function unbackedNetworkSentences(reference, claims) {
     /(Bubblewrap|isolated|target|service|process|entry).*(reach|connect|listen|internet|route|model provider|outside service|host's network|host network)|(reach|connect|internet|route).*(Bubblewrap|isolated|target|service)|network|abstract|loopback|forward|\bbridge\b|socket|namespace|D-Bus|\bMach\b|firewall|egress|proxy/i;
   const outsideScreen =
     /abstract|D-Bus|socket|reach.*host|internet|network namespace|loopback and nothing else|forwarded service|bridge the runtime owns/i;
-  const inside = new Set(sentencesOf(section));
+  const insideSentences = [...sentencesOf(section), ...sentencesOf(moved)];
+  const inside = new Set(insideSentences);
   return [
-    ...sentencesOf(section).filter((sentence) => insideScreen.test(sentence) && !known(sentence)),
-    ...sentencesOf(reference).filter((sentence) => !inside.has(sentence) && outsideScreen.test(sentence) && !known(sentence)),
+    ...insideSentences.filter((sentence) => insideScreen.test(sentence) && !known(sentence)),
+    ...sentencesOf(`${reference}\n${mechanism}`).filter(
+      (sentence) => !inside.has(sentence) && outsideScreen.test(sentence) && !known(sentence),
+    ),
   ];
 }
 
@@ -18247,7 +18277,8 @@ function unbackedNetworkSentences(reference, claims) {
  * below). The old sentence that said a Bubblewrap target shares the host's network namespace is gone.
  */
 function checkBridgeReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const reference = readDocsPage(REFERENCE_PAGE);
+  const mechanism = readDocsPage(CONFINEMENT_PAGE);
   check(reference.includes('### File-system confinement\n'), 'the reference has no "### File-system confinement" section');
   const claims = [
     [
@@ -18573,19 +18604,19 @@ function checkBridgeReference() {
     ...[...apiSource.matchAll(/^\s*await runCase\(['"]([^'"]+)['"], /gm)].map((match) => match[1]),
   ]);
   const lines = new Set(
-    reference
+    `${reference}\n${mechanism}`
       .split('\n')
       .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
       .map((sentence) => sentence.replace(/^[-\s]+/, '')),
   );
   for (const [sentence, backedBy] of claims) {
-    check(lines.has(sentence), `the reference does not state: ${sentence}`);
+    check(lines.has(sentence), `neither the reference nor the confinement page states: ${sentence}`);
     for (const name of backedBy) {
       check(caseNames.has(name), `the reference's claim "${sentence.slice(0, 60)}..." names the case "${name}", which no suite runs`);
     }
   }
-  const unbacked = unbackedNetworkSentences(reference, claims);
-  check(unbacked.length === 0, `the reference makes network claims no case backs: ${JSON.stringify(unbacked)}`);
+  const unbacked = unbackedNetworkSentences(reference, mechanism, claims);
+  check(unbacked.length === 0, `the documentation makes network claims no case backs: ${JSON.stringify(unbacked)}`);
   // Sentences of the kinds an unbacked claim takes, each placed in the confinement section and, for the narrow screen, after it.
   const scratch = [
     'A Bubblewrap target can connect to the internet through the host.',
@@ -18599,11 +18630,19 @@ function checkBridgeReference() {
   ];
   const heading = '### File-system confinement\n';
   const at = reference.indexOf(heading) + heading.length;
+  // Each kind is placed in the reference's confinement section and in the confinement page's sections that hold the mechanism.
+  const movedHeading = '## Host services\n';
+  const movedAt = mechanism.indexOf(movedHeading) + movedHeading.length;
   for (const sentence of scratch) {
     const inSection = `${reference.slice(0, at)}${sentence}\n${reference.slice(at)}`;
     check(
-      unbackedNetworkSentences(inSection, claims).includes(sentence),
+      unbackedNetworkSentences(inSection, mechanism, claims).includes(sentence),
       `an unbacked sentence in the confinement section passed the screen: ${sentence}`,
+    );
+    const inPage = `${mechanism.slice(0, movedAt)}\n${sentence}\n${mechanism.slice(movedAt)}`;
+    check(
+      unbackedNetworkSentences(reference, inPage, claims).includes(sentence),
+      `an unbacked sentence in the confinement page's mechanism sections passed the screen: ${sentence}`,
     );
   }
   for (const sentence of [
@@ -18612,14 +18651,18 @@ function checkBridgeReference() {
     'Nothing reaches the internet from a target.',
   ]) {
     check(
-      unbackedNetworkSentences(`${reference}\n## Elsewhere\n\n${sentence}\n`, claims).includes(sentence),
+      unbackedNetworkSentences(`${reference}\n## Elsewhere\n\n${sentence}\n`, mechanism, claims).includes(sentence),
       `an unbacked sentence outside the confinement section passed the screen: ${sentence}`,
+    );
+    check(
+      unbackedNetworkSentences(reference, `${mechanism}\n## Elsewhere\n\n${sentence}\n`, claims).includes(sentence),
+      `an unbacked sentence at the end of the confinement page passed the screen: ${sentence}`,
     );
   }
   // Story 1.83: the reference teaches the authorization, and the retired declaration appears only in the sentence that says it is gone.
   const retiredSentence =
     '`"network"` is no longer a field: `check` refuses an entry that declares it, naming the entry and pointing at `egress`.';
-  const declaring = reference
+  const declaring = `${reference}\n${mechanism}`
     .split('\n')
     .filter((line) => /"network"|`network`|until Story 1\.83|hostNetwork/.test(line) && line !== retiredSentence);
   check(
@@ -18627,15 +18670,16 @@ function checkBridgeReference() {
     `the reference still teaches the retired network declaration: ${JSON.stringify(declaring.map((line) => line.slice(0, 120)))}`,
   );
   check(
-    !/shares the host's network namespace/.test(reference) && !/Story 1\.63 closes that route/.test(reference),
-    "the reference still says a Bubblewrap target shares the host's network namespace",
+    !/shares the host's network namespace/.test(`${reference}\n${mechanism}`) &&
+      !/Story 1\.63 closes that route/.test(`${reference}\n${mechanism}`),
+    "the documentation still says a Bubblewrap target shares the host's network namespace",
   );
   // Story 1.82: the sentence that listed the host's sockets as connectable is gone, and the one that replaces it names what is hidden.
-  const confinementSection = (reference.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+  const confinementSection = `${(reference.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanism}`;
   check(
-    !/Path-based Unix sockets that the read-only `\/` still shows/.test(reference) &&
-      !/Story 1\.82 closes that route/.test(reference) &&
-      !/stay connectable, and Story/.test(reference) &&
+    !/Path-based Unix sockets that the read-only `\/` still shows/.test(confinementSection) &&
+      !/Story 1\.82 closes that route/.test(confinementSection) &&
+      !/stay connectable, and Story/.test(confinementSection) &&
       confinementSection.includes('`/var/run/docker.sock`') &&
       confinementSection.includes('`/run/dbus/system_bus_socket`') &&
       confinementSection.includes('answer `ECONNREFUSED`') &&
@@ -18645,30 +18689,38 @@ function checkBridgeReference() {
       confinementSection.includes('ranked by who can create a socket') &&
       confinementSection.includes('A call is refused (exit 12') &&
       confinementSection.includes('`hostSocketTruncation`'),
-    "the reference's confinement section still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
+    "the confinement documentation still lists the host's path-based sockets as connectable, or does not name the sockets a target cannot connect to and the ones it reaches",
   );
   // Story 1.131: the sentence that said the directories a target is granted are not under the private root is gone.
   // The sentences that replace it state where each call directory lives and that a killed run's are reclaimed.
   const oldCallDirectorySentence =
     'The directories a target is granted (its workspace, its temp directory, the status and port files) are not under the root.';
-  const staleCallDirectories = (text) =>
-    text.includes(oldCallDirectorySentence) ||
-    !claims.filter(([, backedBy]) => backedBy.includes('the call directory units')).every(([sentence]) => text.includes(sentence));
+  const staleCallDirectories = (referenceText, mechanismText) => {
+    const text = `${referenceText}\n${mechanismText}`;
+    return (
+      text.includes(oldCallDirectorySentence) ||
+      !claims.filter(([, backedBy]) => backedBy.includes('the call directory units')).every(([sentence]) => text.includes(sentence))
+    );
+  };
   check(
-    !staleCallDirectories(reference),
-    "the reference still says the directories a target is granted are not under the root, or does not state where each call directory lives and that a killed run's are reclaimed",
+    !staleCallDirectories(reference, mechanism),
+    "the documentation still says the directories a target is granted are not under the root, or does not state where each call directory lives and that a killed run's are reclaimed",
   );
   check(
-    staleCallDirectories(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldCallDirectorySentence}\n`)),
+    staleCallDirectories(
+      reference.replace('### File-system confinement\n', `### File-system confinement\n${oldCallDirectorySentence}\n`),
+      mechanism,
+    ),
     'the check on the call directory sentences passed with the old sentence in the confinement section',
   );
   check(
-    staleCallDirectories(reference.replace('The audit lists none of them as an observed mount.\n', '')),
+    staleCallDirectories(reference, mechanism.replace('The audit lists none of them as an observed mount.\n', '')),
     'the check on the call directory sentences passed with the audit sentence removed',
   );
   check(
     staleCallDirectories(
-      reference.replace(
+      reference,
+      mechanism.replace(
         "so a killed run leaves no call directory in the system's temp directory",
         'so a killed run leaves a call directory behind',
       ),
@@ -18677,8 +18729,8 @@ function checkBridgeReference() {
   );
   // Story 1.88: the sentence that said the evaluation layer's processes keep every socket of the host is gone.
   // The sentences that replace it name the sockets the layer's processes cannot connect to and the ones they reach.
-  const staleLayerSockets = (text) => {
-    const section = (text.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+  const staleLayerSockets = (referenceText, mechanismText) => {
+    const section = `${(referenceText.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanismText}`;
     return (
       section.includes("The evaluation layer's processes keep every socket of the host") ||
       ![
@@ -18693,24 +18745,27 @@ function checkBridgeReference() {
     );
   };
   check(
-    !staleLayerSockets(reference),
-    "the reference's confinement section still says the evaluation layer's processes keep every socket of the host, or does not name the sockets they cannot connect to and the ones they reach",
+    !staleLayerSockets(reference, mechanism),
+    "the confinement documentation still says the evaluation layer's processes keep every socket of the host, or does not name the sockets they cannot connect to and the ones they reach",
   );
   const oldLayerSentence =
     "The evaluation layer's processes keep every socket of the host, since their `/` is a writable bind of the host's, where a mount over a socket file that went away would create a file on the host.";
   check(
-    staleLayerSockets(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldLayerSentence}\n`)),
+    staleLayerSockets(reference.replace('### File-system confinement\n', `### File-system confinement\n${oldLayerSentence}\n`), mechanism),
     'the check on the evaluation layer sentences passed with the old sentence in the confinement section',
   );
   check(
-    staleLayerSockets(reference.replace('The socket the runtime serves a layer process stays connectable', 'A socket stays connectable')),
+    staleLayerSockets(
+      reference,
+      mechanism.replace('The socket the runtime serves a layer process stays connectable', 'A socket stays connectable'),
+    ),
     'the check on the evaluation layer sentences passed with the sentence on the private root removed',
   );
 
   // Story 1.89: the sentence that stated the shell launcher's limit (a name no shell can hold, an exported function, the variables bash initializes) is gone.
   // The sentences that replace it say no shell stands in the path and the target's environment is exact.
-  const staleLauncherEnvironment = (text) => {
-    const section = (text.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+  const staleLauncherEnvironment = (referenceText, mechanismText) => {
+    const section = `${(referenceText.split('### File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanismText}`;
     return (
       section.includes('The limit: a call that hides sockets can change or drop a variable') ||
       section.includes('and it restores `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` to the call') ||
@@ -18722,15 +18777,19 @@ function checkBridgeReference() {
     );
   };
   check(
-    !staleLauncherEnvironment(reference),
-    "the reference's confinement section still states the shell launcher's limit, or does not say the target receives exactly the environment the call gave it",
+    !staleLauncherEnvironment(reference, mechanism),
+    "the confinement documentation still states the shell launcher's limit, or does not say the target receives exactly the environment the call gave it",
   );
   const limitSentence =
     'The limit: a call that hides sockets can change or drop a variable whose name a shell cannot hold (`my.setting`, `BASH_FUNC_f%%`), an exported shell function, and a variable bash initializes itself (`PS1`, `PS2`, `PS4`, `LINENO`, `RANDOM`, `SHELLOPTS`, `BASHOPTS`, `BASH`, `BASH_VERSION`) when `sh` is bash, and Story 1.89 closes it.';
   check(
-    staleLauncherEnvironment(reference.replace('### File-system confinement\n', `### File-system confinement\n${limitSentence}\n`)) &&
+    staleLauncherEnvironment(
+      reference.replace('### File-system confinement\n', `### File-system confinement\n${limitSentence}\n`),
+      mechanism,
+    ) &&
       staleLauncherEnvironment(
         reference.replace('The target receives exactly the environment the call gave it', 'The target receives an environment'),
+        mechanism,
       ),
     'the check on the launcher sentences passed with the limit sentence in the confinement section or with the exact-environment sentence removed',
   );

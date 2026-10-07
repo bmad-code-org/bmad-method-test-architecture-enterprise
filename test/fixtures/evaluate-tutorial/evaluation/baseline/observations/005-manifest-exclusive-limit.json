@@ -1,0 +1,48 @@
+{
+  "legId": "manifest-exclusive-limit",
+  "sequence": 5,
+  "workspace": "mutated:M-001",
+  "cwd": "<workspace>",
+  "request": {
+    "probeId": "manifest-exclusive-limit",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "executable": "tea-skill-runner",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {
+        "agent": "custom",
+        "agent-cmd": "./agent.js",
+        "skill-root": "skill",
+        "timeout-ms": "30000"
+      },
+      "environment": [],
+      "stdin": {
+        "kind": "text",
+        "value": "Review a refund of 100 against the limit of 100."
+      }
+    }
+  },
+  "observation": {
+    "probeId": "manifest-exclusive-limit",
+    "interfaceId": "refund-skill",
+    "operationId": "review-refund",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "status": "answered",
+        "decision": "declined",
+        "amount": 100
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+}
