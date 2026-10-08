@@ -4948,6 +4948,48 @@ async function runTests() {
       );
       git(['checkout', 'main'], gitRepo);
 
+      // `npx skills add` links `.claude/skills/<name>` to a canonical `.agents/skills/<name>` folder and git reports the real path,
+      // so a diff to the linked reviewer or knowledge base has to fire the guard under that path too.
+      const linkedRepo = path.join(tmpRoot, 'git-linked');
+      fs.mkdirSync(linkedRepo, { recursive: true });
+      git(['init', '-b', 'main'], linkedRepo);
+      git(['config', 'user.email', 'tea-tests@example.com'], linkedRepo);
+      git(['config', 'user.name', 'TEA Tests'], linkedRepo);
+      git(['config', 'commit.gpgsign', 'false'], linkedRepo);
+      const canonicalSkills = path.join(linkedRepo, '.agents', 'skills');
+      fs.mkdirSync(path.join(canonicalSkills, 'bmad-testarch-test-review'), { recursive: true });
+      fs.copyFileSync(path.join(gitSkillDir, 'SKILL.md'), path.join(canonicalSkills, 'bmad-testarch-test-review', 'SKILL.md'));
+      fs.mkdirSync(path.join(canonicalSkills, 'bmod-tea', 'knowledge'), { recursive: true });
+      fs.copyFileSync(
+        path.join(repoRoot, 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv'),
+        path.join(canonicalSkills, 'bmod-tea', 'knowledge', 'tea-index.csv'),
+      );
+      fs.mkdirSync(path.join(linkedRepo, '.claude', 'skills'), { recursive: true });
+      for (const name of ['bmad-testarch-test-review', 'bmod-tea']) {
+        fs.symlinkSync(path.join('..', '..', '.agents', 'skills', name), path.join(linkedRepo, '.claude', 'skills', name));
+      }
+      fs.mkdirSync(path.join(linkedRepo, 'tests'));
+      fs.writeFileSync(path.join(linkedRepo, 'tests', 'a.spec.ts'), "test('a', () => {});\n");
+      git(['add', '.'], linkedRepo);
+      git(['commit', '-m', 'initial'], linkedRepo);
+      for (const [branch, target] of [
+        ['poison-linked-skill', path.join('.agents', 'skills', 'bmad-testarch-test-review', 'SKILL.md')],
+        ['poison-linked-knowledge', path.join('.agents', 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv')],
+      ]) {
+        git(['checkout', '-b', branch, 'main'], linkedRepo);
+        fs.appendFileSync(path.join(linkedRepo, target), '\npoisoned\n');
+        fs.writeFileSync(path.join(linkedRepo, 'tests', 'a.spec.ts'), `test('${branch}', () => {});\n`);
+        git(['add', '.'], linkedRepo);
+        git(['commit', '-m', branch], linkedRepo);
+        const linkedRun = runCli(['--base', 'main', '--project-root', linkedRepo, '--agent-cmd', stubAgent, '--no-isolate']);
+        assert(
+          linkedRun.status === 2 && linkedRun.stderr.includes('reviewer control plane'),
+          `git fixture: a diff to ${target} fires the control-plane guard when the install is symlinked`,
+          `status=${linkedRun.status} stderr=${linkedRun.stderr}`,
+        );
+        git(['checkout', 'main'], linkedRepo);
+      }
+
       // couture-cast PR #106 end-to-end reproduction: a codex run reported
       // "Convention: priorityMarkers (18 of 40 sampled)" against a repo with zero real
       // P0-P3 markers anywhere. These corpus files exist on `main`, before the review

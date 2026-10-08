@@ -287,11 +287,14 @@ function runTests() {
 
     // Every step file reads the base through {tea-knowledge}; SKILL.md is the one place that says where it is.
     const KNOWLEDGE_DEFINITION = '`{skill-root}/../bmod-tea/knowledge`';
+    const DEFINITION_LINE = new RegExp(String.raw`^- \`\{tea-knowledge\}\` is the .*$`, 'm');
     const usesKnowledge = (dir) =>
       fs.readdirSync(dir, { withFileTypes: true }).some((entry) => {
         const absolute = path.join(dir, entry.name);
         if (entry.isDirectory()) return usesKnowledge(absolute);
-        return entry.name.endsWith('.md') && entry.name !== 'SKILL.md' && fs.readFileSync(absolute, 'utf8').includes('{tea-knowledge}');
+        if (!/\.(md|ya?ml)$/.test(entry.name)) return false;
+        const text = fs.readFileSync(absolute, 'utf8');
+        return (entry.name === 'SKILL.md' ? text.replace(DEFINITION_LINE, '') : text).includes('{tea-knowledge}');
       });
     const undefinedKnowledge = skillDirs.filter((name) => {
       const dir = path.join(skillsRoot, name);

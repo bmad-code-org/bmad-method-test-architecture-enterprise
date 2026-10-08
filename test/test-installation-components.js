@@ -149,10 +149,7 @@ async function runTests() {
       'trace_output',
     ]) {
       assert(!questionKeys.has(gone), `bmod.toml does not ask the v6 key ${gone}, which migration-1.toml moves or drops`);
-      assert(
-        migration.detect.includes(gone) || gone === 'tea_evaluations_folder' || gone === 'ci_platform',
-        `migration-1.toml detects ${gone}`,
-      );
+      assert(migration.detect.includes(gone), `migration-1.toml detects ${gone}`);
     }
 
     // The two moved keys land on keys their skill's customize.toml declares.
@@ -165,7 +162,9 @@ async function runTests() {
     assert(
       typeof evaluateCustomize.workflow?.evaluations_folder === 'string' &&
         migration.guide.includes('bmad-testarch-evaluate.toml') &&
-        migration.guide.includes('bmad-testarch-ci.toml'),
+        migration.guide.includes('bmad-testarch-ci.toml') &&
+        migration.guide.includes('`[workflow]` `evaluations_folder`') &&
+        migration.guide.includes('`[workflow]` `ci_platform`'),
       'migration-1.toml writes evaluations_folder and ci_platform to the customization files of the skills that declare them',
     );
   } catch (error) {

@@ -553,7 +553,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `skills/bmod-tea/` holds the module's `bmod.toml` with nine setup questions, `roster.toml` with Murat, and `help/` for the `bmad` help agent; each skill has a member `bmod.toml`.
   Every skill reads its settings as `modules.tea.<key>` through `resolve_config.py` instead of `_bmad/tea/config.yaml`, and tells the user to run `bmad setup tea` when TEA is not set up.
   A project upgraded from the classic installer keeps its answers: bmad-method 6.12 already wrote them into `_bmad/config.toml`, and `bmad migrate` (TEA's `migration-1.toml`) moves a non-default `ci_platform` and `tea_evaluations_folder` into the customization files of `bmad-testarch-ci` and `bmad-testarch-evaluate`, drops `risk_threshold` and the three output-folder keys, and offers to delete `_bmad/tea/config.yaml` and `_bmad/tea/module-help.csv`.
-  A project with only a `_bmad/tea/config.yaml` runs `bmad setup tea` and answers the nine questions again.
+  A project with only a `_bmad/tea/config.yaml` runs `bmad setup tea` first; `bmad migrate` then offers to restore the answers the YAML recorded wherever setup wrote a default.
   Two settings that only one skill reads moved to that skill's `customize.toml`: `evaluations_folder` (was `tea_evaluations_folder`) in `bmad-testarch-evaluate`, and `ci_platform` in `bmad-testarch-ci`.
   The installer's post-install notes are in `help/integrations.md`.
 - The skills moved from `src/agents/` and `src/workflows/testarch/` to root `skills/`, and `bmod-tea` is `skills/bmod-tea/`.
@@ -564,7 +564,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The classic installer's `_bmad/tea/workflows/testarch/` copy is probed last, so a project upgraded from v6 reviews with the skill it just installed.
   The CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is not beside the skill.
   CI that pins a TEA tarball unpacks the skill from `package/skills/bmad-testarch-test-review` (it was `package/src/workflows/testarch/...`) and copies `package/skills/bmod-tea` beside it; `cli/examples/pr-test-review.yml` shows both.
-- The `tea-test-review` control-plane guard also refuses a diff that edits the `bmod-tea` knowledge base beside the skill, since the reviewer's criteria now live there.
+- The `tea-test-review` control-plane guard also refuses a diff that edits the `bmod-tea` knowledge base beside the skill, since the reviewer's criteria now live there, and it checks both the linked path and the real path of each, so the default `npx skills add` symlink install is guarded.
 - `bmad-testarch-test-design` detects epic-level mode from the active initiative's ticket tree on a v7 project and keeps the `sprint-status.yaml` check as the v6 fallback.
   The Playwright Utils, Pact.js Utils and library mandates name `[modules.tea]` as the flag source, the library mandate no longer asks to verify per-workflow knowledge copies, and generated ATDD checklists no longer point at `sprint-status.yaml` alone.
 - Both live ci capture records (`tagged-release`, `nightly-deploy`) are re-captured with the v7 configuration (`_bmad/config.toml`, `bmod-tea` installed beside the Evaluate skill), since the skill's configuration section changed the digest they pin.

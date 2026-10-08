@@ -880,7 +880,18 @@ function main() {
     const skillInsideProject = relativeSkillRoot === '' || (!relativeSkillRoot.startsWith('..') && !path.isAbsolute(relativeSkillRoot));
     if (skillInsideProject) {
       // The reviewer is the skill plus the bmod-tea knowledge base it reads beside itself, so a diff to either rewrites the gate.
-      const guarded = [relativeSkillRoot, path.relative(projectRoot, path.join(skillRoot, '..', 'bmod-tea'))]
+      // `npx skills add` links `.claude/skills/<name>` to a canonical folder and git reports the real path, so each root is guarded
+      // under its own path and under its resolved path.
+      const realRelative = (absolute) => {
+        try {
+          return path.relative(fs.realpathSync(projectRoot), fs.realpathSync(absolute));
+        } catch {
+          return null;
+        }
+      };
+      const roots = [skillRoot, path.join(skillRoot, '..', 'bmod-tea')];
+      const candidates = roots.flatMap((root) => [path.relative(projectRoot, root), realRelative(root)]);
+      const guarded = [...new Set(candidates.filter((relative) => relative !== null))]
         .filter((relative) => relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative)))
         .map((relative) => (relative === '' ? './' : relative.split(path.sep).join('/') + '/'));
       for (const prefix of guarded) {
