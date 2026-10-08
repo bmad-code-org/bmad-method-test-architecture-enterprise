@@ -263,6 +263,7 @@ class ReportMeter {
     this.burstPeak = 0;
     this.floodPeak = 0;
     this.unsettled = false;
+    this.lost = false;
     this.closing = false;
     this.ended = null;
     this.child = null;
@@ -292,6 +293,12 @@ class ReportMeter {
     const lines = (this.carry + this.decoder.write(chunk)).split('\n');
     this.carry = lines.pop();
     for (const line of lines) {
+      // The meter's stream sees every sandbox report on the host, so it is the stream most likely to lose some: its own loss event
+      // means it counted fewer reports than the kernel logged.
+      if (line.includes('"lossEvent"')) {
+        this.lost = true;
+        continue;
+      }
       const time = line.includes('"eventMessage"') ? eventMicroseconds(line) : null;
       if (time !== null) this.count(time);
     }
@@ -316,7 +323,11 @@ class ReportMeter {
   /** Whether reports came faster than the log was measured to keep them, or the meter ended before it could say they did not. */
   overloaded() {
     return (
-      this.burstPeak >= this.burstReports || this.floodPeak >= this.floodReports || this.unsettled || (this.ended !== null && !this.closing)
+      this.burstPeak >= this.burstReports ||
+      this.floodPeak >= this.floodReports ||
+      this.unsettled ||
+      this.lost ||
+      (this.ended !== null && !this.closing)
     );
   }
 

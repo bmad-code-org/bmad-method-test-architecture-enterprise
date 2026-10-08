@@ -5628,6 +5628,7 @@ async function checkAuditChannelUnits() {
   });
   chunked.take(Buffer.from(`Filtering the log data using "x"\n${event}\n${event.slice(0, 30)}`));
   chunked.take(Buffer.from(`${event.slice(30)}\n{"eventType":"lossEvent"}\n`));
+  check(chunked.lost && chunked.overloaded(), 'a meter whose own stream reported lost events was not overloaded');
   check(
     chunked.total === 2 && chunked.burstPeak === 2,
     `a meter fed a header, two events split across chunks and a loss event counted ${chunked.total} reports`,

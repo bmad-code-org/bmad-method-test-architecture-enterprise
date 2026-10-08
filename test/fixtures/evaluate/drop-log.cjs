@@ -23,7 +23,12 @@ const [dropped, flood, pidDirectory, ...given] = process.argv.slice(2);
 const args = given.map((argument, index) => (given[index - 1] === '--timeout' ? '60s' : argument));
 const meter = given.some((argument) => argument.includes('Sandbox: "'));
 const child = spawn('/usr/bin/log', args, { stdio: ['ignore', 'pipe', 'inherit'] });
-fs.writeFileSync(path.join(pidDirectory, `log-${child.pid}`), `${child.pid}\n`);
+try {
+  fs.writeFileSync(path.join(pidDirectory, `log-${child.pid}`), `${child.pid}\n`);
+} catch (error) {
+  child.kill('SIGKILL');
+  throw error;
+}
 
 if (meter) {
   const line = JSON.stringify({
