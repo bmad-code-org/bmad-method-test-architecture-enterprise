@@ -63,13 +63,16 @@ const {
   verdictFor,
   scoreFails,
   rawScoreForViolations,
+  findingBlockSpans,
+  assessmentForRecommendation,
   PARSED_VERDICT_KEYS,
 } = require('./lib/parse-report');
 const { getDiffEvidence, applyFindingProvenance, subtractCounts } = require('./lib/diff-evidence');
+const { scopeReportToPullRequest, restateVerdictLines } = require('./lib/pr-scope-report');
 const { computeConventionBaseline } = require('./lib/convention-baseline');
 const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
-const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
+const { AGENT_ADAPTERS, resolveModel, resolvedModelFromAnswer, agentAnswerText } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
@@ -152,6 +155,7 @@ const VERDICT_KEYS = {
     files: 'array',
     agent: 'string',
     model: null,
+    reviewMode: 'string',
     gateOn: 'string',
     gatingQualityScore: 'number',
     gatingViolations: 'object',
@@ -165,7 +169,6 @@ const VERDICT_KEYS = {
     waived: 'boolean',
     waiveReason: 'string',
     waiveUntil: 'string',
-    allFindingsRecommendation: 'string',
   },
 };
 
@@ -279,9 +282,9 @@ function boundedAgentOutputTail(value) {
   return byLines.length > AGENT_OUTPUT_TAIL_CHARS ? byLines.slice(-AGENT_OUTPUT_TAIL_CHARS) : byLines;
 }
 
-function printMissingReportDiagnostics(agentResult) {
+function printMissingReportDiagnostics(agentResult, agent) {
   for (const [label, value] of [
-    ['stdout', agentResult && agentResult.stdout],
+    ['stdout', agentResult && agentAnswerText(agent, agentResult.stdout)],
     ['stderr', agentResult && agentResult.stderr],
   ]) {
     const tail = boundedAgentOutputTail(value);
@@ -364,8 +367,13 @@ function writeReportArtifact(artifactPath, temporaryPath, content) {
   });
 }
 
-function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
-  const advisory = findings.filter((finding) => !finding.verdict_impact);
+/**
+ * The pull request gate, appended after provenance is known. `excluded` counts
+ * the findings the report left out because they sit on lines the pull request did
+ * not change; none of them is named, since the verdict carries none.
+ */
+function appendPullRequestGate(report, recommendation, qualityScore, excluded) {
+  const eol = report.includes('\r\n') ? '\r\n' : '\n';
   const lines = [
     '',
     '## PR Delta Gate',
@@ -374,20 +382,62 @@ function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
     `**Gate Recommendation**: ${recommendation}`,
     `**Gate Quality Score**: ${qualityScore}/100`,
   ];
-  if (advisory.length === 0) {
-    lines.push('', 'No pre-existing findings were excluded from the PR verdict.');
-  } else {
-    lines.push('', '### Pre-existing Findings (Advisory)', '');
-    for (const finding of advisory) {
-      const location = finding.file ? `${finding.file}${finding.line === null ? '' : `:${finding.line}`}` : 'location unavailable';
-      lines.push(
-        `- **${finding.severity || 'Unscored'} ${finding.row}: ${finding.title}** — ${location}`,
-        `  - Changed-line evidence: ${finding.changed_line_evidence.reason}.`,
-        '  - Verdict impact: no.',
-      );
-    }
+  if (excluded > 0) {
+    lines.push(
+      '',
+      `${excluded} finding${excluded === 1 ? '' : 's'} on lines this pull request did not change ${excluded === 1 ? 'was' : 'were'} left out of this report.`,
+    );
   }
-  return `${report.trimEnd()}\n${lines.join('\n')}\n`;
+  return `${report.trimEnd()}${eol}${lines.join(eol)}${eol}`;
+}
+
+/**
+ * Put the review mode in the report, whatever the agent wrote. The mode is a fact
+ * of the invocation, so the CLI states it: it replaces the template's old
+ * "Review Scope" line, or an agent-written "Review Mode" line, and adds the line
+ * above the Executive Summary when neither is there.
+ */
+function stampReviewMode(report, reviewMode) {
+  const line = `**Review Mode**: ${reviewMode}`;
+  const existing = /^[ \t]*\*\*Review (?:Scope|Mode)\*\*:[^\r\n]*(\r?)$/;
+  const lines = report.split('\n');
+  const first = lines.findIndex((entry) => existing.test(entry));
+  if (first !== -1) {
+    // One mode line: the first is restated, any later Review Scope or Review Mode line goes.
+    return lines
+      .flatMap((entry, index) => {
+        if (index === first) return [entry.replace(existing, `${line}$1`)];
+        return existing.test(entry) ? [] : [entry];
+      })
+      .join('\n');
+  }
+  const summary = /^## Executive Summary[ \t]*$/m.exec(report);
+  return summary ? `${report.slice(0, summary.index)}${line}\n\n${report.slice(summary.index)}` : `${report.trimEnd()}\n\n${line}\n`;
+}
+
+/** Per finding block, the end of a `path:4-8` Location range, or null. */
+function locationEnds(report, spans) {
+  const lines = report.split('\n');
+  return spans.map((span) => {
+    for (let index = span.start; index < span.end; index += 1) {
+      if (!/^\*\*Location:?\*\*/.test(lines[index])) continue;
+      const range = /:(\d+)\s*[-–]\s*(\d+)/.exec(lines[index]);
+      return range ? Number.parseInt(range[2], 10) : null;
+    }
+    return null;
+  });
+}
+
+/** The changed ranges of each review file as the prompt states them: "7" or "10-14". */
+function changedLinesForPrompt(diffEvidence) {
+  const entries = (evidence) => [
+    ...evidence.changedRanges.map((range) => (range.start === range.end ? String(range.start) : `${range.start}-${range.end}`)),
+    ...evidence.deletedAfter.map((line) => `deleted-after:${line}`),
+  ];
+  return Object.fromEntries([
+    ...[...diffEvidence].map(([file, evidence]) => [file, entries(evidence)]),
+    ...[...(diffEvidence.contexts ?? [])].map(([file, evidence]) => [file, entries(evidence)]),
+  ]);
 }
 
 /** Case-folded where the filesystem usually is, so `R.md` and `r.md` are one file there. */
@@ -900,6 +950,10 @@ async function runReview(session) {
   // git, so it produces a review set and no context.
   const filesProvided = options.files.length > 0;
   const gateOn = options.gateOn ?? (filesProvided ? 'all' : 'introduced');
+  // A review that gates on what the pull request introduced is a pull request
+  // review: it scores and reports only what the PR owns. --files and --gate-on all
+  // score whole files.
+  const reviewMode = gateOn === 'introduced' ? 'pr' : 'full-file';
   if (filesProvided && gateOn === 'introduced') {
     fail(
       EXIT.ENV_ERROR,
@@ -948,7 +1002,7 @@ async function runReview(session) {
     } else {
       allChangedFiles = getChangedFiles({ base: baseRef, projectRoot });
       changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
-      diffEvidence = getDiffEvidence({ base: baseRef, projectRoot, files: changedTestFiles });
+      diffEvidence = getDiffEvidence({ base: baseRef, projectRoot, files: changedTestFiles, contextFiles: allChangedFiles });
       ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
       unscorableTestArtifacts = getUnscorableTestArtifacts(allChangedFiles);
     }
@@ -1070,6 +1124,8 @@ async function runReview(session) {
       files: changedTestFiles,
       outputPath,
       scope: options.scope,
+      reviewMode,
+      changedLines: changedLinesForPrompt(diffEvidence),
       testDir: options.testDir,
       teaConfig,
       installedPackages,
@@ -1243,6 +1299,8 @@ async function runReview(session) {
       files: changedTestFiles,
       outputPath: agentOutputPath,
       scope: options.scope,
+      reviewMode,
+      changedLines: changedLinesForPrompt(diffEvidence),
       testDir: options.testDir,
       teaConfig,
       installedPackages,
@@ -1268,13 +1326,22 @@ async function runReview(session) {
           cwd: agentCwd,
           envPass: options.envPass,
           spawnPrefix,
+          // The structured answer is where the agent names the model that ran.
+          usageReport: AGENT_ADAPTERS[options.agent]?.reportsResolvedModel === true,
         });
       } finally {
         stopHeartbeat();
       }
 
+      const ranModel = resolvedModelFromAnswer(options.agent, agentResult.stdout);
+      if (ranModel !== null) {
+        resolvedModel = ranModel;
+        reviewProvenance.modelIdentifier = ranModel;
+        reviewProvenance.sources.modelIdentifier = 'model ID reported by the agent run';
+      }
+
       if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
-        printMissingReportDiagnostics(agentResult);
+        printMissingReportDiagnostics(agentResult, options.agent);
         const error = new Error(
           `Agent finished but no fresh report was written to ${agentOutputPath}; refusing to parse a stale or missing report.`,
         );
@@ -1290,27 +1357,125 @@ async function runReview(session) {
         copyReportArtifact(agentOutputPath, outputPath, copiedReportTemporaryPath);
       }
 
-      const rawReport = fs.readFileSync(agentOutputPath, 'utf8');
-      let parsed;
-      try {
-        parsed = parseReport(rawReport, {
-          reviewedFiles: changedTestFiles,
-          contextFiles,
-          contextBasis,
-          unscorableTestArtifacts,
-          conventionBaseline,
-          registryRowSeverities,
-        });
-      } catch (error) {
-        if (error.code === 'REPORT_UNPARSEABLE') {
-          const wrapped = new Error(`${error.message} (report: ${outputPath})`);
-          wrapped.code = 'REPORT_UNPARSEABLE';
-          throw wrapped;
+      let rawReport = fs.readFileSync(agentOutputPath, 'utf8');
+      const parseAgentReport = (text) => {
+        try {
+          return parseReport(text, {
+            reviewedFiles: changedTestFiles,
+            contextFiles,
+            contextBasis,
+            unscorableTestArtifacts,
+            conventionBaseline,
+            registryRowSeverities,
+          });
+        } catch (error) {
+          if (error.code === 'REPORT_UNPARSEABLE') {
+            const wrapped = new Error(`${error.message} (report: ${outputPath})`);
+            wrapped.code = 'REPORT_UNPARSEABLE';
+            throw wrapped;
+          }
+          throw error;
         }
-        throw error;
+      };
+
+      let parsed = parseAgentReport(rawReport);
+
+      // A pull request review is scoped to the pull request. The prompt asks the agent
+      // to write up only what the PR owns; a finding that still sits on a line the PR
+      // did not change is cut from the report and the verdict, one attributed to a
+      // changed line is cited there, and the result is re-validated by the same strict
+      // parse. The finding blocks must line up with the parsed findings one to one, or
+      // the cut could remove the wrong one.
+      const provenanceOf = (text, report) => {
+        if (reviewMode !== 'pr') {
+          return { findings: applyFindingProvenance(report.findings, diffEvidence, gateOn), spans: null };
+        }
+        const spans = findingBlockSpans(text, registryRowSeverities);
+        if (spans.length !== report.findings.length) {
+          const error = new Error(
+            `The report's ${spans.length} finding blocks and the ${report.findings.length} findings the parser read disagree, so the pull request scope cannot be applied safely (report: ${outputPath}).`,
+          );
+          error.code = 'REPORT_UNPARSEABLE';
+          throw error;
+        }
+        return { findings: applyFindingProvenance(report.findings, diffEvidence, gateOn, locationEnds(text, spans)), spans };
+      };
+      let classified = provenanceOf(rawReport, parsed);
+      parsed.findings = classified.findings;
+
+      let excludedFindings = 0;
+      if (reviewMode === 'pr') {
+        const drop = parsed.findings.map((finding) => !finding.verdict_impact);
+        excludedFindings = drop.filter(Boolean).length;
+        const attributed = parsed.findings
+          .map((finding, index) => ({ finding, index }))
+          .filter(({ finding }) => finding.verdict_impact && finding.changed_line_evidence?.symptomLine !== undefined);
+        if (excludedFindings > 0 || attributed.length > 0) {
+          const outOfScope = parsed.findings.filter((finding) => !finding.verdict_impact);
+          const violations = subtractCounts(parsed.violations, outOfScope);
+          const rawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, violations);
+          const { qualityScore, scoreCap, scoreOverrideRule } = effectiveScoreFor(rawQualityScore, violations);
+          const recommendation = deriveRecommendation(violations, qualityScore);
+          const scoped = scopeReportToPullRequest(rawReport, {
+            spans: classified.spans,
+            findings: parsed.findings,
+            drop,
+            violations,
+            recommendation,
+            scores: { raw: rawQualityScore, cap: scoreCap, effective: qualityScore },
+          });
+          rawReport = normalizeReportScore(scoped, {
+            recommendation,
+            qualityScore,
+            rawQualityScore,
+            scoreCap,
+            scoreOverrideRule,
+            verdictRule: verdictRuleFor(violations, qualityScore),
+          });
+          const firstPass = parsed.findings;
+          const expected = parsed.findings.length - excludedFindings;
+          parsed = parseAgentReport(rawReport);
+          classified = provenanceOf(rawReport, parsed);
+          // The cut keeps the findings in order, so the kept finding at a position is the one the first pass attributed.
+          const keptFirstPass = firstPass.filter((_, index) => !drop[index]);
+          parsed.findings = classified.findings.map((finding, index) => {
+            const first = keptFirstPass[index];
+            const same =
+              first &&
+              first.changed_line_evidence?.symptomLine !== undefined &&
+              first.file === finding.file &&
+              first.row === finding.row &&
+              first.line === finding.line;
+            return same
+              ? {
+                  ...finding,
+                  file: first.file,
+                  path: first.path,
+                  provenance: first.provenance,
+                  changed_line_evidence: first.changed_line_evidence,
+                }
+              : finding;
+          });
+          if (parsed.findings.length !== expected || parsed.findings.some((finding) => !finding.verdict_impact)) {
+            const error = new Error(
+              `The pull request scope did not leave exactly the ${expected} finding(s) on lines the pull request changed (report: ${outputPath}).`,
+            );
+            error.code = 'REPORT_UNPARSEABLE';
+            throw error;
+          }
+          rawReport = restateVerdictLines(rawReport, {
+            recommendation: parsed.recommendation,
+            assessment: assessmentForRecommendation(parsed.recommendation, parsed.qualityScore),
+          });
+          if (excludedFindings > 0) {
+            console.error(
+              `tea-test-review: left ${excludedFindings} finding${excludedFindings === 1 ? '' : 's'} on lines the pull request did not change out of the report and the verdict.`,
+            );
+          }
+        }
       }
 
-      const normalizedReport = normalizeReportScore(rawReport, parsed);
+      const normalizedReport = stampReviewMode(normalizeReportScore(rawReport, parsed), reviewMode);
       writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
       if (parsed.reportedQualityScore !== undefined) {
         console.error(
@@ -1329,22 +1494,17 @@ async function runReview(session) {
             `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
         );
       }
-      const allFindingsRecommendation = parsed.recommendation;
-      parsed.findings = applyFindingProvenance(parsed.findings, diffEvidence, gateOn);
+      // Findings still outside the gate (--gate-on all never has any) change nothing
+      // below; in a pull request review none remain.
       const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
       const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
       const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
       const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
-      const gatingRecommendation = deriveRecommendation(gatingViolations, gatingQualityScore);
-      const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore, advisoryFindings.length);
-      if (gateOn === 'introduced') {
-        parsed.recommendation = gatingRecommendation;
-        parsed.verdictRule = gatingVerdictRule;
-        const currentReport = fs.readFileSync(outputPath, 'utf8');
+      if (reviewMode === 'pr') {
         writeReportArtifact(
           outputPath,
           normalizedReportTemporaryPath,
-          appendDeltaAdvisory(currentReport, parsed.findings, gatingRecommendation, gatingQualityScore),
+          appendPullRequestGate(fs.readFileSync(outputPath, 'utf8'), parsed.recommendation, gatingQualityScore, excludedFindings),
         );
       }
       const gated = { ...parsed, gatingQualityScore, gatingViolations };
@@ -1362,15 +1522,13 @@ async function runReview(session) {
         files: parsed.reviewedFiles,
         agent: options.agent,
         model: resolvedModel,
+        reviewMode,
         gateOn,
         gatingQualityScore,
         gatingViolations,
         reviewProvenance,
         ...parsed,
       };
-      if (allFindingsRecommendation !== gatingRecommendation) {
-        verdictPayload.allFindingsRecommendation = allFindingsRecommendation;
-      }
       // Also CLI-computed, so a consumer reading only the verdict learns that a
       // changed test artifact went unscored. parseReport separately refuses a
       // report that dropped any of these from its disclosure section.

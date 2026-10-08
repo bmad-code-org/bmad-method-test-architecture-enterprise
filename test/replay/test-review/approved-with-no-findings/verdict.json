@@ -10,6 +10,7 @@
   "files": ["playwright/tests/home.spec.ts"],
   "agent": "codex",
   "model": null,
+  "reviewMode": "full-file",
   "gateOn": "all",
   "gatingQualityScore": 98,
   "gatingViolations": {

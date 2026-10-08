@@ -21,7 +21,7 @@ inputDocuments:
 **Score Cap**: 79/100
 **Score Override Rule**: Highest severity High caps effective score at 79: min(raw deduction score 97, 79) = 79.
 **Review Date**: 2026-08-17
-**Review Scope**: single
+**Review Mode**: pr
 **Reviewer**: TEA Agent
 
 ---

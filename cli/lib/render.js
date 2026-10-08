@@ -109,8 +109,9 @@ function severityLabel(severity) {
 }
 
 function findingLocation(finding) {
-  if (!isNonEmptyString(finding.file)) return 'location unavailable';
-  return Number.isInteger(finding.line) ? `${finding.file}:${finding.line}` : finding.file;
+  const file = isNonEmptyString(finding.path) ? finding.path : finding.file;
+  if (!isNonEmptyString(file)) return 'location unavailable';
+  return Number.isInteger(finding.line) ? `${file}:${finding.line}` : file;
 }
 
 /**

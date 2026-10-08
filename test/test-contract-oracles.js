@@ -2557,7 +2557,6 @@ const FROZEN_CONDITIONAL_TYPES = {
     waived: 'boolean',
     waiveReason: 'string',
     waiveUntil: 'string',
-    allFindingsRecommendation: 'string',
   },
   'trace.contract.json': { waivers: 'object', gate_status: 'string', gate_criteria: 'object' },
 };
@@ -2576,6 +2575,7 @@ const FROZEN_EMITTED_KEYS = {
     files: 'array',
     agent: 'string',
     model: null,
+    reviewMode: 'string',
     gateOn: 'string',
     gatingQualityScore: 'number',
     gatingViolations: 'object',

@@ -14,6 +14,14 @@
  *                      forbidden-write | stale-copy | fabricated-convention |
  *                      honest-absent-convention | fabricated-critical-count |
  *                      honest-critical-count
+ *   STUB_FIXTURE       report fixture file name under reports/ (or an absolute path),
+ *                      written in place of the STUB_MODE report
+ *   STUB_MODEL_USAGE   JSON object printed on stdout as the `modelUsage` of a
+ *                      claude-style answer, only when argv asks for
+ *                      `--output-format json`, so a test can prove the verdict
+ *                      records the model that ran and that the flag is sent
+ *   STUB_PROMPT_OUT    path the stdin prompt is copied to, so a test can read
+ *                      the prompt the agent run received
  *   STUB_ASSERT_STDIN  when "1", fail if the prompt did not arrive on stdin or
  *                      if any of it leaked into argv
  *   STUB_ASSERT_MODEL  expected model value; fail unless argv carries a model
@@ -120,6 +128,18 @@ if (process.env.STUB_COUNTER) {
   const invocation = (fs.existsSync(counterPath) ? Number(fs.readFileSync(counterPath, 'utf8')) : 0) + 1;
   fs.writeFileSync(counterPath, String(invocation));
   if (invocation <= Number(process.env.STUB_FIRST_ATTEMPTS || 1)) mode = process.env.STUB_FIRST_MODE || mode;
+}
+
+if (process.env.STUB_PROMPT_OUT) {
+  fs.writeFileSync(process.env.STUB_PROMPT_OUT, prompt);
+}
+
+// Only a run asked for the structured answer (`--output-format json`) gets one, as with the real CLI.
+const jsonRequested = process.argv.some((arg, index) => arg === 'json' && process.argv[index - 1] === '--output-format');
+if (process.env.STUB_MODEL_USAGE && jsonRequested) {
+  process.on('exit', () => {
+    fs.writeSync(1, `${JSON.stringify({ type: 'result', result: 'done', modelUsage: JSON.parse(process.env.STUB_MODEL_USAGE) })}\n`);
+  });
 }
 
 if (mode === 'fail') {
@@ -247,7 +267,7 @@ function bindReportToPrompt(report) {
 
 function writeFixtureReport(fixtureName) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const report = fs.readFileSync(path.join(__dirname, 'reports', fixtureName), 'utf8');
+  const report = fs.readFileSync(path.isAbsolute(fixtureName) ? fixtureName : path.join(__dirname, 'reports', fixtureName), 'utf8');
   fs.writeFileSync(outputPath, bindReportToPrompt(report));
   if (process.env.STUB_LOCK_OUTPUT === '1') {
     fs.chmodSync(outputPath, 0o444);
@@ -426,7 +446,7 @@ if (mode === 'stale-copy') {
   process.exit(0);
 }
 
-const fixture = REPORTS[mode];
+const fixture = process.env.STUB_FIXTURE || REPORTS[mode];
 if (!fixture) {
   console.error(`stub-agent: unknown STUB_MODE "${mode}"`);
   process.exit(95);

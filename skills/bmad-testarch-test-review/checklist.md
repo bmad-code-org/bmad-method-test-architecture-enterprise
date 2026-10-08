@@ -502,7 +502,7 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 Record any issues, observations, or important context during workflow execution:
 
 - **Test Framework**: [Playwright, Jest, Cypress, etc.]
-- **Review Scope**: [single file, directory, full suite]
+- **Review Mode**: [pr, full-file]
 - **Quality Score**: [0-100 score, letter grade]
 - **Critical Issues**: [Count of P0/P1 violations]
 - **Recommendation**: [Approve / Approve with Comments / Request Changes / Block]

@@ -12,6 +12,7 @@
   "files": ["playwright/tests/api/auth-signup-age-gate.spec.ts", "packages/db/test/rls-policies.spec.ts"],
   "agent": null,
   "model": null,
+  "reviewMode": "full-file",
   "gateOn": "all",
   "gatingQualityScore": 83,
   "gatingViolations": {
