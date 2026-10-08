@@ -6,7 +6,8 @@
  * command line (`--skill-root`, `--agent-arg=--json-schema=<schema>`, the prompt on stdin) and prints one JSON object.
  *
  * What it reads: the exit table and the sentence on a request with no usable exit in `references/gaps.md`, and the
- * sentence of `references/inspection.md` that states the web-application rule. It reads nothing else, so it stands in
+ * sentence of `references/inspection.md` that sends a web application to its target kind with the mapping row of that
+ * kind, which gives its interface kind. It reads nothing else, so it stands in
  * for the model on exactly the four questions the evaluation asks. It does not follow `SKILL.md` to a stage and it takes
  * the first statement of a rule it finds, so stage routing and a second, contradicting statement are left to the live
  * run and to `test:evaluate-guidance`.
@@ -50,10 +51,12 @@ if (properties.has('exits')) {
   reply.status = 'answered';
   reply.exits = exitTable();
 } else if (properties.has('targetKind')) {
-  const rule = /A web application is an `([a-z-]+)` target reached as `([a-z]+)`/.exec(guide('inspection.md'));
+  const inspection = guide('inspection.md');
+  const kind = /A web application is an `([a-z-]+)` target/.exec(inspection)?.[1];
+  const row = kind === undefined ? null : new RegExp(`^\\|\\s*\`${kind}\`\\s*\\|\\s*\`([a-z]+)\`\\s*\\|`, 'm').exec(inspection);
   reply.status = 'answered';
-  reply.targetKind = rule?.[1] ?? 'unknown';
-  reply.interface = rule?.[2] ?? 'unknown';
+  reply.targetKind = kind ?? 'unknown';
+  reply.interface = row?.[1] ?? 'unknown';
 } else if (properties.has('exit11')) {
   reply.status = 'answered';
   reply.exit11 = classOf(`tea-evaluate ${exitsNamed[0]}`);

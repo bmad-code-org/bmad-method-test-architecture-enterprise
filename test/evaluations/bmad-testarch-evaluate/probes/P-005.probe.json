@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-002",
   "expectedClean": false,
-  "rationale": "[representative] Seeded defect: M-003 changes the one sentence that states the web-application rule to the web interface kind, which no contract may declare.",
+  "rationale": "[representative] Seeded defect: M-003 changes the ai-feature row of the mapping table, which gives a web application's interface kind, to the web interface kind, which no contract may declare.",
   "defects": [
     {
       "defectId": "D-003",

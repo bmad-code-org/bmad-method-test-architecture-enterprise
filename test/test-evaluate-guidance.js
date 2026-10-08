@@ -177,7 +177,7 @@ function checkInspection(inspection, failures) {
   if (actualRows.some((row) => row[1] === '`web`')) failures.push('inspection.md emits web as an interface');
   for (const marker of [
     'ask a clarifying question',
-    'A web application is an `ai-feature` target reached as `api`',
+    'A web application is an `ai-feature` target, including a web application with no AI behavior, and takes the interface kind of the `ai-feature` row',
     'Record `targetKind` only in `evaluation.json`',
     'which provider model is better',
     'Provider A is its fixed model',
@@ -191,8 +191,8 @@ function checkInspection(inspection, failures) {
     'incident notes',
   ])
     requireText(inspection, marker, 'inspection.md', failures);
-  // Story 1.46: the dogfood suite's seeded B-002 probe edits this one sentence, and a mutation that edits one place
-  // qualifies only while the rule is stated in that place alone. The word `web`, `webapp` or `website` appears in one line of the skill, the
+  // Story 1.46: the dogfood suite's seeded B-002 probe edits the `ai-feature` row this sentence defers to, and a mutation that
+  // edits one place qualifies only while the rule is stated in that place alone. The word `web`, `webapp` or `website` appears in one line of the skill, the
   // sentence of inspection.md that states the rule, so a second line naming it (a restatement in any spelling, a bare
   // `API` or an unquoted `AI feature` included) fails here and the seed's mutation could no longer manifest.
   {
@@ -3790,7 +3790,7 @@ function checkGapsGuidance(guide, engine, failures) {
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   checkIsolationViolationGuidance(guide, failures);
   // Stories 1.61 and 1.46: each dogfood mutation replaces bytes of a guide exactly once, so the exit-table rows M-001, M-002 and
-  // M-004 edit and the sentence M-003 edits stay as they are.
+  // M-004 edit and the mapping row M-003 edits stay as they are.
   const mutationFolder = path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations');
   const mutationFiles = fs.readdirSync(mutationFolder).sort();
   if (mutationFiles.length === 0) failures.push('the dogfood evaluation holds no mutation for gaps.md to keep intact');

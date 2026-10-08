@@ -746,6 +746,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Evaluate skill states the web-application rule in two parts of its inspection guide, each said once: the sentence sends a web application to the `ai-feature` target kind, and the `ai-feature` row of the mapping table gives that kind's interface, `api`.
+  Once the table named `ai-feature` by its value, the sentence's own "reached as `api`" restated the row, and the dogfood evaluation's seeded web-application defect, which edited the sentence alone, stopped manifesting: the live model answered from the row (`api`) in place of the edited sentence (`web`), so P-005's mutated arm held and the run exited 11.
+  M-003 now edits the row; live, the clean arm answered `api` and the mutated arm `web` in 6 of 6 trials each.
 - Evaluate workspaces are copy-on-write clones on macOS (APFS) and on Linux file systems with reflinks (btrfs, XFS), so a run no longer fills the disk.
   Node's `fs.cpSync` and `fs.copyFileSync` ignore `COPYFILE_FICLONE` on macOS and copy every byte, so the pristine, qualify and mutated workspaces each cost the full size of the project's provisioned `node_modules` (2.8 GB for TeA's own evaluation, 6 GB of free space gone for the pristine plus one qualify workspace); a run on a host with 11 GB free died with `ENOSPC` and exit 12 after 33 minutes.
   The workspace copy and the staged copy of a directory now run the system `cp` (`cp -c` on macOS, `cp --reflink=auto` on Linux), one command per directory that holds nothing left out, so a clone costs almost no space and a file system without clones gets a plain copy.

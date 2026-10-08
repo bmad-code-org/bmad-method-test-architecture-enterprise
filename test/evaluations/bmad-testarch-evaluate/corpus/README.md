@@ -10,7 +10,7 @@ The target is TeA's Evaluate skill, run by the generic skill runner over `skills
 | P-002 | `[representative]` | B-001    | defect      | controlled-mutation | M-001: the exit 11 row of the exit table reads infrastructure                                    |
 | P-003 | `[held-out]`       | B-001    | defect      | controlled-mutation | M-002: the exit 12 row of the exit table reads evaluation weakness                               |
 | P-004 | `[representative]` | B-002    | zero-action | clean-control       | Nothing: a web application with no AI features is `ai-feature` over `api`                        |
-| P-005 | `[representative]` | B-002    | defect      | controlled-mutation | M-003: the sentence that states the web-application rule names the `web` interface kind          |
+| P-005 | `[representative]` | B-002    | defect      | controlled-mutation | M-003: the `ai-feature` row of the mapping table names the `web` interface kind                  |
 | P-006 | `[representative]` | B-003    | zero-action | clean-control       | Nothing: Stage 11 lists all thirteen exit table rows, each with the class its row gives          |
 | P-007 | `[representative]` | B-003    | defect      | controlled-mutation | M-004: the `tea-evaluate 13` row is gone, so Stage 11 lists twelve rows                          |
 | P-008 | `[malformed]`      | B-004    | zero-action | clean-control       | Nothing: a request whose `exit` field has the wrong type names no usable exit, and gets no class |
@@ -29,7 +29,7 @@ The four engine rules that Story 1.16's run left unsatisfied are closed in the c
 
 ## Single source of the web-application rule
 
-The web-application rule is stated once in the skill: the sentence in `references/inspection.md` that sends a web application to `ai-feature` reached as `api`. `references/adapters.md` and `references/corpus.md` leave it out, and the guidance test fails when a second statement appears. M-003 edits that one sentence, and the preflight's mutated arm shows the reply carry `web`, so P-005 qualifies. B-002 has no held-out probe: P-003 is the held-out probe of the folder, and one mutation of a single sentence does not give a second, independent seed for the same rule.
+The web-application rule is stated once in the skill, in two parts of `references/inspection.md`: its sentence sends a web application to the `ai-feature` kind, and the `ai-feature` row of its mapping table gives that kind's interface, `api`. Neither part restates the other, `references/adapters.md` and `references/corpus.md` leave the rule out, and the guidance test fails when a second statement of a web application appears. M-003 edits the row, and the preflight's mutated arm shows the reply carry `web`, so P-005 qualifies. When the sentence also named the interface, a mutation of the sentence alone contradicted the row and the model answered from the row. B-002 has no held-out probe: P-003 is the held-out probe of the folder, and one mutation of a single sentence does not give a second, independent seed for the same rule.
 
 ## Reply vocabulary and refused
 
