@@ -1,0 +1,1919 @@
+{
+  "schemaVersion": 7,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "bmad-testarch-test-review",
+  "sourceSpecDigest": "sha256:8825c6cabb08dde577bf13670b7119b06ddbb26513eb7b11428c1cc6eece010f",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "A pull request that adds clean lines to a test file holding old defects passes the gate with zero gating findings, and its report names no finding on a line the pull request did not touch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Reviewing the beside-old fixture exits 0 with recommendation Approve and an empty findings array.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-001"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "old-line-findings-in-pr-report"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "A defect the pull request introduces fails the gate (exit 1), with a gating finding located on the added line.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Reviewing the adds-defects fixture exits 1, recommends Request Changes or Block, and carries a gating H1 finding inside an added hard-wait test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-002"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "introduced-defect-passes-gate"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    },
+    {
+      "id": "B-003",
+      "description": "A test function the pull request adds is classified as introduced, whether the review runs on the head commit or on the merge commit.",
+      "severity": "material",
+      "observableSuccessCriterion": "No finding on an added line of the adds-defects (head) or merge-review (merge) fixture is pre_existing, and each carries a gating finding on its added lines.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-003"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "added-test-classified-pre-existing"
+        }
+      ],
+      "oracles": [
+        "O-003"
+      ]
+    },
+    {
+      "id": "B-004",
+      "description": "New setup that makes an unchanged assertion ineffective is a gating finding located on the changed setup line.",
+      "severity": "material",
+      "observableSuccessCriterion": "Reviewing the setup-change fixture exits 1 with a gating finding.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-004"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "setup-regression-missed"
+        }
+      ],
+      "oracles": [
+        "O-004"
+      ]
+    },
+    {
+      "id": "B-005",
+      "description": "Two distinct defects under one registry row stay two findings, each with its own title and location.",
+      "severity": "material",
+      "observableSuccessCriterion": "The adds-defects review carries one H1 finding inside each of the two hard-wait tests.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-005"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "same-row-findings-collapse"
+        }
+      ],
+      "oracles": [
+        "O-005"
+      ]
+    },
+    {
+      "id": "B-006",
+      "description": "A parameter-driven branch that asserts the expected value on every path is not a High finding. An assertion chosen by control flow over the system output is High.",
+      "severity": "material",
+      "observableSuccessCriterion": "The adds-defects review carries an H3 finding in the output-selected test and no High or Critical finding in the redundant-branch test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-006"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "h3-redundant-branch-rated-high"
+        }
+      ],
+      "oracles": [
+        "O-006"
+      ]
+    },
+    {
+      "id": "B-007",
+      "description": "A type-assignability test in a repository whose CI runs a type checker is not a High value-assertion finding. A value test that accepts every wrong value of the right shape is High.",
+      "severity": "material",
+      "observableSuccessCriterion": "The adds-defects review carries an H10 finding in the shape-only test and no High or Critical finding in the covariance test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-007"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "h10-type-test-rated-high"
+        }
+      ],
+      "oracles": [
+        "O-007"
+      ]
+    },
+    {
+      "id": "B-008",
+      "description": "Criteria that do not apply to the repository are absent from the verdict, and wall-clock duration is reported as not measured when nothing executed the tests.",
+      "severity": "low",
+      "observableSuccessCriterion": "The full-file review of a Python repository carries no finding under a Playwright-utils or Pact row.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-008"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "inapplicable-criteria-reported"
+        }
+      ],
+      "oracles": [
+        "O-008"
+      ]
+    },
+    {
+      "id": "B-009",
+      "description": "An explicit full-file review (--files) reports every seeded old defect and names its mode as full-file. A pull request review names its mode as pr.",
+      "severity": "material",
+      "observableSuccessCriterion": "The full-file review carries a finding inside each of the twelve seeded tests and reviewMode full-file; the beside-old review carries reviewMode pr.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-009"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "full-file-findings-lost"
+        }
+      ],
+      "oracles": [
+        "O-009"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "A pull request that adds one clean test next to old defects passes the gate, and its verdict carries no finding at all: every old defect sits on a line the pull request did not touch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code, recommendation and findings array of the beside-old review.",
+        "negativeDomain": "A failing exit, a recommendation other than Approve, or any finding, including a pre-existing one reported as advisory.",
+        "evidenceTargets": [
+          "/interactions/beside-old/exit-code",
+          "/interactions/beside-old/stdout/recommendation",
+          "/interactions/beside-old/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/beside-old/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/beside-old/stdout/recommendation"
+              },
+              {
+                "literal": "Approve"
+              }
+            ]
+          },
+          {
+            "op": "count-tolerance",
+            "operands": [
+              {
+                "pointer": "/interactions/beside-old/stdout/findings"
+              }
+            ],
+            "expected": 0,
+            "tolerance": 0,
+            "relative": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "Hard waits the pull request adds fail the gate: the review exits 1 and a gating H1 finding sits on an added line.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code, recommendation and findings array of the adds-defects review.",
+        "negativeDomain": "A passing exit, a passing recommendation, or no gating H1 finding inside the added hard-wait tests.",
+        "evidenceTargets": [
+          "/interactions/adds-defects/exit-code",
+          "/interactions/adds-defects/stdout/recommendation",
+          "/interactions/adds-defects/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/exit-code"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/verdict_impact"
+                    },
+                    {
+                      "literal": true
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "Test functions the pull request adds to an existing file are introduced, reviewed on the branch tip and on the merge commit: no finding on an added line is pre-existing, and each review has a gating finding there.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The findings arrays of the adds-defects (head) and merge-review (merge) reviews, with the merge review exit code and recommendation.",
+        "negativeDomain": "A finding on an added line classified pre_existing, or a review with no gating finding on its added lines.",
+        "evidenceTargets": [
+          "/interactions/adds-defects/stdout/recommendation",
+          "/interactions/adds-defects/stdout/findings",
+          "/interactions/merge-review/exit-code",
+          "/interactions/merge-review/stdout/recommendation",
+          "/interactions/merge-review/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-all",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "any",
+              "operands": [
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/line"
+                        },
+                        {
+                          "literal": [
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25,
+                            26,
+                            27,
+                            28,
+                            29,
+                            30,
+                            31,
+                            32,
+                            33,
+                            34,
+                            35,
+                            36,
+                            37,
+                            38,
+                            39,
+                            40,
+                            41,
+                            42,
+                            43,
+                            44,
+                            45,
+                            46,
+                            47,
+                            48,
+                            49,
+                            50,
+                            51,
+                            52,
+                            53,
+                            54,
+                            55,
+                            56,
+                            57,
+                            58,
+                            59
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/provenance"
+                        },
+                        {
+                          "literal": "pre_existing"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30,
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42,
+                        43,
+                        44,
+                        45,
+                        46,
+                        47,
+                        48,
+                        49,
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/verdict_impact"
+                    },
+                    {
+                      "literal": true
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/merge-review/exit-code"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/merge-review/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-all",
+            "collection": {
+              "pointer": "/interactions/merge-review/stdout/findings"
+            },
+            "predicate": {
+              "op": "any",
+              "operands": [
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/line"
+                        },
+                        {
+                          "literal": [
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/provenance"
+                        },
+                        {
+                          "literal": "pre_existing"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/merge-review/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/verdict_impact"
+                    },
+                    {
+                      "literal": true
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "A changed setup line that turns an unchanged assertion into a self-comparison is a pull request regression: the review exits 1 with a gating finding.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code, recommendation and findings array of the setup-change review.",
+        "negativeDomain": "A passing exit, a passing recommendation, or no gating finding, including the case where the only finding sits on the unchanged assertion and is classified pre-existing.",
+        "evidenceTargets": [
+          "/interactions/setup-change/exit-code",
+          "/interactions/setup-change/stdout/recommendation",
+          "/interactions/setup-change/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/setup-change/exit-code"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/setup-change/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/setup-change/stdout/findings"
+            },
+            "predicate": {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/verdict_impact"
+                },
+                {
+                  "literal": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "Two hard waits in two added tests stay two H1 findings, one located in each test.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the adds-defects review.",
+        "negativeDomain": "One H1 finding covering both tests, or an H1 finding missing from either test.",
+        "evidenceTargets": [
+          "/interactions/adds-defects/stdout/recommendation",
+          "/interactions/adds-defects/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "H3 is High for an assertion chosen by control flow over the system output, and no High or Critical finding sits on the parameter-driven branch that asserts the expected value on every path.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the adds-defects review.",
+        "negativeDomain": "No H3 finding in the output-selected test, or a High or Critical finding inside the redundant-branch test.",
+        "evidenceTargets": [
+          "/interactions/adds-defects/stdout/recommendation",
+          "/interactions/adds-defects/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H3"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        40,
+                        41,
+                        42,
+                        43,
+                        44,
+                        45
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "not",
+            "operands": [
+              {
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/adds-defects/stdout/findings"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/severity"
+                        },
+                        {
+                          "literal": [
+                            "Critical",
+                            "High"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/line"
+                        },
+                        {
+                          "literal": [
+                            31,
+                            32,
+                            33,
+                            34,
+                            35,
+                            36,
+                            37
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "H10 is High for a value test that accepts any non-null total, and no High or Critical finding sits on the covariance test, whose assignment the repository CI type-checks with mypy.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the adds-defects review.",
+        "negativeDomain": "No H10 finding in the shape-only test, or a High or Critical finding inside the covariance test.",
+        "evidenceTargets": [
+          "/interactions/adds-defects/stdout/recommendation",
+          "/interactions/adds-defects/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/adds-defects/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/adds-defects/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        48,
+                        49,
+                        50,
+                        51,
+                        52
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "not",
+            "operands": [
+              {
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/adds-defects/stdout/findings"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/severity"
+                        },
+                        {
+                          "literal": [
+                            "Critical",
+                            "High"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "set-membership",
+                      "operands": [
+                        {
+                          "pointer": "@/line"
+                        },
+                        {
+                          "literal": [
+                            55,
+                            56,
+                            57,
+                            58,
+                            59
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "A Python repository with neither Playwright nor Pact gets no finding under a Playwright-utils or Pact row.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the full-file review.",
+        "negativeDomain": "Any finding under M9, L9, M10, H6, H7, H8 or L4.",
+        "evidenceTargets": [
+          "/interactions/full-file/stdout/recommendation",
+          "/interactions/full-file/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/full-file/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-all",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": [
+                        "M9",
+                        "L9",
+                        "M10",
+                        "H6",
+                        "H7",
+                        "H8",
+                        "L4"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "A full-file review reports every one of the twelve seeded defects, each by a finding inside its own test, and names its mode full-file; a pull request review names its mode pr.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation, reviewMode and findings array of the full-file review, and the recommendation and reviewMode of the beside-old review.",
+        "negativeDomain": "A seeded defect with no finding inside its test, a full-file review not named full-file, or a pull request review not named pr.",
+        "evidenceTargets": [
+          "/interactions/full-file/stdout/recommendation",
+          "/interactions/full-file/stdout/reviewMode",
+          "/interactions/full-file/stdout/findings",
+          "/interactions/beside-old/stdout/recommendation",
+          "/interactions/beside-old/stdout/reviewMode"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/full-file/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/full-file/stdout/reviewMode"
+              },
+              {
+                "literal": "full-file"
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    12,
+                    13,
+                    14
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    17,
+                    18,
+                    19,
+                    20
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    23,
+                    24,
+                    25,
+                    26
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    29,
+                    30,
+                    31,
+                    32
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    35,
+                    36,
+                    37,
+                    38
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    41,
+                    42,
+                    43,
+                    44
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    47,
+                    48,
+                    49,
+                    50
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    53,
+                    54,
+                    55,
+                    56,
+                    57
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    9,
+                    60,
+                    61,
+                    62
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    65,
+                    66,
+                    67
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    70,
+                    71,
+                    72,
+                    73
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/full-file/stdout/findings"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [
+                    76,
+                    77,
+                    78,
+                    79,
+                    80,
+                    81,
+                    82
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/beside-old/stdout/recommendation"
+              },
+              {
+                "literal": "Approve"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/beside-old/stdout/reviewMode"
+              },
+              {
+                "literal": "pr"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "review-fixture",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "review",
+          "invocation": {
+            "executable": "review-fixture",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "fixture",
+                "mode",
+                "review"
+              ],
+              "permittedKeys": [
+                "fixture",
+                "mode",
+                "review"
+              ],
+              "types": {
+                "fixture": "string",
+                "mode": "string",
+                "review": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "recommendation"
+            ],
+            "permittedKeys": [
+              "advisoryObservations",
+              "agent",
+              "allFindingsRecommendation",
+              "contextBasis",
+              "contextFiles",
+              "contextWaiversApplied",
+              "conventionBaseline",
+              "executionMode",
+              "files",
+              "findings",
+              "gateFailures",
+              "gateOn",
+              "gatingQualityScore",
+              "gatingViolations",
+              "keyStrengths",
+              "keyWeaknesses",
+              "model",
+              "qualityScore",
+              "rawQualityScore",
+              "recommendation",
+              "report",
+              "reportedQualityScore",
+              "reportedRecommendation",
+              "reviewMode",
+              "reviewProvenance",
+              "reviewedFiles",
+              "scoreCap",
+              "scoreOverrideRule",
+              "unscorableTestArtifacts",
+              "verdictRule",
+              "violations",
+              "waiveReason",
+              "waiveUntil",
+              "waived"
+            ],
+            "types": {
+              "advisoryObservations": "array",
+              "agent": "string",
+              "allFindingsRecommendation": "string",
+              "contextBasis": "string",
+              "contextFiles": "array",
+              "contextWaiversApplied": "number",
+              "conventionBaseline": "object",
+              "executionMode": "string",
+              "files": "array",
+              "findings": "array",
+              "gateFailures": "array",
+              "gateOn": "string",
+              "gatingQualityScore": "number",
+              "gatingViolations": "object",
+              "keyStrengths": "array",
+              "keyWeaknesses": "array",
+              "model": "string",
+              "qualityScore": "number",
+              "rawQualityScore": "number",
+              "recommendation": "string",
+              "report": "string",
+              "reportedQualityScore": "number",
+              "reportedRecommendation": "string",
+              "reviewMode": "string",
+              "reviewProvenance": "object",
+              "reviewedFiles": "array",
+              "scoreCap": "number",
+              "scoreOverrideRule": "string",
+              "unscorableTestArtifacts": "array",
+              "verdictRule": "string",
+              "violations": "object",
+              "waiveReason": "string",
+              "waiveUntil": "string",
+              "waived": "boolean"
+            },
+            "successIndicator": "/recommendation",
+            "channelRoles": {
+              "/recommendation": "success-indicator",
+              "/findings": "collection",
+              "/reviewMode": "payload",
+              "/gatingViolations": "payload",
+              "/gateOn": "payload",
+              "/verdictRule": "diagnostic",
+              "/scoreOverrideRule": "diagnostic",
+              "/keyStrengths": "diagnostic",
+              "/keyWeaknesses": "diagnostic",
+              "/advisoryObservations": "diagnostic"
+            },
+            "collectionLocations": []
+          },
+          "volatilePointers": [
+            "/advisoryObservations",
+            "/keyStrengths",
+            "/keyWeaknesses",
+            "/scoreOverrideRule",
+            "/verdictRule",
+            "/findings/0/title",
+            "/findings/1/title",
+            "/findings/2/title",
+            "/findings/3/title",
+            "/findings/4/title",
+            "/findings/5/title",
+            "/findings/6/title",
+            "/findings/7/title",
+            "/findings/8/title",
+            "/findings/9/title",
+            "/findings/10/title",
+            "/findings/11/title",
+            "/findings/12/title",
+            "/findings/13/title",
+            "/findings/14/title",
+            "/findings/15/title",
+            "/findings/16/title",
+            "/findings/17/title",
+            "/findings/18/title",
+            "/findings/19/title",
+            "/findings/20/title",
+            "/findings/21/title",
+            "/findings/22/title",
+            "/findings/23/title",
+            "/findings/24/title",
+            "/findings/25/title",
+            "/findings/26/title",
+            "/findings/27/title",
+            "/findings/28/title",
+            "/findings/29/title",
+            "/findings/30/title",
+            "/findings/31/title",
+            "/findings/32/title",
+            "/findings/33/title",
+            "/findings/34/title",
+            "/findings/35/title",
+            "/findings/36/title",
+            "/findings/37/title",
+            "/findings/38/title",
+            "/findings/39/title"
+          ],
+          "sensitivityWitness": {
+            "witnessId": "verdict-follows-the-fixture",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-clean-pr",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "json",
+                    "value": {
+                      "fixture": "beside-old",
+                      "review": "head",
+                      "mode": "pr"
+                    }
+                  }
+                }
+              },
+              {
+                "legId": "witness-tautology-pr",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "json",
+                    "value": {
+                      "fixture": "merge-review",
+                      "review": "merge",
+                      "mode": "pr"
+                    }
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-clean-pr/stdout/recommendation"
+                    },
+                    {
+                      "literal": "Approve"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-tautology-pr/stdout/recommendation"
+                        },
+                        {
+                          "literal": "Approve"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "beside-old",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "beside-old"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "adds-defects",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "adds-defects"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "merge-review",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "merge-review"
+          },
+          "review": {
+            "literal": "merge"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "setup-change",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "setup-change"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "full-file",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "full-file"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "files"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate makes a disposable worktree of this repository and provisions _bmad/ and node_modules/; each step builds its own temporary git repository from a committed synthetic fixture under test/fixtures/test-review-evaluation/repos/ and reviews it there.",
+    "cleanup": "The fixture wrapper removes its temporary repository when the review ends, and tea-evaluate removes every workspace when the run ends.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 5,
+    "maxWallClockMinutes": 120,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "Every fixture is synthetic: no adopter code, report text or repository name appears in it.",
+    "Live legs run through the local Claude Code CLI on the owner's subscription, with no API key and no metered spend."
+  ],
+  "requiredEvidence": [
+    "The exit code and the verdict JSON on stdout of every review.",
+    "Mutation manifestation and rollback evidence for every seeded probe."
+  ],
+  "probeStepBound": 5,
+  "fixtureReset": null
+}

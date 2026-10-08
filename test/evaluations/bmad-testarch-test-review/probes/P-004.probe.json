@@ -1,0 +1,12 @@
+{
+  "probeId": "P-004",
+  "probeClass": "zero-action",
+  "behaviorId": "B-003",
+  "expectedClean": true,
+  "rationale": "[boundary] Clean control: added test functions in an existing file are introduced on the branch tip and on the merge commit.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

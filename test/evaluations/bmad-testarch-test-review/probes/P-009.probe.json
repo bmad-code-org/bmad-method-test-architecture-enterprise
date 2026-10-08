@@ -1,0 +1,12 @@
+{
+  "probeId": "P-009",
+  "probeClass": "zero-action",
+  "behaviorId": "B-008",
+  "expectedClean": true,
+  "rationale": "[negative] Clean control: a Python repository gets no Playwright-utils or Pact finding.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

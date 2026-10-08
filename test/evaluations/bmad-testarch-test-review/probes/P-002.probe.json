@@ -1,0 +1,12 @@
+{
+  "probeId": "P-002",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: added tests with two hard waits fail the gate on an added line.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}
