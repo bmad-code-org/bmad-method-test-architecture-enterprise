@@ -81,13 +81,15 @@ jobs:
 
       - name: Install the review skill from the pinned package
         # Deterministic, non-interactive install: the skill content the CLI
-        # discovers under _bmad/ comes from the vetted package tarball, never
-        # from the PR checkout.
+        # reviews with comes from the vetted package tarball, never
+        # from the PR checkout. bmod-tea goes beside the skill: it carries the
+        # knowledge base the skill reads from {skill-root}/../bmod-tea/knowledge.
         run: |
           npm pack "bmad-method-test-architecture-enterprise@${TEA_VERSION}"
           tar -xzf "bmad-method-test-architecture-enterprise-${TEA_VERSION}.tgz"
-          mkdir -p _bmad/tea/workflows/testarch
-          cp -R package/src/workflows/testarch/bmad-testarch-test-review _bmad/tea/workflows/testarch/bmad-testarch-test-review
+          mkdir -p .tea-review/skills
+          cp -R package/skills/bmad-testarch-test-review .tea-review/skills/bmad-testarch-test-review
+          cp -R package/skills/bmod-tea .tea-review/skills/bmod-tea
 
       - name: Install the pinned CLI and agent
         env:
@@ -108,15 +110,15 @@ jobs:
         # that edits its own vendored _bmad/ copy cannot rewrite the reviewer.
         #
         # TEA config: this job installs the skill from a tarball rather than
-        # running the interactive installer, so _bmad/tea/config.yaml does not
-        # exist and the module defaults apply (Playwright Utils on, Pact off,
-        # no Pact MCP). Those defaults are stated in the prompt, so the run is
-        # deterministic either way. If this repository uses contract testing,
-        # say so or the review loads the generic contract-testing fragment
-        # instead of the pactjs-utils set:
-        #   --use-pactjs-utils [--pact-mcp mcp]
-        # Committing _bmad/tea/config.yaml works too; the flags win over it.
-        run: tea-test-review --base "$BASE_REF" --agent claude --skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review" --output test-review.md --json test-review.json
+        # running `bmad setup tea`, so unless the repository commits
+        # _bmad/config.toml the module defaults apply (Playwright Utils on,
+        # Pact.js Utils on, Pact MCP on). Those values are stated in the
+        # prompt, so the run is deterministic either way. Override them with
+        # flags, for example:
+        #   --no-use-pactjs-utils --pact-mcp none
+        # A committed [modules.tea] table in _bmad/config.toml works too; the
+        # flags win over it.
+        run: tea-test-review --base "$BASE_REF" --agent claude --skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review" --output test-review.md --json test-review.json
 
       - name: Upload review artifacts
         if: always()

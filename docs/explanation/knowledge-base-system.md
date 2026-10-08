@@ -11,18 +11,18 @@ Without it, quality is a function of prompt engineering skill. "Write tests for 
 
 ## The `tea-index.csv` Manifest
 
-`src/agents/bmad-tea/resources/tea-index.csv` is the manifest. One row per fragment:
+`skills/bmod-tea/knowledge/tea-index.csv` is the manifest. One row per fragment:
 
 ```csv
 id,name,description,tags,tier,fragment_file
-fixture-architecture,Fixture Architecture,"Composable fixture patterns (pure function → fixture → merge) and reuse rules","fixtures,architecture,playwright,cypress",core,knowledge/fixture-architecture.md
-network-first,Network-First Safeguards,"Intercept-before-navigate workflow, HAR capture, deterministic waits, edge mocking","network,stability,playwright,cypress,ui",core,knowledge/network-first.md
-test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,knowledge/test-quality.md
+fixture-architecture,Fixture Architecture,"Composable fixture patterns (pure function → fixture → merge) and reuse rules","fixtures,architecture,playwright,cypress",core,fixture-architecture.md
+network-first,Network-First Safeguards,"Intercept-before-navigate workflow, HAR capture, deterministic waits, edge mocking","network,stability,playwright,cypress,ui",core,network-first.md
+test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,test-quality.md
 ```
 
 `tier` is one of `core`, `extended`, or `specialized`. The 59 fragments split 24 / 19 / 16 across those tiers.
 
-The agent-level `resources/` directory is the reference catalog. Workflow skills also carry their own `resources/tea-index.csv` and `resources/knowledge/` directories. That duplication is intentional: workflow step frontmatter resolves `knowledgeIndex: './resources/tea-index.csv'` from `{skill-root}`, which keeps each workflow skill modular and self-contained.
+There is one copy of the knowledge base, in the `bmod-tea` skill, and `fragment_file` is relative to its `knowledge/` folder. The agent and every workflow find it as a sibling skill folder: step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`, where `{tea-knowledge}` is `{skill-root}/../bmod-tea/knowledge`. If `bmod-tea` is not installed, the skill says so and offers to install it.
 
 A workflow reads the manifest, selects the fragments its task needs, and loads only those. Running `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and skips the other 49 including `contract-testing.md`, `feature-flags.md`, and `file-utils.md`. Focused context produces better results at lower token cost, and it produces the _same_ results next session.
 

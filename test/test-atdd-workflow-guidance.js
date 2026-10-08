@@ -21,7 +21,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-atdd');
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd');
 const FILES = {
   preflight: path.join(WORKFLOW_ROOT, 'steps-c', 'step-01-preflight-and-context.md'),
   strategy: path.join(WORKFLOW_ROOT, 'steps-c', 'step-03-test-strategy.md'),

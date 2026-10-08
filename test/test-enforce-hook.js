@@ -28,7 +28,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const hook = require('../src/workflows/testarch/bmad-testarch-framework/resources/hooks/tea-enforce.cjs');
+const hook = require('../skills/bmad-testarch-framework/resources/hooks/tea-enforce.cjs');
 
 const colors = {
   reset: '[0m',
@@ -370,17 +370,7 @@ function run() {
   console.log(`${colors.yellow}Test Suite 7: Hook Self-Integrity${colors.reset}\n`);
   // ==========================================================================
 
-  const hookPath = path.join(
-    __dirname,
-    '..',
-    'src',
-    'workflows',
-    'testarch',
-    'bmad-testarch-framework',
-    'resources',
-    'hooks',
-    'tea-enforce.cjs',
-  );
+  const hookPath = path.join(__dirname, '..', 'skills', 'bmad-testarch-framework', 'resources', 'hooks', 'tea-enforce.cjs');
   const realSha = crypto.createHash('sha256').update(fs.readFileSync(hookPath)).digest('hex');
 
   assert(hook.integrityWarning({ ...hook.DEFAULT_CONFIG }) === null, 'no hash configured means the check is off');

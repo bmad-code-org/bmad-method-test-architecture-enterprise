@@ -474,7 +474,7 @@ async function generateDownloadBundles(outputDir) {
 }
 
 async function generateSourcesBundle(downloadsDir) {
-  const srcDir = path.join(PROJECT_ROOT, 'src');
+  const srcDir = path.join(PROJECT_ROOT, 'skills');
   if (!fs.existsSync(srcDir)) return;
 
   const zipPath = path.join(downloadsDir, 'tea-sources.zip');
@@ -487,11 +487,11 @@ async function generateSourcesBundle(downloadsDir) {
 /**
  * Create a zip archive of the project's prompts (agents and workflows) and place it in the downloads directory.
  *
- * Creates tea-prompts.zip from src/ (agents, workflows, testarch), excluding common unwanted paths, writes it to the provided downloads directory, and logs the resulting file size. If src directory does not exist, the function returns without creating a bundle.
+ * Creates tea-prompts.zip from skills/ (the agent, workflows and knowledge base), excluding common unwanted paths, writes it to the provided downloads directory, and logs the resulting file size. If the skills directory does not exist, the function returns without creating a bundle.
  * @param {string} downloadsDir - Destination directory where tea-prompts.zip will be written.
  */
 async function generatePromptsBundle(downloadsDir) {
-  const srcDir = path.join(PROJECT_ROOT, 'src');
+  const srcDir = path.join(PROJECT_ROOT, 'skills');
   if (!fs.existsSync(srcDir)) return;
 
   const zipPath = path.join(downloadsDir, 'tea-prompts.zip');

@@ -1,6 +1,6 @@
 # Dogfoods tea-test-review on this repo's own test suite (test/*.js). Unlike
 # cli/examples/pr-test-review.yml, this repo IS the skill source, so it points
-# --skill-root at src/workflows/testarch/bmad-testarch-test-review directly
+# --skill-root at skills/bmad-testarch-test-review directly
 # instead of installing a pinned npm tarball.
 #
 # NOT YET ENABLED: no ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN repository
@@ -79,7 +79,7 @@ jobs:
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then unset ANTHROPIC_API_KEY; fi
           if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then unset CLAUDE_CODE_OAUTH_TOKEN; fi
-          node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root src/workflows/testarch/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
+          node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root skills/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
 
       - name: Upload review artifacts
         if: always()

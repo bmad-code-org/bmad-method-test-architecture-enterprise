@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { z } = require('zod');
 const yaml = require('yaml');
+const TOML = require('smol-toml');
 
 const { parseRegistryRows } = require('../../tools/validate-criteria-fragments.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../../cli/test-review.js');
@@ -179,58 +180,10 @@ const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fr
 exports.THIRTY_SIX_ROWS_MAPPED = registryRows.length === 36 && Object.keys(fragmentManifest).length === registryRows.length;
 
 /** docs/how-to/workflows/run-atdd.md:8, "TEA currently emits these scaffolds with `test.skip()`." */
-const atddStepsRoot = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-atdd', 'steps-c');
+const atddStepsRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'steps-c');
 const atddStepFiles = fs.existsSync(atddStepsRoot) ? fs.readdirSync(atddStepsRoot).filter((name) => name.endsWith('.md')) : [];
 if (atddStepFiles.length === 0) refuse(`${atddStepsRoot} has no step files`);
 exports.ATDD_EMITS_TEST_SKIP = atddStepFiles.some((name) => fs.readFileSync(path.join(atddStepsRoot, name), 'utf8').includes('test.skip('));
-
-/**
- * README.md's "Eleven are wired" sentence and its `risk_threshold` line, and
- * configuration.md's "Declared but Not Yet Wired" sentence:
- * `src/module.yaml`'s FUTURE-marked keys against a grep of readers under
- * `src/workflows/`.
- */
-const moduleYamlText = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'module.yaml'), 'utf8');
-const moduleYaml = yaml.parse(moduleYamlText);
-const promptedKeys = Object.keys(moduleYaml).filter(
-  (key) => typeof moduleYaml[key] === 'object' && moduleYaml[key] !== null && 'prompt' in moduleYaml[key],
-);
-
-/**
- * The keys a "⏭️ FUTURE" comment actually annotates, read from the marker's
- * position rather than hand-listed: a hardcoded list would keep matching a
- * fixed marker *count* even if a different key were swapped in under an
- * existing marker, which is exactly the drift an "eleven wired, one future"
- * claim exists to catch.
- */
-const moduleYamlLines = moduleYamlText.split('\n');
-// Any top-level YAML scalar key, not just the underscore-only shape a prompted
-// variable happens to use: a hyphenated key such as `post-install-notes:` is a
-// real group boundary too, and matching only `[A-Za-z0-9_]*` let the scan miss
-// it and tunnel through everything nested under it on the (incidental, and
-// therefore fragile) hope that nothing in between coincidentally matched the
-// narrower shape either.
-const TOP_LEVEL_KEY = /^([A-Za-z_][A-Za-z0-9_-]*):/;
-const FUTURE_KEYS = [];
-for (const [index, line] of moduleYamlLines.entries()) {
-  if (!/⏭️\s*FUTURE/.test(line)) continue;
-  // A marker's comment names one group, which can cover several consecutive
-  // prompted variables, not only the first key line after it; the group ends explicitly at the first following top-level key line
-  // (matched with no restriction on which characters that key spells), not
-  // merely at whichever line the scan's own regex happens to notice.
-  let named = 0;
-  for (const candidate of moduleYamlLines.slice(index + 1)) {
-    if (/⏭️\s*FUTURE/.test(candidate)) break;
-    const match = candidate.match(TOP_LEVEL_KEY);
-    if (match === null) continue;
-    if (!promptedKeys.includes(match[1])) break;
-    FUTURE_KEYS.push(match[1]);
-    named += 1;
-  }
-  if (named === 0) refuse(`src/module.yaml:${index + 1}'s "⏭️ FUTURE" marker names no prompted key after it`);
-}
-if (FUTURE_KEYS.length === 0) refuse('src/module.yaml has no "⏭️ FUTURE" marker');
-exports.FUTURE_KEYS = FUTURE_KEYS;
 
 /**
  * A key is read either as a bare `{key}` interpolation (the template
@@ -242,19 +195,36 @@ exports.FUTURE_KEYS = FUTURE_KEYS;
  * "this key is genuinely referenced nowhere" a claim about the whole codebase
  * rather than about one reference style.
  */
-// `keyIsUnread` is called once per prompted key below (every wired key for
-// `ELEVEN_WIRED_ONE_FUTURE`, plus the FUTURE ones). Walking every file under
-// `src/workflows` from disk on each call multiplies that cost by the key count
+// `keyIsUnread` is called once per setup key below. Walking every workflow file
+// from disk on each call multiplies that cost by the key count
 // for no reason: the tree does not change mid-load, so the walk and every
 // file's contents are read once and reused.
 let workflowFileBodies = null;
+
+/**
+ * What a workflow reads: every workflow skill folder plus the shared knowledge
+ * base. The bmad-tea agent and the bmod-tea record are left out; bmod.toml
+ * declares the setup keys, so counting it would mark every key as read.
+ */
+function workflowReadRoots() {
+  const skillsRoot = path.join(PROJECT_ROOT, 'skills');
+  return [
+    ...fs
+      .readdirSync(skillsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== 'bmad-tea' && !entry.name.startsWith('bmod-'))
+      .map((entry) => path.join(skillsRoot, entry.name)),
+    path.join(skillsRoot, 'bmod-tea', 'knowledge'),
+  ];
+}
+
 function readWorkflowFileBodies() {
   if (workflowFileBodies === null) {
-    const workflowsRoot = path.join(PROJECT_ROOT, 'src', 'workflows');
-    workflowFileBodies = fs
-      .readdirSync(workflowsRoot, { recursive: true })
-      .filter((name) => fs.statSync(path.join(workflowsRoot, name)).isFile())
-      .map((name) => fs.readFileSync(path.join(workflowsRoot, name), 'utf8'));
+    workflowFileBodies = workflowReadRoots().flatMap((root) =>
+      fs
+        .readdirSync(root, { recursive: true })
+        .filter((name) => fs.statSync(path.join(root, name)).isFile())
+        .map((name) => fs.readFileSync(path.join(root, name), 'utf8')),
+    );
   }
   return workflowFileBodies;
 }
@@ -267,16 +237,34 @@ exports.keyIsUnread = keyIsUnread;
 
 exports.RISK_THRESHOLD_UNREAD = keyIsUnread('risk_threshold');
 
-/** configuration.md, "no workflow reads it yet": exactly one FUTURE key, and nothing reads it. */
-exports.ONE_FUTURE_KEY_UNREAD = FUTURE_KEYS.length === 1 && FUTURE_KEYS.every(keyIsUnread);
-
 /**
- * README.md, "Eleven are wired into workflows today": eleven prompted keys carry
- * no FUTURE marker, every one of them is genuinely read somewhere under
- * `src/workflows/`, and the one FUTURE key is read nowhere.
+ * README.md's "Eleven are wired" sentence and configuration.md's "Declared but
+ * Not Yet Wired" sentence: the keys `skills/bmod-tea/bmod.toml` asks at setup
+ * against a grep of the workflow skills and the knowledge base. A setup key no workflow
+ * reads is a FUTURE key.
  */
-const wiredKeys = promptedKeys.filter((key) => !FUTURE_KEYS.includes(key));
-exports.ELEVEN_WIRED_ONE_FUTURE = wiredKeys.length === 11 && !wiredKeys.some(keyIsUnread) && exports.ONE_FUTURE_KEY_UNREAD;
+const bmodToml = TOML.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'skills', 'bmod-tea', 'bmod.toml'), 'utf8'));
+const configQuestions = bmodToml.bmod?.config_questions;
+if (!Array.isArray(configQuestions) || configQuestions.length === 0) refuse('skills/bmod-tea/bmod.toml has no [[bmod.config_questions]]');
+const SETUP_KEYS = configQuestions.map((question, index) => {
+  if (typeof question.key !== 'string' || question.key.length === 0) {
+    refuse(`skills/bmod-tea/bmod.toml's config question ${index + 1} has no key`);
+  }
+  return question.key;
+});
+exports.SETUP_KEYS = SETUP_KEYS;
+
+const FUTURE_KEYS = SETUP_KEYS.filter((key) => keyIsUnread(key));
+exports.FUTURE_KEYS = FUTURE_KEYS;
+
+/** Every key setup asks is read somewhere in a workflow skill or the knowledge base. */
+exports.EVERY_SETUP_KEY_WIRED = FUTURE_KEYS.length === 0;
+
+/** configuration.md, "no workflow reads it yet": exactly one setup key that nothing reads. */
+exports.ONE_FUTURE_KEY_UNREAD = FUTURE_KEYS.length === 1;
+
+/** README.md, "Eleven are wired into workflows today": eleven setup keys are read and one is not. */
+exports.ELEVEN_WIRED_ONE_FUTURE = SETUP_KEYS.length - FUTURE_KEYS.length === 11 && exports.ONE_FUTURE_KEY_UNREAD;
 
 // ---------------------------------------------------------------------------
 // output layout
@@ -407,8 +395,9 @@ exports.misplacedOutputs = misplacedOutputs;
 
 // Evaluate is the one `bmad-testarch-*` skill that writes nowhere under
 // `{test_artifacts}`: its evaluation folders live under its own
-// `tea_evaluations_folder` key, so the folder rule does not govern it.
-const testarchRoot = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
+// `evaluations_folder` customization (`{workflow.evaluations_folder}`), so the
+// folder rule does not govern it.
+const testarchRoot = path.join(PROJECT_ROOT, 'skills');
 const layoutSkillDirs = fs
   .readdirSync(testarchRoot)
   .filter((name) => name.startsWith('bmad-testarch-') && name !== 'bmad-testarch-evaluate')

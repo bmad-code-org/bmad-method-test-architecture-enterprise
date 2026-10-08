@@ -11,7 +11,7 @@ TEA Academy teaches testing through 7 progressive sessions with quizzes and save
 
 ## Prerequisites
 
-- BMad installed with the TEA module (`npx bmad-method install`)
+- TEA installed and set up: `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, then `bmad setup tea` in your assistant chat
 
 ## Step 1: Start the Workflow
 

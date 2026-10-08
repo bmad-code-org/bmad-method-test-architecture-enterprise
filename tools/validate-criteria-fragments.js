@@ -42,18 +42,9 @@ const path = require('node:path');
 const { parse } = require('csv-parse/sync');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const REGISTRY_PATH = path.join(
-  PROJECT_ROOT,
-  'src',
-  'workflows',
-  'testarch',
-  'bmad-testarch-test-review',
-  'steps-c',
-  'criteria-registry.md',
-);
-const KNOWLEDGE_ROOT = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea', 'resources');
-const KNOWLEDGE_DIR = path.join(KNOWLEDGE_ROOT, 'knowledge');
-const INDEX_PATH = path.join(KNOWLEDGE_ROOT, 'tea-index.csv');
+const REGISTRY_PATH = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md');
+const KNOWLEDGE_DIR = path.join(PROJECT_ROOT, 'skills', 'bmod-tea', 'knowledge');
+const INDEX_PATH = path.join(KNOWLEDGE_DIR, 'tea-index.csv');
 
 /**
  * Row id to the fragment(s) that teach it, and the exact substring in each that
@@ -334,7 +325,7 @@ function main() {
   let indexed = new Set();
   try {
     const records = parse(fs.readFileSync(INDEX_PATH, 'utf8'), { columns: true, skip_empty_lines: true });
-    indexed = new Set(records.map((record) => String(record.fragment_file || '').replace(/^knowledge\//, '')));
+    indexed = new Set(records.map((record) => String(record.fragment_file || '')));
   } catch (error) {
     fail(`tea-index.csv could not be read: ${error.message}`);
   }

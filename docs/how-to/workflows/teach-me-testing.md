@@ -211,7 +211,7 @@ Skip fundamentals, focus on:
 - GitHub links for browsing source
 
 **Resources:** All 59 knowledge fragments
-**GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge)
+**GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
 
 ## Completion Summary
 
@@ -259,10 +259,10 @@ If scoring <70% on quizzes:
 
 ### Want to restart from scratch
 
-Delete your progress file. `{test_artifacts}` is the `test_artifacts` value in `_bmad/tea/config.yaml` (default `docs/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment. With those defaults and the name `alex`:
+Delete your progress file. `{test_artifacts}` is the `test_artifacts` value under `[modules.tea]` in `_bmad/config.toml` (default `{project-root}/_bmad-output/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment. With those defaults and the name `alex`:
 
 ```bash
-rm docs/test-artifacts/teaching-progress/alex-tea-progress.yaml
+rm _bmad-output/test-artifacts/teaching-progress/alex-tea-progress.yaml
 ```
 
 ## Related Workflows
@@ -280,7 +280,7 @@ After completing TEA Academy, you're ready to use:
 
 - **Documentation:** [TEA Overview](/explanation/tea-overview/)
 - **Knowledge Base:** [Knowledge Base Reference](/reference/knowledge-base/)
-- **GitHub Fragments:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge)
+- **GitHub Fragments:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
 
 ## Support
 

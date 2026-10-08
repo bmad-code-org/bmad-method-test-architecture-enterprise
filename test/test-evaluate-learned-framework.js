@@ -157,7 +157,7 @@ function documentedExamples(learned, transcript) {
 }
 
 function evidenceRecord() {
-  const skill = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate');
+  const skill = path.join(ROOT, 'skills', 'bmad-testarch-evaluate');
   const mentions = filesUnder(skill).filter((file) => fs.readFileSync(file, 'utf8').toLowerCase().includes(NAME));
   check(mentions.length === 0, `framework named in skill: ${mentions.join(', ')}`);
 

@@ -101,8 +101,8 @@ test/eval-artifacts/
 # bmad-workflow-builder process files: session memory and analysis reports it
 # writes inside a skill directory while building or editing it. Never part of
 # the shipped skill.
-src/workflows/testarch/*/.memlog.md
-src/workflows/testarch/*/.analysis/
+skills/*/.memlog.md
+skills/*/.analysis/
 
 # tea-evaluate run directories (AD-12): every run, preflight and score writes
 # runs/<invocationId>/ inside its evaluation folder. Evaluate-authored suites

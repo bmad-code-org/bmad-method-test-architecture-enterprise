@@ -29,8 +29,8 @@
  * PRIORITY IS NOT SCORED AS A FUNCTION OF THE SCORE
  *
  * It would be easy, and wrong, to assert `score >= 6 implies P0`. The workflow says
- * the opposite in three places it owns: `resources/knowledge/test-priorities-matrix.md`
- * ("Priority is **not derived from** risk score"), `resources/knowledge/probability-impact.md`
+ * the opposite in three places it owns: `{tea-knowledge}/test-priorities-matrix.md`
+ * ("Priority is **not derived from** risk score"), `{tea-knowledge}/probability-impact.md`
  * ("Priority is a separate judgment, not a function of risk score"), and the
  * epic-level template's own per-priority criteria ("Risk score is supporting
  * evidence and is not a required condition"). A suite asserting the derivation
@@ -130,6 +130,7 @@ const { failureClassForExit } = require('../cli/test-design-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const {
   digest,
   digestFiles,
@@ -163,7 +164,7 @@ const { readJson, readText, writeText } = require('./lib/file-system-port');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-test-design');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-test-design');
 const SUITE_ID = 'test-design';
 
 // A test-design run reads five step files, the epic and several knowledge
@@ -721,17 +722,18 @@ async function digestTree(root, relativePaths) {
  * writes lands where the authorization's artifact map expects it and nowhere the
  * next case could read it.
  */
-function configYaml() {
-  return [
-    '# Written by test/eval-test-design.js for one staged fixture set.',
-    'user_name: tea-eval-harness',
-    'project_name: field-service-platform',
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    '',
-  ].join('\n');
+function configToml() {
+  return teaConfigToml({
+    header: ['# Written by test/eval-test-design.js for one staged fixture set.'],
+    core: [
+      ['user_name', 'tea-eval-harness'],
+      ['project_name', 'field-service-platform'],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [['test_artifacts', 'test-artifacts']],
+  });
 }
 
 /**
@@ -739,14 +741,15 @@ function configYaml() {
  *
  * Layout, with the workspace itself as the agent's working directory:
  *
- *   <projectRoot>/   the fixture set, plus a resolved _bmad/tea/config.yaml
+ *   <projectRoot>/   the fixture set, plus a resolved _bmad/config.toml
  *   skill/           the bmad-testarch-test-design workflow, copied verbatim
+ *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * The skill sits outside the project root on purpose. Three of its files carry worked
  * risk registers with their own R-001 rows and their own scores, and a fourth carries
  * one numbered from R-002: test-design-template.md, checklist.md,
  * resources/test-design-epic-3.example.md and
- * resources/knowledge/adr-quality-readiness-checklist.md. A project tree containing
+ * {tea-knowledge}/adr-quality-readiness-checklist.md. A project tree containing
  * them would let a run lift its register from the worked example and still read as an
  * analysis of the epic.
  *
@@ -775,14 +778,15 @@ async function stageIntoWorkspace(dir, set) {
   // The workflow writes its document and its progress checkpoint here. Neither set
   // brings anything into this directory, so a run cannot inherit a checkpoint.
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml());
+  fs.mkdirSync(path.join(projectDir, '_bmad'), { recursive: true });
+  await writeText(path.join(projectDir, TEA_CONFIG_RELATIVE_PATH), configToml());
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   // The corpus files the run must leave alone. test-artifacts and _bmad are excluded
   // because the run legitimately writes into the first and the harness wrote the second.
@@ -874,9 +878,10 @@ function buildPrompt(set, { designLevel = 'full' } = {}) {
     'Take mode C (Create). Resolve the workflow placeholders to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     '- `mode`: `epic-level`',
     '- `run_scope`: `epic`',
     `- \`epic_num\`: \`${set.epicNum}\``,

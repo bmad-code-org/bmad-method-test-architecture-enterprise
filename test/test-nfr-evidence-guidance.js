@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-nfr');
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-nfr');
 const BASELINE = path.join(PROJECT_ROOT, 'test', 'results', 'eval-all', 'history', '2026-09-17T12-23-09-218Z.json');
 const PRE_FIX_DIAGNOSTICS = path.join(PROJECT_ROOT, 'test', 'results', 'live-eval-remediation', 'story-1-5', 'pre-fix-diagnostics.json');
 const EVIDENCE_ROOT = path.dirname(PRE_FIX_DIAGNOSTICS);

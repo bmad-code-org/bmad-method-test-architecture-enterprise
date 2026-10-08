@@ -9,50 +9,43 @@ TEA is a standalone module now. That means custom workflows are still supported,
 
 ## The Supported Model
 
-Use one of these approaches:
-
-1. Package the workflow as custom content or a custom module.
-2. Add a menu entry to `bmad-tea` through BMAD agent customization.
-3. Reinstall or quick-update BMAD so the workflow and menu entry are registered.
+1. Build the workflow as its own skill, outside TEA.
+2. Install it into the project with `npx skills add`.
+3. Add a menu entry to `bmad-tea` through agent customization.
 
 This keeps your TEA extensions compatible with upstream updates.
 
 ## Recommended Approach
 
-### 1. Create the workflow as custom content
+### 1. Create the workflow as a skill
 
-Use BMad Builder or your own custom module structure to create a workflow that lives outside TEA core.
-
-- BMAD supports custom modules during install/update.
-- BMad Builder is the recommended path for creating reusable custom agents and workflows.
+Build a skill that lives outside TEA. BMad Builder is the recommended path for creating reusable custom agents and workflows, and a workflow used across projects can ship as its own module.
 
 See:
 
 - [How to Customize BMad](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md)
 - [BMad Builder (BMB)](https://github.com/bmad-code-org/bmad-builder)
 
-### 2. Attach the workflow to `bmad-tea`
+### 2. Install the skill
 
-After TEA is installed, use the generated agent customization file for `bmad-tea` under `_bmad/_config/agents/` and append a menu item:
-
-```yaml
-menu:
-  - trigger: my-custom-workflow
-    workflow: 'my-custom/workflows/my-custom-workflow.yaml'
-    description: My custom TEA extension workflow
-```
-
-This keeps the `bmad-tea` chat/menu experience intact while routing to your custom workflow.
-
-### 3. Reinstall or quick-update BMAD
-
-Run:
+Add it to the project the same way TEA's skills are added:
 
 ```bash
-npx bmad-method install
+npx skills add <your-repo-or-path>
 ```
 
-Then choose a normal update path so BMAD re-applies the customization and refreshes the workflow registration.
+### 3. Attach the workflow to `bmad-tea`
+
+Add a menu item in `_bmad/custom/bmad-tea.toml` (team) or `_bmad/custom/bmad-tea.user.toml` (personal). Entries are keyed by `code`: a new code is appended to Murat's menu, and an existing code replaces that item.
+
+```toml
+[[agent.menu]]
+code = "MW"
+description = "My custom TEA extension workflow"
+skill = "my-custom-workflow"
+```
+
+The `bmad-customize` skill can write this file for you. Start a fresh chat so `bmad-tea` picks up the new menu.
 
 ## What Not to Do
 
@@ -76,7 +69,7 @@ Use patterns like these:
 Read `{skill-root}/workflow.md` and follow it exactly.
 Load `{skill-root}/steps-c/step-01-preflight.md`.
 Run: `uv run {skill-root}/scripts/resolve_customization.py --key inject`
-Read `{project-root}/_bmad/tea/config.yaml`.
+Run: `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core --key modules.tea`
 ```
 
 Avoid patterns like these:
@@ -91,7 +84,7 @@ This keeps the same skill portable across Codex, Claude Code, GitHub Copilot, an
 
 ## When to Use Which Approach
 
-- **Project-specific workflow**: add custom content and attach it to `bmad-tea`
+- **Project-specific workflow**: install it as a skill and attach it to `bmad-tea`
 - **Reusable internal workflow**: package it as a custom module
 - **Reusable public workflow**: consider publishing a standalone BMAD module
 

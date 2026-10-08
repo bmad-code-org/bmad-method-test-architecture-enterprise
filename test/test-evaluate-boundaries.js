@@ -192,7 +192,7 @@ const AJV_IMPORT = Symbol('ajv import');
 const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
 const TEST_TREE = 'test';
 /** The Evaluate skill's templates, adopter code the runtime never loads (Story 1.11). */
-const ASSET_TREE = path.join('src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
+const ASSET_TREE = path.join('skills', 'bmad-testarch-evaluate', 'assets');
 const SKILL_RUNNER = 'skill-runner.js';
 const INSTALL_IDENTIFIERS = new Set(['homedir', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']);
 const INSTALL_PATH = /(?:^|[/\\])\.(?:claude|agents|codex|cursor|gemini)(?:[/\\]|$)|_bmad/;
@@ -1147,14 +1147,13 @@ const PLANTS = [
     name: "a runtime module importing the skill's HTTP port template",
     rule: 'asset-import',
     file: 'lib/evaluate/other.js',
-    source:
-      "module.exports = { load: () => import('../../../src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs') };\n",
+    source: "module.exports = { load: () => import('../../../skills/bmad-testarch-evaluate/assets/http-probe-port.mjs') };\n",
   },
   {
     name: 'a runner reaching the templates through the package name',
     rule: 'asset-import',
     file: 'other-runner.js',
-    source: `const port = require('${PACKAGE_NAME}/src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs');\nmodule.exports = { port };\n`,
+    source: `const port = require('${PACKAGE_NAME}/skills/bmad-testarch-evaluate/assets/http-probe-port.mjs');\nmodule.exports = { port };\n`,
   },
   // engine-import
   {

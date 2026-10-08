@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/**"
+      - "skills/**"
       - "package.json"
       - "package-lock.json"
   workflow_dispatch:
@@ -162,12 +162,22 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
         run: node tools/stamp-changelog.js
 
-      - name: Sync marketplace version
+      - name: Sync marketplace and bmod versions
         run: |
           node <<'NODE'
           const fs = require('node:fs');
 
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+          // The module record carries the version `bmad setup` compares against, as the `version` line of its [bmod] table.
+          const bmodPath = 'skills/bmod-tea/bmod.toml';
+          const bmodSource = fs.readFileSync(bmodPath, 'utf8');
+          const bmodVersionLine = /^version = "[^"]*"$/m;
+          if (!bmodVersionLine.test(bmodSource)) {
+            throw new Error(`${bmodPath} has no version line`);
+          }
+          fs.writeFileSync(bmodPath, bmodSource.replace(bmodVersionLine, `version = "${packageJson.version}"`));
+
           const marketplacePath = '.claude-plugin/marketplace.json';
           const marketplace = JSON.parse(fs.readFileSync(marketplacePath, 'utf8'));
           const plugin = (marketplace.plugins || []).find((entry) => entry && entry.name === packageJson.name);
@@ -191,7 +201,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
         run: |
           VERSION=$(node -p 'require("./package.json").version')
-          git add package.json package-lock.json .claude-plugin/marketplace.json CHANGELOG.md
+          git add package.json package-lock.json .claude-plugin/marketplace.json skills/bmod-tea/bmod.toml CHANGELOG.md
           git commit -m "release: bump to v${VERSION} [skip ci]"
           git tag -a "v${VERSION}" -m "Release v${VERSION}"
 

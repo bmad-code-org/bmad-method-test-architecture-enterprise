@@ -1867,7 +1867,7 @@ async function checkTestDesignOracles(evaluator) {
   }
   // The rule is documented against the shipped worked example, a real test design: its register is the
   // seven rows under "## Risk Assessment", and a labeled copy of its band tables added to it changes nothing.
-  const exampleRoot = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-test-design');
+  const exampleRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-test-design');
   const shipped = fs.readFileSync(path.join(exampleRoot, 'resources', 'test-design-epic-3.example.md'), 'utf8');
   const shippedRead = readTestDesign({ kind: 'text', value: shipped });
   assert(shippedRead.ok && shippedRead.design.risks.length === 7, 'the shipped worked example reads as a seven-row register');
@@ -2346,10 +2346,7 @@ async function checkWholeBodyCoverage() {
       );
     }
     if (expectedLink.scheme === 'tea-workflow-step') {
-      assert(
-        fs.existsSync(path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', expectedLink.id)),
-        `${suiteId}: the workflow step its behavior links exists`,
-      );
+      assert(fs.existsSync(path.join(PROJECT_ROOT, 'skills', expectedLink.id)), `${suiteId}: the workflow step its behavior links exists`);
     }
 
     /** The contract with the whole-body oracle of each step replaced by what `replace` returns for it. */
@@ -2752,7 +2749,7 @@ async function checkWholeBodyDeclarations() {
   // `JSON.stringify` drops a key whose value is `undefined`, so a key of step-05's literal is always written only when its
   // line cannot read as `undefined`. The read refuses a line that reads the coverage matrix or an optional chain with no
   // fallback, and a fallback to `undefined`, which is shown on the step's own text with each fallback removed in turn.
-  const step05Path = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
+  const step05Path = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
   const step05 = fs.readFileSync(step05Path, 'utf8');
   assert(
     (() => {

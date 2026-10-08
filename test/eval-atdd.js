@@ -117,6 +117,7 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
+const { TEA_CONFIG_RELATIVE_PATH, TEA_KNOWLEDGE_PROMPT_LINE, stageTeaKnowledge, teaConfigToml } = require('./lib/staged-tea-config');
 const {
   digest,
   digestFiles,
@@ -155,7 +156,7 @@ const {
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'atdd-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-atdd');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd');
 const RED_CHECK_PATH = path.join(PROJECT_ROOT, 'cli', 'atdd-red-check.js');
 const SUITE_ID = 'atdd';
 const CASE_ID = 'reservations';
@@ -530,22 +531,25 @@ function assertGroundTruthAbsent(workspaceDir, prompt) {
 /* Staging                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function configYaml(projectRoot) {
-  return [
-    '# Written by test/eval-atdd.js for the staged reservations fixture.',
-    'user_name: tea-eval-harness',
-    `project_name: ${projectRoot}`,
-    'communication_language: English',
-    'document_output_language: English',
-    'output_folder: docs',
-    'test_artifacts: test-artifacts',
-    'tea_browser_automation: none',
-    'tea_use_playwright_utils: false',
-    'tea_use_pactjs_utils: false',
-    'tea_execution_mode: sequential',
-    'tea_capability_probe: false',
-    '',
-  ].join('\n');
+function configToml(projectRoot) {
+  return teaConfigToml({
+    header: ['# Written by test/eval-atdd.js for the staged reservations fixture.'],
+    core: [
+      ['user_name', 'tea-eval-harness'],
+      ['project_name', projectRoot],
+      ['communication_language', 'English'],
+      ['document_output_language', 'English'],
+      ['output_folder', 'docs'],
+    ],
+    tea: [
+      ['test_artifacts', 'test-artifacts'],
+      ['tea_browser_automation', 'none'],
+      ['tea_use_playwright_utils', 'false'],
+      ['tea_use_pactjs_utils', 'false'],
+      ['tea_execution_mode', 'sequential'],
+      ['tea_capability_probe', 'false'],
+    ],
+  });
 }
 
 /**
@@ -555,6 +559,7 @@ function configYaml(projectRoot) {
  *
  *   <projectRoot>/   the fixture service and story, plus a resolved config and an empty tests/
  *   skill/           the bmad-testarch-atdd workflow, copied verbatim
+ *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * @param {object} groundTruth
  * @returns {{dir: string, projectDir: string, productionFiles: string[]}}
@@ -571,14 +576,15 @@ function stageWorkspace(groundTruth) {
   }
   fs.mkdirSync(path.join(projectDir, groundTruth.testDir), { recursive: true });
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(groundTruth.projectRoot), 'utf8');
+  fs.mkdirSync(path.join(projectDir, '_bmad'), { recursive: true });
+  fs.writeFileSync(path.join(projectDir, TEA_CONFIG_RELATIVE_PATH), configToml(groundTruth.projectRoot), 'utf8');
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
   }
+  stageTeaKnowledge(dir);
 
   // Production files: everything under the project root except the scaffold
   // directory and the harness's own additions. This is what "no production
@@ -675,10 +681,11 @@ function buildPrompt(groundTruth, { storyRelativePath } = {}) {
     'Resolve the workflow placeholders to these values:',
     '',
     `- \`{project-root}\`: \`${root}\``,
-    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     `- \`{test_dir}\`: \`${root}/${groundTruth.testDir}\``,
     '- `{skill-root}`: `skill`',
+    TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`{story_file}\`: \`${root}/${storyPath}\``,
     '',
     `The story is at \`${root}/${storyPath}\`. Read the whole project under`,

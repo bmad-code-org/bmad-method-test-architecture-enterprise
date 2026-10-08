@@ -14,11 +14,11 @@ const path = require('node:path');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
-// Both roots are load-bearing. The eight knowledge-bearing workflows and
-// bmad-teach-me-testing live under src/workflows/testarch; bmad-tea is an agent
-// and lives under src/agents, so a workflow-only scan would silently exempt the
-// one skill that routes every other one.
-const SKILL_ROOTS = ['src/workflows/testarch', 'src/agents'];
+// Every TEA skill, the bmad-tea agent included, is a folder under skills/. The
+// bmod-* folders are module records (bmod-tea carries the shared knowledge base),
+// not skills a user runs, so they are not counted.
+const SKILL_ROOTS = ['skills'];
+const MODULE_RECORD = /^bmod-/;
 
 function directoryNames(absolute) {
   if (!fs.existsSync(absolute)) return [];
@@ -37,7 +37,9 @@ function directoryNames(absolute) {
 function teaSkills(projectRoot = PROJECT_ROOT) {
   const names = new Set();
   for (const root of SKILL_ROOTS) {
-    for (const name of directoryNames(path.join(projectRoot, root))) names.add(name);
+    for (const name of directoryNames(path.join(projectRoot, root))) {
+      if (!MODULE_RECORD.test(name)) names.add(name);
+    }
   }
   return [...names].sort();
 }

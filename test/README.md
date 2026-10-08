@@ -105,7 +105,7 @@ Two fixture sets, `seeded/` and `clean/`, each one epic document and each its ow
 The seeded epic carries five material risks and four risks it rules out in as many words; the clean epic describes a feature whose genuine risk set is small, declares four ruled-out risks and a ceiling of three risks in total, and is what stops recall from rewarding a run that reports everything it can think of.
 The two are never designed in one run, because combining them changes every ratio.
 
-The workflow has no CLI, so the harness stages each set into a disposable workspace holding the epic under that set's own project root, an empty `test-artifacts/`, a resolved `_bmad/tea/config.yaml` whose `test_artifacts` points inside the workspace, and a copy of the skill, then spawns `tea-test-design-runner` through `eval-quality`'s command-line adapter and scores the one markdown document the run leaves in `test-artifacts/`.
+The workflow has no CLI, so the harness stages each set into a disposable workspace holding the epic under that set's own project root, an empty `test-artifacts/`, a resolved `_bmad/config.toml` whose `test_artifacts` points inside the workspace, and a copy of the skill, then spawns `tea-test-design-runner` through `eval-quality`'s command-line adapter and scores the one markdown document the run leaves in `test-artifacts/`.
 The workspace is the run's working directory and the suite declares `scoped-artifact-writes`, so the repository's own working tree is compared before and after and a run that reached it is not scored at all.
 
 The skill is copied to `skill/`, outside the staged project root.
@@ -125,7 +125,7 @@ Seven of the ten gate at 1, because they are arithmetic and vocabulary: a score 
 Grounding, precision and coverage mapping gate at 0.8, because all three are matched by tokens and a risk described in words the fixture did not anticipate is a miss the fixture caused.
 
 Priority is not scored as a function of the risk score.
-The workflow states in its own knowledge fragments that priority is a separate judgment the score informs: `resources/knowledge/test-priorities-matrix.md` says "Priority is not derived from risk score", `resources/knowledge/probability-impact.md` says "Priority is a separate judgment, not a function of risk score", and the epic-level template repeats under every priority heading that "Risk score is supporting evidence and is not a required condition".
+The workflow states in its own knowledge fragments that priority is a separate judgment the score informs: `{tea-knowledge}/test-priorities-matrix.md` says "Priority is not derived from risk score", `{tea-knowledge}/probability-impact.md` says "Priority is a separate judgment, not a function of risk score", and the epic-level template repeats under every priority heading that "Risk score is supporting evidence and is not a required condition".
 A suite asserting `score >= 6 implies P0` would fail a workflow that followed its own rule, so what is checked is the ordering the fixture's severity ranks declare and nothing about the level itself.
 
 `--validate-only` is credential-free and runs no model.
@@ -143,7 +143,7 @@ them changes every percentage, and `ground-truth.json` states its expected answe
 set.
 
 The harness stages each set into a disposable workspace holding the fixture set, a
-resolved `_bmad/tea/config.yaml`, and a copy of the skill, then probes
+resolved `_bmad/config.toml`, and a copy of the skill, then probes
 `tea-trace-runner` through `eval-quality`'s command-line adapter with that workspace as
 the authorization's working directory and scores the two artifacts the run leaves in
 `test-artifacts/trace/`, each named with the run key `epic-{epic_num}` of the set's
@@ -179,7 +179,7 @@ the way the trace harness guards its own.
 
 Ten of the intents have a single right menu item, four are ones where two or more items
 are genuinely close, and four are ones nothing on the menu serves. The first two answers
-are Step 8 of `src/agents/bmad-tea/SKILL.md` verbatim. The third is not: Step 8 says to
+are Step 8 of `skills/bmad-tea/SKILL.md` verbatim. The third is not: Step 8 says to
 continue the conversation when nothing fits and asks for no refusal, so the requirement
 that an unservable intent be declined comes from this suite's own exit condition and the
 prompt states it outright, which is what makes scoring it fair. Every expected menu code

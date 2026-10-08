@@ -33,196 +33,196 @@
   "outputPath": ".github/workflows/test.yml",
   "skillRuleCitations": {
     "githubActionsOutputPath": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
       "section": "1. Resolve Output Path and Select Template",
       "lines": "106-122",
       "rule": "For GitHub Actions the pipeline is written to {project-root}/.github/workflows/test.yml, adapted from the shipped template to the project's stack and framework.",
       "requiredPhrase": "{project-root}/.github/workflows/test.yml"
     },
     "ciPlatformFromConfig": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-01-preflight.md",
       "section": "5. Detect CI Platform",
       "lines": "100-110",
       "rule": "When ci_platform is set explicitly to something other than auto, the run uses that value and skips detection.",
       "requiredPhrase": "use that value"
     },
     "fileIsSyntacticallyValid": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Step 2: CI Pipeline Configuration",
       "lines": "40-54",
       "rule": "The generated file must be syntactically valid, with no YAML errors. A file that does not parse is a defect in the deliverable, whatever it was meant to say.",
       "requiredPhrase": "File is syntactically valid (no YAML/Groovy errors)"
     },
     "adaptTheTemplate": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
       "section": "1. Resolve Output Path and Select Template",
       "lines": "119",
       "rule": "The shipped template is a starting point to adapt, so a pipeline that carries the template's stages regardless of what the project asked for has skipped the adaptation the step requires.",
       "requiredPhrase": "Adapt the template"
     },
     "triggersConfigured": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Configuration Validation",
       "lines": "124-131",
       "rule": "The pipeline's triggers are configured: push, pull_request and schedule as the project needs them.",
       "requiredPhrase": "Triggers configured (push, pull_request, schedule)"
     },
     "noDirectInterpolation": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
       "section": "Security: Script Injection Prevention",
       "lines": "123-134",
       "rule": "Unsafe contexts are never interpolated directly into a run: block; they pass through env: and are referenced as a quoted shell variable.",
       "requiredPhrase": "No direct interpolation"
     },
     "unsafePatternsInRun": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-v/step-01-validate.md",
+      "file": "skills/bmad-testarch-ci/steps-v/step-01-validate.md",
       "section": "3a. Script Injection Scan",
       "lines": "69-82",
       "rule": "${{ inputs.* }}, ${{ github.event.* }} and ${{ github.head_ref }} inside a run: block are flagged as FAIL by the workflow's own validation pass.",
       "requiredPhrase": "Unsafe patterns to flag (FAIL):"
     },
     "gateMustBeAbleToFail": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
       "section": "1. Burn-In Configuration",
       "lines": "74",
       "rule": "continue-on-error belongs on artifact collection and never on a step that runs tests, so a test step that cannot fail the job is a defect in the gate.",
       "requiredPhrase": "never on a step that runs tests"
     },
     "nodeVersionFromNvmrc": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-01-preflight.md",
       "section": "6. Read Environment Context",
       "lines": "118-129",
       "rule": "The Node version comes from .nvmrc when the project has one, and the pipeline uses that version rather than a hardcoded one.",
       "requiredPhrase": "Read `.nvmrc` if present"
     },
     "pipelineStages": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
       "section": "2. Pipeline Stages",
       "lines": "161-172",
       "rule": "The pipeline carries a lint stage, a test stage with parallel shards, a burn-in stage and a report stage, as the project's request calls for them.",
       "requiredPhrase": "test (parallel shards)"
     },
     "failFastFalse": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Step 3: Parallel Sharding",
       "lines": "55-61",
       "rule": "A sharded matrix sets fail-fast to false, so one failing shard does not cancel the others and every shard reports.",
       "requiredPhrase": "fail-fast set to false"
     },
     "burnInIterations": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Step 4: Burn-In Loop",
       "lines": "62-70",
       "rule": "An enabled burn-in loop runs 10 iterations and exits on the first failure.",
       "requiredPhrase": "10 iterations configured (when enabled)"
     },
     "burnInSkippedForBackend": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
       "section": "1. Burn-In Configuration",
       "lines": "70-72",
       "rule": "A backend-only stack skips burn-in by default, and a run honors an explicit request either way.",
       "requiredPhrase": "Skip burn-in by default"
     },
     "artifactsOnFailureOnly": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Step 6: Artifact Collection",
       "lines": "79-86",
       "rule": "Artifacts are uploaded on failure only, at the paths the framework writes, with a retention period set.",
       "requiredPhrase": "Artifacts upload on failure only"
     },
     "evaluationPlanCommandSteps": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "87-126",
       "rule": "A detected evaluation plan renders as a job per tier it places a check on, and the job's one step runs tea-evaluate ci for that tier through npm exec with the evaluations folder as its prefix, as a standalone run: step named for every check on the tier.",
       "requiredPhrase": "Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, as a `run: |` block that holds that one command."
     },
     "evaluationRunsUpload": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "87-126",
       "rule": "After the check steps the job uploads the evaluation folder's runs/ directory with if: always(), so the evidence of a failing run is kept.",
       "requiredPhrase": "an upload of `<evaluation folder>/runs/` with `if: always()`"
     },
     "evaluationToolingInstall": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "87-126",
       "rule": "The evaluation job installs the evaluations folder's private package.json with --prefix and never runs the root install.",
       "requiredPhrase": "Never run the root install in this job."
     },
     "evaluationNodeFloor": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "87-126",
       "rule": "The evaluation job runs the project's .nvmrc version only when it is at or above the floor the tooling declares, and the current LTS otherwise, so a project pinned to an older Node is not blocked.",
       "requiredPhrase": "the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package"
     },
     "evaluationTierJobs": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "87-126",
       "rule": "A plan that places checks on several tiers renders one job per tier, each with the id evaluation-<tier>, its own setup and install and its one tea-evaluate ci step for that tier, so a tier the plan names is enforced where its trigger fires.",
       "requiredPhrase": "For each tier the plan places a check on, write one job:"
     },
     "evaluationMergeRunsPrFirst": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "96",
       "rule": "The merge job runs the pr tier's step first and its own tier's step second, each as a standalone step, because a tier holds only the checks placed on it.",
       "requiredPhrase": "The job for the `merge` tier runs the `pr` tier's step first and the `merge` tier's step second, each as its own step"
     },
     "evaluationTierTriggers": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "99",
       "rule": "The events a tier's checks name in trigger are added to the workflow's on: block: pull-request is pull_request, merge is push to the default branch when the pipeline lists no merge_group, and schedule is schedule with the request's cron.",
       "requiredPhrase": "`merge` is `merge_group` when the pipeline already lists it and `push` to the default branch otherwise"
     },
     "evaluationEventGuard": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "99",
       "rule": "An evaluation job is limited with an if: on the event when the workflow carries more events than the tier's checks name, so the pull request tier does not run on a schedule and the scheduled tier does not run on a pull request.",
       "requiredPhrase": "Limit the evaluation job with an `if:` on the event when the workflow carries more events than the tier's checks name."
     },
     "evaluationTierTimeouts": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "102",
       "rule": "timeout-minutes is 30 for the pr and merge jobs and 120 for scheduled and release, whose live checks spend model calls.",
       "requiredPhrase": "`timeout-minutes` is 30 for the `pr` and `merge` jobs and 120 for `scheduled` and `release`"
     },
     "evaluationArtifactNames": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "93",
       "rule": "Each job uploads its runs/ under the artifact name that is its job id followed by -runs, so two jobs never upload one name.",
       "requiredPhrase": "The artifact name in item 6 is the job id followed by `-runs`."
     },
     "evaluationReRender": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "4. Re-render Without Duplicating",
       "lines": "129-140",
       "rule": "A second run rewrites each job that carries the plan's marker under the id the rules give now and never leaves two jobs for one tier, and it leaves every job without the marker as it is.",
       "requiredPhrase": "Leave every job without the marker as it is."
     },
     "evaluationEditEntry": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-e/step-01-assess.md",
+      "file": "skills/bmad-testarch-ci/steps-e/step-01-assess.md",
       "section": "3. Detect Evaluation Plans",
       "lines": "63",
       "rule": "Edit mode detects the evaluation plans of the repository and treats each one as an edit to apply to the loaded pipeline file.",
       "requiredPhrase": "Every `ci/evaluation-ci-plan.json` it finds is an edit to apply."
     },
     "evaluationEditCheckpoint": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "ENTRY POINTS",
       "lines": "35-41",
       "rule": "Edit mode never writes the create run's checkpoint, which belongs to the create run.",
       "requiredPhrase": "never write `{outputFile}`: the checkpoint belongs to the create run"
     },
     "evaluationGateWait": {
-      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
       "lines": "104-111",
       "rule": "A job the plan's tier gates waits for the tier's evaluation job: inside the pipeline file the evaluation job's id is appended to the job's needs, with the entries it already had kept in order, and nothing else of the job changes.",

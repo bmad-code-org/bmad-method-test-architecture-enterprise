@@ -30,7 +30,7 @@ async function main() {
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-workflow-description-'));
   try {
-    const leanDir = path.join(tempRoot, 'src', 'workflows', 'testarch', 'temp-lean-missing-description');
+    const leanDir = path.join(tempRoot, 'skills', 'temp-lean-missing-description');
     fs.mkdirSync(leanDir, { recursive: true });
     fs.writeFileSync(path.join(leanDir, 'SKILL.md'), '---\nname: temp-lean-missing-description\n---\n\n# Temp\n');
 

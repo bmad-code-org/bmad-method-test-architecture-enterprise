@@ -57,22 +57,22 @@
   "freshStartMarker": "Starting fresh",
   "corpusCitations": {
     "correctionPhrase": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+      "file": "skills/bmad-teach-me-testing/steps-c/step-04-session-01.md"
     },
     "reviewMarker": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+      "file": "skills/bmad-teach-me-testing/steps-c/step-04-session-01.md"
     },
     "quizQuestionEvidence": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+      "file": "skills/bmad-teach-me-testing/steps-c/step-04-session-01.md"
     },
     "continuationMarker": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01-init.md"
+      "file": "skills/bmad-teach-me-testing/steps-c/step-01-init.md"
     },
     "freshStartMarker": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01-init.md"
+      "file": "skills/bmad-teach-me-testing/steps-c/step-01-init.md"
     },
     "quizAnswers": {
-      "file": "src/workflows/testarch/bmad-teach-me-testing/data/quiz-questions.yaml"
+      "file": "skills/bmad-teach-me-testing/data/quiz-questions.yaml"
     }
   }
 }

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { loadCorpus, validateCorpus } = require('./eval-bmad-tea-routing');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const SKILL_FILE = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea', 'SKILL.md');
+const SKILL_FILE = path.join(PROJECT_ROOT, 'skills', 'bmad-tea', 'SKILL.md');
 
 const failures = [];
 let checks = 0;
@@ -52,23 +52,23 @@ function validateUnservableBoundaries(corpus, skill) {
   const byCase = new Map(rows.map((row) => [row.sourceCase, row]));
   const declineCases = corpus.cases.filter((item) => item.expected?.expectedAction === 'decline');
 
-  if (byCase.size !== rows.length) problems.push('src/agents/bmad-tea/SKILL.md repeats an unservable boundary source case');
+  if (byCase.size !== rows.length) problems.push('skills/bmad-tea/SKILL.md repeats an unservable boundary source case');
 
   for (const item of declineCases) {
     const row = byCase.get(item.id);
     if (!row) {
-      problems.push(`src/agents/bmad-tea/SKILL.md declares no unservable boundary for "${item.id}"`);
+      problems.push(`skills/bmad-tea/SKILL.md declares no unservable boundary for "${item.id}"`);
       continue;
     }
     if (!row.result || !row.boundary || !row.missing) {
-      problems.push(`src/agents/bmad-tea/SKILL.md carries an incomplete unservable boundary for "${item.id}"`);
+      problems.push(`skills/bmad-tea/SKILL.md carries an incomplete unservable boundary for "${item.id}"`);
     }
   }
   for (const row of rows) {
     const item = corpus.cases.find((candidate) => candidate.id === row.sourceCase);
-    if (!item) problems.push(`src/agents/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" is orphaned from the intent corpus`);
+    if (!item) problems.push(`skills/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" is orphaned from the intent corpus`);
     else if (item.expected?.expectedAction !== 'decline') {
-      problems.push(`src/agents/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" references a servable case`);
+      problems.push(`skills/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" references a servable case`);
     }
   }
   return problems;

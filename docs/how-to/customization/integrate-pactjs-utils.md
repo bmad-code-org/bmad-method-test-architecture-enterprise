@@ -202,10 +202,11 @@ Set `tea_pact_mcp: 'none'` to stop TEA attempting a broker call at all.
 
 ## Turning It Off
 
-```yaml
-# _bmad/tea/config.yaml
-tea_use_pactjs_utils: false # TEA writes raw @pact-foundation/pact instead
-tea_pact_mcp: 'none' # TEA never attempts a broker call
+```toml
+# _bmad/config.toml
+[modules.tea]
+tea_use_pactjs_utils = "false" # TEA writes raw @pact-foundation/pact instead
+tea_pact_mcp = "none"          # TEA never attempts a broker call
 ```
 
 Turning `tea_use_pactjs_utils` off does not disable contract testing. It changes which API the generated tests are written against; the determinism rules and provider scrutiny still apply.

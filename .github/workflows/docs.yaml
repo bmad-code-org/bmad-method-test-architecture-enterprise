@@ -8,6 +8,7 @@ on:
       - "docs/**"
       - "website/**"
       - "tools/build-docs.js"
+      - "skills/**"
       - ".github/workflows/docs.yaml"
   workflow_dispatch:
 

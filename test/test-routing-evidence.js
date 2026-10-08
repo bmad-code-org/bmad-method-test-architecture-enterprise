@@ -121,11 +121,20 @@ function checkFixtureProvenance(failures, contract, corpus) {
   );
 
   const liveIntentsEnvelope = { $comment: corpus.intents.$comment, corpusVersion: corpus.intents.corpusVersion };
+  // The frozen live-run evidence names the agent's files where the run read them, under src/agents/.
+  // The live corpus names them where the repository keeps them now, under skills/; the same files, so
+  // the relocation is mapped back before the comparison and the frozen evidence stays as it was captured.
+  const asCaptured = (value) =>
+    typeof value === 'string'
+      ? value.replaceAll('skills/bmad-tea/', 'src/agents/bmad-tea/')
+      : Array.isArray(value)
+        ? value.map(asCaptured)
+        : value;
   const liveGroundTruthEnvelope = {
-    $comment: corpus.groundTruth.$comment,
+    $comment: asCaptured(corpus.groundTruth.$comment),
     groundTruthVersion: corpus.groundTruth.groundTruthVersion,
-    menuSource: corpus.groundTruth.menuSource,
-    skillSource: corpus.groundTruth.skillSource,
+    menuSource: asCaptured(corpus.groundTruth.menuSource),
+    skillSource: asCaptured(corpus.groundTruth.skillSource),
   };
   checkEqual(failures, liveIntentsEnvelope, envelope.intentsEnvelope, 'intents.json envelope matches its snapshot');
   checkEqual(failures, liveGroundTruthEnvelope, envelope.groundTruthEnvelope, 'ground-truth.json envelope matches its snapshot');

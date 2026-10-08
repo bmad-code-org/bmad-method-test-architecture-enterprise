@@ -25,11 +25,11 @@ name: Quality & Validation
 # Three suites used to run ONLY from .husky/pre-commit: test:knowledge,
 # test:changelog and test:tea-workflow-descriptions. `git commit --no-verify`
 # skips that hook, as does every edit made through the GitHub web UI.
-# test:knowledge carries the knowledge-copy parity check across the eight
-# bmad-testarch workflows, so for as long as it was absent here nothing in CI
-# stopped the workflow copies of the knowledge base from silently diverging
-# from the agent's. Running the chain itself in CI is what keeps any suite
-# from being missed that way again.
+# test:knowledge checks the one knowledge base under skills/bmod-tea/knowledge
+# (index rows, fragment files, tiers, the {tea-knowledge} definition in each
+# skill), so for as long as it was absent here nothing in CI stopped a skill
+# from pointing at a missing or unindexed fragment. Running the chain itself
+# in CI is what keeps any suite from being missed that way again.
 #
 # test:lockfile-age, test:lockfile-age-cache, test:licences and
 # test:supply-chain run in the chain shards and again in their own
@@ -390,9 +390,9 @@ jobs:
       - name: Seed one violation per gate and watch it fail
         run: npm run test:supply-chain
 
-  # dependency-direction holds cli/, tools/, test/ and src/**/*.cjs to a declared
+  # dependency-direction holds cli/, tools/, test/ and skills/**/*.cjs to a declared
   # layer graph and stays report-only until two eval-quality limits are fixed
-  # upstream. package-boundary holds the published src/, cli/ and .claude-plugin/
+  # upstream. package-boundary holds the published skills/, cli/ and .claude-plugin/
   # trees against dev-only path references. field-ownership holds schemaVersion
   # to the two generators that stamp it. test:guard-publish seeds a token-present,
   # workflow-absent environment and watches the publish guard refuse it.
@@ -413,7 +413,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Report import-direction violations over cli/, tools/, test/ and src/**/*.cjs
+      - name: Report import-direction violations over cli/, tools/, test/ and skills/**/*.cjs
         run: npm run test:direction
 
       - name: Hold the published tree to the package boundary

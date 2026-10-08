@@ -102,7 +102,7 @@ Terminology reference for Test Architect (TEA).
 | **Story**               | Single unit of implementable work with clear acceptance criteria, typically 2-8 hours of effort. Grouped into epics.                       |
 | **Story Context**       | Implementation guidance embedded in story files during create-story, referencing existing patterns and approaches.                         |
 | **Story File**          | Markdown file containing story description, acceptance criteria, technical notes, and testing requirements.                                |
-| **Track Selection**     | Automatic analysis by `bmad-help` suggesting appropriate track based on complexity indicators. User can override.                          |
+| **Track Selection**     | Automatic analysis by `bmad` suggesting appropriate track based on complexity indicators. User can override.                               |
 
 ## Game Development Terms
 
@@ -135,7 +135,7 @@ Terminology reference for Test Architect (TEA).
 | **Engagement Model**               | One of the five ways to use TEA: No TEA, TEA Solo, TEA Lite, TEA Integrated (Greenfield), TEA Integrated (Brownfield). Enterprise is a track layered on the Integrated models, not a sixth model. See [Engagement Models](/docs/explanation/engagement-models.md).                |
 | **Epic-Level Test Design**         | Test planning per epic (Phase 4) focusing on risk assessment, priorities, and coverage strategy for that specific epic.                                                                                                                                                           |
 | **Evaluate**                       | The `evaluate` workflow (`bmad-testarch-evaluate`, menu code `EV`). It takes a skill, agent, workflow, tool-use system or AI feature through a scored development and held-out evaluation with named gaps, and ends with a CI plan handed to `ci`. Its runtime is `tea-evaluate`. |
-| **Evaluation Folder**              | The folder under `{tea_evaluations_folder}` that holds one evaluation: `evaluation.json`, the contract, the probes, the corpus, the committed baseline and the CI plan. Every `tea-evaluate` command takes it with `--evaluation`.                                                |
+| **Evaluation Folder**              | The folder under the `evaluations_folder` setting that holds one evaluation: `evaluation.json`, the contract, the probes, the corpus, the committed baseline and the CI plan. Every `tea-evaluate` command takes it with `--evaluation`.                                          |
 | **Fixture Architecture**           | Pattern of building pure functions first, then wrapping in framework-specific fixtures for testability, reusability, and composition.                                                                                                                                             |
 | **Gate Decision**                  | Go/no-go decision for release with four outcomes: PASS ✅ (ready), CONCERNS ⚠️ (proceed with mitigation), FAIL ❌ (blocked), WAIVED ⏭️ (approved despite issues).                                                                                                                 |
 | **Knowledge Fragment**             | Individual markdown file in TEA's knowledge base covering a specific testing pattern or practice (59 fragments total).                                                                                                                                                            |

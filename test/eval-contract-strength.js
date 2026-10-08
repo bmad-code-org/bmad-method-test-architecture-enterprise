@@ -109,7 +109,9 @@ const traceHarness = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REVIEW_FIXTURE_DIR = path.join('test', 'fixtures', 'test-review-eval');
-const REVIEW_SKILL_DIR = path.join('src', 'workflows', 'testarch', 'bmad-testarch-test-review');
+const REVIEW_SKILL_DIR = path.join('skills', 'bmad-testarch-test-review');
+// The review skill reads its knowledge from {skill-root}/../bmod-tea/knowledge.
+const TEA_KNOWLEDGE_SKILL_DIR = path.join('skills', 'bmod-tea');
 const DEFAULT_OUT = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'contract-strength');
 const DEFAULT_CACHE = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'preflight-cache');
 const BASELINE_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'expected-strength.json');
@@ -217,7 +219,7 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * where the artifact map reads the verdict back. So the run directory is given
  * the fixture tree at the path `--files` names and the skill at a path
  * `resolveSkill` probes, and everything the leg declares is then true of it. The
- * skill is `src/workflows/testarch/...`, which is the fourth candidate
+ * skill is `skills/...`, which is the fourth candidate
  * `cli/lib/resolve-skill.js` looks in and the one a checkout of this repository
  * satisfies.
  *
@@ -257,7 +259,7 @@ async function stagedWorkspaceFor(suiteId, request) {
   }
   const staged = stageDirectories({
     from: PROJECT_ROOT,
-    directories: suiteId === 'test-review' ? [REVIEW_FIXTURE_DIR, REVIEW_SKILL_DIR] : [],
+    directories: suiteId === 'test-review' ? [REVIEW_FIXTURE_DIR, REVIEW_SKILL_DIR, TEA_KNOWLEDGE_SKILL_DIR] : [],
     prefix: `tea-${slug(suiteId)}-preflight-`,
   });
   return { ...staged, artifacts: {} };

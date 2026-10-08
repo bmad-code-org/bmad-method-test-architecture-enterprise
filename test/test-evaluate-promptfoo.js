@@ -14,16 +14,7 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'evaluate-promptfoo');
 const EVALUATION = path.join('evals', 'summary');
 const EVALUATOR = path.join(FIXTURE, EVALUATION, 'evaluator');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
-const STARTER = path.join(
-  ROOT,
-  'src',
-  'workflows',
-  'testarch',
-  'bmad-testarch-evaluate',
-  'assets',
-  'evaluators',
-  'promptfoo-assertions.mjs',
-);
+const STARTER = path.join(ROOT, 'skills', 'bmad-testarch-evaluate', 'assets', 'evaluators', 'promptfoo-assertions.mjs');
 const failures = [];
 const UNGRADED = 'ungraded framework error';
 const REFUSED = 'is refused:';

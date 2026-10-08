@@ -39,7 +39,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CLI = path.join(ROOT, 'cli/evaluate.js');
 const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
 const EVALUATION = path.join(ROOT, 'test/evaluations/bmad-testarch-evaluate');
-const SKILL = 'src/workflows/testarch/bmad-testarch-evaluate';
+const SKILL = 'skills/bmad-testarch-evaluate';
 const READER = path.join(__dirname, 'fixtures/evaluate-dogfood/skill-reader.js');
 const GIT = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
@@ -106,8 +106,11 @@ function project(label, { edit = () => {}, trim = false } = {}) {
   });
   fs.mkdirSync(path.join(repository, 'cli'));
   fs.copyFileSync(READER, path.join(repository, 'cli/skill-runner.js'));
-  fs.mkdirSync(path.join(repository, '_bmad/tea'), { recursive: true });
-  fs.writeFileSync(path.join(repository, '_bmad/tea/config.yaml'), 'user_name: Test\ncommunication_language: English\n');
+  fs.mkdirSync(path.join(repository, '_bmad'), { recursive: true });
+  fs.writeFileSync(
+    path.join(repository, '_bmad/config.toml'),
+    '[core]\nuser_name = "Test"\ncommunication_language = "English"\n\n[modules.tea]\ntest_artifacts = "test-artifacts"\n',
+  );
   fs.mkdirSync(path.join(repository, 'node_modules'));
   fs.writeFileSync(path.join(repository, 'node_modules/.placeholder'), '');
   fs.writeFileSync(path.join(repository, '.gitignore'), '_bmad/\nnode_modules/\n');

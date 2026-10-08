@@ -25,7 +25,7 @@ This page states what each command does, what it accepts and what it returns.
 
 ## Prerequisites
 
-- Node.js 22.20 or later, with TeA installed in the evaluations folder (`{tea_evaluations_folder}`, `evals` in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin. The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
+- Node.js 22.20 or later, with TeA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-testarch-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin. The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
 - `eval-quality` 7.2.0 or later, a devDependency of the same private `package.json`.
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.

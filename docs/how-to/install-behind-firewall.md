@@ -1,11 +1,11 @@
 ---
 title: 'Install TEA Behind a Corporate Firewall'
-description: Point the BMAD installer at a local clone or internal mirror when it cannot reach GitHub
+description: Install the TEA skills from a local clone or internal mirror when GitHub is blocked
 ---
 
 # Install TEA Behind a Corporate Firewall
 
-If the BMAD installer runs but cannot fetch the Test Architect module from GitHub, point it at a local clone or an internal Git mirror.
+`npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` fetches TEA from GitHub. If your network blocks GitHub, install from a local clone or an internal Git mirror instead.
 
 1. Clone TEA locally, or use your internal Git mirror:
 
@@ -14,30 +14,29 @@ If the BMAD installer runs but cannot fetch the Test Architect module from GitHu
      /path/to/local/bmad-method-test-architecture-enterprise
    ```
 
-2. Edit the module list in the BMAD repo you run the installer from, at `BMAD-METHOD/tools/cli/external-official-modules.yaml`, so the TEA entry points at your local path. `url:` accepts a local filesystem path or an internal Git mirror URL:
-
-   ```yaml
-   bmad-method-test-architecture-enterprise:
-     url: /path/to/local/bmad-method-test-architecture-enterprise
-     module-definition: src/module.yaml
-     code: tea
-     name: 'Test Architect'
-     description: 'Master Test Architect for quality strategy, test automation, and release gates'
-     defaultSelected: false
-     type: bmad-org
-     npmPackage: bmad-method-test-architecture-enterprise
-   ```
-
-3. Run the installer:
+2. From your project root, add the skills from that path. `npx skills add` accepts a local path or a Git URL in place of the GitHub name:
 
    ```bash
-   npx bmad-method install
+   npx skills add /path/to/local/bmad-method-test-architecture-enterprise
+   # or: npx skills add https://git.internal.example.com/mirrors/bmad-method-test-architecture-enterprise.git
    ```
 
-If you cannot edit the BMAD repo, pass the same local path on the command line instead. `--custom-source` accepts comma-separated Git URLs or local paths:
+   This adds the TEA skills and `bmod-tea`, which holds the setup questions and the knowledge base.
 
-```bash
-npx bmad-method install --custom-source /path/to/local/bmad-method-test-architecture-enterprise
-```
+3. Add the `bmad` skill and its module record `bmod-core-tools` from BMad Method core the same way, from a clone or mirror of `BMAD-METHOD`, if the project does not have them:
 
-If your environment also blocks npm, use an internal npm proxy, or allow npm only for the local module cache.
+   ```bash
+   npx skills add /path/to/local/BMAD-METHOD --skill bmad bmod-core-tools
+   ```
+
+   `bmad setup` runs through [uv](https://docs.astral.sh/uv/) with Python 3.11 or later. Install uv from an internal mirror, and make a Python 3.11 interpreter available to it, because uv downloads Python from the internet when none is installed.
+
+4. In your assistant chat, run:
+
+   ```text
+   bmad setup tea
+   ```
+
+Setup and every TEA workflow run locally once the skills are installed. Updates are the exception: `bmad setup` updates through `npx skills update`, which looks for new versions on GitHub. To update behind the firewall, pull the new version into your clone or mirror and run step 2 again.
+
+If your environment also blocks npm, use an internal npm proxy so `npx` can fetch the `skills` CLI.

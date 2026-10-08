@@ -50,7 +50,7 @@ const { DEFAULT_TIERS, PLAN_PATH, readPlan } = require('../cli/lib/evaluate/ci-p
 const { validateCorpus, scoreRun, guardHolds, jobBlockOf, sha256Of, withoutNeeds } = require('./eval-ci');
 
 const ROOT = path.join(__dirname, '..');
-const SKILL = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-ci');
+const SKILL = path.join(ROOT, 'skills', 'bmad-testarch-ci');
 const STEP = 'steps-c/step-03b-render-evaluation-plans.md';
 const PLAN_SCHEMA_FILE = 'cli/lib/evaluate/schemas/evaluation-ci-plan.schema.json';
 const PLAN_RULES_FILE = 'cli/lib/evaluate/ci-plan.js';
@@ -315,12 +315,12 @@ function checkTemplateBlock() {
   }
 }
 
-/** Every file under the skill except the knowledge fragments, as paths relative to the skill root. */
+/** Every file under the skill, as paths relative to the skill root. The knowledge base lives in bmod-tea, not here. */
 function skillFiles(directory = SKILL) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const absolute = path.join(directory, entry.name);
     const relative = path.relative(SKILL, absolute).split(path.sep).join('/');
-    if (entry.isDirectory()) return relative === 'resources/knowledge' ? [] : skillFiles(absolute);
+    if (entry.isDirectory()) return skillFiles(absolute);
     return [relative];
   });
 }

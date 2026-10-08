@@ -26,7 +26,7 @@ const { egressRegistryProblems } = require('../cli/lib/evaluate/registry');
 const Ajv = AjvModule.default ?? AjvModule;
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 
-const SKILL_ROOT = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate');
+const SKILL_ROOT = path.join(__dirname, '..', 'skills', 'bmad-testarch-evaluate');
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
 const REFERENCE = (name) => path.join(SKILL_ROOT, 'references', `${name}.md`);
 const ASSET = (name) => path.join(SKILL_ROOT, 'assets', name);

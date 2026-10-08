@@ -47,16 +47,7 @@ const path = require('node:path');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CLEAN_FIXTURE_DIR = path.join(__dirname, 'fixtures', 'framework-scaffold', 'clean');
-const REAL_HOOK_PATH = path.join(
-  PROJECT_ROOT,
-  'src',
-  'workflows',
-  'testarch',
-  'bmad-testarch-framework',
-  'resources',
-  'hooks',
-  'tea-enforce.cjs',
-);
+const REAL_HOOK_PATH = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-framework', 'resources', 'hooks', 'tea-enforce.cjs');
 
 const colors = {
   reset: '\u001B[0m',

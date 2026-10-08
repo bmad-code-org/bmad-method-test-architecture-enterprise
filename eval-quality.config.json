@@ -812,7 +812,7 @@
         "extensions": [".js"]
       },
       {
-        "path": "src",
+        "path": "skills",
         "extensions": [".cjs", ".mjs"]
       },
       {
@@ -855,9 +855,10 @@
             "node:net",
             "node:os",
             "node:path",
-            "node:string_decoder"
+            "node:string_decoder",
+            "smol-toml"
           ],
-          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (commander, js-yaml, ajv, markdown-it), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
+          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (commander, js-yaml, smol-toml, ajv, markdown-it), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
         }
       },
       {
@@ -877,7 +878,7 @@
       {
         "name": "evaluate-evaluator-templates",
         "match": "prefix",
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/evaluators/",
+        "path": "skills/bmad-testarch-evaluate/assets/evaluators/",
         "label": "the Evaluate skill's adopter evaluator templates",
         "imports": ["evaluate-evaluator-templates"],
         "externals": {
@@ -899,7 +900,7 @@
       {
         "name": "evaluate-templates",
         "match": "prefix",
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/",
+        "path": "skills/bmad-testarch-evaluate/assets/",
         "label": "the Evaluate skill's HTTP port templates",
         "imports": ["evaluate-templates"],
         "externals": {
@@ -919,8 +920,8 @@
       {
         "name": "hooks-cjs",
         "match": "prefix",
-        "path": "src/",
-        "label": "src/**/*.cjs",
+        "path": "skills/",
+        "label": "skills/**/*.cjs",
         "imports": ["hooks-cjs"],
         "externals": {
           "policy": "allow",
@@ -952,52 +953,52 @@
   "package-boundary": {
     "paths": [
       {
-        "path": "src/agents"
+        "path": "skills/bmad-tea"
       },
       {
-        "path": "src/module-help.csv"
+        "path": "skills/bmod-tea"
       },
       {
-        "path": "src/module.yaml"
+        "path": "skills/bmad-teach-me-testing"
       },
       {
-        "path": "src/workflows/testarch/bmad-teach-me-testing"
+        "path": "skills/bmad-testarch-atdd"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-atdd"
+        "path": "skills/bmad-testarch-automate"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-automate"
+        "path": "skills/bmad-testarch-ci"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-ci"
+        "path": "skills/bmad-testarch-evaluate/SKILL.md"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/SKILL.md"
+        "path": "skills/bmad-testarch-evaluate/assets"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets"
+        "path": "skills/bmad-testarch-evaluate/bmod.toml"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/customize.toml"
+        "path": "skills/bmad-testarch-evaluate/customize.toml"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-evaluate/references"
+        "path": "skills/bmad-testarch-evaluate/references"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-framework"
+        "path": "skills/bmad-testarch-framework"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-nfr"
+        "path": "skills/bmad-testarch-nfr"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-test-design"
+        "path": "skills/bmad-testarch-test-design"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-test-review"
+        "path": "skills/bmad-testarch-test-review"
       },
       {
-        "path": "src/workflows/testarch/bmad-testarch-trace"
+        "path": "skills/bmad-testarch-trace"
       },
       {
         "path": "cli"
@@ -2044,7 +2045,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "a77d8824d0ce749498457086bd81053123f0a4fe1fa9b3a307976f9feac07180"
+            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
           }
         },
         {
@@ -2100,30 +2101,12 @@
         },
         {
           "file": "README.md",
-          "key": "`risk_threshold` — risk cutoff for mandatory testing",
+          "key": "Every one is read by a workflow today",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "RISK_THRESHOLD_UNREAD"
+            "export": "EVERY_SETUP_KEY_WIRED"
           },
-          "reason": "a grep of src/workflows/ for risk_threshold"
-        },
-        {
-          "file": "README.md",
-          "key": "Eleven are wired into workflows today",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "ELEVEN_WIRED_ONE_FUTURE"
-          },
-          "reason": "src/module.yaml's prompted keys split by its FUTURE marker, and a grep of src/workflows/ finding each of the eleven wired keys read and the one FUTURE key unread"
-        },
-        {
-          "file": "docs/reference/configuration.md",
-          "key": "no workflow reads it yet",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "ONE_FUTURE_KEY_UNREAD"
-          },
-          "reason": "src/module.yaml's FUTURE marker names exactly one key, and a grep of src/workflows/ finds it unread"
+          "reason": "skills/bmod-tea/bmod.toml's setup keys, and a grep of the workflow skills and knowledge base finding every one of them read"
         },
         {
           "file": "docs/explanation/eval-quality-adoption-guide.md",
@@ -2132,7 +2115,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "a77d8824d0ce749498457086bd81053123f0a4fe1fa9b3a307976f9feac07180"
+            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
           }
         },
         {

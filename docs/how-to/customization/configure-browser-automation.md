@@ -9,10 +9,10 @@ TEA can interact with live browsers during test generation: verify selectors, ex
 
 ## The Four Modes
 
-TEA's browser automation is controlled by `tea_browser_automation` in `_bmad/tea/config.yaml`:
+TEA's browser automation is controlled by `tea_browser_automation` under `[modules.tea]` in `_bmad/config.toml`. `bmad setup tea` asks for it; run it again to change the answer, or edit the file:
 
-```yaml
-tea_browser_automation: 'auto' # auto | cli | mcp | none
+```toml
+tea_browser_automation = "auto" # auto | cli | mcp | none
 ```
 
 | Mode   | Behavior                                                                                                                                                  |
@@ -159,7 +159,7 @@ The old boolean flag `tea_use_mcp_enhancements` has been replaced:
 | `tea_use_mcp_enhancements: true`  | `tea_browser_automation: "auto"` |
 | `tea_use_mcp_enhancements: false` | `tea_browser_automation: "none"` |
 
-The BMAD installer will auto-migrate existing configs.
+Nothing migrates the old flag automatically. Answer the browser automation question in `bmad setup tea` with the equivalent value.
 
 ## Troubleshooting
 

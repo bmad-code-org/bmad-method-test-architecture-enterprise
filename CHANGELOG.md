@@ -549,6 +549,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The two rows M-001 and M-002 edit compare their class with the answer the `classify-exits` step gave for the same exit, which O-001 holds to the table, so each seeded probe still violates one oracle and every oracle outcome reads `agrees`.
   `test:evaluate-dogfood` holds the predicate equal to the table, replays a listing that swaps the two classes and a class changed in `references/gaps.md` with no contract edit, and a class vocabulary test alone passes both, so the cases fail it.
   The contract digest changes, so the recorded live PASS of Story 1.46 is superseded.
+- TEA is a bmod: `bmad setup tea` sets it up, replacing the classic installer.
+  `skills/bmod-tea/` holds the module's `bmod.toml` with nine setup questions, `roster.toml` with Murat, and `help/` for the `bmad` help agent; each skill has a member `bmod.toml`.
+  Every skill reads its settings as `modules.tea.<key>` through `resolve_config.py` instead of `_bmad/tea/config.yaml`, and tells the user to run `bmad setup tea` when TEA is not set up.
+  A project upgraded from the classic installer keeps its answers: bmad-method 6.12 already wrote them into `_bmad/config.toml`, and `bmad migrate` (TEA's `migration-1.toml`) moves a non-default `ci_platform` and `tea_evaluations_folder` into the customization files of `bmad-testarch-ci` and `bmad-testarch-evaluate`, drops `risk_threshold` and the three output-folder keys, and offers to delete `_bmad/tea/config.yaml` and `_bmad/tea/module-help.csv`.
+  A project with only a `_bmad/tea/config.yaml` runs `bmad setup tea` first; `bmad migrate` then offers to restore the answers the YAML recorded wherever setup wrote a default.
+  Two settings that only one skill reads moved to that skill's `customize.toml`: `evaluations_folder` (was `tea_evaluations_folder`) in `bmad-testarch-evaluate`, and `ci_platform` in `bmad-testarch-ci`.
+  The installer's post-install notes are in `help/integrations.md`.
+- The skills moved from `src/agents/` and `src/workflows/testarch/` to root `skills/`, and `bmod-tea` is `skills/bmod-tea/`.
+- The knowledge base is one copy in `skills/bmod-tea/knowledge/` instead of nine copies in each skill's `resources/`.
+  `tea-index.csv` paths are relative to that folder.
+  A skill that uses the knowledge base checks that `bmod-tea` is installed beside it and offers to install it when it is not.
+- `tea-test-review` reads `[modules.tea]` from the `_bmad` TOML layers (and a v6 `_bmad/tea/config.yaml` only when `_bmad/config.toml` does not exist) and probes `skills/bmad-testarch-test-review` as well as `.claude/skills` and `.agents/skills`.
+  The classic installer's `_bmad/tea/workflows/testarch/` copy is probed last, so a project upgraded from v6 reviews with the skill it just installed.
+  The CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is not beside the skill.
+  CI that pins a TEA tarball unpacks the skill from `package/skills/bmad-testarch-test-review` (it was `package/src/workflows/testarch/...`) and copies `package/skills/bmod-tea` beside it; `cli/examples/pr-test-review.yml` shows both.
+- The `tea-test-review` control-plane guard also refuses a diff that edits the `bmod-tea` knowledge base beside the skill, since the reviewer's criteria now live there, and it checks both the linked path and the real path of each, so the default `npx skills add` symlink install is guarded.
+- `bmad-testarch-test-design` detects epic-level mode from the active initiative's ticket tree on a v7 project and keeps the `sprint-status.yaml` check as the v6 fallback.
+  The Playwright Utils, Pact.js Utils and library mandates name `[modules.tea]` as the flag source, the library mandate no longer asks to verify per-workflow knowledge copies, and generated ATDD checklists no longer point at `sprint-status.yaml` alone.
+- Both live ci capture records (`tagged-release`, `nightly-deploy`) are re-captured with the v7 configuration (`_bmad/config.toml`, `bmod-tea` installed beside the Evaluate skill), since the skill's configuration section changed the digest they pin.
+- The publish workflow writes the release version into `skills/bmod-tea/bmod.toml` and commits it with `package.json` and the marketplace entry, and `test:release-metadata` fails when the three disagree.
+- `bmad-testarch-ci` and `bmad-testarch-test-design` read `tea_capability_probe` with the same string-aware parse the other skills use, so a setup answer of `"false"` turns the probe off.
+- `test:knowledge` also holds that every skill reading `{tea-knowledge}` defines it as `{skill-root}/../bmod-tea/knowledge`, that `bmod.toml` and the plugin marketplace list every skill folder under `skills/`, and that each skill's `bmod.toml` names `bmod-tea` and the module's `update_source`; a missing teaching menu fails the suite instead of warning.
+  `test:eval-routing-evidence` maps the frozen live-run envelope's `src/agents/` paths onto the relocated files, and the docs workflow also runs when `skills/**` changes, since the published source zips are built from it.
+- The install docs name `uv` as a prerequisite of `bmad setup` and add `bmod-core-tools` to the `bmad` install command.
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).
@@ -710,6 +734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `src/module.yaml` and `src/module-help.csv`.
+- The `risk_threshold` setup question, which no workflow read.
 - The registry field `network` and its `"host"` value are removed (Story 1.83, AD-8).
   `"network": "host"` gave a confined Linux target the host's whole network and with it a route to the host's abstract Unix sockets, so the targets that run an agent kept the gap Story 1.63 closed for every other entry.
   `check` now refuses an entry that declares `network`, naming the entry and pointing at `egress`, and `run.json`'s `hostNetwork` is replaced by `egress`.

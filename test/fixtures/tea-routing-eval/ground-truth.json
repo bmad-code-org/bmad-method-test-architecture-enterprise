@@ -4,7 +4,7 @@
     "in GROUND_TRUTH_ONLY_KEYS is searched for in the assembled prompt before a model call is spent, and the whole",
     "file's bytes are searched for too, the way test/eval-trace.js guards its own ground truth.",
     "",
-    "Where the three actions come from. `route` and `clarify` are Step 8 of src/agents/bmad-tea/SKILL.md verbatim:",
+    "Where the three actions come from. `route` and `clarify` are Step 8 of skills/bmad-tea/SKILL.md verbatim:",
     "dispatch a clear match directly, and pause to clarify only when two or more items are genuinely close. `decline`",
     "is not. Step 8's third clause says that when nothing on the menu fits the agent should just continue the",
     "conversation, and it names chat, clarifying questions and bmad-help as fair game. It forbids a dispatch and it",
@@ -17,7 +17,7 @@
     "`expectedMenuCode` is the primary key because the menu is what the agent dispatches from. Nine of the ten items",
     "name a skill and one, GATE, names a prompt, so `expectedWorkflow` is null there and is scored only where the menu",
     "names a workflow. The harness checks every code and every workflow here against the live",
-    "src/agents/bmad-tea/customize.toml, so an edit to the menu fails this corpus rather than silently invalidating it.",
+    "skills/bmad-tea/customize.toml, so an edit to the menu fails this corpus rather than silently invalidating it.",
     "",
     "`decidingTokens` is the deciding feature of the intent, written as words the user's own message carries. The",
     "harness refuses a token that is not in the intent, and that rule is the whole reason the number means anything:",
@@ -35,8 +35,8 @@
     "what is not a clarification, it is a stall."
   ],
   "groundTruthVersion": 3,
-  "menuSource": "src/agents/bmad-tea/customize.toml",
-  "skillSource": "src/agents/bmad-tea/SKILL.md",
+  "menuSource": "skills/bmad-tea/customize.toml",
+  "skillSource": "skills/bmad-tea/SKILL.md",
   "cases": {
     "epic-risk-before-tests": {
       "expectedAction": "route",

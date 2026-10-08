@@ -1,0 +1,454 @@
+---
+name: 'step-03-scaffold-framework'
+description: 'Create framework scaffold with adaptive orchestration (agent-team, subagent, or sequential)'
+nextStepFile: '{skill-root}/steps-c/step-04-docs-and-scripts.md'
+knowledgeIndex: '{tea-knowledge}/tea-index.csv'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
+---
+
+# Step 3: Scaffold Framework
+
+## STEP GOAL
+
+Generate the test directory structure, configuration files, fixtures, factories, helpers, and sample tests using deterministic mode selection with runtime fallback.
+
+## MANDATORY EXECUTION RULES
+
+- 📖 Read the entire step file before acting
+- ✅ Speak in `{communication_language}`
+- ✅ Apply knowledge base patterns where required
+- ✅ Resolve execution mode from explicit user request first, then config
+- ✅ Apply fallback rules deterministically when requested mode is unsupported
+
+---
+
+## EXECUTION PROTOCOLS:
+
+- 🎯 Follow the MANDATORY SEQUENCE exactly
+- 💾 Record outputs before proceeding
+- 📖 Load the next step only when instructed
+
+## CONTEXT BOUNDARIES:
+
+- Available context: config, loaded artifacts, and knowledge fragments
+- Focus: this step's goal only
+- Limits: do not execute future steps
+- Dependencies: prior steps' outputs (if any)
+
+## MANDATORY SEQUENCE
+
+**CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
+
+## 0. Resolve Execution Mode (User Override First)
+
+```javascript
+const parseBooleanFlag = (value, defaultValue = true) => {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['false', '0', 'off', 'no'].includes(normalized)) return false;
+    if (['true', '1', 'on', 'yes'].includes(normalized)) return true;
+  }
+  if (value === undefined || value === null) return defaultValue;
+  return Boolean(value);
+};
+
+const orchestrationContext = {
+  config: {
+    execution_mode: config.tea_execution_mode || 'auto', // "auto" | "subagent" | "agent-team" | "sequential"
+    capability_probe: parseBooleanFlag(config.tea_capability_probe, true), // supports booleans and "false"/"true" strings
+  },
+  timestamp: new Date().toISOString().replace(/[:.]/g, '-'),
+};
+
+const normalizeUserExecutionMode = (mode) => {
+  if (typeof mode !== 'string') return null;
+  const normalized = mode.trim().toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ');
+
+  if (normalized === 'auto') return 'auto';
+  if (normalized === 'sequential') return 'sequential';
+  if (normalized === 'subagent' || normalized === 'sub agent' || normalized === 'subagents' || normalized === 'sub agents') {
+    return 'subagent';
+  }
+  if (normalized === 'agent team' || normalized === 'agent teams' || normalized === 'agentteam') {
+    return 'agent-team';
+  }
+
+  return null;
+};
+
+const normalizeConfigExecutionMode = (mode) => {
+  if (mode === 'subagent') return 'subagent';
+  if (mode === 'auto' || mode === 'sequential' || mode === 'subagent' || mode === 'agent-team') {
+    return mode;
+  }
+  return null;
+};
+
+// Explicit user instruction in the active run takes priority over config.
+const explicitModeFromUser = normalizeUserExecutionMode(runtime.getExplicitExecutionModeHint?.() || null);
+
+const requestedMode = explicitModeFromUser || normalizeConfigExecutionMode(orchestrationContext.config.execution_mode) || 'auto';
+const probeEnabled = orchestrationContext.config.capability_probe;
+
+const supports = { subagent: false, agentTeam: false };
+if (probeEnabled) {
+  supports.subagent = runtime.canLaunchSubagents?.() === true;
+  supports.agentTeam = runtime.canLaunchAgentTeams?.() === true;
+}
+
+let resolvedMode = requestedMode;
+if (requestedMode === 'auto') {
+  if (supports.agentTeam) resolvedMode = 'agent-team';
+  else if (supports.subagent) resolvedMode = 'subagent';
+  else resolvedMode = 'sequential';
+} else if (probeEnabled && requestedMode === 'agent-team' && !supports.agentTeam) {
+  resolvedMode = supports.subagent ? 'subagent' : 'sequential';
+} else if (probeEnabled && requestedMode === 'subagent' && !supports.subagent) {
+  resolvedMode = 'sequential';
+}
+```
+
+Resolution precedence:
+
+1. Explicit user request in this run (`agent team` => `agent-team`; `subagent` => `subagent`; `sequential`; `auto`)
+2. `tea_execution_mode` from config
+3. Runtime capability fallback (when probing enabled)
+
+## 1. Create Directory Structure
+
+Use `{detected_stack}` from Step 1 to determine directory layout.
+
+**If {detected_stack} is `frontend` or `fullstack`:**
+
+- `{test_dir}/e2e/`
+- `{test_dir}/support/fixtures/`
+- `{test_dir}/support/helpers/`
+- `{test_dir}/support/page-objects/` (optional)
+
+**If {detected_stack} is `backend` or `fullstack`:**
+
+Create the idiomatic test directory for the detected language:
+
+- **Python (pytest)**: `tests/` with `conftest.py`, `tests/unit/`, `tests/integration/`, `tests/api/`
+- **Java/Kotlin (JUnit)**: `src/test/java/` mirroring `src/main/java/` package structure, with `unit/`, `integration/`, `api/` sub-packages
+- **Go**: `*_test.go` files alongside source files (Go convention), plus `testdata/` for fixtures
+- **C#/.NET (xUnit)**: `tests/` project with `Unit/`, `Integration/`, `Api/` directories
+- **Ruby (RSpec)**: `spec/` with `spec/unit/`, `spec/integration/`, `spec/api/`, `spec/support/`
+- **Rust**: `tests/` for integration tests, inline `#[cfg(test)]` modules for unit tests
+
+**If {detected_stack} is `mobile`:**
+
+- `{maestro_root}/` — device flows, one journey per file (where `{maestro_root}` is `maestro/` or `.maestro/`)
+- `{maestro_root}/subflows/` — reusable sequences (login, onboarding dismissal, seed navigation) invoked via `runFlow`
+- `{maestro_root}/config.yaml` or `.maestro/config.yaml` — workspace config (flow include/exclude, execution order)
+- Plus the idiomatic unit and component test directory for the app's language:
+  - **React Native / Expo**: `__tests__/` or `src/**/*.test.tsx` with Jest or Vitest and React Native Testing Library
+  - **Native iOS**: `<App>Tests/` (XCTest unit) and `<App>UITests/` if XCUITest is also in use
+  - **Native Android**: `app/src/test/java/` (JUnit unit) and `app/src/androidTest/java/` (instrumented)
+  - **Flutter**: `test/` for unit and widget tests, `integration_test/` for integration
+
+Keep `{maestro_root}/subflows/` separate from the flow root so a flow count never counts shared setup as a test.
+
+**If `config.tea_use_pactjs_utils` is enabled AND contract testing is relevant to this project AND runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
+
+**Relevance gate — check this before creating anything.** `tea_use_pactjs_utils` defaults to `true`, which means "use these utilities when contract tests are written", not "every project gets a Pact suite".
+
+Apply the gate in `pactjs-utils-mandate.md` § _Relevance Before Scaffolding_ exactly as written. It is the single source for this decision: sufficient signals, the weak signals that need corroboration, and the "no source in this repo and not started by this repo" disqualifier that separates a real boundary from a frontend calling its own backend. Do not restate or relax it here.
+
+**If the gate does not open, create no Pact artifacts.** Say in the setup summary that contract scaffolding was skipped because no consumer-provider boundary was found, and note that the `framework` workflow can add it later. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite.
+
+Create Node.js/TypeScript contract testing directory structure per `pact-consumer-framework-setup.md`:
+
+- `tests/contract/consumer/` — consumer contract test files (`.pacttest.ts` extension)
+- `tests/contract/support/` — pact config, provider state factories, consumer helpers shim
+- `scripts/` — shell scripts (`env-setup.sh`, `publish-pact.sh`, `can-i-deploy.sh`, `record-deployment.sh`)
+- `.github/actions/detect-breaking-change/` — PR checkbox-driven breaking change detection
+- `.github/actions/detect-provider-branch/` — consumer PR adds one provider branch to `can-i-deploy`
+- `.github/workflows/contract-test-consumer.yml` — consumer CDC CI workflow
+
+---
+
+## 2. Generate Framework Config
+
+**If {detected_stack} is `frontend` or `fullstack`:**
+
+Create `playwright.config.ts` or `cypress.config.ts` with:
+
+- **Timeouts**: action 15s, navigation 30s, test 60s
+- **Base URL**: env fallback (`BASE_URL`)
+- **Artifacts**: trace `retain-on-failure-and-retries`, screenshot `only-on-failure`, video `retain-on-failure`
+- **Reporters**: HTML + JUnit + console
+- **Parallelism**: enabled (CI tuned)
+
+Use TypeScript if `use_typescript: true`.
+
+**If {detected_stack} is `backend` or `fullstack`:**
+
+Create the idiomatic test config for the detected framework:
+
+- **pytest**: `pyproject.toml` `[tool.pytest.ini_options]` or `pytest.ini` with markers, test paths, coverage settings
+- **JUnit**: `build.gradle`/`pom.xml` test configuration with JUnit 5 dependencies, Surefire/Failsafe plugins
+- **Go test**: no config file needed (Go convention); optionally create `Makefile` test targets
+- **xUnit**: `.csproj` test project with xUnit and coverlet dependencies
+- **RSpec**: `.rspec` config file with `spec_helper.rb` and `rails_helper.rb` (if Rails)
+
+**If {detected_stack} is `mobile`:**
+
+Create `{maestro_root}/config.yaml` (or `.maestro/config.yaml`):
+
+- **flows**: glob for the flow files to include, excluding `subflows/`
+- **includeTags / excludeTags**: so CI can run a risk-appropriate subset (`P0` on the PR gate, everything nightly)
+- **Execution**: leave flows order-independent; every flow starts with `clearState` per `maestro-flows.md`
+
+Also create the unit/component test config for the app's language (`jest.config.js` with the `react-native` preset, `vitest.config.ts`, or the platform-native equivalent). Per `mobile-test-strategy.md` the device suite is the smallest layer, so the unit config is not optional.
+
+---
+
+## 3. Environment Setup
+
+Create `.env.example` with `TEST_ENV`, `BASE_URL`, `API_URL`.
+
+**Stack-conditional environment files:**
+
+**If {detected_stack} is `frontend` or `fullstack` (Node.js):**
+
+- `.nvmrc` using current LTS Node (prefer Node 24+)
+
+**If {detected_stack} is `backend`:**
+
+Create the idiomatic version file for the detected language:
+
+- **Python**: `.python-version` with current stable Python (prefer 3.12+)
+- **Java**: `.java-version` or `JAVA_HOME` documentation in `.env.example`
+- **Go**: Go version is already in `go.mod` (no additional file needed)
+- **C#/.NET**: `global.json` with SDK version if not already present
+- **Ruby**: `.ruby-version` with current stable Ruby
+
+**If {detected_stack} is `mobile`:**
+
+- `.nvmrc` when the app is React Native or Expo (the JS toolchain still applies)
+- Add `MAESTRO_APP_ID`, `MAESTRO_DRIVER_STARTUP_TIMEOUT`, and any test-account variables to `.env.example`
+- Never commit a test credential: `maestro-flows.md` H9 treats an inlined secret as a HIGH violation
+
+---
+
+## 4. Fixtures & Factories
+
+Read the TEA config and use `{knowledgeIndex}` to load fragments based on `{detected_stack}`:
+
+### Deterministic Knowledge Selection
+
+The fragment list for this step is a closed set. Start empty, evaluate the complete conditions in this section, and add every fragment from each matching list. A config flag opens a branch only when every stack, runner, package, and relevance condition on that branch also matches. Do not add fragments from tier labels, index descriptions, nearby mentions elsewhere in this step, general usefulness, or possible future need. Deduplicate while preserving the order below. Identical facts and config must produce an identical list.
+
+Contract testing is relevant only when repository facts show existing Pact artifacts, dependencies, configuration, or broker variables, or when the task explicitly requests contract testing. A service count or target-state architecture alone does not open a contract branch.
+
+**If `{detected_stack}` is `mobile`:**
+
+- `mobile-test-strategy.md` (CRITICAL: load this first — it decides which behaviors become device flows at all, and most should not)
+- `maestro-flows.md` (flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, commands whose behavior differs by platform)
+- `mobile-ci-device-lab.md` (which build artifact the flows run against, and the CI mechanics around it)
+- `test-levels-framework.md`, `test-priorities-matrix.md`, `test-quality.md`
+- Do NOT load browser fragments: `network-first.md`, `playwright-config.md`, and `intercept-network-call.md` describe a DOM and a request interceptor a device flow does not have
+
+**If `{detected_stack}` is `frontend`, `fullstack`, or `backend`:**
+
+- **If Playwright Utils enabled AND the project can install an npm package** (a `package.json` exists, or this scaffold is creating one for a JS/TS project). The flag defaults to `true` regardless of stack; a Python, Go, Java, Ruby, or other non-Node backend has no `package.json` to install into, so the flag is inert there and the disabled branch below applies instead, whatever the flag says:
+  - `playwright-utils-mandate.md` (load first — it is the binding rule for everything this workflow scaffolds)
+  - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
+  - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
+  - **Ask before installing, then install.** This step is the only place the workflow writes outside the test directory, so name what it will add and get a yes before touching `package.json`:
+
+    > `framework` will add `@seontechnologies/playwright-utils` as a dev dependency. Peer: `@playwright/test >= 1.54.1`. Optional, for schema validation: `ajv >= 8.0.0`, `zod >= 3.0.0`. Install it?
+
+    ```bash
+    npm install -D @seontechnologies/playwright-utils
+    ```
+
+    Skip the ask only when the package is already in `package.json`, or when the user asked for playwright-utils by name in this run.
+
+  - The install is not optional decoration once accepted: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. **If the user declines, record it and fall through to the disabled branch for the whole scaffold.** Do not scaffold imports against a package the project does not have.
+
+- **If disabled:**
+  - Always: `fixture-architecture.md`, `data-factories.md`, `test-quality.md`
+  - Also `network-first.md` and `playwright-config.md`, but only when the project runs a browser through Playwright. Both describe a `playwright.config.*` and a request interceptor. A Python, Go, Java, or Ruby service has neither, and scaffolding against them writes sample files that project cannot run, which is the same failure the mandate branch above guards against.
+
+**If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`) **and the relevance gate in section 1 opened**:
+
+- `pactjs-utils-mandate.md` (load first - it is the binding rule for every Pact artifact this workflow scaffolds, and it carries the relevance gate itself)
+- `pact-consumer-framework-setup.md` (CRITICAL: load this for directory structure, scripts, CI workflow, and PactV4 patterns — includes `fileParallelism: false` + `pool: 'forks'` + `singleFork: true`, determinism gate, and `jq` publish normalization)
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` rule), `pactjs-utils-provider-verifier.md` (same `pool: 'forks'` + `singleFork` rule applies to consumer AND provider), `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `contract-testing.md`
+- `pact-broker-webhooks.md` — when scaffolding the provider repo and any CI step that depends on `can-i-deploy`
+- **Ask before installing, then install.** Same rule as Playwright Utils, and the same reason: this writes to `package.json`.
+
+  > `framework` will add `@seontechnologies/pactjs-utils` and its peer `@pact-foundation/pact` as dev dependencies (`@pact-foundation/pact >= 16.2.0`). Install them?
+
+  ```bash
+  npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
+  ```
+
+  Skip the ask only when they are already in `package.json`, or when the user asked for contract testing by name in this run.
+
+- Every Pact artifact generated downstream imports from the package, so a declined install means the whole contract scaffold falls through to the disabled branch. Do not scaffold imports against a package the project does not have.
+- Ensure `jq` is available on CI runners (default on `ubuntu-latest`; document `brew install jq` for macOS dev machines) — required by `scripts/check-pact-determinism.sh` and `scripts/publish-pact.sh`
+
+**If Pact.js Utils disabled but contract testing relevant:**
+
+- `contract-testing.md`
+
+**If Pact MCP is enabled and the relevance gate in section 1 opened** (`config.tea_pact_mcp` is `"mcp"`):
+
+- `pact-mcp.md`
+
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
+
+Implement:
+
+- Fixture index with `mergeTests`
+- Auto-cleanup hooks
+- Faker-based data factories with overrides
+
+**If Playwright Utils enabled, the fixture index is `{test_dir}/support/merged-fixtures.ts` and it is the only entry point tests import `test` from:**
+
+```typescript
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+// Browser suites only:
+import { test as interceptFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test as networkErrorFixture } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+// Project-owned:
+import { test as authFixture } from './auth-fixture';
+
+export const test = mergeTests(apiRequestFixture, recurseFixture, interceptFixture, networkErrorFixture, authFixture);
+
+export { expect } from '@playwright/test';
+export { log };
+```
+
+`interceptFixture` and `networkErrorFixture` are browser-only: include them when `{detected_stack}` is `frontend` or `fullstack`, and drop both from the merge and the imports for a `backend` stack. Merging a browser fixture into an API-only suite pulls in a `page` dependency the suite never uses.
+
+Also scaffold `{test_dir}/support/auth-fixture.ts` from `auth-session.md` § _Custom Auth Provider Pattern_: an `AuthProvider` implementing all six members (`getEnvironment`, `getUserIdentifier`, `extractToken`, `extractCookies`, `isTokenExpired`, `manageAuthToken`), passed to `setAuthProvider`, then `base.extend(createAuthFixtures())`. Do not invent a shorter interface. Leave `manageAuthToken` and the cookie names as marked `TODO`s when the auth endpoint is unknown, and list them in the setup summary. Do not scaffold a form-driven login fixture in its place.
+
+Wire `authStorageInit()` and `configureAuthSession()` into `global-setup.ts`, and add the token storage directory to `.gitignore`.
+
+Skip this whole block for Maestro, Cypress, and non-Playwright backend stacks.
+
+---
+
+## 5. Sample Tests & Helpers
+
+**If {detected_stack} is `frontend` or `fullstack`:**
+
+Create example tests in `{test_dir}/e2e/` demonstrating:
+
+- Given/When/Then format
+- data-testid selector strategy
+- Factory usage
+- Network interception pattern (if applicable)
+
+**If Playwright Utils enabled**, the samples are the reference every later workflow copies from, so they must be exemplary rather than merely runnable. Each sample:
+
+- Imports `test` from `../support/merged-fixtures`, never from `@playwright/test`
+- Declares `interceptNetworkCall({ url })` before `page.goto`, and awaits it after, so the network-first principle is visible in the shape of the code
+- Uses `apiRequest` for setup and teardown, `recurse` for anything eventually consistent, `log.step` for milestones
+- Takes `authToken` from the auth fixture rather than driving a login form
+
+Ship at least one API sample and, for `frontend`/`fullstack`, one UI sample. A sample suite that demonstrates only vanilla Playwright while the config says otherwise teaches the wrong pattern to every workflow that reads it later.
+
+**If {detected_stack} is `backend` or `fullstack`:**
+
+Create example tests in the idiomatic location for the detected language:
+
+- **Python**: `tests/test_example.py` with pytest fixtures, parametrize, and factory usage
+- **Java**: `src/test/java/.../ExampleTest.java` with JUnit 5 annotations, `@BeforeEach` setup
+- **Go**: `example_test.go` alongside source with table-driven tests and `testify` assertions
+- **C#/.NET**: `tests/ExampleTests.cs` with xUnit `[Fact]`/`[Theory]` and fixture injection
+- **Ruby**: `spec/example_spec.rb` with RSpec `describe`/`context`/`it` and factory_bot
+
+**If {detected_stack} is `mobile`:**
+
+Create `maestro/example-flow.yaml` demonstrating the patterns in `maestro-flows.md`:
+
+- `clearState` then `launchApp` for isolation
+- Accessibility-id selectors, never `index:` or `point:`
+- `extendedWaitUntil` on a named condition instead of `sleep`
+- An `assertVisible` on the destination state, so the flow proves something
+- A `P0` tag so CI can select it
+- `${ENV_VAR}` for any credential
+
+Also create `maestro/subflows/login.yaml` showing `runFlow` composition with `env` passing, plus one unit or component example in the app's own framework so the sample suite reflects the real level distribution.
+
+Create helpers for:
+
+- API clients (if needed)
+- Network utilities (frontend/fullstack only)
+- Auth helpers
+- Test data factories (language-idiomatic patterns)
+
+**If `config.tea_use_pactjs_utils` is enabled, the relevance gate in section 1 opened, and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
+
+Create Node.js/TypeScript contract test samples per `pact-consumer-framework-setup.md`. Every sample follows `pactjs-utils-mandate.md`: `createProviderState` rather than a hand-cast `.given()`, `buildVerifierOptions` rather than a literal options object, scoped `consumerBranch` rather than a hand-built selector, `isBreakingChangeTolerantBranch` where an explicit tolerance policy exists, `createRequestFilter` rather than bespoke auth middleware, and the `pact-consumer-di.md` injection so the sample exercises the real client instead of raw `fetch`. These samples are the reference every later workflow copies, so a raw-Pact sample teaches the wrong pattern permanently.
+
+- **Consumer test**: Example using PactV4 `addInteraction()` builder + `createProviderState` + real consumer code with URL injection (`.pacttest.ts` extension). **One `addInteraction()` per `it()` block** — never chain multiple interactions in a single test (PactV4 FFI drops them non-deterministically; see `pactjs-utils-consumer-helpers.md` Example 6).
+- **Support files**: Pact config factory (`pact-config.ts`), provider state factories (`provider-states.ts`), local consumer-helpers shim (`consumer-helpers.ts`)
+- **Vitest config (consumer)**: Minimal `vitest.config.pact.ts` with **`fileParallelism: false` AND `pool: 'forks'` + `poolOptions.forks.singleFork: true`** (both required — `fileParallelism: false` prevents shared pact JSON corruption from parallel workers; forks pool + singleFork prevents the Pact Rust FFI from leaking state across files and flaking on Linux CI. See `pact-consumer-framework-setup.md` Example 2). Do NOT copy settings from unit config.
+- **Vitest config (provider)**: `vitest.config.contract.ts` with **`pool: 'forks'` + `poolOptions.forks.singleFork: true`** (same rule as consumer; required for message providers and multi-file HTTP providers; see `pactjs-utils-provider-verifier.md` Example 8).
+- **Shell scripts**: `env-setup.sh`, `check-pact-determinism.sh` (primary defense against non-deterministic pact generation), `publish-pact.sh` (with `jq -S` interaction sort normalization), branch-aware `can-i-deploy.sh`, `record-deployment.sh` in `scripts/`
+- **package.json scripts**: Split `test:pact:consumer` (determinism gate — runs `check-pact-determinism.sh` with 3 runs) and `test:pact:consumer:run` (inner single-pass vitest invocation). CI and local both call `npm run test:pact:consumer` for 1:1 parity.
+- **CI workflow**: `contract-test-consumer.yml` with detect-breaking-change and PR-only detect-provider-branch actions
+- **package.json scripts**: `test:pact:consumer` (determinism gate), `test:pact:consumer:run` (inner single-pass vitest), `publish:pact`, `can:i:deploy:consumer` with scoped `PROVIDER_PACTICIPANT`, `record:consumer:deployment`
+- **.gitignore**: Add `/pacts/` and `pact-logs/`
+
+---
+
+### 6. Orchestration Notes for This Step
+
+For this step, treat these work units as parallelizable when `resolvedMode` is `agent-team` or `subagent`:
+
+- Worker A: directory + framework config + env setup (sections 1-3)
+- Worker B: fixtures + factories (section 4)
+- Worker C: sample tests + helpers (section 5)
+
+In parallel-capable modes, runtime decides worker scheduling and concurrency.
+
+If `resolvedMode` is `sequential`, execute sections 1→5 in order.
+
+Regardless of mode, outputs must be identical in structure and quality.
+
+### 7. Save Progress
+
+**Save this step's accumulated work to `{outputFile}`.**
+
+- **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
+
+  ```yaml
+  ---
+  workflowStatus: 'in-progress'
+  stepsCompleted: ['step-03-scaffold-framework']
+  lastStep: 'step-03-scaffold-framework'
+  lastSaved: '{date}'
+  ---
+  ```
+
+  Then write this step's output below the frontmatter.
+
+- **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
+  - Add `'step-03-scaffold-framework'` to `stepsCompleted` array (only if not already present)
+  - Set `lastStep: 'step-03-scaffold-framework'`
+  - Set `lastSaved: '{date}'`
+  - Append this step's output to the appropriate section of the document.
+
+Load next step: `{nextStepFile}`
+
+## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
+
+### ✅ SUCCESS:
+
+- Step completed in full with required outputs
+
+### ❌ SYSTEM FAILURE:
+
+- Skipped sequence steps or missing outputs
+  **Master Rule:** Skipping steps is FORBIDDEN.

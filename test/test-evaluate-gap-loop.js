@@ -21,8 +21,7 @@ const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = process.env.TEA_EVALUATE_GAP_LOOP_FIXTURE ?? path.join(__dirname, 'fixtures/evaluate-gap-loop');
 const SOURCE = path.join(__dirname, 'fixtures/evaluate-authoring/test-review');
 const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
-const GUIDE =
-  process.env.TEA_EVALUATE_GAP_LOOP_GUIDE ?? path.join(ROOT, 'src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md');
+const GUIDE = process.env.TEA_EVALUATE_GAP_LOOP_GUIDE ?? path.join(ROOT, 'skills/bmad-testarch-evaluate/references/gaps.md');
 const EXCLUDED = new Set(['replay', 'runs', 'node_modules']);
 const PROBE_CLASSES = {
   'P-001': 'zero-action',

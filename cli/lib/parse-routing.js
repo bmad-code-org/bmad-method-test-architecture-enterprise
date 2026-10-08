@@ -19,7 +19,7 @@
 
 'use strict';
 
-/** The three answers Step 8 of src/agents/bmad-tea/SKILL.md allows. */
+/** The three answers Step 8 of skills/bmad-tea/SKILL.md allows. */
 const ROUTING_ACTIONS = ['route', 'clarify', 'decline'];
 
 /** @returns {string|null} A trimmed non-empty string, or null for anything else. */

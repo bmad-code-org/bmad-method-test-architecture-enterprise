@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-test-design');
+const ROOT = path.join(__dirname, '..', 'skills', 'bmad-testarch-test-design');
 const riskStep = fs.readFileSync(path.join(ROOT, 'steps-c', 'step-03-risk-and-testability.md'), 'utf8');
 const coverageStep = fs.readFileSync(path.join(ROOT, 'steps-c', 'step-04-coverage-plan.md'), 'utf8');
 const template = fs.readFileSync(path.join(ROOT, 'test-design-template.md'), 'utf8');

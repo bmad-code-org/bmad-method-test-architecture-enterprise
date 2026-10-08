@@ -50,7 +50,7 @@ TEA's answer is not a better prompt. It is to make the work repeatable at three 
 
 ### The order you run things
 
-The ten workflows are a directed graph, not a menu. `src/module-help.csv` encodes it.
+The ten workflows are a directed graph, not a menu. `skills/bmod-tea/help/help.md` describes it, and the `bmad` skill reads it to recommend the next step.
 
 ```text
 Phase 3, solutioning, once per project
@@ -69,8 +69,6 @@ Epic or release gate
 Phase 3 order matters and is deliberate: run `test-design` first so NFR evidence needs can shape the infrastructure, then `framework` once the architecture and the test design have settled the stack, then `ci` once the framework exists so the pipeline wires to real commands.
 
 `test-design` is dual-mode. At system level it produces an architecture-facing document and a QA-facing one. Per epic it produces `test-design/test-design-epic-N.md`. `teach-me-testing` sits outside the lifecycle and runs once per learner.
-
-`module-help.csv`'s single `phase` column records the phase a workflow's catalog row is sequenced under (its `preceded-by`/`followed-by` chain), not every phase the workflow can run in. `test-design`'s row is `3-solutioning` because that is the chain the row encodes (`test-design` → `framework`); the epic-level Phase 4 invocation above has no dependency edges of its own and so gets no second row, only this prose.
 
 For the full lifecycle diagram including the BMad phases around TEA, see [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/).
 
@@ -134,7 +132,7 @@ That separation exists because it was measured. Two reviewers of the same four f
 | P0 at 100%, overall ≥ 80%, P1 between 80% and 89%               | **CONCERNS** |
 | Stakeholder-approved waiver with the complete approval contract | **WAIVED**   |
 
-Our epic finishes at P0 100%, P1 87%, overall 84%, so it gates at CONCERNS with the residual risk named rather than passing quietly. Two overlays can lower that result further and can never raise it: a requirement resting only on recorded live verification caps at CONCERNS, and a synthetic coverage oracle below high confidence does the same. WAIVED is never derived; a human sets it, and the artifact demands an approver, approval date, reason, expiry, monitoring plan, remediation owner, and fix target. The authoritative contract is in the [Traceability template](./src/workflows/testarch/bmad-testarch-trace/trace-template.md#waiver-details).
+Our epic finishes at P0 100%, P1 87%, overall 84%, so it gates at CONCERNS with the residual risk named rather than passing quietly. Two overlays can lower that result further and can never raise it: a requirement resting only on recorded live verification caps at CONCERNS, and a synthetic coverage oracle below high confidence does the same. WAIVED is never derived; a human sets it, and the artifact demands an approver, approval date, reason, expiry, monitoring plan, remediation owner, and fix target. The authoritative contract is in the [Traceability template](./skills/bmad-testarch-trace/trace-template.md#waiver-details).
 
 If the run is not gate-eligible at all, because evidence collection was waived, restricted, inaccessible, or deferred, TEA emits no decision rather than computing one on partial evidence.
 
@@ -146,11 +144,11 @@ BMad is a small **agent + workflow engine**. There is no external orchestrator; 
 
 | File / Scope                                              | What it does                                                                                                 | When it loads                                                               |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `src/agents/bmad-tea/SKILL.md`                            | Murat's activation sequence and critical actions; renders the `{agent.menu}` placeholder                     | First, activates the TEA agent                                              |
-| `src/agents/bmad-tea/customize.toml`                      | Agent customization surface: `[[agent.menu]]` items (code to skill), persona fields, persistent facts, hooks | During agent activation                                                     |
-| `src/workflows/testarch/<workflow>/SKILL.md`              | Workflow entrypoint: resolves workflow customization, picks mode, routes to the first step                   | When a TEA workflow is invoked                                              |
-| `src/workflows/testarch/<workflow>/customize.toml`        | Workflow customization surface: activation hooks, persistent facts, optional `on_complete` behavior          | During workflow activation                                                  |
-| `src/workflows/testarch/<workflow>/workflow.yaml`         | Machine-readable metadata: config bindings, run variables, tool hints, output paths                          | Installer, tooling, and workflow metadata lookups                           |
+| `skills/bmad-tea/SKILL.md`                                | Murat's activation sequence and critical actions; renders the `{agent.menu}` placeholder                     | First, activates the TEA agent                                              |
+| `skills/bmad-tea/customize.toml`                          | Agent customization surface: `[[agent.menu]]` items (code to skill), persona fields, persistent facts, hooks | During agent activation                                                     |
+| `skills/<workflow>/SKILL.md`                              | Workflow entrypoint: resolves workflow customization, picks mode, routes to the first step                   | When a TEA workflow is invoked                                              |
+| `skills/<workflow>/customize.toml`                        | Workflow customization surface: activation hooks, persistent facts, optional `on_complete` behavior          | During workflow activation                                                  |
+| `skills/<workflow>/workflow.yaml`                         | Machine-readable metadata: run variables, tool hints, output paths                                           | Tooling and workflow metadata lookups                                       |
 | `instructions.md`                                         | Workflow-specific summary and operator notes                                                                 | On demand                                                                   |
 | `steps-c/*.md`                                            | **Create** steps: primary execution, 5 to 12 files per workflow, 75 across the module                        | One at a time (just-in-time)                                                |
 | `steps-c/step-NNx-subagent-*.md`                          | **Worker** steps: one isolated dimension each, dispatched in parallel                                        | When an orchestrator step delegates                                         |
@@ -160,10 +158,13 @@ BMad is a small **agent + workflow engine**. There is no external orchestrator; 
 | `*-template.md`                                           | Output skeleton with `{PLACEHOLDER}` vars, filled in by steps to produce the artifact                        | Read by steps-c when generating output                                      |
 | `bmad-testarch-test-review/steps-c/criteria-registry.md`  | The 35 scoreable rows, each with a fixed severity and gate class. Severity is read here                      | Read by every review worker before it scores anything                       |
 | `bmad-testarch-framework/resources/hooks/tea-enforce.cjs` | Project-level guardrail for mechanically decidable test-quality violations; framework Create scaffolds it    | Before writes, after writes or shell commands, and when an agent turn stops |
-| `resources/tea-index.csv`                                 | Knowledge fragment index: id, name, description, tags, tier, path. 59 rows                                   | Read before recommendations and by knowledge-loading steps                  |
-| `resources/knowledge/*.md`                                | 59 reusable fragments: standards, patterns, API references, integration mandates                             | Selectively read into context by tier and config flags                      |
+| `skills/bmod-tea/bmod.toml`                               | Module record: version, member skills, setup questions, install messages                                     | Read by `bmad setup tea` and `bmad`                                         |
+| `skills/bmod-tea/roster.toml`                             | Lists Murat as the module's agent                                                                            | Read by roster-aware skills such as party mode                              |
+| `skills/bmod-tea/help/*.md`                               | What each TEA skill is for, when to recommend it, and what each setup answer does                            | Read by the `bmad` skill when routing                                       |
+| `skills/bmod-tea/knowledge/tea-index.csv`                 | Knowledge fragment index: id, name, description, tags, tier, path. 59 rows                                   | Read before recommendations and by knowledge-loading steps                  |
+| `skills/bmod-tea/knowledge/*.md`                          | 59 reusable fragments: standards, patterns, API references, integration mandates                             | Selectively read into context by tier and config flags                      |
 
-Nine copies of the knowledge base exist on purpose: the agent carries one, and so does each of the eight workflows that consult it. Every copy is byte-identical. A workflow skill has to stay self-contained so it can be installed, copied, or invoked without reaching across skill boundaries, so when knowledge changes, propagate the update into the affected workflow resource directories rather than replacing them with a central runtime path. `bmad-teach-me-testing` is the exception; it carries a curated pointer file at `data/tea-resources-index.yaml` instead of the fragments themselves.
+The knowledge base has one copy, in the `bmod-tea` skill. The agent and every workflow that consults it read it as a sibling skill folder, `{skill-root}/../bmod-tea/knowledge`. If `bmod-tea` is missing, the skill says so and offers to install it. `bmad-teach-me-testing` carries a curated pointer file at `data/tea-resources-index.yaml` instead of reading the fragments.
 
 ```mermaid
 flowchart TB
@@ -183,7 +184,7 @@ flowchart TB
 
 ### How It Works at Runtime
 
-**1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and `_bmad/tea/config.yaml`, greets you, and renders `{agent.menu}` as a numbered table. Naming one clear intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly. A message that supports several menu choices triggers one focused question naming the relevant choices before any workflow starts.
+**1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and the `core` and `modules.tea` config from `_bmad/config.toml` and its `_bmad/custom/` layers, greets you, and renders `{agent.menu}` as a numbered table. Naming one clear intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly. A message that supports several menu choices triggers one focused question naming the relevant choices before any workflow starts.
 
 **2. Workflow entry.** Direct workflow commands use the installed skill name, such as `/bmad-testarch-automate` or `$bmad-testarch-automate`, depending on the host's invocation syntax. `TA` is the equivalent agent-menu code, available only once TEA is active. Either way, the workflow's `SKILL.md` resolves its own `[workflow]` customization block and asks which mode to run: Create, Resume, Validate, or Edit. Create and Resume both route into `steps-c/`; Validate into `steps-v/`; Edit into `steps-e/`. `test-review` alone supports `headless: true`, which skips the greeting and the menu and runs Create directly. That is how the CLI drives it in CI.
 
@@ -236,16 +237,25 @@ The three passes cover different user-visible moments. `--pre` checks content be
 
 This closes the gap between advisory generation guidance and a later `test-review`. It blocks seven mechanically decidable Absolute rules and warns on one: focused tests, tautological assertions, hard waits, oversized test files, Maestro flows that cannot fail, two Pact parallelism rules, and undocumented disabled tests as the warning. Rules that require semantic judgment stay in `test-review`. The hook fails open on its own errors so a broken guardrail cannot lock the agent out of writing. Agent platforms without a write-time hook API skip installation and rely on `test-review` for enforcement.
 
-**How workflows become commands.** `npx bmad-method install` copies each TEA skill into the host runtime's skill directory under its own name. Invoking that name loads the skill, and the step-file process takes over. The skill name is identical on every platform the BMad installer supports.
+**How workflows become commands.** `npx skills add` copies each TEA skill into the host's skill directory under its own name. Invoking that name loads the skill, and the step-file process takes over. The skill name is the same on every host.
 
 ## Install
 
 ```bash
-npx bmad-method install
-# Select: Test Architect (TEA)
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-**Note:** TEA is automatically added to party mode after installation. Use `/party` to collaborate with TEA alongside other BMad agents.
+This adds the TEA skills and `bmod-tea`, the module record that holds the setup questions and the knowledge base. Then, in your assistant chat, run:
+
+```text
+bmad setup tea
+```
+
+`bmad setup` runs through [uv](https://docs.astral.sh/uv/) (Python 3.11 or later, which uv fetches when it is missing), so install uv first. The `bmad` skill comes from BMad Method core. If you do not have it, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools`. Setup asks TEA's questions and writes the answers to `_bmad/config.toml`. Run `bmad setup tea` again later to see or change them.
+
+`npx skills add` installs the head of `main`. To install a release, point it at the release tag instead: `npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills`.
+
+Murat is listed in the module's roster, so party mode can bring him into a group discussion alongside other BMad agents.
 
 ### Invocation Syntax
 
@@ -314,10 +324,9 @@ A copy-paste workflow lives at `cli/examples/pr-test-review.yml`, and the full f
 
 ## Configuration
 
-TEA variables are defined in `src/module.yaml` and prompted during install. Eleven are wired into workflows today; the last one is a placeholder that nothing reads yet.
+TEA's setup questions are declared in `skills/bmod-tea/bmod.toml` and asked by `bmad setup tea`, which writes the answers to `modules.tea` in `_bmad/config.toml`. Every one is read by a workflow today. Team overrides go in `_bmad/custom/config.toml` and personal ones in `_bmad/custom/config.user.toml`; run `bmad setup tea` again to see or change the answers.
 
 - `test_artifacts` — base output folder for test artifacts. Each workflow writes into its own folder under it (`test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, `framework/`), and a file produced once per story, epic, or release carries that scope in its name, such as `trace/gate-decision-epic-16.json`. See [Output Layout](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/#output-layout)
-- `tea_evaluations_folder` — base folder for Evaluate's own evaluation folders (string, default `evals`), resolved as `{project-root}/{value}`
 - `tea_use_playwright_utils` — enable Playwright Utils integration (boolean, default true). When true **and the package is installed**, `@seontechnologies/playwright-utils` becomes the default implementation for everything it covers: generated Playwright tests use `interceptNetworkCall`, `apiRequest`, `recurse`, and `log` without being asked, and `test-review` flags a vanilla equivalent that carries no stated reason. See [Integrate Playwright Utils](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/integrate-playwright-utils/)
 - `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing (boolean, default true). It decides how Pact suites are written, not whether a project gets one: TEA still requires a real consumer-provider boundary before scaffolding a contract test. When on **and the package is installed**, generated Pact code uses `createProviderState`, `buildVerifierOptions`, and `createRequestFilter` rather than raw Pact boilerplate. A flag with no install generates the raw path and reports one recommendation rather than flagging every file
 - `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction: mcp, none (string, default mcp). Safe without a broker: every broker-dependent step degrades to provider source or an OpenAPI spec and reports that the broker was unreachable
@@ -325,9 +334,12 @@ TEA variables are defined in `src/module.yaml` and prompted during install. Elev
 - `tea_execution_mode` — how TEA orchestrates multi-step generation and evaluation: auto, subagent, agent-team, sequential (string, default auto)
 - `tea_capability_probe` — probe the runtime before selecting an execution mode (boolean, default true). With it off, TEA honors the configured mode strictly and fails loudly instead of falling back
 - `test_stack_type` — detected or configured stack type (auto, frontend, backend, fullstack, mobile). Mobile is checked before frontend, because a React Native project carries React in `package.json` and would otherwise misdetect as web
-- `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci, other)
 - `test_framework` — detected or configured test framework (auto, Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec, Maestro, other)
-- `risk_threshold` — risk cutoff for mandatory testing. Prompted at install, not yet read by any workflow
+
+Two settings that only one workflow reads are set through that workflow's customization file instead, under `[workflow]`:
+
+- `evaluations_folder` — base folder for Evaluate's own evaluation folders (default `evals`, relative to the project root). Set it in `_bmad/custom/bmad-testarch-evaluate.toml`
+- `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci, other; default auto). Set it in `_bmad/custom/bmad-testarch-ci.toml`
 
 Full option reference: [Configuration](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/).
 
@@ -335,8 +347,8 @@ Full option reference: [Configuration](https://bmad-code-org.github.io/bmad-meth
 
 TEA relies on a curated testing knowledge base of 59 fragments, indexed by tier:
 
-- Index: `src/agents/bmad-tea/resources/tea-index.csv`
-- Fragments: `src/agents/bmad-tea/resources/knowledge/`
+- Index: `skills/bmod-tea/knowledge/tea-index.csv`
+- Fragments: `skills/bmod-tea/knowledge/`
 - Tiers: 24 core, 19 extended, 16 specialized
 
 Workflows load only the fragments required for the current task, and the required set is named in the step file rather than inferred from index tags. See [Knowledge Base](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/knowledge-base/).
@@ -344,21 +356,19 @@ Workflows load only the fragments required for the current task, and the require
 ## Repository Layout
 
 ```text
-src/                     # the shipped module
-├── module.yaml          # install-time variables and post-install notes
-├── module-help.csv      # workflow catalog: menu codes, phases, ordering
-├── agents/bmad-tea/     # SKILL.md, customize.toml, resources/{tea-index.csv, knowledge/}
-└── workflows/testarch/  # ten self-contained workflow skills
-    ├── bmad-teach-me-testing/
-    ├── bmad-testarch-atdd/
-    ├── bmad-testarch-automate/
-    ├── bmad-testarch-ci/
-    ├── bmad-testarch-evaluate/
-    ├── bmad-testarch-framework/        # resources/hooks/tea-enforce.cjs lives here
-    ├── bmad-testarch-nfr/
-    ├── bmad-testarch-test-design/
-    ├── bmad-testarch-test-review/      # steps-c/criteria-registry.md lives here
-    └── bmad-testarch-trace/
+skills/                  # the shipped module, one folder per skill
+├── bmod-tea/            # module record: bmod.toml, roster.toml, help/, knowledge/{tea-index.csv, *.md}
+├── bmad-tea/            # the agent: SKILL.md, customize.toml
+├── bmad-teach-me-testing/
+├── bmad-testarch-atdd/
+├── bmad-testarch-automate/
+├── bmad-testarch-ci/
+├── bmad-testarch-evaluate/
+├── bmad-testarch-framework/        # resources/hooks/tea-enforce.cjs lives here
+├── bmad-testarch-nfr/
+├── bmad-testarch-test-design/
+├── bmad-testarch-test-review/      # steps-c/criteria-registry.md lives here
+└── bmad-testarch-trace/
 
 cli/                     # tea-test-review: the headless CI gate
 docs/                    # source of truth for the docs site
@@ -628,7 +638,7 @@ Custom workflows are still compatible with TEA, but they are no longer implicitl
 
 1. Package the workflow as custom content or a custom module.
 2. Attach it to `bmad-tea` using the agent customization flow.
-3. Reinstall/update BMAD so the new menu item and workflow are registered.
+3. Install the workflow skill with `npx skills add`, then start a fresh chat so the new menu item is picked up.
 
 See [Extend TEA with Custom Workflows](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/extend-tea-with-custom-workflows/) and the BMAD customization guide at [BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md).
 
@@ -754,9 +764,10 @@ npm view bmad-method-test-architecture-enterprise dist-tags
 **Install TEA:**
 
 ```bash
-npx bmad-method install
-# Select "Test Architect (TEA)"
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
+
+Then run `bmad setup tea` in the assistant chat.
 
 **Test Workflows:** type these in the assistant chat, not in a shell.
 
@@ -825,7 +836,7 @@ Before releasing:
 After releasing:
 
 - [ ] Verify NPM publication: `npm view bmad-method-test-architecture-enterprise`
-- [ ] Test installation: `npx bmad-method install`
+- [ ] Test installation: `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, then `bmad setup tea`
 - [ ] Verify workflows work
 - [ ] Check GitHub Release created
 - [ ] Monitor for issues

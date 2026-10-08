@@ -6033,16 +6033,7 @@ async function checkCommandTrialDenial() {
 /** The isolated package every framework case installs under the project's own node_modules (the repository's is read only). */
 const FRAMEWORK = 'probe-fw';
 /** The shipped version probe, copied into a case's `evaluator/` as an adopter copies it. */
-const VERSION_PROBE = path.join(
-  PROJECT_ROOT,
-  'src',
-  'workflows',
-  'testarch',
-  'bmad-testarch-evaluate',
-  'assets',
-  'evaluators',
-  'installed-version.mjs',
-);
+const VERSION_PROBE = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-evaluate', 'assets', 'evaluators', 'installed-version.mjs');
 const SHIPPED_PROBE = { command: 'evaluator/installed-version.mjs', args: [FRAMEWORK] };
 
 /** The package.json the project's isolated package is installed as. */

@@ -77,7 +77,7 @@ The reads run over the probes the builder emits and over the committed probe fil
 
 `tea-routing-intents.probes.json` and `tea-routing-controls.probes.json` ship a gameability probe and
 a clean control each, and nothing else. A defect probe needs a controlled mutation of the system under
-test with baseline and mutated evidence, and the system here is `src/agents/bmad-tea/SKILL.md`.
+test with baseline and mutated evidence, and the system here is `skills/bmad-tea/SKILL.md`.
 Mutating the skill to prove that the eval catches the mutation is an edit to the thing being measured,
 so the route is closed rather than unused. The fragment-selection corpora carry the same two classes
 for the same reason.

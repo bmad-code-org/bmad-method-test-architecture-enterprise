@@ -13,8 +13,8 @@ The skill is the source of truth for all review logic (checklist, scoring, repor
 
 - Node.js 20+, with the `tea-test-review` bin (`npm install --global bmad-method-test-architecture-enterprise`, or via `npx`).
 - The `bmad-testarch-test-review` skill present in the workspace **when the CLI runs**. The reviewed repo doesn't need to commit BMAD files or install the TEA module; CI can fetch the skill as a build step (see the [example workflow](#example-workflow)). Two ways to supply it:
-  - **Discovered in the project**: probed at `_bmad/tea/workflows/testarch/bmad-testarch-test-review`, `.claude/skills/bmad-testarch-test-review`, `.agents/skills/bmad-testarch-test-review`. Local-dev case.
-  - **Pinned with `--skill-root <path>`** (recommended for CI): unpack from a pinned npm tarball, point `--skill-root` at it. Reviewer never comes from the PR checkout.
+  - **Discovered in the project**: probed at `.claude/skills/bmad-testarch-test-review`, `.agents/skills/bmad-testarch-test-review`, `skills/bmad-testarch-test-review`, and last the classic installer's `_bmad/tea/workflows/testarch/bmad-testarch-test-review`, which a project upgraded from v6 can still hold. Local-dev case.
+  - **Pinned with `--skill-root <path>`** (recommended for CI): unpack from a pinned npm tarball (`package/skills/bmad-testarch-test-review`), copy `package/skills/bmod-tea` beside it, and point `--skill-root` at the skill. The skill reads its knowledge base from the `bmod-tea` folder beside it, and the CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is missing. Reviewer never comes from the PR checkout.
 - For `--agent claude` (default): the `claude` CLI on `PATH`, authenticated via subscription/keychain login or `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` in the environment.
 - For `--agent codex`: the `codex` CLI on `PATH`, authenticated via `codex login`, which stores credentials in `$HOME/.codex/auth.json`. **`OPENAI_API_KEY` in the environment is not enough**: codex 0.146.0 never reads it, and a run with only that variable set sends no credential at all and fails with `401 ... Missing bearer or basic authentication in header`. On a machine with no interactive login, such as any CI runner, write the auth file first with `printenv OPENAI_API_KEY | codex login --with-api-key`.
 - For `--agent agy`: the `agy` CLI on `PATH` with its Antigravity session ready. It accepts `--model`; without an override it uses the session's model. This adapter sends the complete prompt through the `--print` process argument because `agy` does not consume the prompt from stdin.
@@ -28,7 +28,7 @@ Install the CLI once. This adds the `tea-test-review` command to your `PATH`; it
 npm install --global bmad-method-test-architecture-enterprise@latest
 ```
 
-**If the project already has the TEA module** (any of the three probed locations above), that is the whole setup. Run it from the project root against the files you want reviewed:
+**If the project already has the TEA skills** (any of the probed locations above), that is the whole setup. Run it from the project root against the files you want reviewed:
 
 ```bash
 tea-test-review \
@@ -41,7 +41,7 @@ tea-test-review \
 **If it doesn't**, point `--skill-root` at the copy that shipped with the CLI. The global install includes the skill, so nothing else has to be fetched:
 
 ```bash
-export TEA_SKILL="$(npm prefix -g)/lib/node_modules/bmad-method-test-architecture-enterprise/src/workflows/testarch/bmad-testarch-test-review"
+export TEA_SKILL="$(npm prefix -g)/lib/node_modules/bmad-method-test-architecture-enterprise/skills/bmad-testarch-test-review"
 
 tea-test-review --agent codex --skill-root "$TEA_SKILL" --files tests/checkout.spec.ts
 ```
@@ -93,7 +93,7 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--agent-arg <arg>`                                    | -                                                                  | Extra argument appended to the selected agent's argv (repeatable).                                                                                                                                                                                                                                                                                    |
 | `--env-pass <NAME>`                                    | -                                                                  | Env var allowed through beyond the default set (repeatable).                                                                                                                                                                                                                                                                                          |
 | `--timeout-ms <n>`                                     | 20 min + 2 min per reviewed file, capped at 30 min                 | Agent wall-clock timeout: on POSIX the agent's process group gets SIGTERM, then SIGKILL 2 s later if it is still running. On Windows, a kill-on-close Job Object stops the agent and ordinary descendants when the turn ends. No supported vendor CLI caps turns, so this bounds a stuck run, with up to 2 s spent reading the output the agent left. |
-| `--execution-mode <mode>`                              | `auto`                                                             | Force `tea_execution_mode` (`auto`\|`agent-team`\|`subagent`\|`sequential`), overriding `_bmad/tea/config.yaml`.                                                                                                                                                                                                                                      |
+| `--execution-mode <mode>`                              | `auto`                                                             | Force `tea_execution_mode` (`auto`\|`agent-team`\|`subagent`\|`sequential`), overriding the project config.                                                                                                                                                                                                                                           |
 | `--capability-probe` / `--no-capability-probe`         | `true`                                                             | Force `tea_capability_probe`. With it off, the requested execution mode is honored strictly.                                                                                                                                                                                                                                                          |
 | `--min-score <n>`                                      | -                                                                  | Fail when the quality score is below `n` (0-100).                                                                                                                                                                                                                                                                                                     |
 | `--max-critical <n>`                                   | no cap                                                             | Fail when Critical violations exceed `n`.                                                                                                                                                                                                                                                                                                             |
@@ -180,14 +180,14 @@ Four config keys pick which knowledge fragments load, and two more decide how st
 One of the four is fixed by the headless contract: `tea_browser_automation=none`. The other five, the three fragment keys plus the orchestration pair `tea_execution_mode` and `tea_capability_probe`, resolve by precedence, highest first:
 
 1. Explicit flag (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`, `--execution-mode sequential`, `--no-capability-probe`)
-2. `<project-root>/_bmad/tea/config.yaml` (written by `npx bmad-method install`)
-3. Module default from `src/module.yaml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: mcp`, `tea_execution_mode: auto`, `tea_capability_probe: true`
+2. The project's `[modules.tea]` table, merged from `_bmad/config.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml`, later files winning (written by `bmad setup tea`). Only when `_bmad/config.toml` does not exist does the CLI read a legacy `_bmad/tea/config.yaml` instead, so CI set up for an older TEA keeps working
+3. Module default from `skills/bmod-tea/bmod.toml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: mcp`, `tea_execution_mode: auto`, `tea_capability_probe: true`
 
 `step-03-quality-evaluation.md` reads the orchestration pair, probes the runtime, dispatches its four quality workers in parallel when it can launch them, and resolves to `sequential` when it cannot. Both keys are stated in the prompt because `auto` with the probe off resolves to `sequential` on every run, which would leave the parallel path unreachable. The report's `**Execution Mode**:` line records which one it resolved to.
 
-A missing `config.yaml` is normal: CI installs the skill without running the interactive installer. Content that exists but is invalid is an error (exit 2): non-boolean `tea_use_*`, a `tea_pact_mcp` outside the enum, unparseable YAML, or a non-mapping file. Quoted booleans (`'true'`, `'false'`) are coerced.
+A missing config is normal: CI installs the skill without running `bmad setup tea`. Content that exists but is invalid is an error (exit 2): a `tea_use_*` value that is not a boolean or the string `"true"` or `"false"`, a `tea_pact_mcp` or `tea_execution_mode` outside its enum, unparseable TOML or YAML, a `[modules.tea]` that is not a table, or a legacy file that is not a mapping. The strings `"true"` and `"false"`, as `bmad setup` writes them, are coerced.
 
-**In CI, state what you need.** With no `config.yaml` and no flag, a contract-testing repo gets `tea_use_pactjs_utils: true` and loads the `pactjs-utils-*`/`pact-*` fragments, which is what a repo on those utilities wants. A repo writing raw `@pact-foundation/pact` should commit `_bmad/tea/config.yaml` or pass `--no-use-pactjs-utils`, so the review loads `contract-testing.md` and scores against the rules that repo actually follows.
+**In CI, state what you need.** With no config and no flag, a contract-testing repo gets `tea_use_pactjs_utils: true` and loads the `pactjs-utils-*`/`pact-*` fragments, which is what a repo on those utilities wants. A repo writing raw `@pact-foundation/pact` should commit a `[modules.tea]` table in `_bmad/config.toml` or pass `--no-use-pactjs-utils`, so the review loads `contract-testing.md` and scores against the rules that repo actually follows.
 
 ## Exit codes
 
@@ -362,7 +362,7 @@ The finding blocks are read exactly once, and both this cross-check and the verd
 
 ## Example workflow
 
-[Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: two jobs (review + PR comment), full-history checkout, skill and CLI installed from an exactly-pinned npm version, `--skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review"`, artifacts uploaded for both report and verdict JSON, and a find-and-update PR comment that distinguishes pass, fail, skip, and infrastructure failure. Make the `review` job a required status check to gate merges.
+[Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: two jobs (review + PR comment), full-history checkout, skill and CLI installed from an exactly-pinned npm version, `--skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review"`, artifacts uploaded for both report and verdict JSON, and a find-and-update PR comment that distinguishes pass, fail, skip, and infrastructure failure. Make the `review` job a required status check to gate merges.
 
 The comment carries the score/recommendation/violations digest, review provenance, and up to three `keyWeaknesses` bullets. It inlines the full report in a collapsed `<details>` block (falling back to an artifact link alone above ~40,000 characters, GitHub's comment body cap is 65,536) so a reviewer can paste it straight into an AI coding agent to apply the fixes.
 

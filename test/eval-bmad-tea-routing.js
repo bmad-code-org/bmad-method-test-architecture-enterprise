@@ -52,7 +52,7 @@
  *
  * WHERE THE ORACLE COMES FROM, AND WHERE IT DOES NOT
  *
- * `route` and `clarify` are Step 8 of `src/agents/bmad-tea/SKILL.md` verbatim:
+ * `route` and `clarify` are Step 8 of `skills/bmad-tea/SKILL.md` verbatim:
  * dispatch a clear match directly, and pause to clarify only when two or more
  * items are genuinely close.
  *
@@ -173,7 +173,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'tea-routing-eval');
 const INTENTS = path.join(FIXTURE_ROOT, 'intents.json');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-tea');
 const SKILL_FILE = path.join(SKILL_ROOT, 'SKILL.md');
 const MENU_FILE = path.join(SKILL_ROOT, 'customize.toml');
 const SUITE_ID = 'bmad-tea-routing';
@@ -455,41 +455,41 @@ async function validateCorpus({ intents, groundTruth, cases }, overrides = {}) {
   const boundaries = ambiguityBoundaryRows(skill);
   const boundariesByCase = new Map();
   const boundaryFacts = new Set();
-  if (menu.length === 0) problems.push('src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item; there is nothing to route to');
+  if (menu.length === 0) problems.push('skills/bmad-tea/customize.toml declares no [[agent.menu]] item; there is nothing to route to');
 
   for (const boundary of boundaries) {
     const { sourceCase, facts, missing, candidateCodes: codes, columnCount } = boundary;
     if (columnCount !== 4) {
-      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary row has ${columnCount} columns; expected 4`);
+      problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary row has ${columnCount} columns; expected 4`);
     }
     if (sourceCase === null) {
-      problems.push('src/agents/bmad-tea/SKILL.md ambiguity boundary carries no backticked source case id');
+      problems.push('skills/bmad-tea/SKILL.md ambiguity boundary carries no backticked source case id');
       continue;
     }
     if (boundariesByCase.has(sourceCase)) {
-      problems.push(`src/agents/bmad-tea/SKILL.md repeats ambiguity boundary source case "${sourceCase}"`);
+      problems.push(`skills/bmad-tea/SKILL.md repeats ambiguity boundary source case "${sourceCase}"`);
     } else {
       boundariesByCase.set(sourceCase, boundary);
     }
     const normalizedFacts = normalizeBoundaryText(facts);
     if (boundaryFacts.has(normalizedFacts)) {
-      problems.push(`src/agents/bmad-tea/SKILL.md repeats ambiguity boundary facts ${JSON.stringify(facts)}`);
+      problems.push(`skills/bmad-tea/SKILL.md repeats ambiguity boundary facts ${JSON.stringify(facts)}`);
     }
     boundaryFacts.add(normalizedFacts);
     if (normalizedFacts.length === 0) {
-      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no supplied facts`);
+      problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no supplied facts`);
     }
     if (codes.length < 2) {
-      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" needs at least two candidate codes`);
+      problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" needs at least two candidate codes`);
     }
     if (new Set(codes).size !== codes.length) {
-      problems.push(`src/agents/bmad-tea/SKILL.md repeats a menu code in ambiguity boundary ${codes.join(', ')}`);
+      problems.push(`skills/bmad-tea/SKILL.md repeats a menu code in ambiguity boundary ${codes.join(', ')}`);
     }
     for (const code of codes) {
-      if (!byCode.has(code)) problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary names unknown menu code "${code}"`);
+      if (!byCode.has(code)) problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary names unknown menu code "${code}"`);
     }
     if (normalizeBoundaryText(missing).length === 0) {
-      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no missing deciding information`);
+      problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no missing deciding information`);
     }
   }
 
@@ -547,7 +547,7 @@ async function validateCorpus({ intents, groundTruth, cases }, overrides = {}) {
     if (expected.expectedAction === 'route') {
       const menuItem = byCode.get(expected.expectedMenuCode);
       if (menuItem === undefined) {
-        problems.push(`${label}: expectedMenuCode "${expected.expectedMenuCode}" is not a code in src/agents/bmad-tea/customize.toml`);
+        problems.push(`${label}: expectedMenuCode "${expected.expectedMenuCode}" is not a code in skills/bmad-tea/customize.toml`);
       } else if ((menuItem.skill ?? null) !== (expected.expectedWorkflow ?? null)) {
         problems.push(
           `${label}: the menu maps ${menuItem.code} to ${menuItem.skill ?? 'a prompt rather than a skill'} and the oracle expects ${expected.expectedWorkflow ?? 'null'}`,
@@ -564,11 +564,11 @@ async function validateCorpus({ intents, groundTruth, cases }, overrides = {}) {
       const candidates = expected.candidateCodes ?? [];
       if (candidates.length < 2) problems.push(`${label}: a clarify case needs at least two candidateCodes; one candidate is a route`);
       for (const code of candidates) {
-        if (!byCode.has(code)) problems.push(`${label}: candidateCode "${code}" is not a code in src/agents/bmad-tea/customize.toml`);
+        if (!byCode.has(code)) problems.push(`${label}: candidateCode "${code}" is not a code in skills/bmad-tea/customize.toml`);
       }
       const boundary = boundariesByCase.get(item.id);
       if (boundary === undefined) {
-        problems.push(`${label}: src/agents/bmad-tea/SKILL.md declares no ambiguity boundary for this source case`);
+        problems.push(`${label}: skills/bmad-tea/SKILL.md declares no ambiguity boundary for this source case`);
       } else {
         const actualCandidates = [...boundary.candidateCodes].sort().join('+');
         const expectedCandidates = [...candidates].sort().join('+');
@@ -592,10 +592,10 @@ async function validateCorpus({ intents, groundTruth, cases }, overrides = {}) {
   for (const [sourceCase] of boundariesByCase) {
     const item = cases.find((candidate) => candidate.id === sourceCase);
     if (item === undefined) {
-      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" is orphaned from the intent corpus`);
+      problems.push(`skills/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" is orphaned from the intent corpus`);
     } else if (item.expected?.expectedAction !== 'clarify') {
       problems.push(
-        `src/agents/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" references a ${item.expected?.expectedAction ?? 'missing'} case; clear and unservable intents must not be over-clarified`,
+        `skills/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" references a ${item.expected?.expectedAction ?? 'missing'} case; clear and unservable intents must not be over-clarified`,
       );
     }
   }
@@ -988,9 +988,9 @@ async function buildPrompt(item) {
     '',
     'Apply the dispatch rule in Step 8 of the skill to the single user message at the end. Do not run the activation steps, do not greet, and do not produce the workflow itself. Decide only where this message belongs.',
     '',
-    `----- src/agents/bmad-tea/SKILL.md -----\n${skill}`,
+    `----- skills/bmad-tea/SKILL.md -----\n${skill}`,
     '',
-    `----- src/agents/bmad-tea/customize.toml -----\n${menu}`,
+    `----- skills/bmad-tea/customize.toml -----\n${menu}`,
     '',
     `----- the user's opening message -----\n${item.intent}`,
     '',

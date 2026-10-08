@@ -460,17 +460,23 @@ function main() {
     .option('--no-isolate', 'disable filesystem isolation (default: isolated when CI is set, otherwise off)')
     .option(
       '--use-playwright-utils',
-      'force tea_use_playwright_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)',
+      'force tea_use_playwright_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
     )
-    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding _bmad/tea/config.yaml')
-    .option('--use-pactjs-utils', 'force tea_use_pactjs_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)')
-    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding _bmad/tea/config.yaml')
-    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: mcp)`)
+    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option(
+      '--use-pactjs-utils',
+      'force tea_use_pactjs_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
+    )
+    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option(
+      '--pact-mcp <mode>',
+      `force tea_pact_mcp, overriding [modules.tea] in _bmad/config.toml (${PACT_MCP_VALUES.join('|')}; default: mcp)`,
+    )
     .option(
       '--execution-mode <mode>',
-      `force tea_execution_mode, overriding _bmad/tea/config.yaml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
+      `force tea_execution_mode, overriding [modules.tea] in _bmad/config.toml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
     )
-    .option('--capability-probe', 'force tea_capability_probe on, overriding _bmad/tea/config.yaml (default: true)')
+    .option('--capability-probe', 'force tea_capability_probe on, overriding [modules.tea] in _bmad/config.toml (default: true)')
     .option('--no-capability-probe', 'force tea_capability_probe off, so the requested execution mode is honored strictly');
 
   program.exitOverride();
@@ -618,8 +624,19 @@ function main() {
     }
   }
 
+  // The skill reads its knowledge base from the bmod-tea folder beside it. Without it a headless run
+  // would stop at activation after the paid agent call has started, so refuse before any call.
+  const knowledgeIndex = path.join(skillRoot, '..', 'bmod-tea', 'knowledge', 'tea-index.csv');
+  if (!fs.existsSync(knowledgeIndex)) {
+    fail(
+      EXIT.ENV_ERROR,
+      `The TEA knowledge base is not installed beside the skill (expected ${path.resolve(knowledgeIndex)}).\n` +
+        'Install bmod-tea next to bmad-testarch-test-review: npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea',
+    );
+  }
+
   // Every config key step-01 branches on is resolved here (flag, then the
-  // project's config.yaml, then the module default) and stated in the prompt.
+  // project's [modules.tea] config, then the module default) and stated in the prompt.
   // An unstated key is one the agent decides per run.
   let teaConfig;
   let installedPackages;
@@ -862,14 +879,30 @@ function main() {
     const relativeSkillRoot = path.relative(projectRoot, skillRoot);
     const skillInsideProject = relativeSkillRoot === '' || (!relativeSkillRoot.startsWith('..') && !path.isAbsolute(relativeSkillRoot));
     if (skillInsideProject) {
-      const skillPrefix = relativeSkillRoot === '' ? './' : relativeSkillRoot.split(path.sep).join('/') + '/';
-      const touched = relativeSkillRoot === '' ? allChangedFiles : allChangedFiles.filter((file) => file.startsWith(skillPrefix));
-      if (touched.length > 0) {
-        fail(
-          EXIT.ENV_ERROR,
-          `The diff modifies the reviewer control plane (${skillPrefix}): ${touched.join(', ')}. ` +
-            'The gate cannot trust a review defined by the change under review; review the skill change separately or vendor a pinned skill from outside the checkout.',
-        );
+      // The reviewer is the skill plus the bmod-tea knowledge base it reads beside itself, so a diff to either rewrites the gate.
+      // `npx skills add` links `.claude/skills/<name>` to a canonical folder and git reports the real path, so each root is guarded
+      // under its own path and under its resolved path.
+      const realRelative = (absolute) => {
+        try {
+          return path.relative(fs.realpathSync(projectRoot), fs.realpathSync(absolute));
+        } catch {
+          return null;
+        }
+      };
+      const roots = [skillRoot, path.join(skillRoot, '..', 'bmod-tea')];
+      const candidates = roots.flatMap((root) => [path.relative(projectRoot, root), realRelative(root)]);
+      const guarded = [...new Set(candidates.filter((relative) => relative !== null))]
+        .filter((relative) => relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative)))
+        .map((relative) => (relative === '' ? './' : relative.split(path.sep).join('/') + '/'));
+      for (const prefix of guarded) {
+        const touched = prefix === './' ? allChangedFiles : allChangedFiles.filter((file) => file.startsWith(prefix));
+        if (touched.length > 0) {
+          fail(
+            EXIT.ENV_ERROR,
+            `The diff modifies the reviewer control plane (${prefix}): ${touched.join(', ')}. ` +
+              'The gate cannot trust a review defined by the change under review; review the skill change separately or vendor a pinned skill from outside the checkout.',
+          );
+        }
       }
     }
   }

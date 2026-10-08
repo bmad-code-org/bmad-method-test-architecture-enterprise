@@ -4,7 +4,7 @@
  * AD-7, AD-8, AD-21).
  *
  * The port is the Evaluate skill's template,
- * `src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs`,
+ * `skills/bmad-testarch-evaluate/assets/http-probe-port.mjs`,
  * rendered unchanged into the fixture's `adapter/` beside its conformance
  * file. Every case that runs `tea-evaluate` copies `test/fixtures/evaluate-api/`
  * (the grader, a loopback HTTP service whose `GET /grade` accepts an answer
@@ -134,7 +134,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
-const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
+const ASSETS = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-evaluate', 'assets');
 const PORT_TEMPLATE = path.join(ASSETS, 'http-probe-port.mjs');
 const CONFORMANCE_TEMPLATE = path.join(ASSETS, 'http-probe-port.conformance.mjs');
 const KILLED_CALL = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'killed-call.cjs');
@@ -639,8 +639,7 @@ async function unitService() {
 }
 
 async function checkPortUnits() {
-  const { default: createHttpProbePort, nodeTransport } =
-    await import('../src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs');
+  const { default: createHttpProbePort, nodeTransport } = await import('../skills/bmad-testarch-evaluate/assets/http-probe-port.mjs');
   const engine = await loadEngine();
   const service = await unitService();
   try {
@@ -1851,7 +1850,7 @@ async function checkUnits() {
 
     // A denial's message names the host a redirect gave, which a URL lowercases: a secret the target put there is
     // scrubbed from the message in every case, as from the answer.
-    const { default: createHttpProbePort } = await import('../src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs');
+    const { default: createHttpProbePort } = await import('../skills/bmad-testarch-evaluate/assets/http-probe-port.mjs');
     const mixedCaseKey = 'Unit-Key-Value-MixedCase';
     const templatePort = createHttpProbePort({
       ...portConfiguration({

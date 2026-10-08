@@ -27,22 +27,22 @@
   "testDir": "tests",
   "skillRuleCitations": {
     "redPhaseIsSkipped": {
-      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
+      "file": "skills/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
       "section": "CRITICAL ATDD Requirements",
       "requiredPhrase": "Use `test.skip()` to mark tests as red-phase scaffolds"
     },
     "noPlaceholderAssertions": {
-      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04c-aggregate.md",
+      "file": "skills/bmad-testarch-atdd/steps-c/step-04c-aggregate.md",
       "section": "2. Verify TDD Red Phase Compliance",
       "requiredPhrase": "has placeholder assertions - must assert EXPECTED behavior"
     },
     "confirmRedBeforeGreen": {
-      "file": "src/workflows/testarch/bmad-testarch-atdd/checklist.md",
+      "file": "skills/bmad-testarch-atdd/checklist.md",
       "section": "Red-Phase Scaffolds Verified",
       "requiredPhrase": "Activation guidance is documented: remove `test.skip()` for the current task, then confirm RED before implementing"
     },
     "workflowDoesNotRunTests": {
-      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
+      "file": "skills/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
       "section": "MANDATORY EXECUTION RULES",
       "requiredPhrase": "Do NOT run tests (that's step 5)"
     }

@@ -47,22 +47,25 @@ Those are the features you'll test.
 
 ## Step 1: Install BMad and Scaffold Framework (10 minutes)
 
-### Install BMad Method
+### Install BMad Method and TEA
 
 ```bash
-npx bmad-method install
+npx skills add bmad-code-org/BMAD-METHOD
+npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-When prompted:
+The first command adds BMad Method, including the `bmad` skill that runs setup. The second adds the TEA skills and `bmod-tea`. Then, in your assistant chat, run:
 
-- **Select modules:** Choose "BMM: BMad Method" and "TEA: BMad Test Architect" (press Space on each, then Enter)
-- **Project name:** Keep default or enter your project name
-- **Experience level:** Choose "beginner" for this tutorial
-- **Planning artifacts folder:** Keep default
-- **Implementation artifacts folder:** Keep default
-- **Project knowledge folder:** Keep default
-- **Enable TEA Playwright Model Context Protocol (MCP) enhancements?** Choose "No" for now (we'll explore this later)
-- **Using playwright-utils?** Choose "No" for now (we'll explore this later)
+```text
+bmad setup
+```
+
+When it asks:
+
+- **Test artifacts folder:** Keep default
+- **Playwright Utils:** Answer `false` for now (we'll explore this later)
+- **Browser automation:** Answer `none` for now (we'll explore this later)
+- **Everything else:** Keep defaults
 
 You'll see a `_bmad/` folder in your project.
 
