@@ -36,7 +36,17 @@ Every fixture is a small Python and pytest repository; none holds adopter code, 
 
 The confirmed requirements expect these clean controls to fail on the release this evaluation was authored against: P-001 (old-line findings in a pull request review), P-007 (H3 on a redundant branch), P-008 (H10 on a type-checked covariance test) and P-010 (no `reviewMode` field).
 Their `noKnownDefectStatement` says so.
-The first live run records that state and is not accepted as a baseline.
+The first preflight measured a fifth: P-005, where the self-comparison is reported on the unchanged assertion line, classified pre-existing, and the review approves.
+
+`tea-evaluate run` qualifies every clean control on one clean arm and stops with exit 11 when a control's baseline fails, so no full run can record this state.
+The before state is the evidence the first preflight wrote: the clean, mutated and re-run arms of P-003's and P-011's qualification, each a live review of all five steps.
+The first `run` happens after the fixes and is the one accepted as a baseline.
+
+## Volatile fields
+
+A live reviewer words its free text differently on every run, and preflight's state-reset check compares two reviews of one request field by field.
+The contract declares the free-text fields volatile, each finding's `title` included.
+RFC 6901 has no wildcard, so the titles are named by index, `/findings/0/title` through `/findings/39/title`; a pointer past the end of the array removes nothing.
 
 ## Seeded defects and refusals
 

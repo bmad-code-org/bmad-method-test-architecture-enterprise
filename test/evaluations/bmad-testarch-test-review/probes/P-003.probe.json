@@ -29,13 +29,75 @@
           }
         },
         "relation": {
-          "op": "equality",
+          "op": "all",
           "operands": [
             {
-              "pointer": "/interactions/manifest-p-003/stdout/recommendation"
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-003/stdout/recommendation"
+                },
+                {
+                  "literal": "Approve"
+                }
+              ]
             },
             {
-              "literal": "Approve"
+              "op": "for-any",
+              "collection": {
+                "pointer": "/interactions/manifest-p-003/stdout/findings"
+              },
+              "predicate": {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/row"
+                      },
+                      {
+                        "literal": "H1"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "set-membership",
+                    "operands": [
+                      {
+                        "pointer": "@/line"
+                      },
+                      {
+                        "literal": [
+                          15,
+                          16,
+                          17,
+                          18,
+                          19,
+                          20,
+                          23,
+                          24,
+                          25,
+                          26,
+                          27,
+                          28
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/provenance"
+                      },
+                      {
+                        "literal": "pre_existing"
+                      }
+                    ]
+                  }
+                ]
+              }
             }
           ]
         }
@@ -74,13 +136,75 @@
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/recommendation"
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/recommendation"
+              },
+              {
+                "literal": "Approve"
+              }
+            ]
           },
           {
-            "literal": "Approve"
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/observed/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/provenance"
+                    },
+                    {
+                      "literal": "pre_existing"
+                    }
+                  ]
+                }
+              ]
+            }
           }
         ]
       }
