@@ -89,8 +89,26 @@ function ci(folder, tier, env = {}, extra = []) {
     timeout: 600_000,
     env: { ...BASE_ENV, ...env },
   });
-  if (run.error) throw run.error;
+  if (run.error) throw hungCi(run, folder, tier);
   return { status: run.status, stdout: run.stdout, stderr: run.stderr, output: `${run.stdout}${run.stderr}` };
+}
+
+/**
+ * The error of a `ci` call that did not end: the stage it last reported on stderr and what its newest run directory holds, so
+ * a hang names where it stopped instead of a bare `ETIMEDOUT` (the scratch copy that holds the run is gone once the test ends).
+ */
+function hungCi(run, folder, tier) {
+  const said = `${run.stderr ?? ''}`.trim().split('\n').slice(-8).join('\n');
+  const runs = path.join(folder, 'runs');
+  const newest = fs.existsSync(runs) ? fs.readdirSync(runs).sort().at(-1) : undefined;
+  const held =
+    newest === undefined ? 'no run directory' : fs.readdirSync(path.join(runs, newest), { recursive: true }).sort().slice(0, 40).join(', ');
+  const error = new Error(
+    `ci${tier === undefined ? '' : ` --tier ${tier}`} over ${folder} did not end (${run.error.code ?? run.error.message}).\n` +
+      `Its last progress lines:\n${said || '(none)'}\nIts newest run, ${newest ?? 'none'}, holds: ${held}`,
+  );
+  error.cause = run.error;
+  return error;
 }
 
 /** A command other than `ci` through the CLI. */
