@@ -100,9 +100,18 @@ function ci(folder, tier, env = {}, extra = []) {
 function hungCi(run, folder, tier) {
   const said = `${run.stderr ?? ''}`.trim().split('\n').slice(-8).join('\n');
   const runs = path.join(folder, 'runs');
-  const newest = fs.existsSync(runs) ? fs.readdirSync(runs).sort().at(-1) : undefined;
-  const held =
-    newest === undefined ? 'no run directory' : fs.readdirSync(path.join(runs, newest), { recursive: true }).sort().slice(0, 40).join(', ');
+  let newest;
+  let held;
+  try {
+    newest = fs.existsSync(runs) ? fs.readdirSync(runs).sort().at(-1) : undefined;
+    held =
+      newest === undefined
+        ? 'no run directory'
+        : fs.readdirSync(path.join(runs, newest), { recursive: true }).sort().slice(0, 40).join(', ');
+  } catch (error) {
+    // A run directory that cannot be listed must not hide the timeout it would have explained.
+    held = `unavailable (${error.code ?? error.message})`;
+  }
   const error = new Error(
     `ci${tier === undefined ? '' : ` --tier ${tier}`} over ${folder} did not end (${run.error.code ?? run.error.message}).\n` +
       `Its last progress lines:\n${said || '(none)'}\nIts newest run, ${newest ?? 'none'}, holds: ${held}`,
