@@ -2,7 +2,7 @@
   "legId": "p-012-manifest-decision-reject",
   "sequence": 12,
   "workspace": "mutated:M-006",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-cf2a92fd-543b-41b9-abb3-c5e0175a6412/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-012-manifest-decision-reject",
     "interfaceId": "answer-grade",
@@ -30,7 +30,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Sun, 04 Oct 2026 14:43:13 GMT",
+      "date": "Tue, 06 Oct 2026 21:23:20 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

@@ -59,7 +59,11 @@
  *   or its degenerate response, `corpus/gameability/<probeId>.json`, is absent, fails its schema
  *   (`schema`), answers a plan step the contract does not declare or leaves one unanswered, answers a
  *   step with the response of another kind of call (a command's, a tool call's or an HTTP request's), or
- *   exits a code the step's registry entry declares as infrastructure.
+ *   exits a code the step's registry entry declares as infrastructure. Under a `partitionPlan` (Story 1.109)
+ *   the file answers the steps of `contract.json`, the held-out probe's naive oracle is one the held-out view
+ *   keeps, and a check that opens the held-out plan holds `corpus/held-out/gameability/<probeId>.json` to the
+ *   same rules over the plan's steps (required when the plan declares a step), naming a step by an ID only when
+ *   it has the schema's shape.
  * - `historical` (Story 1.9): a probe on the `historical` route does not carry `expectedClean: false`, seeds
  *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there;
  *   Story 1.32: it names neither or both of `fixCommit` and `deployments`, one deployment without the
@@ -76,7 +80,9 @@
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
  *   does not have, one that cannot run read-only, the `custom` adapter with no `agentCommand`, or a `model`
  *   its adapter refuses. Story 1.17 narrows it to the `deterministic` evaluator: under any other kind the
- *   evaluator scores the rubric, so neither file may carry a `judge` block.
+ *   evaluator scores the rubric, so neither file may carry a `judge` block. A `judge.modelSnapshot` that
+ *   differs from the model the judge's adapter runs (`judge.model`, a model its `agentArgs` set, or the
+ *   adapter's default) is refused too: `judge.model` selects the model and the snapshot only records it.
  * - `evaluator` (Story 1.34): a `sealed-brief-agent` evaluator whose `evaluation.json` has no
  *   `evaluatorQualification` (`attempts`, `minimumAgreement`), which `run` needs to qualify the agent
  *   before its verdicts count; and an `evaluatorQualification` beside any other kind, where nothing would use it.
@@ -91,7 +97,8 @@
  *   holds a link or special file; a `command` evaluator's executable is not a regular executable file; a
  *   `sealed-brief-agent` names an adapter TeA lacks or one with no bridged run, the `custom` adapter
  *   with no `agentCommand`, a `model` its adapter refuses, passthrough `agentArgs` that reopen what the
- *   bridged run closes, or no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, where an
+ *   bridged run closes, no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, or one that differs
+ *   from the model the agent runs (`evaluator.model`, a model its `agentArgs` set, or the adapter's default), where an
  *   `evaluator` block beside the `deterministic` or `records` kind is refused as unused; a `records`
  *   evaluator's directory is absent or reached through a link. An unknown kind, and a `command` or
  *   `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
@@ -103,7 +110,8 @@
  *   runtime-owned plan schema, an unknown `evaluate` check id included (`schema`), and keep the placement rules
  *   `tea-evaluate ci` enforces (`tier`, `duplicate`, `command`, `trigger`, `placeholder`, `placement-default`,
  *   `placement-reason`, `deterministic-off-pr`, `live-on-pr`; Story 1.96 added `trigger`, `placeholder`, `tiers`
- *   and `applicability`, read against `evaluation.json` and `contract.json`; `ci-plan.js`). An absent plan is no defect
+ *   and `applicability`, read against `evaluation.json` and `contract.json`; Story 1.97 added `gates`, a violation
+ *   of the optional list of jobs a check's tier gates; `ci-plan.js`). An absent plan is no defect
  *   here; `tea-evaluate ci` exits 64.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
@@ -168,7 +176,22 @@ const { answeredKind, degenerateResponsePath } = require('./gameability');
 /** How a finding names a call of each interface kind. */
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
-const { PartitionPlanError, contractView, mappingViewProblems, partitionPlanProblems, readHeldOutPlan } = require('./partition');
+const {
+  HELD_OUT_DIRECTORY,
+  PROBE_ID,
+  PartitionPlanError,
+  STEP_ID,
+  contractView,
+  heldOutResponsePath,
+  mappingViewProblems,
+  named,
+  partitionPlanProblems,
+  readHeldOutPlan,
+  readHeldOutResponse,
+  readRegularFile,
+  stepsReadBy,
+  NotRegularFileError,
+} = require('./partition');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -236,7 +259,8 @@ const RUNTIME_SCHEMA_ROOT = path.join(__dirname, 'schemas');
 const TEA_MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
 
 function readJsonFile(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  // Read without blocking, so a FIFO where a file belongs is a finding and never a wait a signal cannot end.
+  return JSON.parse(readRegularFile(file).toString('utf8'));
 }
 
 /** Ajv's errors as one line each, naming the instance location and what it broke. */
@@ -338,7 +362,7 @@ function parseInto(report, folder, relative) {
   try {
     return readJsonFile(path.join(folder, relative));
   } catch (error) {
-    report.add(relative, 'json', `does not parse as JSON: ${error.message}`);
+    report.add(relative, 'json', error instanceof NotRegularFileError ? error.message : `does not parse as JSON: ${error.message}`);
     return;
   }
 }
@@ -1092,14 +1116,73 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
   }
 }
 
+/** The operation a plan step calls, with its interface, from the contract's interfaces; undefined when the contract holds none. */
+function operationOfStep(contract, step) {
+  return (Array.isArray(contract?.permittedInterfaces) ? contract.permittedInterfaces : [])
+    .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
+    .find((candidate) => candidate.iface?.logicalId === step?.interfaceId && candidate.operation?.operationId === step?.operationId);
+}
+
+/**
+ * One degenerate-response file's answers against the plan steps it answers (the steps of `contract.json`, or the held-out plan's):
+ * one answer for every plan step and no other, each of its step's kind, and an exit code no registry entry of the step's command
+ * reads as a target that could not run. `wording` and `name` make the findings fit the file: a finding about the held-out plan's
+ * answers names a step by an ID only when it has the schema's shape (`named`), and otherwise by where it sits.
+ */
+function checkAnswers(report, { file, answers, plan, contract, registry, wording, name }) {
+  const planned = new Set(plan.map((step) => step?.stepId).filter((stepId) => typeof stepId === 'string'));
+  for (const [position, step] of plan.entries()) {
+    if (typeof step?.stepId === 'string' && !Object.hasOwn(answers, step.stepId)) {
+      report.add(file, 'gameability', wording.unanswered(name(step.stepId, `interactionPlan[${position}]`)));
+    }
+  }
+  for (const [position, stepId] of Object.keys(answers).entries()) {
+    const label = name(stepId, `steps entry ${position}`);
+    if (!planned.has(stepId)) {
+      report.add(file, 'gameability', wording.undeclared(label));
+      continue;
+    }
+    const step = plan.find((candidate) => candidate?.stepId === stepId);
+    const operation = operationOfStep(contract, step);
+    const answer = answers[stepId];
+    const stepKind = operation?.iface?.kind;
+    const answerKind = answeredKind(answer);
+    if (operation !== undefined && stepKind !== answerKind) {
+      report.add(
+        file,
+        'gameability',
+        `answers step ${label}, ${KIND_NAMES[stepKind] ?? stepKind}, with ${KIND_NAMES[answerKind]}'s response, so the gameability arm cannot answer it`,
+      );
+      continue;
+    }
+    if (answerKind !== 'cli') continue;
+    const entries = (registry ?? []).filter(
+      (entry) => entry?.interfaceId === operation?.iface?.logicalId && entry?.executable === operation?.operation?.invocation?.executable,
+    );
+    const { exitCode } = answer;
+    if (infrastructureCodesOf(entries).includes(exitCode)) {
+      report.add(
+        file,
+        'gameability',
+        `step ${label} exits ${exitCode}, which its registry entry declares as an infrastructure exit code, so the arm would read the degenerate response as a target that could not run`,
+      );
+    }
+  }
+}
+
 /**
  * A gameability probe's naive oracle and its committed degenerate response
  * (`corpus/gameability/<probeId>.json`): the oracle is one the contract
- * declares for another behavior, and the response answers every plan step,
- * and only those, with an exit code no registry entry of the step's command
- * reads as a target that could not run.
+ * declares for another behavior, and the response answers every plan step of
+ * `contract.json`, and only those, with an exit code no registry entry of the
+ * step's command reads as a target that could not run.
+ *
+ * Under a `partitionPlan` (Story 1.109) the answers to the held-out plan's steps live beside the plan, which a development check
+ * never opens (`checkHeldOutAnswers`), so this file answers the steps of `contract.json` in every partition, and a held-out
+ * probe's naive oracle is one the held-out view keeps: an oracle that reads a development-only step leaves that view, and the
+ * probe's arm in it has nothing to resolve.
  */
-function checkGameability(report, folder, relative, probe, context, behaviors, registry) {
+function checkGameability(report, folder, relative, probe, context, behaviors, registry, evaluation) {
   const naive = probe.qualification?.naiveOracle;
   if (typeof naive === 'string' && context.contract !== undefined) {
     const declared = (Array.isArray(context.contract.oracles) ? context.contract.oracles : []).some((oracle) => oracle?.id === naive);
@@ -1111,6 +1194,20 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
         'gameability',
         `qualification.naiveOracle ${naive} is an oracle of the probe's own behavior ${probe.behaviorId}; the naive oracle belongs to another behavior, and ${probe.behaviorId}'s own oracle is the disciplined one that must reject the degenerate response`,
       );
+    } else if (
+      Array.isArray(evaluation?.heldOutProbes) &&
+      evaluation.heldOutProbes.includes(probe.probeId) &&
+      Array.isArray(evaluation.partitionPlan?.developmentOnlySteps)
+    ) {
+      const oracle = context.contract.oracles.find((candidate) => candidate?.id === naive);
+      const developmentOnly = new Set(evaluation.partitionPlan.developmentOnlySteps);
+      if (stepsReadBy(oracle).some((stepId) => developmentOnly.has(stepId))) {
+        report.add(
+          relative,
+          'gameability',
+          `qualification.naiveOracle ${naive} reads a development-only step, so the held-out view this held-out probe runs in drops it; name an oracle the held-out view keeps`,
+        );
+      }
     }
   }
   if (typeof probe.probeId !== 'string') return;
@@ -1131,49 +1228,72 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
   }
   const response = parseInto(report, folder, responseFile);
   if (response === undefined || !validateInto(report, responseFile, 'schema', context.validate.degenerateResponse, response)) return;
-  const plan = Array.isArray(context.contract?.interactionPlan) ? context.contract.interactionPlan : [];
-  const planned = new Set(plan.map((step) => step?.stepId).filter((stepId) => typeof stepId === 'string'));
-  for (const stepId of planned) {
-    if (!Object.hasOwn(response.steps, stepId)) {
-      report.add(
-        responseFile,
-        'gameability',
-        `answers no response for interaction plan step ${stepId}, so the gameability arm cannot run the plan`,
-      );
-    }
-  }
-  for (const stepId of Object.keys(response.steps)) {
-    if (!planned.has(stepId)) {
-      report.add(responseFile, 'gameability', `answers step ${stepId}, which the contract's interaction plan does not declare`);
+  checkAnswers(report, {
+    file: responseFile,
+    answers: response.steps,
+    plan: Array.isArray(context.contract?.interactionPlan) ? context.contract.interactionPlan : [],
+    contract: context.contract,
+    registry,
+    wording: {
+      unanswered: (stepId) => `answers no response for interaction plan step ${stepId}, so the gameability arm cannot run the plan`,
+      undeclared: (stepId) => `answers step ${stepId}, which the contract's interaction plan does not declare`,
+    },
+    name: (stepId) => stepId,
+  });
+}
+
+/**
+ * The answers a gameability probe gives the held-out plan's steps (Story 1.109), `corpus/held-out/gameability/<probeId>.json`, for
+ * the held-out and both views, which a check that opens a sound plan reads for every gameability probe: a probe runs the whole
+ * plan in the both view whichever partition it belongs to. The file is required when the plan declares a step, answers every step
+ * of the plan and no other, and meets the same rules as the answers of `contract.json`. Every finding names the file by the
+ * probe's ID and a step by its ID only when it has the schema's shape (otherwise by where it sits), and the file's own text, a
+ * parser's message and a schema error's key among it, never reaches a line.
+ */
+function checkHeldOutAnswers(report, folder, context, registry, heldOutPlan) {
+  const plan = heldOutPlan.interactionPlan;
+  for (const entry of listDirectory(folder, 'probes') ?? []) {
+    if (!entry.isFile || !PROBE_FILE.test(entry.name)) continue;
+    let probe;
+    try {
+      probe = readJsonFile(path.join(folder, 'probes', entry.name));
+    } catch {
       continue;
     }
-    const step = plan.find((candidate) => candidate?.stepId === stepId);
-    const operation = (Array.isArray(context.contract?.permittedInterfaces) ? context.contract.permittedInterfaces : [])
-      .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
-      .find((candidate) => candidate.iface?.logicalId === step?.interfaceId && candidate.operation?.operationId === step?.operationId);
-    const answer = response.steps[stepId];
-    const stepKind = operation?.iface?.kind;
-    const answerKind = answeredKind(answer);
-    if (operation !== undefined && stepKind !== answerKind) {
-      report.add(
-        responseFile,
-        'gameability',
-        `answers step ${stepId}, ${KIND_NAMES[stepKind] ?? stepKind}, with ${KIND_NAMES[answerKind]}'s response, so the gameability arm cannot answer it`,
-      );
+    if (probe?.qualification?.route !== 'gameability' || typeof probe.probeId !== 'string' || !PROBE_ID.test(probe.probeId)) continue;
+    const file = heldOutResponsePath(probe.probeId);
+    let answered;
+    try {
+      answered = readHeldOutResponse(folder, probe.probeId);
+    } catch (error) {
+      if (!(error instanceof PartitionPlanError)) throw error;
+      if (error.absent !== true) report.add(file, 'gameability', error.message);
+      else if (plan.length > 0) {
+        report.add(
+          file,
+          'gameability',
+          `probes/${entry.name} takes the gameability route under a partitionPlan whose held-out plan declares ${plan.length === 1 ? 'a step' : 'steps'}, and ${file} is absent; it holds the answers to the held-out plan's steps, which the gameability arm answers the held-out and both views from`,
+        );
+      }
       continue;
     }
-    if (answerKind !== 'cli') continue;
-    const entries = (registry ?? []).filter(
-      (entry) => entry?.interfaceId === operation?.iface?.logicalId && entry?.executable === operation?.operation?.invocation?.executable,
-    );
-    const { exitCode } = answer;
-    if (infrastructureCodesOf(entries).includes(exitCode)) {
-      report.add(
-        responseFile,
-        'gameability',
-        `step ${stepId} exits ${exitCode}, which its registry entry declares as an infrastructure exit code, so the arm would read the degenerate response as a target that could not run`,
-      );
+    if (!context.validate.degenerateResponse(answered.response)) {
+      plainSchemaFindings(report, file, context.validate.degenerateResponse, undefined, 'gameability');
+      continue;
     }
+    checkAnswers(report, {
+      file,
+      answers: answered.response.steps,
+      plan,
+      contract: context.contract,
+      registry,
+      wording: {
+        unanswered: (stepId) =>
+          `answers no response for held-out plan step ${stepId}, so the gameability arm cannot run the held-out and both views`,
+        undeclared: (stepId) => `answers step ${stepId}, which the held-out plan does not declare`,
+      },
+      name: (stepId, fallback) => named(stepId, STEP_ID, fallback),
+    });
   }
 }
 
@@ -1247,10 +1367,27 @@ function checkJudge(report, evaluation, contract, conditions, { partial = false 
   if (AGENT_ADAPTERS[judge.agent].command === null && typeof judge.agentCommand !== 'string') {
     report.add(MANIFEST_NAME, 'judge', `judge.agent ${judge.agent} runs no command of its own, so judge.agentCommand must name one`);
   }
+  let runs;
   try {
-    resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
+    runs = resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
   } catch (error) {
     report.add(MANIFEST_NAME, 'judge', `judge's model cannot run: ${error.message}`);
+    return;
+  }
+  // `judge.model` selects the model every judge call runs; `judge.modelSnapshot` only records it. A recorded identity that
+  // differs from the model the adapter runs would put a false condition on every run, so the two must name one model.
+  // An adapter with no model flag (`custom`) resolves to no model, so its snapshot is a label `check` cannot compare.
+  const recorded = conditions?.judge?.modelSnapshot;
+  if (typeof runs === 'string' && typeof recorded === 'string' && recorded.length > 0 && recorded !== runs) {
+    const source =
+      typeof judge.model === 'string'
+        ? 'judge.model'
+        : `a model in judge.agentArgs or the default of the ${judge.agent} adapter, since evaluation.json sets no judge.model`;
+    report.add(
+      CONDITIONS_NAME,
+      'judge',
+      `judge.modelSnapshot ${JSON.stringify(recorded)} differs from the model every judge call runs, ${JSON.stringify(runs)} (${source}); judge.model selects the model and judge.modelSnapshot records it, so set both to the same provider model ID`,
+    );
   }
 }
 
@@ -1536,10 +1673,26 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
         `evaluator.agent ${evaluator.agent} runs no command of its own, so evaluator.agentCommand must name one`,
       );
     }
+    let runs = null;
     try {
-      resolveModel(evaluator.agent, evaluator.model, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
+      runs = resolveModel(evaluator.agent, evaluator.model, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
     } catch (error) {
       report.add(MANIFEST_NAME, 'evaluator', `the evaluator's model cannot run: ${error.message}`);
+    }
+    // `evaluator.model` selects the model the sealed-brief agent runs; `evaluator.modelSnapshot` only records it. A recorded
+    // identity that differs from the model the adapter runs would put a false condition on every run, so the two must name
+    // one model. An adapter with no model flag (`custom`) resolves to no model, so its snapshot is a label `check` cannot compare.
+    const recorded = conditions?.evaluator?.modelSnapshot;
+    if (typeof runs === 'string' && typeof recorded === 'string' && recorded.length > 0 && recorded !== runs) {
+      const source =
+        typeof evaluator.model === 'string'
+          ? 'evaluator.model'
+          : `a model in evaluator.agentArgs or the default of the ${evaluator.agent} adapter, since evaluation.json sets no evaluator.model`;
+      report.add(
+        CONDITIONS_NAME,
+        'evaluator',
+        `evaluator.modelSnapshot ${JSON.stringify(recorded)} differs from the model the sealed-brief agent runs, ${JSON.stringify(runs)} (${source}); evaluator.model selects the model and evaluator.modelSnapshot records it, so set both to the same provider model ID`,
+      );
     }
   }
   if (typeof conditions?.evaluator?.modelSnapshot !== 'string' || conditions.evaluator.modelSnapshot.length === 0) {
@@ -1592,7 +1745,7 @@ function checkInterfaceRepeat(report, line) {
 }
 
 /** Checks every committed probe; returns the qualification routes they take. */
-function checkProbes(report, folder, context, behaviors, mutations, registry, compiled) {
+async function checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation) {
   const routes = new Set();
   const reportingProbes = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
@@ -1613,14 +1766,15 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, co
     }
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
-    if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
+    if (probe.qualification?.route === 'gameability')
+      checkGameability(report, folder, relative, probe, context, behaviors, registry, evaluation);
     if (probe.qualification?.route === 'historical') {
       const named = reportedOperations(probe.qualification.deployments);
       if (named.length > 0) reportingProbes.push({ relative, operations: named });
     }
   }
   // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe whose report the engine's line names.
-  if (reportingProbes.length > 0) checkReportCollision(report, compiled().signatureCollision, reportingProbes);
+  if (reportingProbes.length > 0) checkReportCollision(report, (await compiled()).signatureCollision, reportingProbes);
   return routes;
 }
 
@@ -1692,18 +1846,14 @@ function declaredPath(instancePath, declared) {
  * never reaches a line, which is what `describeErrors` would add for an unexpected property, and `declaredPath` keeps the path to
  * the schema's own names. `locate` maps that path to where the author edits it.
  */
-function plainSchemaFindings(report, file, validate, locate = (instancePath) => instancePath || '(root)') {
+function plainSchemaFindings(report, file, validate, locate = (instancePath) => instancePath || '(root)', rule = 'partition-plan') {
   const declared = declaredNames(validate.schema);
   const lines = [
     ...new Set((validate.errors ?? []).map((error) => `${locate(declaredPath(error.instancePath, declared))} ${error.message}`)),
   ];
-  for (const line of lines.slice(0, SCHEMA_ERROR_LIMIT)) report.add(file, 'partition-plan', line);
+  for (const line of lines.slice(0, SCHEMA_ERROR_LIMIT)) report.add(file, rule, line);
   if (lines.length > SCHEMA_ERROR_LIMIT) {
-    report.add(
-      file,
-      'partition-plan',
-      `${lines.length - SCHEMA_ERROR_LIMIT} more schema error(s) not shown; fix the ones above and run check again`,
-    );
+    report.add(file, rule, `${lines.length - SCHEMA_ERROR_LIMIT} more schema error(s) not shown; fix the ones above and run check again`);
   }
 }
 
@@ -1729,11 +1879,12 @@ function checkPlanMappings(report, folder, planFile, contract, view, heldOutPlan
  * `partitionPlan` (Story 1.51): the development-only steps exist, the held-out plan is a valid file of its own, and the held-out
  * view it makes keeps every behavior an oracle. Every finding names a path or an ID and none quotes held-out plan bytes, so the
  * authoring loop that reads `check` output learns nothing it must not. The engine's compile over the held-out view is not
- * run here (`check` compiles nothing); a compile defect surfaces at a held-out or both preflight.
+ * run here (`check` compiles nothing); a compile defect surfaces in the `ci` plan's `compile` and `seal` checks, which run over every
+ * view, and at the first held-out preflight or run of both partitions.
  *
  * Returns the held-out plan only when it is sound: the file reads, passes its schema and `partitionPlanProblems`, `contract.json`
  * passes the engine's contract schema, and the held-out view it makes passes it too. Those are the findings that block the return.
- * An evaluator kind, an empty `heldOutProbes` and a gameability probe are findings of their own and do not: nothing in them
+ * An evaluator kind and an empty `heldOutProbes` are findings of their own and do not: nothing in them
  * reaches the plan's bytes, and a plan criterion is named by its label either way. Whatever else reads the plan (the both view
  * the rubric rules run over) then runs over a plan that is known to fit.
  */
@@ -1754,13 +1905,6 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
       probe = readJsonFile(path.join(folder, 'probes', entry.name));
     } catch {
       continue;
-    }
-    if (probe?.qualification?.route === 'gameability') {
-      report.add(
-        `probes/${entry.name}`,
-        'partition-plan',
-        'is a gameability probe; its degenerate response answers one plan, so a partitionPlan does not partition gameability probes yet',
-      );
     }
     if (!selected.includes(probe?.probeId) || (probe.probeClass !== 'defect' && probe.probeClass !== 'gameability')) continue;
     const defects = Array.isArray(probe.defects) ? probe.defects : [];
@@ -2286,9 +2430,10 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine stage runs in, so `check` uses the engine the caller's own compile uses
  * @param {string} [options.partition] the partition a run is about to execute. A `development` run neither opens the held-out plan
  *   nor hashes it for the corpus index (Story 1.51), so the plan's own findings are those of `check` and of a held-out or both run.
+ * @param {string[]} [options.scratch] the caller's list of directories it removes however it ends, a signal included, which holds the directory the engine's compile stage works in
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition } = {}) {
+async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition, scratch } = {}) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2323,9 +2468,9 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   context.contract = contractFor(folder);
   // One compile serves both refusals `check` quotes: a repeated interface identifier (Story 1.102) and a report operation's collision (Stories 1.75, 1.77). It runs only when a refusal is possible and at most once: a contract of two or more interfaces can repeat an identifier, and a probe that names a report can collide.
   let refusals;
-  const compiled = () => (refusals ??= compileRefusals(path.join(folder, CONTRACT_NAME), env));
+  const compiled = () => (refusals ??= compileRefusals(path.join(folder, CONTRACT_NAME), env, scratch));
   if (Array.isArray(context.contract?.permittedInterfaces) && context.contract.permittedInterfaces.length >= 2) {
-    checkInterfaceRepeat(report, compiled().interfaceRepeat);
+    checkInterfaceRepeat(report, (await compiled()).interfaceRepeat);
   }
   checkRequirements(report, folder, evaluation, context.contract, context.engine);
   checkOperationPhases(report, evaluation, context.contract);
@@ -2334,10 +2479,13 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
-  const routes = checkProbes(report, folder, context, behaviors, mutations, registry, compiled);
+  const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
+  // The answers a gameability probe gives the held-out plan's steps sit beside the plan, so a check that opens a sound plan reads them
+  // and a development check never does (Story 1.109).
+  if (heldOutPlan !== undefined) checkHeldOutAnswers(report, folder, context, registry, heldOutPlan);
   // The rubrics the evaluation judges are those of every partition (Story 1.105): `contract.json`'s and the held-out plan's. The
   // plan is known only when `checkPartitionPlan` returned it (a development run does not open it, and one that is unreadable or
   // has a finding is not returned), and then the both view is built over it. Without it `check` holds the rubrics it can see
@@ -2373,7 +2521,9 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
 
   try {
     const planFile = evaluation.partitionPlan?.heldOutPlan;
-    const stale = await corpusIndexProblem(folder, { unread: openPlan || typeof planFile !== 'string' ? [] : [planFile] });
+    const stale = await corpusIndexProblem(folder, {
+      unread: openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY],
+    });
     if (stale !== null) report.add(INDEX_NAME, 'stale-index', stale);
   } catch (error) {
     if (!(error instanceof CorpusIndexError)) throw error;

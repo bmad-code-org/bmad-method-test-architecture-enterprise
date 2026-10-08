@@ -7,10 +7,10 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
+    "implementationDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
     "artifactDigest": "sha256:45d2d7fb570fa53d26a3f4698af1ba2af8a69d51222a441f3bd7fdfc18a0dd8b",
-    "commitDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
-    "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote.",
+    "commitDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
+    "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896"
+            "digest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f"
           }
         ],
         "source": "controlled-mutation",
@@ -68,18 +68,13 @@
             }
           },
           "relation": {
-            "op": "not",
+            "op": "containment",
             "operands": [
               {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-trigger-weekly-schedule/artifact/workflow"
-                  },
-                  {
-                    "literal": "0 2 * * 0"
-                  }
-                ]
+                "pointer": "/interactions/manifest-trigger-weekly-schedule/artifact/workflow"
+              },
+              {
+                "literal": "0 2 * * 0"
               }
             ]
           }
@@ -138,10 +133,10 @@
     "probeClass": "defect",
     "behaviorId": "B-004",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
+    "implementationDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
     "artifactDigest": "sha256:206be045284784a2268e2da012ce87e05c60caf48eba179a973056b9ca7d6ee4",
-    "commitDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
-    "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote.",
+    "commitDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
+    "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
@@ -179,7 +174,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896"
+            "digest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f"
           }
         ],
         "source": "controlled-mutation",
@@ -199,18 +194,13 @@
             }
           },
           "relation": {
-            "op": "not",
+            "op": "containment",
             "operands": [
               {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-permission-contents-read/artifact/workflow"
-                  },
-                  {
-                    "literal": "contents: read"
-                  }
-                ]
+                "pointer": "/interactions/manifest-permission-contents-read/artifact/workflow"
+              },
+              {
+                "literal": "contents: read"
               }
             ]
           }
@@ -269,10 +259,10 @@
     "probeClass": "defect",
     "behaviorId": "B-022",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
+    "implementationDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
     "artifactDigest": "sha256:b28995bba9f623e14346292bba0a1dc023d0ab6ccbf845fcd343b70eb9748450",
-    "commitDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
-    "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote.",
+    "commitDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
+    "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote. The manifestation witness reads the plant in a run that reports it, so it fires on the stored correct output the clean arm scores and stays silent on the mutated artifact, which models a run that misses the plant.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml",
@@ -310,7 +300,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896"
+            "digest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f"
           }
         ],
         "source": "controlled-mutation",
@@ -330,13 +320,34 @@
             }
           },
           "relation": {
-            "op": "containment",
+            "op": "all",
             "operands": [
               {
-                "pointer": "/interactions/manifest-template-copied/artifact/workflow"
+                "op": "containment",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-template-copied/artifact/workflow"
+                  },
+                  {
+                    "literal": "npm test"
+                  }
+                ]
               },
               {
-                "literal": "burn-in"
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "containment",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-template-copied/artifact/workflow"
+                      },
+                      {
+                        "literal": "burn-in"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
@@ -390,9 +401,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-017",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
-    "artifactDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
-    "commitDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
+    "implementationDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
+    "artifactDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
+    "commitDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
     "rationale": "minimal-lantern-audit-log states five elements and the workflow carries exactly them, so any gap or addition the run reports against it is a false positive. It is the control that stops the suite scoring well by only ever catching an over-generous pipeline.",
     "qualification": {
       "route": "clean-control",
@@ -402,7 +413,7 @@
         "privateRef": null,
         "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
       },
-      "revisionCommitDigest": "sha256:50a332b7ba47007d31d3fc1ec0308722cec26804573f1dc6f561ab0c782f1896",
+      "revisionCommitDigest": "sha256:37eb741b150b3ffa75fda309cb86eb529d903181bb0d4fcd0f78a5a48407789f",
       "noKnownDefectStatement": "A backend service whose request is one job and a sentence forbidding everything else"
     },
     "expectedClean": true,

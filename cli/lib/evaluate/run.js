@@ -107,7 +107,7 @@ const { holdDeployment, recordRefusal } = require('./historical');
 const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
-const { committedProbes, selectPartition, unknownPartition } = require('./partition');
+const { bothViewDesignation, committedProbes, selectPartition, unknownPartition } = require('./partition');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
@@ -115,6 +115,8 @@ const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
+const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
+const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
@@ -604,8 +606,8 @@ async function runTrial(context) {
       mounts: [
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
-        // The login files a registry entry's `login` grants, read-only (Story 1.113).
-        ...new Set(registry.logins.filter(({ file }) => file !== null).map(({ file }) => `read-only login ${file}`)),
+        // The login files a registry entry's `login` grants, read-only (Story 1.113), named by their neutral form (`recorded-paths.js`).
+        ...new Set(registry.logins.filter(({ file }) => file !== null).map(() => `read-only login ${CREDENTIALS_FILE}`)),
       ],
       // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
       observedMounts,
@@ -1441,6 +1443,7 @@ async function runTrialSets(given) {
   const trialSets = [];
   const recordDigests = {};
   const manifestDigests = {};
+  const mountsOutside = new Set();
   const unreportedResourceUse = [];
   const observedMountsChannel = [];
   const hostSocketTruncation = [];
@@ -1467,6 +1470,7 @@ async function runTrialSets(given) {
         runId,
       });
       manifestDigests[probe.probeId] = set.manifestDigest;
+      for (const mount of set.mountsOutsideAllowlist) mountsOutside.add(mount);
       Object.assign(recordDigests, set.recordDigests);
       trialSets.push({
         probeId: probe.probeId,
@@ -1484,6 +1488,8 @@ async function runTrialSets(given) {
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: [...mountsOutside],
+    setsWithoutManifest: [],
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -1526,7 +1532,7 @@ function recommendationFor(kind, trials, probeId) {
  * The trial sets and the evaluator qualification's attempts (one trial each)
  * seal through here, so the two build one shape.
  *
- * @returns {Promise<{ manifestFile: string, manifestDigest: string, records: string[], recordDigests: Record<string, string> }>}
+ * @returns {Promise<{ manifestFile: string, manifestDigest: string, records: string[], recordDigests: Record<string, string>, mountsOutsideAllowlist: string[] }>}
  */
 async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, directory, runId }) {
   const { folder, evaluation, contract, registry, validate, engine, writer, stop } = context;
@@ -1561,7 +1567,8 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
     workspaceIdentity: `${evaluation.evaluationId} ${conditionArm}`,
     allowedMounts: trials.flatMap((trial) => trial.mounts),
     // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
-    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts))].sort(),
+    // The audit's host paths in the neutral forms (`recorded-paths.js`): the manifest is a record `compare --accept` copies and `runs/` uploads, and a path below the home or temp directory still says which file the target read.
+    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts).map(textNeutralizer({ folder })))].sort(),
     toolAllowlist: tools,
     observedToolCalls: [...new Set(trials.flatMap((trial) => trial.toolCalls))].sort(),
     resourceCeilings: {
@@ -1615,7 +1622,14 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
     recordDigests[recordFile] = bytesDigest(recordFile);
     records.push(recordFile);
   }
-  return { manifestFile, manifestDigest: bytesDigest(manifestFile), records, recordDigests };
+  return {
+    manifestFile,
+    manifestDigest: bytesDigest(manifestFile),
+    records,
+    recordDigests,
+    // What `score` reads off this manifest as an isolation violation, one reason per path (`isolation-allowlist.js`).
+    mountsOutsideAllowlist: mountsOutsideAllowlist(manifest.observedMounts, manifest.allowedMounts),
+  };
 }
 
 /**
@@ -1642,8 +1656,8 @@ function expectedOutcome(arm) {
  * Then the comparison `score` makes (`held-refusal.js`) refuses a call whose inputs changed, whose staged artifact is not the in-process score of the held bytes, or whose exit or `eval-quality:` lines are not the ones those bytes give: exit 12, no vote.
  * The staged bytes the comparison accepted are the ones copied in and read, once.
  */
-async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
-  const { writer, runDirectory, env, log, scratch, stop, engine } = context;
+async function scoreAttempt(context, { probe, directory, set, corpusDigest, designate }) {
+  const { writer, runDirectory, folder, env, log, scratch, stop, engine } = context;
   let held;
   try {
     held = holdAttemptInputs({
@@ -1652,6 +1666,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       corpusDigest,
       probeId: probe.probeId,
       set,
+      designate,
     });
   } catch (error) {
     if (!(error instanceof AttemptInputError)) throw error;
@@ -1661,6 +1676,15 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       message: `${probe.probeId}: ${error.message}; no engine call was made and no vote is recorded for the attempt`,
     });
   }
+  // The designated oracle of a both run's probe must be one the run's own contract lists (Story 1.110); otherwise nothing is called.
+  const [undesignable] = held.designationFindings();
+  if (undesignable !== undefined) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `${probe.probeId}: ${undesignable.message}; no engine call was made and no vote is recorded for the attempt`,
+    });
+  }
   const staging = makeScratchDirectory(scratch, 'tea-evaluate-qualification-');
   try {
     const produced = path.join(staging, 'evidence-artifact.json');
@@ -1668,7 +1692,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
     const args = held.scoreArguments({ pathOf: (relative) => writer.pathOf(relative), set: heldSet, out: produced });
     let result;
     try {
-      result = runEngineStage('score', args, { runDirectory, recordPath: `${directory}/score.json`, writer, env, log });
+      result = await runEngineStage('score', args, { runDirectory, folder, recordPath: `${directory}/score.json`, writer, env, log });
     } catch (error) {
       if (!(error instanceof EngineStageError)) throw error;
       throw stop({ stage: 'trial', exitCode: 12, message: `${probe.probeId}: an evaluator attempt could not be scored: ${error.message}` });
@@ -1761,6 +1785,14 @@ async function qualifyEvaluator(context) {
   }
   const { attempts, minimumAgreement } = evaluation.evaluatorQualification;
   const corpusDigest = await corpusDigestOf(snapshot.index);
+  // An attempt of a both run under a partition plan is scored as its probe's own partition would score it (Story 1.110).
+  const designate = bothViewDesignation({
+    contractBytes: Buffer.from(JSON.stringify(context.view.source)),
+    evaluation,
+    heldOutPlan: context.view.heldOutPlan,
+    partition: snapshot.partition,
+    heldOutProbes: snapshot.heldOutProbes,
+  });
   // The policy an attempt is scored with is the one the trial sets carry, so it is in the run directory before the first score.
   if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
   const report = { attempts, minimumAgreement, arms: [] };
@@ -1794,7 +1826,7 @@ async function qualifyEvaluator(context) {
           runId: `${invocationId}-${probe.probeId}-attempt-${attempt}`,
         });
         writeQualifiedProbe({ writer, stop }, probe);
-        const scored = await scoreAttempt(context, { probe, directory, set, corpusDigest });
+        const scored = await scoreAttempt(context, { probe, directory, set, corpusDigest, designate });
         probes[index].attempts.push({ attempt, ...scored, agrees: scored.outcome === expected });
       }
     }
@@ -1881,9 +1913,19 @@ async function concludeImportedRecords(context) {
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   const recordDigests = {};
   const manifestDigests = {};
+  // What `score` reads off each imported manifest as an isolation violation, as it does for the manifests a run seals: the observed
+  // mounts with no entry in the allowed ones, in the order the sets come, each once. A set with no manifest reaches eval-quality as
+  // absent, which it reads as Invalid (exit 3) as well.
+  const mountsOutside = new Set();
+  const withoutManifest = [];
   const trialSets = imported.sets.map((set) => {
     for (const record of set.records) recordDigests[record] = bytesDigest(record);
-    if (set.manifest !== null) manifestDigests[set.probeId] = bytesDigest(set.manifest);
+    if (set.manifest === null) withoutManifest.push(set.probeId);
+    else {
+      manifestDigests[set.probeId] = bytesDigest(set.manifest);
+      const manifest = writer.readJson(set.manifest);
+      for (const mount of mountsOutsideAllowlist(manifest.observedMounts, manifest.allowedMounts)) mountsOutside.add(mount);
+    }
     return {
       probeId: set.probeId,
       runId: set.runId,
@@ -1903,6 +1945,8 @@ async function concludeImportedRecords(context) {
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: [...mountsOutside],
+    setsWithoutManifest: withoutManifest,
     configurationDigest: imported.configurationDigest,
     trialCount: null,
     evaluatorRecord: { kind: 'records', identity: imported.configuration.evaluatorIdentity, records: snapshot.layer.evaluator.records },
@@ -1924,6 +1968,8 @@ async function completeRun(
     trialSets,
     recordDigests,
     manifestDigests,
+    mountsOutsideAllowlist: outsideMounts,
+    setsWithoutManifest,
     configurationDigest,
     trialCount,
     unreportedResourceUse,
@@ -1978,13 +2024,27 @@ async function completeRun(
     trialSets,
   });
   retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
+  // A trial set whose manifest lists a mount outside the allowlist is one `score` reads as Invalid (exit 3), so the run does
+  // not report success. It stays sealed and complete: `score --run` prints one reason per path from the manifests as written.
+  const mountsRefusal = [
+    mountRefusal({ mounts: outsideMounts, folder: context.folder, who: 'trials' }),
+    setsWithoutManifest.length === 0
+      ? null
+      : `isolation manifest violation: the records of ${setsWithoutManifest.join(', ')} come with no isolation manifest, which \`score\` reads as Invalid (exit 3); the harness writes \`<records>/<probeId>/isolation-manifest.json\` beside each set's records.`,
+  ]
+    .filter((message) => message !== null)
+    .join(' ');
+  const sealedMessage =
+    trialCount === null
+      ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
+      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`;
   const result = outcome({
     stage: 'trial',
-    exitCode: 0,
+    exitCode: mountsRefusal === '' ? 0 : 3,
     message:
-      trialCount === null
-        ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`,
+      mountsRefusal === ''
+        ? sealedMessage
+        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.

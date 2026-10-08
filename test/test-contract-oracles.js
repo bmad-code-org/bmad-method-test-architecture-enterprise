@@ -126,7 +126,12 @@ const {
   scoreRun: scoreNfrRun,
   NFR_OPERATION,
 } = require('./eval-nfr');
-const { loadGroundTruth: loadCiGroundTruth, workflowFromArtifact: ciWorkflowFromArtifact, CI_OPERATION } = require('./eval-ci');
+const {
+  loadGroundTruth: loadCiGroundTruth,
+  workflowFromArtifact: ciWorkflowFromArtifact,
+  isBurnInJob,
+  CI_OPERATION,
+} = require('./eval-ci');
 const { loadGroundTruth: loadAtddGroundTruth, ATDD_INTERFACE, ATDD_OPERATION } = require('./eval-atdd');
 const { parseRouting, ROUTING_ACTIONS } = require('../cli/lib/parse-routing');
 const {
@@ -2989,8 +2994,522 @@ function ciArtifactsOf(directory, expected) {
   return { workflow: { kind: 'text', value: fs.readFileSync(workflowPath, 'utf8') } };
 }
 
+/** The forms each ci table scored, so a main that stopped calling a table fails. */
+const ciFormsScored = { commands: 0, burnIn: 0 };
+
 /**
- * `checkCiOracles`'s oracles are paired with `workflowMentions`, the harness's
+ * The two command oracles of the evaluation-plan project over the forms a run writes them in.
+ *
+ * The real capture quotes its folder names for the shell.
+ * The contract's `regex` oracles therefore tolerate a balanced pair of single or double quotes around the folder, which a correct run may also write around the tier, and still pin the folder and the tier.
+ * A folded YAML scalar can break the line between the words of a command, so the words are separated by `\s+`.
+ * Each row here is the capture with its two command lines rewritten (or a whole workflow of one line, to reach the end-of-text branch).
+ * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
+ * A pattern that no longer tolerates a quote or a fold, one that matches a deviation, an unterminated or mismatched quote, a one-character widening of a quoted alternative, words that run together, one that matches anything, and a literal token restored over the pattern all fail here by name.
+ */
+async function checkCiCommandOraclesOnQuotedForms(evaluator) {
+  console.log('\nci.contract.json command oracles over the quoted and the deviating forms of the evaluation-plan capture');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'ci.contract.json'), 'the ci contract');
+  const groundTruth = await loadCiGroundTruth();
+  if (!groundTruth) unreadable('the ci ground truth is missing or not valid JSON');
+  const specs = ciOracleSpecs(groundTruth);
+  const setId = 'evaluation-plan-quarry-grader';
+  const specOf = (elementId) => specs.find((spec) => spec.setId === setId && spec.elementId === elementId);
+  const install = specOf('command-evaluation-install');
+  const ciPr = specOf('command-evaluation-ci-pr');
+  assert(install !== undefined && ciPr !== undefined, `${setId} states both command oracles`);
+  if (install === undefined || ciPr === undefined) return;
+
+  const item = findCases().find((entry) => entry.suite === 'ci' && entry.id === 'ci/evaluation-plan-live-capture');
+  if (item === undefined) unreadable('test/replay/ci holds no evaluation-plan-live-capture');
+  const capture = fs.readFileSync(path.join(item.directory, '.github', 'workflows', 'test.yml'), 'utf8');
+  const installLine = "npm install --prefix 'evals'";
+  const ciPrLine = "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr";
+  assert(
+    capture.includes(installLine) && capture.includes(ciPrLine),
+    'the capture still holds the two command lines these rows rewrite',
+    'a row over a line the capture no longer holds would compare the capture with itself',
+  );
+  const withLines = (installText, ciPrText) => capture.replace(installLine, installText).replace(ciPrLine, ciPrText);
+
+  const rows = [
+    { label: 'the capture as stored (single-quoted)', text: capture, install: true, ciPr: true },
+    {
+      label: 'double-quoted folders and tier',
+      text: withLines(
+        'npm install --prefix "evals"',
+        'npm exec --prefix "evals" -- tea-evaluate ci --evaluation "evals/grader" --tier "pr"',
+      ),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'unquoted folders and tier',
+      text: withLines('npm install --prefix evals', 'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr'),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'a single-quoted tier',
+      text: withLines(installLine, "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier 'pr'"),
+      install: true,
+      ciPr: true,
+    },
+    { label: 'the install command at the end of the file', text: 'run: npm install --prefix evals', install: true, ciPr: false },
+    {
+      label: 'the ci command at the end of the file',
+      text: 'run: tea-evaluate ci --evaluation evals/grader --tier pr',
+      install: false,
+      ciPr: true,
+    },
+    { label: 'no install command', text: withLines('npm ci', ciPrLine), install: false, ciPr: true },
+    { label: 'no ci command', text: withLines(installLine, 'npm test'), install: true, ciPr: false },
+    { label: 'neither command', text: withLines('npm ci', 'npm test'), install: false, ciPr: false },
+    { label: 'another install prefix', text: withLines('npm install --prefix other', ciPrLine), install: false, ciPr: true },
+    { label: 'another quoted install prefix', text: withLines("npm install --prefix 'other'", ciPrLine), install: false, ciPr: true },
+    {
+      label: 'an install prefix that continues the folder name',
+      text: withLines('npm install --prefix evals-other', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'the nightly tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier nightly"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the prod tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier prod"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the quoted prod tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'prod'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a folded scalar that breaks the install command between its words',
+      text: withLines("npm install\n          --prefix\n          'evals'", ciPrLine),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'a folded scalar that breaks the ci command between its words',
+      text: withLines(
+        installLine,
+        "npm exec --prefix 'evals' -- tea-evaluate ci\n          --evaluation 'evals/grader'\n          --tier pr",
+      ),
+      install: true,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a mismatched pair of quotes',
+      text: withLines('npm install --prefix \'evals"', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with an unterminated quote',
+      text: withLines("npm install --prefix 'evals", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a closing quote only',
+      text: withLines("npm install --prefix evals'", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install prefix with a trailing digit',
+      text: withLines('npm install --prefix evals2', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an evaluation folder with a mismatched pair of quotes',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader\" --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with an unterminated quote',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with a closing quote only',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier pr2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a single-quoted install prefix with a trailing digit',
+      text: withLines("npm install --prefix 'evals'2", ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'a double-quoted install prefix with a trailing digit',
+      text: withLines('npm install --prefix "evals"2', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install command whose option runs into its folder',
+      text: withLines('npm install --prefixevals', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'an install command whose words run together',
+      text: withLines('npminstall --prefix evals', ciPrLine),
+      install: false,
+      ciPr: true,
+    },
+    {
+      label: 'a single-quoted evaluation folder with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader'2 --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a double-quoted evaluation folder with a trailing digit',
+      text: withLines(installLine, 'npm exec --prefix \'evals\' -- tea-evaluate ci --evaluation "evals/grader"2 --tier pr'),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a single-quoted tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier 'pr'2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a double-quoted tier with a trailing digit',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier \"pr\"2"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an evaluation option that runs into its folder',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation'evals/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a tier option that runs into its value',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier'pr'"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a ci command whose subcommand runs into the binary name',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluateci --evaluation 'evals/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'a ci command whose folder runs into the tier option',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader'--tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an upper-case tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier PR"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'the merge tier',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader' --tier merge"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'another evaluation folder',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'other/grader' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+    {
+      label: 'an evaluation folder that continues the name',
+      text: withLines(installLine, "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader2' --tier pr"),
+      install: true,
+      ciPr: false,
+    },
+  ];
+
+  const stepId = ciStepId({ id: setId });
+  let evaluated = 0;
+  for (const row of rows) {
+    const results = evaluateOracles(evaluator, contract, {
+      [stepId]: observation({ operationId: CI_OPERATION, exitCode: 0, artifacts: { workflow: { kind: 'text', value: row.text } } }),
+    });
+    for (const [spec, expected, name] of [
+      [install, row.install, 'command-evaluation-install'],
+      [ciPr, row.ciPr, 'command-evaluation-ci-pr'],
+    ]) {
+      const scorer = spec.scorer(row.text);
+      const result = results.get(spec.id);
+      assert(
+        scorer === expected,
+        `${row.label}: the scorer of ${spec.id} (${name}) says ${expected ? 'pass' : 'fail'}`,
+        `scorer says ${scorer}`,
+      );
+      assert(
+        result?.resolution === (expected ? 'true' : 'false'),
+        `${row.label}: ${spec.id} (${name}) resolves ${expected ? 'true' : 'false'}`,
+        `oracle ${describe(result)}`,
+      );
+      evaluated += 1;
+    }
+  }
+  ciFormsScored.commands = rows.length;
+  console.log(`  ${colors.dim}${evaluated} oracle evaluation(s) across ${rows.length} forms of the two commands${colors.reset}`);
+}
+
+/**
+ * The burn-in job oracle of the full project over the forms a workflow can carry the word in.
+ *
+ * The token was a bare `burn-in`, which the comment `# Weekly burn-in on Sundays` satisfied, so a workflow with no burn-in job held it (Story 1.123).
+ * The oracle is now a `regex` that reads a mapping key or a `name:` line that carries the word and leaves a comment line, a trailing comment, a `run:` line and a run-block line that is no key unsatisfied, while a run-block line that starts with a key carrying the word holds, as an `env` key does.
+ * Each row is the stored full pipeline without its burn-in job (the schedule comment stays) with one job or line appended, or the stored pipeline itself.
+ * The oracle scores it through eval-quality and the paired scorer scores it too, and each has to resolve as the row says.
+ * Besides the hand-written rows, every spelling of the word with one character dropped, doubled or replaced is scored as a job id and as a job name, and the oracle has to say what the harness's own `isBurnInJob` says of it.
+ * A pattern that matches a comment, a pattern that matches anything, a pattern that stops reading a job id, a name or a step name, a literal token restored over the pattern and a one-character widening of the pattern all fail here by name.
+ */
+async function checkCiBurnInOracleOnForms(evaluator) {
+  console.log('\nci.contract.json burn-in job oracle over the forms a workflow carries the word in');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'ci.contract.json'), 'the ci contract');
+  const groundTruth = await loadCiGroundTruth();
+  if (!groundTruth) unreadable('the ci ground truth is missing or not valid JSON');
+  const specs = ciOracleSpecs(groundTruth);
+  const setId = 'full-meridian-storefront';
+  const spec = specs.find((candidate) => candidate.setId === setId && candidate.elementId === 'gate-burn-in');
+  assert(spec !== undefined, `${setId} states the burn-in oracle`);
+  if (spec === undefined) return;
+
+  const workflowOf = (caseId) => {
+    const item = findCases().find((entry) => entry.suite === 'ci' && entry.id === `ci/${caseId}`);
+    if (item === undefined) unreadable(`test/replay/ci holds no ${caseId}`);
+    return fs.readFileSync(path.join(item.directory, '.github', 'workflows', 'test.yml'), 'utf8');
+  };
+  const correct = workflowOf('full-correct-pipeline');
+  const withoutJob = workflowOf('full-burn-in-missing');
+  assert(
+    withoutJob.includes('# Weekly burn-in on Sundays') && !/^\s*burn-in:/m.test(withoutJob) && withoutJob.endsWith('\n'),
+    'the stored pipeline without its burn-in job still carries the schedule comment and no job of that name',
+    'a row built on it would not test a comment',
+  );
+  const withJob = (job) => `${withoutJob}\n${job}`;
+  const job = (id, extra = '') =>
+    `  ${id}:\n${extra}    runs-on: ubuntu-latest\n    steps:\n      - name: Run the suite\n        run: npm run test:e2e\n`;
+
+  const rows = [
+    { label: 'the stored pipeline (a burn-in job id, job name and step names)', text: correct, holds: true },
+    { label: 'an env key that carries the word', text: withJob(job('flaky', '    env:\n      BURN_IN_ITERATIONS: 10\n')), holds: true },
+    { label: 'a with key that carries the word', text: withJob(job('flaky', '    with:\n      burn-in-count: 10\n')), holds: true },
+    {
+      label: 'an artifact name that carries the word',
+      text: withJob(job('flaky', '    with:\n      name: burn-in-report\n')),
+      holds: true,
+    },
+    { label: 'the burn-in job removed and the schedule comment about it kept', text: withoutJob, holds: false },
+    { label: 'a job id of burn-in', text: withJob(job('burn-in')), holds: true },
+    { label: 'a job id that ends with burn-in', text: withJob(job('e2e-burn-in')), holds: true },
+    { label: 'a job id of burn_in', text: withJob(job('burn_in')), holds: true },
+    { label: 'a job id of burnin', text: withJob(job('burnin')), holds: true },
+    { label: 'an upper-case job id', text: withJob(job('BURN-IN')), holds: true },
+    { label: 'a job id on the last line with no newline after it', text: `${withoutJob}\n  burn-in:`, holds: true },
+    { label: 'a job id with Windows line endings', text: withJob(job('burn-in')).replaceAll('\n', '\r\n'), holds: true },
+    { label: 'a job name of Burn-In under another id', text: withJob(job('flaky', '    name: Burn-In (Flaky Detection)\n')), holds: true },
+    { label: 'an upper-case job name', text: withJob(job('flaky', '    name: BURN-IN\n')), holds: true },
+    { label: 'a job name that spells the word with a space', text: withJob(job('flaky', '    name: Burn In\n')), holds: true },
+    {
+      label: 'a step name',
+      text: withJob(
+        `  e2e-repeat:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Run burn-in loop (10 iterations)\n        run: npm run test:e2e\n`,
+      ),
+      holds: true,
+    },
+    { label: 'a comment line that carries a job id', text: withJob(`  # burn-in:\n${job('flaky')}`), holds: false },
+    { label: 'a comment line that carries a name', text: withJob(job('flaky', '    # name: Burn-In\n')), holds: false },
+    { label: 'a comment line between jobs', text: withJob(`  # Weekly burn-in on Sundays\n${job('flaky')}`), holds: false },
+    { label: 'a trailing comment on a name', text: withJob(job('flaky', '    name: Run the suite # burn-in later\n')), holds: false },
+    {
+      label: 'a run line that echoes the word',
+      text: withJob(`  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo burn-in\n`),
+      holds: false,
+    },
+    {
+      label: 'a run line that echoes the word with a colon',
+      text: withJob(`  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo "burn-in: skipped"\n`),
+      holds: false,
+    },
+    {
+      label: 'a line of a run block that names a burn-in iteration',
+      text: withJob(
+        `  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Run the suite\n        run: |\n          echo "Burn-in iteration"\n`,
+      ),
+      holds: false,
+    },
+    {
+      label: 'the word in the value of another key',
+      text: withJob(
+        `  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n        with:\n          key: \${{ runner.os }}-burn-in-cache\n`,
+      ),
+      holds: false,
+    },
+    { label: 'a job id that starts like the word', text: withJob(job('burn-out')), holds: false },
+    { label: 'a job id that spells the word with another letter', text: withJob(job('burnt-in')), holds: false },
+    { label: 'a job name that is only the first half of the word', text: withJob(job('flaky', '    name: Burn\n')), holds: false },
+    { label: 'no workflow text at all', text: '', holds: false },
+    { label: 'the word as the first line of the file', text: 'burn-in:\n  runs-on: ubuntu-latest\n', holds: true },
+    { label: 'a job id indented with a tab', text: `${withoutJob}\n\tburn-in:\n`, holds: true },
+    { label: 'a key line indented after a form feed', text: `${withoutJob}\n\f  burn-in:\n`, holds: false },
+    { label: 'a key line indented after a carriage return', text: `${withoutJob}\n\r  burn-in:\n`, holds: false },
+    {
+      label: 'a line of a run block that starts with a key that carries the word',
+      text: withJob(`  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          burn-in: skipped\n`),
+      holds: true,
+    },
+    { label: 'a job id that continues after the word', text: withJob(job('burn-in-repeat')), holds: true },
+    { label: 'a job name that runs the halves together', text: withJob(job('flaky', '    name: Burnin\n')), holds: true },
+    { label: 'a job name that is the word alone', text: withJob(job('flaky', '    name: burn-in\n')), holds: true },
+    { label: 'a job name with a dot before the word', text: withJob(job('flaky', '    name: Run v1.2 burn-in\n')), holds: true },
+    { label: 'a job name with a slash before the word', text: withJob(job('flaky', '    name: e2e/burn-in\n')), holds: true },
+    { label: 'a quoted job name with a colon before the word', text: withJob(job('flaky', '    name: "Phase 2: burn-in"\n')), holds: true },
+    { label: 'a name with no space after the colon', text: withJob(job('flaky', '    name:burn-in\n')), holds: false },
+    { label: 'a comment line with no space after the hash', text: withJob(`  #burn-in:\n${job('flaky')}`), holds: false },
+    {
+      label: 'a line of a run block that starts with the word and carries no colon',
+      text: withJob(
+        `  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Run the suite\n        run: |\n          burn-in --retries 2\n`,
+      ),
+      holds: false,
+    },
+    {
+      label: 'a line of a run block that carries the word and a colon after another word',
+      text: withJob(
+        `  flaky:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Run the suite\n        run: |\n          echo burn-in: skipped\n`,
+      ),
+      holds: false,
+    },
+  ];
+
+  // A job id has no character outside letters, digits, hyphen and underscore, so each of these lines names no job of that word.
+  for (const mark of ['.', '#', ':', '/', ' ']) {
+    // A space before the word is more indentation, so only the line that has a word before the space is no job id.
+    if (mark !== ' ') {
+      rows.push({
+        label: `a key that starts with ${JSON.stringify(mark)} before the word`,
+        text: withJob(`  ${mark}burn-in:\n`),
+        holds: false,
+      });
+    }
+    rows.push({
+      label: `a key with a word and ${JSON.stringify(mark)} before the word`,
+      text: withJob(`  x${mark}burn-in:\n`),
+      holds: false,
+    });
+    if (mark !== ':') {
+      rows.push({ label: `a key with ${JSON.stringify(mark)} after the word`, text: withJob(`  burn-in${mark}x:\n`), holds: false });
+    }
+  }
+  // The key of a job name is `name:` exactly.
+  const nameKeys = new Set(['name']);
+  for (let index = 0; index < 'name'.length; index++) {
+    nameKeys.add('name'.slice(0, index) + 'name'.slice(index + 1));
+    nameKeys.add('name'.slice(0, index + 1) + 'name'[index] + 'name'.slice(index + 1));
+  }
+  nameKeys.delete('name');
+  for (const key of nameKeys) {
+    rows.push({
+      label: `a ${JSON.stringify(key)} key in place of name`,
+      text: withJob(job('flaky', `    ${key}: Burn-In\n`)),
+      holds: false,
+    });
+  }
+  rows.push(
+    { label: 'a name key written in upper case', text: withJob(job('flaky', '    Name: Burn-In\n')), holds: false },
+    { label: 'a name with no colon', text: withJob(job('flaky', '    name Burn-In\n')), holds: false },
+  );
+  // The oracle and the harness's own `isBurnInJob` agree on every spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name.
+  const word = 'burn-in';
+  const corrupted = new Set();
+  for (let index = 0; index < word.length; index++) {
+    corrupted.add(word.slice(0, index) + word.slice(index + 1));
+    corrupted.add(word.slice(0, index + 1) + word[index] + word.slice(index + 1));
+    for (const replacement of ['x', '.', '#', ':', '/', ' ', '_', '-', '\t', '\n'])
+      corrupted.add(word.slice(0, index) + replacement + word.slice(index + 1));
+  }
+  corrupted.delete(word);
+  for (const spelling of corrupted) {
+    rows.push(
+      {
+        label: `a job id of ${JSON.stringify(spelling)}`,
+        text: withJob(job(spelling)),
+        holds: isBurnInJob(spelling, {}),
+      },
+      {
+        label: `a job name of ${JSON.stringify(spelling)}`,
+        text: withJob(job('flaky', `    name: ${spelling}\n`)),
+        holds: isBurnInJob('flaky', { name: spelling }),
+      },
+    );
+  }
+
+  const oracle = contract.oracles.find((candidate) => candidate.id === spec.id);
+  assert(
+    oracle?.check?.op === 'regex' && oracle.direction.relation === 'regex',
+    `${spec.id} (gate-burn-in) is rendered with the regex operator`,
+    'a literal token is a containment, which a comment satisfies',
+  );
+  assert(
+    /outside a comment/.test(oracle?.direction?.negativeDomain ?? '') && !/command/.test(oracle?.direction?.negativeDomain ?? ''),
+    `${spec.id} (gate-burn-in) states the burn-in claim in its negative domain`,
+    `negative domain: ${oracle?.direction?.negativeDomain}`,
+  );
+
+  const stepId = ciStepId({ id: setId });
+  let evaluated = 0;
+  for (const row of rows) {
+    const results = evaluateOracles(evaluator, contract, {
+      [stepId]: observation({ operationId: CI_OPERATION, exitCode: 0, artifacts: { workflow: { kind: 'text', value: row.text } } }),
+    });
+    const scorer = spec.scorer(row.text);
+    const result = results.get(spec.id);
+    assert(
+      scorer === row.holds,
+      `${row.label}: the scorer of ${spec.id} (gate-burn-in) says ${row.holds ? 'pass' : 'fail'}`,
+      `scorer says ${scorer}`,
+    );
+    assert(
+      result?.resolution === (row.holds ? 'true' : 'false'),
+      `${row.label}: ${spec.id} (gate-burn-in) resolves ${row.holds ? 'true' : 'false'}`,
+      `oracle ${describe(result)}`,
+    );
+    evaluated += 1;
+  }
+  ciFormsScored.burnIn = rows.length;
+  console.log(`  ${colors.dim}${evaluated} forms of the burn-in job, each through the oracle and the scorer${colors.reset}`);
+}
+
+/**
+ * `checkCiOracles`'s oracles are paired with `workflowHoldsToken`, the harness's
  * document-global predicate, rather than with the row-scored `checkElement`
  * result: see the correspondence comment beside `ciOracleSpecs` in
  * `tools/generate-contracts.js` for why. This reads the workflow text off the
@@ -3057,8 +3576,8 @@ async function checkCiOracles(evaluator) {
         if (scorer === false) seenFalse.add(spec.id);
         assert(
           agrees(result, scorer),
-          `${label}: ${spec.id} (${spec.kind}) agrees with workflowMentions`,
-          `workflowMentions says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+          `${label}: ${spec.id} (${spec.kind}) agrees with workflowHoldsToken`,
+          `workflowHoldsToken says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
         );
         evaluated += 1;
       }
@@ -3163,6 +3682,13 @@ async function main() {
   await checkNfrOracles(evaluator);
   checkNfrUnknownWitness(evaluator);
   await checkCiOracles(evaluator);
+  await checkCiCommandOraclesOnQuotedForms(evaluator);
+  await checkCiBurnInOracleOnForms(evaluator);
+  assert(
+    ciFormsScored.commands > 0 && ciFormsScored.burnIn > 0,
+    'both ci form tables scored their forms',
+    `${ciFormsScored.commands} form(s) of the two commands, ${ciFormsScored.burnIn} of the burn-in job`,
+  );
   checkAtddOracles(evaluator);
 
   console.log('');

@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261004T191353878Z-cbee24f1",
-  "seed": "20261004T191353878Z-cbee24f1",
+  "invocationId": "20261006T211425788Z-f3230a87",
+  "seed": "20261006T211425788Z-f3230a87",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.1.0",
+  "evalQualityVersion": "7.2.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,14 +17,14 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-be392922-7921-4d99-9def-b93b0b514d33/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-50918a7d-87ed-437c-869d-f8ac58a9fc51/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
   "logins": [],
   "adopterTree": {
-    "repository": "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/8358f7e4-14a3-47c7-92e3-38333c606f6e/scratchpad/s25-promptfoo-141346/evaluate-promptfoo",
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -32,22 +32,22 @@
     "contract": "sha256:90cb3392291ea9f9392d33eefe449edf51e7468d80c22afe43ead89d695112db",
     "operationPhases": "sha256:87b3b2fd513c054840aae979a43a51abcc08946fade199f76caedfcf86b2429f",
     "evaluatorConfiguration": "sha256:04cb47a82ab224c6e60bd9cfa420a3a8d413c39c3b6903f54f586fb1036f1c00",
-    "preflightVerdict": "sha256:93fad916e18129174da39fa519c2e086208afb635049f347a136720cf3211ca5",
+    "preflightVerdict": "sha256:16b223ece167f1d909393d2e7d6213b637a1711bcb6859082eac6838ecfccbb7",
     "probes": {
-      "P-001": "sha256:c30503bd934a037a80d5cfad37a2c8e478bd3a87a1ec59055387490cd05478fa",
-      "P-002": "sha256:344d18714ae5ca2ec73b242e8392e549b9a9dc4e4478b30399819a8e3f4d2f9b"
+      "P-001": "sha256:87941c55def7d268a37362047d0c6260381aa64237846655b0ce8f4505b6d61e",
+      "P-002": "sha256:0483e9058c969cf78c8312b652a4d90f95f0b9723aa2794870563a5a231cfc8b"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:abb972f6a54d955a8610bee826f88987263e799958000362e15df5931489072d",
-      "trial-sets/P-001/record-2.json": "sha256:46f88864ecfa5ab39d81c3018e7f7f3a496156a441ae88851f8cba4946b9c79d",
-      "trial-sets/P-001/record-3.json": "sha256:28c98cfdba83ad1e59dc7133114ad5e3f7f586ab2108b91047e4dea94b95402f",
-      "trial-sets/P-002/record-1.json": "sha256:ed14b712444c8bac8175ca43ed4661bbeea3f8cccad3f45049e87e96846edd29",
-      "trial-sets/P-002/record-2.json": "sha256:88a28d5a850420a212b3be234cae77e17e6550c5767c482a38ac54c19268d8fc",
-      "trial-sets/P-002/record-3.json": "sha256:ace7aafa64f0dee06d3a2cd32f2c69a2670fd6062cb3525072580b0e984dd8ac"
+      "trial-sets/P-001/record-1.json": "sha256:21fa1ff7eef2ec8743b19a3b5e6c5d9012e6548a1d7b4a5c24ef14379909500f",
+      "trial-sets/P-001/record-2.json": "sha256:f0190b34145ade2db803d670146701452b99f77addec69233c2207b5bd1891ae",
+      "trial-sets/P-001/record-3.json": "sha256:d72e6c5b2797be269332e8d26d64bc90636fb4d07097cc60a81d73c8d8cad024",
+      "trial-sets/P-002/record-1.json": "sha256:c5262e25f4783dd23700b92df6b9aeaf44591411de138e52ac6e77d9a3c53d79",
+      "trial-sets/P-002/record-2.json": "sha256:5c09611ee56736329751549a03b1cd752f1c49183475df0389e8f725337c6d9c",
+      "trial-sets/P-002/record-3.json": "sha256:df177dbea6f8ca00a3bda841aa9e8efa6502ac8366ea16150134e44a008af5de"
     },
     "isolationManifests": {
-      "P-001": "sha256:92a93f09210d296720e2244a01db27660e0319a01c74a79437f04fd43047e20d",
-      "P-002": "sha256:2f4f782bb281c13071388bb6c6d1bbd051339680d615c122c50d333b96c7805c"
+      "P-001": "sha256:02ab55b1748c1913c2d774c81dcfb41d7aaedc208928288bda0003a1f436cf27",
+      "P-002": "sha256:685d999e8b8157c39e2ba534c709b9437bf9cc077e0d7dbe21193968ed1d70e2"
     }
   },
   "contractDigest": "sha256:cebd0a5b6b0a4683d4b47b49e5c139d70299dc375bb5c8435657c8054318c7c0",
@@ -142,59 +142,59 @@
       "conditionArm": "clean",
       "trialIndex": 1,
       "completeness": "complete",
-      "canariesSent": 37,
-      "canariesDelivered": 37,
+      "canariesSent": 76,
+      "canariesDelivered": 76,
       "logReportedLoss": false
     },
     {
       "conditionArm": "clean",
       "trialIndex": 2,
       "completeness": "complete",
-      "canariesSent": 31,
-      "canariesDelivered": 31,
+      "canariesSent": 64,
+      "canariesDelivered": 64,
       "logReportedLoss": false
     },
     {
       "conditionArm": "clean",
       "trialIndex": 3,
       "completeness": "complete",
-      "canariesSent": 30,
-      "canariesDelivered": 30,
+      "canariesSent": 58,
+      "canariesDelivered": 58,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 1,
       "completeness": "complete",
-      "canariesSent": 29,
-      "canariesDelivered": 29,
+      "canariesSent": 64,
+      "canariesDelivered": 64,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 2,
       "completeness": "complete",
-      "canariesSent": 29,
-      "canariesDelivered": 29,
+      "canariesSent": 64,
+      "canariesDelivered": 64,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 3,
       "completeness": "complete",
-      "canariesSent": 30,
-      "canariesDelivered": 30,
+      "canariesSent": 67,
+      "canariesDelivered": 67,
       "logReportedLoss": false
     }
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-04T19:13:53.349Z",
-  "durationMs": 12883,
+  "startedAt": "2026-10-06T21:14:24.200Z",
+  "durationMs": 27630,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261004T191353878Z-cbee24f1"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261006T211425788Z-f3230a87"
   }
 }

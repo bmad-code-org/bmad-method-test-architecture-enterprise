@@ -63,6 +63,7 @@ const { spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
 
+const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corpus-index');
 const { calibrationObservation, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
 const { checkEvaluation } = require('../cli/lib/evaluate/check');
@@ -479,6 +480,14 @@ function plantRubric(folder, edit = () => {}) {
   });
   fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(planted.conditions, null, 2)}\n`);
   if (planted.rubric !== null) plantCalibration(folder, planted.rubric);
+}
+
+/** Edits `plantRubric`'s judge to run the claude adapter, with the given model, agentArgs and recorded snapshot. */
+function plantClaudeJudge({ model, agentArgs = [], snapshot }) {
+  return (planted) => {
+    planted.judge = { agent: 'claude', agentArgs, timeoutMs: 60_000, ...(model === undefined ? {} : { model }) };
+    planted.conditions.judge = { modelSnapshot: snapshot };
+  };
 }
 
 function plantCalibration(folder, rubric) {
@@ -2865,6 +2874,46 @@ const HARDENING_CASES = [
     expect: (output) => [[output.includes('--model is not supported'), 'the finding does not say the adapter takes no model']],
   },
   {
+    name: 'a judge model that differs from the recorded judge model snapshot',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, plantClaudeJudge({ model: 'claude-sonnet-5-5', snapshot: 'sonnet' })),
+    expect: (output) => [
+      [
+        output.includes('judge.modelSnapshot "sonnet" differs from the model every judge call runs, "claude-sonnet-5-5" (judge.model)'),
+        'the finding does not name the recorded snapshot and the model the judge runs',
+      ],
+      [
+        output.includes('judge.model selects the model and judge.modelSnapshot records it'),
+        'the finding does not say which field selects the model',
+      ],
+    ],
+  },
+  {
+    name: 'a judge with no model beside a snapshot other than its adapter default',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, plantClaudeJudge({ snapshot: 'claude-sonnet-5-5' })),
+    expect: (output) => [
+      [
+        output.includes(
+          `"claude-sonnet-5-5" differs from the model every judge call runs, ${JSON.stringify(AGENT_ADAPTERS.claude.defaultModel)}`,
+        ),
+        'the finding does not name the adapter default the judge runs',
+      ],
+      [output.includes('since evaluation.json sets no judge.model'), 'the finding does not say the model comes from the adapter default'],
+    ],
+  },
+  {
+    name: 'a judge model set in agentArgs beside a different judge model snapshot',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, plantClaudeJudge({ agentArgs: ['--model', 'claude-opus-5'], snapshot: 'claude-sonnet-5-5' })),
+    expect: (output) => [
+      [output.includes('differs from the model every judge call runs, "claude-opus-5"'), 'the finding does not name the agentArgs model'],
+    ],
+  },
+  {
     name: 'a judge with no timeout',
     file: 'evaluation.json',
     rule: 'schema',
@@ -3287,6 +3336,18 @@ function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric 
   }
   if (conditions !== null)
     fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(conditions, null, 2)}\n`);
+}
+
+/** Plants a claude sealed-brief agent with the given model and agentArgs, and `snapshot` as the model its conditions record. */
+function plantAgentEvaluator(folder, { model, agentArgs = [], snapshot }) {
+  const evaluator = {
+    kind: 'sealed-brief-agent',
+    agent: 'claude',
+    agentArgs,
+    timeoutMs: 60_000,
+    ...(model === undefined ? {} : { model }),
+  };
+  plantEvaluator(folder, evaluator, { conditions: { ...AGENT_CONDITIONS, evaluator: { modelSnapshot: snapshot } } });
 }
 
 /** Evaluator conditions naming the sealed-brief agent's model and no target model. */
@@ -4021,6 +4082,54 @@ EVALUATOR_CASES.push(
     expect: (output) => [[output.includes('evaluator.agentArgs carries --tools'), 'the finding does not name the flag']],
   },
   {
+    name: 'a sealed-brief agent model that differs from the recorded evaluator model snapshot',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) => plantAgentEvaluator(folder, { model: 'claude-sonnet-5-5', snapshot: 'sonnet' }),
+    expect: (output) => [
+      [
+        output.includes(
+          'evaluator.modelSnapshot "sonnet" differs from the model the sealed-brief agent runs, "claude-sonnet-5-5" (evaluator.model)',
+        ),
+        'the finding does not name the recorded snapshot and the model the agent runs',
+      ],
+      [
+        output.includes('evaluator.model selects the model and evaluator.modelSnapshot records it'),
+        'the finding does not say which field selects the model',
+      ],
+    ],
+  },
+  {
+    name: 'a sealed-brief agent with no model beside a snapshot other than its adapter default',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) => plantAgentEvaluator(folder, { snapshot: 'claude-sonnet-5-5' }),
+    expect: (output) => [
+      [
+        output.includes(
+          `"claude-sonnet-5-5" differs from the model the sealed-brief agent runs, ${JSON.stringify(AGENT_ADAPTERS.claude.defaultModel)}`,
+        ),
+        'the finding does not name the adapter default the agent runs',
+      ],
+      [
+        output.includes('since evaluation.json sets no evaluator.model'),
+        'the finding does not say the model comes from the adapter default',
+      ],
+    ],
+  },
+  {
+    name: 'a sealed-brief agent model set in agentArgs beside a different evaluator model snapshot',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) => plantAgentEvaluator(folder, { agentArgs: ['--model', 'claude-opus-5'], snapshot: 'claude-sonnet-5-5' }),
+    expect: (output) => [
+      [
+        output.includes('differs from the model the sealed-brief agent runs, "claude-opus-5"'),
+        'the finding does not name the agentArgs model',
+      ],
+    ],
+  },
+  {
     name: 'a judge model in the evaluator conditions beside a rubric a command evaluator scores',
     file: 'policy/evaluator-conditions.json',
     rule: 'judge',
@@ -4185,6 +4294,22 @@ const CLEAN_CASES = [
   {
     name: 'a rubric with its judge and the judge model',
     plant: (folder) => plantRubric(folder),
+  },
+  {
+    name: 'a sealed-brief agent model and the same model recorded as its snapshot',
+    plant: (folder) => plantAgentEvaluator(folder, { model: 'claude-sonnet-5-5', snapshot: 'claude-sonnet-5-5' }),
+  },
+  {
+    name: 'a sealed-brief agent on its adapter default and the default recorded as its snapshot',
+    plant: (folder) => plantAgentEvaluator(folder, { snapshot: AGENT_ADAPTERS.claude.defaultModel }),
+  },
+  {
+    name: 'a judge model and the same model recorded as its snapshot',
+    plant: (folder) => plantRubric(folder, plantClaudeJudge({ model: 'claude-sonnet-5-5', snapshot: 'claude-sonnet-5-5' })),
+  },
+  {
+    name: 'a judge on its adapter default and the default recorded as its snapshot',
+    plant: (folder) => plantRubric(folder, plantClaudeJudge({ snapshot: AGENT_ADAPTERS.claude.defaultModel })),
   },
   {
     name: 'a historical probe with a natural defect, its arm and a fix commit named by any revision',

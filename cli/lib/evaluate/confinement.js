@@ -116,6 +116,15 @@
  *                A socket bound after the call started stays reachable for that call and the audit lists a connection to it (Story 1.86).
  *                A Seatbelt profile denies every `connect()` to a path-based socket and allows back the workspace, the call's private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
  *                So no socket outside them is reachable, one bound after the call started included, since the rule names a path.
+ *                The evaluation layer's processes have no route to a host socket either (Story 1.88).
+ *                Under Bubblewrap each start of a layer process lists the host's sockets again (`layerPrefix`) and binds each socket's own path onto itself and an empty device file over it.
+ *                A socket that went away before Bubblewrap starts stops the start and makes no file, since Bubblewrap reads every bind source before any mount.
+ *                A socket its owner removes while Bubblewrap mounts it, between that read and the mask's mount, can leave an empty file and its directory chain at the socket's path, which the layer's writable `/` makes a path on the host.
+ *                The file can exist for as long as the process runs and is no route to anything; the guard (`mask-guard.js`) removes it when the process has ended, and the recovery of a killed run removes it for the run that never ended it.
+ *                The socket the runtime itself serves (the bridge a sealed-brief agent's relay connects to) stays out of the list, and a socket moved into the user's private root stays in it.
+ *                A Seatbelt layer profile carries the same denial and allows back the one bridge socket shape beneath the private root and the two system services (`seatbeltLayerProfile`).
+ *                It also denies every write to the private root and to each entry directly in it, so a layer process cannot rename a tree of the bridge's shape to a run's name there or write a record of the guard.
+ *                Every Bubblewrap vector binds the private root read-only and the run's own private parents writable again (`bubblewrapLayerArguments`), whatever the number of sockets it hides, for the same two reasons.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -166,9 +175,12 @@
 
 const crypto = require('node:crypto');
 const { startEgress } = require('./confinement-egress');
+const { EXIT_LAUNCH_TOO_LARGE, LAUNCH_TOO_LARGE_TOKEN } = require('./confinement-launcher.cjs');
 const { signedStatus } = require('./confinement-status.cjs');
 const { loadEngine } = require('./engine');
-const { BUBBLEWRAP_ARGUMENT_LIMIT, isSocketFile, listHostSockets, socketBudget } = require('./host-sockets');
+const { CREDENTIALS_FILE } = require('./recorded-paths');
+const { BUBBLEWRAP_ARGUMENT_LIMIT, isServedSocket, isSocketFile, listHostSockets, socketBudget } = require('./host-sockets');
+const { startMaskGuard } = require('./mask-guard');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -203,6 +215,7 @@ const {
 const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)', bubblewrap: 'Linux Bubblewrap (bwrap)' });
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
+const ENV_PROGRAM = '/usr/bin/env';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
 
 /**
@@ -381,12 +394,38 @@ function gitFileOf(root) {
 }
 
 /**
+ * The Seatbelt rules that close every path-based Unix socket and allow back `routes` (each a `(subpath "...")`, `(literal "...")` or `(regex #"...")` form) and the two system services in `SEATBELT_SYSTEM_SOCKETS`.
+ * A target's profile and the evaluation layer's profile share them, so the two cannot drift (Story 1.87, Story 1.88).
+ * Seatbelt matches the real path of the socket a `connect()` reaches, so the callers name each path by its real spelling beside the given one.
+ */
+function seatbeltSocketRules(granted) {
+  const routes = [...granted, ...SEATBELT_SYSTEM_SOCKETS.map((entry) => `(literal "${entry}")`)];
+  return [
+    '(deny network-outbound (remote unix-socket))',
+    `(allow network-outbound\n  ${routes.map((entry) => `(remote unix-socket ${entry})`).join('\n  ')})`,
+  ];
+}
+
+/** `text` with every character a Seatbelt regular expression reads as syntax escaped. */
+function escapeRegularExpression(text) {
+  return text.replaceAll(/[.*+?^$()[\]{}|\\]/g, String.raw`\$&`);
+}
+
+/**
  * The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation
  * folder, the project's common git directory or the hooks directory `core.hooksPath` names outside it (a `subpath` matches a
  * path that does not exist yet), or to the checkout's `.git` file, so a layer process cannot plant a hook, change the
  * configuration, move a ref or redirect the checkout to another git directory.
+ * A `connect()` to a path-based Unix socket is refused anywhere but the one shape of path the runtime serves the bridge at beneath `privateRoots` and the two system services (Story 1.88).
+ * That shape is `<root>/run-<name>/s-<name>/bridge.sock` (`workspace.js` `makePrivateParent` and `bridge.js` `socketPlace`).
+ * The rule names a path, so a socket bound after the process started is refused too.
+ * A layer process is under `(allow default)`, so it can rename a directory it owns that holds a host socket (Docker Desktop's `~/.docker/run`, the directory `SSH_AUTH_SOCK` names) to a path the allowance names and connect there.
+ * Seatbelt checks a rename against the path of the entry that is renamed, so the rename of a prepared tree to `<root>/run-<name>` is a write to the entry `<root>/run-<name>`.
+ * The profile therefore also denies every write to the private root, to each entry directly in it and to any path of the bridge's shape, in a rule of its own.
+ * That refuses the rename of a host directory to `<root>/run-<name>`, to `<root>/run-<name>/s-<name>` and to `<root>/run-<name>/s-<name>/bridge.sock`, and a write of a file in the root (the guard's records).
+ * A write beneath an existing `<root>/run-<name>` stays allowed for the layer's own scratch directories, and the bridge's `connect()` needs no write.
  */
-function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirectoryPath = null, gitFile = null) {
+function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirectoryPath = null, gitFile = null, privateRoots = []) {
   const present = (entries) => entries.filter((entry) => entry !== null && entry !== undefined);
   const denied = [...new Set(present([evaluationFolder, gitDirectory, hooksDirectoryPath]).flatMap(spellings))].map(
     (entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`,
@@ -394,7 +433,22 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
   const files = [...new Set(present([gitFile]).flatMap(spellings))].map(
     (entry) => `(literal "${assertProfileSafePath(entry, refuseUnsafePath)}")`,
   );
-  return ['(version 1)', '(allow default)', `(deny file-write* ${[...denied, ...files].join(' ')})`, ''].join('\n');
+  const shape = (root, tail) =>
+    `(regex #"^${escapeRegularExpression(assertProfileSafePath(root, refuseUnsafePath))}/run-[^/]+/s-[^/]+${tail}")`;
+  const bridgeSockets = privateRoots.map((root) => shape(root, String.raw`/bridge\.sock$`));
+  const bridgeDirectories = privateRoots.map((root) => shape(root, '(/|$)'));
+  // The root itself and each entry directly in it: the run's parent directories, the guard's records and any name a rename could take.
+  const rootEntries = privateRoots.map(
+    (root) => `(regex #"^${escapeRegularExpression(assertProfileSafePath(root, refuseUnsafePath))}(/[^/]+)?$")`,
+  );
+  return [
+    '(version 1)',
+    '(allow default)',
+    `(deny file-write* ${[...denied, ...files].join(' ')})`,
+    ...(bridgeDirectories.length === 0 ? [] : [`(deny file-write* ${[...rootEntries, ...bridgeDirectories].join(' ')})`]),
+    ...seatbeltSocketRules(bridgeSockets),
+    '',
+  ].join('\n');
 }
 
 /**
@@ -409,25 +463,27 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
  * A `connect()` to a path-based unix socket is refused anywhere but the workspace, the private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
  * The rule names a path, so it holds for a socket bound after the call started.
  *
- * With `audit` (`{ token, exempt }`), the kernel reports what the profile
- * allows or refuses: every file rule that denies carries the sandbox's token
- * (`with message`), and one rule, placed before every rule that follows it so
- * that a later grant (the home, the git directory's own entry) overrides it,
- * reports each `file-read-data` the profile allows outside `exempt` (the paths
- * the sandbox may read, and the root directory itself) with the same token
- * (`with report`). Without `audit` the profile is the one every earlier story
- * generated, byte for byte.
+ * With `audit` (`{ token, exempt }`), the kernel reports what the profile allows or refuses.
+ * Every file rule that denies carries the sandbox's token (`with message`).
+ * One rule reports each `file-read-data` the profile allows outside `exempt` (the paths the sandbox may read, and the root directory itself) with the same token (`with report`).
+ * That rule is placed before every rule that follows it, so a later grant (the home, a call directory, the git directory's own entry) overrides it.
+ * Without `audit` the profile is the one every earlier story generated, byte for byte.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null, audit = null }) {
+function seatbeltTargetProfile({
+  workspace,
+  writable,
+  evaluationFolder,
+  git = null,
+  privateRoot = null,
+  rootHome = null,
+  rootGrants = [],
+  audit = null,
+}) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
-  // Seatbelt matches the real path of the socket a `connect()` reaches, and `spellings` names the real path of each grant beside its given one.
+  const socketRules = seatbeltSocketRules(allowed);
   const socketRoutes = (candidates) => candidates.map((entry) => `(remote unix-socket ${entry})`).join('\n  ');
-  const socketRules = [
-    '(deny network-outbound (remote unix-socket))',
-    `(allow network-outbound\n  ${socketRoutes([...allowed, ...SEATBELT_SYSTEM_SOCKETS.map((entry) => `(literal "${entry}")`)])})`,
-  ];
   const tagged = audit === null ? '' : ` (with message "${audit.token}")`;
   // Seatbelt decides an operation by the rules that name it before the rules that name its wildcard, so the report rule
   // (which names `file-read-data`) would override every later `file-read*` rule, whatever their order; an audited profile
@@ -462,29 +518,29 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
             .map((entry) => `(remote unix-socket (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`)
             .join('\n  ')})`,
         ];
-  // The target's own home sits beneath the private root, so it is allowed again after the root's denial (the last
-  // matching rule wins); a sibling home, another run's parent and the root's listing stay denied.
-  // Resolving the home's path asks the root and each directory down to the home's parent for their metadata (an `lstat`
-  // while a module loads, `realpath`, `mkdir -p`, `cd`), so those directories answer a metadata request, which tells nothing
-  // a path does not already say; listing them stays denied, since a directory's entries are file data.
-  const homeAncestors = [];
-  if (rootHome !== null) {
+  // The target's own home and the call directories (Story 1.131) sit beneath the private root, so each is allowed again after the root's denial.
+  // The last matching rule wins, so a sibling home, another run's parent and the root's listing stay denied.
+  // Resolving the path of one of them asks the root and each directory down to its parent for their metadata (an `lstat` while a module loads, `realpath`, `mkdir -p`, `cd`).
+  // Those directories therefore answer a metadata request, which tells nothing a path does not already say, and listing them stays denied, since a directory's entries are file data.
+  const reachable = [rootHome, ...rootGrants].filter((entry) => entry !== null);
+  const reachableAncestors = [];
+  for (const directory of reachable) {
     for (
-      let ancestor = path.dirname(rootHome);
+      let ancestor = path.dirname(directory);
       ancestor.length > 1 && ancestor !== path.dirname(ancestor);
       ancestor = path.dirname(ancestor)
     ) {
-      if (spellings(privateRoot).some((held) => isInside(held, ancestor))) homeAncestors.push(ancestor);
-      else break;
+      if (!spellings(privateRoot).some((held) => isInside(held, ancestor))) break;
+      if (!reachableAncestors.includes(ancestor)) reachableAncestors.push(ancestor);
     }
   }
-  const homeRules =
-    rootHome === null
+  const reachableRules =
+    reachable.length === 0
       ? []
       : [
-          `(allow ${reads} file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
-          `(allow file-read-metadata\n  ${homeAncestors.flatMap(literals).join('\n  ')})`,
-          `(allow network-outbound\n  ${socketRoutes(subpaths(rootHome))})`,
+          `(allow ${reads} file-write*\n  ${reachable.flatMap(subpaths).join('\n  ')})`,
+          `(allow file-read-metadata\n  ${reachableAncestors.flatMap(literals).join('\n  ')})`,
+          `(allow network-outbound\n  ${socketRoutes(reachable.flatMap(subpaths))})`,
         ];
   // What the sandbox may read is not reported; every other read the profile allows is (macOS reports by real path, so both spellings are named).
   const reportRule =
@@ -511,7 +567,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     ...reportRule,
     ...gitRules,
     ...privateRules,
-    ...homeRules,
+    ...reachableRules,
     ...quiet,
     ...denials(withheld),
     '',
@@ -573,29 +629,64 @@ function sandboxOwnDirectories() {
 }
 
 /**
+ * Where a call directory beneath the user's private root reaches a Bubblewrap target (Story 1.131): the sandbox empties the root, so a grant beneath it would be hidden.
+ * The directory is bound at a path under the synthetic `/dev`, which the sandbox keeps and which no listing of the root shows, as the egress proxy's directory is (Story 1.83).
+ * The name is the directory's own, which `mkdtemp` made unique among the run's call directories.
+ */
+function callDirectoryMount(directory) {
+  return path.join('/dev', path.basename(directory));
+}
+
+/**
+ * The path a target names `candidate` by when it is an absolute path inside one of the `mounted` call directories (`{ directory, mount }`, Story 1.131): the mount of that directory and the rest of the path.
+ * Any other value is returned as it is, so a value that is no path, a relative path and a path outside every call directory pass through.
+ */
+function pathAsMounted(candidate, mounted) {
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) return candidate;
+  for (const { directory, mount } of mounted) {
+    const held = spellings(directory).find((spelling) => isInside(spelling, candidate));
+    if (held !== undefined) return path.join(mount, path.relative(held, path.resolve(candidate)));
+  }
+  return candidate;
+}
+
+/**
  * Where a call's socket mounts reach Bubblewrap (Story 1.82): a file of NUL-separated arguments the launcher opens as this
  * descriptor and `--args` reads, so the number of sockets a host holds cannot overflow the argument limit of the call's `exec`.
+ * The launcher puts the file at this position among the command's descriptors (`ARGUMENTS_DESCRIPTOR` of `confinement-launcher.cjs`).
  */
 const SOCKET_ARGUMENTS_FD = 3;
 
 /**
- * The launcher of a call that hides sockets: it opens the arguments file named by its first argument as `SOCKET_ARGUMENTS_FD`
- * and executes the rest of its arguments in its own place, so the process Bubblewrap runs in is the one the runtime started.
+ * The launcher of a call that hides sockets (Story 1.89): a Node program the runtime starts outside the sandbox, first in the call's command and before `strace`.
+ * It opens the arguments file as `SOCKET_ARGUMENTS_FD`, starts the rest of the command with the environment the call was given and ends as the command ended.
+ * No shell stands between the runtime and Bubblewrap, so no name a shell treats specially changes on the way.
  */
-const SOCKET_LAUNCHER = Object.freeze(['/bin/sh', '-c', `exec ${SOCKET_ARGUMENTS_FD}<"$1" || exit 126; shift; exec "$@"`, 'sh']);
+const SOCKET_LAUNCHER = path.join(__dirname, 'confinement-launcher.cjs');
 
 /**
- * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on and resets
- * `IFS`, `OPTIND` and `PPID` whenever the call's environment held them, and bash (the `sh` of some hosts) decrements `SHLVL` and sets
- * `_` and `OLDPWD`.
- * `env` restores each to what the call's environment held (an unset one stays unset), so a variable whose name is a valid shell
- * identifier and that the shell does not initialize reaches the target as the call gave it.
- * A name no shell can hold, an exported shell function and the variables bash initializes itself are the shell's to change (Story 1.89).
+ * The environment the launcher itself starts with: the loader variables the engine's own watchdog carries (`ELECTRON_RUN_AS_NODE`, `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`), which a Node binary may need to start, and nothing else.
+ * Node reads `NODE_OPTIONS` and its kin from its environment and could run a script of the call's environment outside the sandbox, and its `process.env` cannot read a variable named by a decimal integer, so the call's environment travels in a file.
  */
-const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID']);
+function launcherEnvironment() {
+  const environment = { ELECTRON_RUN_AS_NODE: '1' };
+  for (const name of ['LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH']) {
+    if (process.env[name] !== undefined) environment[name] = process.env[name];
+  }
+  return environment;
+}
 
-/** The program that restores `SHELL_VARIABLES` between the launcher's shell and the command. */
-const ENVIRONMENT_PROGRAM = '/usr/bin/env';
+/**
+ * The error a launcher's refusal for the size of the command's arguments and environment is: the one Node's own `spawn` gives the operating system's `E2BIG`, or `null` when the result is no such refusal.
+ * A call that hides sockets starts the command from the launcher, so the engine's spawn of the launcher succeeds and the operating system's refusal reaches the runtime as the launcher's exit.
+ * The engine's command-line adapter maps an error whose `code` is `E2BIG` into its own `port-failure` fault with the reason `launch-too-large`, so a run reads the refusal of a call that hides sockets as it reads one of a call that hides none.
+ */
+function launchTooLarge(result, wrapped) {
+  if (typeof wrapped?.environmentFile !== 'string' || result?.exitCode !== EXIT_LAUNCH_TOO_LARGE) return null;
+  const said = String(result?.stderr?.value ?? result?.stderr ?? '');
+  if (!said.includes(LAUNCH_TOO_LARGE_TOKEN)) return null;
+  return Object.assign(new Error('spawn E2BIG'), { code: 'E2BIG', errno: -os.constants.errno.E2BIG, syscall: 'spawn' });
+}
 
 /**
  * What the probes run a trivial process under: the target's isolation, whatever
@@ -616,25 +707,36 @@ function socketMaskArguments(sockets) {
 }
 
 /**
- * The command a call that hides sockets starts: the launcher, the arguments file, and `env` restoring the variables the launcher's
- * shell touches to what `environment` held (an unset one stays unset), then `argv`.
- * A first word with `=` in it would be read by `env` as an assignment, so it is refused.
+ * The Bubblewrap arguments of the evaluation layer that hide each of `sockets`: a bind of the socket's own path onto itself, then the empty device file over it (Story 1.88).
+ * The layer's `/` is a writable bind of the host's, so a mount over a path that went away makes Bubblewrap create an empty file there, on the host.
+ * Bubblewrap runs `realpath` on every bind source before any mount, so a socket that went away before the start stops the start and makes no file.
+ * `setup_newroot` then reads each bind's source, makes the destination's parent directories and the destination as an empty file when it is gone, and mounts.
+ * No Bubblewrap argument skips the destination's creation, so a socket its owner removes between the `realpath` pass and the mask's mount can leave an empty file and its directory chain at its path.
+ * The bind of the socket's own path first keeps a destination that went away from being made for a path the vector's own bind does not stand on.
+ * The guard (`mask-guard.js`) removes that file and those directories when the process has ended.
+ * A path no argument can carry is a `ConfinementError`.
  */
-function launchedCommand(socketFile, environment, argv) {
-  if (String(argv[0]).includes('=')) {
-    throw new ConfinementError(
-      `the executable ${JSON.stringify(argv[0])} holds "=", which the socket launcher's env would read as an assignment`,
-    );
-  }
-  const held = (name) => typeof environment?.[name] === 'string';
-  // The options come first: `env` reads an assignment as the end of them.
-  const restore = [
-    ...SHELL_VARIABLES.filter((name) => !held(name)).flatMap((name) => ['-u', name]),
-    ...SHELL_VARIABLES.filter(held).map((name) => `${name}=${environment[name]}`),
-  ];
-  // Dash stops on an `OPTIND` that is no number (`Illegal number`), so the shell never sees one the call held.
-  const shell = held('OPTIND') ? [ENVIRONMENT_PROGRAM, '-u', 'OPTIND', ...SOCKET_LAUNCHER] : SOCKET_LAUNCHER;
-  return [...shell, socketFile, ENVIRONMENT_PROGRAM, ...restore, ...argv];
+function pinnedMaskArguments(sockets) {
+  return sockets.flatMap((socket) => ['--ro-bind', socket, socket, ...socketMaskArguments([socket])]);
+}
+
+/**
+ * The environment as a spawn reads it: each defined value as the string Node's `spawn` makes of it, so the launcher starts the command with what the engine's own spawn would have given it.
+ */
+function stringEnvironment(environment) {
+  return Object.fromEntries(
+    Object.entries(environment ?? {})
+      .filter(([, value]) => value !== undefined)
+      .map(([name, value]) => [name, String(value)]),
+  );
+}
+
+/**
+ * The command a call that hides sockets starts: Node running the launcher, the arguments file of the mounts, the file that carries the call's environment, then `argv` (Story 1.89).
+ * The launcher starts `argv` with that environment exactly, so nothing about the command's first word or the environment's names can be read as anything but themselves.
+ */
+function launchedCommand(socketFile, environmentFile, argv) {
+  return [process.execPath, SOCKET_LAUNCHER, socketFile, environmentFile, ...argv];
 }
 
 /**
@@ -659,6 +761,9 @@ function launchedCommand(socketFile, environment, argv) {
  * (Story 1.83) is bound read-only at `mount`, a path beneath the synthetic `/dev`
  * when the directory sits in the private root the sandbox empties, so the
  * call's shim reaches the proxy's socket from inside the namespace.
+ * Each of `mounted` (`{ directory, mount }`) is a call directory beneath that root (Story 1.131).
+ * It is bound writable at `mount`, a path beneath the synthetic `/dev`, so the target reaches it.
+ * The run's private parent holds the directory, so the next run's recovery reclaims it after a kill.
  */
 function bubblewrapTargetArguments({
   executable,
@@ -673,6 +778,7 @@ function bubblewrapTargetArguments({
   sockets = [],
   socketsFd = null,
   egress = null,
+  mounted = [],
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
   const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
@@ -723,6 +829,8 @@ function bubblewrapTargetArguments({
     ...(statusMount === statusFile ? [] : ['--bind', realOf(statusFile), statusMount]),
     // The egress proxy's directory is the runtime's: the target sees it read-only, and a `connect()` needs no write.
     ...(egress === null || egress.mount === egress.directory ? [] : ['--ro-bind', realOf(egress.directory), egress.mount]),
+    // A call directory beneath the private root is the call's own and writable, at a path the emptied root does not hide.
+    ...mounted.flatMap(({ directory, mount }) => ['--bind', realOf(directory), mount]),
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -737,22 +845,48 @@ function bubblewrapTargetArguments({
  * read-only. A hooks directory that does not exist yet cannot be bound (the run creates no directory in the adopter's tree),
  * so the adopter-tree reading digests it instead (`workspace.js` `adopterTreeState`).
  * It keeps the host's network, since the evaluation's HTTP port reaches a started server over the host's loopback.
+ * Each of `sockets` (real paths of the host's path-based Unix sockets, `host-sockets.js`) is hidden by a bind of its own path and an empty device file over it (`pinnedMaskArguments`, Story 1.88).
+ * The masks come after the read-only binds, so that a socket inside one of them is hidden too.
+ * The guard's records exist in `privateRoot`, which a layer process could otherwise write, so the vector binds `privateRoot` read-only whenever it is given, whatever the number of sockets.
+ * The bind comes right after `--bind / /`, and each of `privateParents` (the run's own private parent directories, `workspace.js` `makePrivateParent`) is bound writable again, so the layer's scratch directories stay writable and a record cannot be written.
+ * A `connect()` to the bridge's socket on a read-only mount needs no write.
  */
-function bubblewrapLayerArguments({ executable, evaluationFolder, gitDirectory = null, hooksDirectory: hooks = null, gitFile = null }) {
+function bubblewrapLayerArguments({
+  executable,
+  evaluationFolder,
+  gitDirectory = null,
+  hooksDirectory: hooks = null,
+  gitFile = null,
+  sockets = [],
+  privateRoot = null,
+  privateParents = [],
+}) {
   const hooksBound = hooks !== null && hooks !== undefined && fs.existsSync(hooks) ? hooks : null;
   const protectedPaths = [evaluationFolder, gitDirectory, hooksBound, gitFile]
     .filter((entry) => entry !== null && entry !== undefined)
     .map((entry) => assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath));
+  const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
+  const recordArguments =
+    privateRoot === null
+      ? []
+      : [
+          '--ro-bind',
+          realOf(privateRoot),
+          realOf(privateRoot),
+          ...privateParents.flatMap((parent) => ['--bind', realOf(parent), realOf(parent)]),
+        ];
   return [
     executable,
     '--unshare-user',
     '--bind',
     '/',
     '/',
+    ...recordArguments,
     '--dev',
     '/dev',
     ...bubblewrapIsolation(),
     ...protectedPaths.flatMap((entry) => ['--ro-bind', entry, entry]),
+    ...pinnedMaskArguments(sockets),
     '--',
   ];
 }
@@ -787,34 +921,38 @@ const confirmedObservers = new Map();
  * back through it, `{ failure }` with the reason otherwise (Story 1.60).
  */
 function probeObserver(mechanism, env) {
-  // The probes make a directory in the temp directory; one that is missing or unwritable is the workspace step's to name, as
-  // for the mechanism's own probe, and the observer is then confirmed by the first call that runs (the trial's start on macOS,
-  // the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
-  let tempUsable = true;
+  // The probes make a directory beneath the user's private root (Story 1.131), so a run killed outright while a probe runs leaves it to the next preflight's recovery.
+  // A root that cannot be held and a temp directory that is missing or unwritable are the workspace step's to name, as for the mechanism's own probe.
+  // The observer is then confirmed by the first call that runs (the trial's start on macOS, the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
+  const { privateRootBase, privateRootIn } = require('./workspace');
+  let probeUsable = true;
   try {
     fs.accessSync(os.tmpdir(), fs.constants.W_OK);
   } catch {
-    tempUsable = false;
+    probeUsable = false;
   }
+  const parent = probeUsable ? privateRootIn(privateRootBase()) : null;
+  probeUsable = parent !== null;
   if (mechanism.mode === 'seatbelt') {
     const logExecutable = env?.[LOG_ENV] || LOG_EXECUTABLE;
     if (!path.isAbsolute(logExecutable))
       return { failure: `${LOG_ENV} names ${JSON.stringify(logExecutable)}, which is not an absolute path` };
     const key = `${mechanism.executable}|${logExecutable}`;
-    if (!tempUsable) return { observer: { executable: logExecutable } };
+    if (!probeUsable) return { observer: { executable: logExecutable } };
     if (confirmedObservers.has(key)) return confirmedObservers.get(key);
-    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable });
+    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable, parent });
     if (failure !== null) return { failure };
     return confirmedObservers.set(key, { observer: { executable: logExecutable } }).get(key);
   }
   const strace = executableOnPath('strace', env);
   if (strace === null) return { failure: 'strace is not on PATH' };
-  if (!tempUsable) return { observer: { executable: strace } };
+  if (!probeUsable) return { observer: { executable: strace } };
   const key = `${mechanism.executable}|${strace}`;
   if (confirmedObservers.has(key)) return confirmedObservers.get(key);
   const failure = probeTrace({
     strace,
     vector: bubblewrapProbeArguments(mechanism.executable),
+    parent,
   });
   if (failure !== null) return { failure };
   return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
@@ -926,7 +1064,7 @@ function selectConfinement({ evaluation, folder, root, env = process.env, platfo
       refusal: `the evaluation folder's path ${JSON.stringify(unsafe)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the folder, ${optOut}`,
     };
   }
-  // Every workspace and private directory a target is granted is made under the temp directory.
+  // Every workspace a target is granted is made under the temp directory; the private directories it is granted are made beneath the run's private parent.
   const unsafeTemp = spellings(temp).find((entry) => !isProfileSafePath(entry));
   if (unsafeTemp !== undefined) {
     return {
@@ -1002,21 +1140,144 @@ function confines(confinement) {
 }
 
 /**
+ * The user's private root, `/tmp/tea-evaluate-p<uid>` (`workspace.js` `privateRootName`), by each spelling of its base (`/tmp` is a link on macOS).
+ * The runtime serves the bridge a sealed-brief agent's relay connects to beneath it, and writes the guard's records in it.
+ * It is read at the call, since `workspace.js` requires this file.
+ */
+function layerPrivateRoots() {
+  const { privateRootBase, privateRootName } = require('./workspace');
+  return spellings(privateRootBase()).map((base) => path.join(base, privateRootName()));
+}
+
+/** The directory the guard writes its records in: the user's private root, made when it is absent, or `null` where the root cannot be used (`workspace.js` `privateRootIn`). */
+function layerRecordDirectory() {
+  const { privateRootBase, privateRootIn } = require('./workspace');
+  return privateRootIn(privateRootBase());
+}
+
+/**
+ * The private parent directories this process made in `root` (`run-<pid>-<random>`, `workspace.js` `makePrivateParent`) that are real directories the user owns.
+ * A Bubblewrap layer process keeps these writable beneath the read-only root, since its scratch directories and the bridge's directory are made in them.
+ * It is read at each start, so a parent the run made since the vector was built is covered.
+ */
+function layerPrivateParents(root) {
+  const uid = process.getuid?.() ?? null;
+  const prefix = `run-${process.pid}-`;
+  try {
+    return fs
+      .readdirSync(root)
+      .filter((name) => name.startsWith(prefix))
+      .map((name) => path.join(root, name))
+      .filter((candidate) => {
+        try {
+          const stat = fs.lstatSync(candidate);
+          return stat.isDirectory() && (uid === null || stat.uid === uid);
+        } catch {
+          // A parent a run removed since the listing is no parent to keep writable.
+          return false;
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The arguments a layer process's own command can take under Bubblewrap's bound of 9,000 (the executable, the agent CLI's or the evaluator's flags).
+ * The list of hidden sockets leaves room for them.
+ */
+const LAYER_COMMAND_ARGUMENTS = 1000;
+
+/** The arguments of one hidden socket in the layer's vector: the bind of its own path and the empty device file over it. */
+const ARGUMENTS_PER_LAYER_SOCKET = 6;
+
+/**
+ * The host's path-based Unix sockets a Bubblewrap process of the evaluation layer must not reach (Story 1.88): the list of `host-sockets.js` for the call that starts now.
+ * It leaves out the sockets this process serves itself (`isServedSocket`: the path, the device and the inode the bridge registered when it listened), which the layer's own relay connects to.
+ * A socket another process moved into the user's private root is another file, so it stays in the list.
+ * A list that does not fit the room (the sockets only root, the system accounts and the user running the layer can create, or any socket cut) is a `ConfinementError`.
+ * The layer has no record to name a cut socket in, so it hides every socket the host lists or the process does not start.
+ */
+function layerSockets(base, hostSockets) {
+  const room = socketBudget(base.length + LAYER_COMMAND_ARGUMENTS, ARGUMENTS_PER_LAYER_SOCKET);
+  const listed = hostSockets({
+    except: [...(fs.existsSync('/run/user') ? ['/run/user'] : []), ...SOCKET_REPLACED_DIRECTORIES].flatMap(spellings),
+    limit: room,
+  });
+  const { sockets, left = 0, refused = null } = Array.isArray(listed) ? { sockets: listed } : listed;
+  if (refused !== null || left > 0 || sockets.length > room) {
+    throw new ConfinementError(
+      `${refused ?? `the host holds ${sockets.length + left} Unix sockets`}; the evaluation layer's command has room to hide ${room} of the ${BUBBLEWRAP_ARGUMENT_LIMIT} arguments Bubblewrap accepts, and a socket left reachable could be a host service's`,
+    );
+  }
+  return sockets.filter((socket) => !isServedSocket(socket));
+}
+
+/**
  * The argument vector a process of the evaluation layer is started through,
  * before its own command; empty for a run that opted out.
+ * Under Bubblewrap it hides the host's path-based Unix sockets listed now (Story 1.88).
+ * The Bubblewrap vector also binds the user's private root read-only, with the run's own private parents writable, whatever the list holds.
+ * A macOS profile denies a `connect()` to every socket path but the bridge's socket shape beneath the user's private root and the two system services.
+ * The vector carries `refresh`, a function a spawn site calls just before it starts the process.
+ * It lists the sockets again, so a socket that went away since the vector was built stops being named and every start names the current list.
+ * A Bubblewrap vector also carries `guard` (`launchPrefix` in `isolation-primitives.js` calls it with `refresh`): it records the state of each hidden path and returns `settle`, which removes the empty file Bubblewrap made at a path that went away while it mounted (`mask-guard.js`).
  *
  * @param {object|null} confinement `selectConfinement`'s answer
+ * @param {object} [options]
+ * @param {(options: { except: string[], limit: number }) => (string[]|{ sockets: string[], left?: number, refused?: string|null })} [options.hostSockets]
+ *   the list of the host's sockets under Bubblewrap; a case replaces it with a fixed list
+ * @param {() => string|null} [options.recordDirectory] where the guard writes its record; the user's private root by default
+ * @param {(root: string) => string[]} [options.privateParents] the run's private parent directories beneath that root, which stay writable; this process's own by default
  * @returns {string[]}
  */
-function layerPrefix(confinement) {
+function layerPrefix(
+  confinement,
+  { hostSockets = listHostSockets, recordDirectory = layerRecordDirectory, privateParents = layerPrivateParents } = {},
+) {
   if (!confines(confinement)) return [];
-  if (confinement.mode === 'seatbelt')
-    return [
+  let prefix;
+  let guard = null;
+  if (confinement.mode === 'seatbelt') {
+    prefix = [
       confinement.executable,
       '-p',
-      seatbeltLayerProfile(confinement.evaluationFolder, confinement.gitDirectory, confinement.hooksDirectory, confinement.gitFile),
+      seatbeltLayerProfile(
+        confinement.evaluationFolder,
+        confinement.gitDirectory,
+        confinement.hooksDirectory,
+        confinement.gitFile,
+        layerPrivateRoots(),
+      ),
     ];
-  return bubblewrapLayerArguments(confinement);
+  } else {
+    // The vector without sockets first: it refuses an unsafe path before the host is read, and its length sets the room.
+    const base = bubblewrapLayerArguments(confinement);
+    const sockets = layerSockets(base, hostSockets);
+    // The root is made here for every vector, since the vector binds it read-only before the guard writes a record in it, and a vector that hides no socket keeps it read-only too.
+    const directory = recordDirectory();
+    prefix = bubblewrapLayerArguments({
+      ...confinement,
+      sockets,
+      privateRoot: directory,
+      privateParents: directory === null ? [] : privateParents(directory),
+    });
+    guard = () => {
+      if (sockets.length > 0 && directory === null) {
+        throw new ConfinementError(
+          `the user's private root cannot hold the record of the ${sockets.length} sockets the evaluation layer hides, and a start the record does not cover must not begin`,
+        );
+      }
+      try {
+        return startMaskGuard({ sockets, recordDirectory: directory });
+      } catch (error) {
+        if (error?.code === 'EMASKRECORD') throw new ConfinementError(error.message);
+        throw error;
+      }
+    };
+  }
+  Object.defineProperty(prefix, 'refresh', { value: () => layerPrefix(confinement, { hostSockets, recordDirectory, privateParents }) });
+  return guard === null ? prefix : Object.defineProperty(prefix, 'guard', { value: guard });
 }
 
 /**
@@ -1106,6 +1367,11 @@ function targetSandbox({
     rootHome = privateRoot !== null && inside(privateRoot) ? candidate : null;
   };
   if (initialHome !== null) adoptHome(initialHome);
+  // A call directory is a directory the call may write beneath the private root, other than the home (Story 1.131).
+  const isCallDirectory = (candidate) =>
+    privateRoot !== null &&
+    spellings(candidate).some((entry) => spellings(privateRoot).some((held) => isInside(held, entry))) &&
+    !(rootHome !== null && spellings(candidate).some((entry) => spellings(rootHome).some((held) => isInside(held, entry))));
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
     throw new ConfinementError('a target confined by Bubblewrap needs a status directory');
   }
@@ -1172,9 +1438,10 @@ function targetSandbox({
      * `sockets` (Bubblewrap alone) is the list of host sockets to hide, for a call made again after a socket it hid went away:
      * the call's own earlier list without the vanished ones, so no socket another process creates meanwhile joins it. Without
      * it the call asks `hostSockets` for a list, with room for the mounts its own command leaves (`socketBudget`).
-     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile`
-     * names and the call's end removes. `environment` is the environment the call's process starts with; the launcher gives
-     * the target's the variables its shell touches as they were.
+     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile` names and the call's end removes.
+     * `environment` is the environment the call's target starts with.
+     * A call that hides sockets carries it in a second file (`environmentFile`) that the launcher reads.
+     * The wrapped call names the environment its own process starts with (`environment` of the result, the launcher's loader variables alone for a call that hides sockets), which the caller hands the engine in its place.
      */
     wrap(
       target,
@@ -1184,6 +1451,8 @@ function targetSandbox({
       { bridge = null, sockets: own = null, environment = {}, egress: egressSocket = null, listenPort = null } = {},
     ) {
       const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
+      // The call directories beneath the private root are re-granted after the root's denial (Seatbelt) or bound under the synthetic `/dev` (Bubblewrap).
+      const callDirectories = grants.filter(isCallDirectory);
       if (confinement.mode === 'seatbelt') {
         const profile = seatbeltTargetProfile({
           workspace,
@@ -1192,12 +1461,18 @@ function targetSandbox({
           git,
           privateRoot,
           rootHome,
+          rootGrants: callDirectories,
           audit:
             observer === null
               ? null
               : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: [...ownGitEntries(), ...linked] },
         });
-        return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
+        // `env` runs outside the sandbox and after the watchdog hop that starts every target, which is where Node adds the host's `NODE_V8_COVERAGE` to the environment; the sandbox then starts the target without it, as Bubblewrap's `--unsetenv` does.
+        return {
+          target: ENV_PROGRAM,
+          args: ['-u', 'NODE_V8_COVERAGE', confinement.executable, '-p', profile, target, ...args],
+          statusFile: null,
+        };
       }
       if (bridge !== null) {
         const granted =
@@ -1206,6 +1481,18 @@ function targetSandbox({
           writable.some((held) => spellings(held).some((entry) => spellings(bridge).some((socket) => isInside(entry, socket))));
         if (!granted) throw new ConfinementError('the bridge socket must be a path inside a directory the call may write');
       }
+      const mounted = callDirectories.map((directory) => ({ directory, mount: callDirectoryMount(directory) }));
+      if (new Set(mounted.map(({ mount }) => mount)).size !== mounted.length) {
+        throw new ConfinementError('two call directories of one call have one name, which one mount under the synthetic /dev cannot hold');
+      }
+      // The shim serves the bridge's socket at the path its directory has for the target, and every path in the call's environment that lies in a call directory (`TMPDIR`, a started service's port file) is that path too.
+      const bridgeSeen = bridge === null ? null : pathAsMounted(bridge, mounted);
+      const seenEnvironment =
+        mounted.length === 0
+          ? environment
+          : Object.fromEntries(
+              Object.entries(environment).map(([name, value]) => [name, typeof value === 'string' ? pathAsMounted(value, mounted) : value]),
+            );
       // The egress proxy's directory is the runtime's own and the target sees it read-only: a directory of the private root is
       // bound at a path beneath the synthetic `/dev`, which keeps it out of the target's otherwise empty private root.
       let egress = null;
@@ -1243,7 +1530,7 @@ function targetSandbox({
         bubblewrapTargetArguments({
           executable: confinement.executable,
           workspace,
-          writable: grants,
+          writable: grants.filter((directory) => !callDirectories.includes(directory)),
           evaluationFolder,
           git,
           privateRoot,
@@ -1253,11 +1540,12 @@ function targetSandbox({
           sockets: hidden,
           socketsFd,
           egress,
+          mounted,
         });
       const tail = [
         process.execPath,
         STATUS_SHIM,
-        ...(bridge === null ? [] : ['--bridge', bridge]),
+        ...(bridge === null ? [] : ['--bridge', bridgeSeen]),
         ...(egress === null ? [] : ['--egress', path.join(egress.mount, path.basename(egressSocket))]),
         // A server told to bind a port of the namespace's loopback keeps it: the egress listener asks the system for another.
         ...(egress === null || listenPort === null ? [] : ['--avoid', String(listenPort)]),
@@ -1308,30 +1596,44 @@ function targetSandbox({
         fs.rmSync(statusFile, { force: true });
         throw new ConfinementError(`the call hides ${sockets.length} sockets and its command leaves room for ${room}`);
       }
-      // The mounts of the hidden sockets reach Bubblewrap through a file, so a host with very many sockets cannot overflow the
-      // argument limit of the call's `exec`; the file is the runtime's, and the status directory is the target's to read at most.
-      const socketFile = sockets.length === 0 ? null : path.join(status, `sockets-${calls}-${crypto.randomBytes(8).toString('hex')}.args`);
-      if (socketFile !== null) {
-        fs.writeFileSync(
-          socketFile,
-          socketMaskArguments(sockets)
-            .map((argument) => `${argument}\0`)
-            .join(''),
-          { mode: 0o600 },
-        );
-      }
-      const vector = targetVector(sockets, socketFile === null ? null : SOCKET_ARGUMENTS_FD);
+      // A call that hides sockets goes through the launcher (`SOCKET_LAUNCHER`).
+      // The launcher opens the file that carries the mounts as the descriptor `--args` reads, so a host with very many sockets cannot overflow the argument limit of the call's `exec`.
+      // The launcher starts the command with the call's environment from a second file, since it starts with none of its own.
+      // Both files are the runtime's, in the status directory (beneath the private root of a run, which the sandbox empties), and the call's end removes them.
+      // The command is built before either exists, and a failed write removes what was made, so nothing a refusal throws leaves a file.
+      const hiding = sockets.length > 0;
+      const stamp = `${calls}-${crypto.randomBytes(8).toString('hex')}`;
+      const socketFile = hiding ? path.join(status, `sockets-${stamp}.args`) : null;
+      const environmentFile = hiding ? path.join(status, `launch-${stamp}.json`) : null;
+      const vector = targetVector(sockets, hiding ? SOCKET_ARGUMENTS_FD : null);
       const command = [...vector, ...tail];
-      // The key, the sockets the call hides and the file that carries their mounts stay out of what a caller copies: a call whose
-      // Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      if (hiding) {
+        const mounts = socketMaskArguments(sockets)
+          .map((argument) => `${argument}\0`)
+          .join('');
+        try {
+          fs.writeFileSync(socketFile, mounts, { mode: 0o600 });
+          fs.writeFileSync(environmentFile, JSON.stringify(stringEnvironment(seenEnvironment)), { mode: 0o600 });
+        } catch (error) {
+          fs.rmSync(socketFile, { force: true });
+          fs.rmSync(environmentFile, { force: true });
+          fs.rmSync(statusFile, { force: true });
+          throw error;
+        }
+      }
+      // The key, the sockets the call hides and the files that carry their mounts and the environment stay out of what a caller copies.
+      // A call whose Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      // `environment` is what the call's process starts with: the launcher's own (loader variables alone) for a call that hides sockets, the call's for one that hides none.
       const holdKey = (wrapped) =>
         Object.defineProperties(wrapped, {
           statusKey: { value: statusKey },
           hiddenSockets: { value: sockets },
           socketFile: { value: socketFile },
+          environmentFile: { value: environmentFile },
+          environment: { value: hiding ? launcherEnvironment() : seenEnvironment },
         });
       // The launcher goes outermost, before `strace`, so the audit traces Bubblewrap alone, as it does for a call hiding nothing.
-      const launched = (argv) => (socketFile === null ? argv : launchedCommand(socketFile, environment, argv));
+      const launched = (argv) => (hiding ? launchedCommand(socketFile, environmentFile, argv) : argv);
       if (observer === null) {
         const [first, ...rest] = launched(command);
         return holdKey({ target: first, args: rest, statusFile });
@@ -1347,10 +1649,17 @@ function targetSandbox({
           marker: { program: process.execPath, text: path.basename(statusFile) },
           grants: {
             // The egress proxy's directory is no read grant: the shim only connects to its socket, which `connect` below covers.
-            read: readRoots([...grants, ...readable, statusMount]),
+            read: readRoots([...grants, ...mounted.map(({ mount }) => mount), ...readable, statusMount]),
             requested: REQUESTED_ROOTS.flatMap(spellings),
             // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
-            write: [workspace, ...grants, ...(home === null ? [] : [home]), statusMount, ...ownGitEntries()].flatMap(spellings),
+            write: [
+              workspace,
+              ...grants,
+              ...mounted.map(({ mount }) => mount),
+              ...(home === null ? [] : [home]),
+              statusMount,
+              ...ownGitEntries(),
+            ].flatMap(spellings),
             // A connection to a socket file in these places is the call's own (Story 1.86).
             // They are its workspace, its private directories (the bridge's among them), its home, the sandbox's own empty mounts and the egress proxy's directory, which the shim connects to.
             connect: [
@@ -1570,14 +1879,15 @@ function recordedStatus(statusFile, statusKey = null) {
 }
 
 /**
- * A private temp directory for one confined call, joined to the run's
- * `scratch` while it exists: a confined target writes nothing outside its
- * workspace, so the system's temp directory is closed to it (read-only under
- * Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP
- * point it instead. Its real path, so both mechanisms name it one way.
+ * A private temp directory for one confined call, joined to the run's `scratch` while it exists.
+ * A confined target writes nothing outside its workspace, so the system's temp directory is closed to it (read-only under Bubblewrap, denied under Seatbelt), and this is where TMPDIR, TMP and TEMP point it.
+ * It is made by its real path, which Seatbelt names to the target and Bubblewrap binds under the synthetic `/dev`.
+ * It is made beneath the run's private parent (`scratch.privateParent`, Story 1.131).
+ * A run killed outright leaves it to the recovery of that parent and leaves nothing in the system's temp directory.
+ * A list with no parent keeps it in the temp directory.
  */
 function callTemporary(scratch) {
-  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-target-tmp-')));
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-tmp-')));
   scratch.push(directory);
   return directory;
 }
@@ -1868,7 +2178,7 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
             target: wrapped.target,
             subcommandPath: [],
             argv: wrapped.args,
-            env: environment,
+            env: wrapped.environment ?? environment,
           },
           signal,
         );
@@ -1877,6 +2187,9 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         started = status.started;
         if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
         if (!status.started) {
+          // A real E2BIG means Bubblewrap never ran, so only a call whose shim never started can carry the launcher's refusal; a started target's exit and standard error are its own.
+          const tooLarge = launchTooLarge(result, wrapped);
+          if (tooLarge !== null) throw tooLarge;
           const again = socketsToRetry(wrapped, signal, status);
           if (again !== null) {
             sockets = again;
@@ -1933,9 +2246,10 @@ function socketsToRetry(wrapped, signal, status) {
   return remaining.length < hidden.length ? remaining : null;
 }
 
-/** Removes the file that carried a call's socket mounts, once the call has ended. */
+/** Removes the files that carried a call's socket mounts and its environment, once the call has ended (the launcher removes the environment file when it starts). */
 function releaseSocketFile(wrapped) {
   if (typeof wrapped?.socketFile === 'string') fs.rmSync(wrapped.socketFile, { force: true });
+  if (typeof wrapped?.environmentFile === 'string') fs.rmSync(wrapped.environmentFile, { force: true });
 }
 
 /**
@@ -1967,7 +2281,7 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
               ...request,
               target: wrapped.target,
               targetArgs: wrapped.args,
-              env: environment,
+              env: wrapped.environment ?? environment,
             },
             signal,
           );
@@ -2026,18 +2340,18 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
  *
  * @param {object|null} confinement
  * @param {Array<{ interfaceId: string, hosts: string[] }>} [egress] the registry entries that authorize hosts, with their `host:port` items (Story 1.83)
- * @param {Array<{ interfaceId: string, login: string, variable: string|null, file: string|null }>} [logins] the entries that declare a login and what each was given, by the variable's name and the file's path (Story 1.113)
+ * @param {Array<{ interfaceId: string, login: string, variable: string|null, file: string|null }>} [logins] the entries that declare a login and what each was given, by the variable's name and `<credentials-file>` for the file (Story 1.113)
  * @returns {string}
  */
 function forbiddenInputNote(confinement, egress = [], logins = []) {
   const handed =
     "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial.";
-  // What each entry's `login` hands its processes, named by the variable and the path, with no value (Story 1.113).
+  // What each entry's `login` hands its processes, named by the variable and the file's neutral form (`recorded-paths.js`), with no value (Story 1.113).
   const given = logins
     .map((login) => {
       const sources = [
         ...(login.variable === null ? [] : [`the environment variable ${login.variable}`]),
-        ...(login.file === null ? [] : [`the file ${login.file}, read-only`]),
+        ...(login.file === null ? [] : [`the file ${CREDENTIALS_FILE}, read-only`]),
       ];
       return sources.length === 0
         ? ''

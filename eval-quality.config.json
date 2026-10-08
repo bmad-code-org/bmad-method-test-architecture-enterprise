@@ -34,6 +34,17 @@
         }
       },
       {
+        "reason": "The documentation site's mermaid renderer reaches robust-predicates through d3 > d3-delaunay > delaunator; its installed package declares Unlicense and carries a LICENSE file that dedicates the code to the public domain, which places no condition on a user or redistributor. This exception applies only while the private documentation site depends on astro-mermaid.",
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "robust-predicates",
+        "license": "Unlicense",
+        "optional": false,
+        "marker": {
+          "file": "website/package.json",
+          "contains": "\"astro-mermaid\""
+        }
+      },
+      {
         "reason": "The promptfoo devDependency reaches big-integer; its installed package declares Unlicense and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
         "lockfiles": ["package-lock.json"],
         "prefix": "big-integer",
@@ -164,6 +175,13 @@
         "readAs": "MIT",
         "evidence": "zod-to-ts 1.2.0's own published package.json carries no license field, which is why npm records none in the lockfile entry; that version's manifest is silent rather than differently licensed. The registry's current top-level license field reads MIT (inherited from the 2.x line, published years later), and the repository at github.com/sachinraja/zod-to-ts carries an MIT LICENSE file whose copyright range (2021-2025) covers 1.2.0's 2023 publish date, which is the evidence that ties the reading to the locked version itself rather than to a later release.",
         "reason": "A transitive dependency of astro 5 whose manifest declares no licence. The licence it is read as is held against the allowlist like every other entry."
+      },
+      {
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "khroma",
+        "readAs": "MIT",
+        "evidence": "The installed khroma 2.1.0 package includes a license file with the MIT permission grant and the copyright notice of Fabio Spampinato and Andrew Maney; its published package.json carries no license field, which is why npm records none in the lockfile entry, and the registry's top-level license field for khroma reads MIT.",
+        "reason": "A transitive dependency of the documentation site's mermaid renderer (mermaid > khroma) whose lockfile entry declares no licence. The licence it is read as is held against the allowlist like every other entry."
       },
       {
         "lockfiles": ["package-lock.json"],
@@ -427,6 +445,83 @@
           "module": "test/lib/doc-count-sources.js",
           "export": "REPLAY_CONSTRUCTED"
         }
+      },
+      "replayScored": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_SCORED"
+        }
+      },
+      "replayScoredConstructed": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_SCORED_CONSTRUCTED"
+        }
+      },
+      "replayCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CAPTURED_BYTES"
+        }
+      },
+      "replayAtddCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_ATDD_CAPTURED_BYTES"
+        }
+      },
+      "replayTestReviewCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TEST_REVIEW_CAPTURED_BYTES"
+        }
+      },
+      "replayCiCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CI_CAPTURED_BYTES"
+        }
+      },
+      "replayCiFullAndMinimal": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CI_FULL_AND_MINIMAL"
+        }
+      },
+      "storyCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "STORY_COUNT"
+        }
+      },
+      "epicCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "EPIC_COUNT"
+        }
+      },
+      "appendedStoryCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "APPENDED_STORY_COUNT"
+        }
+      },
+      "laneCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/planning-doc-sources.js",
+          "export": "LANE_COUNT"
+        }
       }
     },
     "entries": [
@@ -487,7 +582,7 @@
         "file": "docs/explanation/eval-quality-adoption-guide.md",
         "claim": "one eval:all run's total model calls and their per-suite breakdown",
         "pattern": {
-          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(five ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
+          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
         },
         "counts": [
           "totalCalls",
@@ -594,6 +689,111 @@
         },
         "counts": ["replayRealCaptures", "replayTotal", "replayCaptured", "replayConstructed"],
         "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the replay corpus size, the cases that produce a number and the constructed ones among them",
+        "pattern": {
+          "match": "Of the (\\d+) cases, (\\d+) produce a number and (\\d+) of those are constructed\\."
+        },
+        "counts": ["replayTotal", "replayScored", "replayScoredConstructed"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the cases that carry captured bytes and where they come from",
+        "pattern": {
+          "match": "(\\d+) cases carry captured bytes: (\\d+) from the ATDD fixture corpus, (\\d+) from `fixtures/test-review-cli/` and (\\d+) from live `eval:ci` runs"
+        },
+        "wrap": true,
+        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the test-review captures that score zero recall",
+        "pattern": {
+          "match": "The ([A-Za-z-]+) test-review captures score zero recall"
+        },
+        "counts": ["replayTestReviewCapturedBytes"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the trace replay cases",
+        "pattern": {
+          "match": "([A-Za-z-]+) trace cases cover both sets:"
+        },
+        "counts": ["replayTrace"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the nfr replay cases",
+        "pattern": {
+          "match": "([A-Za-z-]+) `nfr` cases cover both bundles,"
+        },
+        "wrap": true,
+        "counts": ["replayNfr"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the ci replay cases over the full and minimal projects",
+        "pattern": {
+          "match": "([A-Za-z-]+) `ci` cases cover the `full` and `minimal` projects:"
+        },
+        "wrap": true,
+        "counts": ["replayCiFullAndMinimal"]
+      },
+      {
+        "file": "test/test-eval-replay.js",
+        "claim": "the replay corpus size, the cases that produce a number and the constructed ones among them (header)",
+        "pattern": {
+          "match": "The corpus holds (\\d+) cases and (\\d+) of them produce a number; (\\d+) of those are constructed\\."
+        },
+        "counts": ["replayTotal", "replayScored", "replayScoredConstructed"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/test-eval-replay.js",
+        "claim": "the cases that carry captured bytes (header)",
+        "pattern": {
+          "match": "(\\d+) cases carry captured bytes:"
+        },
+        "counts": ["replayCapturedBytes"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "the epic count of the overview (every ## Epic section)",
+        "pattern": {
+          "match": "into ([A-Za-z-]+) epics and \\d+ stories, including H\\.1"
+        },
+        "counts": ["epicCount"]
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "the story count of the overview (every ### Story section, H.1 included)",
+        "pattern": {
+          "match": "into [A-Za-z-]+ epics and (\\d+) stories, including H\\.1"
+        },
+        "counts": ["storyCount"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "how many stories were appended to Epic 1 (every Epic 1 section from Story 1.27 up)",
+        "pattern": {
+          "match": "\\((\\d+) stories were appended to Epic 1 from findings"
+        },
+        "counts": ["appendedStoryCount"],
+        "rendering": "digits"
+      },
+      {
+        "file": "_bmad-output/planning-artifacts/evaluate/epics.md",
+        "claim": "how many parallel lanes the plan holds (every lane list of this file and of sprint-status.yaml)",
+        "pattern": {
+          "match": "run in ([A-Za-z-]+) parallel lanes"
+        },
+        "counts": ["laneCount"]
       }
     ]
   },
@@ -885,8 +1085,16 @@
     "symbols": {
       "foreign": [
         {
+          "token": "SCORE",
+          "reason": "a shell variable the how-to guides capture from the score summary line, not a TEA declaration"
+        },
+        {
           "token": "NODE_EXTRA_CA_CERTS",
           "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
+        },
+        {
+          "token": "NODE_V8_COVERAGE",
+          "reason": "a Node.js environment variable naming the directory V8 writes coverage to, which every Bubblewrap process loses, not a TEA declaration"
         },
         {
           "token": "CONNECT",
@@ -898,43 +1106,19 @@
         },
         {
           "token": "OLDPWD",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "SHLVL",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "OPTIND",
-          "reason": "a shell variable the socket launcher restores"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "PPID",
-          "reason": "a shell variable the socket launcher restores"
-        },
-        {
-          "token": "LINENO",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "RANDOM",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "SHELLOPTS",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASHOPTS",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASH",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
-        },
-        {
-          "token": "BASH_VERSION",
-          "reason": "a variable bash initializes itself, which the reference names as a limit of the socket launcher"
+          "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
           "token": "createCommandLineAdapter",
@@ -1703,6 +1887,18 @@
         {
           "token": "behaviorOracles",
           "reason": "a field of the held-out plan that the runtime schema `held-out-plan.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "evaluationId",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "targetKind",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "judgeCalibration",
+          "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
         }
       ]
     },
@@ -1849,7 +2045,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "0aeeefdaf4e7acfda5472b4206625cd109e899785ed803989ba1cee0cd5535ca"
+            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
           }
         },
         {
@@ -1919,7 +2115,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "0aeeefdaf4e7acfda5472b4206625cd109e899785ed803989ba1cee0cd5535ca"
+            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
           }
         },
         {

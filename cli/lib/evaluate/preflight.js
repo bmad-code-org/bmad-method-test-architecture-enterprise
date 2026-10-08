@@ -90,11 +90,12 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { confines, layerPrefix, selectConfinement } = require('./confinement');
+const { chanceMountNotes, lossyLegs, mountRefusal, mountsOfEveryLeg } = require('./isolation-allowlist');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
-const { degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
+const { answersForView, degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
 const {
   deploymentPair,
   deploymentRoute,
@@ -107,9 +108,19 @@ const {
   routeIdentity,
 } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
-const { PartitionPlanError, committedProbes, loadContractView, selectPartition, unknownPartition } = require('./partition');
+const {
+  PartitionPlanError,
+  committedProbes,
+  loadContractView,
+  partitionRequired,
+  readHeldOutResponse,
+  readRegularFile,
+  selectPartition,
+  unknownPartition,
+} = require('./partition');
 const { createArtifactValidator } = require('./records');
 const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
+const { CREDENTIALS_FILE, REPOSITORY, workspaceDirectory } = require('./recorded-paths');
 const { registryFromEvaluation } = require('./registry');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const {
@@ -128,6 +139,8 @@ const {
   removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadMaskRecords,
+  reclaimDeadObserverProbes,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   journalDirectory,
@@ -186,7 +199,7 @@ function newInvocationId() {
 }
 
 function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return JSON.parse(readRegularFile(file).toString('utf8'));
 }
 
 function writeJson(file, value) {
@@ -195,21 +208,37 @@ function writeJson(file, value) {
 }
 
 /**
- * Every committed gameability probe, sorted by file name, parsed, each with
- * its degenerate response's bytes and steps, read before anything runs.
+ * The committed gameability probes a run qualifies, sorted by file name, parsed, each with its degenerate response's bytes and the
+ * answers to the steps of the view it runs, read before anything runs (`answersForView`, Story 1.109). The held-out and both views
+ * also read, for a probe, the held-out answers beside the held-out plan when the plan declares a step; a development run opens
+ * neither the plan nor those answers.
+ *
+ * @param {string} folder
+ * @param {object} options
+ * @param {{ contract: object, heldOutPlan: object|null }} options.view the contract the run compiles, and the held-out plan it was derived from
+ * @param {Set<string>|null} options.selectedProbeIds the probes the partition selects; every probe when null
  */
-function gameabilityProbes(folder) {
+function gameabilityProbes(folder, { view, selectedProbeIds }) {
   const directory = path.join(folder, 'probes');
   if (!fs.existsSync(directory)) return [];
+  const stepIds = (view.contract.interactionPlan ?? []).map((step) => step.stepId);
+  const readsHeldOut = (view.heldOutPlan?.interactionPlan?.length ?? 0) > 0;
   return fs
     .readdirSync(directory)
     .filter((name) => PROBE_FILE.test(name))
     .sort()
     .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }))
     .filter(({ probe }) => probe.qualification?.route === 'gameability')
+    .filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId))
     .map((entry) => {
       const bytes = fs.readFileSync(path.join(folder, ...degenerateResponsePath(entry.probe.probeId).split('/')));
-      return { ...entry, bytes, steps: JSON.parse(bytes.toString('utf8')).steps };
+      const heldOut = readsHeldOut ? readHeldOutResponse(folder, entry.probe.probeId) : undefined;
+      const steps = answersForView({
+        steps: JSON.parse(bytes.toString('utf8')).steps,
+        heldOutSteps: heldOut?.response.steps,
+        stepIds,
+      });
+      return { ...entry, bytes, ...(heldOut === undefined ? {} : { heldOut: { path: heldOut.path, bytes: heldOut.bytes } }), steps };
     });
 }
 
@@ -242,7 +271,7 @@ function legFileName(sequence, legId) {
  * label and working directory the leg ran in.
  *
  * @param {object} options
- * @param {{label: string, cwd: string, port: object}} options.pristine
+ * @param {{label: string, cwd: string, port: object}} options.pristine `cwd` is the recorded form of the working directory (`recorded-paths.js`)
  * @param {Map<string, {label: string, cwd: string, port: object}>} [options.routes] by leg identifier
  * @param {object} options.registry
  * @param {RunDirectory} options.writer the run directory, which holds `observations/` and `faults/`
@@ -428,16 +457,23 @@ function writeQualificationEvidence(writer, directory, { probe, evidence, worksp
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @param {string} [options.partition] `development` or `held-out`; everything when absent. Only that partition's probes are
  *   qualified, over the contract that partition runs (`partition.js`, Story 1.51)
+ * @param {boolean} [options.requirePartition] refuse with exit 64 a call that names no partition over an evaluation that declares a
+ *   `partitionPlan`, since it would derive the both view and launch the held-out request (Story 1.111).
+ *   The command line sets it.
+ *   The CI `preflight-live` check, which is no authoring step, calls with the both view
  * @returns {Promise<PreflightOutcome>}
  */
-function runPreflightCommand(folder, { partition, ...options } = {}) {
+function runPreflightCommand(folder, { partition, requirePartition = false, ...options } = {}) {
   const unknown = unknownPartition(partition);
   if (unknown !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...unknown }));
   let selection;
   try {
+    const evaluation = readJson(path.join(folder, MANIFEST_NAME));
+    const missing = requirePartition ? partitionRequired(partition, evaluation) : null;
+    if (missing !== null) return Promise.resolve(new PreflightOutcome({ stage: 'check', ...missing }));
     selection = selectPartition({
       partition,
-      heldOutProbes: readJson(path.join(folder, MANIFEST_NAME)).heldOutProbes ?? [],
+      heldOutProbes: evaluation.heldOutProbes ?? [],
       probes: partition === undefined ? [] : committedProbes(folder),
     });
   } catch {
@@ -586,11 +622,11 @@ async function pipeline(
   const workspaces = [];
   let journal = null;
   const controller = new AbortController();
-  // Run-directory files an interrupting signal removes (the CLI's probe list
-  // until its verdict), and the private directories the command makes for
-  // the processes it starts (engine stages, an evaluator, a judge, the
-  // bridge), which are removed however it ends. They sit beneath one private
-  // parent (`makePrivateParent`) a confined target is denied.
+  // Run-directory files an interrupting signal removes (the CLI's probe list until its verdict).
+  // The private directories the command makes for the processes it starts (engine stages, an evaluator, a judge, the bridge) are removed however it ends.
+  // So are the directories it hands a confined call (its temp directory, a started service's port and bridge directories).
+  // They sit beneath one private parent (`makePrivateParent`) a confined target is denied.
+  // A run killed outright leaves them to the next run's recovery of that parent.
   const retractOnSignal = [];
   const scratch = [];
   // Each directory is tried on its own, write bits restored first, and one that cannot be removed is reported,
@@ -651,9 +687,11 @@ async function pipeline(
     const invocationId = newInvocationId();
     makePrivateParent(scratch, { folder, root, journal, runId: invocationId });
     reclaimDeadPrivateParents({ folder, root, journal, log });
+    reclaimDeadMaskRecords({ log });
+    reclaimDeadObserverProbes({ log });
     reclaimDeadWorkspaces({ folder, root, journal, log });
     const refused = await prepare({ folder, evaluation, seeded, contract: view.contract, view });
-    const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
+    const gameability = gameabilityProbes(folder, { view, selectedProbeIds });
     if (refused !== null) return refused;
     // A confined run reads the working tree, the checkout's own HEAD and where the checkout's git commands read their repository
     // from (the resolved git directory, the .git file, the hooks directory's presence): every process of it is denied a write to
@@ -661,7 +699,13 @@ async function pipeline(
     // a digest of the git directory could fire on other sessions' work alone. An opted-out run keeps the full comparison, refs
     // and shared state included (Story 1.112).
     const sharedState = !confines(confinement);
-    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState });
+    // A development run under a partition plan reads no byte of the held-out files, so the tree reading lists the held-out folder and
+    // takes only `lstat` metadata (Story 1.109): a file it cannot open still reads, and a change to one still moves the reading.
+    const sealed =
+      partition === 'development' && evaluation.partitionPlan !== undefined
+        ? [path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')]
+        : [];
+    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory], sharedState, sealed });
     const before = readTree();
     const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one
@@ -819,7 +863,8 @@ async function runInWorkspaces({
       treeDigest: pristine.treeDigest,
       dirty: pristine.dirty,
     },
-    workspaces: { pristine: pristine.root },
+    // Where each workspace sat is the machine's own: the run records its neutral form (`recorded-paths.js`), and the label names the workspace.
+    workspaces: { pristine: workspaceDirectory(pristine) },
     // seatbelt, bubblewrap or opt-out (Story 1.31).
     confinement: confinement.mode,
     // The entries that authorize hosts (`egress`) and the `host:port` items each lists; under Bubblewrap those are the only hosts
@@ -827,8 +872,8 @@ async function runInWorkspaces({
     egress: registry.egressEntries.map((entry) => ({ interfaceId: entry.interfaceId, hosts: [...entry.hosts] })),
     // The entries that declare a `login` and what each was given: the variable's name and the credentials file's path, with no value (Story 1.113).
     // `scrubFile` is the host's file an opted-out run reads only to scrub, and no record holds it.
-    logins: registry.logins.map(({ scrubFile, ...login }) => login),
-    adopterTree: { repository: before.repository, unchanged: null },
+    logins: registry.logins.map(({ scrubFile, ...login }) => ({ ...login, file: login.file === null ? null : CREDENTIALS_FILE })),
+    adopterTree: { repository: before.repository === null ? null : REPOSITORY, unchanged: null },
     refused: [],
   };
   state.run = run;
@@ -843,11 +888,11 @@ async function runInWorkspaces({
   // An engine stage writes its output into a private directory made for the
   // call, which no target has seen, and the runtime copies it into the run
   // directory through its writer, which holds the digest of what it wrote.
-  const engineStage = (stage, args, output) => {
+  const engineStage = async (stage, args, output) => {
     const staging = makeScratchDirectory(scratch, 'tea-evaluate-engine-');
     try {
       const produced = path.join(staging, output);
-      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, writer, env, log });
+      const result = await runEngineStage(stage, [...args, '--out', produced], { runDirectory, folder, writer, env, log });
       if (fs.existsSync(produced)) writer.copyIn(output, produced);
       return result;
     } finally {
@@ -859,7 +904,7 @@ async function runInWorkspaces({
     ['compile', 'eval-contract.json'],
     ['seal', 'sealed-evaluator-brief.json'],
   ]) {
-    const result = engineStage(stage, ['--in', contractPath], output);
+    const result = await engineStage(stage, ['--in', contractPath], output);
     if (result.exitCode !== 0) {
       return outcome({
         stage: 'engine',
@@ -882,13 +927,6 @@ async function runInWorkspaces({
       sealedBriefDigest: engine.digestArtifact(sealedBrief, 'SealedEvaluatorBrief'),
     };
   }
-  const { port: pristineAdapter } = await registry.createProbePort({
-    cwd: pristine.root,
-    projectRoot: pristine.root,
-    workspace: pristine.top,
-    git: gitAccessOf(pristine),
-    privateRoot: registry.privateRoot,
-  });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
   const treeUnchanged = (when, { record = true } = {}) => {
@@ -1114,9 +1152,45 @@ async function runInWorkspaces({
   const probesPath = writer.writeJson('probes.json', probes);
   retractOnSignal.push('probes.json');
   let settled = false;
+  // Each leg of the pristine workspace runs through a port of its own that audits what the leg opens outside what it was granted,
+  // so what every leg opened is told from what one leg did. The ports are made here, after the qualification, one at a time, so
+  // each audit watches its leg alone and ends with it. Only `preflight` audits its legs: `run` judges its trials' manifests, so
+  // its legs run unaudited as they always did, and an audit that fails cannot change a run's outcome.
+  const auditLegs = afterVerdict === null;
+  const legMounts = new Map();
+  const auditedLegs = {
+    async probe(request, signal) {
+      const audited = await registry.createProbePort({
+        cwd: pristine.root,
+        projectRoot: pristine.root,
+        workspace: pristine.top,
+        git: gitAccessOf(pristine),
+        privateRoot: registry.privateRoot,
+        audit: auditLegs,
+      });
+      try {
+        const answered = await audited.port.probe(request, signal);
+        if (auditLegs) {
+          // An audit that cannot confirm what it saw leaves the leg unjudged, as it does a trial. One that lost reports says so
+          // (the log's lost events, or canaries it did not deliver), and no verdict rests on that leg (`isolation-allowlist.js`).
+          const mounts = await audited.observedMounts();
+          const channel = audited.auditChannel();
+          legMounts.set(request.probeId, {
+            mounts,
+            lossy: channel !== null && (channel.canariesDelivered < channel.canariesSent || channel.logReportedLoss),
+          });
+        }
+        return answered;
+      } finally {
+        audited.releaseHome();
+      }
+    },
+    // Every leg has a port, and so a home, of its own.
+    resetHome() {},
+  };
   try {
     const recorder = recordingPort({
-      pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
+      pristine: { label: 'pristine', cwd: workspaceDirectory(pristine), port: auditedLegs },
       routes,
       registry,
       writer,
@@ -1154,6 +1228,19 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
+    if (auditLegs) {
+      // Every leg's audit lost reports: no leg can say what it opened, so the check is not passed over in silence. The existing
+      // audit-loss outcome applies, as it does to a trial whose audit cannot confirm itself.
+      if (legMounts.size > 0 && lossyLegs(legMounts).length === legMounts.size) {
+        throw stop({
+          stage: 'leg',
+          exitCode: 12,
+          message: `the legs yield no audit: the audit lost reports while every leg ran (${lossyLegs(legMounts).join(', ')}), so what the legs opened is unknown; run again on a quieter host`,
+        });
+      }
+      // A path only some legs opened is chance evidence: the preflight reports it, naming the leg, and its exit does not change.
+      for (const note of chanceMountNotes(legMounts, folder)) log(note);
+    }
     // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
     // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64). A plan
     // the engine refused before any leg ran sent nothing to a deployment since the qualification, so nothing is asked.
@@ -1182,7 +1269,7 @@ async function runInWorkspaces({
     // The CLI reads the run directory next: it must hold what the runtime wrote, and nothing else.
     writer.verify('after the legs');
 
-    verdict = engineStage(
+    verdict = await engineStage(
       'preflight',
       ['--contract', contractPath, '--probes', probesPath, '--observations', observationsPath, '--run-id', invocationId],
       'preflight-verdict.json',
@@ -1192,6 +1279,17 @@ async function runInWorkspaces({
     if (!settled) writer.remove('probes.json');
   }
   for (const entry of [...qualified, ...gameabilityQualified]) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
+  // A passed `preflight` is refused when every leg of the pristine workspace opened a path outside the allowlist: a target that lives
+  // outside its workspace loads its own files on every launch, so every trial opens them too, and `score` refuses a trial that does
+  // (exit 3). `run` judges the trials' own manifests, the set `score` judges, so it does not refuse on the legs.
+  if (afterVerdict === null && verdict.exitCode === 0) {
+    const refusal = mountRefusal({
+      mounts: mountsOfEveryLeg(legMounts, [`${pristine.kind} pristine`]),
+      folder,
+      who: 'legs',
+    });
+    if (refusal !== null) return outcome({ stage: 'leg', exitCode: 3, message: refusal });
+  }
   if (afterVerdict === null || verdict.exitCode !== 0) {
     return outcome({
       stage: 'verdict',
@@ -1203,6 +1301,7 @@ async function runInWorkspaces({
     return await afterVerdict({
       folder,
       evaluation,
+      view,
       contract,
       registry,
       pristine,
@@ -1314,7 +1413,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
     privateRoot: registry.privateRoot,
   });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
-  return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
+  return { label: `mutated:${mutation.mutationId}`, cwd: workspaceDirectory(workspace), port };
 }
 
 /**

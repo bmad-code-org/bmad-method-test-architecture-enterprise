@@ -17,7 +17,7 @@ You will continue to operate with your given name, identity, and communication_s
 
 - Bare paths (e.g. `references/inspection.md`) resolve from the skill root.
 - `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).
-- `{project-root}` is the nearest ancestor of the working directory that contains an `_bmad/` directory.
+- `{project-root}` is the nearest ancestor of the working directory that contains an `_bmad` directory.
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling files such as `references/...` and `assets/...` from `{skill-root}`.
 
@@ -97,7 +97,7 @@ Before the first `tea-evaluate check`, load `references/mutation.md` and author 
 
 For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. For TeA's own package, run `node cli/evaluate.js check --evaluation <evaluation-folder>`, then `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `./node_modules/.bin/eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json` from the repository root. The local CLI and binary use that root's one eval-quality installation. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
 
-After seal succeeds, copy `assets/evaluation-folder.gitignore` to `<evaluation-folder>/.gitignore` before the first preflight creates `runs/`. For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>`; for TeA's own package, run `node cli/evaluate.js preflight --evaluation <evaluation-folder>` from the repository root. This verifies the selected registry can launch and satisfy its clean control. Stop and report the command, exit code and stderr on failure; complete adapter wiring only after preflight succeeds.
+After seal succeeds, copy `assets/evaluation-folder.gitignore` to `<evaluation-folder>/.gitignore` before the first preflight creates `runs/`. For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development`; for TeA's own package, run `node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development` from the repository root. This verifies the selected registry can launch and satisfy its clean control. The flag is required only when `evaluation.json` declares a `partitionPlan`, and a preflight with no `--partition` over one exits 64. Held-out preflight (`--partition held-out`) runs only after the development review. Stop and report the command, exit code and stderr on failure; complete adapter wiring only after preflight succeeds.
 
 ### Stage 7: Evaluator
 

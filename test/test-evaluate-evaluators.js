@@ -152,7 +152,9 @@ const {
   setRecommendationOf,
   trialRecommendation,
 } = require('../cli/lib/evaluate/judgment-rows');
+const { runnableArgv } = require('./lib/recorded-argv');
 const { removeDeadPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
+const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -1229,6 +1231,22 @@ async function checkKilledCommandRecovery() {
       'the command run did not die by SIGKILL',
     );
     check(parent && fs.existsSync(parent), 'SIGKILL did not leave the command evaluator parent');
+    // The killed run also left a record of the sockets its layer hid (Story 1.88), and an empty file where a socket went away.
+    const strewn = path.join(scratch.make('killed-mask-placeholder'), 'killed.sock');
+    fs.writeFileSync(strewn, '', { mode: 0o444 });
+    const maskRecord = path.join(PRIVATE_ROOT, `mask-${child.pid}-${'d'.repeat(16)}.json`);
+    fs.writeFileSync(
+      maskRecord,
+      JSON.stringify({
+        version: 1,
+        kind: 'layer-mask',
+        ownerPid: child.pid,
+        launchedAt: Date.now() - 1000,
+        sockets: [{ path: strewn, state: 'absent' }],
+        directories: [],
+      }),
+      { mode: 0o600 },
+    );
     const laterTemp = scratch.make('killed-command-later-temp');
     const recovered = evaluate(['preflight', '--evaluation', project.folder], {
       ...project.env,
@@ -1246,6 +1264,10 @@ async function checkKilledCommandRecovery() {
       `preflight did not report killed command scratch ${commands}`,
     );
     check(!fs.existsSync(parent), `preflight left killed command scratch in ${parent}`);
+    check(
+      !fs.existsSync(maskRecord) && !fs.existsSync(strewn),
+      `preflight after a killed run left the hidden-socket record ${maskRecord} (${fs.existsSync(maskRecord)}) or the empty file ${strewn} (${fs.existsSync(strewn)})`,
+    );
     check(git(project.repository, ['status', '--porcelain']) === status, 'command scratch recovery changed adopter status');
     check(git(project.repository, ['for-each-ref']) === refs, 'command scratch recovery changed adopter refs');
   } finally {
@@ -2440,7 +2462,13 @@ async function checkBridgePrivateDirectories() {
         VERDICT_TOUCH: announce,
         VERDICT_REPORT: String(listener.port),
       });
-      check(ran.status === 0, `${label}: the run exited ${ran.status}; expected 0\n${ran.output}`);
+      // The attempts at the bridge's private directories are mounts outside the allowlist, which a confined run refuses (exit 3) once
+      // its trials are sealed; the opted-out control observes none.
+      const refused = ran.status === 3 && /isolation manifest violation: the trials opened \d+ path\(s\)/.test(ran.output);
+      check(
+        unconfined ? ran.status === 0 : refused,
+        `${label}: the run exited ${ran.status}; expected ${unconfined ? 0 : 3}\n${ran.output}`,
+      );
       const runDirectory = runDirectoryOf(project.folder);
       const reports = runDirectory === null ? [] : agentPrivateReport(runDirectory);
       // The call's report is kept in several of the run's files; it is one report.
@@ -3139,8 +3167,8 @@ function checkAttemptsReproduce(what, runDirectory) {
       const kept = path.join(directory, 'evidence-artifact.json');
       if (!fs.existsSync(kept)) continue;
       const out = path.join(scratch.make(`${what}-reproduce`), 'evidence-artifact.json');
-      const argv = [...call.argv];
-      argv[argv.indexOf('--out') + 1] = out;
+      // The record names the run's files by their path below the evaluation folder and the staging file as `<staging>/<name>`.
+      const argv = runnableArgv(call.argv, { folder: path.resolve(runDirectory, '..', '..'), out });
       const direct = spawnSync(process.execPath, [engineCliPath(BASE_ENV), ...argv], {
         encoding: 'utf8',
         timeout: SPAWN_TIMEOUT_MS,
@@ -3167,7 +3195,7 @@ function checkAttemptsReproduce(what, runDirectory) {
               '--evaluator-configuration',
             ].includes(call.argv[at - 1]),
           )
-          .every((file) => file.startsWith(runDirectory)),
+          .every((file) => file.startsWith(`runs/${path.basename(runDirectory)}/`)),
         `${what}: ${arm}/attempt ${attempt}'s recorded argv names a file outside the run directory`,
       );
       reproduced += 1;
@@ -3645,7 +3673,14 @@ function scoreAttemptProblems(source) {
     problems.push('reads the staged artifact again, or uses the staging path beyond its one read (produced)');
   const staged = withoutReader.match(/\bstagedArtifact\(/g) ?? [];
   if (staged.length !== 1) problems.push(`reads the staged artifact ${staged.length} times; expected once (stagedArtifact()`);
-  for (const required of ['holdAttemptInputs(', 'held.scoreArguments(', 'heldRefusal(', 'writer.write(evidence, staged.bytes)']) {
+  for (const required of [
+    'holdAttemptInputs(',
+    'designate,',
+    'held.designationFindings(',
+    'held.scoreArguments(',
+    'heldRefusal(',
+    'writer.write(evidence, staged.bytes)',
+  ]) {
     if (!body.includes(required)) problems.push(`does not call ${required}`);
   }
   return problems;
@@ -3689,7 +3724,10 @@ function checkScoreAttemptRoutesThroughTheModule() {
   const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'run.js'), 'utf8');
   for (const problem of scoreAttemptProblems(source)) check(false, `scoreAttempt ${problem}`);
   const plant = (line) =>
-    source.replace('\nasync function scoreAttempt(context, { probe, directory, set, corpusDigest }) {', (head) => `${head}\n  ${line}`);
+    source.replace(
+      '\nasync function scoreAttempt(context, { probe, directory, set, corpusDigest, designate }) {',
+      (head) => `${head}\n  ${line}`,
+    );
   // Every alternative of every rule has a plant, and the plant is refused for that rule's reason.
   for (const { reason, alternatives } of STATIC_READ_RULES) {
     for (const alternative of alternatives) {
@@ -3718,6 +3756,11 @@ function checkScoreAttemptRoutesThroughTheModule() {
       'does not call writer.write(evidence, staged.bytes)',
     ],
     ['inputs held without the module', source.replace('holdAttemptInputs(', 'holdInputs('), 'does not call holdAttemptInputs('],
+    [
+      'a designation the held inputs are never asked to check (Story 1.110)',
+      source.replace('held.designationFindings(', 'held.noDesignationFindings('),
+      'does not call held.designationFindings(',
+    ],
     ['no comparison', source.replace('heldRefusal(', 'noRefusal('), 'does not call heldRefusal('],
     [
       'inputs held through another reader',
@@ -4984,11 +5027,64 @@ async function checkImportedFilesSealedAgainstTheConfiguration() {
   checkVotes('records sealed against the final configuration', evidence, 'P-002', 'caught');
 }
 
+/**
+ * A records harness whose sealed isolation manifest lists a mount outside its allowlist, or none at all, is one `score` reads as
+ * Invalid (exit 3), so `run` over its records exits 3 as it does over the manifests it seals itself. The run stays sealed and
+ * complete, so `score --run` prints the same finding. The control, the records as the harness wrote them, runs and scores clean.
+ */
+async function checkImportedManifestMounts() {
+  const project = await harnessProject('records-manifest-mounts');
+  if (project === null) return;
+  const records = path.join(project.folder, 'records');
+  const manifest = path.join(records, 'P-002', 'isolation-manifest.json');
+  useRecords(project);
+  const control = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(control.status === 0, `run over the harness's own records exited ${control.status}; expected 0\n${control.output}`);
+
+  const outside = '<home>/host-notes.txt';
+  const sealedManifest = fs.readFileSync(manifest);
+  editJson(manifest, (value) => (value.observedMounts = [outside]));
+  commitAll(project.repository, project.folder, 'a harness manifest that lists a mount outside its allowlist');
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    ran.status === 3 && ran.output.includes(`mount outside allowlist: ${outside}`),
+    `run over records whose manifest lists ${outside} exited ${ran.status}; expected 3 naming it\n${ran.output}`,
+  );
+  const directory = runDirectoryOf(project.folder);
+  const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
+  check(
+    record.completed === true && record.outcome?.exitCode === 3,
+    `run.json records ${JSON.stringify({ completed: record.completed, outcome: record.outcome })}; expected a completed run that ended with exit 3`,
+  );
+  if (directory !== null) {
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(directory)], project.env);
+    check(
+      scored.status === 3 && scored.output.includes(`mount outside allowlist: ${outside}`),
+      `score over the same run exited ${scored.status}; expected 3 naming ${outside}\n${scored.output}`,
+    );
+  }
+
+  // A set with no manifest reaches eval-quality as absent, which it reads as Invalid too.
+  fs.writeFileSync(manifest, sealedManifest);
+  fs.rmSync(manifest);
+  commitAll(project.repository, project.folder, 'a harness set with no manifest');
+  const bare = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    bare.status === 3 && bare.output.includes('P-002') && bare.output.includes('no isolation manifest'),
+    `run over records with no manifest for P-002 exited ${bare.status}; expected 3 naming the set\n${bare.output}`,
+  );
+  const bareDirectory = runDirectoryOf(project.folder);
+  if (bareDirectory !== null) {
+    const scored = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(bareDirectory)], project.env);
+    check(scored.status === 3, `score over records with no manifest for P-002 exited ${scored.status}; expected 3\n${scored.output}`);
+  }
+}
+
 /** The reference, the CLI header and the command's own help all describe the option, so the page cannot drop it unseen. */
 function checkCalibrationInputsDocumented() {
   const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   for (const text of [
-    'npx tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
+    'npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
     '`calibrationDigest`',
     '`scorerConfigurationDigest`',
     'bind `tea.judgeCalibrationDigest` in the configuration to its `calibrationDigest`',
@@ -7366,8 +7462,10 @@ async function checkFrameworkProbeShapes() {
 
 /**
  * Every case in run order with the group it belongs to.
- * CI runs the groups as five scripts so no one runner carries the whole file's wall time.
- * They are `--group=evaluators`, `--group=agents` and `--group=records`.
+ * CI runs the groups as scripts of their own so no one runner carries the whole file's wall time.
+ * `--group=evaluators` and `--group=evaluators-agent-version` hold the evaluator cases and the agent version cases.
+ * `--group=agents`, `--group=agents-importers` and `--group=agents-sealed-brief` hold the installed framework cases and the sealed-brief agent's.
+ * `--group=records` holds the records evaluator and the imported calibration.
  * `--group=held-attempts` holds an evaluator attempt's score call to its inputs over real eval-quality (Story 1.69).
  * `--group=private` runs confined sealed-brief agents and signal-ended runs over the run's private directories (Story 1.58).
  * With no `--group` every case runs.
@@ -7386,14 +7484,14 @@ const CASES = [
   { name: 'npm lockfile generations and linked entries', body: checkLockfileProbeVersions, group: 'agents' },
   { name: 'tree metadata changes the install digest', body: checkTreeProbeMetadata, group: 'agents' },
   { name: 'a hoisted plugin needs its own declaration', body: checkTransitiveFrameworkDeclaration, group: 'agents' },
-  { name: 'a nested package resolves through its importer chain', body: checkNestedFrameworkResolution, group: 'agents' },
-  { name: 'a linked importer resolves from its real path', body: checkLinkedImporterResolution, group: 'agents' },
-  { name: 'separate importer trees cover same-name nested copies', body: checkSeparateImporterTrees, group: 'agents' },
-  { name: 'a missing declared install digest stops the run', body: checkMissingFrameworkInstallDigest, group: 'agents' },
-  { name: 'an installed package patch stops an in-flight run', body: checkInstalledFrameworkDigestMidRun, group: 'agents' },
-  { name: 'a lockfile edit stops an in-flight run', body: checkLockfileDigestMidRun, group: 'agents' },
-  { name: 'an install digest is held during calibration', body: checkFrameworkDigestCalibration, group: 'agents' },
-  { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents' },
+  { name: 'a nested package resolves through its importer chain', body: checkNestedFrameworkResolution, group: 'agents-importers' },
+  { name: 'a linked importer resolves from its real path', body: checkLinkedImporterResolution, group: 'agents-importers' },
+  { name: 'separate importer trees cover same-name nested copies', body: checkSeparateImporterTrees, group: 'agents-importers' },
+  { name: 'a missing declared install digest stops the run', body: checkMissingFrameworkInstallDigest, group: 'agents-importers' },
+  { name: 'an installed package patch stops an in-flight run', body: checkInstalledFrameworkDigestMidRun, group: 'agents-importers' },
+  { name: 'a lockfile edit stops an in-flight run', body: checkLockfileDigestMidRun, group: 'agents-importers' },
+  { name: 'an install digest is held during calibration', body: checkFrameworkDigestCalibration, group: 'agents-importers' },
+  { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents-importers' },
   { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
   { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
   { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
@@ -7411,43 +7509,47 @@ const CASES = [
   { name: 'evaluators outside the import contract', body: checkEvaluatorFailures, group: 'evaluators' },
   { name: 'a hung evaluator', body: checkEvaluatorTimeout, group: 'evaluators' },
   { name: 'the set recommendation', body: checkSetRecommendation, group: 'evaluators' },
-  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents' },
+  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents-sealed-brief' },
   { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
-  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents' },
+  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents-sealed-brief' },
   { name: 'the scratch removal', body: checkScratchRemoval, group: 'private' },
   { name: 'a killed command evaluator run is reclaimed', body: checkKilledCommandRecovery, group: 'private' },
   { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'private' },
-  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
-  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
-  { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators' },
-  { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators' },
+  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents-sealed-brief' },
+  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents-sealed-brief' },
+  { name: 'agent version knowledge stays in the adapter', body: checkAgentVersionAdapterBoundary, group: 'evaluators-agent-version' },
+  { name: 'installed agent version changes the run configuration', body: checkAgentVersionUpgrade, group: 'evaluators-agent-version' },
   {
     name: 'a sealed-brief baseline replays through ci without an agent version probe',
     body: checkSealedBriefCiReplayStartsNoVersionProbe,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
-  { name: 'unreadable installed agent versions stop before qualification', body: checkAgentVersionFaults, group: 'evaluators' },
+  {
+    name: 'unreadable installed agent versions stop before qualification',
+    body: checkAgentVersionFaults,
+    group: 'evaluators-agent-version',
+  },
   {
     name: 'an agent version probe receives only declared environment keys and refuses a delimiter',
     body: checkAgentVersionEnvironmentAndDelimiter,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
   {
     name: 'post-trial and post-attempt agent version reads count in sealed resource use',
     body: checkAgentVersionPostTrialUse,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
   {
     name: 'an installed agent version changing during the run stops the attempt or trial',
     body: checkAgentVersionMoves,
-    group: 'evaluators',
+    group: 'evaluators-agent-version',
   },
-  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents' },
-  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents' },
-  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents' },
-  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents' },
-  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents' },
-  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents' },
+  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents-sealed-brief' },
+  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents-sealed-brief' },
+  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents-sealed-brief' },
+  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents-sealed-brief' },
+  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents-sealed-brief' },
+  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents-sealed-brief' },
   { name: "an evaluator attempt's call is held to its inputs", body: checkHeldAttempts, group: 'held-attempts' },
   { name: 'a later probe, a later attempt and an Invalid attempt are held', body: checkHeldAttemptsLaterProbes, group: 'held-attempts' },
   { name: 'a call with an undocumented exit still stops the run', body: checkHeldAttemptsUndocumentedExit, group: 'held-attempts' },
@@ -7465,6 +7567,7 @@ const CASES = [
     body: checkImportedFilesSealedAgainstTheConfiguration,
     group: 'records',
   },
+  { name: 'imported manifests list mounts outside the allowlist', body: checkImportedManifestMounts, group: 'records' },
 ];
 /** Story 1.69's cases, for `--held-attempts-only` (the revert checks, which can narrow them with `--only=<text>`). */
 const HELD_ATTEMPT_CASES = CASES.filter(({ group }) => group === 'held-attempts');
@@ -7479,13 +7582,8 @@ async function runCase(name, body) {
   }
 }
 
-/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
-function requestedGroup() {
-  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
-  return argument === undefined ? null : argument.slice('--group='.length);
-}
-
 async function main() {
+  if (printGroupsWhenAsked(CASES)) return 0;
   const group = requestedGroup();
   if (group !== null && !GROUPS.has(group)) {
     console.error(

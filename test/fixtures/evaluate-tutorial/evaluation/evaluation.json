@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "evaluationId": "refund-check",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77"
+  },
+  "targetKind": "skill",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "refund-skill",
+      "executable": "tea-skill-runner",
+      "target": "node_modules/.bin/tea-skill-runner",
+      "subcommandPaths": [[]],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 100000,
+      "infrastructureExitCodes": [3, 4, 5, 6]
+    }
+  ],
+  "launch": {
+    "root": "..",
+    "skillRoot": "skill"
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": ["clean", "mutated"],
+  "trials": 3,
+  "tiers": ["pr"],
+  "strengthFloor": {
+    "defect": 1
+  },
+  "operationPhases": {
+    "refund-skill": {
+      "review-refund": "outcome"
+    }
+  }
+}

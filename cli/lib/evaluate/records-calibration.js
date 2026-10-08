@@ -52,6 +52,7 @@ const { loadEngine } = require('./engine');
 const { EvaluatorLayerError, evaluatorOf } = require('./evaluators');
 const { createArtifactValidator } = require('./records');
 const { MANIFEST_NAME } = require('./folder');
+const { readRegularFile } = require('./partition');
 
 const JUDGMENTS_NAME = 'calibration-judgments.json';
 const CONFIGURATION_NAME = 'evaluator-configuration.json';
@@ -368,7 +369,7 @@ async function calibrationInputs({ folder, evaluation, contract, engine }) {
 async function calibrationInputsOf(folder) {
   const read = (name) => {
     try {
-      const value = JSON.parse(fs.readFileSync(path.join(folder, name), 'utf8'));
+      const value = JSON.parse(readRegularFile(path.join(folder, name)).toString('utf8'));
       return isObject(value) ? { value } : { fault: 'it is not a JSON object' };
     } catch (error) {
       return { fault: `it cannot be read as JSON: ${error.message}` };

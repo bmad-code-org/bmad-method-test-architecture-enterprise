@@ -63,7 +63,7 @@
     "triggersConfigured": {
       "file": "skills/bmad-testarch-ci/checklist.md",
       "section": "Configuration Validation",
-      "lines": "123-130",
+      "lines": "124-131",
       "rule": "The pipeline's triggers are configured: push, pull_request and schedule as the project needs them.",
       "requiredPhrase": "Triggers configured (push, pull_request, schedule)"
     },
@@ -84,7 +84,7 @@
     "gateMustBeAbleToFail": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
       "section": "1. Burn-In Configuration",
-      "lines": "68",
+      "lines": "74",
       "rule": "continue-on-error belongs on artifact collection and never on a step that runs tests, so a test step that cannot fail the job is a defect in the gate.",
       "requiredPhrase": "never on a step that runs tests"
     },
@@ -119,7 +119,7 @@
     "burnInSkippedForBackend": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
       "section": "1. Burn-In Configuration",
-      "lines": "63-66",
+      "lines": "70-72",
       "rule": "A backend-only stack skips burn-in by default, and a run honors an explicit request either way.",
       "requiredPhrase": "Skip burn-in by default"
     },
@@ -133,77 +133,77 @@
     "evaluationPlanCommandSteps": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "66-95",
+      "lines": "87-126",
       "rule": "A detected evaluation plan renders as a job per tier it places a check on, and the job's one step runs tea-evaluate ci for that tier through npm exec with the evaluations folder as its prefix, as a standalone run: step named for every check on the tier.",
       "requiredPhrase": "Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, as a `run: |` block that holds that one command."
     },
     "evaluationRunsUpload": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "66-95",
+      "lines": "87-126",
       "rule": "After the check steps the job uploads the evaluation folder's runs/ directory with if: always(), so the evidence of a failing run is kept.",
       "requiredPhrase": "an upload of `<evaluation folder>/runs/` with `if: always()`"
     },
     "evaluationToolingInstall": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "66-95",
+      "lines": "87-126",
       "rule": "The evaluation job installs the evaluations folder's private package.json with --prefix and never runs the root install.",
       "requiredPhrase": "Never run the root install in this job."
     },
     "evaluationNodeFloor": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "66-95",
+      "lines": "87-126",
       "rule": "The evaluation job runs the project's .nvmrc version only when it is at or above the floor the tooling declares, and the current LTS otherwise, so a project pinned to an older Node is not blocked.",
       "requiredPhrase": "the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package"
     },
     "evaluationTierJobs": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "66-95",
+      "lines": "87-126",
       "rule": "A plan that places checks on several tiers renders one job per tier, each with the id evaluation-<tier>, its own setup and install and its one tea-evaluate ci step for that tier, so a tier the plan names is enforced where its trigger fires.",
       "requiredPhrase": "For each tier the plan places a check on, write one job:"
     },
     "evaluationMergeRunsPrFirst": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "77",
+      "lines": "96",
       "rule": "The merge job runs the pr tier's step first and its own tier's step second, each as a standalone step, because a tier holds only the checks placed on it.",
       "requiredPhrase": "The job for the `merge` tier runs the `pr` tier's step first and the `merge` tier's step second, each as its own step"
     },
     "evaluationTierTriggers": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "80",
+      "lines": "99",
       "rule": "The events a tier's checks name in trigger are added to the workflow's on: block: pull-request is pull_request, merge is push to the default branch when the pipeline lists no merge_group, and schedule is schedule with the request's cron.",
       "requiredPhrase": "`merge` is `merge_group` when the pipeline already lists it and `push` to the default branch otherwise"
     },
     "evaluationEventGuard": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "80",
+      "lines": "99",
       "rule": "An evaluation job is limited with an if: on the event when the workflow carries more events than the tier's checks name, so the pull request tier does not run on a schedule and the scheduled tier does not run on a pull request.",
       "requiredPhrase": "Limit the evaluation job with an `if:` on the event when the workflow carries more events than the tier's checks name."
     },
     "evaluationTierTimeouts": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "81",
+      "lines": "102",
       "rule": "timeout-minutes is 30 for the pr and merge jobs and 120 for scheduled and release, whose live checks spend model calls.",
       "requiredPhrase": "`timeout-minutes` is 30 for the `pr` and `merge` jobs and 120 for `scheduled` and `release`"
     },
     "evaluationArtifactNames": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "3. Render Each Plan",
-      "lines": "74",
+      "lines": "93",
       "rule": "Each job uploads its runs/ under the artifact name that is its job id followed by -runs, so two jobs never upload one name.",
       "requiredPhrase": "The artifact name in item 6 is the job id followed by `-runs`."
     },
     "evaluationReRender": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "4. Re-render Without Duplicating",
-      "lines": "100-105",
+      "lines": "129-140",
       "rule": "A second run rewrites each job that carries the plan's marker under the id the rules give now and never leaves two jobs for one tier, and it leaves every job without the marker as it is.",
       "requiredPhrase": "Leave every job without the marker as it is."
     },
@@ -217,9 +217,16 @@
     "evaluationEditCheckpoint": {
       "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
       "section": "ENTRY POINTS",
-      "lines": "34-39",
+      "lines": "35-41",
       "rule": "Edit mode never writes the create run's checkpoint, which belongs to the create run.",
       "requiredPhrase": "never write `{outputFile}`: the checkpoint belongs to the create run"
+    },
+    "evaluationGateWait": {
+      "file": "skills/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "104-111",
+      "rule": "A job the plan's tier gates waits for the tier's evaluation job: inside the pipeline file the evaluation job's id is appended to the job's needs, with the entries it already had kept in order, and nothing else of the job changes.",
+      "requiredPhrase": "append the evaluation job's id to the gated job's `needs`, keep the entries already there in their order"
     }
   },
   "negativeControls": [
@@ -388,7 +395,8 @@
           "iterations": 10,
           "rule": "burnInIterations",
           "requestQuote": "The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
-          "contractToken": "burn-in"
+          "contractToken": "burn-in:",
+          "contractPattern": "^[\\s\\S]*(?:^|\\n)[ \\t-]*(?:[\\w-]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn][\\w-]*:|name: [^\\n#]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn])[\\s\\S]*$"
         },
         {
           "id": "artifact-playwright-report",
@@ -594,7 +602,8 @@
           "standaloneStep": true,
           "rule": "evaluationToolingInstall",
           "requestQuote": "Run its pull request checks on every pull request.",
-          "contractToken": "npm install --prefix evals"
+          "contractToken": "npm install --prefix evals",
+          "contractPattern": "^[\\s\\S]*npm\\s+install\\s+--prefix\\s+(?:'evals'|\"evals\"|evals)(?:\\s|$)[\\s\\S]*$"
         },
         {
           "id": "command-evaluation-ci-pr",
@@ -610,7 +619,8 @@
           ],
           "rule": "evaluationPlanCommandSteps",
           "requestQuote": "Run its pull request checks on every pull request.",
-          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr"
+          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr",
+          "contractPattern": "^[\\s\\S]*tea-evaluate\\s+ci\\s+--evaluation\\s+(?:'evals/grader'|\"evals/grader\"|evals/grader)\\s+--tier\\s+(?:'pr'|\"pr\"|pr)(?:\\s|$)[\\s\\S]*$"
         },
         {
           "id": "job-evaluation-pr",
@@ -1076,6 +1086,206 @@
       ],
       "mustNotEmit": [],
       "why": "Twelve elements over a pipeline the team already has: a hand-written test job under no marker, and an evaluation job under the plan's marker that an earlier create run wrote when the plan held two pr checks and the repository held another plan, so it carries the folder in its id, a literal Node version, a step named for two checks, a short limit and an upload under a shared name. The edit run loads the pipeline, detects the plan and applies sections 3 and 4 of the render step. The marker job is rewritten under the id the rules give now, and exactly one job runs the tier and carries the marker. The test job keeps its bytes, comments, quoting and layout included, which a parse cannot show and a rewrite of the job would change. The checkpoint the create run left under test-artifacts/ci/ is untouched, since the checkpoint belongs to the create run. The harness digests every other project file as well, so a changed checkpoint is also a fixture mutation."
+    },
+    {
+      "id": "evaluation-gate-slate-publisher",
+      "root": "evaluation-gate",
+      "projectRoot": "slate-publisher",
+      "remoteOwner": "slate-labs",
+      "title": "A package whose pipeline already carries a hand-written test job and a hand-written publish job, and whose evaluation places checks on the pull request and release tiers with the release tier gating the publish job",
+      "mode": "edit",
+      "editTarget": ".github/workflows/test.yml",
+      "requestSource": "docs/ci-requirements.md",
+      "nvmrcVersion": "24",
+      "isMinimalRequest": false,
+      "requireEveryElement": true,
+      "projectFiles": [
+        ".github/workflows/test.yml",
+        ".nvmrc",
+        "docs/ci-requirements.md",
+        "evals/notes/ci/evaluation-ci-plan.json",
+        "evals/package.json",
+        "package-lock.json",
+        "package.json",
+        "src/notes.js",
+        "test-artifacts/ci/ci-pipeline-progress.md",
+        "tests/notes.test.js"
+      ],
+      "expectedElements": [
+        {
+          "id": "trigger-pull-request-main",
+          "kind": "trigger",
+          "event": "pull_request",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "pull requests targeting `main`",
+          "contractToken": "pull_request:"
+        },
+        {
+          "id": "trigger-release-published",
+          "kind": "trigger",
+          "event": "release",
+          "types": [
+            "published"
+          ],
+          "rule": "evaluationTierTriggers",
+          "requestQuote": "and published releases",
+          "contractToken": "release:"
+        },
+        {
+          "id": "permission-contents-read",
+          "kind": "permission",
+          "scope": "contents",
+          "level": "read",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Permissions: `contents: read` only.",
+          "contractToken": "contents: read"
+        },
+        {
+          "id": "node-version-evaluation-floor",
+          "kind": "node-version",
+          "scope": "evaluation",
+          "floor": "22.20.0",
+          "rule": "evaluationNodeFloor",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "command-unit-tests",
+          "kind": "command",
+          "command": "npm test",
+          "rule": "pipelineStages",
+          "requestQuote": "then run `npm test`.",
+          "contractToken": "npm test"
+        },
+        {
+          "id": "command-evaluation-install",
+          "kind": "command",
+          "command": "npm install --prefix evals",
+          "standaloneStep": true,
+          "rule": "evaluationToolingInstall",
+          "requestQuote": "Run its pull request checks on every pull request and its release checks when a release is published.",
+          "contractToken": "npm install --prefix"
+        },
+        {
+          "id": "command-evaluation-ci-pr",
+          "kind": "command",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/notes --tier pr",
+          "standaloneStep": true,
+          "checkIds": [
+            "check",
+            "compile",
+            "seal",
+            "replay"
+          ],
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request and its release checks when a release is published.",
+          "contractToken": "--tier pr"
+        },
+        {
+          "id": "command-evaluation-ci-release",
+          "kind": "command",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/notes --tier release",
+          "standaloneStep": true,
+          "checkIds": [
+            "twin-run",
+            "held-out"
+          ],
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request and its release checks when a release is published.",
+          "contractToken": "--tier release"
+        },
+        {
+          "id": "job-evaluation-pr",
+          "kind": "job",
+          "jobId": "evaluation-pr",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/notes --tier pr",
+          "marker": "# tea-evaluation-plan: evals/notes/ci/evaluation-ci-plan.json",
+          "runsOn": [
+            "pull_request"
+          ],
+          "timeoutMinutes": 30,
+          "rule": "evaluationEventGuard",
+          "requestQuote": "Run its pull request checks on every pull request and its release checks when a release is published.",
+          "contractToken": "evaluation-pr"
+        },
+        {
+          "id": "job-evaluation-release",
+          "kind": "job",
+          "jobId": "evaluation-release",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/notes --tier release",
+          "marker": "# tea-evaluation-plan: evals/notes/ci/evaluation-ci-plan.json",
+          "runsOn": [
+            "release"
+          ],
+          "timeoutMinutes": 120,
+          "rule": "evaluationTierTimeouts",
+          "requestQuote": "Run its pull request checks on every pull request and its release checks when a release is published.",
+          "contractToken": "evaluation-release"
+        },
+        {
+          "id": "artifact-evaluation-runs-pr",
+          "kind": "artifact",
+          "pathToken": "evals/notes/runs/",
+          "onFailureOnly": false,
+          "condition": "always()",
+          "jobId": "evaluation-pr",
+          "name": "evaluation-pr-runs",
+          "rule": "evaluationArtifactNames",
+          "requestQuote": "keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+          "contractToken": "evaluation-pr-runs"
+        },
+        {
+          "id": "artifact-evaluation-runs-release",
+          "kind": "artifact",
+          "pathToken": "evals/notes/runs/",
+          "onFailureOnly": false,
+          "condition": "always()",
+          "jobId": "evaluation-release",
+          "name": "evaluation-release-runs",
+          "rule": "evaluationArtifactNames",
+          "requestQuote": "keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+          "contractToken": "evaluation-release-runs"
+        },
+        {
+          "id": "preserved-job-test",
+          "kind": "preserved",
+          "jobId": "test",
+          "sha256": "3ff312ae73cd98fb4a7cf11ca2abbe9337314c74f9ea3ec1c2f15ade40afe051",
+          "rule": "evaluationReRender",
+          "requestQuote": "The release team wrote this job by hand and keeps it as it is.",
+          "contractToken": "# Maintained by the release team"
+        },
+        {
+          "id": "wait-publish",
+          "kind": "wait",
+          "jobId": "publish",
+          "needs": [
+            "test",
+            "evaluation-release"
+          ],
+          "runsOn": [
+            "release"
+          ],
+          "sha256": "429a84d396f2b3f45b83fb9239d492e994aa37b8b579468bb875611d7cc30463",
+          "rule": "evaluationGateWait",
+          "requestQuote": "so the `publish` job waits for them.",
+          "contractToken": null
+        },
+        {
+          "id": "checkpoint-untouched",
+          "kind": "checkpoint",
+          "file": "test-artifacts/ci/ci-pipeline-progress.md",
+          "sha256": "3ecba703338330b44326502570b4c9a7a3cf6a68cb6766beb701d8eef9267065",
+          "rule": "evaluationEditCheckpoint",
+          "requestQuote": "the create run's progress file under `test-artifacts/ci/` stays as it is",
+          "contractToken": null
+        }
+      ],
+      "mustNotEmit": [],
+      "why": "Fifteen elements over a pipeline the team already has: a hand-written test job, and a hand-written publish job that waits for the test job and runs on a published release. The request says the repository holds an evaluation of the release note builder, asks for its pull request checks on every pull request and its release checks when a release is published, and says a release must never reach the registry unless those release checks passed, so the publish job waits for them. It names neither the plan nor the mechanism, and the wait element measures the rendering the step's item 10 gives for the plan's gates field. The edit run writes the evaluation-pr and evaluation-release jobs (each limited to its own event, under the 30 and 120 minute limits, uploading its runs/ under a name of its own) and appends the evaluation-release job's id to the publish job's needs, after the test entry the job already had. Everything else of the publish job keeps its bytes: its condition, its steps and its settings. The wait element reads the needs list exactly, the events the publish job still runs on, and the digest of the job's source without its needs lines. The test job and the create run's checkpoint stay as they were."
     }
   ]
 }

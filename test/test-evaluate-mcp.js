@@ -87,6 +87,7 @@ const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { MAX_OUTPUT_BYTES, createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
+const { recordedMount } = require('./lib/recorded-mount');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -1853,35 +1854,51 @@ async function checkConfinedServerReads() {
     const contract = path.join(fs.realpathSync(project.folder), 'contract.json');
     const ran = evaluate(['run', '--evaluation', project.folder], {
       ...project.env,
-      GRADER_READ: JSON.stringify({ contract, outside }),
+      GRADER_READ: JSON.stringify({ contract, outside, '@when': ['trial-clean-1'] }),
     });
-    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
     const runDirectory = runDirectoryOf(project.folder);
     const trial = runDirectory === null ? null : path.join(runDirectory, 'trials', 'clean', 'trial-1.json');
     const evidence = trial !== null && fs.existsSync(trial) ? fs.readFileSync(trial, 'utf8') : '';
     const manifest =
       runDirectory === null ? null : readIfPresent(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
-    return { contract, evidence, observed: manifest?.observedMounts ?? null };
+    // The manifest records the audit's paths in the neutral forms the runtime writes, so the expectation is each real path put through them.
+    const recorded = (real) => recordedMount(real, { folder: project.folder, env: project.env });
+    return {
+      ran,
+      contract,
+      recordedContract: recorded(contract),
+      recordedOutside: recorded(realOutside),
+      evidence,
+      observed: manifest?.observedMounts ?? null,
+    };
   };
   const refusal = /contract: refused (EPERM|EACCES|ENOENT|EROFS)/;
+  // The read of the contract and of the file outside are mounts outside the allowlist, which a confined run refuses (exit 3) once its
+  // trials are sealed; the opted-out control observes none. Judged on the attempt the comparisons below count.
+  const checkExit = (label, run, refused) =>
+    check(
+      refused ? run.ran.status === 3 && /isolation manifest violation: the trials opened/.test(run.ran.output) : run.ran.status === 0,
+      `${label}: run exited ${run.ran.status}; expected ${refused ? 3 : 0}\n${run.ran.output}`,
+    );
 
   // The kernel's report channel on macOS can lose a report under load (Story 1.60): a run whose audit lists only what it should, but
   // not all of it, runs again (up to two more times) before the exact comparison below counts. Any extra path counts at once.
-  const wanted = (run) => [run.contract, realOutside].sort();
+  const wanted = (run) => [run.recordedContract, run.recordedOutside].sort();
   const lostOnly = (run) =>
     Array.isArray(run.observed) &&
     run.observed.every((entry) => wanted(run).includes(entry)) &&
     wanted(run).some((entry) => !run.observed.includes(entry));
   let confined = runReading('confined-reads');
   for (let again = 0; again < 2 && process.platform === 'darwin' && lostOnly(confined); again += 1) confined = runReading('confined-reads');
+  checkExit('confined-reads', confined, true);
   check(refusal.test(confined.evidence), `a confined tool server's read of contract.json was not refused: ${confined.evidence}`);
   check(
     /outside: allowed/.test(confined.evidence),
     `a confined tool server could not read the ungranted file, so the case proves nothing: ${confined.evidence}`,
   );
   check(
-    JSON.stringify(confined.observed) === JSON.stringify([confined.contract, realOutside].sort()),
-    `a confined tool server's trial set observed ${JSON.stringify(confined.observed)}; expected the contract and ${realOutside}`,
+    JSON.stringify(confined.observed) === JSON.stringify(wanted(confined)),
+    `a confined tool server's trial set observed ${JSON.stringify(confined.observed)}; expected the contract and the file outside, recorded as ${JSON.stringify(wanted(confined))}`,
   );
 
   let declared = runReading('confined-reads-declared', { declared: true });
@@ -1892,17 +1909,19 @@ async function checkConfinedServerReads() {
   ) {
     declared = runReading('confined-reads-declared', { declared: true });
   }
+  checkExit('confined-reads-declared', declared, true);
   check(
     refusal.test(declared.evidence) && /outside: allowed/.test(declared.evidence),
     `a tool server under a declared system path read: ${declared.evidence}`,
   );
   check(
-    JSON.stringify(declared.observed) === JSON.stringify([declared.contract]),
+    JSON.stringify(declared.observed) === JSON.stringify([declared.recordedContract]),
     `a read under a declared system path was reported: ${JSON.stringify(declared.observed)}; expected the contract alone`,
   );
 
   // The control: with the confinement off, the same server reads the contract.
   const open = runReading('confined-reads-open', { optOut: true });
+  checkExit('confined-reads-open', open, false);
   check(/contract: allowed/.test(open.evidence), `the unconfined control could not read contract.json: ${open.evidence}`);
 }
 

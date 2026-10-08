@@ -52,10 +52,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The runner image names the package cache, so each new image downloads its own bubblewrap and strace once and every
+      # later shard installs them from the cache with no mirror (tools/install-linux-sandbox.sh).
+      - name: Name the runner image for the package cache
+        id: sandbox-image
+        run: echo "image=${ImageOS:-unknown}-${ImageVersion:-$(date -u +%G-%V)}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the bubblewrap and strace packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tea-linux-sandbox-debs
+          key: linux-sandbox-debs-${{ runner.os }}-${{ runner.arch }}-${{ steps.sandbox-image.outputs.image }}
+
       # The case builds a withheld repository under bubblewrap and reads the host's git, which must be 2.44 or later for a
       # partial clone to build without a fetch; the loop fails if the runner's git is older.
       - name: Install bubblewrap and strace
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
+        timeout-minutes: 11
+        run: bash tools/install-linux-sandbox.sh
 
       - name: Allow bubblewrap to create its own network namespace
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import mermaid from 'astro-mermaid';
 import rehypeMarkdownLinks from './src/rehype-markdown-links.js';
 import rehypeBasePaths from './src/rehype-base-paths.js';
 import { getSiteUrl } from './src/lib/site-url.js';
@@ -18,6 +19,11 @@ export default defineConfig({
 
   // Disable aggressive caching in dev mode
   vite: {
+    build: {
+      // Mermaid's own chunks (diagram parsers, the renderer) run 400 to 700 kB each. A page loads them on
+      // demand, and only when it holds a diagram, so they are not part of any page's first load.
+      chunkSizeWarningLimit: 800,
+    },
     optimizeDeps: {
       force: true, // Always re-bundle dependencies
     },
@@ -36,6 +42,41 @@ export default defineConfig({
   },
 
   integrations: [
+    // Renders ```mermaid fences in the reader's browser, so the build needs no headless browser.
+    // It must come before starlight(): Starlight's code renderer would otherwise claim the fence
+    // first and print it as raw source. The docs draw their diagrams with light fills and black
+    // text (several open with a `%%{init: {'theme':'base', ...}}%%` directive for GitHub), so
+    // every diagram renders in mermaid's light theme and sits on a light card in both site
+    // themes (see custom.css). A dark diagram theme would put light text on those pale fills.
+    mermaid({
+      autoTheme: false,
+      theme: 'default',
+      enableLog: false,
+      // Draw every diagram at its natural width. custom.css keeps that width, so a diagram wider than
+      // the column scrolls inside its card instead of shrinking below a readable size.
+      mermaidConfig: Object.fromEntries(
+        [
+          'flowchart',
+          'sequence',
+          'gantt',
+          'journey',
+          'class',
+          'state',
+          'er',
+          'pie',
+          'requirement',
+          'mindmap',
+          'timeline',
+          'gitGraph',
+          'c4',
+          'sankey',
+          'xyChart',
+          'block',
+          'quadrantChart',
+          'architecture',
+        ].map((diagram) => [diagram, { useMaxWidth: false }]),
+      ),
+    }),
     sitemap(),
     starlight({
       title: 'Test Architect (TEA)',
@@ -111,6 +152,19 @@ export default defineConfig({
               ],
             },
             {
+              label: 'Evaluate',
+              items: [
+                { label: 'Evaluate a Skill or Agent', slug: 'how-to/evaluate/evaluate-a-skill-or-agent' },
+                { label: 'Evaluate an MCP Tool Server', slug: 'how-to/evaluate/evaluate-an-mcp-tool-server' },
+                { label: 'Evaluate an HTTP API', slug: 'how-to/evaluate/evaluate-an-http-api' },
+                { label: 'Choose an Evaluator and Calibrate a Judge', slug: 'how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge' },
+                { label: 'Read the Gaps and Fix Them', slug: 'how-to/evaluate/read-the-gaps-and-fix-them' },
+                { label: 'Compare Runs and Accept a Baseline', slug: 'how-to/evaluate/compare-runs-and-accept-a-baseline' },
+                { label: 'Put an Evaluation in CI', slug: 'how-to/evaluate/put-an-evaluation-in-ci' },
+                { label: 'Bring an Existing Suite', slug: 'how-to/evaluate/bring-an-existing-suite' },
+              ],
+            },
+            {
               label: 'Customization',
               autogenerate: { directory: 'how-to/customization' },
             },
@@ -128,6 +182,8 @@ export default defineConfig({
             { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
             { label: 'Verification Architecture', slug: 'explanation/verification-architecture' },
             { label: 'How TEA Is Tested', slug: 'explanation/how-tea-is-tested' },
+            { label: 'How Evaluate Works', slug: 'explanation/how-evaluate-works' },
+            { label: 'Why Evaluate Confines the Target', slug: 'explanation/why-evaluate-confines-the-target' },
             { label: 'Engagement Models', slug: 'explanation/engagement-models' },
             { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
             { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },

@@ -30,6 +30,8 @@ const SKILL_ROOT = path.join(__dirname, '..', 'skills', 'bmad-testarch-evaluate'
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
 const REFERENCE = (name) => path.join(SKILL_ROOT, 'references', `${name}.md`);
 const ASSET = (name) => path.join(SKILL_ROOT, 'assets', name);
+/** The runner's registry `target` in the guide and the starter: a path inside `launch.root`, since a bare name resolves outside the workspace and `score` exits 3. */
+const RUNNER_TARGET_IN_ROOT = 'evals/node_modules/.bin/tea-skill-runner';
 
 const EXPECTED_STAGES = [
   'inspection',
@@ -88,7 +90,7 @@ function resolveGameabilityPredicate(engine, predicate, observation, kind) {
     () => false,
     {},
     1000,
-    `corpus.md ${kind} P-004.defectSignature.condition.predicate`,
+    `${corpusKindFile(kind)} P-004.defectSignature.condition.predicate`,
   ).resolution;
 }
 
@@ -341,7 +343,201 @@ function checkDigestFileGuidance({ intake, contractGuide, readme }, engine, fail
     );
 }
 
-function checkCorpus(corpus, engine, failures) {
+/**
+ * The corpus guide is carved into the craft every kind shares (`corpus.md`) and one guide per target kind (Story 1.114). The kind list,
+ * the four headings each kind guide holds and the file names are fixed here, so a guide that gains, loses or renames one fails.
+ */
+const CORPUS_KINDS = [
+  ['Agent', 'agent'],
+  ['Skill', 'skill'],
+  ['Workflow', 'workflow'],
+  ['Tool-use system', 'tool-use-system'],
+  ['AI feature', 'ai-feature'],
+  ['Test-review mechanism', 'test-review-mechanism'],
+];
+const CORPUS_KIND_HEADINGS = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
+const GUIDE_TOKEN_BUDGET = 9000;
+
+function corpusKindFile(title) {
+  return `corpus-${CORPUS_KINDS.find(([name]) => name === title)[1]}.md`;
+}
+
+let tokenEncoder;
+/** The builder's metric: tiktoken `cl100k_base` (the same encoding its `count_tokens.py` reports). */
+function countTokens(text) {
+  tokenEncoder ??= require('js-tiktoken').getEncoding('cl100k_base');
+  return tokenEncoder.encode(text, [], []).length;
+}
+
+/** The metric is pinned to its encoding: this literal counts 16 tokens under `cl100k_base`, where a length-over-four estimate gives 18. */
+const TOKEN_METRIC_LITERAL = 'The floor, partition and held-out rules live in references/corpus.md.';
+const TOKEN_METRIC_COUNT = 16;
+function checkTokenMetric(failures, count = countTokens) {
+  const counted = count(TOKEN_METRIC_LITERAL);
+  if (counted !== TOKEN_METRIC_COUNT)
+    failures.push(`countTokens returns ${counted} for the pinned literal; cl100k_base returns ${TOKEN_METRIC_COUNT}`);
+}
+
+/** Reads `corpus.md`, every per-kind guide and the `corpus*.md` names `references/` holds; a missing file is a failure that names it and reads as empty. */
+function readCorpusGuides(failures, directory = path.join(SKILL_ROOT, 'references')) {
+  const read = (file) => {
+    try {
+      return fs.readFileSync(path.join(directory, file), 'utf8');
+    } catch (error) {
+      failures.push(`${file} cannot be read: ${error.code ?? error.message}`);
+      return '';
+    }
+  };
+  let present = [];
+  try {
+    present = fs.readdirSync(directory).filter((name) => /^corpus.*\.md$/.test(name));
+  } catch {
+    // An unreadable directory already failed every read above.
+  }
+  return {
+    shared: read('corpus.md'),
+    kinds: Object.fromEntries(CORPUS_KINDS.map(([title]) => [title, read(corpusKindFile(title))])),
+    present,
+  };
+}
+
+/** The carve itself: `corpus.md` names the six guides and holds no kind heading, and each of the seven files is within the budget. */
+function checkCorpusLayout(guides, failures) {
+  const { shared } = guides;
+  requireHeading(shared, '## Per-kind guides', 'corpus.md', failures);
+  const index = headingBody(shared, '## Per-kind guides');
+  requireText(
+    index,
+    'Load only the guide for the target kind recorded as `targetKind` at inspection.',
+    'corpus.md Per-kind guides',
+    failures,
+  );
+  requireLine(
+    index,
+    'Both tool-use rows of the inspection mapping (a calling agent and a tool server) load the tool-use guide, and a tool server reached over `mcp` takes its channel pointers from `references/oracles.md` and its registry shape from `references/adapters.md`.',
+    'corpus.md Per-kind guides',
+    failures,
+  );
+  try {
+    assert.deepStrictEqual(
+      [...index.matchAll(/`references\/(corpus-[a-z-]+\.md)`/g)].map((match) => match[1]),
+      CORPUS_KINDS.map(([title]) => corpusKindFile(title)),
+    );
+  } catch (error) {
+    failures.push(`corpus.md Per-kind guides must list exactly the six per-kind files: ${error.message}`);
+  }
+  try {
+    assert.deepStrictEqual(
+      [...(guides.present ?? [])].sort(),
+      ['corpus.md', ...CORPUS_KINDS.map(([title]) => corpusKindFile(title))].sort(),
+    );
+  } catch (error) {
+    failures.push(`references/ holds corpus guides other than corpus.md and the six per-kind files: ${error.message}`);
+  }
+  for (const [title] of CORPUS_KINDS)
+    requireText(index, `- ${title}: \`references/${corpusKindFile(title)}\``, 'corpus.md Per-kind guides', failures);
+  const moved = new Set([...CORPUS_KINDS.map(([title]) => title), ...CORPUS_KIND_HEADINGS]);
+  for (const level of [1, 2, 3])
+    for (const section of sections(shared, level))
+      if (moved.has(section.title) || section.title.endsWith(' corpus'))
+        failures.push(`corpus.md holds the ${section.title} heading that belongs in a per-kind guide`);
+  for (const [file, text] of [['corpus.md', shared], ...CORPUS_KINDS.map(([title]) => [corpusKindFile(title), guides.kinds[title]])]) {
+    const tokens = countTokens(text);
+    if (tokens > GUIDE_TOKEN_BUDGET) failures.push(`${file} is ${tokens} tokens, over the ${GUIDE_TOKEN_BUDGET}-token guide budget`);
+  }
+  checkTokenMetric(failures);
+}
+
+/** Every Markdown file of the skill's guides, `SKILL.md`, the assets and `docs/`, by repository-relative path. */
+function corpusReferenceSurface() {
+  const files = {};
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.md')) files[path.relative(path.join(__dirname, '..'), full)] = fs.readFileSync(full, 'utf8');
+    }
+  };
+  walk(path.join(SKILL_ROOT, 'references'));
+  walk(path.join(SKILL_ROOT, 'assets'));
+  walk(path.join(__dirname, '..', 'docs'));
+  files[path.relative(path.join(__dirname, '..'), SKILL_MD_PATH)] = fs.readFileSync(SKILL_MD_PATH, 'utf8');
+  return files;
+}
+
+/**
+ * A guide that names a per-kind file no guide holds, or names a `corpus.md` heading the file no longer has (the kind headings moved to
+ * the per-kind guides), reads a place that is not there. `corpus.md` itself is exempt from the heading rule, since it holds the headings,
+ * and its own lines are scanned for a moved section or kind named as a place below.
+ */
+function corpusReferenceProblems(files, shared) {
+  const known = new Set(CORPUS_KINDS.map(([title]) => corpusKindFile(title)));
+  const headings = new Set(sections(shared, 2).map((section) => `## ${section.title}`));
+  const problems = [];
+  for (const [file, text] of Object.entries(files)) {
+    for (const [index, line] of text.split('\n').entries()) {
+      const where = `${file}:${index + 1}`;
+      for (const [named] of line.matchAll(/corpus-[a-z0-9-]+\.md/g))
+        if (!known.has(named)) problems.push(`${where} names ${named}, which is not a per-kind corpus guide`);
+      const inShared = path.basename(file) === 'corpus.md';
+      if (!inShared && !/corpus\.md/.test(line)) continue;
+      if (!inShared)
+        for (const [, heading] of line.matchAll(/`(#{1,3} [^`]+)`/g))
+          if (!headings.has(heading)) problems.push(`${where} names the heading ${heading}, which corpus.md does not hold`);
+      for (const name of [...CORPUS_KIND_HEADINGS, ...CORPUS_KINDS.flatMap(([title]) => [`${title} section`, `${title} kind`])])
+        if (line.includes(name)) problems.push(`${where} names ${name} as part of corpus.md; it moved to a per-kind guide`);
+    }
+  }
+  return problems;
+}
+
+/** `SKILL.md` stays byte-identical: both live capture records pin its digest, and neither pins a corpus guide. */
+function checkCorpusPins(engine, failures, skillBytes = fs.readFileSync(SKILL_MD_PATH), records = readCaptureRecords()) {
+  const skillDigest = engine.digestBytes(skillBytes);
+  for (const [repository, record] of Object.entries(records)) {
+    if (record.sessionRead?.['SKILL.md'] !== skillDigest)
+      failures.push(`${repository} capture-record.json pins a SKILL.md other than the one on disk`);
+    for (const key of Object.keys(record.sessionRead ?? {}))
+      if (/(^|\/)corpus/.test(key)) failures.push(`${repository} capture-record.json pins ${key}; a corpus guide is not a session read`);
+  }
+}
+
+function readCaptureRecords() {
+  return Object.fromEntries(
+    ['tagged-release', 'nightly-deploy'].map((repository) => [
+      repository,
+      JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate-ci-repos', repository, 'capture-record.json'), 'utf8')),
+    ]),
+  );
+}
+
+function checkCorpusReferences(guides, failures) {
+  const files = corpusReferenceSurface();
+  for (const problem of corpusReferenceProblems(files, guides.shared)) failures.push(problem);
+  // The same scan raises the stale references it exists for.
+  const runGuide = Object.keys(files).find((file) => file.endsWith('references/run.md'));
+  for (const [label, planted] of [
+    ["a heading of a per-kind guide named as corpus.md's", 'See the Gameability design in corpus.md.'],
+    ["a kind heading named as corpus.md's", 'See `## Agent` in `corpus.md`.'],
+    ['a heading corpus.md does not hold', 'See `## Removed lesson` in `corpus.md`.'],
+    ['a per-kind file no guide holds', 'Load `references/corpus-agents.md`.'],
+    [
+      'a kind section named without backticks beside corpus.md',
+      'See the Workflow section of `references/corpus.md` for the held-out rule.',
+    ],
+  ]) {
+    const found = corpusReferenceProblems({ ...files, [runGuide]: `${files[runGuide]}\n${planted}\n` }, guides.shared);
+    if (found.length === 0) failures.push(`${label} passed the corpus reference scan`);
+  }
+  // corpus.md reads its own lines the same way: a moved section named as a place below.
+  const sharedFile = Object.keys(files).find((file) => file.endsWith('references/corpus.md'));
+  const plantedShared = `${files[sharedFile]}\nEach gameability probe follows the Gameability design of its kind below.\n`;
+  if (corpusReferenceProblems({ ...files, [sharedFile]: plantedShared }, guides.shared).length === 0)
+    failures.push('a moved section named inside corpus.md passed the corpus reference scan');
+}
+
+function checkCorpus(guides, engine, failures) {
+  const corpus = guides.shared;
   requireHeading(corpus, '## Corpus rules and layout', 'corpus.md', failures);
   for (const marker of [
     '`zero-action` probe with `expectedClean: true`',
@@ -369,8 +565,10 @@ function checkCorpus(corpus, engine, failures) {
     'A floor with no eligible probe in a partition it is read on exits `ci --tier release` 2 with `no-eligible-probe`',
     'Set `strengthFloor.gameability` to the confirmed minimum, such as `1`, once the development partition and `heldOutProbes` each hold a gameability probe',
     '`P-004` fills the partition it sits in, so commit a second gameability probe for the other partition first and leave the floor undeclared until then',
-    '`tea-evaluate check` refuses a gameability probe beside a `partitionPlan`, so an evaluation that declares one holds no gameability floor',
-    "Each held-out seed changes an adopter-owned rule through its mutation (`P-006` through `M-001`, and the Workflow kind's `P-008` through `M-003`)",
+    'Under a `partitionPlan` each gameability probe answers the whole plan from two files (see the partition section)',
+    "under a `partitionPlan` the plan file's steps are answered in a second file (see the partition section)",
+    'Each held-out seed changes an adopter-owned rule through its mutation, as the held-out seeds of the per-kind guides do',
+    'The HTTP example in `references/corpus-ai-feature.md` returns JSON with a JSON content type.',
     'rejects a gameability probe without that arm',
     'policy/scoring-policy.json',
     'assets/scoring-policy.template.json',
@@ -378,9 +576,8 @@ function checkCorpus(corpus, engine, failures) {
   ])
     requireText(corpus, marker, 'corpus.md', failures);
   checkPartitionPlanGuidance(corpus, failures);
+  checkCorpusLayout(guides, failures);
 
-  const kinds = ['Agent', 'Skill', 'Workflow', 'Tool-use system', 'AI feature', 'Test-review mechanism'];
-  const headingNames = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
   const ordinaryTags = new Set(['representative', 'negative', 'malformed', 'gameability', 'held-out']);
   const malformedKeys = {
     Agent: 'stdin.customerId',
@@ -430,15 +627,7 @@ function checkCorpus(corpus, engine, failures) {
     'Tool-use system': [['stdout/reserveCallCount', 1]],
     'Test-review mechanism': [['stdout/decision', 'defective']],
   };
-  const kindSections = sections(corpus, 2).filter((section) => kinds.includes(section.title));
-  try {
-    assert.deepStrictEqual(
-      kindSections.map((section) => section.title),
-      kinds,
-    );
-  } catch (error) {
-    failures.push(`corpus.md kind headings changed: ${error.message}`);
-  }
+  const kindSections = CORPUS_KINDS.map(([title]) => ({ title, file: corpusKindFile(title), body: guides.kinds[title] }));
 
   const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
   const validateCommitted = ajv.compile(
@@ -462,14 +651,26 @@ function checkCorpus(corpus, engine, failures) {
   };
   let zeroActionDefectCount = 0;
   for (const kind of kindSections) {
-    const subheads = sections(kind.body, 3);
+    const subheads = sections(kind.body, 2);
     try {
       assert.deepStrictEqual(
         subheads.map((section) => section.title),
-        headingNames,
+        CORPUS_KIND_HEADINGS,
+      );
+      assert.deepStrictEqual(
+        sections(kind.body, 1).map((section) => section.title),
+        [`${kind.title} corpus`],
+      );
+      assert.deepStrictEqual(sections(kind.body, 3), []);
+      assert.ok(kind.body.startsWith(`# ${kind.title} corpus\n\n`), 'the guide starts with its kind heading');
+      assert.match(kind.body.split('\n')[3] ?? '', /^The worked interface is `(cli|api|mcp)`\.$/);
+      assert.strictEqual(
+        kind.body.split('\n')[4],
+        'The floor, partition and held-out rules live in `references/corpus.md`.',
+        'the guide names corpus.md as the home of the floor, partition and held-out rules',
       );
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} subheadings changed: ${error.message}`);
+      failures.push(`${kind.file} headings changed: ${error.message}`);
     }
     const foundTags = [];
     const probes = [];
@@ -489,7 +690,7 @@ function checkCorpus(corpus, engine, failures) {
       '/interactions/malformed-input/',
       '`O-003` checks',
     ])
-      requireText(malformedBody, marker, `corpus.md ${kind.title} malformed input`, failures);
+      requireText(malformedBody, marker, `${kind.file} malformed input`, failures);
     for (const subhead of subheads) {
       const sectionTags = [];
       for (const match of subhead.body.matchAll(/<!-- example:probe -->\s*```json\n([\s\S]*?)\n```/g)) {
@@ -497,20 +698,18 @@ function checkCorpus(corpus, engine, failures) {
         try {
           probe = JSON.parse(match[1]);
         } catch (error) {
-          failures.push(`corpus.md ${kind.title} has invalid tagged JSON: ${error.message}`);
+          failures.push(`${kind.file} has invalid tagged JSON: ${error.message}`);
           continue;
         }
         const tag = probe.rationale?.match(/^\[([a-z-]+)\]/)?.[1];
-        if (!ordinaryTags.has(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
+        if (!ordinaryTags.has(tag)) failures.push(`${kind.file} probe ${probe.probeId} has no permitted rationale tag`);
         foundTags.push(tag);
         sectionTags.push(tag);
         probes.push(probe);
         if (probe.probeClass !== 'canary' && probe.defects.some((defect) => defect.manifestationWitness == null))
-          failures.push(`corpus.md ${kind.title} ${probe.probeId} has a non-canary defect without a manifestation witness`);
+          failures.push(`${kind.file} ${probe.probeId} has a non-canary defect without a manifestation witness`);
         if (!validateCommitted(probe))
-          failures.push(
-            `corpus.md ${kind.title} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`,
-          );
+          failures.push(`${kind.file} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`);
         let qualification;
         if (probe.qualification.route === 'clean-control')
           qualification = { ...probe.qualification, baselinePassEvidence: evidence, revisionCommitDigest: baseline.commitDigest };
@@ -539,14 +738,12 @@ function checkCorpus(corpus, engine, failures) {
           qualification,
         };
         if (!validateEngine(qualified))
-          failures.push(
-            `corpus.md ${kind.title} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`,
-          );
+          failures.push(`${kind.file} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`);
       }
       try {
         assert.deepStrictEqual(sectionTags, expectedTagsByHeading[subhead.title]);
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} ${subhead.title} has the wrong worked probes: ${error.message}`);
+        failures.push(`${kind.file} ${subhead.title} has the wrong worked probes: ${error.message}`);
       }
     }
     try {
@@ -560,7 +757,7 @@ function checkCorpus(corpus, engine, failures) {
         ...(kind.title === 'Workflow' ? ['held-out'] : []),
       ]);
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} tagged corpus changed: ${error.message}`);
+      failures.push(`${kind.file} tagged corpus changed: ${error.message}`);
     }
     const seed = probes.find((probe) => probe.probeId === 'P-006');
     if (
@@ -568,10 +765,10 @@ function checkCorpus(corpus, engine, failures) {
       seed.qualification?.route !== 'controlled-mutation' ||
       seed.defects?.[0]?.manifestationWitness == null
     )
-      failures.push(`corpus.md ${kind.title} lacks a worked seeded defect with a manifestation witness`);
+      failures.push(`${kind.file} lacks a worked seeded defect with a manifestation witness`);
     const heldOut = { Skill: ['P-004', 'P-006'], Workflow: ['P-006', 'P-008'] }[kind.title] ?? ['P-006'];
     const heldOutBody = headings.get('Held-out probe selection') ?? '';
-    for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `corpus.md ${kind.title} held-out selection`, failures);
+    for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `${kind.file} held-out selection`, failures);
     if (kind.title === 'Workflow')
       for (const marker of [
         'Select an unseen two-step reservation and an unseen reporting request early. List `P-006` and `P-008` in `heldOutProbes`.',
@@ -581,7 +778,7 @@ function checkCorpus(corpus, engine, failures) {
         'No `zero-action` defect probe stays in development, so the evaluation declares the `defect` floor alone.',
         '`P-008` seeds the reporting rule for unseen reservation R-19 through `M-003`; qualify it as `P-006` is.',
       ])
-        requireText(heldOutBody, marker, 'corpus.md Workflow held-out selection', failures);
+        requireText(heldOutBody, marker, 'corpus-workflow.md held-out selection', failures);
     // The starter's floors are read on the development partition (a development baseline's twin run) and on the held-out list. The engine's
     // strength vector leaves canaries and every `expectedClean` probe out, so a floor class needs a non-clean probe of its class in each.
     const starterFloors = Object.keys(JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8')).strengthFloor);
@@ -591,15 +788,13 @@ function checkCorpus(corpus, engine, failures) {
     ])
       for (const probeClass of starterFloors)
         if (!members.some((probe) => probe.probeClass === probeClass && probe.probeClass !== 'canary' && !probe.expectedClean))
-          failures.push(
-            `corpus.md ${kind.title} worked ${partition} partition holds no eligible ${probeClass} probe for the starter's floor`,
-          );
+          failures.push(`${kind.file} worked ${partition} partition holds no eligible ${probeClass} probe for the starter's floor`);
     for (const id of heldOut) {
       const selected = probes.find((probe) => probe.probeId === id);
       if (!selected || selected.expectedClean !== false || selected.qualification?.route === 'clean-control')
-        failures.push(`corpus.md ${kind.title} held-out ${id} must be non-clean`);
+        failures.push(`${kind.file} held-out ${id} must be non-clean`);
       if (!probes.some((probe) => !heldOut.includes(probe.probeId) && probe.behaviorId === selected?.behaviorId))
-        failures.push(`corpus.md ${kind.title} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
+        failures.push(`${kind.file} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
     }
     if (Object.hasOwn(heldOutInputs, kind.title)) {
       const input = heldOutInputs[kind.title];
@@ -617,19 +812,19 @@ function checkCorpus(corpus, engine, failures) {
           expectedFaultPredicate('observed', heldOutFaultOutputs[kind.title]),
         );
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-006 must bind its held-out input and expose the seeded fault: ${error.message}`);
+        failures.push(`${kind.file} P-006 must bind its held-out input and expose the seeded fault: ${error.message}`);
       }
     }
     const malformed = probes.find((probe) => probe.probeId === 'P-003');
     if (!malformed?.rationale.startsWith('[malformed]') || !malformed.rationale.includes('type-violating'))
-      failures.push(`corpus.md ${kind.title} P-003 lacks a type-violating malformed input`);
+      failures.push(`${kind.file} P-003 lacks a type-violating malformed input`);
     const gameability = probes.find((probe) => probe.probeId === 'P-004');
     if (
       gameability?.behaviorId !== 'B-001' ||
       gameability.qualification?.naiveOracle !== 'O-002' ||
       (!(headings.get('Gameability design') ?? '').includes('different behavior') && kind.title !== 'Skill')
     )
-      failures.push(`corpus.md ${kind.title} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
+      failures.push(`${kind.file} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
     const [counterChannel, counterKey, counterValue] = gameabilityCountercaseInputs[kind.title];
     const boundCountercase = Object.entries(gameability?.defectSignature?.condition?.selector?.inputBinding ?? {}).filter(
       ([, value]) => value !== null,
@@ -637,43 +832,42 @@ function checkCorpus(corpus, engine, failures) {
     try {
       assert.deepStrictEqual(boundCountercase, [[counterChannel, { [counterKey]: { literal: counterValue } }]]);
     } catch (error) {
-      failures.push(`corpus.md ${kind.title} P-004 must bind its concrete countercase input: ${error.message}`);
+      failures.push(`${kind.file} P-004 must bind its concrete countercase input: ${error.message}`);
     }
     const responseBlocks = [
       ...(headings.get('Gameability design') ?? '').matchAll(/<!-- example:gameability-response -->\s*```json\n([\s\S]*?)\n```/g),
     ];
     if (responseBlocks.length !== 1) {
-      failures.push(`corpus.md ${kind.title} needs exactly one tagged gameability response; found ${responseBlocks.length}`);
+      failures.push(`${kind.file} needs exactly one tagged gameability response; found ${responseBlocks.length}`);
     } else if (gameability?.defectSignature?.condition?.predicate) {
       try {
         const response = JSON.parse(responseBlocks[0][1]);
         if (!validateDegenerate(response)) {
-          failures.push(`corpus.md ${kind.title} gameability response fails runtime schema: ${JSON.stringify(validateDegenerate.errors)}`);
+          failures.push(`${kind.file} gameability response fails runtime schema: ${JSON.stringify(validateDegenerate.errors)}`);
         } else if (Object.keys(response.steps).length !== 1 || !Object.hasOwn(response.steps, 'decide')) {
-          failures.push(`corpus.md ${kind.title} gameability response must answer only the worked decide step`);
+          failures.push(`${kind.file} gameability response must answer only the worked decide step`);
         } else {
           const observed = gameabilityObservation(response.steps.decide, kind.title);
           const predicate = gameability.defectSignature.condition.predicate;
           const actual = resolveGameabilityPredicate(engine, predicate, observed, kind.title);
-          if (actual !== 'true')
-            failures.push(`corpus.md ${kind.title} P-004 signature resolves ${actual} on its committed degenerate response`);
+          if (actual !== 'true') failures.push(`${kind.file} P-004 signature resolves ${actual} on its committed degenerate response`);
           const counter =
             kind.title === 'AI feature'
               ? { responseBody: cleanCounterresponses[kind.title] }
               : { stdout: { kind: 'json', value: cleanCounterresponses[kind.title] } };
           const clean = resolveGameabilityPredicate(engine, predicate, counter, kind.title);
-          if (clean !== 'false') failures.push(`corpus.md ${kind.title} P-004 signature resolves ${clean} on its clean counterresponse`);
+          if (clean !== 'false') failures.push(`${kind.file} P-004 signature resolves ${clean} on its clean counterresponse`);
         }
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} gameability response cannot be evaluated: ${error.message}`);
+        failures.push(`${kind.file} gameability response cannot be evaluated: ${error.message}`);
       }
     }
     if (kind.title === 'Skill') {
       for (const id of ['P-002', 'P-003', 'P-006'])
         if (probes.find((probe) => probe.probeId === id)?.behaviorId !== 'B-002')
-          failures.push(`corpus.md Skill ${id} must cover critical B-002`);
+          failures.push(`corpus-skill.md ${id} must cover critical B-002`);
       if (probes.find((probe) => probe.probeId === 'P-007')?.behaviorId !== 'B-001')
-        failures.push('corpus.md Skill needs a B-001 development seed');
+        failures.push('corpus-skill.md needs a B-001 development seed');
       const eligibleSeed = probes.find((probe) => probe.probeId === 'P-007');
       if (
         eligibleSeed?.defects?.[0]?.manifestationWitness?.inputs?.stdin?.value !==
@@ -686,8 +880,13 @@ function checkCorpus(corpus, engine, failures) {
         eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/decision' ||
         eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'declined'
       )
-        failures.push('corpus.md Skill P-007 must bind the eligible input and false decline');
-      requireText(headings.get('Gameability design') ?? '', "O-002` is B-002's naive decline oracle", 'corpus.md Skill', failures);
+        failures.push('corpus-skill.md P-007 must bind the eligible input and false decline');
+      requireText(
+        headings.get('Gameability design') ?? '',
+        "O-002` is B-002's naive decline oracle",
+        'corpus-skill.md Gameability design',
+        failures,
+      );
       if (
         !gameability?.rationale?.includes("B-002's refusal-only oracle") ||
         seed?.defects?.[0]?.severity !== 'critical' ||
@@ -701,11 +900,11 @@ function checkCorpus(corpus, engine, failures) {
         seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/reservationCallCount' ||
         seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 1
       )
-        failures.push('corpus.md Skill must show B-002 no-call evidence and B-001 gameability relation');
+        failures.push('corpus-skill.md must show B-002 no-call evidence and B-001 gameability relation');
     } else {
       const comparisonSeed = probes.find((probe) => probe.probeId === 'P-007');
       if (seed?.behaviorId !== 'B-001' || seed?.defects?.[0]?.behaviorId !== 'B-001' || seed?.defects?.[0]?.severity !== 'material')
-        failures.push(`corpus.md ${kind.title} P-006 must hold out material B-001`);
+        failures.push(`${kind.file} P-006 must hold out material B-001`);
       if (
         comparisonSeed?.behaviorId !== 'B-002' ||
         comparisonSeed?.expectedClean !== false ||
@@ -715,11 +914,11 @@ function checkCorpus(corpus, engine, failures) {
         comparisonSeed?.defects?.[0]?.severity !== 'low' ||
         comparisonSeed?.defects?.[0]?.manifestationWitness == null
       )
-        failures.push(`corpus.md ${kind.title} P-007 must seed B-002 with a non-null manifestation witness`);
+        failures.push(`${kind.file} P-007 must seed B-002 with a non-null manifestation witness`);
       requireText(
         headings.get('Negative and malformed inputs') ?? '',
         'B-002 is the low-severity requirement',
-        `corpus.md ${kind.title} B-002 rank`,
+        `${kind.file} B-002 rank`,
         failures,
       );
       const [inputChannel, inputKey, positiveInput] = comparisonSeedInputs[kind.title];
@@ -732,7 +931,7 @@ function checkCorpus(corpus, engine, failures) {
         assert.strictEqual(witnessInput, positiveInput);
         assert.deepStrictEqual(boundInput, [[inputChannel, { [inputKey]: { literal: positiveInput } }]]);
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-007 witness and signature must bind the same positive input: ${error.message}`);
+        failures.push(`${kind.file} P-007 witness and signature must bind the same positive input: ${error.message}`);
       }
       try {
         assert.strictEqual(comparisonSeed.defects[0].manifestationWitness.legId, 'manifest-b002-fault');
@@ -745,7 +944,7 @@ function checkCorpus(corpus, engine, failures) {
           expectedFaultPredicate('observed', comparisonFaultOutputs[kind.title]),
         );
       } catch (error) {
-        failures.push(`corpus.md ${kind.title} P-007 witness and signature must expose the B-002 fault: ${error.message}`);
+        failures.push(`${kind.file} P-007 witness and signature must expose the B-002 fault: ${error.message}`);
       }
     }
     if (
@@ -757,7 +956,7 @@ function checkCorpus(corpus, engine, failures) {
         JSON.stringify(seed.defectSignature?.condition?.predicate) !==
           JSON.stringify(expectedFaultPredicate('observed', heldOutFaultOutputs.Workflow)))
     )
-      failures.push('corpus.md Workflow P-006 must skip all required actions while claiming success');
+      failures.push('corpus-workflow.md P-006 must skip all required actions while claiming success');
     if (kind.title === 'Workflow') {
       const heldOutReport = probes.find((probe) => probe.probeId === 'P-008');
       const input = 'Create reservation R-19 and read it back.';
@@ -779,7 +978,7 @@ function checkCorpus(corpus, engine, failures) {
         );
       } catch (error) {
         failures.push(
-          `corpus.md Workflow P-008 must hold out a B-002 defect probe that reports failure after both actions: ${error.message}`,
+          `corpus-workflow.md P-008 must hold out a B-002 defect probe that reports failure after both actions: ${error.message}`,
         );
       }
     }
@@ -795,10 +994,11 @@ function checkCorpus(corpus, engine, failures) {
         seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/response-body/decision' ||
         seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'pass')
     )
-      failures.push('corpus.md AI feature P-006 must pass the bound restricted answer');
+      failures.push('corpus-ai-feature.md P-006 must pass the bound restricted answer');
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
-  if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
+  if (zeroActionDefectCount === 0)
+    failures.push('the per-kind corpus guides lack a worked zero-action defect for a mandatory-action behavior');
 }
 
 /**
@@ -820,8 +1020,17 @@ function checkPartitionPlanGuidance(corpus, failures) {
     'names every defect by path and ID without quoting the plan',
     '`tea-evaluate preflight --partition held-out`',
     'neither the plan file nor a held-out baseline under `baseline/`',
-    'beside a gameability probe, or beside a records evaluator and a rubric',
-    'has no designated oracle there',
+    'refuses a `partitionPlan` beside a records evaluator and a rubric',
+    "A gameability probe's degenerate response follows the plan too",
+    '`corpus/held-out/gameability/<probeId>.json`, beside the plan, answers the steps of the plan file',
+    "the arm of each view answers only that view's steps",
+    'Give every gameability probe both files, each answering every step its own source declares',
+    "add an oracle on a shared step to `contract.json` for it, or keep that behavior's gameability probe in the development partition",
+    'and a held-out probe whose naive oracle reads a development-only step',
+    "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step",
+    'It names a gameability answer left out, misplaced or unreadable by probe and step ID',
+    'A run with no `--partition` scores each probe against the oracle of its own partition',
+    'Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step',
     'selects with an `any` matcher',
     'witnesses with a non-private input',
     'under one, replace it that way',
@@ -994,6 +1203,25 @@ function checkPartitionPlanGuidance(corpus, failures) {
     failures.push(
       'the partition plan check accepts a mapping row for a development-only oracle, so the mapping example check proves nothing',
     );
+  // Story 1.109: the tagged held-out answers example meets the degenerate-response schema and answers exactly the steps of the plan
+  // example, so a file that answers a step of `contract.json` or leaves a plan step out is not the example the guide teaches.
+  const answerExamples = taggedExamples(body, 'held-out-gameability-response');
+  if (answerExamples.length !== 1) {
+    failures.push(`corpus.md needs one tagged held-out-gameability-response example; found ${answerExamples.length}`);
+    return;
+  }
+  const answersSchema = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'degenerate-response.schema.json')),
+  );
+  const validateAnswers = new Ajv({ strict: false, allErrors: true }).compile(answersSchema);
+  if (!validateAnswers(answerExamples[0]))
+    failures.push(`corpus.md held-out gameability answers fail the degenerate-response schema: ${JSON.stringify(validateAnswers.errors)}`);
+  const answered = Object.keys(answerExamples[0].steps ?? {}).sort();
+  const planned = plans[0].interactionPlan.map((step) => step.stepId).sort();
+  if (JSON.stringify(answered) !== JSON.stringify(planned))
+    failures.push(
+      `corpus.md held-out gameability answers answer ${JSON.stringify(answered)}, not the plan example's steps ${JSON.stringify(planned)}`,
+    );
 }
 
 function taggedExamples(content, tag) {
@@ -1118,9 +1346,16 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const manifestPath = path.join(evaluationRoot, 'evaluation.json');
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
       manifest.requirements = { path: 'requirements.md', digest: contract.sourceSpecDigest };
-      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       const shimDirectory = path.join(tempRoot, 'bin');
       fs.mkdirSync(shimDirectory);
+      // The runner sits outside the trial's workspace, so the entry lists where it is installed, as an adopter's does.
+      manifest.registry[0].systemPaths = [
+        shimDirectory,
+        path.join(__dirname, '..', 'cli'),
+        path.join(__dirname, '..', 'package.json'),
+        path.dirname(require.resolve('commander')),
+      ].map((entry) => fs.realpathSync(entry));
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       const runnerShim = path.join(shimDirectory, 'tea-skill-runner');
       fs.writeFileSync(
         runnerShim,
@@ -1675,10 +1910,9 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
     for (const marker of [
-      'Under a `partitionPlan`, add `--partition development` to that preflight',
-      'builds the both view and launches the held-out request during authoring',
+      'tea-evaluate preflight --evaluation <evaluation-folder> --partition development`. Under a `partitionPlan` the flag is required',
+      'a preflight with no `--partition` exits 64, since it would build the both view and launch the held-out request during authoring',
       'run `--partition held-out` only after the development review',
-      '<evaluation-folder>`. Under a `partitionPlan`',
       'development review. A nonzero exit halts this stage',
     ])
       requireText(adapterGuide, marker, 'adapters.md partition plan preflight', failures);
@@ -1710,10 +1944,21 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'lists its host in `egress` on its entry on Linux',
     ])
       requireText(agentFallback, marker, 'adapters.md Agent fallback', failures);
-    requireText(
-      headingBody(adapterGuide, '## Skill runner'),
+    for (const marker of [
       "on Linux list the provider's host, port and addresses in `egress` on its registry entry",
-      'adapters.md Skill runner',
+      'register it as a path inside `launch.root`',
+      '`target` is `evals/node_modules/.bin/tea-skill-runner`',
+      '`"provision": ["evals/node_modules"]`',
+      'bare name `tea-skill-runner` as the `target` and declares the install directories in `systemPaths`',
+      'npm exec --prefix {tea_evaluations_folder} --',
+      'is a `preflight` fixture',
+      'test/fixtures/evaluate-tutorial/evaluation/evaluation.json',
+    ])
+      requireText(headingBody(adapterGuide, '## Skill runner'), marker, 'adapters.md Skill runner', failures);
+    requireText(
+      adapterOpening,
+      'each refuses it with exit 3 and `isolation manifest violation: ... mount outside allowlist`, before any score',
+      'adapters.md opening runner path',
       failures,
     );
     const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
@@ -1752,7 +1997,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     );
     const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(evaluationSchema);
     const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
-    assert.strictEqual(starter.registry[0].target, 'tea-skill-runner');
+    assert.strictEqual(starter.registry[0].target, RUNNER_TARGET_IN_ROOT);
     const registryFixtures = [
       'evaluate/preflight/evaluation.json',
       'evaluate-tool-use-agent/evals/tool-use/evaluation.json',
@@ -1768,7 +2013,10 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       if (!validateEvaluation(candidate))
         failures.push('adapters.md registry ' + (index + 1) + ' fails runtime schema: ' + JSON.stringify(validateEvaluation.errors));
       const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', registryFixtures[index]), 'utf8'));
-      assert.deepStrictEqual(entry, fixture.registry[0], 'adapters.md registry ' + (index + 1) + ' differs from its working fixture');
+      // The preflight fixture registers the runner by its bare name; the guide registers the same entry at its path inside `launch.root`.
+      const expected =
+        fixture.registry[0].target === 'tea-skill-runner' ? { ...fixture.registry[0], target: RUNNER_TARGET_IN_ROOT } : fixture.registry[0];
+      assert.deepStrictEqual(entry, expected, 'adapters.md registry ' + (index + 1) + ' differs from its working fixture');
     }
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -3008,7 +3256,7 @@ function checkSystemPathsFragment(guide, failures) {
     JSON.stringify(paths) !== '["/opt/verdict-rules"]'
   )
     failures.push(
-      'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose names',
+      'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose describes',
     );
   if (fragment.confinement === false || fragment.registry?.[0]?.egress !== undefined)
     failures.push('harness.md systemPaths fragment must keep the default confinement and list no egress');
@@ -3030,11 +3278,13 @@ function checkConfinedSkillExample(guide, failures) {
     failures.push(`harness.md confined skill registry fails runtime schema: ${JSON.stringify(validate.errors)}`);
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'preflight', 'evaluation.json'), 'utf8'));
   if (
-    JSON.stringify(examples[0]) !== JSON.stringify(fixture.registry[0]) ||
+    JSON.stringify(examples[0]) !== JSON.stringify({ ...fixture.registry[0], target: RUNNER_TARGET_IN_ROOT }) ||
     examples[0].executable !== 'tea-skill-runner' ||
     fixture.confinement === false
   )
-    failures.push('harness.md confined skill registry differs from its working confined fixture');
+    failures.push(
+      'harness.md confined skill registry differs from its working confined fixture with the runner at its path inside launch.root',
+    );
 }
 
 /**
@@ -3136,7 +3386,7 @@ function checkHarnessGuidance(guide, failures) {
     "the workspace, the call's temp directory, the private home, the Node installation",
     'each free of double quotes, backslashes and control characters',
     'such as a language installation, a rules directory or a cache',
-    'This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system',
+    'This `evaluation.json` fragment declares the `verdict-rules` directory, the one directory the `verdict` target reads beyond the system',
     "Merge its `registry` entry into the evaluation's registry",
     'It lists no `egress` and runs confined',
     'then run `check` and rerun development',
@@ -3234,18 +3484,19 @@ function checkRunGuidance(guide, failures) {
   ])
     requireText(guide, marker, 'run.md', failures);
   for (const marker of [
-    'Under a `partitionPlan`, give the `preflight` command `--partition development`',
-    'builds the both view and launches the held-out request while the gap loop is still open',
+    'The `preflight` flag is required only when `evaluation.json` declares a `partitionPlan`',
+    'A preflight with no `--partition` over one exits 64, since it would build the both view and launch the held-out request while the gap loop is still open',
     'run `--partition held-out` only after the development review',
+    'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development',
   ])
     requireText(guide, marker, 'run.md partition plan preflight', failures);
   // Story 1.61: each platform's mechanism and observer, the exit-12 refusal, the opt-out, the network namespace and what run.json records.
   const confined = headingBody(guide, '## Run confined');
   for (const marker of [
     'confine every process they start, before any of them starts',
-    'Seatbelt through `/usr/bin/sandbox-exec` on macOS',
+    'Seatbelt through `sandbox-exec` on macOS',
     'Bubblewrap through `bwrap` on Linux (`apt-get install bubblewrap`)',
-    '`/usr/bin/log stream` on macOS',
+    '`log stream` on macOS',
     '`strace` on Linux (`apt-get install strace`, version 6.1 or later, which needs ptrace)',
     'a mechanism the host refuses (a kernel that forbids unprivileged user namespaces',
     'an observer that cannot confirm itself',
@@ -3280,7 +3531,10 @@ function checkRunGuidance(guide, failures) {
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
     'Read both before reading a verdict',
     // Stories 1.82 and 1.87: a socket file of the host is closed to a Bubblewrap target under either network value and to a macOS Seatbelt target, and run.json records the Bubblewrap cut.
-    'A confined target cannot connect to a socket file of the host (Bubblewrap answers `ECONNREFUSED`, macOS Seatbelt `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    // Story 1.88: a socket that exists when the call starts is out of reach, one bound afterwards is reachable where nothing masks or denies its path, and the reason is the platform's.
+    'A confined target cannot connect to a socket file of the host that exists when its call starts (Bubblewrap masks it and answers `ECONNREFUSED`, macOS Seatbelt denies it and answers `EPERM`), so a target that needs a host service through one opts out with `"confinement": false`',
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root",
+    "The reason is that seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads, so Bubblewrap has no way to refuse a connection to a path once the process has started",
     '`hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the host held more Unix sockets than a call can hide, and is `[]` when no call was cut',
     "when an entry is listed, say so before reading that trial's verdict",
   ])
@@ -3329,7 +3583,7 @@ function checkRunGuidance(guide, failures) {
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
     'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
-    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
   ];
@@ -3368,9 +3622,10 @@ function checkIsolationViolationGuidance(guide, failures) {
     'The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route, and such a target opts out with `"confinement": false` and the adopter\'s recorded reason',
     "A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels reaches a plain-HTTP gateway on the host's loopback that its entry lists",
     // Stories 1.82 and 1.87: a host service behind a socket file is out of a confined target's reach (Bubblewrap under either `network`, macOS Seatbelt), and the escape is the opt-out.
-    'A confined target cannot reach a host service through a socket file:',
-    "a connection to the Docker socket (testcontainers) or to a database's Unix socket such as `/var/run/postgresql/.s.PGSQL.5432` answers `ECONNREFUSED` from a Bubblewrap target",
-    "since the runtime mounts an empty device file over every socket file outside the call's own grants",
+    'A confined target cannot reach a host service through a socket file that exists when its call starts:',
+    "a connection to the Docker socket (testcontainers) or to a database's Unix socket (a `.s.PGSQL.5432` file) answers `ECONNREFUSED` from a Bubblewrap target",
+    "since the runtime mounts an empty device file over each socket file it lists outside the call's own grants",
+    "A socket file a host process binds after the call started is reachable wherever nothing masks or denies its path: under Bubblewrap anywhere outside the masks, on macOS only inside the granted paths and the bridge's shape beneath the private root, since seccomp cannot read a socket's path, a network namespace does not scope path sockets and AppArmor needs a profile that root loads",
     "and `EPERM` from a macOS Seatbelt target, since its profile denies every connection to a socket path outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
@@ -3807,6 +4062,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
   for (const heading of [
     ...INSPECTIONS.map(([name]) => name),
     '## Place each check',
+    '## Gate the publish or deploy job',
     '## Keep the deterministic checks on pr',
     '## Place the live checks',
     '## Offer eval-quality-gates',
@@ -3885,6 +4141,21 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
   ])
     requireLine(live, line, 'ci.md live placement', failures);
   checkRetiredNetwork(guide, failures, 'ci.md');
+  const gate = headingBody(guide, '## Gate the publish or deploy job');
+  for (const line of [
+    'An evaluation job that no other job waits for reports and blocks nothing that ships.',
+    'When the release flow inspection found a publish or deploy job that must not run before the evaluation passes, set `gates` on a check of the tier whose evaluation job should stop it, with the job\'s id from its workflow file: `"gates": ["publish"]` for a job `publish` in `release.yml`.',
+    "The `release` tier is the usual home, since its event is the one that starts the repository's release or deploy workflow.",
+    "Name in the `trigger` of every check on the gating tier each event that starts the gated job's workflow.",
+    "When that workflow also starts on `workflow_dispatch`, as a nightly `deploy.yml` does, list `manual-dispatch` beside `release`, since the CI skill refuses a gate whose job already ran on an event where the tier's evaluation job is skipped.",
+    "The jobs a tier gates are the union of `gates` over the checks the plan places on that tier, so name a job once, on any check of the tier, and a name repeated across the tier's checks is merged.",
+    '`check` accepts a job id and reports any other name under rule `gates`; it cannot tell whether the repository holds that job, which `bmad-testarch-ci` answers when it renders the wait.',
+    "The wait holds best when the job lives in the workflow file the CI skill edits, which holds the evaluation jobs too: the job then waits through `needs`, and the step refuses the plan when the job already ran in a run where the tier's evaluation job is skipped, such as a deploy on every `push` beside an evaluation job guarded to tags, or when the evaluation job runs on a run the job did not run on before, such as a `workflow_dispatch` the plan adds to a tag-push release file, while a run the render adds that the evaluation job skips is skipped through the wait and is no conflict.",
+    'A job in another workflow file waits through a `workflow_run` trigger, which the step refuses for a pull request tier, for a tier whose evaluation job carries a ref or cron guard, and for a job with its own `needs`, `if:` or ref and event contexts, so hand the CI skill the workflow file that holds the job when you can.',
+    'Leave `gates` out when the inspection found no such job or the adopter declined the gate, and say which in the `reason` of the release entries.',
+    "The field creates no event: a tier whose only event another tier took still has no event of its own, and the CI skill's summary names it.",
+  ])
+    requireLine(gate, line, 'ci.md gating', failures);
   const gates = headingBody(guide, '## Offer eval-quality-gates');
   for (const marker of [
     'is opt-in',
@@ -3912,6 +4183,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'Delete the checks the evaluation cannot run',
     '`judge-calibration` when the contract declares no rubric and `gameability` when no probe takes the gameability route, which pass as no-ops',
     'Keep the one `preflight-live` set that fits',
+    'set `gates` as `Gate the publish or deploy job` says',
     '`api-conformance` for an evaluation that declares no HTTP target, which `check` reports as an `applicability` finding',
     'edit it in place',
     'Show the adopter the placement table with each deviation and its reason before the hand-off.',
@@ -3938,13 +4210,16 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'or in create mode when the inspection found no pipeline file',
     'the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`',
     'Name in the request the concrete event of this repository for each tier it should render',
-    'Gating an existing publish or deploy job on the evaluation job is outside what that step does',
+    'That step renders each `gates` entry as a wait of the named job on the evaluation job of the tier',
+    'its summary reports the edit to the job, a name that matches no job and a conflicting gate',
+    'so relay that report to the adopter',
+    'When the plan gates a job, invoke it on the workflow file that holds that job.',
     "give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record",
     'a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage',
     'Stage 12 is complete when the plan passes `check`',
     'the secrets the live tiers need',
     'every tier that exited non-zero with the stage that owns its repair',
-    "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
+    'each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason',
   ])
     requireText(handoff, marker, 'ci.md hand-off', failures);
   for (const marker of [
@@ -3974,6 +4249,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
         "or the deploy workflow's own trigger, a nightly one included",
         'A repository with none of these gets a published release from step-03b, and the reason says so.',
         'A `scheduled` run gates nothing unless the deploy waits for it.',
+        'Record each publish or deploy job by the id of the job and the workflow file that holds it, since the plan names a job to gate by that id.',
       ],
     ],
     [
@@ -3995,7 +4271,9 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
       '## Place the live checks',
       [
         'Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.',
+        'and `release` for `release`, with `manual-dispatch` beside it when the gated workflow starts on `workflow_dispatch`.',
         'places the live set twice at its defaults: on `scheduled` for `.github/workflows/nightly.yml`, and on `release` for the trigger of the deploy workflow in `.github/workflows/deploy.yml`',
+        'That workflow also starts on `workflow_dispatch`, so the release checks list `manual-dispatch` beside `release`.',
       ],
     ],
     [
@@ -4069,7 +4347,8 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     const found = plan.planFindings(example);
     if (found.length > 0) failures.push(`ci.md ci-plan example ${index + 1} fails the runtime: ${JSON.stringify(found)}`);
     for (const entry of example.checks ?? []) {
-      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`)) failures.push(problem);
+      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`, { subsetTriggers: index === 1 }))
+        failures.push(problem);
       if ((entry.placement?.reason?.match(CI_FILE_TOKEN) ?? []).length === 0)
         failures.push(`ci.md ci-plan example ${index + 1} gives ${entry.id} a reason that cites no file`);
     }
@@ -4104,6 +4383,18 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     failures.push('ci.md second ci-plan example moves a check off its default, where the text says it keeps the defaults');
   if (plans[0] && plans[1] && JSON.stringify(plans[0]) === JSON.stringify(plans[1]))
     failures.push('ci.md two ci-plan examples are identical, so the guide does not show a placement that differs');
+  // The first example gates a job the release workflow holds, by the id the runtime accepts, on one check of the release tier.
+  const gated = (plans[0]?.checks ?? []).filter((entry) => entry.gates !== undefined);
+  if (gated.length !== 1 || gated[0].placement?.tier !== 'release' || JSON.stringify(gated[0].gates) !== JSON.stringify(['publish']))
+    failures.push('ci.md first ci-plan example does not gate the publish job on one check of the release tier');
+  if (gated[0] !== undefined && !/publish job of \.github\/workflows\/release\.yml/.test(gated[0].placement?.reason ?? ''))
+    failures.push('ci.md first ci-plan example gives the gated check a reason that does not name the job and its workflow');
+  if (!plans[1]?.checks?.some((entry) => entry.placement?.tier === 'release' && entry.trigger?.includes('manual-dispatch')))
+    failures.push(
+      'ci.md second ci-plan example does not list manual-dispatch beside release for a deploy workflow that starts on workflow_dispatch',
+    );
+  if (plans[1]?.checks?.some((entry) => entry.gates !== undefined))
+    failures.push('ci.md second ci-plan example gates a job, where the text leaves the nightly deploy ungated');
 
   // The credential keys sit in a registry entry the runtime accepts.
   const registries = taggedExamples(guide, 'ci-registry');
@@ -4285,11 +4576,35 @@ async function main() {
   const localFailures = [];
   checkLocalStage6(removedLocalEngine, localFailures);
   if (localFailures.length === 0) failures.push('SKILL.md local Stage 6 engine removal passed its guidance check');
+  // Story 1.111: Stage 6 preflights the development partition in both forms, says when the flag is required and keeps the held-out
+  // preflight after the development review, so a worker that follows SKILL.md alone never launches the held-out request.
+  const STAGE6_DEVELOPMENT_ADOPTER =
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_DEVELOPMENT_LOCAL = 'node cli/evaluate.js preflight --evaluation <evaluation-folder> --partition development';
+  const STAGE6_FLAG_RULE =
+    'The flag is required only when `evaluation.json` declares a `partitionPlan`, and a preflight with no `--partition` over one exits 64.';
+  const STAGE6_HELD_OUT_CLAUSE = 'Held-out preflight (`--partition held-out`) runs only after the development review.';
+  const checkStage6Partition = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    for (const marker of [STAGE6_DEVELOPMENT_ADOPTER, STAGE6_DEVELOPMENT_LOCAL, STAGE6_FLAG_RULE, STAGE6_HELD_OUT_CLAUSE])
+      requireText(local, marker, 'SKILL.md Stage 6 partition', found);
+  };
+  checkStage6Partition(skillContent, failures);
+  for (const [name, removed] of [
+    ['the adopter development flag', STAGE6_DEVELOPMENT_ADOPTER],
+    ['the local development flag', STAGE6_DEVELOPMENT_LOCAL],
+    ['the flag rule', STAGE6_FLAG_RULE],
+    ['the held-out clause', STAGE6_HELD_OUT_CLAUSE],
+  ]) {
+    const found = [];
+    checkStage6Partition(skillContent.replace(removed, ''), found);
+    if (found.length === 0) failures.push(`SKILL.md Stage 6 without ${name} passed its guidance check`);
+  }
   requireText(skillContent, '{test_artifacts}/evaluate/<evaluationId>/gap-report.md', 'SKILL.md resume', failures);
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
-  const corpus = fs.readFileSync(REFERENCE('corpus'), 'utf8');
+  const corpusGuides = readCorpusGuides(failures);
   const engine = await loadEngine();
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
@@ -4324,7 +4639,9 @@ async function main() {
     checkDigestFileGuidance(corrupted, engine, rejected);
     if (rejected.length === 0) failures.push(`${label} passed the digest guidance gate`);
   }
-  checkCorpus(corpus, engine, failures);
+  checkCorpus(corpusGuides, engine, failures);
+  checkCorpusReferences(corpusGuides, failures);
+  checkCorpusPins(engine, failures);
   checkRetiredNetwork(fs.readFileSync(REFERENCE('adapters'), 'utf8'), failures, 'adapters.md');
   try {
     checkContractGuidance(
@@ -4416,7 +4733,27 @@ async function main() {
         'corpus partition plan held-out probe move removal',
         'corpus',
         checkPartitionPlanGuidance,
-        (text) => text.replace('selects with an `any` matcher', 'selects with the private literal'),
+        (text) => text.replaceAll('selects with an `any` matcher', 'selects with the private literal'),
+      ],
+      [
+        'corpus partition plan both view designation removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'A run with no `--partition` scores each probe against the oracle of its own partition',
+            'A run with no `--partition` scores no probe of a behavior with two oracles',
+          ),
+      ],
+      [
+        'corpus partition plan gameability signature removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'Give a gameability probe a `defectSignature` that selects with an `any` matcher on the channel that differs by step',
+            'Give a gameability probe a `defectSignature` that selects one step',
+          ),
       ],
       [
         'corpus partition plan closed baseline removal',
@@ -4547,17 +4884,81 @@ async function main() {
         (text) => text.replace("A records harness's records name only the oracles, behaviors and criteria of the run's view.", ''),
       ],
       [
+        'corpus partition plan gameability answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace("A gameability probe's degenerate response follows the plan too.", ''),
+      ],
+      [
+        'corpus partition plan held-out answers file placed in the development corpus',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            '`corpus/held-out/gameability/<probeId>.json`, beside the plan,',
+            '`corpus/gameability/<probeId>.json`, beside the plan,',
+          ),
+      ],
+      [
+        'corpus partition plan held-out answers example removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('<!-- example:held-out-gameability-response -->', ''),
+      ],
+      [
+        'corpus partition plan held-out answers example answering a contract step',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) => text.replace('"held-out-run": { "stdout": "verdict: pending', '"shared-run": { "stdout": "verdict: pending'),
+      ],
+      [
+        'corpus partition plan every-step answers sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            'Give every gameability probe both files, each answering every step its own source declares (the steps of `contract.json` in the first, the steps of the plan file in the second), because the both view runs each probe over both.',
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan naive oracle sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "Name a held-out probe's naive oracle among the oracles of `contract.json` that read no development-only step, since the held-out view drops the others.",
+            '',
+          ),
+      ],
+      [
+        'corpus partition plan gameability check sentence removal',
+        'corpus',
+        checkPartitionPlanGuidance,
+        (text) =>
+          text.replace(
+            "It names a gameability answer left out, misplaced or unreadable by probe and step ID, and a held-out step by its ID only when the ID has the schema's shape, and a held-out probe whose naive oracle reads a development-only step. ",
+            '',
+          ),
+      ],
+      [
         'run partition plan preflight removal',
         'run',
         checkRunGuidance,
-        (text) => text.replace('give the `preflight` command `--partition development`', 'give the `preflight` command no flag'),
+        (text) => text.replace('A preflight with no `--partition` over one exits 64', 'A preflight with no `--partition` over one runs'),
       ],
       ['harness confined example removal', 'harness', checkHarnessGuidance, (text) => text.replace('<!-- example:registry -->', '')],
       [
         'harness confined example corruption',
         'harness',
         checkHarnessGuidance,
-        (text) => text.replace('"target": "tea-skill-runner"', '"target": "stub-skill-runner"'),
+        (text) => text.replace('"target": "evals/node_modules/.bin/tea-skill-runner"', '"target": "stub-skill-runner"'),
+      ],
+      [
+        'harness confined example bare runner name',
+        'harness',
+        checkHarnessGuidance,
+        (text) => text.replace('"target": "evals/node_modules/.bin/tea-skill-runner"', '"target": "tea-skill-runner"'),
       ],
       [
         'harness home sentence removal',
@@ -5108,6 +5509,194 @@ async function main() {
         ciCheck,
         (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
       ],
+      ['ci gating section removal', 'ci', ciCheck, (text) => text.replace('## Gate the publish or deploy job', '## Something else')],
+      [
+        'ci gating union sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The jobs a tier gates are the union of `gates` over the checks the plan places on that tier, so name a job once, on any check of the tier, and a name repeated across the tier's checks is merged.",
+            '',
+          ),
+      ],
+      [
+        'ci gating rule sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '`check` accepts a job id and reports any other name under rule `gates`; it cannot tell whether the repository holds that job, which `bmad-testarch-ci` answers when it renders the wait.',
+            '',
+          ),
+      ],
+      [
+        'ci gating same-file sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The wait holds best when the job lives in the workflow file the CI skill edits, which holds the evaluation jobs too: the job then waits through `needs`, and the step refuses the plan when the job already ran in a run where the tier's evaluation job is skipped, such as a deploy on every `push` beside an evaluation job guarded to tags, or when the evaluation job runs on a run the job did not run on before, such as a `workflow_dispatch` the plan adds to a tag-push release file, while a run the render adds that the evaluation job skips is skipped through the wait and is no conflict.",
+            '',
+          ),
+      ],
+      [
+        'ci gating cross-file sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'A job in another workflow file waits through a `workflow_run` trigger, which the step refuses for a pull request tier, for a tier whose evaluation job carries a ref or cron guard, and for a job with its own `needs`, `if:` or ref and event contexts, so hand the CI skill the workflow file that holds the job when you can.',
+            '',
+          ),
+      ],
+      [
+        'ci hand-off job file sentence removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace('When the plan gates a job, invoke it on the workflow file that holds that job.\n', ''),
+      ],
+      [
+        'ci gating trigger sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace("Name in the `trigger` of every check on the gating tier each event that starts the gated job's workflow.\n", ''),
+      ],
+      [
+        'ci gating dispatch sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "When that workflow also starts on `workflow_dispatch`, as a nightly `deploy.yml` does, list `manual-dispatch` beside `release`, since the CI skill refuses a gate whose job already ran on an event where the tier's evaluation job is skipped.\n",
+            '',
+          ),
+      ],
+      [
+        'ci live placement loses the dispatch mapping',
+        'ci',
+        ciCheck,
+        (text) => text.replace(', with `manual-dispatch` beside it when the gated workflow starts on `workflow_dispatch`', ''),
+      ],
+      [
+        'ci nightly example loses manual-dispatch on release',
+        'ci',
+        ciCheck,
+        (text) => text.replace('"trigger": ["release", "manual-dispatch"],', '"trigger": ["release"],'),
+        'does not list manual-dispatch beside release',
+      ],
+      [
+        'ci nightly example lead-in loses the dispatch sentence',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '\nThat workflow also starts on `workflow_dispatch`, so the release checks list `manual-dispatch` beside `release`.',
+            '',
+          ),
+      ],
+      [
+        'ci gating leave-out sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'Leave `gates` out when the inspection found no such job or the adopter declined the gate, and say which in the `reason` of the release entries.',
+            '',
+          ),
+      ],
+      [
+        'ci gating no-event sentence removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            "The field creates no event: a tier whose only event another tier took still has no event of its own, and the CI skill's summary names it.",
+            '',
+          ),
+      ],
+      [
+        'ci gating sentence widened on its line',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'An evaluation job that no other job waits for reports and blocks nothing that ships.',
+            'An evaluation job that no other job waits for reports and blocks nothing that ships. Name every job of the pipeline.',
+          ),
+        'ci.md gating lacks the whole line',
+      ],
+      ['ci hand-off wait relay removal', 'ci', ciCheck, (text) => text.replace(', so relay that report to the adopter', '')],
+      [
+        'ci hand-off left the gate to the adopter again',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason',
+            "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
+          ),
+      ],
+      [
+        'ci release inspection job id removal',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '\nRecord each publish or deploy job by the id of the job and the workflow file that holds it, since the plan names a job to gate by that id.',
+            '',
+          ),
+      ],
+      [
+        'ci write the plan gates pointer removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace(', set `gates` as `Gate the publish or deploy job` says', ''),
+      ],
+      [
+        'ci example gates removed',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],\n', ''),
+        'does not gate the publish job',
+      ],
+      [
+        'ci example gates a name that is no job id',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],', '      "gates": ["publish job"],'),
+        'fails the runtime',
+      ],
+      [
+        'ci example gate reason loses the job and its workflow',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            'The publish job of .github/workflows/release.yml ships the tag and shares that file with the evaluation jobs, so it waits for this tier.',
+            'The tag ships from the registry workflow.',
+          ),
+        'gated check a reason that does not name the job and its workflow',
+      ],
+      [
+        'ci second example gates the nightly deploy',
+        'ci',
+        ciCheck,
+        (text) =>
+          text.replace(
+            '"enforcement": "warn",\n      "evidence": ["runs/<invocationId>/checks/twin-run/stdout"],',
+            '"enforcement": "warn",\n      "gates": ["deploy"],\n      "evidence": ["runs/<invocationId>/checks/twin-run/stdout"],',
+          ),
+        'second ci-plan example gates a job',
+      ],
+      [
+        'ci example gates two jobs',
+        'ci',
+        ciCheck,
+        (text) => text.replace('      "gates": ["publish"],', '      "gates": ["publish", "deploy"],'),
+        'does not gate the publish job',
+      ],
       [
         'ci create mode removal',
         'ci',
@@ -5302,6 +5891,133 @@ async function main() {
       else if (expected !== undefined && !rejected.some((failure) => failure.includes(expected)))
         failures.push(`${label} failed the guidance gate without the failure it targets (${expected}): ${JSON.stringify(rejected)}`);
     }
+    // The carve (Story 1.114): each mutation edits the file that holds the text and must raise the failure that names it.
+    const guides = corpusGuides;
+    const kindBody = (title) => guides.kinds[title].replace(/^# .+\n\n/, `## ${title}\n\n`);
+    const carveCases = [
+      [
+        'corpus.md with the Workflow section moved back',
+        (copy) => void (copy.shared += `\n${kindBody('Workflow')}`),
+        checkCorpusLayout,
+        'corpus.md holds the Workflow heading',
+      ],
+      [
+        'corpus.md with every kind section moved back',
+        (copy) => void (copy.shared += CORPUS_KINDS.map(([title]) => `\n${kindBody(title)}`).join('')),
+        checkCorpusLayout,
+        'corpus.md is ',
+      ],
+      [
+        'corpus.md without the Per-kind guides section',
+        (copy) => void (copy.shared = copy.shared.replace('## Per-kind guides', '## Removed lesson')),
+        checkCorpusLayout,
+        'corpus.md lacks exact heading ## Per-kind guides',
+      ],
+      [
+        'corpus.md without the load-one instruction',
+        (copy) =>
+          void (copy.shared = copy.shared.replace(
+            'Load only the guide for the target kind recorded as `targetKind` at inspection.',
+            'Load the guides.',
+          )),
+        checkCorpusLayout,
+        'Load only the guide for the target kind',
+      ],
+      [
+        'corpus.md pointing a tool server at adapters.md for its channel pointers',
+        (copy) =>
+          void (copy.shared = copy.shared.replace(
+            'takes its channel pointers from `references/oracles.md` and its registry shape from `references/adapters.md`.',
+            'takes its channel pointers from `references/adapters.md`.',
+          )),
+        checkCorpusLayout,
+        'corpus.md Per-kind guides lacks the whole line',
+      ],
+      [
+        'a seventh corpus guide in references',
+        (copy) => void (copy.present = [...copy.present, 'corpus-plugin.md']),
+        checkCorpusLayout,
+        'references/ holds corpus guides other than corpus.md and the six per-kind files',
+      ],
+      [
+        'corpus.md without one per-kind file',
+        (copy) => void (copy.shared = copy.shared.replace('- Skill: `references/corpus-skill.md`\n', '')),
+        checkCorpusLayout,
+        'must list exactly the six per-kind files',
+      ],
+      [
+        'a per-kind guide that is missing',
+        (copy) => void (copy.kinds.Skill = ''),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-skill.md headings changed',
+      ],
+      [
+        'a per-kind guide without its kind heading',
+        (copy) => void (copy.kinds['AI feature'] = copy.kinds['AI feature'].replace('# AI feature corpus', '# AI corpus')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-ai-feature.md headings changed',
+      ],
+      [
+        'a per-kind guide with a subsection back at the third level',
+        (copy) => void (copy.kinds.Agent = copy.kinds.Agent.replace('## Gameability design', '### Gameability design')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-agent.md headings changed',
+      ],
+      [
+        'a per-kind guide with a renamed subsection',
+        (copy) => void (copy.kinds.Workflow = copy.kinds.Workflow.replace('## Held-out probe selection', '## Held-out selection')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-workflow.md headings changed',
+      ],
+      [
+        'a tagged example that the probe schema refuses',
+        (copy) =>
+          void (copy.kinds['Tool-use system'] = copy.kinds['Tool-use system'].replace(
+            '"probeClass": "zero-action"',
+            '"probeClass": "no-such-class"',
+          )),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-tool-use-system.md P-001 fails committed-probe schema',
+      ],
+      [
+        'a per-kind guide padded past the budget',
+        (copy) => void (copy.kinds.Agent += `\n${'A sentence that pads the guide past its token budget. '.repeat(3000)}\n`),
+        checkCorpusLayout,
+        'corpus-agent.md is ',
+      ],
+      [
+        'a tagged gameability response that answers another step',
+        (copy) => void (copy.kinds.Skill = copy.kinds.Skill.replace('"decide": {', '"other": {')),
+        (copy, found) => checkCorpus(copy, engine, found),
+        'corpus-skill.md gameability response must answer only the worked decide step',
+      ],
+    ];
+    for (const [label, corrupt, check, expected] of carveCases) {
+      const copy = { shared: guides.shared, kinds: { ...guides.kinds }, present: [...guides.present] };
+      corrupt(copy);
+      const rejected = [];
+      check(copy, rejected);
+      if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+      else if (!rejected.some((failure) => failure.includes(expected)))
+        failures.push(`${label} failed the guidance gate without the failure it targets (${expected}): ${JSON.stringify(rejected)}`);
+    }
+    const meteredFailures = [];
+    checkTokenMetric(meteredFailures, (text) => Math.ceil(text.length / 4));
+    if (meteredFailures.length === 0) failures.push('a length-over-four token count passed the cl100k_base pin');
+    const pinFailures = [];
+    checkCorpusPins(engine, pinFailures, Buffer.concat([fs.readFileSync(SKILL_MD_PATH), Buffer.from('\n')]));
+    if (!pinFailures.some((failure) => failure.includes('pins a SKILL.md other than the one on disk')))
+      failures.push('a SKILL.md with another byte passed the capture record pins');
+    const pinnedGuide = readCaptureRecords();
+    pinnedGuide['tagged-release'].sessionRead['references/corpus.md'] = 'sha256:0';
+    const guidePinFailures = [];
+    checkCorpusPins(engine, guidePinFailures, undefined, pinnedGuide);
+    if (!guidePinFailures.some((failure) => failure.includes('pins references/corpus.md')))
+      failures.push('a capture record that pins a corpus guide passed the pins check');
+    const unreadable = [];
+    readCorpusGuides(unreadable, path.join(os.tmpdir(), 'tea-no-such-guide-directory'));
+    if (unreadable.length !== 7 || !unreadable.every((failure) => failure.includes('cannot be read: ENOENT')))
+      failures.push(`seven missing guides must each fail with their name: ${JSON.stringify(unreadable)}`);
   } catch (error) {
     failures.push(`guidance negative checks: ${error.stack}`);
   }
@@ -5417,6 +6133,10 @@ async function main() {
   if (!validateEvaluation(template))
     failures.push(`assets/evaluation.json fails runtime schema: ${JSON.stringify(validateEvaluation.errors)}`);
   if (template.interface === 'web') failures.push('assets/evaluation.json emits web');
+  if (template.registry?.[0]?.target !== RUNNER_TARGET_IN_ROOT || template.launch?.root !== '../..')
+    failures.push(
+      'assets/evaluation.json registers the runner outside launch.root; its target is a path inside the project root launch.root names',
+    );
   try {
     assert.deepStrictEqual(template.registry?.[0]?.infrastructureExitCodes, [3, 4, 5, 6]);
   } catch (error) {

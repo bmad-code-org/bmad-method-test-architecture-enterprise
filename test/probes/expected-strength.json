@@ -1,7 +1,7 @@
 {
   "nfr": {
     "contractId": "tea-nfr-behavioral",
-    "corpusDigest": "sha256:ba40e443a8c96672339fda6dffe124817b78e8d0555d5f70ff618261efce2fb4",
+    "corpusDigest": "sha256:fe6c10e273a9edb5fa593beec3702ea62e5148b5e15e7c5889dd1fa2c35ab37e",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:82404830bfcfcfdd66730200a9ed3c81e138bde3e75506ea1b8aa6a6fbd45a1e",
+    "corpusDigest": "sha256:c3d950cc260e15f97568cb02aa9ffc1f560a4c97852ac151b3445ab3cf3bfc85",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -225,12 +225,12 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-003",
-        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["oracle resolved infrastructure-error"],
         "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null,
         "comparableResult": null
@@ -239,12 +239,12 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-004",
-        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["oracle resolved infrastructure-error"],
         "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null,
         "comparableResult": null
@@ -253,12 +253,12 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-022",
-        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["oracle resolved infrastructure-error"],
         "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null,
         "comparableResult": null
@@ -719,6 +719,84 @@
               "state": "passed-clean-control",
               "severity": "critical",
               "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -727,7 +805,7 @@
   },
   "tea-routing-intents": {
     "contractId": "tea-routing-intents-behavioral",
-    "corpusDigest": "sha256:edf85a84fca266b2901835e2355d16eb4f6ae0e79f5b94e27748767692f15e55",
+    "corpusDigest": "sha256:76ca0305e8250f947b4664c9ced070aa436c51bdad90c3b6cbfa916db1fb83c7",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -1600,7 +1678,7 @@
   },
   "tea-routing-controls": {
     "contractId": "tea-routing-controls-behavioral",
-    "corpusDigest": "sha256:11250235b91220e6854ee6078dcb5368cb7b9d5bbc91466cc78d6ca6dd63c530",
+    "corpusDigest": "sha256:b4ea1ead903cf0d60c35ccefc13ef6e75b8b9ccf881a214e577e9663fc53b252",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3718,7 +3796,7 @@
   },
   "test-design": {
     "contractId": "tea-test-design-behavioral",
-    "corpusDigest": "sha256:073496d5d76852bb4da371b88395a0ce31bc26f45ae756026d12287d02431e9a",
+    "corpusDigest": "sha256:4356cda41b959358ef403e2fecf2f7d6c3246b3e60ff26af06779c1a3b1ab99e",
     "probeCount": 16,
     "strength": {
       "defect": {
@@ -4266,7 +4344,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
-    "corpusDigest": "sha256:6d4d0932112700b2a2c8b900f7c24656dd75572eca665b04f212029c811cd102",
+    "corpusDigest": "sha256:4f02479e4af84345e70ff854e81a968bf5820bd2ac0b765dc67a4e248125d5e8",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -4555,7 +4633,7 @@
   },
   "fragment-selection/bmad-testarch-atdd": {
     "contractId": "tea-fragment-selection-atdd",
-    "corpusDigest": "sha256:eea8ed947cd0141c69789500fb24dadd04515cc55c34297b92a408dfb15c81c8",
+    "corpusDigest": "sha256:2306ac4447ec0aed352d1178023afbe185594ea78b49bbd799816553e85944f6",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -4768,7 +4846,7 @@
   },
   "fragment-selection/bmad-testarch-automate": {
     "contractId": "tea-fragment-selection-automate",
-    "corpusDigest": "sha256:9298496a4e25aeeeee88c276856ee6b993999c9f0d34b726f9376ce167a536de",
+    "corpusDigest": "sha256:da253ea46afabdbdab07d85f3aee1af0db4a942ac706c957cf32d0f527eb07ab",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -5029,7 +5107,7 @@
   },
   "fragment-selection/bmad-testarch-ci": {
     "contractId": "tea-fragment-selection-ci",
-    "corpusDigest": "sha256:c76d8bcd662e67d5f1f20784b6ff6467f1d45a5d85432a3d48e66307d929b8aa",
+    "corpusDigest": "sha256:9850bbbc660ced7a381b36491ab67af3caa0ebcfb93dcf95828e903ec8d5b413",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -5218,7 +5296,7 @@
   },
   "fragment-selection/bmad-testarch-framework": {
     "contractId": "tea-fragment-selection-framework",
-    "corpusDigest": "sha256:d4b25a7ef5f139d50398f59237770a895a015a9e9008f7ef45369d50c5576d4b",
+    "corpusDigest": "sha256:83eded91d18ac61261223aba6f084de1edf55f7344db6a7fd20bf44a836cb997",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -5431,7 +5509,7 @@
   },
   "fragment-selection/bmad-testarch-nfr": {
     "contractId": "tea-fragment-selection-nfr",
-    "corpusDigest": "sha256:362478cc98bc7b218df64a005cb26687a54f2f1213b22a8d7156aa3c8e90caea",
+    "corpusDigest": "sha256:a89e1bfc7b5d9e7ece3bed41436e21ffab483a4f25f09dd1e115f3c2dd51a8ce",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -5620,7 +5698,7 @@
   },
   "fragment-selection/bmad-testarch-test-design": {
     "contractId": "tea-fragment-selection-test-design",
-    "corpusDigest": "sha256:dab82989ac37992496693b9031d9e633bccc52cd44082db5a5c3edca94bac989",
+    "corpusDigest": "sha256:79a08fd4cfbb3b13f0eacbada1d03b24664a68841143dd1da67a0e749927304e",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -5881,7 +5959,7 @@
   },
   "fragment-selection/bmad-testarch-test-review": {
     "contractId": "tea-fragment-selection-test-review",
-    "corpusDigest": "sha256:9f875c011621b80cb8a7d412d76cac71a63b8b8e6bc254429ee6add4805c93c3",
+    "corpusDigest": "sha256:ab80f3d1ee9577d046f30b4ac20d06a1566c1405af27a080c2288fdff6c77bf1",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -6070,7 +6148,7 @@
   },
   "fragment-selection/bmad-testarch-trace": {
     "contractId": "tea-fragment-selection-trace",
-    "corpusDigest": "sha256:e5a9ee9c7b0cc25bb23a2ce54149249c78daa56f0b40085ffe3194d738d40b17",
+    "corpusDigest": "sha256:17244ce35746cfd1dafc1f6005c054e4aa5cefd2a77935316dc6d9c9b0e4b945",
     "probeCount": 2,
     "strength": {
       "defect": null,

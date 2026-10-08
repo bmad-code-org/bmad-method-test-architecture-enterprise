@@ -46,7 +46,7 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
 {
   "interfaceId": "stub-skill",
   "executable": "tea-skill-runner",
-  "target": "tea-skill-runner",
+  "target": "evals/node_modules/.bin/tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
@@ -62,11 +62,12 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
 }
 ```
 
-This entry is the working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) that runs confined with no `confinement` field and lists its model provider in `egress`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.
+This entry is the [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) entry with its `target` set to the runner's path inside `launch.root`, since a runner outside the workspace is read outside the trial's grants.
+It runs confined with no `confinement` field and lists its model provider in `egress`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.
 
 ## Declare what a confined target reads
 
-A confined target reads the whole host except the evaluation folder, the project's git directory and the user's private root. The audit lists every path it opens outside what the trial was granted: the workspace, the call's temp directory, the private home, the Node installation the runtime runs from and the operating system's own directories. Each listed path becomes an `observedMounts` entry of the trial set's isolation manifest, and `score` then exits 3 (Invalid) with one `mount outside allowlist` reason per path. Executing a binary reads it, so a toolchain outside those grants is listed too.
+A confined target reads the whole host except the evaluation folder, the project's git directory and the user's private root. The audit lists every path it opens outside what the trial was granted: the workspace, the call's temp directory, the private home, the Node installation the runtime runs from and the operating system's own directories. Each listed path becomes an `observedMounts` entry of the trial set's isolation manifest, and `score` then exits 3 (Invalid) with one `mount outside allowlist` reason per path. Executing a binary reads it, so a toolchain outside those grants is listed too. `run` exits 3 with the same paths once its trials are sealed, and `preflight` exits 3 for a path every one of its legs opened.
 
 List what the target legitimately reads in its registry entry's `systemPaths`: absolute host paths, each free of double quotes, backslashes and control characters, such as a language installation, a rules directory or a cache. A command, tool-server or HTTP entry takes the field, and an HTTP entry's list covers the service it starts. Ask the adopter to confirm each path before declaring it and name the narrowest directory that holds it, such as one language installation or one rules directory. The list grants reads only; a confined target writes nothing outside its workspace and its private directories, and the audit lists every access to the evaluation folder, the project's git directory or the user's private root even under a declared path. Two entries that start the same target declare the same `systemPaths` and the same `egress`, or `check` exits 10.
 
@@ -90,4 +91,4 @@ List what the target legitimately reads in its registry entry's `systemPaths`: a
 }
 ```
 
-This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system. It lists no `egress` and runs confined. Merge its `registry` entry into the evaluation's registry, then run `check` and rerun development.
+This `evaluation.json` fragment declares the `verdict-rules` directory, the one directory the `verdict` target reads beyond the system. It lists no `egress` and runs confined. Merge its `registry` entry into the evaluation's registry, then run `check` and rerun development.

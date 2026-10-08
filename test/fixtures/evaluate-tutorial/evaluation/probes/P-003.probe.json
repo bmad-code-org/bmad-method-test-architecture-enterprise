@@ -1,0 +1,12 @@
+{
+  "probeId": "P-003",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "[malformed] Clean control: a request that is not text is refused.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The skill has no known defect at this revision."
+  }
+}

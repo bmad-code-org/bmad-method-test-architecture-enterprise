@@ -19,6 +19,10 @@
  * way a green run could skip a shard or swallow its failure, one case each,
  * and `chainedScripts` refuses a chain part that is not a bare `npm run`.
  *
+ * The actionlint install is held the same way: each case mutates a copy of the real
+ * installer or workflow text and the check has to fail, so a check that passes over
+ * everything cannot hide behind the clean repository.
+ *
  * Usage: node test/test-ci-coverage.js
  */
 
@@ -28,6 +32,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  ACTIONLINT_INSTALLER,
+  ACTIONLINT_WORKFLOWS,
+  actionlintInstallerProblems,
+  actionlintInstallProblems,
+  actionlintInstallStepProblems,
   chainedScripts,
   DELIBERATELY_LOCAL,
   scriptsCoveredInCi,
@@ -234,10 +243,159 @@ function checkChainOfNonNpmRunPartFails() {
   );
 }
 
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, '.github', 'workflows');
+const INSTALLER_TEXT = fs.readFileSync(ACTIONLINT_INSTALLER, 'utf8');
+
+/** Replace one piece of text, and fail the case when the piece is gone, so a stale mutation cannot pass silently. */
+function mutate(name, text, from, to) {
+  check(text.includes(from), `${name}: the mutation target ${JSON.stringify(from)} is no longer in the file`);
+  return text.replace(from, to);
+}
+
+/** Each way the installer can drop what the criteria require, with a phrase its problem has to carry. */
+const INSTALLER_MUTATIONS = {
+  'a single attempt': [(text) => mutate('a single attempt', text, 'ATTEMPTS=7', 'ATTEMPTS=1'), 'retries each download'],
+  'four attempts': [(text) => mutate('four attempts', text, 'ATTEMPTS=7', 'ATTEMPTS=4'), 'retries each download'],
+  'six attempts, which stop the waits at 32 seconds': [
+    (text) => mutate('six attempts', text, 'ATTEMPTS=7', 'ATTEMPTS=6'),
+    'makes exactly 7 attempts',
+  ],
+  'a wait budget below the schedule': [
+    (text) => mutate('a wait budget of 60', text, 'WAIT_BUDGET=126', 'WAIT_BUDGET=60'),
+    'spends at most 126 seconds',
+  ],
+  'a retry base of 0 by default': [
+    (text) => mutate('a retry base of 0', text, 'INSTALL_ACTIONLINT_RETRY_BASE:-2}', 'INSTALL_ACTIONLINT_RETRY_BASE:-0}'),
+    'waits a base of 2 seconds by default',
+  ],
+  'a sleep that does nothing by default': [
+    (text) => mutate('a sleep of true', text, 'INSTALL_ACTIONLINT_SLEEP:-sleep}', 'INSTALL_ACTIONLINT_SLEEP:-true}'),
+    'sleeps with the real `sleep` by default',
+  ],
+  'a deadline of 2000 seconds by default': [
+    (text) => mutate('a deadline of 2000', text, 'INSTALL_ACTIONLINT_DEADLINE:-170}', 'INSTALL_ACTIONLINT_DEADLINE:-2000}'),
+    'stops retrying after 170 seconds by default',
+  ],
+  'a constant wait': [(text) => mutate('a constant wait', text, 'RETRY_BASE << ($1 - 1)', 'RETRY_BASE'), 'grows the wait'],
+  'no gzip -t before the pinned script reads the tarball': [
+    (text) => mutate('no gzip -t', text, ' && gzip -t "$tarball" 2>/dev/null', ''),
+    '`gzip -t`',
+  ],
+  'no checksum check on the tarball': [
+    (text) => mutate('no checksum check', text, 'verify_checksum "$tarball" && return 0', 'return 0'),
+    'release checksum file',
+  ],
+  'a checksum comparison that never differs': [
+    (text) => mutate('no checksum comparison', text, '[[ $actual != "$expected" ]]', 'false'),
+    'release checksum file',
+  ],
+  'a hard-coded version in place of the resolution': [
+    (text) =>
+      mutate(
+        'a hard-coded version',
+        text,
+        '  with_retry try_latest || give_up "resolving the latest release from ${LATEST_URL}"',
+        '  VERSION=1.7.12',
+      ),
+    'resolves the latest release tag',
+  ],
+  'a version literal anywhere in the code': [(text) => `${text}\nPINNED_VERSION=1.7.12\n`, 'keeps the actionlint version out of its code'],
+  'a branch in place of the commit': [
+    (text) => mutate('a branch', text, /^SCRIPT_COMMIT=[0-9a-f]{40}$/m.exec(text)[0], 'SCRIPT_COMMIT=main'),
+    '40-hex commit',
+  ],
+  'a branch in the script URL': [
+    (text) => mutate('a branch in the URL', text, '${RAW_BASE}/${SCRIPT_COMMIT}/scripts', '${RAW_BASE}/main/scripts'),
+    '40-hex commit',
+  ],
+  'a script digest that is not 64 hex': [
+    (text) => mutate('a short digest', text, /^SCRIPT_SHA256_DEFAULT=[0-9a-f]{64}$/m.exec(text)[0], 'SCRIPT_SHA256_DEFAULT=a96d6013'),
+    '64-hex sha256',
+  ],
+  'a download script that is not checked against its digest': [
+    (text) => mutate('no script digest check', text, '[[ $actual != "$SCRIPT_SHA256" ]]', 'false'),
+    '64-hex sha256',
+  ],
+  'a comment standing in for the gzip check': [
+    (text) =>
+      mutate(
+        'a comment for the gzip check',
+        text,
+        'if fetch_file "$TARBALL_URL" "$tarball" && gzip -t "$tarball" 2>/dev/null; then',
+        '# fetch_file "$TARBALL_URL" "$tarball" && gzip -t "$tarball"\n  if fetch_file "$TARBALL_URL" "$tarball"; then',
+      ),
+    '`gzip -t`',
+  ],
+};
+
+function checkActionlintInstallerKeepsEveryPart() {
+  const clean = actionlintInstallerProblems(INSTALLER_TEXT);
+  check(clean.length === 0, `the real installer was refused: ${JSON.stringify(clean)}`);
+  for (const [name, [apply, phrase]] of Object.entries(INSTALLER_MUTATIONS)) {
+    const problems = actionlintInstallerProblems(apply(INSTALLER_TEXT));
+    check(
+      problems.some((problem) => problem.includes(phrase)),
+      `${name} did not fail the installer check with ${JSON.stringify(phrase)}: ${JSON.stringify(problems)}`,
+    );
+  }
+}
+
+/** The inline step each workflow ran before the installer, which a GitHub 503 fails on its first attempt. */
+const INLINE_STEP = `        run: |
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
+          sudo mv ./actionlint /usr/local/bin/
+`;
+
+function checkEachWorkflowKeepsTheInstaller() {
+  for (const file of ACTIONLINT_WORKFLOWS) {
+    const text = fs.readFileSync(path.join(WORKFLOW_ROOT, file), 'utf8');
+    const clean = actionlintInstallStepProblems(file, text);
+    check(clean.length === 0, `${file} was refused: ${JSON.stringify(clean)}`);
+    const step = /^ {8}run: \|\n {10}bash tools\/install-actionlint\.sh[^\n]*\n[^\n]*\n/m.exec(text);
+    check(step !== null, `${file}: the Install actionlint run block is not where the case looks for it`);
+    if (!step) continue;
+    const mutations = {
+      'the inline curl and bash steps': text.replace(step[0], INLINE_STEP),
+      'a step that runs something else': text.replace(step[0], '        run: echo installed\n'),
+      'a step with no timeout': text.replace(
+        '        timeout-minutes: 5\n        run: |\n          bash tools/install-actionlint.sh',
+        '        run: |\n          bash tools/install-actionlint.sh',
+      ),
+      'a step with a 30 minute timeout': text.replace(
+        '        timeout-minutes: 5\n        run: |\n          bash tools/install-actionlint.sh',
+        '        timeout-minutes: 30\n        run: |\n          bash tools/install-actionlint.sh',
+      ),
+      'a step that swallows the installer failure': text.replace(
+        'bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"',
+        'bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin" || true',
+      ),
+      'a step that continues on error': text.replace(
+        '        timeout-minutes: 5\n',
+        '        timeout-minutes: 5\n        continue-on-error: true\n',
+      ),
+      'a step with an if': text.replace(
+        '        timeout-minutes: 5\n',
+        "        timeout-minutes: 5\n        if: github.event_name == 'push'\n",
+      ),
+      'no Install actionlint step': text.replace('- name: Install actionlint', '- name: Install a linter'),
+      'a second step that runs the download script': `${text}      - name: Lint again\n        run: bash download-actionlint.bash\n`,
+    };
+    for (const [name, mutated] of Object.entries(mutations)) {
+      check(mutated !== text, `${file}: the mutation "${name}" changed nothing`);
+      const problems = actionlintInstallStepProblems(file, mutated);
+      check(problems.length > 0, `${file} with ${name} passed the actionlint install check`);
+    }
+  }
+}
+
 function checkRealRepoIsClean() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   const chained = chainedScripts(manifest);
   const inCi = scriptsCoveredInCi(chained);
+  const install = actionlintInstallProblems();
+  check(install.length === 0, `the real actionlint install is refused: ${JSON.stringify(install)}`);
   const notRun = chained.filter((script) => !inCi.has(script));
   check(notRun.length === 0, `chained script(s) the real workflows never run: ${JSON.stringify(notRun)}`);
   const uncovered = uncoveredScripts(manifest, inCi);
@@ -262,6 +420,8 @@ function main() {
   checkEveryBypassIsRefused();
   checkEveryBranchFilterIsAllowed();
   checkChainOfNonNpmRunPartFails();
+  checkActionlintInstallerKeepsEveryPart();
+  checkEachWorkflowKeepsTheInstaller();
   checkRealRepoIsClean();
 
   if (failures.length > 0) {

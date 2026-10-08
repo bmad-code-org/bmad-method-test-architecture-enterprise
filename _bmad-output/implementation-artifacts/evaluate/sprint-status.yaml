@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 10-03-2026 04:30
+last_updated: 10-04-2026 22:52
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -119,19 +119,19 @@ development_status:
   1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it: done
   1-86-list-a-connection-to-a-hosts-path-based-unix-socket-outside-the-grants-as-an-observed-mount: done
   1-87-give-a-macos-seatbelt-target-no-route-to-the-hosts-path-based-unix-sockets: done
-  1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: backlog
-  1-89-pass-the-targets-exact-environment-through-the-socket-launcher: backlog
-  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: backlog
-  1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent: backlog
+  1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets: done
+  1-89-pass-the-targets-exact-environment-through-the-socket-launcher: done
+  1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard: done
+  1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent: done
   1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository: done
   1-90-verify-the-baseline-manifests-file-digests: done
-  1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
-  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
+  1-91-keep-machine-paths-out-of-a-committed-baseline: done
+  1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: done
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: done
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: done
-  1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
+  1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: done
   1-96-check-the-derivable-fields-of-a-ci-plan: done
-  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
+  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: done
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: done
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: done
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: done
@@ -142,23 +142,23 @@ development_status:
   1-105-partition-rubrics-in-a-partition-plan: done
   1-106-partition-waivers-in-a-partition-plan: done
   1-107-partition-evaluator-mappings-in-a-partition-plan: done
-  1-108-compile-and-seal-each-partition-view-in-ci: backlog
-  1-109-partition-gameability-degenerate-responses: backlog
-  1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
-  1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
+  1-108-compile-and-seal-each-partition-view-in-ci: done
+  1-109-partition-gameability-degenerate-responses: done
+  1-110-designate-one-oracle-per-behavior-in-the-both-view: done
+  1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: done
   1-112-keep-other-sessions-commits-from-failing-a-runs-adopter-tree-check: done
   1-113-run-a-subscription-authenticated-agent-target-confined: done
-  1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: backlog
+  1-114-carve-the-corpus-guide-into-one-guide-per-target-kind: done
   1-115-give-the-skill-a-command-that-prints-a-files-digest: done
-  1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract: backlog
+  1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract: done
   1-76-require-an-explicit-custom-agent-version-response: done
   1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: done
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: done
   1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe: done
   1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux: done
-  1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: backlog
-  1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: backlog
-  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: backlog
+  1-121-make-the-ci-controlled-mutation-witnesses-read-the-reported-element-so-their-preflight-passes: done
+  1-122-make-the-ci-command-oracles-hold-on-the-quoted-stored-capture: done
+  1-123-score-each-ci-projects-stored-workflow-structurally-as-well-as-by-its-substring-oracles: done
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -167,7 +167,7 @@ development_status:
   2-3-render-evaluation-plans-in-bmad-testarch-ci: done
   2-4-finish-the-evaluation-with-its-ci-stage: done
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: done
-  2-6-document-evaluate-for-the-people-who-use-it: backlog
+  2-6-document-evaluate-for-the-people-who-use-it: done
   epic-2-retrospective: optional
 parallel_lanes:
   # Run order inside each lane. A story's coordinator hands off to the next
@@ -201,7 +201,6 @@ parallel_lanes:
     - 1-79-hold-the-gameability-scoring-branch-of-a-sealed-brief-baseline-to-starting-no-agent-version-probe
     - 1-109-partition-gameability-degenerate-responses
     - 1-110-designate-one-oracle-per-behavior-in-the-both-view
-    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     - 1-108-compile-and-seal-each-partition-view-in-ci
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
@@ -227,7 +226,6 @@ parallel_lanes:
     - 1-88-give-the-evaluation-layers-processes-no-route-to-the-hosts-path-based-unix-sockets
     - 1-89-pass-the-targets-exact-environment-through-the-socket-launcher
     - 1-131-give-a-killed-runs-call-directories-to-the-recovery-of-its-private-parent
-    - 1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
@@ -250,7 +248,7 @@ parallel_lanes:
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
-    - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
+    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     # Starts only once every other story has merged.
     - 2-6-document-evaluate-for-the-people-who-use-it
   lane-4-ci-plans-and-the-ci-probe-corpus:
@@ -265,6 +263,8 @@ parallel_lanes:
     - 1-115-give-the-skill-a-command-that-prints-a-files-digest
     - 1-132-pack-the-withheld-history-without-writing-into-the-adopters-repository
     - 1-120-hold-the-partial-clone-failing-pack-refusal-to-one-outcome-on-linux
+    - 1-116-hold-each-exits-class-against-its-ad-10-row-in-the-dogfood-contract
+    - 1-130-retry-and-verify-the-actionlint-download-so-a-github-outage-cannot-fail-a-shard
     - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
     - 1-114-carve-the-corpus-guide-into-one-guide-per-target-kind
 owner_handoff:

@@ -130,12 +130,14 @@ const { heldRefusal, stagedArtifact } = require('./held-refusal');
 const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes } = require('./score-inputs');
 const {
   WorkspaceRefusal,
+  cleanUpOnSignal,
   makePrivateParent,
   makeScratchDirectory,
   releaseScratchDirectory,
   removeScratchDirectory,
 } = require('./workspace');
-const { writePartitionViews } = require('./partition');
+const { PartitionPlanError, loadBothViewDesignation, writePartitionViews } = require('./partition');
+const { textNeutralizer } = require('./recorded-paths');
 const { phaseOf, writeInterpretation } = require('./interpret');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -274,6 +276,29 @@ function phaseSnapshotProblems(run, contract) {
   return problems;
 }
 
+/**
+ * The held inputs of a run, with the designation each probe is scored under (Story 1.110): a both run under a `partitionPlan` asks
+ * `eval-quality score --designated-oracle` for the oracle its probe's own partition lists (`partition.js` `bothViewDesignation`),
+ * through this one function, so the call's arguments and the in-process check hold the same designation. A designation that cannot be
+ * derived is a finding of the input check, and no score call runs.
+ */
+function holdRunInputs({ folder, runDirectory, index, record, engine, designations = null }) {
+  let designate;
+  if (designations !== null) {
+    // A replay reproduces a baseline: each probe is scored under the oracle the baseline's own call record handed it, and the folder is
+    // not read, so a folder that changed since is the stale-baseline rule's to report and no designation finding is.
+    designate = (probe) => ({ oracleId: designations.get(probe?.probeId) ?? null, problem: null, listed: undefined });
+    return holdScoreInputs({ runDirectory, index, record, engine, designate });
+  }
+  try {
+    designate = loadBothViewDesignation({ folder, partition: record?.partition, heldOutProbes: record?.heldOutProbes });
+  } catch (error) {
+    if (!(error instanceof PartitionPlanError)) throw error;
+    designate = () => ({ oracleId: null, problem: error.message });
+  }
+  return holdScoreInputs({ runDirectory, index, record, engine, designate });
+}
+
 /** Every finding in the held inputs of the run directory, before any engine call. */
 async function inputFindings({ folder, runDirectory, index, record, engine, held }) {
   const validate = createArtifactValidator();
@@ -293,6 +318,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
     return value;
   };
   for (const { relative, message } of held.aliasFindings()) add(relative, 'run-integrity', message);
+  for (const { relative, message } of held.designationFindings()) add(relative, 'designation', message);
   const runPrefix = `${referencePath(folder, runDirectory)}/`;
   const referenceProblem = (reference, what, expectedPath = null) => {
     if (reference?.storage !== 'public' || typeof reference.path !== 'string') {
@@ -477,7 +503,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
  *   user's private root (`workspace.js` `makePrivateParent`) and removes it at its end
  * @returns {Promise<ScoreOutcome>}
  */
-async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot } = {}) {
+async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot, designations = null } = {}) {
   const located = runDirectoryFor(folder, invocationId);
   if (located.wiring !== undefined)
     return new ScoreOutcome({ exitCode: WIRING, message: located.wiring, runDirectory: located.directory ?? null });
@@ -514,7 +540,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
 
   const engine = await loadEngine();
-  const held = holdScoreInputs({ runDirectory, index, record: located.record, engine });
+  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine, designations });
   const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine, held });
   if (findings.length === 0) {
     const contract = held.json(index.contract);
@@ -565,6 +591,18 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     });
   }
   const scratch = [];
+  const removeScratch = () => {
+    // A staging directory that could not be removed after its call is tried again here.
+    while (scratch.length > 0) {
+      try {
+        removeScratchDirectory(scratch.pop());
+      } catch {
+        // It stays on disk under the system's temporary directory; the score's own result is already decided.
+      }
+    }
+  };
+  // A score that makes its own private parent (a replay hands over a staging root, and its `ci` owns the cleanup) removes it on a signal.
+  const release = stagingRoot === undefined ? cleanUpOnSignal([], new AbortController(), { onSignal: removeScratch }) : () => {};
   try {
     try {
       if (stagingRoot === undefined) makePrivateParent(scratch);
@@ -591,14 +629,8 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       optedOutNote,
     });
   } finally {
-    // A staging directory that could not be removed after its call is tried again here.
-    while (scratch.length > 0) {
-      try {
-        removeScratchDirectory(scratch.pop());
-      } catch {
-        // It stays on disk under the system's temporary directory; the score's own result is already decided.
-      }
-    }
+    release();
+    removeScratch();
     writer.close();
   }
 }
@@ -624,7 +656,9 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     let failure = null;
     let stageFailed = false;
     try {
-      const result = runEngineStage('score', args, {
+      const result = await runEngineStage('score', args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(recordRelative),
         writer,
@@ -902,7 +936,9 @@ async function strengthAggregateStep({
     args.push('--floors', writer.pathOf(floorsRelative), '--policy', inRun(runDirectory, index.policy), '--out', produced);
     let result;
     try {
-      result = runEngineStage(AGGREGATE_STAGE, args, {
+      result = await runEngineStage(AGGREGATE_STAGE, args, {
+        folder,
+        scoreInvocation: path.basename(scoreRelative),
         runDirectory: writer.pathOf(scoreRelative),
         recordPath: writer.pathOf(callRelative),
         writer,
@@ -984,7 +1020,9 @@ async function strengthAggregateStep({
     // The held writer refused a file after the floors were staged: the summary keeps what was written and the run exits 12.
     log(`strength aggregate: ${error.message}`);
     const call = summary.call !== null && writer.has(callRelative) ? summary.call : null;
-    return { summary: { ...summary, call, reason: error.message }, exitCode: null, stageFailed: true, integrity: error.message };
+    // The summary is a record `compare --accept` copies, so the refusal's reason names the run's paths in the neutral forms.
+    const reason = textNeutralizer({ folder })(error.message);
+    return { summary: { ...summary, call, reason }, exitCode: null, stageFailed: true, integrity: error.message };
   } finally {
     releaseScratchDirectory(scratch, staging);
   }
@@ -1132,6 +1170,7 @@ module.exports = {
   SEVERITY,
   ScoreOutcome,
   combinedExit,
+  holdRunInputs,
   inputFindings,
   phaseSnapshotProblems,
   regularFileBytes,

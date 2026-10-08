@@ -35,6 +35,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { BEHAVIOR_ID, named, oraclesListed, sameOracles } = require('./partition');
+
 /** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
 const STRUCTURAL_EXIT = 4;
 const FAULT_EXIT = 5;
@@ -122,11 +124,15 @@ function scoreInputList({ runDirectory, index, record }) {
   return inputs;
 }
 
+/** What `designate` answers when a probe asks the engine for no oracle of its own. */
+const NO_DESIGNATION = Object.freeze({ oracleId: null, problem: null });
+
 /** What the held inputs of one `score` command are: the bytes the input check accepted. */
 class HeldInputs {
   #engine;
   #read;
   #accepted;
+  #designate;
 
   /**
    * @param {object} options
@@ -134,11 +140,23 @@ class HeldInputs {
    *   Null reads the input's file as a regular file.
    *   An evaluator attempt's inputs are read through the run directory writer.
    * @param {string} [options.accepted] what a held file was accepted as, for the message of a file that cannot be read again
+   * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] the oracle a probe asks
+   *   `eval-quality score --designated-oracle` for (Story 1.110): `partition.js` `bothViewDesignation`, which names an oracle only for
+   *   a probe of a both run under a `partitionPlan` whose behavior the both view lists with several. The CLI call's arguments and the
+   *   in-process score both read it through `designation`, so they cannot disagree.
    */
-  constructor({ engine, index, entries, read = null, accepted = 'the regular file the input check accepted' }) {
+  constructor({
+    engine,
+    index,
+    entries,
+    read = null,
+    accepted = 'the regular file the input check accepted',
+    designate = () => NO_DESIGNATION,
+  }) {
     this.#engine = engine;
     this.#read = read;
     this.#accepted = accepted;
+    this.#designate = designate;
     this.index = index;
     this.entries = new Map(entries.map((entry) => [entry.relative, entry]));
   }
@@ -146,6 +164,61 @@ class HeldInputs {
   /** The held entry of a run-relative path, or undefined when that path is no score input. */
   lookup(relative) {
     return this.entries.get(relative);
+  }
+
+  /**
+   * What one trial set's probe designates (Story 1.110), read from the held probe: the oracle the CLI call is handed and the in-process
+   * score is given, or `oracleId: null` for neither. `problem` names a probe the contract cannot place, and a probe that cannot be read
+   * designates nothing here, since the input check reports that file itself.
+   *
+   * @returns {{ oracleId: string|null, problem: string|null }}
+   */
+  designation(set) {
+    let probe;
+    try {
+      probe = this.json(set.probe);
+    } catch {
+      return NO_DESIGNATION;
+    }
+    return this.#designate(probe);
+  }
+
+  /**
+   * A finding for each trial set whose designation cannot be made, or whose behavior the folder's both view lists with other oracles
+   * than the contract this run sealed does, where that can change the designation. The sealed contract of a both run is the both view
+   * the run compiled. A sealed list of several oracles may have been designated one, so a folder that lists it differently would score
+   * the probe under an oracle the run never held or leave it undesignated; a folder that designates an oracle the sealed list does not
+   * hold is refused too. A sealed list of exactly one oracle is designated by the engine from the sealed contract whatever the folder
+   * says, so a folder that changed such a behavior is the stale-baseline rule's to report.
+   *
+   * @returns {Array<{ relative: string, message: string }>}
+   */
+  designationFindings() {
+    const findings = [];
+    let contract = null;
+    try {
+      contract = this.json(this.index.contract);
+    } catch {
+      // The contract's own finding comes from the input check.
+    }
+    for (const set of this.index.trialSets) {
+      const { oracleId, problem, listed } = this.designation(set);
+      // A problem every probe shares (the folder's views cannot be derived) is reported once.
+      if (problem !== null && !findings.some((entry) => entry.message === problem))
+        findings.push({ relative: set.probe, message: problem });
+      if (problem !== null || listed === undefined || contract === null) continue;
+      const behaviorId = this.json(set.probe)?.behaviorId;
+      const sealed = oraclesListed(contract, behaviorId);
+      if (sameOracles(listed, sealed)) continue;
+      // A list the sealed contract holds with exactly one oracle is designated by the engine from the sealed contract whatever the
+      // folder says, so only a folder that designates an oracle or a sealed list of several (which may have designated one) can differ.
+      if (oracleId === null && !(Array.isArray(sealed) && sealed.length > 1)) continue;
+      findings.push({
+        relative: set.probe,
+        message: `names ${named(behaviorId, BEHAVIOR_ID, 'a behavior')}, whose oracles the evaluation folder's both view lists differently from the contract this run sealed; run the evaluation again`,
+      });
+    }
+    return findings;
   }
 
   /** A finding for each path the index names in two roles, in listing order. */
@@ -188,7 +261,10 @@ class HeldInputs {
       this.index.corpusDigest,
     );
     if (this.exists(set.isolationManifest)) args.push('--isolation-manifest', pathOf(set.isolationManifest));
-    args.push('--evaluator-configuration', pathOf(this.index.evaluatorConfiguration), '--out', out);
+    args.push('--evaluator-configuration', pathOf(this.index.evaluatorConfiguration));
+    const { oracleId } = this.designation(set);
+    if (oracleId !== null) args.push('--designated-oracle', oracleId);
+    args.push('--out', out);
     return args;
   }
 
@@ -265,6 +341,7 @@ class HeldInputs {
     if (records.some((sealed) => sealed?.isolationManifestArtifact?.storage === 'private')) {
       return { artifact: null, exitCode: USAGE_EXIT, lines: null };
     }
+    const { oracleId } = this.designation(set);
     try {
       const { artifact, ladder, qualification } = await this.#engine.runScore({
         record: records,
@@ -277,6 +354,7 @@ class HeldInputs {
         policy: this.#engine.scanJson(this.entry(this.index.policy).bytes.toString('utf8'), 'ScoringPolicy'),
         privateManifest: null,
         corpusDigest: this.index.corpusDigest,
+        ...(oracleId === null ? {} : { designatedOracleId: oracleId }),
         port: undefined,
         signal: new AbortController().signal,
       });
@@ -328,9 +406,10 @@ class HeldInputs {
  * @param {object} options.index the parsed `trial-sets.json`
  * @param {object} options.record the parsed `run.json`
  * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
+ * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
  * @returns {HeldInputs}
  */
-function holdScoreInputs({ runDirectory, index, record, engine }) {
+function holdScoreInputs({ runDirectory, index, record, engine, designate }) {
   const entries = scoreInputList({ runDirectory, index, record }).map((input) => {
     try {
       const bytes = regularFileBytes(input.file);
@@ -341,7 +420,7 @@ function holdScoreInputs({ runDirectory, index, record, engine }) {
       return { ...input, exists: error.code !== 'ENOENT', bytes: null, error: error.message, digest: null };
     }
   });
-  return new HeldInputs({ engine, index, entries });
+  return new HeldInputs({ engine, index, entries, designate });
 }
 
 /**
@@ -358,10 +437,11 @@ function holdScoreInputs({ runDirectory, index, record, engine }) {
  * @param {string} options.corpusDigest
  * @param {string} options.probeId
  * @param {{ records: string[], manifestFile: string }} options.set the attempt's sealed set: its record files and isolation manifest, run-relative
+ * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
  * @returns {HeldInputs}
  * @throws {AttemptInputError} naming the first input that is not what the runtime wrote
  */
-function holdAttemptInputs({ read, engine, corpusDigest, probeId, set }) {
+function holdAttemptInputs({ read, engine, corpusDigest, probeId, set, designate }) {
   const index = {
     ...RUN_FILES,
     corpusDigest,
@@ -376,7 +456,7 @@ function holdAttemptInputs({ read, engine, corpusDigest, probeId, set }) {
     }
     return { ...input, exists: true, bytes, error: null, digest: engine.digestBytes(bytes) };
   });
-  return new HeldInputs({ engine, index, entries, read, accepted: 'the file the runtime wrote' });
+  return new HeldInputs({ engine, index, entries, read, accepted: 'the file the runtime wrote', designate });
 }
 
 /** The probe file a run writes for `probeId`. */

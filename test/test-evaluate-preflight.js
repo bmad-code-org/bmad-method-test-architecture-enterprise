@@ -70,10 +70,13 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
+const { SUPERVISOR_BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('../cli/lib/agent-supervisor-bounds');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
+const { chanceMountNotes, lossyLegs, mountsOfEveryLeg } = require('../cli/lib/evaluate/isolation-allowlist');
 const { scratchDirectories } = require('./lib/scratch-directories');
+const { CONFINEMENT_PAGE, REFERENCE_PAGE, readDocsPage, sectionOf } = require('./lib/docs-pages');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -89,6 +92,12 @@ const SHIM = path.join(FIXTURES, 'engine-shim.js');
 const HIDE_ENGINE = path.join(FIXTURES, 'engine-absent', 'hide-engine.cjs');
 const WRAP_ENGINE = path.join(FIXTURES, 'engine-wrapped', 'wrap-engine.cjs');
 const DENIALS = ['forbidden-target', 'interface-not-authorized', 'executable-not-authorized'];
+/** Where the runner reads from when it runs from this repository: its sources, its manifest and the one package it requires. */
+const RUNNER_INSTALL = [
+  path.join(PROJECT_ROOT, 'cli'),
+  path.join(PROJECT_ROOT, 'package.json'),
+  path.dirname(require.resolve('commander')),
+].map((entry) => fs.realpathSync(entry));
 
 /** This process's environment with every variable the cases set themselves removed, so a developer's shell cannot reroute a case. */
 const BASE_ENV = Object.fromEntries(
@@ -481,10 +490,9 @@ async function checkWindowsSupervision() {
     carried.observation.stderr === process.env.SystemRoot,
     `the infrastructure-only SystemRoot changed the observed stderr: ${JSON.stringify(carried.observation.stderr)}`,
   );
-  // Match the guardian's separate Job Object setup bound, with room for
-  // process startup and the supervisor's missing-report backstop.
-  const windowsSetupMs = 90_000;
-  const startupWaitMs = windowsSetupMs + 20_000;
+  // The case waits as long as the supervisor's own bounds promise: the guardian's Job Object setup, the cold Node start before that clock begins and the missing-report backstop.
+  const windowsSetupMs = WINDOWS_SETUP_MS;
+  const startupWaitMs = WINDOWS_SETUP_MS + WINDOWS_STARTUP_SLACK_MS + SUPERVISOR_BACKSTOP_MS;
   const directory = tempDir('windows-job-owner');
   const agentScript = path.join(directory, 'agent.cjs');
   const childScript = path.join(directory, 'child.cjs');
@@ -532,6 +540,19 @@ const ready = setInterval(() => {
     closed.then(() => (runnerClosed = true));
     while (!fs.existsSync(file) && !runnerClosed && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? readPids(file) : null;
+  };
+  // A process tree is read through PowerShell and WMI under a bound of 10 s per call, and a call that times out or fails answers with an empty list.
+  // The tree is already up once the agent has recorded its pids, so the lookup retries until the tree answers, within the same bound the case allows the setup.
+  const waitForChildren = async (parentPid, closed, accepts = (pids) => pids.length > 0) => {
+    const deadline = Date.now() + startupWaitMs;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    let pids = childrenOf(parentPid);
+    while (!accepts(pids) && !runnerClosed && Date.now() < deadline && Number.isSafeInteger(parentPid) && parentPid > 0) {
+      await delay(200);
+      pids = childrenOf(parentPid);
+    }
+    return pids;
   };
   const observeEndBy = async (pid, deadline) => {
     if (!Number.isSafeInteger(pid) || pid <= 0) return null;
@@ -761,11 +782,11 @@ class FakePowerShell {
   let leader = null;
   try {
     dualPids = await waitForPids(dualFile, dualClosed);
-    [supervisor] = childrenOf(dual.pid);
-    [leader] = childrenOf(supervisor ?? 0);
+    [supervisor] = await waitForChildren(dual.pid, dualClosed);
+    [leader] = await waitForChildren(supervisor ?? 0, dualClosed);
     check(
       dualPids !== null && supervisor !== undefined && leader !== undefined,
-      'the Windows dual-kill case did not start the supervisor, leader, agent and child',
+      `the Windows dual-kill case did not start the supervisor, leader, agent and child: ${JSON.stringify({ dualPids, supervisor, leader })}\n${dualStderr}`,
     );
     const killedAt = Date.now();
     if (leader !== undefined) reap(leader);
@@ -821,12 +842,14 @@ class FakePowerShell {
   try {
     ownerPids = await waitForPids(ownerFile, ownerClosed);
     if (ownerPids !== null) {
-      [ownerSupervisor] = childrenOf(ownerRun.pid);
-      [ownerLeader] = childrenOf(ownerSupervisor);
-      [guardian] = childrenOf(ownerLeader);
-      guardianChildren = childrenOf(guardian);
+      [ownerSupervisor] = await waitForChildren(ownerRun.pid, ownerClosed);
+      [ownerLeader] = await waitForChildren(ownerSupervisor ?? 0, ownerClosed);
+      [guardian] = await waitForChildren(ownerLeader ?? 0, ownerClosed);
+      guardianChildren = await waitForChildren(guardian ?? 0, ownerClosed, (pids) => pids.length >= 2 && pids.includes(ownerPids.agent));
       ownerAgentVerified = guardianChildren.includes(ownerPids.agent);
-      ownerChildVerified = ownerAgentVerified && childrenOf(ownerPids.agent).includes(ownerPids.child);
+      ownerChildVerified =
+        ownerAgentVerified &&
+        (await waitForChildren(ownerPids.agent, ownerClosed, (pids) => pids.includes(ownerPids.child))).includes(ownerPids.child);
       const helpers = guardianChildren.filter((pid) => pid !== ownerPids.agent);
       if (ownerChildVerified && helpers.length === 1) [helper] = helpers;
     }
@@ -1112,23 +1135,25 @@ function checkSupervisorTraceRetries() {
   }
 }
 function checkWindowsRunnerReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
-  const { WINDOWS_SETUP_MS: setupBound } = require('../cli/lib/agent-supervisor-bounds');
+  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
   check(
     section.includes('Windows Job Object') &&
       section.includes('kill-on-close') &&
       section.includes('10 s') &&
-      setupBound === 90_000 &&
+      WINDOWS_SETUP_MS === 90_000 &&
       section.includes('The guardian allows 90 s for setup') &&
       section.includes('wall clock starts when the guardian reports the actual agent PID'),
-    'the tea-skill-runner reference and supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+    'the confinement page and the supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+  );
+  const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
+  check(
+    runner.includes('On Windows') && runner.includes('120 s in `maxElapsedMs`'),
+    "the reference's tea-skill-runner section must name the Windows Job Object and the 120 s reserve a registry entry leaves for bounded Job Object setup",
   );
 }
 
 function checkPosixRunnerReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
   check(
     section.includes('detached watchdog') &&
       section.includes('leader-only pipe') &&
@@ -1136,9 +1161,13 @@ function checkPosixRunnerReference() {
       section.includes('before the guardian starts the agent') &&
       section.includes('four processes supervise the agent') &&
       section.includes('25 s startup reserve') &&
-      section.includes('7 s for supervisor backstop and output drain') &&
-      section.includes('40 s in `maxElapsedMs`'),
-    'the tea-skill-runner reference must name POSIX watchdog ownership, its four-process layout, startup and completion bound, 40 s adapter reserve, and 10 s descendant bound',
+      section.includes('7 s for supervisor backstop and output drain'),
+    'the confinement page must name POSIX watchdog ownership, its four-process layout, startup and completion bound and 10 s descendant bound',
+  );
+  const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
+  check(
+    runner.includes('40 s in `maxElapsedMs`'),
+    'the reference must name the 40 s POSIX reserve a registry entry leaves in maxElapsedMs for watchdog setup, supervisor completion and runner overhead',
   );
 }
 
@@ -1782,13 +1811,23 @@ setInterval(() => {}, 1000);
  * target in this repository: the stub project for the preflight fixture, the
  * repository itself for the check fixture.
  */
-function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT) {
+function copyFixture(source = PREFLIGHT_FIXTURE, root = STUB_PROJECT, { grantRunner = true, grantBin = true } = {}) {
   const folder = path.join(tempDir('case'), path.basename(source));
   fs.cpSync(source, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
   editJson(folder, 'evaluation.json', (value) => {
     value.launch.root = path.relative(folder, root).split(path.sep).join('/');
+    // The runner on PATH sits outside the trial's workspace, so its entry lists where the runner is installed, as an adopter's does.
+    if (grantRunner) grantRunnerInstall(value, { bin: grantBin });
   });
   return folder;
+}
+
+/** Lists where the runner is installed in `systemPaths` of every registry entry that names it, as an adopter's evaluation does. */
+function grantRunnerInstall(evaluation, { bin = true } = {}) {
+  // The install's directories and the bin directory that holds the link `PATH` resolves, which a Linux audit lists as well.
+  runnerPath();
+  const grants = bin ? [...RUNNER_INSTALL, fs.realpathSync(binDirectory)] : [...RUNNER_INSTALL];
+  for (const entry of evaluation.registry ?? []) if (entry.target === 'tea-skill-runner') entry.systemPaths = grants;
 }
 
 /**
@@ -1895,6 +1934,318 @@ function checkPasses() {
     check(fs.existsSync(path.join(runDirectory, artifact)), `the run holds no ${artifact}`);
   }
   check(!fs.existsSync(path.join(runDirectory, 'faults')), 'a passing run recorded a leg fault');
+}
+
+/** The runner's install as the Evaluate skill leaves it: inside the evaluated project, with the bin link an `npm install` makes. */
+function projectWithInstalledRunner() {
+  const project = stubProject('installed-runner');
+  const install = path.join(project, 'node_modules', 'tea');
+  fs.mkdirSync(path.join(install, 'node_modules'), { recursive: true });
+  fs.cpSync(path.join(PROJECT_ROOT, 'cli'), path.join(install, 'cli'), { recursive: true });
+  fs.copyFileSync(path.join(PROJECT_ROOT, 'package.json'), path.join(install, 'package.json'));
+  fs.cpSync(RUNNER_INSTALL[2], path.join(install, 'node_modules', 'commander'), { recursive: true });
+  fs.mkdirSync(path.join(project, 'node_modules', '.bin'));
+  fs.symlinkSync(path.join('..', 'tea', 'cli', 'skill-runner.js'), path.join(project, 'node_modules', '.bin', 'tea-skill-runner'));
+  return project;
+}
+
+/** A scoring policy for a folder that never had one, so `run` can start; one trial meets its minimum. */
+function writeScoringPolicy(folder) {
+  fs.mkdirSync(path.join(folder, 'policy'), { recursive: true });
+  fs.writeFileSync(
+    path.join(folder, 'policy', 'scoring-policy.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 2,
+        parentDigest: null,
+        revisionCount: 0,
+        policyId: 'stub-skill-preflight',
+        severityFloor: 'material',
+        confidenceThreshold: 0.5,
+        catchThreshold: 0.6,
+        minimumTrialCount: 1,
+        reExecutionCap: 2,
+        remediationCap: 3,
+        regexMatchStepBudget: 1_000_000,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/**
+ * A runner that runs from outside the trial's workspace is refused up front. The registry entry names the bare `tea-skill-runner`,
+ * so the runner and what it requires sit beside the install, not in the copy, and `score` would exit 3 on every one of them as a
+ * mount outside the allowlist. `preflight` and `run` refuse with that exit and name both setups that work.
+ */
+/**
+ * The rules that tell a path every leg opened from one some legs did, over legs the audit watched in full and legs it lost reports
+ * on: a lossy leg's list may lack a path the leg opened, so it takes no part in the intersection and no note says the other legs did
+ * not open a path on its word. The workspace grants are allowed, and every leg lossy leaves nothing common (the command then exits 12).
+ */
+function checkLegMountRules() {
+  const leg = (mounts, lossy = false) => ({ mounts, lossy });
+  const both = ['/i/cli/a.js', '/i/cli/b.js'];
+  const all = new Map([
+    ['alpha', leg([...both, '/only/alpha'])],
+    ['beta', leg(both)],
+    ['control', leg([...both, 'copy pristine'])],
+  ]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(all, ['copy pristine'])) === JSON.stringify(both),
+    `the paths every leg opened are ${JSON.stringify(mountsOfEveryLeg(all, ['copy pristine']))}; expected ${JSON.stringify(both)}`,
+  );
+  const notes = chanceMountNotes(all, PROJECT_ROOT);
+  check(
+    notes.length === 2 && notes[0].includes('"alpha"') && notes[0].includes('/only/alpha') && notes[1].includes('copy pristine'),
+    `the notes on paths only some legs opened are ${JSON.stringify(notes)}`,
+  );
+
+  // A leg whose audit lost every report of a path every other leg opened: left out, not counted as a leg that did not open it.
+  const withLoss = new Map([...all, ['gamma', leg(['/i/cli/a.js'], true)]]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(withLoss, ['copy pristine'])) === JSON.stringify(both),
+    `a lossy leg shrank the paths every leg opened to ${JSON.stringify(mountsOfEveryLeg(withLoss, ['copy pristine']))}`,
+  );
+  const lossNotes = chanceMountNotes(withLoss, PROJECT_ROOT);
+  check(
+    lossNotes.length === 3 &&
+      !lossNotes.some((note) => note.includes('"gamma"') && note.includes('opened') && note.includes('/i/cli/b.js')) &&
+      lossNotes.at(-1).includes('"gamma"') &&
+      lossNotes.at(-1).includes('left out of the check') &&
+      lossNotes.slice(0, -1).every((note) => note.includes('audit watched in full')),
+    `the notes beside a lossy leg are ${JSON.stringify(lossNotes)}; expected the same two and one naming the lossy leg as left out`,
+  );
+  check(JSON.stringify(lossyLegs(withLoss)) === JSON.stringify(['gamma']), `the lossy legs are ${JSON.stringify(lossyLegs(withLoss))}`);
+
+  // A lossy leg that lost every read, with the others agreeing, does not turn the structural case into a pass.
+  const dropped = new Map([...all, ['delta', leg([], true)]]);
+  check(
+    JSON.stringify(mountsOfEveryLeg(dropped, ['copy pristine'])) === JSON.stringify(both),
+    `a lossy leg that listed nothing emptied the paths every leg opened to ${JSON.stringify(mountsOfEveryLeg(dropped, ['copy pristine']))}`,
+  );
+
+  // Every leg lossy, and no leg at all: nothing is vouched for.
+  const lost = new Map([
+    ['alpha', leg(both, true)],
+    ['beta', leg([], true)],
+  ]);
+  check(
+    mountsOfEveryLeg(lost, []).length === 0 && lossyLegs(lost).length === 2 && mountsOfEveryLeg(new Map(), []).length === 0,
+    'legs whose audits all lost reports vouched for a path',
+  );
+}
+
+/**
+ * A log that loses every second report (`fixtures/evaluate/lossy-log.cjs`, macOS): over the bare-name setup `preflight` would refuse,
+ * every leg's audit says it lost reports, so no leg can say what it opened. The audit-loss outcome applies (exit 12, the legs yield no
+ * audit) in place of a pass on the shrunken set the dropped lines leave, which is the defect the refusal exists to catch.
+ */
+function checkLossyLegAudit() {
+  if (process.platform !== 'darwin') return;
+  const pids = tempDir('lossy-log-pids');
+  const executable = path.join(tempDir('lossy-log'), 'log');
+  fs.writeFileSync(executable, `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'lossy-log.cjs')}" 2 "${pids}" "$@"\n`, {
+    mode: 0o755,
+  });
+  try {
+    const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+    const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: executable } });
+    check(
+      result.status === 12 && result.output.includes('the legs yield no audit: the audit lost reports while every leg ran'),
+      `preflight over a log that loses every second report exited ${result.status}; expected 12 naming the audit's loss\n${result.output}`,
+    );
+    check(
+      !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),
+      `preflight judged the paths of legs whose audit lost reports\n${result.output}`,
+    );
+  } finally {
+    // The real `log` the stub started outlives the runtime's SIGKILL of the stub; end each one this case started.
+    for (const name of fs.readdirSync(pids)) {
+      const pid = Number(fs.readFileSync(path.join(pids, name), 'utf8'));
+      const command = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' }).stdout;
+      if (command.includes('/usr/bin/log stream') && command.includes('tea-evaluate-audit-')) reap(pid);
+    }
+  }
+}
+
+function checkRunnerOutsideAllowlist() {
+  const refusal = (output) => {
+    // The runner's own files are the paths it names; the first three of the sorted list, in the form the records use.
+    check(/mount outside allowlist: (<[a-z-]+>|\/)\S+/.test(output), `the refusal names no path outside the allowlist:\n${output}`);
+    const opened = Number(/opened (\d+) path/.exec(output)?.[1]);
+    check(
+      opened >= 2,
+      `the refusal counts ${opened} path(s); the runner's sources and the package it requires are at least two:\n${output}`,
+    );
+    check(
+      /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist.*so every trial will too, and `score` refuses a trial that does \(exit 3\)/.test(
+        output,
+      ) || /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(output),
+      `the refusal does not say why score would exit 3:\n${output}`,
+    );
+    for (const setup of [
+      '`node_modules/.bin/tea-skill-runner`',
+      '`launch.root`',
+      'copy workspace',
+      '`workspace.provision`',
+      '`systemPaths`',
+    ]) {
+      check(output.includes(setup), `the refusal does not name ${setup}, so the adopter learns neither working setup:\n${output}`);
+    }
+  };
+
+  // The bare name with nothing granted: the legs pass the engine's verdict, and the mounts alone refuse the setup.
+  const bare = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+  const refused = runPreflight(bare);
+  check(refused.status === 3, `preflight over the bare runner name exited ${refused.status}; expected 3\n${refused.output}`);
+  refusal(refused.output);
+  const directory = runDirectoryOf(bare);
+  check(directory !== null, 'the refused preflight wrote no run directory');
+  if (directory !== null) {
+    // A preflight that stopped before the engine's verdict (a lossy audit under host load, say) leaves none; report it with the exit above.
+    const verdictPath = path.join(directory, 'preflight-verdict.json');
+    const verdict = fs.existsSync(verdictPath) ? readJson(verdictPath) : null;
+    check(
+      verdict?.passed === true,
+      `the engine's verdict was ${verdict?.passed ?? 'missing'}; the refusal must come from the mounts alone`,
+    );
+    const recorded = readJson(path.join(directory, 'run.json')).outcome;
+    check(
+      recorded?.exitCode === 3 && recorded?.stage === 'leg',
+      `run.json records ${JSON.stringify(recorded)}; expected exit 3 at the leg stage`,
+    );
+  }
+
+  // `run` refuses it from the trials it sealed, the set `score` judges: exit 3 naming the paths, the trial sets sealed and complete.
+  const bareRun = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+  writeScoringPolicy(bareRun);
+  const refusedRun = runEvaluate(['run', '--evaluation', bareRun]);
+  check(refusedRun.status === 3, `run over the bare runner name exited ${refusedRun.status}; expected 3\n${refusedRun.output}`);
+  refusal(refusedRun.output);
+  const runDirectory = runDirectoryOf(bareRun);
+  const runRecord = runDirectory === null ? {} : readJson(path.join(runDirectory, 'run.json'));
+  check(
+    runRecord.completed === true && runRecord.outcome?.exitCode === 3 && runRecord.outcome?.stage === 'trial',
+    `run.json records ${JSON.stringify({ completed: runRecord.completed, outcome: runRecord.outcome })}; expected a completed run that ended with exit 3 at the trial stage`,
+  );
+  const refusedScore = runEvaluate(['score', '--evaluation', bareRun]);
+  check(
+    refusedScore.status === 3 && refusedScore.output.includes('mount outside allowlist: '),
+    `score over the refused run exited ${refusedScore.status}; expected the same exit 3 with the isolation violation\n${refusedScore.output}`,
+  );
+
+  // Setup one: the bare name, with the directories the runner runs from listed in `systemPaths`.
+  const listed = copyFixture();
+  const listedResult = runPreflight(listed);
+  check(
+    listedResult.status === 0,
+    `preflight with the runner's install in systemPaths exited ${listedResult.status}; expected 0\n${listedResult.output}`,
+  );
+  for (const problem of passedPreflightProblems(runDirectoryOf(listed))) check(false, `the systemPaths setup: ${problem}`);
+
+  // Setup two: the target is a path inside launch.root, over a copy workspace.
+  const inside = copyFixture(PREFLIGHT_FIXTURE, projectWithInstalledRunner(), { grantRunner: false });
+  editJson(inside, 'evaluation.json', (value) => {
+    for (const entry of value.registry) entry.target = 'node_modules/.bin/tea-skill-runner';
+  });
+  const insideResult = runPreflight(inside);
+  check(
+    insideResult.status === 0,
+    `preflight with the runner inside launch.root exited ${insideResult.status}; expected 0\n${insideResult.output}`,
+  );
+  for (const problem of passedPreflightProblems(runDirectoryOf(inside))) check(false, `the in-root setup: ${problem}`);
+}
+
+/**
+ * The bare-name runner's three `systemPaths` directories: the two install directories and the bin directory that holds the link
+ * `PATH` resolves. With all three granted, `preflight`, `run` and `score --run` pass on every platform. The bin directory is the
+ * third because a Linux audit lists the link itself (an `execve` or `readlink` of `<bin>/tea-skill-runner`), so without its grant
+ * `preflight` refuses the setup with exit 3 naming that path, `run` ends at the trial stage with exit 3, and `score --run` on that
+ * run exits 3. The macOS audit lists the runner's files in the two install directories and not the link, so the same setup
+ * without the bin grant passes there; each platform's expectation follows what its audit lists.
+ */
+function checkRunnerBinDirectory() {
+  const linuxAudit = process.platform === 'linux';
+  const stages = (label, options) => {
+    const preflight = runPreflight(copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, options));
+    const runFolder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, options);
+    writeScoringPolicy(runFolder);
+    const run = runEvaluate(['run', '--evaluation', runFolder]);
+    const runDirectory = runDirectoryOf(runFolder);
+    check(runDirectory !== null, `${label}: the run wrote no single runs/<invocationId>/ directory`);
+    const score = runDirectory === null ? null : runEvaluate(['score', '--evaluation', runFolder, '--run', path.basename(runDirectory)]);
+    return { preflight, run, runDirectory, score };
+  };
+
+  // All three directories granted: the documented setup.
+  const granted = stages('three directories granted', {});
+  check(
+    granted.preflight.status === 0,
+    `preflight over the bare runner name with its three directories granted exited ${granted.preflight.status}; expected 0\n${granted.preflight.output}`,
+  );
+  check(
+    granted.run.status === 0,
+    `run over the bare runner name with its three directories granted exited ${granted.run.status}; expected 0\n${granted.run.output}`,
+  );
+  check(
+    granted.score?.status === 0,
+    `score --run over the bare runner name with its three directories granted exited ${granted.score?.status}; expected 0\n${granted.score?.output}`,
+  );
+  if (granted.runDirectory !== null) {
+    const recorded = readJson(path.join(granted.runDirectory, 'run.json'));
+    check(
+      recorded.completed === true && recorded.outcome?.exitCode === 0,
+      `run.json records ${JSON.stringify({ completed: recorded.completed, outcome: recorded.outcome })}; expected a completed run that exited 0`,
+    );
+  }
+
+  // Only the bin directory's grant removed.
+  const withoutBin = stages('bin directory not granted', { grantBin: false });
+  if (!linuxAudit) {
+    for (const [name, result] of [
+      ['preflight', withoutBin.preflight],
+      ['run', withoutBin.run],
+      ['score --run', withoutBin.score],
+    ]) {
+      check(
+        result?.status === 0,
+        `${name} without the bin directory's grant exited ${result?.status} on ${process.platform}, whose audit does not list the link; expected 0\n${result?.output}`,
+      );
+    }
+    return;
+  }
+  // The audit lists the link in the bin directory, so the refusal names that one path, the one the bin grant covers.
+  const link = new RegExp(`mount outside allowlist: \\S*${path.basename(binDirectory)}/tea-skill-runner(?=[;)\\s]|$)`);
+  const refusal = (name, output) => {
+    check(link.test(output), `${name} without the bin directory's grant does not name the link as 'mount outside allowlist':\n${output}`);
+    check(
+      /opened 1 path\(s\) outside the allowlist/.test(output),
+      `${name} without the bin directory's grant refused more than the link; the install directories are granted:\n${output}`,
+    );
+  };
+  check(
+    withoutBin.preflight.status === 3,
+    `preflight without the bin directory's grant exited ${withoutBin.preflight.status}; expected 3\n${withoutBin.preflight.output}`,
+  );
+  refusal('preflight', withoutBin.preflight.output);
+  check(
+    withoutBin.run.status === 3,
+    `run without the bin directory's grant exited ${withoutBin.run.status}; expected 3\n${withoutBin.run.output}`,
+  );
+  refusal('run', withoutBin.run.output);
+  if (withoutBin.runDirectory !== null) {
+    const recorded = readJson(path.join(withoutBin.runDirectory, 'run.json'));
+    check(
+      recorded.completed === true && recorded.outcome?.exitCode === 3 && recorded.outcome?.stage === 'trial',
+      `run.json records ${JSON.stringify({ completed: recorded.completed, outcome: recorded.outcome })}; expected a completed run that ended with exit 3 at the trial stage`,
+    );
+  }
+  check(
+    withoutBin.score?.status === 3 && link.test(withoutBin.score.output),
+    `score --run over the run without the bin directory's grant exited ${withoutBin.score?.status}; expected 3 naming the link\n${withoutBin.score?.output}`,
+  );
 }
 
 function checkRemovedEntry() {
@@ -2228,10 +2579,19 @@ function checkPrivateHome() {
       }
     });
     const result = runPreflight(folder, { env: { ...temp.env, HOME: hostHome } });
+    // The agent's attempts at the evaluation folder and the host's home are mounts outside the allowlist, which a confined preflight
+    // refuses as `score` would (exit 3) once the engine's verdict passed; an opted-out run audits nothing.
+    const expected = confinement ? 3 : 0;
     check(
-      result.status === 0,
-      `preflight whose agent keeps state under HOME (confinement ${confinement}, environmentKeys ${JSON.stringify(keys)}) exited ${result.status}; expected 0\n${result.output}`,
+      result.status === expected,
+      `preflight whose agent keeps state under HOME (confinement ${confinement}, environmentKeys ${JSON.stringify(keys)}) exited ${result.status}; expected ${expected}\n${result.output}`,
     );
+    if (confinement) {
+      check(
+        result.output.includes('mount outside allowlist: '),
+        `the refusal does not name the paths the agent tried to reach:\n${result.output}`,
+      );
+    }
     return observedStdouts(runDirectoryOf(folder));
   };
   const field = (stdout, name) => new RegExp(`^${name}: (.*)$`, 'm').exec(stdout)?.[1];
@@ -2364,8 +2724,10 @@ function checkSubscriptionLogin() {
   check(
     ['seatbelt', 'bubblewrap'].includes(filedRun?.confinement) &&
       JSON.stringify(filedRun?.logins) ===
-        JSON.stringify([{ interfaceId: 'stub-skill', executable: 'tea-skill-runner', login: 'claude', variable: null, file: realFile }]),
-    `the preflight's run.json recorded confinement ${filedRun?.confinement} and the logins ${JSON.stringify(filedRun?.logins)}; expected the mechanism and the file by path`,
+        JSON.stringify([
+          { interfaceId: 'stub-skill', executable: 'tea-skill-runner', login: 'claude', variable: null, file: '<credentials-file>' },
+        ]),
+    `the preflight's run.json recorded confinement ${filedRun?.confinement} and the logins ${JSON.stringify(filedRun?.logins)}; expected the mechanism and the file as <credentials-file>`,
   );
   check(
     filesUnder(filed.directory ?? '').every((file) => fs.statSync(file).isDirectory() || !fs.readFileSync(file).includes(fakeLogin)),
@@ -2487,6 +2849,7 @@ function checkCopyContents() {
   editJson(folder, 'evaluation.json', (value) => {
     value.launch.root = '../..';
     value.workspace.provision = ['vendor'];
+    grantRunnerInstall(value);
   });
   firstLegSays(folder, 'STUB-LIST');
   const result = runPreflight(folder);
@@ -2676,7 +3039,10 @@ function checkLinkedEvaluation() {
   fs.writeFileSync(decoySkill, fs.readFileSync(decoySkill, 'utf8').replace(/^name:.*$/m, 'name: decoy-skill'));
   const folder = path.join(real, 'evaluation');
   fs.cpSync(PREFLIGHT_FIXTURE, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
-  editJson(folder, 'evaluation.json', (value) => (value.launch.root = '../project'));
+  editJson(folder, 'evaluation.json', (value) => {
+    value.launch.root = '../project';
+    grantRunnerInstall(value);
+  });
   const link = path.join(decoy, 'evaluation');
   fs.symlinkSync(folder, link, 'dir');
   const result = runPreflight(link);
@@ -2836,6 +3202,10 @@ async function main() {
     checkSupervisorTraceRetries();
     if (process.platform !== 'win32') checkPosixRunnerReference();
     checkPasses();
+    checkLegMountRules();
+    checkLossyLegAudit();
+    checkRunnerOutsideAllowlist();
+    checkRunnerBinDirectory();
     checkRemovedEntry();
     checkShim();
     checkFailingControl();

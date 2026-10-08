@@ -5,8 +5,10 @@
  * The plan (`ci-plan.js`) is the only definition of tier membership. The runtime reads it, validates its placement
  * rules (exit 10 on a finding, 64 when the plan is absent) and runs exactly the checks whose `placement.tier` is the
  * tier asked for, in plan order. Every check runs, whether or not an earlier one failed, so the evidence bundle is
- * complete. An `evaluate` check is run by its id; its `command` records the `tea-evaluate` argv a reader can run by hand, and a pipeline runs `tea-evaluate ci --tier <tier>` once per tier. A
- * `gate` check is an `eval-quality-gates` command the adopter adopted, run as a child process with no shell and the
+ * complete. An `evaluate` check is run by its id; its `command` records the `tea-evaluate` argv a reader can run by hand,
+ * except `preflight-live` under a `partitionPlan`, which `ci` alone runs over every partition.
+ * A pipeline runs `tea-evaluate ci --tier <tier>` once per tier.
+ * A `gate` check is an `eval-quality-gates` command the adopter adopted, run as a child process with no shell and the
  * plan's argv, in the evaluation folder, as the leader of a process group of its own: it ends at the plan check's
  * `timeoutMs` or past 64 MiB of output (exit 12, what it printed kept), and a signal to `ci` reaches the group first.
  *
@@ -15,6 +17,10 @@
  * is read from the evidence artifact's `contractVerdict` and is a warning (exit 0 plus a warning line and a `warn` row),
  * and `ci` passes no `--strict`. The final exit is the most severe blocking result in the order 64, 12, 5, 4, 3, 13, 11,
  * 10, 2, 1, then 0.
+ *
+ * The plan's `compile` and `seal` checks run the engine over `contract.json` and, under a `partitionPlan`, over each of the
+ * development, held-out and both views (`engineStageCheck`, Story 1.108), so a held-out plan the engine refuses fails the
+ * `pr` tier.
  *
  * Persistence: `runs/<invocationId>/` is created through `RunDirectory`, so the write rules of Story 1.8 hold. Per
  * check it holds `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, and `ci.json` (the tier, whether the
@@ -35,8 +41,10 @@
  *     verdict and the per-probe evidence artifacts, strength aggregate and floors file are compared byte for byte with
  *     the baseline's. The stage exits pass through; when they are 0 or 2 and
  *     a file differs, is missing or is extra, the check exits 13 (evaluation evidence drift). Every file `score`
- *     writes under `scores/<id>/` is compared except its call records (`score.json` and `aggregate-strength.json`),
- *     which hold the argv of each engine call with the private staging paths and the invocation id of this replay.
+ *     writes under `scores/<id>/` is compared, the call records (each probe's `score.json` and `aggregate-strength.json`)
+ *     included, since they record neutral path forms (`recorded-paths.js`) that a replay of the same records writes
+ *     again. The one file left out is the invocation's own `scores/<id>/score.json` summary, which names this replay's
+ *     invocation id.
  *   - `gameability` scores the gameability arm of every gameability probe through `score` over the baseline's records;
  *     no target launches.
  *   - `oracle-agreement` reads the `corroboration` the engine recorded on each oracle outcome of the baseline evidence.
@@ -77,14 +85,16 @@ const {
 } = require('./compare');
 const { buildCorpusIndex, corpusDigestOf } = require('./corpus-index');
 const { loadEngine } = require('./engine');
-const { runEngineStage } = require('./engine-cli');
+const { EngineStageError, runEngineStage } = require('./engine-cli');
+const { signalGroup, stopGroups } = require('./process-group');
 const { escapeUnprintable, findingLine } = require('./finding-lines');
 const { isApiEntry } = require('./http-target');
 const { PLAN_PATH, TIERS, classify, mostSevere, readPlan } = require('./ci-plan');
-const { PartitionPlanError, loadContractView } = require('./partition');
+const { PartitionPlanError, heldOutPlanName, loadContractView } = require('./partition');
 const { calibrationShortfalls } = require('./calibration');
 const { ensureRunsDirectory, newInvocationId, readJson, runPreflightCommand } = require('./preflight');
 const { createArtifactValidator } = require('./records');
+const { textNeutralizer } = require('./recorded-paths');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { runRunCommand } = require('./run');
 const { runScoreCommand } = require('./score');
@@ -112,8 +122,8 @@ const POLICY_NAME = 'policy/scoring-policy.json';
 const CONFORMANCE_FILE = 'adapter/http-probe-port.conformance.mjs';
 const SCRATCH_PREFIX = 'tea-evaluate-replay-';
 const OWNER_NAME = '.tea-evaluate-ci-owner.json';
-/** What a replay leaves out of its comparison: the call records of `score`, which hold each engine call's argv, private staging paths and invocation id. */
-const CALL_RECORDS = new Set(['score.json', 'aggregate-strength.json']);
+/** What a replay leaves out of its comparison: the invocation's own summary, which names the invocation id of this replay. */
+const SUMMARY_RECORD = 'score.json';
 /**
  * What a child (a gate, the conformance run) may print and how long it may run. A child that prints more than
  * `MAX_OUTPUT_BYTES` (64 MiB, both streams together) is killed and the check exits 12 with what was captured; a gate
@@ -270,7 +280,8 @@ async function runCiCommand(folder, { tier, env = process.env, log = () => {} } 
     }
   };
   const context = createContext({ folder, tier, env, log, writer, scratch });
-  // An interrupting signal reaches the gate's process group and removes the scratch directory.
+  // An interrupting signal ends the engine stage that is running (`cleanUpOnSignal` does, before this handler), reaches the gate's
+  // process group and removes the scratch directory.
   const release = cleanUpOnSignal([], new AbortController(), {
     onSignal: (name) => {
       stopChildren(context, name, SIGNAL_GRACE_MS);
@@ -354,6 +365,17 @@ async function runCheck(context, entry) {
     outcome = result(INFRASTRUCTURE, { stderr: `${escapeUnprintable(String(error?.message ?? error))}\n`, source: 'tea-evaluate' });
   }
   if (outcome.stderr === '' && logged.length > 0) outcome.stderr = `${logged.map((line) => escapeUnprintable(line)).join('\n')}\n`;
+  // What an `evaluate` check printed and logged is uploaded with `runs/`, so it is recorded in the neutral forms; a gate's output is the gate's own.
+  if (entry.kind === 'evaluate') {
+    const neutral = textNeutralizer({ folder: context.folder });
+    outcome = {
+      ...outcome,
+      stdout: neutral(outcome.stdout),
+      stderr: neutral(outcome.stderr),
+      warnings: outcome.warnings.map(neutral),
+      notes: outcome.notes.map(neutral),
+    };
+  }
   // The action comes from AD-10's table alone; the plan's `enforcement` records the class and changes nothing here.
   const classified = classify(entry.kind, outcome.exitCode, outcome.source);
   let { action } = classified;
@@ -452,35 +474,12 @@ function finish({ folder, tier, writer, rows, baseline }) {
 // Child processes: gate checks and the conformance run
 
 /**
- * Signals the process group `child` leads (the child itself where groups do not exist). A group that is gone is not an
- * error, and neither is one whose members have all ended and wait to be reaped: macOS answers EPERM for it.
- */
-function signalGroup(child, signal) {
-  try {
-    if (process.platform === 'win32') child.kill(signal);
-    else process.kill(-child.pid, signal);
-  } catch (error) {
-    if (error.code !== 'ESRCH' && error.code !== 'EPERM') throw error;
-  }
-}
-
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-/**
- * Ends every child the invocation has running: `signal` goes to its process group first and, once `graceMs` has passed
- * (a wait that blocks, since the caller is a signal handler about to end the process), SIGKILL follows. Nothing a gate
- * started outlives `ci` that way, except when `ci` itself is killed with SIGKILL, which no handler sees.
+ * Ends every child the invocation has running (`stopGroups`, `process-group.js`): `signal` goes to its process group first and,
+ * once `graceMs` has passed, SIGKILL follows. Nothing a gate started outlives `ci` that way, except when `ci` itself is killed
+ * with SIGKILL, which no handler sees. The engine stages end through `cleanUpOnSignal`, which stops them before this runs.
  */
 function stopChildren(context, signal, graceMs) {
-  if (context.children.size === 0) return;
-  for (const child of context.children) signalGroup(child, signal);
-  if (signal !== 'SIGKILL') {
-    sleepSync(graceMs);
-    for (const child of context.children) signalGroup(child, 'SIGKILL');
-  }
-  context.children.clear();
+  stopGroups(context.children, signal, graceMs);
 }
 
 /**
@@ -594,7 +593,10 @@ async function runGate(context, entry) {
 // evaluate checks
 
 async function checkCheck(context) {
-  const findings = await checkEvaluation(context.folder, { env: context.env });
+  // The check's engine compile works in a directory on the invocation's list, beside the replay's scratch directory, which carries the
+  // owner file: a signal removes the private parent, and the next `ci` over the folder removes it after a SIGKILL.
+  invocationScratch(context);
+  const findings = await checkEvaluation(context.folder, { env: context.env, scratch: context.scratch });
   const text = findings.map((entry) => findingLine(entry.file, entry.rule, entry.message));
   text.push(
     findings.length === 0
@@ -604,23 +606,140 @@ async function checkCheck(context) {
   return result(findings.length === 0 ? OK : AUTHORING, { stdout: text.join('') });
 }
 
-/** `compile` and `seal` over the evaluation's `contract.json`, through the engine CLI; the stage's exit passes through. */
-function engineStageCheck(context, entry, stage, produced) {
-  const staging = stagingDirectory(context, 'tea-evaluate-engine-');
-  const output = path.join(staging, produced);
-  const called = runEngineStage(stage, ['--in', path.join(context.folder, CONTRACT_NAME), '--out', output], {
-    runDirectory: context.writer.root,
-    recordPath: `checks/${entry.id}/engine.json`,
-    writer: context.writer,
-    env: context.env,
-    log: context.log,
+/**
+ * The views the engine stage checks run over (Story 1.108): one entry, `contract.json`, for a folder with no `partitionPlan`
+ * (and for one whose `evaluation.json` cannot be read, which is the `check` check's finding), and under a `partitionPlan` one
+ * entry for each of the development, held-out and both views. Each entry names its `view` and holds `file`, the contract the stage
+ * reads, or `problem`, the message of the error that kept the view from being derived (authoring, exit 10), or `unstaged`, a message
+ * naming the code of the error that kept a derived view from being staged (infrastructure, exit 12). The development view is the folder's
+ * `contract.json` itself, so the held-out plan is read only for the held-out and both views. A derived view is staged in a
+ * directory of the invocation's scratch list.
+ */
+function stageViews(context) {
+  return context.once('stage-views', () => {
+    const contractFile = path.join(context.folder, CONTRACT_NAME);
+    let evaluation = null;
+    try {
+      evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+    } catch {
+      // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is compiled as before.
+    }
+    if (evaluation?.partitionPlan === undefined) return [{ view: null, file: contractFile }];
+    const views = [{ view: 'development', file: contractFile }];
+    for (const view of ['held-out', 'both']) {
+      let derived;
+      try {
+        derived = loadContractView({ folder: context.folder, evaluation, partition: view });
+      } catch (error) {
+        // A plan error names paths only. Any other error comes from a file that is not what its schema says, and its text can quote
+        // the file, so the message names the files and the error's class.
+        views.push({
+          view,
+          problem:
+            error instanceof PartitionPlanError
+              ? error.message
+              : `${heldOutPlanName(evaluation)} and contract.json do not derive the ${view} view (an unexpected ${error?.name ?? 'error'})`,
+        });
+        continue;
+      }
+      // A view that is derived and cannot be staged is a fault of this machine, which is infrastructure and no defect of the plan.
+      try {
+        const staged = path.join(stagingDirectory(context, 'tea-evaluate-view-'), CONTRACT_NAME);
+        fs.writeFileSync(staged, derived.bytes);
+        views.push({ view, file: staged });
+      } catch (error) {
+        views.push({ view, unstaged: `the derived ${view} view could not be staged (${error?.code ?? error?.name ?? 'error'})` });
+      }
+    }
+    return views;
   });
-  const artifacts = [`checks/${entry.id}/engine.json`];
-  if (fs.existsSync(output)) {
-    context.writer.copyIn(`checks/${entry.id}/${produced}`, output);
-    artifacts.push(`checks/${entry.id}/${produced}`);
+}
+
+/**
+ * `compile` and `seal` over the contract each view of the evaluation runs, through the engine CLI; the stage's exit passes through.
+ *
+ * A folder with no `partitionPlan` runs the stage once over `contract.json`, writes `checks/<id>/engine.json` and the produced artifact
+ * beside it, and prints what the engine printed. Under a `partitionPlan` the development view keeps exactly those paths, and the
+ * held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`. The stdout names each view
+ * and its exit. The development view's own stdout and stderr pass through as the check's, and what the engine said about the held-out
+ * or both view stays in that view's `engine.json`, since it can quote the held-out plan. The exit is the most severe of the views'
+ * exits, so the engine's exit class reaches `ci` unchanged. A view that cannot be derived is a finding of that view with exit 10, its
+ * stage does not run, and every other view still runs. Sealing recompiles first (eval-quality's own rule), so the engine refuses to seal
+ * a view it refuses to compile, and a refused view leaves no produced artifact.
+ */
+async function engineStageCheck(context, entry, stage, produced) {
+  const views = stageViews(context);
+  const whereOf = (view) => (view === null || view === 'development' ? `checks/${entry.id}` : `checks/${entry.id}/${view}`);
+  const run = async ({ view, file }) => {
+    const where = whereOf(view);
+    const staging = stagingDirectory(context, 'tea-evaluate-engine-');
+    const output = path.join(staging, produced);
+    const called = await runEngineStage(stage, ['--in', file, '--out', output], {
+      runDirectory: context.writer.root,
+      folder: context.folder,
+      recordPath: `${where}/engine.json`,
+      writer: context.writer,
+      env: context.env,
+      log: context.log,
+    });
+    const artifacts = [`${where}/engine.json`];
+    if (fs.existsSync(output)) {
+      context.writer.copyIn(`${where}/${produced}`, output);
+      artifacts.push(`${where}/${produced}`);
+    }
+    return { called, artifacts, record: `${where}/engine.json` };
+  };
+  if (views[0].view === null) {
+    const { called, artifacts } = await run(views[0]);
+    return result(called.exitCode, { stdout: called.stdout, stderr: called.stderr, artifacts });
   }
-  return result(called.exitCode, { stdout: called.stdout, stderr: called.stderr, artifacts });
+  const exits = [];
+  const artifacts = [];
+  // What each view's summary says comes first, and the development view's own streams follow, so the engine's bytes stay exact and last.
+  let summary = '';
+  let faults = '';
+  let developmentStdout = '';
+  let developmentStderr = '';
+  for (const entryView of views) {
+    const { view } = entryView;
+    if (entryView.problem !== undefined) {
+      exits.push(AUTHORING);
+      summary += findingLine(`${view} view`, 'partition-plan', `${entryView.problem}; ${stage} did not run over the ${view} view`);
+      continue;
+    }
+    if (entryView.unstaged !== undefined) {
+      exits.push(INFRASTRUCTURE);
+      summary += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
+      faults += `${stage} over the ${view} view: ${escapeUnprintable(entryView.unstaged)}\n`;
+      continue;
+    }
+    let ran;
+    try {
+      ran = await run(entryView);
+    } catch (error) {
+      if (!(error instanceof EngineStageError)) throw error;
+      exits.push(INFRASTRUCTURE);
+      // The stage wrote its record before it failed.
+      artifacts.push(`${whereOf(view)}/engine.json`);
+      summary += `${stage} over the ${view} view: eval-quality could not run it (exit ${INFRASTRUCTURE})\n`;
+      faults += `${stage} over the ${view} view: ${escapeUnprintable(error.message)}\n`;
+      continue;
+    }
+    const { called, artifacts: written, record } = ran;
+    exits.push(called.exitCode);
+    artifacts.push(...written);
+    summary += `${stage} over the ${view} view: eval-quality exited ${called.exitCode}${
+      called.exitCode === 0 ? '' : `; its record is ${relativeTo(context.folder, context.writer.pathOf(record))}`
+    }\n`;
+    // What an engine message of the held-out or both view says can quote the held-out plan, so it stays in that view's own record.
+    if (view === 'development') {
+      developmentStdout = called.stdout;
+      developmentStderr = called.stderr;
+    }
+  }
+  const stdout = `${summary}${developmentStdout}`;
+  const stderr = `${faults}${developmentStderr}`;
+  return result(mostSevere(exits), { stdout, stderr, artifacts });
 }
 
 /** eval-quality's environment-probe conformance suite over the evaluation's HTTP port, against a loopback stub it starts and closes itself. */
@@ -785,20 +904,31 @@ function staleBaseline(context, baseline) {
       // An evaluation.json that cannot be read is the check's finding, and the folder's contract.json is compiled as before.
     }
     if (evaluation?.partitionPlan !== undefined && baseline.manifest.partition !== 'development') {
+      let view = null;
       try {
-        const view = loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition });
-        const staged = path.join(staging, CONTRACT_NAME);
-        fs.writeFileSync(staged, view.bytes);
-        // The compile reads the staged view only once it is written.
-        contractFile = staged;
+        view = loadContractView({ folder: context.folder, evaluation, partition: baseline.manifest.partition });
       } catch (error) {
         // Every failure to derive the view is a reason, so a baseline is never passed without its digest comparison.
         viewProblem = error instanceof PartitionPlanError ? error.message : `an unexpected ${error?.name ?? 'error'} while deriving it`;
       }
+      if (view !== null) {
+        const staged = path.join(staging, CONTRACT_NAME);
+        try {
+          fs.writeFileSync(staged, view.bytes);
+        } catch (error) {
+          // A view that is derived and cannot be staged is a fault of this machine, which is infrastructure and no reason of staleness.
+          throw new Error(
+            `the ${baseline.manifest.partition} view of the contract could not be staged (${error?.code ?? error?.name ?? 'error'})`,
+          );
+        }
+        // The compile reads the staged view only once it is written.
+        contractFile = staged;
+      }
     }
     if (viewProblem !== null) reasons.push(`the ${baseline.manifest.partition} view of the contract cannot be derived (${viewProblem})`);
-    const stage = runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
+    const stage = await runEngineStage('compile', ['--in', contractFile, '--out', compiled], {
       runDirectory: context.writer.root,
+      folder: context.folder,
       recordPath: 'baseline-staleness/engine.json',
       writer: context.writer,
       env: context.env,
@@ -850,16 +980,18 @@ async function tierBaseline(context) {
   const baseline = locateBaseline(context);
   if (baseline.absent === true || baseline.problem !== undefined) return null;
   try {
-    const reasons = await staleBaseline(context, baseline);
+    // `ci.json` records the reasons in the neutral forms, as each check's warning does, so the tier's warning is the same text.
+    const neutral = textNeutralizer({ folder: context.folder });
+    const reasons = (await staleBaseline(context, baseline)).map(neutral);
     return { stale: reasons.length > 0, reasons };
   } catch (error) {
-    return { stale: false, reasons: [], error: String(error?.message ?? error) };
+    return { stale: false, reasons: [], error: textNeutralizer({ folder: context.folder })(String(error?.message ?? error)) };
   }
 }
 
 // --- the replay
 
-/** Every regular file under `root/relative` as `path below relative -> bytes`, call records left out; null with findings when a link is met. */
+/** Every regular file under `root/relative` as `path below relative -> bytes`, the invocation's summary left out; null with findings when a link is met. */
 function evidenceFiles(root, relative) {
   const files = new Map();
   const findings = [];
@@ -868,7 +1000,7 @@ function evidenceFiles(root, relative) {
     relative,
     (child) => {
       const name = child.slice(relative.length + 1);
-      if (CALL_RECORDS.has(path.posix.basename(name))) return;
+      if (name === SUMMARY_RECORD) return;
       files.set(name, regularFileBytes(path.join(root, ...child.split('/'))));
     },
     findings,
@@ -922,12 +1054,12 @@ function scratchRun(context, baseline) {
 
 /** eval-quality's preflight stage over the baseline's contract, probes and observations; its verdict is copied to `replay/`. */
 function replayPreflight(context, baseline) {
-  return context.once('replay-preflight', () => {
+  return context.once('replay-preflight', async () => {
     const scratch = scratchRun(context, baseline);
     const staging = path.join(scratch.directory, 'preflight');
     fs.mkdirSync(staging);
     const output = path.join(staging, 'preflight-verdict.json');
-    const stage = runEngineStage(
+    const stage = await runEngineStage(
       'preflight',
       [
         '--contract',
@@ -943,6 +1075,7 @@ function replayPreflight(context, baseline) {
       ],
       {
         runDirectory: context.writer.root,
+        folder: scratch.folder,
         recordPath: 'replay/engine/preflight.json',
         writer: context.writer,
         env: context.env,
@@ -959,6 +1092,34 @@ function replayPreflight(context, baseline) {
 }
 
 /**
+ * The oracle each probe of the baseline was scored under (Story 1.110): the `--designated-oracle` argument of the probe's call record in
+ * the accepted score invocation, by probe ID. A probe whose record names none, or cannot be read, is scored under the engine's own rule,
+ * and a replay that then differs from the baseline is evidence drift.
+ *
+ * @returns {Map<string, string>}
+ */
+function recordedDesignations(baseline) {
+  const designations = new Map();
+  const directory = path.join(baseline.directory, 'scores', baseline.manifest.scoreInvocationId);
+  let entries;
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return designations;
+  }
+  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+    try {
+      const { argv } = JSON.parse(regularFileBytes(path.join(directory, entry.name, 'score.json')).toString('utf8'));
+      const at = Array.isArray(argv) ? argv.indexOf('--designated-oracle') : -1;
+      if (at !== -1 && typeof argv[at + 1] === 'string') designations.set(entry.name, argv[at + 1]);
+    } catch {
+      // A call record that cannot be read leaves the probe to the engine's own rule.
+    }
+  }
+  return designations;
+}
+
+/**
  * `score` over the placed baseline in the scratch copy; every file it wrote is copied to `replay/scores/`. The produced
  * subtree is the one `scores/` entry that is new after the call, so no entry already there (the accepted one, or a
  * planted one) is ever read as produced. The call's staging directories live in the scratch directory.
@@ -969,6 +1130,7 @@ function replayScore(context, baseline) {
     const logged = [];
     const before = new Set(scoreInvocations(scratch.runDirectory) ?? []);
     const outcome = await runScoreCommand(scratch.folder, {
+      designations: recordedDesignations(baseline),
       run: scratch.acceptedRun,
       env: context.env,
       stagingRoot: scratch.stagingRoot,
@@ -983,7 +1145,7 @@ function replayScore(context, baseline) {
     if (scoreId !== null) {
       const relative = `scores/${scoreId}`;
       ({ files: produced } = evidenceFiles(scratch.runDirectory, relative));
-      // Everything the score wrote is kept as evidence, its call records included; the comparison leaves those out.
+      // Everything the score wrote is kept as evidence, its summary included; the comparison leaves the summary out.
       const everything = new Map();
       walkRegular(
         scratch.runDirectory,
@@ -1019,7 +1181,7 @@ function concernsOf(files, label) {
 async function replayCheck(context) {
   const baseline = locateBaseline(context);
   if (baseline.problem !== undefined) return baseline.problem();
-  const verdict = replayPreflight(context, baseline);
+  const verdict = await replayPreflight(context, baseline);
   const scored = await replayScore(context, baseline);
   const engine = await loadEngine();
   const digest = (bytes) => engine.digestBytes(bytes);
@@ -1409,4 +1571,4 @@ const EVALUATE_CHECKS = Object.fromEntries([
   ['strength-comparison', strengthComparisonCheck],
 ]);
 
-module.exports = { CALL_RECORDS, CiOutcome, EVALUATE_CHECKS, MAX_OUTPUT_BYTES, confine, runCiCommand };
+module.exports = { SUMMARY_RECORD, CiOutcome, EVALUATE_CHECKS, MAX_OUTPUT_BYTES, confine, runCiCommand };

@@ -78,9 +78,7 @@ function headingToAnchor(heading) {
     .toLowerCase()
     .replaceAll(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
     .replaceAll(/[^\w\s-]/g, '') // Remove special chars
-    .replaceAll(/\s+/g, '-') // Spaces to hyphens
-    .replaceAll(/-+/g, '-') // Collapse hyphens
-    .replaceAll(/^-+|-+$/g, ''); // Trim hyphens
+    .replaceAll(/\s/g, '-'); // Each space to a hyphen, as the site's github-slugger does: no collapsing, no trimming
 }
 
 /**

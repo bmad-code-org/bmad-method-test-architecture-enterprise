@@ -4,14 +4,18 @@
 # instead of installing a pinned npm tarball.
 #
 # NOT YET ENABLED: no ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN repository
-# secret exists yet, so the agent-running steps below are commented out and
-# the trigger is workflow_dispatch only, not pull_request. A run without
-# either secret would just fail and post a confusing "infrastructure failure"
-# comment on every real PR.
+# secret exists yet, so the trigger is workflow_dispatch only, not
+# pull_request, and the two agent-running steps below are gated on
+# `github.event_name == 'pull_request'`: under workflow_dispatch they are
+# skipped. A run without either secret would just fail and post a confusing
+# "infrastructure failure" comment on every real PR. The steps stay real
+# instead of commented out so the verdict step's `steps.run-review.outcome`
+# resolves for actionlint (test:workflows-lint). A skipped step's outcome is
+# `skipped`, which the verdict step reports as "failed", as it did before.
 #
-# To enable: add one of the two secrets, uncomment the "Install the pinned
-# agent CLI" and "Run headless test review" steps, and switch `on:` back to
-# `pull_request: { types: [opened, synchronize, reopened] }`.
+# To enable: add one of the two secrets and switch `on:` back to
+# `pull_request: { types: [opened, synchronize, reopened] }`. The agent steps
+# then run on their own; they need no uncommenting.
 #   - ANTHROPIC_API_KEY: pay-per-token via the Anthropic Console.
 #   - CLAUDE_CODE_OAUTH_TOKEN: a long-lived token from an existing Claude
 #     subscription, generated locally with `claude setup-token`. No separate
@@ -57,18 +61,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # - name: Install the pinned agent CLI
-      #   env:
-      #     CLAUDE_CODE_VERSION: 2.1.220
-      #   run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Install the pinned agent CLI
+        if: github.event_name == 'pull_request'
+        env:
+          CLAUDE_CODE_VERSION: 2.1.220
+        run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
-      # - name: Run headless test review
-      #   id: run-review
-      #   env:
-      #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      #     # or: CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      #     BASE_REF: origin/${{ github.base_ref }}
-      #   run: node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root skills/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
+      - name: Run headless test review
+        id: run-review
+        if: github.event_name == 'pull_request'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BASE_REF: origin/${{ github.base_ref }}
+        # A secret the repository lacks expands to an empty string, and the agent runner passes a set variable through as it is,
+        # so the empty one is unset: an empty ANTHROPIC_API_KEY beside a real OAuth token would reach the agent as a key.
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then unset ANTHROPIC_API_KEY; fi
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then unset CLAUDE_CODE_OAUTH_TOKEN; fi
+          node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root skills/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
 
       - name: Upload review artifacts
         if: always()

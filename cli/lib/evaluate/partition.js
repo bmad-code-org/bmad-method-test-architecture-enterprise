@@ -16,6 +16,18 @@ const PARTITIONS = ['development', 'held-out'];
 /** The held-out plan's format version, which `schemas/held-out-plan.schema.json` holds the same. */
 const HELD_OUT_PLAN_VERSION = 1;
 const STEP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PROBE_ID = /^P-[0-9]{3,}$/;
+/**
+ * The folder the held-out plan and the held-out answers sit in, sealed from a development run: the held-out plan is a file
+ * directly under it, and `corpus-index.js` leaves everything below it out of a development run's staleness comparison.
+ */
+const HELD_OUT_DIRECTORY = 'corpus/held-out/';
+/**
+ * Where a gameability probe's answers to the held-out plan's steps are committed (Story 1.109), one `<probeId>.json` per probe in
+ * the shape of `corpus/gameability/<probeId>.json`. It sits beside the held-out plan under `HELD_OUT_DIRECTORY`: a development run
+ * opens none of it.
+ */
+const HELD_OUT_ANSWERS_DIRECTORY = `${HELD_OUT_DIRECTORY}gameability/`;
 const ORACLE_ID = /^O-[0-9]{3,}$/;
 const BEHAVIOR_ID = /^B-[0-9]{3,}$/;
 const RUBRIC_ID = /^R-[0-9]{3,}$/;
@@ -45,6 +57,41 @@ const HELD_OUT_PLAN_PATH = new RegExp(
     .heldOutPlan.pattern,
 );
 
+/** The error of a path that holds something other than a regular file where one is required. */
+class NotRegularFileError extends Error {
+  constructor() {
+    super('is not a regular file');
+    this.name = 'NotRegularFileError';
+  }
+}
+
+/**
+ * The bytes of `file`, which must be a regular file (a link to one is followed). The file is opened without blocking and checked
+ * through the descriptor, so a FIFO or a device is refused at once and never waited on: a blocking read would hold the event loop, and a
+ * signal to the command could not end it (Story 1.92).
+ *
+ * @returns {Buffer}
+ * @throws {NotRegularFileError} when the path is not a regular file; any other failure to open or read is the system's own error
+ */
+function readRegularFile(file) {
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) throw new NotRegularFileError();
+    return fs.readFileSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/**
+ * The held-out plan's path as a message may name it: the relative path when `evaluation.json` gives one of the schema's shape,
+ * otherwise the `partitionPlan` field that holds it, so no byte a reader typed outside that shape reaches a message.
+ */
+function heldOutPlanName(evaluation) {
+  const relative = evaluation?.partitionPlan?.heldOutPlan;
+  return typeof relative === 'string' && HELD_OUT_PLAN_PATH.test(relative) ? relative : 'the partitionPlan of evaluation.json';
+}
+
 /** Every committed probe, sorted by file name, parsed. */
 function committedProbes(folder) {
   const directory = path.join(folder, 'probes');
@@ -60,6 +107,19 @@ function committedProbes(folder) {
 function unknownPartition(partition) {
   if (partition === undefined || PARTITIONS.includes(partition)) return null;
   return { exitCode: 64, message: `unknown partition ${JSON.stringify(partition)}; choose development or held-out` };
+}
+
+/**
+ * The usage refusal (exit 64) for a request that names no partition over an evaluation that declares a `partitionPlan`, or null.
+ * The request would derive the both view, which launches the held-out request, so an authoring step names its partition.
+ */
+function partitionRequired(partition, evaluation) {
+  if (partition !== undefined || evaluation.partitionPlan === undefined) return null;
+  return {
+    exitCode: 64,
+    message:
+      'evaluation.json declares a partitionPlan; name the partition with --partition development or --partition held-out, since a preflight with no --partition launches the held-out request',
+  };
 }
 
 /**
@@ -184,7 +244,7 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
   const file = path.join(folder, ...relative.split('/'));
   let bytes;
   try {
-    if (fs.realpathSync(path.dirname(file)) !== path.join(fs.realpathSync(folder), 'corpus', 'held-out')) {
+    if (fs.realpathSync.native(path.dirname(file)) !== path.join(fs.realpathSync.native(folder), 'corpus', 'held-out')) {
       throw new PartitionPlanError(`${relative} is not directly under corpus/held-out/ of the evaluation folder`);
     }
     if (!fs.lstatSync(file).isFile()) throw new PartitionPlanError(`${relative} is not a regular file`);
@@ -213,6 +273,52 @@ function readHeldOutPlan(folder, evaluation, { shaped = true } = {}) {
     );
   }
   return plan;
+}
+
+/** Where one gameability probe's answers to the held-out plan's steps are committed, relative to the evaluation folder. */
+const heldOutResponsePath = (probeId) => `${HELD_OUT_ANSWERS_DIRECTORY}${probeId}.json`;
+
+/**
+ * One gameability probe's answers to the held-out plan's steps (Story 1.109): the file's bytes, which a run digests, and its parsed
+ * content, whose `steps` answer the held-out plan's steps. Only the held-out and both views read it, so a development run never
+ * opens it. The file is a regular file directly under `corpus/held-out/gameability/` of the evaluation folder, reached through no
+ * link, and a refusal names the path and never a byte of the file.
+ *
+ * @param {string} folder
+ * @param {string} probeId a probe ID of the form `P-NNN`
+ * @returns {{ path: string, bytes: Buffer, response: object }}
+ * @throws {PartitionPlanError} `absent` is true when the file does not exist
+ */
+function readHeldOutResponse(folder, probeId) {
+  if (typeof probeId !== 'string' || !PROBE_ID.test(probeId)) {
+    throw new PartitionPlanError('a gameability probe answers the held-out plan from a file named by its probe ID, of the form P-NNN');
+  }
+  const relative = heldOutResponsePath(probeId);
+  const file = path.join(folder, ...relative.split('/'));
+  let bytes;
+  try {
+    // The native real path spells the directory as the disk does, on a case-insensitive file system too, so a case-variant
+    // `corpus/held-out/Gameability/` is refused here and no other spelling than the sealed one is read.
+    if (
+      fs.realpathSync.native(path.dirname(file)) !==
+      path.join(fs.realpathSync.native(folder), ...HELD_OUT_ANSWERS_DIRECTORY.split('/').filter(Boolean))
+    ) {
+      throw new PartitionPlanError(`${relative} is not directly under ${HELD_OUT_ANSWERS_DIRECTORY} of the evaluation folder`);
+    }
+    if (!fs.lstatSync(file).isFile()) throw new PartitionPlanError(`${relative} is not a regular file`);
+    bytes = fs.readFileSync(file);
+  } catch (error) {
+    if (error instanceof PartitionPlanError) throw error;
+    const refusal = new PartitionPlanError(`${relative} cannot be read (${error.code ?? 'error'})`);
+    refusal.absent = error.code === 'ENOENT';
+    throw refusal;
+  }
+  try {
+    return { path: relative, bytes, response: JSON.parse(bytes.toString('utf8')) };
+  } catch {
+    // The parser's own message quotes the bytes, which stay out of every finding.
+    throw new PartitionPlanError(`${relative} does not parse as JSON`);
+  }
 }
 
 /**
@@ -309,9 +415,132 @@ function contractView({ contractBytes, evaluation, heldOutPlan = null, partition
  * @throws {PartitionPlanError}
  */
 function loadContractView({ folder, evaluation, partition }) {
-  const contractBytes = fs.readFileSync(path.join(folder, 'contract.json'));
+  let contractBytes;
+  try {
+    contractBytes = readRegularFile(path.join(folder, 'contract.json'));
+  } catch (error) {
+    if (error instanceof NotRegularFileError) throw new PartitionPlanError('contract.json is not a regular file');
+    throw error;
+  }
   const needsPlan = evaluation.partitionPlan !== undefined && partition !== 'development';
   return contractView({ contractBytes, evaluation, heldOutPlan: needsPlan ? readHeldOutPlan(folder, evaluation) : null, partition });
+}
+
+/**
+ * What a probe designates when nothing is to be passed: the engine's own rule (a behavior that lists exactly one oracle designates it)
+ * applies. `listed` is the oracle list the folder's both view holds for the probe's behavior, which only a both run has.
+ */
+const NO_DESIGNATION = Object.freeze({ oracleId: null, problem: null, listed: undefined });
+
+/** The oracle list a contract holds under a behavior: an array, or null for a behavior the contract does not hold or one with no list. */
+const oraclesListed = (contract, behaviorId) => {
+  const behavior = (Array.isArray(contract?.behaviors) ? contract.behaviors : []).find((entry) => entry?.id === behaviorId);
+  return Array.isArray(behavior?.oracles) ? behavior.oracles : null;
+};
+
+/**
+ * Whether the two oracle lists of one behavior are the same list (an absent list is null). The sealed contract of a both run is the
+ * both view the run compiled, so a folder that derives another list has drifted from the run.
+ */
+const sameOracles = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+
+/**
+ * The oracle a probe of a both run asks `eval-quality score --designated-oracle` for (Story 1.110, AD-22).
+ *
+ * The both view gives a behavior its development oracle and its held-out oracle, so eval-quality's own rule (a behavior that lists
+ * exactly one oracle designates it) designates none there. Each probe belongs to one partition, though: the held-out one when its
+ * ID is in `heldOutProbes`, the development one otherwise. The oracle it is designated is the one its partition's own view lists
+ * for its behavior (`contractView` over that partition, the view the partition's own run compiles). When that view lists no
+ * oracle or several, nothing is passed, and the both run scores the probe undesignated as the partition's own run does. When the
+ * both view lists exactly one oracle the engine designates it itself, so nothing is passed either.
+ * A run that is not a both run designates nothing: every view of a development or held-out run is the one that run compiled.
+ * A both run's answer also carries `listed`, the oracle list the folder's both view holds for the probe's behavior (every view of a
+ * folder with no `partitionPlan` is `contract.json`), so a caller can hold it against the list the run's sealed contract holds.
+ *
+ * @param {object} options
+ * @param {Buffer} options.contractBytes the folder's `contract.json`
+ * @param {object} options.evaluation parsed `evaluation.json`
+ * @param {object|null} options.heldOutPlan the parsed held-out plan; read only by a both run under a plan, never by a development run
+ * @param {string} options.partition the run's partition (`development`, `held-out` or `both`)
+ * @param {Iterable<string>} options.heldOutProbes `evaluation.json`'s `heldOutProbes`
+ * @returns {(probe: { probeId: string, behaviorId: string }) => { oracleId: string|null, problem: string|null, listed: string[]|null|undefined }}
+ *   `problem` names a probe whose behavior the contract does not hold; a problem never quotes a byte of the plan
+ */
+function bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition, heldOutProbes }) {
+  if (partition !== 'both') return () => NO_DESIGNATION;
+  if (evaluation?.partitionPlan === undefined) {
+    let source;
+    try {
+      source = JSON.parse(contractBytes.toString('utf8'));
+    } catch {
+      // The contract's own finding comes from the input check.
+      return () => NO_DESIGNATION;
+    }
+    return (probe) => ({ oracleId: null, problem: null, listed: oraclesListed(source, probe?.behaviorId) });
+  }
+  const heldOut = new Set(heldOutProbes ?? []);
+  const view = (name) =>
+    contractView({ contractBytes, evaluation, heldOutPlan: name === 'development' ? null : heldOutPlan, partition: name });
+  // Every view is derived before any probe is asked, so a plan that cannot yield one fails here and not inside a score call.
+  const views = { both: view('both'), development: view('development'), 'held-out': view('held-out') };
+  return (probe) => {
+    const inBoth = oraclesListed(views.both.contract, probe?.behaviorId);
+    if (inBoth === null) {
+      const probeLabel = named(probe?.probeId, PROBE_ID, 'a probe');
+      const behaviorLabel = named(probe?.behaviorId, BEHAVIOR_ID, 'a behavior');
+      return { oracleId: null, problem: `${probeLabel} names ${behaviorLabel}, which the contract does not hold`, listed: null };
+    }
+    if (inBoth.length === 1) return { oracleId: null, problem: null, listed: inBoth };
+    const own = oraclesListed(views[heldOut.has(probe.probeId) ? 'held-out' : 'development'].contract, probe.behaviorId);
+    const oracleId = Array.isArray(own) && own.length === 1 && typeof own[0] === 'string' ? own[0] : null;
+    return { oracleId, problem: null, listed: inBoth };
+  };
+}
+
+/**
+ * `bothViewDesignation` over a folder, for a command that holds a run and not the view it ran (`score`): reads `evaluation.json`
+ * and, for a both run, `contract.json`, and under a `partitionPlan` the held-out plan. A development or held-out run opens none of
+ * them, so a development run never opens `corpus/held-out/`; a run with no plan opens `contract.json` and no plan.
+ *
+ * @param {object} options
+ * @param {string} options.folder
+ * @param {string|undefined} options.partition the run record's partition
+ * @param {Iterable<string>|undefined} options.heldOutProbes the run record's `heldOutProbes`
+ * @returns {(probe: object) => { oracleId: string|null, problem: string|null, listed: string[]|null|undefined }}
+ * @throws {PartitionPlanError} when a both run's evaluation, contract or held-out plan cannot be read; the message names paths only
+ */
+function loadBothViewDesignation({ folder, partition, heldOutProbes }) {
+  if (partition !== 'both') return () => NO_DESIGNATION;
+  let evaluation;
+  try {
+    evaluation = JSON.parse(fs.readFileSync(path.join(folder, 'evaluation.json'), 'utf8'));
+  } catch {
+    throw new PartitionPlanError(
+      'evaluation.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived',
+    );
+  }
+  const planned = evaluation?.partitionPlan !== undefined;
+  let contractBytes;
+  try {
+    contractBytes = readRegularFile(path.join(folder, 'contract.json'));
+    JSON.parse(contractBytes.toString('utf8'));
+  } catch {
+    // A folder with no plan is scored as the engine scores it, and the input check reports its contract on its own.
+    if (!planned) return () => NO_DESIGNATION;
+    throw new PartitionPlanError(
+      'contract.json cannot be read as JSON, so the oracle each probe of the both view is scored against cannot be derived',
+    );
+  }
+  const heldOutPlan = planned ? readHeldOutPlan(folder, evaluation) : null;
+  try {
+    return bothViewDesignation({ contractBytes, evaluation, heldOutPlan, partition, heldOutProbes });
+  } catch (error) {
+    if (error instanceof PartitionPlanError) throw error;
+    // A plan or contract off its shape throws from the derivation; the cause quotes the file, so only the path is named.
+    throw new PartitionPlanError(
+      `${evaluation.partitionPlan.heldOutPlan} and contract.json do not derive the views of the both run, so the oracle each probe is scored against cannot be derived`,
+    );
+  }
 }
 
 /** The oracle IDs and `rubricId/criterionId` pairs a contract declares, read defensively: `check` reports a contract off its schema on its own. */
@@ -664,17 +893,32 @@ function partitionPlanProblems({ contract, evaluation, heldOutPlan, heldOutBehav
 }
 
 module.exports = {
+  HELD_OUT_DIRECTORY,
   HELD_OUT_PLAN_VERSION,
+  NotRegularFileError,
   PARTITIONS,
+  BEHAVIOR_ID,
+  PROBE_ID,
   PartitionPlanError,
+  oraclesListed,
+  sameOracles,
+  STEP_ID,
+  bothViewDesignation,
   committedProbes,
   contractView,
+  heldOutPlanName,
+  heldOutResponsePath,
+  loadBothViewDesignation,
   loadContractView,
   mappingView,
   mappingViewProblems,
+  named,
   partitionPlanProblems,
+  partitionRequired,
   planCriterionName,
   readHeldOutPlan,
+  readHeldOutResponse,
+  readRegularFile,
   selectPartition,
   stepsReadBy,
   unknownPartition,

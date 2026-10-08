@@ -92,7 +92,7 @@
  *
  * ONE PROJECT PER RUN
  *
- * The five projects are five services with five requests. Each is its own
+ * The six projects are six services with six requests. Each is its own
  * workspace, its own agent call, and its own case.
  *
  * EDIT SETS
@@ -106,6 +106,11 @@
  * holds and compares it with the job in the edited file, and `checkpoint` digests a project
  * file and compares it with the file after the run. A stored edit case keeps that file
  * beside the workflow.
+ *
+ * A job the plan gates is the one job of the pipeline the edit may change: the `wait` element
+ * names the job, the exact `needs` list it must end with (the entries it had, then the
+ * evaluation job's id), the events it still runs on, and the digest of its source with its
+ * `needs` lines removed, so the wait is present and nothing else of the job moved.
  *
  * THREE MODES
  *
@@ -276,7 +281,7 @@ const ACTIONLINT = {
 const LINT_TIMEOUT_MS = 30_000;
 
 /** The kinds an expected element may declare, and what each one is checked with. */
-const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job', 'preserved', 'checkpoint'];
+const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job', 'preserved', 'checkpoint', 'wait'];
 
 /** The two modes a fixture set runs the skill in: create writes the pipeline, edit changes the pipeline the project already has. */
 const SET_MODES = ['create', 'edit'];
@@ -395,12 +400,12 @@ const THRESHOLDS = {
   // an untrusted input interpolated into a script, a syntax error. Each is a
   // workflow that fails on its first push.
   maxLintFindings: 0,
-  // Sixty-three requested elements across the five projects: thirteen, five, ten, twenty-three and twelve. 0.96 admits two
-  // misses in the corpus, the width of a defensible disagreement about how an element is spelled in the two projects
-  // whose requests state their elements in prose. A project whose ground truth sets `requireEveryElement` is held to
-  // every one of its elements on its own, whatever this ratio says: the three evaluation projects' elements each read
+  // Seventy-eight requested elements across the six projects: thirteen, five, ten, twenty-three, twelve and fifteen. 0.97
+  // admits two misses in the corpus, the width of a defensible disagreement about how an element is spelled in the two
+  // projects whose requests state their elements in prose. A project whose ground truth sets `requireEveryElement` is held
+  // to every one of its elements on its own, whatever this ratio says: the four evaluation projects' elements each read
   // one property the skill's step prescribes, so a single miss is a deviation and must not hide in the aggregate.
-  requestedElementRecall: 0.96,
+  requestedElementRecall: 0.97,
   // The trigger elements on their own. A workflow whose triggers are
   // wrong never runs on the event the team asked for, so nothing else in it
   // matters, and the one disagreement the recall admits can never be a trigger.
@@ -657,6 +662,44 @@ function npmScriptOf(command) {
   return null;
 }
 
+/** Whether a backslash run before `index` leaves the character at `index` escaped. */
+function isEscaped(pattern, index) {
+  let backslashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && pattern[cursor] === '\\'; cursor--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+/** Whether a `|` sits outside every group and character class, which would split the anchors over two alternatives. */
+function hasTopLevelAlternation(pattern) {
+  let depth = 0;
+  let inCharacterClass = false;
+  for (let index = 0; index < pattern.length; index++) {
+    const character = pattern[index];
+    if (isEscaped(pattern, index)) continue;
+    if (character === '[') {
+      inCharacterClass = true;
+      continue;
+    }
+    if (character === ']') {
+      inCharacterClass = false;
+      continue;
+    }
+    if (inCharacterClass) continue;
+    if (character === '(') depth++;
+    else if (character === ')') depth--;
+    else if (character === '|' && depth === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a pattern is anchored over the whole expression, as the contract's `regex` operator requires.
+ * The logic is the operator's own rule in eval-quality (`regexRejection`), copied here so the corpus check needs no internal import.
+ */
+function isPatternAnchored(pattern) {
+  return pattern.startsWith('^') && pattern.endsWith('$') && !isEscaped(pattern, pattern.length - 1) && !hasTopLevelAlternation(pattern);
+}
+
 /**
  * Static validation of the corpus. This is what a pull request runs, and it is
  * what stops the ground truth from rotting into assertions about rules that moved
@@ -873,6 +916,47 @@ async function validateCorpus(groundTruth) {
       if (element.contractToken !== null && (typeof element.contractToken !== 'string' || element.contractToken.trim().length === 0)) {
         problems.push(`${elementLabel}: contractToken is neither null nor a non-empty string`);
       }
+      // A contract pattern is the tolerant form of the token.
+      // For a command it tolerates the quotes a run writes around a folder, and for the burn-in gate it reads a key or a name line outside a comment.
+      // It is the regex source the contract's oracle reads over the workflow, and the paired scorer tests it with `new RegExp(source)`.
+      // The contract's regex operator accepts only a pattern anchored over the whole expression.
+      // That is `^` first, `$` last and unescaped, and no alternation at the top level.
+      // `isPatternAnchored` mirrors that rule, so this check refuses an unanchored pattern before compile does.
+      // Backreferences, lookbehind and nested quantifiers stay with compile, which `test:contracts` runs over the rendered contract.
+      // The pattern states the same claim as its token, so it has to match the token.
+      // A `command` element's token is the command a run writes, so its pattern has to match that command too.
+      // A gate element's command is the one its job loops, which its pattern does not state.
+      if (element.contractPattern !== undefined) {
+        const pattern = element.contractPattern;
+        if (typeof pattern !== 'string' || pattern.trim().length === 0) {
+          problems.push(`${elementLabel}: contractPattern is declared and is not a non-empty string`);
+        } else if (element.contractToken === null) {
+          problems.push(`${elementLabel}: declares a contractPattern and no contractToken, so there is no literal for it to agree with`);
+        } else if (isPatternAnchored(pattern)) {
+          let compiled = null;
+          try {
+            compiled = new RegExp(pattern);
+          } catch {
+            problems.push(`${elementLabel}: contractPattern is not a regular expression`);
+          }
+          if (compiled !== null) {
+            if (!compiled.test(element.contractToken)) {
+              problems.push(
+                `${elementLabel}: contractPattern does not match its own contractToken ${JSON.stringify(element.contractToken)}`,
+              );
+            }
+            if (element.kind === 'command' && typeof element.command === 'string' && !compiled.test(element.command)) {
+              problems.push(
+                `${elementLabel}: contractPattern does not match the command ${JSON.stringify(element.command)} the element requests`,
+              );
+            }
+          }
+        } else {
+          problems.push(
+            `${elementLabel}: contractPattern is not anchored, and the contract's regex operator accepts only a pattern that begins with ^, ends with an unescaped $ and has no alternation at the top level`,
+          );
+        }
+      }
       switch (element.kind) {
         case 'trigger': {
           if (typeof element.event !== 'string' || element.event.length === 0) problems.push(`${elementLabel}: trigger declares no event`);
@@ -1019,6 +1103,40 @@ async function validateCorpus(groundTruth) {
             else if (sha256Of(block) !== element.sha256) {
               problems.push(
                 `${elementLabel}: the staged job ${element.jobId} digests to ${sha256Of(block)}, which is not the declared sha256`,
+              );
+            }
+          }
+          break;
+        }
+        case 'wait': {
+          if (typeof element.jobId !== 'string' || element.jobId.trim().length === 0) {
+            problems.push(`${elementLabel}: wait declares no jobId`);
+          }
+          if (
+            !Array.isArray(element.needs) ||
+            element.needs.length === 0 ||
+            element.needs.some((id) => typeof id !== 'string' || id.trim().length === 0)
+          ) {
+            problems.push(`${elementLabel}: wait declares no needs list of job ids`);
+          }
+          if (
+            element.runsOn !== undefined &&
+            (!Array.isArray(element.runsOn) || element.runsOn.length === 0 || element.runsOn.some((event) => typeof event !== 'string'))
+          ) {
+            problems.push(`${elementLabel}: runsOn is declared and is not a non-empty list of events`);
+          }
+          if (set.mode !== 'edit') {
+            problems.push(`${elementLabel}: a wait gates a job the pipeline already has, so it belongs to an edit set`);
+          }
+          if (typeof element.sha256 !== 'string' || !SHA256_HEX.test(element.sha256)) {
+            problems.push(`${elementLabel}: wait declares no sha256 of the job's bytes without its needs`);
+          } else if (setRoot && typeof element.jobId === 'string') {
+            const staged = await readText(path.join(setRoot, set.editTarget ?? WORKFLOW_PATH));
+            const block = staged.present ? jobBlockOf(staged.text, element.jobId) : null;
+            if (block === null) problems.push(`${elementLabel}: the staged pipeline carries no job ${element.jobId}`);
+            else if (sha256Of(withoutNeeds(block)) !== element.sha256) {
+              problems.push(
+                `${elementLabel}: the staged job ${element.jobId} digests to ${sha256Of(withoutNeeds(block))} without its needs, which is not the declared sha256`,
               );
             }
           }
@@ -1585,11 +1703,11 @@ async function readWorkflow(directory) {
 /**
  * Whether the workflow, read as one string, carries a literal.
  *
- * This is the document-global predicate the ci contract's oracles are paired
- * with. The contract's vocabulary addresses a text artifact as one string, so a
- * `containment` oracle can ask whether the document mentions `npm test` and
- * cannot ask whether a run: block invokes it. The harness scores the second
- * question through checkElement; this function answers the first, and
+ * This is the document-global predicate the ci contract's `containment` oracles are paired with.
+ * `workflowHoldsToken` chooses it or `workflowMatches` for each element.
+ * The contract's vocabulary addresses a text artifact as one string, so a `containment` oracle can ask whether the document mentions `npm test`.
+ * It cannot ask whether a run: block invokes it.
+ * The harness scores the second question through checkElement; this function answers the first.
  * test/test-contract-oracles.js holds each oracle to agreeing with it.
  *
  * @param {string} text
@@ -1598,6 +1716,40 @@ async function readWorkflow(directory) {
  */
 function workflowMentions(text, literal) {
   return String(text).includes(literal);
+}
+
+/**
+ * Whether the workflow, read as one string, matches a `contractPattern` source.
+ *
+ * The contract renders the same source with the vocabulary's `regex` operator.
+ * The operator reads it with no flags, so this reads it with `new RegExp(source)` and none.
+ *
+ * @param {string} text
+ * @param {string} source
+ * @returns {boolean}
+ */
+function workflowMatches(text, source) {
+  return new RegExp(source).test(String(text));
+}
+
+/**
+ * Whether the workflow holds the claim the contract's oracle states for one requested element: its
+ * `contractPattern` where the element has one, else its `contractToken` as a literal.
+ *
+ * A real run quotes its folder names for the shell.
+ * A correct run may also quote a tier, and a folded YAML scalar can break the line between the words of a command.
+ * An element whose command a run may write that way states a pattern, and its literal stays the single-spaced unquoted spelling the pattern must also match.
+ * The burn-in gate states a pattern too, because its literal is also a word a comment carries.
+ * Its pattern reads a mapping key or a `name:` line that carries the word, and a comment line or a `run:` line leaves it unsatisfied while a run-block line that starts with a key carrying the word holds, as an `env` key does.
+ *
+ * @param {string} text
+ * @param {{contractToken: string, contractPattern?: string}} element
+ * @returns {boolean}
+ */
+function workflowHoldsToken(text, element) {
+  return typeof element.contractPattern === 'string'
+    ? workflowMatches(text, element.contractPattern)
+    : workflowMentions(text, element.contractToken);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1748,6 +1900,23 @@ function jobBlockOf(text, jobId) {
   while (end < lines.length && !/^ {0,2}\S/.test(lines[end])) end += 1;
   while (end > start + 1 && lines[end - 1].trim() === '') end -= 1;
   return lines.slice(start, end).join('\n');
+}
+
+/**
+ * A job's source without its `needs` key: the `needs:` line at the job's own depth and the deeper lines that continue it
+ * (a block list), so a job that gained an entry in `needs` digests as the job it was.
+ */
+function withoutNeeds(block) {
+  const lines = String(block).split('\n');
+  const kept = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^ {4}needs:/.test(lines[index])) {
+      while (index + 1 < lines.length && /^(?: {5,}\S| {4}- )/.test(lines[index + 1])) index += 1;
+      continue;
+    }
+    kept.push(lines[index]);
+  }
+  return kept.join('\n');
 }
 
 /**
@@ -2126,6 +2295,41 @@ function checkElement(element, set, workflow, text = '', aux = {}) {
       if (sha256Of(block) !== element.sha256)
         return { present: false, detail: `job ${element.jobId} was changed: its bytes are not the ones the pipeline held` };
       return { present: true, detail: `job ${element.jobId} is byte for byte as it was` };
+    }
+    case 'wait': {
+      const job = jobs.find(([jobId]) => jobId === element.jobId)?.[1];
+      if (job === undefined) return { present: false, detail: `job ${element.jobId} is gone from the pipeline` };
+      // The wait is the evaluation job's id appended to the entries the job already waited for, in that order.
+      const unknown = element.needs.filter((id) => !jobs.some(([jobId]) => jobId === id));
+      if (unknown.length > 0) {
+        return { present: false, detail: `job ${element.jobId} waits for ${unknown.join(', ')}, which the workflow does not hold` };
+      }
+      if (needsOf(job).join(',') !== element.needs.join(',')) {
+        return {
+          present: false,
+          detail: `job ${element.jobId} waits for [${needsOf(job).join(', ')}], expected [${element.needs.join(', ')}]`,
+        };
+      }
+      // Nothing else of the job moved: its `if:`, steps and settings are the bytes the pipeline held.
+      const block = jobBlockOf(text, element.jobId);
+      if (block === null || sha256Of(withoutNeeds(block)) !== element.sha256) {
+        return {
+          present: false,
+          detail: `job ${element.jobId} was changed beyond its needs: its other bytes are not the ones the pipeline held`,
+        };
+      }
+      // The gated job still starts on the events it started on, so a wait on a job its event skips is a miss.
+      if (element.runsOn !== undefined) {
+        const events = eventsRunBy(workflow, job);
+        if (events === null) return { present: false, detail: `the if of job ${element.jobId} cannot be read as an event guard` };
+        if ([...events].sort().join(',') !== [...element.runsOn].sort().join(',')) {
+          return {
+            present: false,
+            detail: `job ${element.jobId} runs on ${events.join(', ') || 'no event'}, expected ${element.runsOn.join(', ')}`,
+          };
+        }
+      }
+      return { present: true, detail: `job ${element.jobId} waits for [${element.needs.join(', ')}] and is otherwise as it was` };
     }
     case 'checkpoint': {
       const written = aux.files?.[element.file];
@@ -3053,11 +3257,15 @@ module.exports = {
   readWorkflow,
   workflowFromArtifact,
   workflowMentions,
+  workflowMatches,
+  workflowHoldsToken,
   checkElement,
   checkpointFilesOf,
+  isBurnInJob,
   guardHolds,
   jobBlockOf,
   sha256Of,
+  withoutNeeds,
   unrequestedElements,
   workflowRuleViolations,
   scoreRun,

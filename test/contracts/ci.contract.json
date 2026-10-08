@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
-  "sourceSpecDigest": "sha256:9bada098e19508894c91de538acc2831620395dd09f342f98d6f95dabb2f2685",
+  "sourceSpecDigest": "sha256:1fc0a6613d454f992d6c75525c1f6e14002d9f808888815824bd38c7f0543ce9",
   "behaviors": [
     {
       "id": "B-001",
@@ -1258,6 +1258,253 @@
         }
       ],
       "oracles": ["O-066"]
+    },
+    {
+      "id": "B-067",
+      "description": "evaluation-gate-slate-publisher: trigger-pull-request-main is requested. pull requests targeting `main`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-067"]
+    },
+    {
+      "id": "B-068",
+      "description": "evaluation-gate-slate-publisher: trigger-release-published is requested. and published releases",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-068"]
+    },
+    {
+      "id": "B-069",
+      "description": "evaluation-gate-slate-publisher: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-069"]
+    },
+    {
+      "id": "B-070",
+      "description": "evaluation-gate-slate-publisher: command-unit-tests is requested. then run `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-070"]
+    },
+    {
+      "id": "B-071",
+      "description": "evaluation-gate-slate-publisher: command-evaluation-install is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-071"]
+    },
+    {
+      "id": "B-072",
+      "description": "evaluation-gate-slate-publisher: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-072"]
+    },
+    {
+      "id": "B-073",
+      "description": "evaluation-gate-slate-publisher: command-evaluation-ci-release is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-073"]
+    },
+    {
+      "id": "B-074",
+      "description": "evaluation-gate-slate-publisher: job-evaluation-pr is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-074"]
+    },
+    {
+      "id": "B-075",
+      "description": "evaluation-gate-slate-publisher: job-evaluation-release is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-075"]
+    },
+    {
+      "id": "B-076",
+      "description": "evaluation-gate-slate-publisher: artifact-evaluation-runs-pr is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-076"]
+    },
+    {
+      "id": "B-077",
+      "description": "evaluation-gate-slate-publisher: artifact-evaluation-runs-release is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-077"]
+    },
+    {
+      "id": "B-078",
+      "description": "evaluation-gate-slate-publisher: preserved-job-test is requested. The release team wrote this job by hand and keeps it as it is.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-078"]
+    },
+    {
+      "id": "B-079",
+      "description": "evaluation-gate-slate-publisher: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-gate-slate-publisher/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-079"]
     }
   ],
   "oracles": [
@@ -1474,21 +1721,19 @@
       "commentary": "full-meridian-storefront: gate-burn-in is requested. The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for full-meridian-storefront, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"burn-in\".",
+        "negativeDomain": "A run whose workflow has no key or name line for \"burn-in\" outside a comment.",
         "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
-          },
-          {
-            "literal": "burn-in"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*(?:^|\\n)[ \\t-]*(?:[\\w-]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn][\\w-]*:|name: [^\\n#]*[Bb][Uu][Rr][Nn][-_ ]?[Ii][Nn])[\\s\\S]*$"
       }
     },
     {
@@ -2029,21 +2274,19 @@
       "commentary": "evaluation-plan-quarry-grader: command-evaluation-install is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix evals\".",
+        "negativeDomain": "A run whose workflow carries no \"npm install --prefix evals\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
-          },
-          {
-            "literal": "npm install --prefix evals"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*npm\\s+install\\s+--prefix\\s+(?:'evals'|\"evals\"|evals)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {
@@ -2052,21 +2295,19 @@
       "commentary": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "containment",
+        "relation": "regex",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"tea-evaluate ci --evaluation evals/grader --tier pr\".",
+        "negativeDomain": "A run whose workflow carries no \"tea-evaluate ci --evaluation evals/grader --tier pr\" command, whether or not it quotes its arguments for the shell.",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
-        "op": "containment",
+        "op": "regex",
         "operands": [
           {
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
-          },
-          {
-            "literal": "tea-evaluate ci --evaluation evals/grader --tier pr"
           }
-        ]
+        ],
+        "pattern": "^[\\s\\S]*tea-evaluate\\s+ci\\s+--evaluation\\s+(?:'evals/grader'|\"evals/grader\"|evals/grader)\\s+--tier\\s+(?:'pr'|\"pr\"|pr)(?:\\s|$)[\\s\\S]*$"
       }
     },
     {
@@ -2898,6 +3139,321 @@
           }
         ]
       }
+    },
+    {
+      "id": "O-067",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: trigger-pull-request-main is requested. pull requests targeting `main`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-068",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: trigger-release-published is requested. and published releases",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"release:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "release:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-069",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-070",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: command-unit-tests is requested. then run `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-071",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: command-evaluation-install is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "npm install --prefix"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-072",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "--tier pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-073",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: command-evaluation-ci-release is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"--tier release\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "--tier release"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-074",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: job-evaluation-pr is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-075",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: job-evaluation-release is requested. Run its pull request checks on every pull request and its release checks when a release is published.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-release\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-release"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-076",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: artifact-evaluation-runs-pr is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-pr-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-077",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: artifact-evaluation-runs-release is requested. keep what each evaluation job records under `runs/` as a build artifact of its own, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-release-runs\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "evaluation-release-runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-078",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: preserved-job-test is requested. The release team wrote this job by hand and keeps it as it is.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-gate-slate-publisher, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"# Maintained by the release team\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+          },
+          {
+            "literal": "# Maintained by the release team"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-079",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-gate-slate-publisher: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for evaluation-gate-slate-publisher.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow",
+          "/interactions/ci-evaluation-gate-slate-publisher/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-gate-slate-publisher/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-gate-slate-publisher/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "rubrics": [],
@@ -3140,6 +3696,27 @@
           }
         }
       }
+    },
+    {
+      "stepId": "ci-evaluation-gate-slate-publisher",
+      "interfaceId": "tea-ci-runner",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` in edit mode against the project in `slate-publisher/`.\n\nThe workflow is in `skill/`. Read `skill/SKILL.md`, answer its mode question with `[E] Edit`, then execute\n`skill/steps-e/step-01-assess.md` and `skill/steps-e/step-02-apply-edit.md` in order, in full, following every\nstep they load, without skipping or reordering.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `slate-publisher`\n- TEA config (`[core]` and `[modules.tea]`): `slate-publisher/_bmad/config.toml`\n- `{test_artifacts}`: `slate-publisher/test-artifacts`\n- `{skill-root}`: `skill`\n- `{tea-knowledge}`: `bmod-tea/knowledge`\n- `ci_platform`: `github-actions`\n- `test_dir`: `slate-publisher/tests`\n\nThe pipeline to edit is `slate-publisher/.github/workflows/test.yml`, which the project already has. The requirements its team keeps for it are\nin `slate-publisher/docs/ci-requirements.md`. Treat them as decisions the edited pipeline has to keep carrying, and read the rest of\nthe project the way the edit steps say to. Apply the edits those steps treat as requested, and no other.\n\nThis workspace has no shell, so a check that runs a command cannot be executed here. Record each of those as\nnot run and continue; do not halt on them.\n\n----- what to produce -----\nEdit `slate-publisher/.github/workflows/test.yml` in place. Do not edit or delete any other file that was under `slate-publisher/` when you\nstarted, and write no file this workflow does not write in edit mode.\n\nWhen you are done, print one line naming the pipeline file you edited. Nothing else you print is read."
+          }
+        }
+      }
     }
   ],
   "scopedResources": null,
@@ -3153,15 +3730,15 @@
     "human-labels"
   ],
   "testData": {
-    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log, quarry-grader/ for evaluation-plan-quarry-grader, granite-router/ for evaluation-tiers-granite-router, ember-ledger/ for evaluation-edit-ember-ledger), a resolved _bmad/config.toml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
+    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log, quarry-grader/ for evaluation-plan-quarry-grader, granite-router/ for evaluation-tiers-granite-router, ember-ledger/ for evaluation-edit-ember-ledger, slate-publisher/ for evaluation-gate-slate-publisher), a resolved _bmad/config.toml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
     "cleanup": "Delete the workspace. The corpus under test/fixtures/ci-eval/ is read-only and the harness digests it before and after every run.",
     "principals": null,
     "resources": null
   },
   "budgets": {
-    "maxToolCalls": 1500,
-    "maxWallClockMinutes": 100,
-    "maxCostUsd": "20.00"
+    "maxToolCalls": 1800,
+    "maxWallClockMinutes": 120,
+    "maxCostUsd": "24.00"
   },
   "safetyLimits": [
     "The runner writes only inside the staged workspace, and only what the workflow scaffolds; the harness fails a run that changed the repository or a pre-existing project file.",
@@ -3173,6 +3750,6 @@
     "The exit code of each invocation.",
     "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
   ],
-  "probeStepBound": 7,
+  "probeStepBound": 8,
   "fixtureReset": null
 }

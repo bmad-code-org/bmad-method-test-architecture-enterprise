@@ -102,11 +102,11 @@
  * the parser, so a green run here proves nothing about what a live agent emits."
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
- * whether they handle real agent output correctly. Almost every case produces a number and
- * almost every one of those is constructed. The cases that carry captured bytes come
- * from the ATDD fixture corpus, from the CLI parser fixtures and from live eval:ci
- * runs over the evaluation-plan, evaluation-tiers and evaluation-edit projects; the corpus counts live in
- * test/lib/doc-count-sources.js, which counts the cases and their origins. The test-review captures score as measured misses because their reports
+ * whether they handle real agent output correctly.
+ * The corpus holds 158 cases and 152 of them produce a number; 134 of those are constructed.
+ * 18 cases carry captured bytes: they come from the ATDD fixture corpus, from the CLI parser fixtures and from live eval:ci runs over the evaluation-plan, evaluation-tiers, evaluation-edit and evaluation-gate projects.
+ * test/lib/doc-count-sources.js derives these counts from the expected.json files, and test:doc-counts holds this paragraph and test/README.md to them.
+ * The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
  * reviewer that named nothing. The routing replay corpus also preserves all four
  * successful clarification branches, and every routing replay remains constructed.
@@ -571,7 +571,7 @@ function nfrScoringInputs(set) {
  * Only what scoreRun reads: the project's role, the Node version its .nvmrc
  * states, the file list, and each requested element's identity, kind and the
  * parameters its check reads. The request quote, the rule citation and the
- * contract token stay out because scoreRun never reads them, and so does
+ * contract token and contract pattern stay out because scoreRun never reads them, and so does
  * mustNotEmit, which only the contract's oracles address; every `why` and
  * `title` string stays out so an editorial pass moves no digest.
  *
@@ -586,7 +586,7 @@ function ciScoringInputs(set) {
     `files=${[...(set.projectFiles ?? [])].sort().join(' ')}`,
     ...(set.expectedElements ?? []).map((element) => {
       // Rest-destructured to drop the fields scoreRun never reads.
-      const { id, kind, requestQuote, rule, contractToken, ...parameters } = element;
+      const { id, kind, requestQuote, rule, contractToken, contractPattern, ...parameters } = element;
       return [id, kind, JSON.stringify(canonical(parameters))].join('|');
     }),
   ];

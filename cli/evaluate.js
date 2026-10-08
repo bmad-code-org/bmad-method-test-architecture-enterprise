@@ -12,10 +12,10 @@
  *                                             item's label-free scorerInput; with --file write nothing and print
  *                                             eval-quality's digestBytes over the bytes of one file the folder
  *                                             holds, named relative to the folder (--file and --calibration-inputs cannot be combined)
- *   tea-evaluate preflight --evaluation <path> [--from-working-tree]
+ *   tea-evaluate preflight --evaluation <path> [--from-working-tree] [--partition <development|held-out>]
  *                                             qualify the seeded probes in a disposable workspace, drive the
  *                                             preflight legs and take the verdict from eval-quality
- *   tea-evaluate run --evaluation <path> [--from-working-tree]
+ *   tea-evaluate run --evaluation <path> [--from-working-tree] [--partition <development|held-out>]
  *                                             the preflight, then each arm (clean, mutated, historical,
  *                                             gameability) `trials` times in fresh workspaces, judged by the
  *                                             deterministic evaluator and any rubric judge, sealed as one
@@ -42,6 +42,9 @@
  *   2-5 preflight, run and score: an eval-quality stage's own exit, passed through verbatim (2, FAIL, from
  *       score alone; score passes on the most severe of its per-probe exits); a sealed-brief agent
  *       qualification records its score exit 3 and stops the run with 12 on any exit other than 0, 2 or 3
+ *   3   also preflight and run: a mount outside the isolation allowlist, the check score makes of a trial set's isolation
+ *       manifest, found in the legs of the preflight's pristine workspace or in the manifests a run sealed (run seals them
+ *       and stays scoreable); the message names the paths and the two setups that work
  *   2-5 also ci: the exit of each stage it runs (compile, seal, the replay's preflight and score, a live check's
  *       preflight, run and score), passed through the same way; 2 is also a probe class below its strength floor
  *       on the release tier
@@ -57,9 +60,10 @@
  *   10  also ci: a plan that fails its schema or its placement rules (a check with no non-blank reason, a trigger its
  *       tier does not use, a <evaluation-folder> left in a command or an evidence path, a preflight-live default that
  *       disagrees with the registry, evaluation.json tiers that differ from the plan's, an api-conformance check over
- *       an evaluation with no HTTP target, a rubric with no judge-calibration on a live tier the plan uses, a
- *       deterministic check that needs no secret placed off pr, a live check on pr, a command not led by its tool, a
- *       warn enforcement where AD-10 gives no warn) or that sits in a ci/ directory that is a link; a baseline that
+ *       an evaluation with no HTTP target, a rubric with no judge-calibration on a live tier the plan uses, a gates
+ *       list that is empty, repeats a name or holds a name that is no job id, a deterministic check that needs no
+ *       secret placed off pr, a live check on pr, a command not led by its tool, a warn enforcement where AD-10
+ *       gives no warn) or that sits in a ci/ directory that is a link; a baseline that
  *       fails its schema, holds anything in scores/ besides the accepted score invocation, or holds a probe or
  *       contract that is not JSON; a check's own exit 10 (a check finding, a conformance run that exits 1) passes through
  *   10  also run: a trial request the registry denies, no probe or no scoring policy, a clean control whose
@@ -95,6 +99,9 @@
  *   64  also ci: no ci/evaluation-ci-plan.json, an unknown --tier, a check that needs a baseline/ that is absent, an
  *       api-conformance check over an evaluation whose evaluation.json names no registry, or a gate's own 64 passed
  *       through
+ *   64  also preflight: no --partition over an evaluation whose evaluation.json declares a partitionPlan, since the
+ *       command would derive the both view and launch the held-out request; the refusal names --partition and both
+ *       values, and a folder with no partitionPlan preflights with no flag
  *   64  also digest --file: a path outside the folder, through a symbolic link, to a directory, to a file the folder
  *       does not hold or to something that is not a regular file, and --file with --calibration-inputs
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
@@ -201,6 +208,11 @@ async function runDriven(name, command, options, extra) {
     outcome = await command(folder, { ...extra, log: (line) => process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(line)}\n`) });
   } catch (error) {
     if (error instanceof EngineUnavailableError || error instanceof EngineStageError) throw error;
+    // A layer process that cannot start because the host's sockets cannot all be hidden (Story 1.88) is a host condition: its message is the whole report.
+    if (error?.name === 'ConfinementError') {
+      process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(error.message)}\n`);
+      return EXIT_CODES.infrastructure;
+    }
     process.stderr.write(`${NAME} ${name}: ${escapeUnprintable(error?.stack ?? error)}\n`);
     return EXIT_CODES.infrastructure;
   }
@@ -225,6 +237,7 @@ function preflightCommand(options) {
   return runDriven('preflight', runPreflightCommand, options, {
     fromWorkingTree: options.fromWorkingTree === true,
     partition: options.partition,
+    requirePartition: true,
   });
 }
 
@@ -285,7 +298,10 @@ function buildProgram(run) {
     )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
-    .option('--partition <name>', 'development or held-out; omitted qualifies both')
+    .option(
+      '--partition <name>',
+      'development or held-out; required when evaluation.json declares a partitionPlan, otherwise omitted qualifies every probe',
+    )
     .action((options) => run(preflightCommand, options));
   program
     .command('run')

@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261004T124624287Z-74b15b1c",
-  "seed": "20261004T124624287Z-74b15b1c",
+  "invocationId": "20261006T211537032Z-55937911",
+  "seed": "20261006T211537032Z-55937911",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "7.1.0",
+  "evalQualityVersion": "7.2.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -13,17 +13,18 @@
     "kind": "copy",
     "commit": null,
     "tree": null,
-    "treeDigest": "sha256:07e9b9243c478203d4ed3fe24a0e9d67946634c6c1f91f650f9f515933d1b107",
+    "treeDigest": "sha256:a6447406241a813ebbc85b8485457804b59d29cff33636fdb511ff9a9bed0239",
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-8b5695a4-e4ce-4361-980a-fc8da3027e2b/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-6bcf4f18-3c2d-40c0-9d4e-ce9dc08d07eb/target"
+    "pristine": "<workspace>",
+    "mutated:M-001": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
+  "logins": [],
   "adopterTree": {
-    "repository": null,
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],
@@ -31,22 +32,22 @@
     "contract": "sha256:8ea60e474d31a1674dc07385a5568ed3a0eaf35927c592f95e6853f5c61f935f",
     "operationPhases": "sha256:5968839c26b1e9180cd0f5f131da9bbe1255e8db1c82014b003342110437d071",
     "evaluatorConfiguration": "sha256:5c21130303c35f7675cbc7f8ee9748ac9d3ddff4da01372ed0e4ebe63376acb0",
-    "preflightVerdict": "sha256:114dcf665a292f91eabbdc06023f87cc370f4320e2e79e7e8ded407560c82b7b",
+    "preflightVerdict": "sha256:b6568fd8fa9605139670b8b995c9be915e0597beefaf9099ad3e14a16ab4ef12",
     "probes": {
-      "P-001": "sha256:71a4396e3333790124e69f7163f0b2eeb54ffb50e4610f16068a427b9d3db471",
-      "P-002": "sha256:e78777529c70b26b2f4b8cdda27167fe5e9aeaa21d535e2f5165def1c0a8cae7"
+      "P-001": "sha256:4455406da840f5e0d5f058fb8507bcb3483da182b94767d590f8a46ac38d9c53",
+      "P-002": "sha256:6359c223a8a5ff6234d67409b4e8ba88e182fa624a30b96ac7c0c4697963230a"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:3f1f32c96a5bea90ab9b8d850f1b5f9ebf3047bde3dfec031fbbd70254cf5805",
-      "trial-sets/P-001/record-2.json": "sha256:c1f34b623009638c9c5a4e45be598d5acfd7d5663156e7f30c2768cae04417fe",
-      "trial-sets/P-001/record-3.json": "sha256:7884507a9707b5ab8e583179513f05e3eeb328c531b1da40b2ce3fcfa7307aef",
-      "trial-sets/P-002/record-1.json": "sha256:5ccc08fe5db564c9483b1fb44b9600fce7028cbb25f223ad162fdd5ec666466f",
-      "trial-sets/P-002/record-2.json": "sha256:f5108e64cb02a5d0c1cc85b4d9df86872b08909620879cdaa567bac15d20bada",
-      "trial-sets/P-002/record-3.json": "sha256:cb76cfb3b5bb6e40933ba2fc9e9566cac8c3e4269db9d96974667d1f87948721"
+      "trial-sets/P-001/record-1.json": "sha256:f0e70b8b12bacfb199d73e0009339a4c09ba5d5080b8ac9636d398b9af32760a",
+      "trial-sets/P-001/record-2.json": "sha256:78107d832fd65a4c3350c0cb7dfb9aa360490e1c97e1dc0b0b47cbf36eeb6b3b",
+      "trial-sets/P-001/record-3.json": "sha256:876cb02b81eb217237c2bf6463701515c92df5365bdbca0ff5097f4ed5a9251c",
+      "trial-sets/P-002/record-1.json": "sha256:6f749dd8aac5de1a69181afc35f02ad761afa70300e7e4c198f8b4eafacf58cb",
+      "trial-sets/P-002/record-2.json": "sha256:1a950a1da7fab3826b21a7343b1a845c353fa5b648195ffb63345f80eda0abaa",
+      "trial-sets/P-002/record-3.json": "sha256:c030069e9c1b0173c4ab93f90e149f98db45dccff7089ffc0045c60c866c9510"
     },
     "isolationManifests": {
-      "P-001": "sha256:38d7a421c740474bb387ebca49b83321b518e423ce1045b7870d2ffb5c00a119",
-      "P-002": "sha256:a7eb43bdc42bfddfb99ae293cd2d3b6821a96d34bf3da1a0bf52f69f94bad281"
+      "P-001": "sha256:4cfe85ce725484a8d7b32fb5ec5fb181c00b20ae0a68c1655353c90b523660fb",
+      "P-002": "sha256:0b10442bb2b3fd0da70624b641012ec0937eab20c7d7e18b4e2ed48caf31efc4"
     }
   },
   "contractDigest": "sha256:aa84c14ee6830cd6ca2e331ae5b4581fbadf8b5245aa2450b90e4dbdf9c9d9bd",
@@ -134,59 +135,59 @@
       "conditionArm": "clean",
       "trialIndex": 1,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     },
     {
       "conditionArm": "clean",
       "trialIndex": 2,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     },
     {
       "conditionArm": "clean",
       "trialIndex": 3,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 1,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 2,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     },
     {
       "conditionArm": "mutated:M-001",
       "trialIndex": 3,
       "completeness": "complete",
-      "canariesSent": 3,
-      "canariesDelivered": 3,
+      "canariesSent": 4,
+      "canariesDelivered": 4,
       "logReportedLoss": false
     }
   ],
   "hostSocketTruncation": [],
   "egressRefusals": [],
-  "startedAt": "2026-10-04T12:46:23.821Z",
-  "durationMs": 2825,
+  "startedAt": "2026-10-06T21:15:35.781Z",
+  "durationMs": 6428,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261004T124624287Z-74b15b1c"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261006T211537032Z-55937911"
   }
 }

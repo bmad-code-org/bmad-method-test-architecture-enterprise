@@ -2,7 +2,7 @@
   "legId": "create-alpha",
   "sequence": 1,
   "workspace": "pristine",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-39e88447-eab0-419d-b569-baa1ff0806ba/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "create-alpha",
     "interfaceId": "records",
@@ -31,9 +31,9 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "id": "rec-add41da4-982f-420b-a184-b90970dddce4",
+        "id": "rec-3f62ce36-54ae-489e-bd52-938246f4f6e0",
         "title": "Alpha",
-        "path": "store/rec-add41da4-982f-420b-a184-b90970dddce4.json"
+        "path": "store/rec-3f62ce36-54ae-489e-bd52-938246f4f6e0.json"
       }
     },
     "stderr": {

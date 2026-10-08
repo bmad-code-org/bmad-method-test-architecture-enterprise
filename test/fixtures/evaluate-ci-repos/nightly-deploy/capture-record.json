@@ -1,20 +1,20 @@
 {
   "comment": "A live maintainer session through the local Claude Code CLI wrote ci/evaluation-ci-plan.json and the tiers of evaluation.json in this repository. The plan is committed as the session left it, and evaluation.json as it stands.",
   "command": "claude -p <prompt> --model claude-sonnet-5-5 --allowedTools Read Write Edit Glob Grep Bash --permission-mode acceptEdits --output-format json",
-  "claudeCodeVersion": "2.1.289 (Claude Code)",
+  "claudeCodeVersion": "2.1.291 (Claude Code)",
   "model": "claude-sonnet-5-5",
-  "turns": 18,
-  "durationMs": 564714,
+  "turns": 20,
+  "durationMs": 441077,
   "prompt": "You are the maintainer's agent in this repository. Run the Evaluate skill at Stage 12, the CI stage.\n\nThe skill is at .claude/skills/bmad-testarch-evaluate/SKILL.md. Its configuration is _bmad/tea/config.yaml. The evaluation is evals/answer-grade; Stages 1 to 11 are complete, `tea-evaluate check` passes, and the latest run under evals/answer-grade/runs is scored. Load references/ci.md from the skill and follow it for this repository: inspect it, place each check, write evals/answer-grade/ci/evaluation-ci-plan.json, update evaluation.json as the guide says, and validate with `npm exec --prefix evals -- tea-evaluate check --evaluation evals/answer-grade` until it reports no authoring defects.\n\nThe maintainer confirms the latest scored run as the baseline. The skill `bmad-testarch-ci` is not installed here, so do not render any pipeline file. End with the closing summary the guide asks for, including the exact request you would hand to `bmad-testarch-ci`.\n\nWork only inside this directory. Do not run git commands that change history.",
   "sessionRead": {
-    "references/ci.md": "sha256:d8779d6f5c0745d5ceb62cbe80948e081f59836bebcbec045bf757e7b5b2e7e4",
-    "SKILL.md": "sha256:cec124e76838a0eff52aec6d8a99e936fc73388889a212d560821c07afb0fb26",
+    "references/ci.md": "sha256:d1ef38707c59f1e38b80c6118190df2810c1645a4b552e7b80d9c0b1358d3025",
+    "SKILL.md": "sha256:b0042f88c1dc940d4e5fdf8cf75ba351ecfd41df51010cefc28d2c9b56814752",
     "assets/evaluation-ci-plan.template.json": "sha256:3d65dbfa3b3f53ddc73aa1b38032162f596ae5773aef0b45e9dd46b26819add4"
   },
   "repositoryRead": "sha256:d4b8d872556fd1679bef0e8d392af8795332e88b25a83d9f2ed9241aab29e521",
   "notDigested": "bmad-testarch-ci step 03b: the sessions render no pipeline file, so what they wrote does not depend on it.",
   "wrote": {
-    "evals/answer-grade/ci/evaluation-ci-plan.json": "sha256:ce614cfcc273e7450fa6b40042c958ceef3d1906e933c8db30c254e29f56167f",
+    "evals/answer-grade/ci/evaluation-ci-plan.json": "sha256:f4dfc534d8ecb3bc6505a0a2136e1364d85d6860787fafd26f16e60f16dceb48",
     "evals/answer-grade/evaluation.json": "sha256:7f154d5fce2f18a064b793d1feea61ecf17deb31be11e1981214282668c20e9b"
   },
   "scratchSetup": "The scratch copy left out this record and any plan, reset the tiers of evaluation.json to the Story 1.24 evaluation's, and held one scored run of the evaluation (tea-evaluate run, then score) and no baseline until the session accepted the latest run at the maintainer's word; neither the run nor the baseline is committed."

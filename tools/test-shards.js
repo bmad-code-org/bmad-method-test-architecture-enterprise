@@ -44,7 +44,10 @@
  * Refreshing the weights: every CI shard writes `--timings` into a
  * `timings-<i>` artifact. Download them with `gh run download <run-id>
  * --pattern 'timings-*'`, then merge every downloaded `shard-<i>.json` with
- * `jq -S -s add` into tools/test-shard-weights.json.
+ * `jq -S -s add` into tools/test-shard-weights.json. A weight carries load
+ * headroom: the median of several recent runs plus 25 percent, or the maximum
+ * for a suite whose cases split into `--group` scripts, shared out by each
+ * group's share of the suite's local time.
  *
  * Usage:
  *   node tools/test-shards.js --shard <i>/<n> [--coverage-dir D] [--timings out.json]

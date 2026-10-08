@@ -68,7 +68,7 @@
  * names the workspace by its runtime label, or several labels separated by
  * commas (for example trial-clean-2, the
  * directory tea-evaluate-trial-clean-2-<uuid> that holds this working
- * directory), and VERDICT_DO says what the command does there:
+ * directory), and VERDICT_DO says what the command does there (written `name@text`, it acts only on a request that holds `text`):
  *
  *   infrastructure          answer nothing and exit 3
  *   kill                    answer nothing and end by SIGKILL, as a target a
@@ -260,7 +260,9 @@ const text = policy.toString('utf8');
 const workspaceDirectory = path.basename(path.dirname(process.cwd()));
 const workspaceMatch = /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(workspaceDirectory);
 const here = Boolean(process.env.VERDICT_WHEN) && process.env.VERDICT_WHEN.split(',').includes(workspaceMatch?.[1]);
-const act = here ? process.env.VERDICT_DO : undefined;
+// An act written `name@text` acts only on a request that holds `text`, so one leg of a preflight can differ from the others.
+const [doName, onlyRequest] = String(process.env.VERDICT_DO ?? '').split('@');
+const act = here && (onlyRequest === undefined || request.includes(onlyRequest)) ? doName || undefined : undefined;
 if (process.env.VERDICT_MARKER) {
   const label = workspaceMatch?.[1] ?? null;
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });

@@ -2,7 +2,7 @@
   "legId": "p-008-manifest-decision-pass",
   "sequence": 9,
   "workspace": "mutated:M-004",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-004-2fcb2b77-7bb7-4414-b3ef-81d2d6569edf/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-008-manifest-decision-pass",
     "interfaceId": "answer-grade",
@@ -32,7 +32,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Sun, 04 Oct 2026 14:43:13 GMT",
+      "date": "Tue, 06 Oct 2026 21:23:19 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

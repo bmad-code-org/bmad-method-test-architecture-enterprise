@@ -202,6 +202,46 @@ check('the replay counts are recomputed independently and agree with each other'
   );
 });
 
+check('the counts of cases that produce a number and of cases that carry captured bytes are recomputed independently', () => {
+  const root = path.join(PROJECT_ROOT, 'test', 'replay');
+  const cases = [];
+  for (const suiteId of fs.readdirSync(root)) {
+    for (const caseId of fs.readdirSync(path.join(root, suiteId))) {
+      const expected = JSON.parse(fs.readFileSync(path.join(root, suiteId, caseId, 'expected.json'), 'utf8'));
+      cases.push({
+        suiteId,
+        origin: expected.storedOutput.origin,
+        scored: expected.result !== null && !('unmeasurable' in expected.result),
+        fixtureSet: expected.inputs.fixtureSet,
+      });
+    }
+  }
+  const carriesBytes = (entry) => entry.origin !== 'constructed';
+  assert.strictEqual(source.REPLAY_SCORED, cases.filter((entry) => entry.scored).length);
+  assert.ok(
+    source.REPLAY_SCORED < source.REPLAY_TOTAL,
+    'the corpus holds cases whose run was unmeasurable, which this count has to leave out',
+  );
+  assert.strictEqual(source.REPLAY_SCORED_CONSTRUCTED, cases.filter((entry) => entry.scored && entry.origin === 'constructed').length);
+  assert.strictEqual(source.REPLAY_CAPTURED_BYTES, cases.filter(carriesBytes).length);
+  assert.strictEqual(source.REPLAY_CAPTURED_BYTES, source.REPLAY_CAPTURED + source.REPLAY_REAL_CAPTURES);
+  assert.strictEqual(source.REPLAY_ATDD_CAPTURED_BYTES, cases.filter((entry) => entry.suiteId === 'atdd' && carriesBytes(entry)).length);
+  assert.strictEqual(
+    source.REPLAY_TEST_REVIEW_CAPTURED_BYTES,
+    cases.filter((entry) => entry.suiteId === 'test-review' && carriesBytes(entry)).length,
+  );
+  assert.strictEqual(source.REPLAY_CI_CAPTURED_BYTES, cases.filter((entry) => entry.suiteId === 'ci' && carriesBytes(entry)).length);
+  assert.strictEqual(
+    source.REPLAY_ATDD_CAPTURED_BYTES + source.REPLAY_TEST_REVIEW_CAPTURED_BYTES + source.REPLAY_CI_CAPTURED_BYTES,
+    source.REPLAY_CAPTURED_BYTES,
+    'the three suites that carry captured bytes account for every such case',
+  );
+  assert.strictEqual(
+    source.REPLAY_CI_FULL_AND_MINIMAL,
+    cases.filter((entry) => entry.suiteId === 'ci' && /^(full|minimal)-/.test(entry.fixtureSet)).length,
+  );
+});
+
 check("every doc-counts entry's counts array names its sources in the order its pattern's capture groups carry them", () => {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const entries = config['doc-counts'].entries;

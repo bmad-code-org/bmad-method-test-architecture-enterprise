@@ -42,6 +42,7 @@ Pick a path:
 - **New to Testing?** Start with [TEA Academy](/tutorials/learn-testing-tea-academy) - Learn testing from fundamentals to advanced practices (7 sessions, 1-2 weeks)
 - **TEA Lite**: Start with [Getting Started with Test Architect](/tutorials/tea-lite-quickstart) (30 minutes)
 - **Full TEA**: Start with the [TEA Overview](/explanation/tea-overview) for the complete workflow map
+- **Evaluating a skill, an agent or an AI feature**: Start with [Evaluate Your First Skill](/tutorials/evaluate-your-first-skill) to score one skill from requirements to an accepted baseline
 - **Enterprise**: Choose [Greenfield](/how-to/brownfield/use-tea-for-enterprise) or [Brownfield](/how-to/brownfield/use-tea-with-existing-tests)
 - **Custom Extensions**: See [Extend TEA with Custom Workflows](/how-to/customization/extend-tea-with-custom-workflows)
 
@@ -49,17 +50,18 @@ Pick a path:
 
 The Command column works in a fresh session. The Menu code works only after `/bmad-tea` is loaded. On Codex, swap the leading `/` for `$`.
 
-| Workflow                                                  | Command                      | Menu code | Purpose                               |
-| --------------------------------------------------------- | ---------------------------- | --------- | ------------------------------------- |
-| [Teach Me Testing](/how-to/workflows/teach-me-testing)    | `/bmad-teach-me-testing`     | `TMT`     | Learn testing (7 sessions, 1-2 weeks) |
-| [Test Design](/how-to/workflows/run-test-design)          | `/bmad-testarch-test-design` | `TD`      | Risk-based planning + NFR planning    |
-| [Framework Setup](/how-to/workflows/setup-test-framework) | `/bmad-testarch-framework`   | `TF`      | Scaffold test framework               |
-| [CI/CD Integration](/how-to/workflows/setup-ci)           | `/bmad-testarch-ci`          | `CI`      | Set up quality pipeline               |
-| [ATDD](/how-to/workflows/run-atdd)                        | `/bmad-testarch-atdd`        | `AT`      | Failing acceptance tests (TDD)        |
-| [Test Automation](/how-to/workflows/run-automate)         | `/bmad-testarch-automate`    | `TA`      | Expand automation coverage            |
-| [Test Review](/how-to/workflows/run-test-review)          | `/bmad-testarch-test-review` | `RV`      | Quality audit with scoring            |
-| [NFR Evidence Audit](/how-to/workflows/run-nfr-assess)    | `/bmad-testarch-nfr`         | `NR`      | Non-functional evidence evaluation    |
-| [Requirements Tracing](/how-to/workflows/run-trace)       | `/bmad-testarch-trace`       | `TR`      | Coverage mapping + gate decision      |
+| Workflow                                                  | Command                      | Menu code | Purpose                                |
+| --------------------------------------------------------- | ---------------------------- | --------- | -------------------------------------- |
+| [Teach Me Testing](/how-to/workflows/teach-me-testing)    | `/bmad-teach-me-testing`     | `TMT`     | Learn testing (7 sessions, 1-2 weeks)  |
+| [Test Design](/how-to/workflows/run-test-design)          | `/bmad-testarch-test-design` | `TD`      | Risk-based planning + NFR planning     |
+| [Framework Setup](/how-to/workflows/setup-test-framework) | `/bmad-testarch-framework`   | `TF`      | Scaffold test framework                |
+| [CI/CD Integration](/how-to/workflows/setup-ci)           | `/bmad-testarch-ci`          | `CI`      | Set up quality pipeline                |
+| [ATDD](/how-to/workflows/run-atdd)                        | `/bmad-testarch-atdd`        | `AT`      | Failing acceptance tests (TDD)         |
+| [Test Automation](/how-to/workflows/run-automate)         | `/bmad-testarch-automate`    | `TA`      | Expand automation coverage             |
+| [Test Review](/how-to/workflows/run-test-review)          | `/bmad-testarch-test-review` | `RV`      | Quality audit with scoring             |
+| [NFR Evidence Audit](/how-to/workflows/run-nfr-assess)    | `/bmad-testarch-nfr`         | `NR`      | Non-functional evidence evaluation     |
+| [Evaluate](/tutorials/evaluate-your-first-skill)          | `/bmad-testarch-evaluate`    | `EV`      | Scored behavioral evaluation + CI plan |
+| [Requirements Tracing](/how-to/workflows/run-trace)       | `/bmad-testarch-trace`       | `TR`      | Coverage mapping + gate decision       |
 
 > **Agent menu shortcut:** The TEA agent menu also provides a `GATE` intent, typed in chat after loading `bmad-tea`. It has no command of its own because it is a routing helper rather than a workflow: it walks you through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate decision) and produces no artifact.
 

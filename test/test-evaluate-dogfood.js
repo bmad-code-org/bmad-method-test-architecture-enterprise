@@ -18,6 +18,11 @@
  *    that the rule is stated once, so a second statement fails there, and the live preflight qualifies the seed against the
  *    model, which this replay cannot (its reader takes the sentence it finds),
  *  - the reference set equals the exit table of `references/gaps.md`, so a row added or dropped there fails here,
+ *  - O-003 holds each record to the class its row gives (Story 1.116): the predicate equals one `id` and `class` pair per row of
+ *    the table, a listing that swaps the classes of `tea-evaluate 11` and `tea-evaluate 12` fails it, and so does a class changed
+ *    in the guide with no contract edit, where a test of the class vocabulary alone passes both,
+ *  - each seeded probe violates only the oracles of its own behavior and every oracle outcome reads `agrees`, so the rows of
+ *    M-001 and M-002 move O-001 alone,
  *  - each seeded probe has its own defect ID, the requirements digest is the one the contract and `evaluation.json` carry,
  *    the requirements name the JSON fields as evidence, and the skill's `.gitignore` asset lists what Stage 6 writes.
  */
@@ -85,7 +90,8 @@ function commit(repository) {
 /**
  * A committed temp project holding the evaluation folder, the skill's guides and the reader in the place of the skill
  * runner, laid out as the repository is so the folder's `launch.root`, registry target and mutation targets resolve.
- * `trim` keeps one clean control and one arm, with one trial, for the variants that only read the engine's coverage.
+ * `trim` keeps one clean control (`true` keeps P-001, a probe ID keeps that probe) and one arm, with one trial, for the variants
+ * that only read the engine's coverage or one trial's oracle outcomes.
  */
 function project(label, { edit = () => {}, trim = false } = {}) {
   const directory = scratch.make(label);
@@ -110,7 +116,7 @@ function project(label, { edit = () => {}, trim = false } = {}) {
   fs.writeFileSync(path.join(repository, '.gitignore'), '_bmad/\nnode_modules/\n');
   if (trim) {
     for (const name of fs.readdirSync(path.join(folder, 'probes')))
-      if (name !== 'P-001.probe.json') fs.rmSync(path.join(folder, 'probes', name));
+      if (name !== `${trim === true ? 'P-001' : trim}.probe.json`) fs.rmSync(path.join(folder, 'probes', name));
     for (const name of fs.readdirSync(path.join(folder, 'mutations'))) fs.rmSync(path.join(folder, 'mutations', name));
     const evaluation = read(path.join(folder, 'evaluation.json'));
     Object.assign(evaluation, { arms: ['clean'], trials: 1, heldOutProbes: [] });
@@ -155,6 +161,54 @@ function runAndScore(subject, partition) {
   return evidence;
 }
 
+/**
+ * A runner in the reader's place whose reply swaps the classes of the `tea-evaluate 11` and `tea-evaluate 12` records of a
+ * listing: every id is still covered and both classes still belong to the table's vocabulary (Story 1.116).
+ */
+const SWAPPING_RUNNER = `#!/usr/bin/env node
+'use strict';
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const result = spawnSync(process.execPath, [path.join(__dirname, 'skill-reader.js'), ...process.argv.slice(2)], {
+  stdio: ['inherit', 'pipe', 'inherit'],
+  encoding: 'utf8',
+});
+const reply = JSON.parse(result.stdout);
+if (Array.isArray(reply.exits)) {
+  const [eleven, twelve] = ['tea-evaluate 11', 'tea-evaluate 12'].map((id) => reply.exits.find((row) => row.id === id));
+  [eleven.class, twelve.class] = [twelve.class, eleven.class];
+}
+process.stdout.write(JSON.stringify(reply) + '\\n');
+`;
+
+/**
+ * Runs the exit-table control (P-006) over the committed folder with `contract` and `repository` applied, and returns the
+ * run's exit code and the oracles it found violated. A baseline that violates the control's own oracle stops the run at
+ * its qualification (exit 11), and the violation is read from that record. Otherwise the clean trial's records give it.
+ */
+function replayOf(label, { contract = () => {}, repository = () => {} } = {}) {
+  const subject = project(label, {
+    trim: 'P-006',
+    edit: (where) => {
+      const file = path.join(where.folder, 'contract.json');
+      const edited = read(file);
+      contract(edited);
+      write(file, edited);
+      repository(where);
+    },
+  });
+  const ran = cli(subject.folder, 'run');
+  const directory = latest(subject.folder);
+  const violated = (oracles) => oracles.filter((oracle) => oracle.disposition === 'violated').map((oracle) => oracle.oracleId);
+  if (ran.status === 0) return { exit: 0, violated: violated(read(path.join(directory, 'trials/clean/trial-1.json')).oracles) };
+  assert.match(
+    ran.output,
+    /P-006\.probe\.json: the clean control's baseline does not pass/,
+    `${label}: run exited ${ran.status}\n${ran.output}`,
+  );
+  return { exit: ran.status, violated: violated(read(path.join(directory, 'qualification/P-006/baseline-pass.json')).oracles) };
+}
+
 const unsatisfied = (artifact) => artifact.coverageGaps.filter((gap) => !gap.satisfied).map((gap) => gap.rule);
 const stateVotes = (artifact) => artifact.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
 
@@ -165,7 +219,7 @@ try {
   const gaps = fs.readFileSync(path.join(ROOT, SKILL, 'references/gaps.md'), 'utf8');
   const table = exitTableOf(gaps);
 
-  // The reference set is the exit table, and the class vocabulary O-003 allows is the table's.
+  // The reference set is the exit table.
   assert.equal(table.length, 13, 'the exit table holds thirteen rows');
   const referenceSet = contract.referenceSets['exit-table'];
   assert.deepEqual(referenceSet.keys, ['id']);
@@ -174,12 +228,42 @@ try {
     table.map((row) => ({ id: row.id })),
     'contract.json referenceSets.exit-table drifted from the exit table in references/gaps.md: author the new row or drop the old one',
   );
+  // O-003 holds each record to the class its row gives: one `all` pair of `@/id` and `@/class` per row. The rows of
+  // tea-evaluate 11 and 12 compare the class with the answer the classify-exits step gave for that exit, and O-001 holds
+  // that answer to the table, so a seeded edit of either row moves O-001 alone (Story 1.116).
+  const answerOf = { 'tea-evaluate 11': 'exit11', 'tea-evaluate 12': 'exit12' };
   const o003 = contract.oracles.find((oracle) => oracle.id === 'O-003');
-  const membership = JSON.stringify(o003.check).match(
-    /"op":"set-membership","operands":\[\{"pointer":"@\/class"\},\{"literal":(\[[^\]]*\])\}/,
+  const pairs = o003.check.operands.find((operand) => operand.op === 'for-all').predicate;
+  assert.deepEqual(
+    pairs,
+    {
+      op: 'any',
+      operands: table.map((row) => ({
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: '@/id' }, { literal: row.id }] },
+          {
+            op: 'equality',
+            operands: [
+              { pointer: '@/class' },
+              answerOf[row.id] === undefined
+                ? { literal: row.class }
+                : { pointer: `/interactions/classify-exits/stdout/${answerOf[row.id]}` },
+            ],
+          },
+        ],
+      })),
+    },
+    'O-003 pairs each record with the class its row of the exit table gives it: a drift from the table fails here',
   );
-  assert.ok(membership, 'O-003 tests each record against a literal class set');
-  assert.deepEqual(JSON.parse(membership[1]), [...new Set(table.map((row) => row.class))], 'O-003 class vocabulary drifted from the table');
+  const o001 = JSON.stringify(contract.oracles.find((oracle) => oracle.id === 'O-001').check);
+  for (const [id, field] of Object.entries(answerOf)) {
+    const row = table.find((candidate) => candidate.id === id);
+    assert.ok(
+      o001.includes(`{"pointer":"/interactions/classify-exits/stdout/${field}"},{"literal":${JSON.stringify(row.class)}}`),
+      `O-001 holds the ${field} answer to the class of the ${id} row`,
+    );
+  }
   const location = contract.permittedInterfaces[0].operations[0].responseDescriptor.collectionLocations;
   assert.deepEqual(location, [
     { pointer: '/exits', expectedCardinality: { mode: 'exact', count: table.length }, referenceSet: 'exit-table' },
@@ -271,6 +355,72 @@ try {
   }
   assert.deepEqual(Object.keys(heldOut), ['P-003'], 'the held-out run scores the held-out probe alone');
 
+  // Each seeded defect is scoped to one oracle: the oracles its mutated trials violate are the ones its own behavior lists,
+  // and the engine's corroboration agrees on every oracle outcome. M-001 and M-002 edit the rows of tea-evaluate 11 and 12,
+  // which O-003 reads too, so a listing check that held the row's literal class would violate beside O-001 and read `disagrees`.
+  const oraclesOf = Object.fromEntries(contract.behaviors.map((behavior) => [behavior.id, behavior.oracles]));
+  for (const probe of probes) {
+    const outcomes = scored[probe.probeId].outcomes;
+    assert.deepEqual(
+      [...new Set(outcomes.filter((outcome) => outcome.corroboration !== 'agrees').map((outcome) => outcome.oracleId))],
+      [],
+      `${probe.probeId} records an oracle outcome whose corroboration is not agrees`,
+    );
+    assert.deepEqual(
+      [...new Set(outcomes.filter((outcome) => outcome.disposition === 'violated').map((outcome) => outcome.oracleId))],
+      probe.expectedClean ? [] : oraclesOf[probe.behaviorId],
+      `${probe.probeId} violates an oracle outside its behavior`,
+    );
+  }
+
+  // ---- a listing that swaps two classes fails O-003 (Story 1.116) ------------------------------------------------------
+  const held = { exit: 0, violated: [] };
+  const vocabulary = [...new Set(table.map((row) => row.class))];
+  /** O-003 as Story 1.46 left it: each record's class tested against the table's vocabulary, with the evidence targets it then had. */
+  const vocabularyOnly = (edited) => {
+    const oracle = edited.oracles.find((candidate) => candidate.id === 'O-003');
+    oracle.check.operands.find((operand) => operand.op === 'for-all').predicate = {
+      op: 'set-membership',
+      operands: [{ pointer: '@/class' }, { literal: vocabulary }],
+    };
+    oracle.direction.evidenceTargets = oracle.direction.evidenceTargets.filter((target) => target.includes('/list-exit-table/'));
+  };
+  const swapRunner = ({ repository }) => {
+    fs.copyFileSync(path.join(repository, 'cli/skill-runner.js'), path.join(repository, 'cli/skill-reader.js'));
+    fs.writeFileSync(path.join(repository, 'cli/skill-runner.js'), SWAPPING_RUNNER, { mode: 0o755 });
+  };
+  /** Gives the `eval-quality 3` row a class that is in the table's vocabulary and is not the row's own. */
+  const reclassify = ({ repository }) => {
+    const file = path.join(repository, SKILL, 'references/gaps.md');
+    const text = fs.readFileSync(file, 'utf8');
+    const from = '| `eval-quality 3`        | infrastructure or integrity                   |';
+    const to = '| `eval-quality 3`        | runtime fault                                 |';
+    assert.ok(text.includes(from) && vocabulary.includes('runtime fault'), 'the row the case reclassifies is in the table');
+    fs.writeFileSync(file, text.replace(from, to));
+  };
+  assert.deepEqual(replayOf('clean-listing'), held, 'the committed contract passes the unswapped listing');
+  assert.deepEqual(
+    replayOf('swapped-listing', { repository: swapRunner }),
+    { exit: 11, violated: ['O-003'] },
+    'a complete listing in vocabulary that swaps the classes of tea-evaluate 11 and 12 violates O-003, and the run stops at the control',
+  );
+  assert.deepEqual(
+    replayOf('swapped-listing-vocabulary-only', { repository: swapRunner, contract: vocabularyOnly }),
+    held,
+    'a class vocabulary test alone passes the swapped listing, which is why O-003 pairs each id with its class',
+  );
+  // Swapping a class in the guide with no contract edit fails the replay.
+  assert.deepEqual(
+    replayOf('reclassified-row', { repository: reclassify }),
+    { exit: 11, violated: ['O-003'] },
+    'a class changed in the guide table, with no contract edit, violates O-003',
+  );
+  assert.deepEqual(
+    replayOf('reclassified-row-vocabulary-only', { repository: reclassify, contract: vocabularyOnly }),
+    held,
+    'a class vocabulary test alone passes a class changed to another class of the table',
+  );
+
   // ---- reverting one repair brings its engine rule back as CONCERNS ---------------------------------------------------
   const base = runAndScore(project('base-trimmed', { trim: true }), null)['P-001'];
   assert.deepEqual([base.contractVerdict, unsatisfied(base)], ['PASS', []], 'the trimmed control scores PASS with no gap');
@@ -306,6 +456,9 @@ try {
   reverts('per-record', 'no-quantifier', (edited) => {
     const check = checkOf(edited, 'O-003');
     check.operands = check.operands.filter((operand) => operand.op !== 'for-all');
+    // The evidence targets that only the quantifier's pairs read go with it, or the direction no longer aligns with the check.
+    const oracle = edited.oracles.find((candidate) => candidate.id === 'O-003');
+    oracle.direction.evidenceTargets = oracle.direction.evidenceTargets.filter((target) => target.includes('/list-exit-table/'));
   }); // gap G-3
   reverts('omission-and-completeness', 'no-completeness', (edited) => {
     const check = checkOf(edited, 'O-003');

@@ -61,7 +61,7 @@ One runner covers eight skills because the eight contracts declare one interface
 
 - ~~`trace`~~ and ~~`automate`~~, writing into a staged tree. `trace` writes its summary and matrix. `automate` runs four hand-authored spec sets against the fixed implementation and a mutated scratch copy.
 - ~~`nfr`~~ and ~~`test-design`~~, each writing its assessment artifact. `nfr` is done (`tea-nfr-runner`, `test/eval-nfr.js`); `test-design` is done (`tea-test-design-runner`, `test/eval-test-design.js`).
-- ~~`atdd`~~, generating red-phase acceptance scaffolds scored under NFR9's isolation (`tea-atdd-runner`, `test/eval-atdd.js`).
+- ~~`atdd`~~, generating red-phase acceptance scaffolds scored under the isolation every gate that executes content runs in (`tea-atdd-runner`, `test/eval-atdd.js`).
 - ~~`framework`~~ and ~~`ci`~~, scaffolding a project or pipeline. `ci` is done (`tea-ci-runner`, `test/eval-ci.js`); `framework` installs and smoke-tests scaffolded frameworks (`test/eval-framework-scaffold.js`).
 - ~~`bmad-tea`~~ and ~~`bmad-teach-me-testing`~~. `test/lib/transcript-harness.js`'s `runTranscript` closes the multi-turn transcript mechanism gap; `bmad-tea` routes intents (`test/eval-bmad-tea-routing.js`), and `bmad-teach-me-testing` evaluates multi-turn teaching sessions (`test/eval-teach-me-testing.js`).
 
@@ -118,11 +118,11 @@ What the corpus scores, read off `test/probes/expected-strength.json` as it stan
 
 | Contract                               | defect        | gameability           | Not scored, and why                                                                                     |
 | -------------------------------------- | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `test-review`                          | 9 of 9 caught | refused               | the gameability signature reads a written file, so AD-9's gate refuses it                               |
+| `test-review`                          | 9 of 9 caught | refused               | the gameability signature reads a written file, so the qualification gate refuses it                    |
 | the eight fragment-selection contracts | none authored | 1 of 1 caught on each | fragment selection seeds no defect; it is a routing measurement with a required set and a forbidden set |
-| `trace`                                | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
-| `nfr`                                  | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
-| `ci`                                   | refused       | none authored         | all three fail pre-flight on `seeded-fault-fired` before AD-9's gate is reached                         |
+| `trace`                                | refused       | none authored         | all three signatures read a written file, so the qualification gate refuses them                        |
+| `nfr`                                  | refused       | none authored         | all three signatures read a written file, so the qualification gate refuses them                        |
+| `ci`                                   | refused       | none authored         | all three signatures read a written file, so the qualification gate refuses them                        |
 
 The fragment-selection row is closed, not owed: routing has no defect to seed, so `none authored` is
 the correct final state of that cell, not a gap waiting on work.
@@ -130,7 +130,7 @@ the correct final state of that cell, not a gap waiting on work.
 The four `refused` cells are a real, tracked gap, not a closed question, and each carries the same
 owner and exit condition `test/evals/suite-manifest.json`'s own deferred entries use elsewhere in this
 repository: **owner** TEA maintainers; **exit condition** a signature that addresses evidence the port
-already permits, `exit-code` or `stdout`, rather than the `artifact` pointer AD-9 refuses by
+already permits, `exit-code` or `stdout`; the qualification gate refuses an `artifact` pointer by
 construction. `test-review`'s own defect class is the proof this path exists: its exit code
 discriminates a plant from the clean control, so all nine defect probes carry an `exit-code` signature
 and score today where its own gameability probe, addressing the file the verdict names, still cannot.
@@ -140,29 +140,32 @@ since every completed trace run exits 0 whatever it wrote, which is why `trace`'
 `nfr`'s stay refused rather than closed the same way; each needs a signature this vocabulary does not
 have yet, not a copy of `test-review`'s fix.
 
-The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
+The three numbers that moved and what moved them: `test-review`'s defect class went from four exercised
 and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
-fault leg's own request, and `trace`'s three plants stopped failing pre-flight when its witness legs
-moved off the seeded set. Both are `seeded-faults-scoped`, and both are below. Fourteen of
-`test-design`'s sixteen probes and all three of `ci`'s defect probes still fail pre-flight on
-`seeded-fault-fired`, and every probe in the other thirteen corpora pre-flights, so what is left
-unscored elsewhere is the qualification gate alone.
+fault leg's own request, `trace`'s three plants stopped failing pre-flight when its witness legs
+moved off the seeded set, and `ci`'s three plants stopped failing it when their witnesses moved to the
+request the run reports (the weekly schedule, the `contents: read` grant, the requested test command
+with the forbidden burn-in job absent), which is what the fault leg's replay of the correct run needs.
+The test-review and trace moves are `seeded-faults-scoped`, and both are below; the ci move cleared
+`seeded-fault-fired` and `seeded-faults-scoped` together, and `test/probes/README.md` records it. Fourteen of
+`test-design`'s sixteen probes still fail pre-flight on `seeded-fault-fired`, and every probe in the
+other fourteen corpora pre-flights, so what is left unscored elsewhere is the qualification gate alone.
 
-A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
-is that the contract does not fire where there is nothing to find.
+A clean control stays out of the strength vector.
+It establishes that the contract does not fire where there is nothing to find.
 
 `npm run eval:preflight` and `npm run eval:contract-strength` read their exit code against
 `test/probes/expected-strength.json` rather than against pass and fail directly: 0 when every probe
 reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
 Eight probes could not be pre-flighted when that rule was written, and both scripts would have been
-red on every run, which is how a script stops being read before the day it means something. Seventeen
-of the 59 cannot pre-flight today, fourteen of them `test-design`'s and three of them `ci`'s, so the
+red on every run, which is how a script stops being read before the day it means something. Fourteen
+of the 59 cannot pre-flight today, all of them `test-design`'s, so the
 baseline is what says a green run is green rather than what excuses a red one, and the rule is what
 catches the first probe whose outcome moves in either direction.
 
 ### The behavior grouping was a defect, and it is fixed
 
-`eval-quality`'s `designatedOracleIdOf` resolves AD-40's designated oracle only for a behavior
+`eval-quality`'s `designatedOracleIdOf` resolves a probe's designated oracle only for a behavior
 declaring exactly one oracle, and `score` votes a trial with `designatedState ?? firstInvalidatingState ?? firstState`.
 A behavior grouping four plant oracles resolves none, so every probe in the corpus would have voted
 whatever state the contract's first oracle happened to reach, and the defect catch rate would have
@@ -203,14 +206,14 @@ stored evidence: `artifact` is refused as `condition-artifact-channel-contract-l
 What is left is the exit code, and whether that is honest depends on the command. For
 `tea-test-review` it discriminates: a review that finds a gating defect exits 1 and one that finds
 none exits 0, so the condition is false on the clean control, and the nine plant probes carry it. It
-does not discriminate which row, so per-row attribution is the designated oracle's and the finding's
-rather than the signature's, which is a weaker guarantee than AD-40 intends and is stated here
+does not discriminate which row, so per-row attribution comes from the designated oracle and the finding.
+That is a weaker guarantee than a designated oracle gives, and it is stated here
 because it is what the vocabulary allows. For `tea-trace-runner` the exit code discriminates nothing,
 since every completed trace run exits 0 whatever it wrote, so its three probes keep the signature
 that states the truth about the plant and are refused rather than given one that would qualify and
 mean nothing.
 
-**`seeded-faults-scoped` compares a run against itself.** AD-10 asks whether a seeded fault fires
+**`seeded-faults-scoped` compares a run against itself.** `eval-quality` asks whether a seeded fault fires
 anywhere it should not, and `planPreflight` answers it against every leg already registered for the
 operation, which for a TEA contract is its sensitivity witness legs. `test-review`'s differential
 drove one leg at a seeded fixture and `trace`'s drove both at the seeded set, so at `eval-quality`
@@ -236,7 +239,7 @@ contract-side to get a green pre-flight would be gaming the witness.
 TEA raised it upstream, and 1.4.0 fixes it in the reducer. A clean leg is dropped when it issued the
 fault leg's request and received the fault leg's answer, compared over the request with the
 correlation identifier neutralised and over the projected evidence with the observation identifier
-neutralised. Both halves are required: dropping on the answer alone would discard AD-10's own worked
+neutralised. Both halves are required: dropping on the answer alone would discard `eval-quality`'s own worked
 example of two distinct nonexistent identifiers both returning 404, which are the legs the check
 exists to read. A check left with no clean leg to examine now fails and names why, where it reported
 satisfied before.
@@ -252,7 +255,7 @@ the move.
 the reducer kept it in the examined set and the check reported a real scoping problem in the trace
 contract. That problem is now closed, and the shape of it is worth keeping.
 
-The witness was right and the leg was not clean. AD-10 reads every other leg of an operation as a
+The witness was right and the leg was not clean. `eval-quality` reads every other leg of an operation as a
 clean leg. `trace-fixture-set` carries `stateChangeMarker: true`, so `selectControl` plans no control
 leg for it, and the only other legs it had were its two sensitivity witness legs, both staged against
 the seeded set. `D-001` asserts that P0 coverage is 50, which is what the seeded workspace produces
@@ -294,12 +297,12 @@ O-023 and O-024 move from `abstained` to `passed-clean-control`, so `count-toler
 spelling to have committed to.
 
 One limit is worth knowing before writing a new oracle. Every quantifier still abstains over an empty
-collection, which is AD-4's whole purpose and is why `trace`'s five `for-any` oracles over the seeded
+collection, which is by design and is why `trace`'s five `for-any` oracles over the seeded
 export abstained on the clean control for as long as they were resolved against the clean set's
 summary: they ask whether some element exists, and an empty collection is an honest "nothing was
 checked". `deep-equality` against a literal `[]` also still abstains, so the
-two spellings of "this collection is empty" disagree. eval-quality records that disagreement in AD-4
-rather than hiding it. The bare `count-tolerance` assertion is the one to write.
+two spellings of "this collection is empty" disagree. eval-quality records that disagreement
+and leaves it visible. The bare `count-tolerance` assertion is the one to write.
 
 **A rejected probe names its reason, as of 1.4.0.** The qualification gate computes a closed list of
 twenty reason codes. Through 1.3.0 none of them reached the evidence artifact or any published
@@ -315,11 +318,11 @@ was needed and the count stays at two.
 
 Three findings, all measured, none of them tuned away.
 
-- **`test-review` and every fragment-selection contract leave AD-20 coverage rules unsatisfied.**
+- **`test-review` and every fragment-selection contract leave coverage rules unsatisfied.**
   `runScore` computes them from the contract itself and nothing in this repository had read them
   before. `test-review` leaves `whole-body`, `malformed-input` and `state-change-read-back`
   unsatisfied; every fragment-selection contract leaves `malformed-input` unsatisfied. Each scores the
-  run down to CONCERNS without blocking it, which is exactly the weight AD-20 gives a coverage gap.
+  run down to CONCERNS without blocking it, which is exactly the weight `eval-quality` gives a coverage gap.
 - **`trace`'s clean control scored FAIL. Closed, and the two halves that closed it work only
   together.** Five of its twenty-six oracles abstained on `P-004`: `O-009`, `O-010`, `O-011`,
   `O-013` and `O-014`, every one a `for-any` quantifier over the seeded export, and every one named
@@ -333,7 +336,7 @@ Three findings, all measured, none of them tuned away.
   sets' runs, so the seeded step selects the seeded run and the clean step selects the clean one.
   Measured on the stored replay, all twenty-six oracles resolve `passed-clean-control` and `P-004`
   moves from FAIL at exit 2 to CONCERNS at exit 0. What holds it at CONCERNS is the four unsatisfied
-  AD-20 coverage rules the bullet above describes, which is separate work.
+  coverage rules the bullet above describes.
 
   Either half on its own is worse than neither, which is why they landed together. Two observations
   under the old matcher bindings leave every observation satisfying both steps, and `exactly-one`
@@ -400,7 +403,7 @@ Two things the live run found that no deterministic check could.
 live `trace` pre-flight failed its own witness. Both legs ran in one staged directory, and their two
 summaries came back byte-identical while their two matrices differed, which is a run that rewrote one
 artifact and left the other. The second leg's artifact map was reading a summary the first leg wrote.
-Every TEA contract declares `fixtureReset: null`, so AD-10 plans nothing to reset a workspace between
+Every TEA contract declares `fixtureReset: null`, so pre-flight plans nothing to reset a workspace between
 legs, and a directory per spawned leg is the only thing that makes a leg's evidence its own. With
 that fixed the witness passes, and the fix cost the twelve minutes of the first pair.
 

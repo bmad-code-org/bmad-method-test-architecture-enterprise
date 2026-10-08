@@ -252,7 +252,7 @@ tea_browser_automation = "auto" # "cli" | "mcp" | "none"
 **Related:**
 
 - [Configure Browser Automation Guide](/docs/how-to/customization/configure-browser-automation.md)
-- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp)
+- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp)
 
 ---
 

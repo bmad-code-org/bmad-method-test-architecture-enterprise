@@ -11,7 +11,7 @@ The target is TeA's Evaluate skill, run by the generic skill runner over `skills
 | P-003 | `[held-out]`       | B-001    | defect      | controlled-mutation | M-002: the exit 12 row of the exit table reads evaluation weakness                               |
 | P-004 | `[representative]` | B-002    | zero-action | clean-control       | Nothing: a web application with no AI features is `ai-feature` over `api`                        |
 | P-005 | `[representative]` | B-002    | defect      | controlled-mutation | M-003: the sentence that states the web-application rule names the `web` interface kind          |
-| P-006 | `[representative]` | B-003    | zero-action | clean-control       | Nothing: Stage 11 lists all thirteen exit table rows with a class the table uses                 |
+| P-006 | `[representative]` | B-003    | zero-action | clean-control       | Nothing: Stage 11 lists all thirteen exit table rows, each with the class its row gives          |
 | P-007 | `[representative]` | B-003    | defect      | controlled-mutation | M-004: the `tea-evaluate 13` row is gone, so Stage 11 lists twelve rows                          |
 | P-008 | `[malformed]`      | B-004    | zero-action | clean-control       | Nothing: a request whose `exit` field has the wrong type names no usable exit, and gets no class |
 | P-009 | `[malformed]`      | B-004    | defect      | controlled-mutation | M-005: the sentence that says such a request has no class gives it the evaluation weakness class |
@@ -24,7 +24,7 @@ The four engine rules that Story 1.16's run left unsatisfied are closed in the c
 
 - **`success-indicator-separation`:** the operation nominates `/status` as its success indicator and gives the answer fields their own roles. Every oracle reads `status` and an answer field in both its direction and its check.
 - **`malformed-input`:** the step `refuse-no-exit` binds the `type-violating` matcher on the declared key `stdin.exit` (a number), and O-004 addresses it. The request the skill receives is the JSON object holding the question and `"exit":"malformed"`, which names no usable exit.
-- **`per-record`:** the operation declares `/exits` as a collection location, and O-003 quantifies over it with `for-all`, testing each record's class.
+- **`per-record`:** the operation declares `/exits` as a collection location, and O-003 quantifies over it with `for-all`, holding each record to the class its row gives: the predicate is an `any` of one `all` pair per row over `@/id` and `@/class`, and the pairs of `tea-evaluate 11` and `tea-evaluate 12` compare the class with the `classify-exits` answer for that exit, which O-001 holds to the table.
 - **`omission-and-completeness`:** that location names the reference set `exit-table`, which holds the thirteen ids of the exit table in `references/gaps.md`, and O-003 reconciles the records against it with `covers-by-key`. `test:evaluate-dogfood` holds the set equal to the table.
 
 ## Single source of the web-application rule

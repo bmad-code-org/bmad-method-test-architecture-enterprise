@@ -41,11 +41,15 @@ function withFixedHost(body) {
   stub.native = stub;
   fs.realpathSync = stub;
   fs.existsSync = (candidate) => (candidate === '/run/user' ? true : existsSync(candidate));
+  // The evaluation layer names the user's private root, `/tmp/tea-evaluate-p<uid>` (Story 1.88), so the user is fixed too.
+  const getuid = process.getuid;
+  process.getuid = () => 501;
   try {
     return body();
   } finally {
     fs.realpathSync = realpathSync;
     fs.existsSync = existsSync;
+    process.getuid = getuid;
   }
 }
 
@@ -179,6 +183,40 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
       }).wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { egress: `${egressDirectory}/s` });
+      // The call directories (the call's temp directory, a started service's port directory and its bridge directory) sit beneath the run's private parent, which the sandbox empties (Story 1.131).
+      // Under Bubblewrap each is bound at a path under the synthetic /dev, the environment, the port file and the shim's bridge name it there, and the audit grants the mount.
+      // Under Seatbelt the profile allows each again beneath the denied root.
+      const callParent = `${privateRoot}/run-501-AbCdEf`;
+      const callTemporary = `${callParent}/tea-evaluate-target-tmp-AbCdEf`;
+      const callPortDirectory = `${callParent}/tea-evaluate-port-AbCdEf`;
+      const callBridgeDirectory = `${callParent}/tea-nb-AbCdEf`;
+      const callEnvironment = {
+        PATH: '/usr/bin',
+        TMPDIR: callTemporary,
+        TMP: callTemporary,
+        TEMP: callTemporary,
+        PORT_FILE: `${callPortDirectory}/port`,
+      };
+      const callWrap = (sandbox) =>
+        sandbox.wrap('/fixture/bin/node', ['server.js'], [callTemporary, callPortDirectory, callBridgeDirectory], ['/opt/toolchain'], {
+          bridge: `${callBridgeDirectory}/b`,
+          environment: callEnvironment,
+        });
+      const bubblewrapCallWrapped = callWrap(
+        sandboxOf({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory }),
+      );
+      const bubblewrapCallAuditWrapped = callWrap(
+        sandboxOf({
+          confinement: { ...bubblewrapConfinement, observer: { executable: '/usr/bin/strace' } },
+          workspace,
+          git,
+          privateRoot,
+          home: rootHome,
+          audit: { directory: `${callParent}/tea-evaluate-audit-AbCdEf` },
+          status: statusDirectory,
+        }),
+      );
+      const seatbeltCallWrapped = callWrap(sandboxOf({ confinement: seatbeltConfinement, workspace, git, privateRoot, home: rootHome }));
       // The host's path-based Unix sockets the call hides each get an empty device file over their real path (Story 1.82); the
       // mounts reach Bubblewrap through a file the launcher opens, so the golden holds the vector and the file's arguments.
       const bubblewrapSocketsWrapped = sandboxOf({
@@ -189,8 +227,21 @@ function collectGeneratedOutputs() {
         home: rootHome,
         status: statusDirectory,
         hostSockets: () => ['/run/dbus/system_bus_socket', '/run/docker.sock', '/tmp/agent/agent.sock'],
-      }).wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
+      }).wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], [], {
+        environment: { PATH: '/usr/bin', PWD: '/proj', 'my.setting': 'v', PS1: 'prompt> ' },
+      });
       const socketArguments = fs.readFileSync(bubblewrapSocketsWrapped.socketFile, 'utf8').split('\0');
+      // The launcher starts with the environment the wrapped call names (the loader variables) and reads the call's own from a file (Story 1.89).
+      const socketEnvironment = {
+        // The host's loader variables are no part of the golden: the launcher's environment holds those and the one the engine's watchdog sets.
+        launcher: {
+          ELECTRON_RUN_AS_NODE: bubblewrapSocketsWrapped.environment.ELECTRON_RUN_AS_NODE,
+          loaderVariablesOnly: Object.keys(bubblewrapSocketsWrapped.environment).every((name) =>
+            ['ELECTRON_RUN_AS_NODE', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'].includes(name),
+          ),
+        },
+        file: JSON.parse(fs.readFileSync(bubblewrapSocketsWrapped.environmentFile, 'utf8')),
+      };
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -223,7 +274,18 @@ function collectGeneratedOutputs() {
           env: { PATH: '/usr/bin:/bin', HOME: workspace },
         }),
         'confinement.layerPrefix.seatbelt': confinement.layerPrefix(seatbeltConfinement),
-        'confinement.layerPrefix.bubblewrap': confinement.layerPrefix(bubblewrapConfinement),
+        // The evaluation layer lists the host's sockets for every start (Story 1.88), so the golden fixes the list: none, and three.
+        // Both vectors bind the private root read-only and the run's own parent writable again, so the golden names the root and the parent.
+        'confinement.layerPrefix.bubblewrap': confinement.layerPrefix(bubblewrapConfinement, {
+          hostSockets: () => [],
+          recordDirectory: () => '/tmp/tea-evaluate-p501',
+          privateParents: () => ['/tmp/tea-evaluate-p501/run-4242-0123456789abcdef'],
+        }),
+        'confinement.layerPrefix.bubblewrap.sockets': confinement.layerPrefix(bubblewrapConfinement, {
+          hostSockets: () => ['/run/dbus/system_bus_socket', '/run/docker.sock', '/tmp/agent/agent.sock'],
+          recordDirectory: () => '/tmp/tea-evaluate-p501',
+          privateParents: () => ['/tmp/tea-evaluate-p501/run-4242-0123456789abcdef'],
+        }),
         'confinement.targetSandbox.wrap.seatbelt': seatbeltTarget.wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]),
         'confinement.targetSandbox.wrap.bubblewrap': { ...bubblewrapWrapped },
         'confinement.targetSandbox.wrap.seatbelt.git': seatbeltGitTarget.wrap(
@@ -280,15 +342,21 @@ function collectGeneratedOutputs() {
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus': { ...bubblewrapOwnedStatusWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories': { ...bubblewrapCallWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.environment': bubblewrapCallWrapped.environment,
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit': { ...bubblewrapCallAuditWrapped },
+        'confinement.targetSandbox.wrap.seatbelt.callDirectories': seatbeltCallWrapped,
         'confinement.targetSandbox.wrap.bubblewrap.egress': { ...bubblewrapEgressWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets': { ...bubblewrapSocketsWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.sockets.arguments': socketArguments,
+        'confinement.targetSandbox.wrap.bubblewrap.sockets.environment': socketEnvironment,
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);
       for (const key of [
         'confinement.targetSandbox.wrap.bubblewrap.audit',
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit',
       ]) {
         const granted = [...outputs[key].trace.grants.read];
         // It is listed before the system's own directories, which can include it (a node at /usr/bin/node).
@@ -306,6 +374,7 @@ function collectGeneratedOutputs() {
         .join('<node>')
         .replaceAll(/status-(\d+)-[0-9a-f]{16}\.json/g, 'status-$1-<token>.json')
         .replaceAll(/sockets-(\d+)-[0-9a-f]{16}\.args/g, 'sockets-$1-<token>.args')
+        .replaceAll(/launch-(\d+)-[0-9a-f]{16}\.json/g, 'launch-$1-<token>.json')
         .replaceAll(/trace-(\d+)-[0-9a-f]{12}\.txt/g, 'trace-$1-<token>.txt')
         .replaceAll(path.join(__dirname, '..', '..', 'cli', 'lib', 'evaluate'), '<confinement-directory>');
       const normalized = JSON.parse(text);
@@ -314,6 +383,7 @@ function collectGeneratedOutputs() {
       for (const key of [
         'confinement.targetSandbox.wrap.bubblewrap.audit',
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',
+        'confinement.targetSandbox.wrap.bubblewrap.callDirectories.audit',
       ]) {
         const audited = normalized[key].trace.grants;
         for (const name of ['read', 'write', 'connect', 'withheld', 'withheldExcept']) audited[name] = [...new Set(audited[name])];

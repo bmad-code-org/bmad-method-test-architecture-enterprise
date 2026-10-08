@@ -25,7 +25,7 @@ const path = require('node:path');
 const { hostEnvironmentPort, runArm } = require('./arm');
 const { EngineUnavailableError, loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
-const { makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
+const { cleanUpOnSignal, makeScratchDirectory, releaseScratchDirectory, removeScratchDirectory } = require('./workspace');
 
 /** The step the report request runs as; no plan step of the contract carries it. */
 const REPORT_STEP = 'release-report';
@@ -193,22 +193,41 @@ function lineNamesOperation(line, operations) {
  *
  * @param {string} contractPath the evaluation's `contract.json`
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {{ signatureCollision: string|null, interfaceRepeat: string|null }}
+ * @param {string[]} [scratch] the caller's list of directories it removes however it ends, a signal included; a call with no list removes its own directory on a signal
+ * @returns {Promise<{ signatureCollision: string|null, interfaceRepeat: string|null }>}
  */
-function compileRefusals(contractPath, env = process.env) {
+async function compileRefusals(contractPath, env = process.env, scratch) {
   const none = { signatureCollision: null, interfaceRepeat: null };
-  // A scratch list of its own, since `check` has no run: the directory goes through the layer's one scratch path (`makeScratchDirectory`) and is released the same way.
-  const scratch = [];
+  // The directory goes through the layer's one scratch path (`makeScratchDirectory`) and is released the same way.
+  // `ci` hands over its own list, which its signal handler removes. A call with no list (`check`, the pipeline's own check) keeps
+  // one and removes it on a signal itself, since nothing else would.
+  const list = scratch ?? [];
+  const release =
+    scratch === undefined
+      ? cleanUpOnSignal([], new AbortController(), {
+          onSignal: () => {
+            for (const directory of list.splice(0)) {
+              try {
+                removeScratchDirectory(directory);
+              } catch {
+                // The signal still ends the process; the directory stays in the temporary directory.
+              }
+            }
+          },
+        })
+      : () => {};
   let staging;
   try {
-    staging = makeScratchDirectory(scratch, 'tea-evaluate-check-');
+    staging = makeScratchDirectory(list, 'tea-evaluate-check-');
   } catch {
     // A temporary directory that cannot be made leaves the stage unrun: `run` reports it, and these rules stay quiet.
+    release();
     return none;
   }
   try {
-    const stage = runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
+    const stage = await runEngineStage('compile', ['--in', contractPath, '--out', path.join(staging, 'eval-contract.json')], {
       runDirectory: staging,
+      folder: path.dirname(contractPath),
       recordPath: path.join(staging, 'compile-record.json'),
       env,
     });
@@ -221,7 +240,8 @@ function compileRefusals(contractPath, env = process.env) {
     if (error instanceof EngineStageError || error instanceof EngineUnavailableError) return none;
     throw error;
   } finally {
-    releaseScratchDirectory(scratch, staging);
+    release();
+    releaseScratchDirectory(list, staging);
   }
 }
 

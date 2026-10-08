@@ -25,6 +25,11 @@
  *  - the CI suite's manifest lists exactly the files under each project root;
  *  - the stored `evaluation-plan` replay is a real capture of the live `eval:ci` run.
  *
+ * Story 1.97 adds the gate adopter: its plan names the publish job its release tier gates, its request asks in prose that the
+ * publish job waits for the release checks, and its ground truth reads the wait (the `needs` list the job ends with, the events it
+ * still runs on, the bytes of the rest of the job). The scorer's wait element is held here by one edit of the stored correct run each,
+ * the cross-file form by the gate block of the template, and the step's sentences about gates, conflicts and the re-render by pins.
+ *
  * Story 1.93 adds the projects that carry the rest of the step: the tiers adopter's plan places checks on pr, merge,
  * scheduled and release, and its ground truth is the job, tier step, event, timeout and artifact name each tier's rules give; the
  * edit adopter's pipeline carries a marker job under an id the rules no longer give and a hand-written job, and its
@@ -42,7 +47,7 @@ const { spawnSync } = require('node:child_process');
 const YAML = require('yaml');
 
 const { DEFAULT_TIERS, PLAN_PATH, readPlan } = require('../cli/lib/evaluate/ci-plan');
-const { validateCorpus, scoreRun, guardHolds, jobBlockOf, sha256Of } = require('./eval-ci');
+const { validateCorpus, scoreRun, guardHolds, jobBlockOf, sha256Of, withoutNeeds } = require('./eval-ci');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL = path.join(ROOT, 'skills', 'bmad-testarch-ci');
@@ -419,6 +424,8 @@ function checkFixturePlan() {
 
 const TIERS_SET_ID = 'evaluation-tiers-granite-router';
 const EDIT_SET_ID = 'evaluation-edit-ember-ledger';
+const FULL_SET_ID = 'full-meridian-storefront';
+const GATE_SET_ID = 'evaluation-gate-slate-publisher';
 /** The event a plan trigger starts, as the step maps it for a pipeline that lists no merge_group. */
 const EVENT_OF_TRIGGER = { 'pull-request': 'pull_request', merge: 'push', schedule: 'schedule', release: 'release' };
 /** The limit in minutes the step gives each tier's job. */
@@ -906,8 +913,8 @@ function checkStepSentences() {
       "Limit the evaluation job with an `if:` on the event when the workflow carries more events than the tier's checks name.",
     ],
     [
-      'new events guard the earlier jobs',
-      'When an event is new to the workflow, give each job that existed before an `if:` limiting it to the events it already ran on',
+      'new events and widened filters guard the earlier jobs',
+      'give each job that existed before an `if:` limiting it to the events and filters it already ran on',
     ],
     [
       'tiers that share an event are told apart',
@@ -918,11 +925,11 @@ function checkStepSentences() {
     ['a cron is told apart by its schedule', "`github.event.schedule == '<its cron>'` for each cron"],
     [
       'a tier left with no event is named and never guarded out of every event',
-      "When a tier's only resolved event is one that another tier took, name that tier in the summary as wired to no event until the gating of Story 1.97, and render no guard that excludes a tier from every event.",
+      "When a tier's only resolved event is one that another tier took, name that tier in the summary as wired to no event of its own, and render no guard that excludes a tier from every event: its evaluation job runs on the event the other tier took, and a job it gates (item 10) waits for it there, since `gates` names a job and creates no event.",
     ],
     [
-      'one tier takes workflow_dispatch',
-      'give `workflow_dispatch` to the one tier whose `trigger` names it and guard the others out of it',
+      'every tier that names manual-dispatch takes workflow_dispatch',
+      'give `workflow_dispatch` to every tier whose `trigger` names it and guard the tiers that do not name it out of it',
     ],
     ['release falls back to a published release', 'and `release` of type `published` when they name none'],
   ])
@@ -939,6 +946,12 @@ function checkSupportingFiles() {
   check(
     example.includes("'step-03b-render-evaluation-plans'") && example.includes('## Step 3b: Render Evaluation Plans'),
     'the progress example does not list step-03b or carry its section',
+  );
+  check(
+    (readSkill('steps-c/step-04-validate-and-summary.md') ?? '').includes(
+      'Evaluation plans rendered, refused or not validated, the jobs they gate, and the credentials their live tiers need',
+    ),
+    'the summary step does not report the jobs the plans gate',
   );
   check(
     (readSkill('checklist.md') ?? '').includes('### Step 10: Evaluation Plans'),
@@ -1046,6 +1059,74 @@ async function checkCorpusGuards() {
       'standaloneStep is declared and is not a boolean',
     ],
     ['checkIds that is empty', 'command-evaluation-ci-pr', { checkIds: [] }, 'checkIds is declared and is not a non-empty list'],
+    [
+      'contractPattern that is empty',
+      'command-evaluation-install',
+      { contractPattern: '' },
+      'contractPattern is declared and is not a non-empty string',
+    ],
+    [
+      'contractPattern with no contractToken',
+      'command-evaluation-install',
+      { contractToken: null, contractPattern: '^npm install --prefix evals$' },
+      'declares a contractPattern and no contractToken',
+    ],
+    [
+      'contractPattern that is not anchored at its start',
+      'command-evaluation-install',
+      { contractPattern: String.raw`[\s\S]*npm install --prefix ['"]?evals['"]?[\s\S]*$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern that is not anchored at its end',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm install --prefix ['"]?evals['"]?` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern with an alternation at the top level',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^npm ci$|^[\s\S]*npm install --prefix evals[\s\S]*$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern whose final dollar is escaped',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm install --prefix evals\$` },
+      'contractPattern is not anchored',
+    ],
+    [
+      'contractPattern that is not a regular expression',
+      'command-evaluation-install',
+      { contractPattern: '^(npm install$' },
+      'is not a regular expression',
+    ],
+    [
+      'contractPattern that does not match its contractToken',
+      'command-evaluation-install',
+      { contractPattern: String.raw`^[\s\S]*npm ci[\s\S]*$` },
+      'does not match its own contractToken',
+    ],
+    [
+      "contractPattern that does not match the element's command",
+      'command-evaluation-ci-pr',
+      { contractPattern: '^tea-evaluate ci --evaluation evals/grader --tier pr$' },
+      'does not match the command',
+    ],
+    [
+      'contractPattern of a gate that does not match its contractToken',
+      'gate-burn-in',
+      { contractToken: 'burn-out:' },
+      'does not match its own contractToken',
+      FULL_SET_ID,
+    ],
+    [
+      'contractPattern of a gate that is not anchored',
+      'gate-burn-in',
+      { contractPattern: String.raw`^[\s\S]*burn-in:` },
+      'contractPattern is not anchored',
+      FULL_SET_ID,
+    ],
     ['checkIds without standaloneStep', 'command-evaluation-ci-pr', { standaloneStep: false }, 'needs standaloneStep'],
     ['condition that is empty', 'artifact-evaluation-runs', { condition: '' }, 'condition is declared and is not a non-empty string'],
     ['condition beside onFailureOnly', 'artifact-evaluation-runs', { onFailureOnly: true }, 'declares a condition and onFailureOnly'],
@@ -1121,6 +1202,15 @@ async function checkCorpusGuards() {
       `validateCorpus does not refuse ${label} (${problems.length} problems)`,
     );
   }
+  // A gate's command is the one its job loops, which the pattern of the gate does not state, so the match with the command binds a command element only.
+  const gate = structuredClone(baseline);
+  gate.fixtureSets.find((set) => set.id === FULL_SET_ID).expectedElements.find((entry) => entry.id === 'gate-burn-in').command =
+    'npm run test:e2e -- --repeat-each=10';
+  const gateProblems = (await validateCorpus(gate)).problems;
+  check(
+    !gateProblems.some((problem) => problem.includes('does not match the command')),
+    `validateCorpus holds the contractPattern of a gate to its command: ${gateProblems.join('; ')}`,
+  );
 }
 
 function checkStoredCapture() {
@@ -1259,6 +1349,802 @@ function checkTierAndEditCases() {
   }
 }
 
+/** Whether a line of `text`, with its list marker removed, is `sentence` whole. */
+function hasLineText(text, sentence) {
+  return String(text ?? '')
+    .split('\n')
+    .some((line) => line.trim().replace(/^(?:[-*] |\d+\. )/, '') === sentence.replace(/^(?:[-*] |\d+\. )/, ''));
+}
+
+/** The sentences of the step that resolve, render, restore and report the gates, each pinned whole on a line of its own. */
+function checkGateSentences() {
+  const step = readSkill(STEP) ?? '';
+  const sentences = [
+    ['gates resolve after validation', 'Then resolve the gates of every plan that was not refused.'],
+    [
+      'a tier gates the union of the lists',
+      'A tier gates the union of the `gates` lists over the checks the plan places on it, each name once.',
+    ],
+    [
+      'a name matches one job in one file',
+      'A name matches a job when exactly one workflow file of the repository holds a job with that id (for GitHub Actions, the pipeline file this step writes and the other files in `.github/workflows/`).',
+    ],
+    [
+      'a name that matches no job',
+      'A name that no file holds, that several files hold, or that is the id of a job this step wrote (one that carries the `# tea-evaluation-plan:` marker) matches no job.',
+    ],
+    ['a conflict is a wait that cannot hold', 'A gate conflicts when its wait cannot hold, and each conflict below refuses the plan.'],
+    [
+      'a skipped evaluation job skips the gated job',
+      "Inside the pipeline file, a job that needs a skipped job is skipped, so a gate conflicts when the gated job already ran in a run where its tier's evaluation job is skipped.",
+    ],
+    [
+      'events and guards are compared',
+      "Compare the events and the branch, tag and cron filters the gated job ran on as its file held them before this render (its workflow's `on:` and its own `if:`) with the events and guards the evaluation job of each tier that gates it runs on, using the ref or cron guards item 7 gives it.",
+    ],
+    [
+      'a run the render adds is no conflict',
+      'A run this render adds, such as a merge tier widening `on.push` to `branches: [main]` or a new cron, is skipped through the wait and is no conflict.',
+    ],
+    [
+      'a deploy that already ran on every push beside a tag-guarded evaluation job conflicts',
+      'A deploy that already ran on every `push` beside a release evaluation job guarded to tags conflicts.',
+    ],
+    [
+      'an evaluation job running on a run the gated job did not have conflicts',
+      "It also conflicts when the tier's evaluation job runs on a run the gated job did not run on before this render, such as a `workflow_dispatch` the render adds to a tag-push release file, since an in-file gated job carries no guard of its own and would run there.",
+    ],
+    [
+      'a gated job that already ran on a dispatch gains no run, and a file without dispatch conflicts',
+      'A gated job that already ran on `workflow_dispatch`, as a nightly deploy file does, gains no run when the evaluation job runs on a dispatch, and a deploy file that did not start on `workflow_dispatch` before the render conflicts when the plan names `manual-dispatch` on the gating tier.',
+    ],
+    [
+      'a job gated by another plan through the other form conflicts',
+      'It conflicts when the job already waits for an evaluation job of another plan through the other form of item 10.',
+    ],
+    [
+      'a status function in the if conflicts',
+      "It conflicts, in either form, when the job's `if:` calls a status function other than `success()` (`always()`, `!cancelled()` or `failure()`), since the job would run after the evaluation job failed.",
+    ],
+    [
+      'a cross-file wait for a pull request or fork tier conflicts',
+      "Across files the wait is `workflow_run`, and it conflicts when the tier's GitHub event is `pull_request`, `pull_request_target` or another event that runs code of a fork, since the job would check out the fork's commit with the repository's secrets.",
+    ],
+    [
+      'a cross-file wait behind a ref or cron guard conflicts',
+      "It conflicts when the tier's evaluation job carries a ref or cron guard beyond its event, since `github.event.workflow_run.event` cannot tell a tag push from a branch push or one cron from another, and a skipped evaluation job still lets the run conclude `success`.",
+    ],
+    [
+      'a file that follows another workflow, or a job gated twice, conflicts',
+      'It conflicts when the gated file already has a `workflow_run` trigger that lists a workflow other than the pipeline file, or when the job is gated by another plan or by a second tier, since two `if:` lines cannot be combined.',
+    ],
+    [
+      'a cross-file job with needs, uses, an if or changing contexts conflicts',
+      'It conflicts when the gated job has `needs` (its sibling is skipped on the `workflow_run` event and the job never runs again), is a `uses:` reusable-workflow job (it has no checkout step to carry the `ref`), has an `if:` of its own other than the one this step wrote, or reads `github.ref`, `github.ref_name`, `github.sha`, `github.head_ref` or `github.event.*` outside the wait this step wrote, since those contexts change under `workflow_run`.',
+    ],
+    [
+      'a missing name or a conflict refuses the plan',
+      'Refuse a plan with a name that matches no job or with a conflicting gate: report each in the summary, render nothing from that plan, and treat the jobs of its earlier run as section 4 treats a refused plan.',
+    ],
+    ['other plans still render', 'Other plans still render.'],
+    [
+      'widened filters guard the jobs that existed before',
+      'When an event is new to the workflow, or an event the workflow already has gains a branch filter, a tag pattern or a cron, give each job that existed before an `if:` limiting it to the events and filters it already ran on, and name the guard in the summary.',
+    ],
+    [
+      'an in-file gated job is exempt from the pre-existing job guard',
+      'An in-file gated job (item 10) is exempt from that guard, since its `needs` on the evaluation job keeps it off the runs this render adds, which holds because section 2 refuses a gate whose evaluation job runs on one of them.',
+    ],
+    ['the wait is item 10', '10. **Gates.**'],
+    [
+      'the wait follows where the gated job lives',
+      "For each job the tier gates (section 2), make the job wait for the tier's evaluation job, by where the gated job lives.",
+    ],
+    [
+      'inside one file the wait is needs, appended',
+      "In the pipeline file this step writes, the wait is `needs`: append the evaluation job's id to the gated job's `needs`, keep the entries already there in their order (a `needs` that is one string becomes a list), and leave the job's `if:` and every other key as they are, so the job's own event handling stays as it was.",
+    ],
+    [
+      'across files the wait is workflow_run, an if with the path and a ref',
+      "In another workflow file the wait is a `workflow_run` trigger, since a job waits only for jobs of its own workflow run and `needs` cannot reach the evaluation job: add to that file's `on:`, keeping the triggers already there, `workflow_run` with `workflows` naming the pipeline file this step writes (its `name:`, or its file path when it has none) and `types: [completed]`, give the job `if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == '<the GitHub event of the tier>' && github.event.workflow_run.path == '<the pipeline file path>'`, and set `ref: ${{ github.event.workflow_run.head_sha }}` on the job's `actions/checkout` steps, as the gate block of `./github-actions-template.yaml` shows between its `evaluation-gate:begin` and `evaluation-gate:end` markers.",
+    ],
+    [
+      'a cross-file job is limited to the pipeline, the event and the evaluated commit',
+      "A completed workflow run triggers the job whatever workflow and event started it, and a `workflow_run` job checks out the default branch, so the three checks limit the job to a successful run of the pipeline file on the tier's event and the `ref` builds the commit the evaluation ran on.",
+    ],
+    ['the cross-file job starts only from that completion', 'That job then starts only from that completion, and the summary says so.'],
+    [
+      'the other jobs of the gated workflow are guarded, a gated job is not',
+      'Give each other job of that file, except a job this item gates, an `if:` limiting it to the events it already ran on, as item 7 does for a pipeline that gains an event.',
+    ],
+    [
+      'the edit is reported and nothing else of the job changes',
+      'Report each edit in the summary with the job, its file and the evaluation job it waits for, and change nothing else of the job.',
+    ],
+    ['a re-render restores the wait under the current id', '- Restore each wait with its job.'],
+    [
+      'the restore rewrites the needs entry',
+      "For a job the plan's tier gates, write the wait under the id item 1 gives now: replace the `needs` entry that names a job the marker carried, under the id it carried then, with the current id, so a renamed evaluation job leaves neither two entries nor a dangling one, and add the wait where it is absent.",
+    ],
+    [
+      'a wait goes with its plan entry or its evaluation job',
+      '- Remove a wait when the plan no longer names the job on that tier, and remove the waits on an evaluation job when that job is removed.',
+    ],
+    [
+      'the needs entry goes with its key when alone',
+      'The `needs` entry goes, the key with it when it was the only entry, and a list left with one entry is written as that entry.',
+    ],
+    [
+      'across files the trigger and guards stay while another wait uses them',
+      "Across files the `if:` and the checkout `ref:` go with the wait, and the `workflow_run` trigger and the guards on the workflow's other jobs go only when no other wait in that file still uses them.",
+    ],
+    [
+      'the gated job is as it was',
+      'The gated job then carries what it carried before the first render, a one-entry `needs` list reading as its entry.',
+    ],
+    [
+      'the limits name the one wait',
+      "- Limits: change no job this step did not write, except the event guards of section 3 item 7 and the wait of section 3 item 10, which changes that one job's `needs` in the pipeline file, or across files that job's `if:` and checkout `ref:`, its workflow's `workflow_run` trigger and the event guards of that workflow's other jobs, and nothing else",
+    ],
+    ['a gate creates no job, event or check', '- 🚫 A `gates` entry names a job to wait for and creates no job, event or check'],
+    [
+      'success names the gated jobs',
+      "- Every job a tier gates waits for the tier's evaluation job, or the plan is refused with the name or the conflict reported",
+    ],
+    [
+      'failure names a gated job changed beyond the wait',
+      "- A gated job changed beyond the wait of section 3 item 10 (its `needs` in the pipeline file; across files its `if:` and checkout `ref:`, its workflow's `workflow_run` trigger and the guards of that workflow's other jobs), or a wait written for a plan that was refused",
+    ],
+    [
+      'other platforms get the wait in their idiom',
+      "Other platforms get the same structure in their own idiom: a job or stage per tier, one step per tier, the evidence kept whatever the result, and the wait of item 10 as the platform's own dependency between jobs, or between pipelines when the gated job lives in another file.",
+    ],
+    [
+      'the summary of the create run names the jobs gated',
+      'the plans found, the jobs written, the jobs gated, the plans refused or not validated, and the credentials the live tiers need.',
+    ],
+  ];
+  for (const [label, sentence] of sentences) {
+    check(
+      label.startsWith('the summary of the create run') ? step.includes(sentence) : hasLineText(step, sentence),
+      `${STEP} lacks the sentence for ${label}, whole and on a line of its own`,
+    );
+  }
+  // The retired phrase named a story the step no longer waits for.
+  check(!step.includes('until the gating of Story 1.97'), `${STEP} still waits for the gating of Story 1.97`);
+  check(
+    (readSkill('checklist.md') ?? '').includes("Each job a tier gates waits for the tier's evaluation job"),
+    'the checklist lacks the item for the waits of gated jobs',
+  );
+  check(
+    (readSkill('steps-v/step-01-validate.md') ?? '').includes(
+      "Each job a tier gates (`gates` in the plan) waits for the tier's evaluation job",
+    ),
+    'the validate step lacks its check of the waits of gated jobs',
+  );
+}
+
+/** The gate block of the template: the cross-file form of the wait, parsed as YAML. */
+function checkGateTemplateBlock() {
+  const template = readSkill('github-actions-template.yaml') ?? '';
+  const match = /^# evaluation-gate:begin\n([\S\s]*?)^# evaluation-gate:end$/m.exec(template);
+  check(match !== null, 'github-actions-template.yaml has no evaluation-gate:begin and evaluation-gate:end block');
+  if (match === null) return;
+  let parsed;
+  try {
+    parsed = YAML.parse(
+      match[1]
+        .split('\n')
+        .map((line) => line.replace(/^# ?/, ''))
+        .join('\n'),
+      { uniqueKeys: true, strict: true },
+    );
+  } catch (error) {
+    check(false, `the evaluation gate block is not YAML: ${error.message.split('\n')[0]}`);
+    return;
+  }
+  const run = parsed?.on?.workflow_run;
+  check(
+    JSON.stringify(run?.workflows) === JSON.stringify(['PIPELINE_NAME']),
+    `the gate block names ${JSON.stringify(run?.workflows)} as the workflow to follow where [PIPELINE_NAME] belongs`,
+  );
+  check(
+    JSON.stringify(run?.types) === JSON.stringify(['completed']),
+    'the gate block follows an event other than the completion of the evaluation workflow',
+  );
+  const jobs = Object.entries(parsed?.jobs ?? {});
+  check(jobs.length === 1 && jobs[0][0] === 'GATED_JOB_ID', 'the gate block does not address exactly the GATED_JOB_ID job');
+  const gated = jobs[0]?.[1] ?? {};
+  check(
+    gated.if ===
+      "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'TIER_EVENT' && github.event.workflow_run.path == 'PIPELINE_PATH'",
+    "the gate block gives the job an if other than the successful conclusion of a run of the pipeline file started by the tier's event",
+  );
+  check(
+    Object.keys(gated).join(',') === 'if,steps',
+    `the gate block changes ${Object.keys(gated).join(', ')} of the job where only the if and the checkout belong`,
+  );
+  const checkouts = (gated.steps ?? []).filter((step) => typeof step?.uses === 'string' && step.uses.startsWith('actions/checkout'));
+  check(
+    checkouts.length === 1 && gated.steps.length === 1 && checkouts[0].with?.ref === '${{ github.event.workflow_run.head_sha }}',
+    'the gate block does not check out the commit the evaluation workflow ran on',
+  );
+  check(
+    template.includes(
+      '#   PIPELINE_NAME: the `name:` of the workflow file that holds the evaluation jobs, its file path when it has none',
+    ) &&
+      template.includes('#   GATED_JOB_ID:  the id of the job the tier gates') &&
+      template.includes("#   TIER_EVENT:    the GitHub event that starts the tier's evaluation job") &&
+      template.includes('#   PIPELINE_PATH: the repository-relative path of the workflow file that holds the evaluation jobs'),
+    'the template legend lacks the PIPELINE_NAME, GATED_JOB_ID, TIER_EVENT and PIPELINE_PATH lines of the gate block',
+  );
+}
+
+/** The plan of the gate adopter names the job its release tier gates, and its ground truth reads the wait that follows. */
+function checkGateFixture() {
+  const gate = groundTruthSet(GATE_SET_ID);
+  check(gate !== undefined, `ground-truth.json has no fixture set ${GATE_SET_ID}`);
+  const folder = 'test/fixtures/ci-eval/evaluation-gate/evals/notes';
+  const adopter = readPlan(path.join(ROOT, folder));
+  check(
+    adopter.plan !== undefined && adopter.findings.length === 0,
+    `the gate adopter's plan breaks the runtime schema: ${JSON.stringify(adopter.findings)}`,
+  );
+  if (gate === undefined || adopter.plan === undefined) return;
+  // The jobs a tier gates are the union of `gates` over the checks the plan places on it.
+  const gated = (tier) => [
+    ...new Set(adopter.plan.checks.filter((entry) => entry.placement.tier === tier).flatMap((entry) => entry.gates ?? [])),
+  ];
+  check(
+    gated('pr').length === 0,
+    `the plan gates ${gated('pr').join(', ')} on pr, where the request gates the publish job on the release checks alone`,
+  );
+  check(
+    JSON.stringify(gated('release')) === JSON.stringify(['publish']),
+    `the plan gates ${JSON.stringify(gated('release'))} on release, expected ["publish"]`,
+  );
+  check(
+    adopter.plan.checks.filter((entry) => entry.gates !== undefined).length === 1,
+    'the plan names the publish job on more than one check, so the union over the tier is not what the fixture shows',
+  );
+  const element = (id) => gate.expectedElements.find((entry) => entry.id === id);
+  const wait = element('wait-publish');
+  const pipeline = fs.readFileSync(path.join(FIXTURE_ROOT, 'evaluation-gate', '.github', 'workflows', 'test.yml'), 'utf8');
+  const publish = YAML.parse(pipeline, { uniqueKeys: true, strict: true }).jobs?.publish;
+  check(
+    wait?.jobId === 'publish' && JSON.stringify(wait?.needs) === JSON.stringify([...[publish?.needs].flat(), 'evaluation-release']),
+    `the ground truth's wait is ${JSON.stringify(wait)}, expected the publish job's needs (${JSON.stringify(publish?.needs)}) followed by evaluation-release`,
+  );
+  check(
+    JSON.stringify(wait?.runsOn) === JSON.stringify(['release']) && publish?.if === "github.event_name == 'release'",
+    'the ground truth does not hold the publish job to the release event its own if already gives it',
+  );
+  check(
+    element('job-evaluation-release')?.jobId === 'evaluation-release' &&
+      JSON.stringify(element('job-evaluation-release')?.runsOn) === JSON.stringify(['release']),
+    'the ground truth does not put the evaluation job the publish job waits for on the release event',
+  );
+  check(
+    !pipeline.includes('evaluation-'),
+    'the staged pipeline already holds an evaluation job, so the run has nothing to render and the wait would be the fixture',
+  );
+  // Rule C of the step: the gated job never runs in a run where its tier's evaluation job is skipped, so every event the publish
+  // job's own if lets through is an event the evaluation job's if (as the stored correct run renders it) lets through too.
+  const correctRun = YAML.parse(
+    fs.readFileSync(path.join(REPLAY_ROOT, 'evaluation-gate-live-capture', '.github', 'workflows', 'test.yml'), 'utf8'),
+  );
+  const events = Object.keys(correctRun.on ?? {});
+  const stranded = events.filter(
+    (event) => guardHolds(publish?.if, event) !== false && guardHolds(correctRun.jobs['evaluation-release']?.if, event) === false,
+  );
+  check(stranded.length === 0, `the publish job can run on ${stranded.join(', ')}, where the release evaluation job is skipped`);
+  check(!/always\(|cancelled\(|failure\(/.test(String(publish?.if ?? '')), 'the publish job calls a status function in its if');
+  check(gate.requireEveryElement === true && gate.mode === 'edit', 'the gate adopter is not an edit set held to every one of its elements');
+  const request = fs.readFileSync(path.join(FIXTURE_ROOT, 'evaluation-gate', 'docs', 'ci-requirements.md'), 'utf8');
+  check(
+    !/evaluation-ci-plan|\bplan\b|\bgates\b|\bneeds\b/i.test(request),
+    "the gate adopter's request names the plan, its gates field or the needs key",
+  );
+  check(request.includes(wait?.requestQuote ?? '\u0000'), "the wait is not quoted from the gate adopter's request");
+  check(
+    gate.projectFiles.includes(`evals/notes/${PLAN_PATH}`) && gate.projectFiles.includes('evals/package.json'),
+    'the gate adopter does not declare its plan and its evaluations folder manifest',
+  );
+}
+
+/**
+ * The wait element, held by one edit of the stored correct run each: the form it takes, the order and content of the list it
+ * ends with, what else of the job may not move, the events it still runs on, and the evaluation job it waits for.
+ */
+function checkGatedWait() {
+  const set = groundTruthSet(GATE_SET_ID);
+  const directory = path.join(REPLAY_ROOT, 'evaluation-gate-live-capture');
+  check(fs.existsSync(path.join(directory, '.github', 'workflows', 'test.yml')), 'the stored correct run of the gate adopter is gone');
+  if (set === undefined || !fs.existsSync(path.join(directory, '.github', 'workflows', 'test.yml'))) return;
+  const correct = fs.readFileSync(path.join(directory, '.github', 'workflows', 'test.yml'), 'utf8');
+  const checkpoint = fs.readFileSync(path.join(directory, 'test-artifacts', 'ci', 'ci-pipeline-progress.md'), 'utf8');
+  const missesOf = (text) =>
+    scoreRun(set, text, { findings: [] }, { files: { 'test-artifacts/ci/ci-pipeline-progress.md': checkpoint } })
+      .elements.filter((element) => !element.present)
+      .map((element) => element.id);
+  const wait = '    needs: [test, evaluation-release]\n';
+  check(correct.includes(wait), 'the stored correct run of the gate adopter has no wait to edit');
+  check(missesOf(correct).length === 0, `the stored correct run of the gate adopter misses ${missesOf(correct).join(', ')}`);
+  const edited = (replacement) => correct.replace(wait, replacement);
+  const publish = (text) => text.replace("    if: github.event_name == 'release'\n    needs: [test, evaluation-release]\n", wait);
+  for (const [label, text, expected] of [
+    ['the wait as a block list', edited('    needs:\n      - test\n      - evaluation-release\n'), ''],
+    ['the wait as an indentless block list', edited('    needs:\n    - test\n    - evaluation-release\n'), ''],
+    ['the wait cut from the list', edited('    needs: test\n'), 'wait-publish'],
+    ['the wait with the old entry dropped', edited('    needs: [evaluation-release]\n'), 'wait-publish'],
+    ['the wait put ahead of the entry the job had', edited('    needs: [evaluation-release, test]\n'), 'wait-publish'],
+    ['the wait on the pr evaluation job', edited('    needs: [test, evaluation-pr]\n'), 'wait-publish'],
+    ['the wait extended at the end of the list', edited('    needs: [test, evaluation-release, evaluation-pr]\n'), 'wait-publish'],
+    ['the wait followed by an entry that runs on the same event', edited('    needs: [test, evaluation-release, test]\n'), 'wait-publish'],
+    ['both evaluation jobs awaited', edited('    needs: [test, evaluation-pr, evaluation-release]\n'), 'wait-publish'],
+    ['no needs at all', edited(''), 'wait-publish'],
+    ['the publish condition dropped', publish(correct), 'wait-publish'],
+    [
+      'the publish condition widened',
+      correct.replace(
+        "    if: github.event_name == 'release'\n    needs",
+        "    if: github.event_name == 'release' || github.event_name == 'pull_request'\n    needs",
+      ),
+      'wait-publish',
+    ],
+    ['the publish steps edited', correct.replace("          registry-url: 'https://registry.npmjs.org'\n", ''), 'wait-publish'],
+    ['the publish timeout edited', correct.replace('    timeout-minutes: 10\n', '    timeout-minutes: 20\n'), 'wait-publish'],
+    ['the publish job gone', correct.replace(/\n {2}publish:\n[\S\s]*$/, '\n'), 'wait-publish'],
+    [
+      'the evaluation job on the wrong event',
+      correct.replace(
+        "    name: 'Evaluation (release)'\n    if: github.event_name == 'release'\n",
+        "    name: 'Evaluation (release)'\n    if: github.event_name == 'pull_request'\n",
+      ),
+      'job-evaluation-release,wait-publish',
+    ],
+    [
+      'the waited evaluation job removed',
+      correct.replace(/\n {2}evaluation-release:\n[\S\s]*?(?=\n {2}publish:\n)/, ''),
+      'artifact-evaluation-runs-release,command-evaluation-ci-release,job-evaluation-release,wait-publish',
+    ],
+    [
+      'the wait written on the test job',
+      edited('    needs: test\n').replace("    name: 'Unit tests'\n", "    name: 'Unit tests'\n    needs: evaluation-release\n"),
+      'preserved-job-test,wait-publish',
+    ],
+  ]) {
+    const missed = missesOf(text).sort().join(',');
+    check(text !== correct || label === 'the wait as a block list', `${label}: the edit left the stored correct run as it was`);
+    check(missed === expected, `${label} misses ${missed || 'nothing'} where ${expected || 'nothing'} belongs`);
+  }
+  // `withoutNeeds` removes the key at the job's depth and the lines that continue it, and nothing else.
+  const block = '  job:\n    needs:\n      - a\n      - b\n    if: x\n    steps:\n      - run: echo needs: a';
+  check(
+    withoutNeeds(block) === '  job:\n    if: x\n    steps:\n      - run: echo needs: a',
+    `withoutNeeds reads ${JSON.stringify(withoutNeeds(block))}`,
+  );
+  check(
+    withoutNeeds('  job:\n    needs:\n    - a\n    - b\n    if: x') === '  job:\n    if: x',
+    'withoutNeeds keeps the lines of an indentless block list',
+  );
+  check(withoutNeeds('  job:\n    needs: a\n    if: x') === '  job:\n    if: x', 'withoutNeeds keeps the needs of a one-line key');
+  check(withoutNeeds('  job:\n    if: x\n    needs: [a, b]') === '  job:\n    if: x', 'withoutNeeds keeps the needs of a flow list');
+  check(
+    withoutNeeds('  job:\n    if: x\n    steps:\n      - run: a\n        needs: b') ===
+      '  job:\n    if: x\n    steps:\n      - run: a\n        needs: b',
+    'withoutNeeds drops a key deeper than the job',
+  );
+}
+
+/** The stored cases of the gate adopter: the live capture, and the two deviations derived from it. */
+function checkGateCases() {
+  const read = (name) => JSON.parse(fs.readFileSync(path.join(REPLAY_ROOT, name, 'expected.json'), 'utf8'));
+  const names = fs.readdirSync(REPLAY_ROOT).filter((name) => name.startsWith('evaluation-gate-'));
+  let captures = 0;
+  for (const name of names) {
+    const expected = read(name);
+    check(expected.inputs?.fixtureSet === GATE_SET_ID, `${name} scores against ${expected.inputs?.fixtureSet}, expected ${GATE_SET_ID}`);
+    check(fs.existsSync(path.join(REPLAY_ROOT, name, '.github', 'workflows', 'test.yml')), `${name} holds no stored workflow`);
+    check(
+      fs.existsSync(path.join(REPLAY_ROOT, name, 'test-artifacts', 'ci', 'ci-pipeline-progress.md')),
+      `${name} holds no checkpoint, which the edit set scores`,
+    );
+    if (expected.storedOutput?.origin !== 'real-capture') continue;
+    captures += 1;
+    const stored = fs.readFileSync(path.join(REPLAY_ROOT, name, '.github', 'workflows', 'test.yml'));
+    check(
+      typeof expected.storedOutput.capturedBy === 'string' && expected.storedOutput.capturedBy.length > 0,
+      `${name} is a real capture and does not say which run produced it`,
+    );
+    check(
+      expected.storedOutput.sha256 === crypto.createHash('sha256').update(stored).digest('hex'),
+      `${name} holds a workflow whose sha256 differs from the one recorded when the run was captured`,
+    );
+    check(
+      Object.values(expected.result.elements).every(Boolean),
+      `${name} is the real capture and misses ${expected.result.elementMisses.join('; ')}`,
+    );
+  }
+  check(captures === 1, `test/replay/ci holds ${captures} real captures of ${GATE_SET_ID}, expected one`);
+  // The deviations: the wait cut from a correct run, and an evaluation job its event skips under a publish job that needs it.
+  // Two cases that miss the same elements must sign alike and differ in nothing else, so each deviation misses its own set.
+  const missesOf = (name) =>
+    Object.entries(read(name).result.elements)
+      .filter(([, present]) => !present)
+      .map(([id]) => id);
+  check(missesOf('evaluation-gate-live-capture').length === 0, 'the live capture of the gate adopter misses an element');
+  for (const [name, expected] of Object.entries({
+    'evaluation-gate-needs-cut': ['wait-publish'],
+    'evaluation-gate-release-job-on-pull-requests': ['job-evaluation-release', 'wait-publish'],
+  })) {
+    check(
+      missesOf(name).sort().join(',') === expected.join(','),
+      `${name} misses ${missesOf(name).join(', ') || 'nothing'}, expected ${expected.join(', ')}`,
+    );
+  }
+}
+
+/** The corpus validator refuses the wait it cannot hold: a wait with no list, no digest, a digest the staged job does not give, or on a set that is not an edit set. */
+async function checkWaitGuards() {
+  const baseline = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+  const cases = [
+    ['a wait with no jobId', { jobId: '' }, 'wait declares no jobId'],
+    ['a wait with an empty needs list', { needs: [] }, 'wait declares no needs list of job ids'],
+    ['a wait whose needs holds a non-name', { needs: ['test', 5] }, 'wait declares no needs list of job ids'],
+    ['a wait whose runsOn is empty', { runsOn: [] }, 'runsOn is declared and is not a non-empty list of events'],
+    ['a wait with no digest', { sha256: 'abc' }, "wait declares no sha256 of the job's bytes without its needs"],
+    ['a wait whose digest is not the staged job without its needs', { sha256: '0'.repeat(64) }, 'which is not the declared sha256'],
+    ['a wait on a job the pipeline does not hold', { jobId: 'absent' }, 'the staged pipeline carries no job absent'],
+  ];
+  for (const [label, patch, expected] of cases) {
+    const mutated = structuredClone(baseline);
+    const element = mutated.fixtureSets.find((set) => set.id === GATE_SET_ID).expectedElements.find((entry) => entry.id === 'wait-publish');
+    Object.assign(element, patch);
+    const { problems } = await validateCorpus(mutated);
+    check(
+      problems.some((problem) => problem.includes(expected)),
+      `validateCorpus does not refuse ${label} (${problems.length} problems)`,
+    );
+  }
+  const created = structuredClone(baseline);
+  const set = created.fixtureSets.find((entry) => entry.id === TIERS_SET_ID);
+  set.expectedElements.push(
+    structuredClone(
+      baseline.fixtureSets.find((entry) => entry.id === GATE_SET_ID).expectedElements.find((entry) => entry.id === 'wait-publish'),
+    ),
+  );
+  const { problems } = await validateCorpus(created);
+  check(
+    problems.some((problem) => problem.includes('belongs to an edit set')),
+    'validateCorpus does not refuse a wait on a set that is not an edit set',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The step applied to the two committed live repositories (Story 1.97, round 2)
+
+const REPOSITORIES_ROOT = path.join(__dirname, 'fixtures', 'evaluate-ci-repos');
+
+/** The runs a workflow's `on:` starts, as classes: an event, and for a push whether it is a tag, a branch or any push, and for a schedule its cron. */
+function runClassesOf(on) {
+  const runs = [];
+  for (const [event, value] of Object.entries(on ?? {})) {
+    if (event === 'push') {
+      if (value?.tags) runs.push({ event, ref: 'tag' });
+      if (value?.branches) runs.push({ event, ref: 'branch' });
+      if (!value?.tags && !value?.branches) runs.push({ event, ref: 'any' });
+    } else if (event === 'schedule') {
+      for (const entry of value ?? []) runs.push({ event, cron: entry.cron });
+    } else runs.push({ event });
+  }
+  return runs;
+}
+
+/** The `if:` text of a run class, as item 7 writes it. */
+function guardOf(run) {
+  if (run.event === 'schedule') return `github.event.schedule == '${run.cron}'`;
+  if (run.event === 'push' && run.ref === 'tag') return "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')";
+  if (run.event === 'push' && run.ref === 'branch') return "github.event_name == 'push' && github.ref == 'refs/heads/main'";
+  return `github.event_name == '${run.event}'`;
+}
+
+/** Whether `run` is one of the runs in the set: the same event, ref class and cron, an `any` push covering a tag or a branch push. */
+const coveredBy = (run, evaluationRuns) =>
+  evaluationRuns.some(
+    (other) =>
+      other.event === run.event && (other.ref === run.ref || other.ref === 'any') && (run.event !== 'schedule' || other.cron === run.cron),
+  );
+
+/**
+ * Section 2 and items 7 and 10 of step 03b, applied by the test's own helper to a repository's workflow files and a plan. It
+ * models the in-file wait on GitHub Actions: the tier events and their guards, the guards on the jobs that existed before, the
+ * resolution of each gated name and its conflicts, and the `needs` of the gated job. It returns the plan's refusals or the
+ * rendered pipeline file.
+ */
+function renderGatedPipeline({ workflows, pipelineFile, plan, scheduledCron, releaseFile }) {
+  const refused = [];
+  const pipeline = structuredClone(workflows[pipelineFile]);
+  const before = workflows[pipelineFile];
+  const tiers = ['pr', 'merge', 'scheduled', 'release'].filter((tier) => plan.checks.some((entry) => entry.placement.tier === tier));
+  const named = (tier) => plan.checks.filter((entry) => entry.placement.tier === tier);
+  const dispatch = (tier) => named(tier).some((entry) => entry.trigger.includes('manual-dispatch'));
+  const specs = {};
+  for (const tier of tiers) {
+    const runs = [];
+    if (tier === 'pr') runs.push({ event: 'pull_request' });
+    if (tier === 'merge') runs.push(pipeline.on.merge_group === undefined ? { event: 'push', ref: 'branch' } : { event: 'merge_group' });
+    if (tier === 'scheduled') runs.push({ event: 'schedule', cron: scheduledCron });
+    if (tier === 'release') runs.push(...runClassesOf(workflows[releaseFile].on).filter((run) => run.event !== 'workflow_dispatch'));
+    if (dispatch(tier)) runs.push({ event: 'workflow_dispatch' });
+    specs[tier] = runs;
+  }
+  // Item 7: a release push that another tier's push shares is told apart by its tag.
+  for (const run of specs.release ?? []) {
+    if (
+      run.event === 'push' &&
+      run.ref === 'any' &&
+      tiers.some((tier) => tier !== 'release' && specs[tier].some((other) => other.event === 'push'))
+    )
+      run.ref = 'tag';
+  }
+  // The runs the render adds to the pipeline file: every tier run the file's `on:` did not hold.
+  const oldRuns = runClassesOf(before.on);
+  const added = tiers.flatMap((tier) => specs[tier]).filter((run) => !coveredBy(run, oldRuns));
+  // Item 7: widen `on:`, keeping what is there.
+  for (const run of added) {
+    if (run.event === 'push') {
+      pipeline.on.push = { ...pipeline.on.push, branches: ['main'] };
+    } else if (run.event === 'schedule') {
+      pipeline.on.schedule = [...(pipeline.on.schedule ?? []), { cron: run.cron }];
+    } else pipeline.on[run.event] ??= null;
+  }
+  // Section 2: resolve each gated name.
+  const gatedBy = {};
+  for (const tier of tiers) {
+    for (const name of new Set(named(tier).flatMap((entry) => entry.gates ?? []))) {
+      const holders = Object.entries(workflows).filter(([, workflow]) => workflow.jobs?.[name] !== undefined);
+      if (holders.length !== 1) {
+        refused.push(`${name} matches ${holders.length} jobs`);
+        continue;
+      }
+      if (holders[0][0] !== pipelineFile) {
+        refused.push(`${name} lives in ${holders[0][0]}, a cross-file wait this helper does not model`);
+        continue;
+      }
+      const job = before.jobs[name];
+      if (/always\(|cancelled\(|failure\(/.test(String(job.if ?? ''))) refused.push(`${name} calls a status function in its if`);
+      const stranded = runClassesOf(before.on).filter((run) => !coveredBy(run, specs[tier]));
+      if (stranded.length > 0) {
+        refused.push(`${name} already ran on ${JSON.stringify(stranded)}, where the ${tier} evaluation job is skipped`);
+      }
+      const added = specs[tier].filter((run) => !coveredBy(run, runClassesOf(before.on)));
+      if (added.length > 0) {
+        refused.push(
+          `${name} would run on ${JSON.stringify(added)}, which it did not run on before, where the ${tier} evaluation job runs`,
+        );
+      }
+      (gatedBy[name] ??= []).push(tier);
+    }
+  }
+  if (refused.length > 0) return { refused };
+  // Item 7 guards: a pre-existing job that is not gated keeps the runs it had.
+  if (added.length > 0) {
+    for (const id of Object.keys(before.jobs)) {
+      if (gatedBy[id] === undefined) pipeline.jobs[id].if = oldRuns.map(guardOf).join(' || ');
+    }
+  }
+  // Items 1 to 10: one evaluation job per tier, and the wait appended to each gated job.
+  for (const tier of tiers) {
+    const shared = (run) => tiers.some((other) => other !== tier && specs[other].some((candidate) => candidate.event === run.event));
+    pipeline.jobs[`evaluation-${tier}`] = {
+      'timeout-minutes': tier === 'scheduled' || tier === 'release' ? 120 : 30,
+      if: specs[tier]
+        .map((run) => (run.event === 'workflow_dispatch' || !shared(run) ? `github.event_name == '${run.event}'` : guardOf(run)))
+        .join(' || '),
+      steps: [{ run: `npm exec --prefix evals -- tea-evaluate ci --evaluation evals/answer-grade --tier ${tier}\n` }],
+    };
+  }
+  for (const [id, gating] of Object.entries(gatedBy)) {
+    pipeline.jobs[id].needs = [...[before.jobs[id].needs ?? []].flat(), ...gating.map((tier) => `evaluation-${tier}`)];
+  }
+  return { workflow: pipeline };
+}
+
+function loadRepository(name) {
+  const root = path.join(REPOSITORIES_ROOT, name);
+  const directory = path.join(root, '.github', 'workflows');
+  const workflows = Object.fromEntries(
+    fs.readdirSync(directory).map((file) => [file, YAML.parse(fs.readFileSync(path.join(directory, file), 'utf8'), { uniqueKeys: true })]),
+  );
+  const { plan, findings } = readPlan(path.join(root, 'evals', 'answer-grade'));
+  check(plan !== undefined && findings.length === 0, `${name}: the committed plan does not read: ${JSON.stringify(findings)}`);
+  return { workflows, plan };
+}
+
+/**
+ * Section 2 and items 7 and 10 applied to both committed live plans, and to edits of them that must conflict or guard.
+ * The rendering is the helper's, built from the committed workflows and plans by the step's rules, and the parsed result is read
+ * for the wait, the guards and the widened triggers.
+ */
+function checkGateRenders() {
+  // tagged-release: the pipeline file is release.yml, the file that holds `publish`.
+  const tagged = loadRepository('tagged-release');
+  const rendered = renderGatedPipeline({
+    workflows: tagged.workflows,
+    pipelineFile: 'release.yml',
+    plan: tagged.plan,
+    releaseFile: 'release.yml',
+  });
+  check(rendered.refused === undefined, `tagged-release is refused: ${JSON.stringify(rendered.refused)}`);
+  const release = rendered.workflow;
+  if (release !== undefined) {
+    check(
+      JSON.stringify(release.jobs.publish.needs) === JSON.stringify(['evaluation-release']),
+      `tagged-release: publish waits for ${JSON.stringify(release.jobs.publish.needs)}`,
+    );
+    const rest = { ...release.jobs.publish };
+    delete rest.needs;
+    check(
+      JSON.stringify(rest) === JSON.stringify(tagged.workflows['release.yml'].jobs.publish),
+      'tagged-release: the publish job changed beyond its needs',
+    );
+    check(
+      release.jobs['evaluation-release'].if === "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')",
+      `tagged-release: the release evaluation job runs under ${release.jobs['evaluation-release'].if}`,
+    );
+    check(
+      release.jobs['evaluation-merge'].if === "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+      `tagged-release: the merge evaluation job runs under ${release.jobs['evaluation-merge'].if}`,
+    );
+    check(
+      release.jobs['evaluation-pr'].if === "github.event_name == 'pull_request'",
+      'tagged-release: the pr evaluation job is not limited to pull requests',
+    );
+    check(
+      JSON.stringify(release.on.push) === JSON.stringify({ tags: ['v*'], branches: ['main'] }) && release.on.pull_request === null,
+      `tagged-release: the triggers read ${JSON.stringify(release.on)}`,
+    );
+  }
+  // The release tier naming `manual-dispatch` adds a dispatch to a tag-push release file, where the in-file `publish` would run.
+  const addedDispatch = structuredClone(tagged.plan);
+  for (const entry of addedDispatch.checks) if (entry.tier === 'release') entry.trigger = ['release', 'manual-dispatch'];
+  const dispatchAdded = renderGatedPipeline({
+    workflows: tagged.workflows,
+    pipelineFile: 'release.yml',
+    plan: addedDispatch,
+    releaseFile: 'release.yml',
+  });
+  check(
+    dispatchAdded.refused?.length === 1 &&
+      /^publish would run on \[\{"event":"workflow_dispatch"\}\], which it did not run on before, where the release evaluation job runs$/.test(
+        dispatchAdded.refused[0],
+      ),
+    `a gate whose evaluation job runs on a dispatch the render adds does not conflict: ${JSON.stringify(dispatchAdded.refused)}`,
+  );
+  // A declined gate: `publish` is a pre-existing job the render widens the filters under, so it keeps the tag runs it had.
+  const declined = structuredClone(tagged.plan);
+  for (const entry of declined.checks) delete entry.gates;
+  const guarded = renderGatedPipeline({
+    workflows: tagged.workflows,
+    pipelineFile: 'release.yml',
+    plan: declined,
+    releaseFile: 'release.yml',
+  });
+  check(
+    guarded.workflow?.jobs.publish.if === "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')" &&
+      guarded.workflow.jobs.publish.needs === undefined,
+    `tagged-release without the gate: publish runs under ${guarded.workflow?.jobs.publish.if}`,
+  );
+
+  // nightly-deploy: the pipeline file is deploy.yml, the file that holds `production`; the scheduled tier takes the cron of nightly.yml.
+  const nightly = loadRepository('nightly-deploy');
+  const renderNightly = (plan) =>
+    renderGatedPipeline({
+      workflows: nightly.workflows,
+      pipelineFile: 'deploy.yml',
+      plan,
+      scheduledCron: nightly.workflows['nightly.yml'].on.schedule[0].cron,
+      releaseFile: 'deploy.yml',
+    });
+  // The step refuses a gate whose job already ran on an event where the tier's evaluation job is skipped: `deploy.yml` also runs
+  // `production` on a dispatch, so a plan that names `manual-dispatch` on the scheduled checks alone is refused with that conflict,
+  // and the plan that names it on the release checks too renders.
+  const releaseTriggers = (plan, triggers) => {
+    const edited = structuredClone(plan);
+    for (const entry of edited.checks) if (entry.tier === 'release') entry.trigger = triggers;
+    return edited;
+  };
+  const checkNightlyRender = (label, deploy) => {
+    check(
+      deploy.refused === undefined,
+      `${label}: nightly-deploy with manual-dispatch on the release tier is refused: ${JSON.stringify(deploy.refused)}`,
+    );
+    if (deploy.workflow === undefined) return;
+    const production = deploy.workflow.jobs.production;
+    check(
+      JSON.stringify(production.needs) === JSON.stringify(['evaluation-release']),
+      `${label}: production waits for ${JSON.stringify(production.needs)}`,
+    );
+    check(production.if === undefined, `${label}: the gated production job carries an event guard besides its wait`);
+    check(
+      deploy.workflow.jobs['evaluation-release'].if === "github.event.schedule == '47 3 * * *' || github.event_name == 'workflow_dispatch'",
+      `${label}: the release evaluation job runs under ${deploy.workflow.jobs['evaluation-release'].if}`,
+    );
+    check(
+      deploy.workflow.jobs['evaluation-scheduled'].if ===
+        "github.event.schedule == '17 2 * * *' || github.event_name == 'workflow_dispatch'",
+      `${label}: the scheduled evaluation job runs under ${deploy.workflow.jobs['evaluation-scheduled'].if}`,
+    );
+    check(
+      JSON.stringify(deploy.workflow.on.schedule) === JSON.stringify([{ cron: '47 3 * * *' }, { cron: '17 2 * * *' }]) &&
+        'workflow_dispatch' in deploy.workflow.on,
+      `${label}: the triggers read ${JSON.stringify(deploy.workflow.on)}`,
+    );
+  };
+  const refusedDispatch = renderNightly(releaseTriggers(nightly.plan, ['release']));
+  check(
+    refusedDispatch.refused?.length === 1 &&
+      /^production already ran on \[\{"event":"workflow_dispatch"\}\], where the release evaluation job is skipped$/.test(
+        refusedDispatch.refused[0],
+      ),
+    `nightly-deploy: the plan with release alone reads ${JSON.stringify(refusedDispatch.refused)}`,
+  );
+  checkNightlyRender('edited plan', renderNightly(releaseTriggers(nightly.plan, ['release', 'manual-dispatch'])));
+  // The committed live plan is whichever shape its session wrote: it renders with `manual-dispatch` on its release checks and is refused without.
+  const liveNamesDispatch = nightly.plan.checks
+    .filter((entry) => entry.tier === 'release')
+    .every((entry) => entry.trigger.includes('manual-dispatch'));
+  const live = renderNightly(nightly.plan);
+  if (liveNamesDispatch) checkNightlyRender('committed plan', live);
+  else
+    check(
+      JSON.stringify(live.refused) === JSON.stringify(refusedDispatch.refused),
+      `nightly-deploy: the committed plan reads ${JSON.stringify(live.refused)}`,
+    );
+
+  // Conflicts and refusals, each from an edit of a committed repository.
+  const everyPush = structuredClone(tagged.workflows);
+  everyPush['release.yml'].on = { push: null };
+  const strandedRun = renderGatedPipeline({
+    workflows: everyPush,
+    pipelineFile: 'release.yml',
+    plan: tagged.plan,
+    releaseFile: 'release.yml',
+  });
+  check(
+    strandedRun.refused?.length === 1 && /already ran on .*"ref":"any".*the release evaluation job is skipped/.test(strandedRun.refused[0]),
+    `a deploy on every push beside a tag-guarded release evaluation does not conflict: ${JSON.stringify(strandedRun)}`,
+  );
+  const status = structuredClone(tagged.workflows);
+  status['release.yml'].jobs.publish.if = 'always()';
+  check(
+    renderGatedPipeline({ workflows: status, pipelineFile: 'release.yml', plan: tagged.plan, releaseFile: 'release.yml' }).refused?.some(
+      (reason) => reason.includes('status function'),
+    ) === true,
+    'a gated job whose if calls always() does not conflict',
+  );
+  const absent = structuredClone(tagged.plan);
+  absent.checks.find((entry) => entry.gates).gates = ['absent'];
+  check(
+    renderGatedPipeline({ workflows: tagged.workflows, pipelineFile: 'release.yml', plan: absent, releaseFile: 'release.yml' })
+      .refused?.[0] === 'absent matches 0 jobs',
+    'a name that matches no job does not refuse the plan',
+  );
+  const twice = structuredClone(tagged.workflows);
+  twice['ci.yml'].jobs.publish = twice['ci.yml'].jobs.test;
+  check(
+    renderGatedPipeline({ workflows: twice, pipelineFile: 'release.yml', plan: tagged.plan, releaseFile: 'release.yml' }).refused?.[0] ===
+      'publish matches 2 jobs',
+    'a name that two workflow files hold does not refuse the plan',
+  );
+  // A run the render adds is no conflict: the tagged-release pipeline gains pull request and branch runs the publish job never had.
+  check(
+    strandedRun.refused !== undefined && rendered.refused === undefined,
+    'the pre-render comparison treats the runs the render adds as a conflict',
+  );
+}
+
 async function main() {
   checkEntryPoints();
   checkTemplateBlock();
@@ -1277,6 +2163,13 @@ async function main() {
   await checkEditSetGuards();
   checkStoredCapture();
   checkTierAndEditCases();
+  checkGateSentences();
+  checkGateTemplateBlock();
+  checkGateFixture();
+  checkGatedWait();
+  checkGateCases();
+  await checkWaitGuards();
+  checkGateRenders();
 
   if (failures.length > 0) {
     for (const message of failures) console.error(`${colors.red}✗${colors.reset} ${message}`);
@@ -1284,7 +2177,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds its patterns, the fixture adopter's plan is the Story 1.10 plan, and the tiers and edit adopters hold their ground truth to their plans`,
+    `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds its patterns, the fixture adopter's plan is the Story 1.10 plan, the tiers, edit and gate adopters hold their ground truth to their plans`,
   );
 }
 

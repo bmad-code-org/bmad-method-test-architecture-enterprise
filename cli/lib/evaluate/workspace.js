@@ -55,12 +55,16 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const { killLiveStreams } = require('./confinement-audit');
+const { OBSERVER_PROBE_NAME, killLiveStreams } = require('./confinement-audit');
+const { stopEngineStages } = require('./engine-cli');
 const { hooksDirectory, unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
+const { processMayRun, sweepMaskRecords } = require('./mask-guard');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
 
+/** How long an eval-quality stage that a signal stopped has before SIGKILL. */
+const ENGINE_STAGE_GRACE_MS = 500;
 /** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 /** How long one pack of a withheld repository may take: it holds the project's whole history. */
@@ -545,9 +549,11 @@ function heldPrivateRoot(root) {
  * known to be dead. Every private directory the evaluation layer makes
  * for the run (the engine's, the qualification's, an evaluator's, a judge's,
  * the bridge's configuration, token and socket, the score's) is made beneath
- * the parent by `makeScratchDirectory`. A directory the target is deliberately
- * granted (its temp directory, the status and port
- * directories, the workspace) stays in the run's temp directory.
+ * the parent by `makeScratchDirectory`.
+ * A path the target is deliberately granted (its temp directory, a started service's port and bridge directories, its home, the status file) is made beneath the parent too.
+ * It reaches the target at a path the sandbox keeps (`confinement.js`), so the recovery of a killed run's parent reclaims it (Story 1.131).
+ * The workspace alone stays in the system's temp directory, and nothing else does.
+ * The observer probes of selection run before the parent exists, so each makes its directory beneath the root itself (`observer-probe-<pid>-<random>`), which `reclaimDeadObserverProbes` removes once its pid is dead.
  *
  * @param {string[]} scratch
  * @returns {string} the parent
@@ -658,6 +664,66 @@ function recordedPrivateRoot(entry, platform) {
   )
     return null;
   return root;
+}
+
+/**
+ * Removes what a killed run's evaluation layer left at the paths it hid (Story 1.88): the records `mask-guard.js` wrote in the user's private root before each start of a layer process.
+ * A record names a path, the device and inode it had and its state before the start, in a file named for the runtime's pid.
+ * A record whose pid is alive is left, since that run settles it itself; a dead run's record is applied under the rule teardown uses (`removePlaceholders`) and deleted.
+ * The records sit in the root beside the run's private parent, since a layer process that starts before the parent exists (the probe of the HTTP port) must be covered too.
+ *
+ * @param {object} [options]
+ * @param {(message: string) => void} [options.log]
+ * @returns {string[]} the records that were applied and deleted
+ */
+function reclaimDeadMaskRecords({ log = () => {} } = {}) {
+  const root = heldPrivateRoot(path.join(privateRootBase(), privateRootName()));
+  return root === null ? [] : sweepMaskRecords({ recordDirectory: root, log });
+}
+
+/**
+ * Removes the directories a killed run's observer probe left in the user's private root (Story 1.131).
+ * The probe (`confinement-audit.js` `probeReportStream` and `probeTrace`) makes `observer-probe-<pid>-<random>` there at selection, before the run's private parent exists, and removes it when it ends.
+ * An entry is removed when its name carries a pid, that process is gone, and it is a real directory (no link) the user owns with mode 0700.
+ * An entry of a live pid, a link, a file, a directory with another mode or another owner is left.
+ * The removal does not follow a link (`removeScratchDirectory`), and each removal is reported through `log`.
+ *
+ * @param {object} [options]
+ * @param {(message: string) => void} [options.log]
+ * @param {(pid: number) => boolean} [options.alive]
+ * @param {string} [options.root] the private root to read; the user's own by default
+ * @param {number} [options.uid] the owner an entry must have; the user's own by default
+ * @returns {string[]} the directories that were removed
+ */
+function reclaimDeadObserverProbes({
+  log = () => {},
+  alive = processMayRun,
+  root: given = path.join(privateRootBase(), privateRootName()),
+  uid = typeof process.getuid === 'function' ? process.getuid() : -1,
+} = {}) {
+  const root = heldPrivateRoot(given);
+  const removed = [];
+  if (root === null || typeof process.getuid !== 'function') return removed;
+  let names;
+  try {
+    names = fs.readdirSync(root).filter((name) => OBSERVER_PROBE_NAME.test(name));
+  } catch {
+    return removed;
+  }
+  for (const name of names) {
+    const directory = path.join(root, name);
+    try {
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || stat.uid !== uid || (stat.mode & 0o777) !== 0o700) continue;
+      if (alive(Number(OBSERVER_PROBE_NAME.exec(name)[1]))) continue;
+      removeScratchDirectory(directory);
+      removed.push(directory);
+      log(`removed the observer probe directory ${directory} that a killed run left`);
+    } catch (error) {
+      log(`could not remove the observer probe directory ${directory}: ${error.message}`);
+    }
+  }
+  return removed;
 }
 
 /** Reclaim a dead invocation's private parent only when its journal and in-parent marker agree. */
@@ -858,30 +924,89 @@ function fileDigest(file) {
 }
 
 /**
+ * What a path under a sealed directory contributes to a tree reading: its size, modification time and mode, taken from `lstat` and
+ * never from the file's bytes, so a file the process cannot open still reads and a change to it still moves the reading.
+ */
+const sealedContent = (stats) => `<sealed>${stats.size}:${stats.mtimeMs}:${stats.mode & 0o7777}`;
+
+/**
+ * Whether a path sits under one of the sealed directories, as a test over its POSIX path relative to `root`. The directories are
+ * absolute and compared by their real path from `root`'s own, in lower case, so a case-insensitive file system's other spelling of
+ * the same place is sealed too. A directory outside `root` seals nothing.
+ *
+ * @param {string} root
+ * @param {string[]} sealed absolute directories
+ * @returns {(relative: string) => boolean}
+ */
+function sealedUnder(root, sealed) {
+  const native = fs.realpathSync.native(root);
+  const prefixes = sealed
+    .map((directory) => posix(path.relative(native, directory)).toLowerCase())
+    .filter((relative) => relative.length > 0 && relative !== '..' && !relative.startsWith('../'))
+    .map((relative) => `${relative}/`);
+  return (relative) => {
+    const folded = `${relative.toLowerCase()}/`;
+    return prefixes.some((prefix) => folded.startsWith(prefix));
+  };
+}
+
+/**
  * A digest over every directory, file and symbolic link under `root`, sorted
  * by path: each contributes its POSIX path and kind; directories and files
  * also contribute their mode, a file its SHA-256 bytes and a link its target.
- * A path in `exclude` (absolute) is left out with everything under it.
+ * A path in `exclude` (absolute) is left out with everything under it. A file
+ * under a directory in `sealed` contributes `sealedContent` (its `lstat` metadata) and its bytes are never read, a sealed
+ * directory that cannot be listed contributes the error code of the listing, and a sealed entry `lstat` cannot reach contributes
+ * the error code of that call.
  *
  * @param {string} root
  * @param {object} [options]
  * @param {string[]} [options.exclude]
+ * @param {string[]} [options.sealed] absolute directories whose files are read by `lstat` alone
  * @returns {string} `sha256:<hex>`
  */
-function treeDigest(root, { exclude = [] } = {}) {
+function treeDigest(root, { exclude = [], sealed = [] } = {}) {
   const excluded = new Set(exclude);
+  const isSealed = sealed.length === 0 ? () => false : sealedUnder(root, sealed);
   const parts = ['.', 'directory', fs.lstatSync(root).mode & 0o7777];
   const visit = (directory) => {
-    const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    } catch (error) {
+      if (!isSealed(posix(path.relative(root, directory)))) throw error;
+      parts.push(posix(path.relative(root, directory)), 'unlisted', error.code ?? 'error');
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(directory, entry.name);
       if (excluded.has(full)) continue;
       const relative = posix(path.relative(root, full));
-      if (entry.isSymbolicLink()) parts.push(relative, 'link', fs.readlinkSync(full));
-      else if (entry.isDirectory()) {
-        parts.push(relative, 'directory', fs.lstatSync(full).mode & 0o7777);
-        visit(full);
-      } else if (entry.isFile()) parts.push(relative, 'file', fs.lstatSync(full).mode & 0o7777, fileDigest(full));
+      const sealedEntry = isSealed(relative);
+      // A sealed directory that can be listed and not entered (mode 0o444) names entries `lstat` and `readlink` cannot reach: the
+      // reading records that, and an entry outside a sealed directory that fails is still a refusal.
+      const statted = (read) => {
+        try {
+          return read(full);
+        } catch (error) {
+          if (!sealedEntry) throw error;
+          parts.push(relative, 'unstatted', error.code ?? 'error');
+          return null;
+        }
+      };
+      if (entry.isSymbolicLink()) {
+        const target = statted(fs.readlinkSync);
+        if (target !== null) parts.push(relative, 'link', target);
+      } else if (entry.isDirectory()) {
+        const stats = statted(fs.lstatSync);
+        if (stats !== null) {
+          parts.push(relative, 'directory', stats.mode & 0o7777);
+          visit(full);
+        }
+      } else if (entry.isFile()) {
+        const stats = statted(fs.lstatSync);
+        if (stats !== null) parts.push(relative, 'file', stats.mode & 0o7777, sealedEntry ? sealedContent(stats) : fileDigest(full));
+      }
     }
   };
   visit(root);
@@ -1031,8 +1156,11 @@ function repositoryOf(directory) {
   return { top: resolvedTop, gitDirectory, commit: id, tree: tree.ok ? tree.stdout.trim() : null };
 }
 
-/** What a path in the tree holds, for a digest: a file's SHA-256, a link's target, or a marker for anything else or nothing. */
-function contentOf(file) {
+/**
+ * What a path in the tree holds, for a digest: a file's SHA-256, a link's target, or a marker for anything else or nothing. A
+ * `sealed` file holds its `lstat` metadata instead, and its bytes are never read.
+ */
+function contentOf(file, sealed = false) {
   let stats;
   try {
     stats = fs.lstatSync(file);
@@ -1040,7 +1168,7 @@ function contentOf(file) {
     return '<absent>';
   }
   if (stats.isSymbolicLink()) return `<link>${fs.readlinkSync(file)}`;
-  if (stats.isFile()) return `<file>${fileDigest(file)}`;
+  if (stats.isFile()) return sealed ? sealedContent(stats) : `<file>${fileDigest(file)}`;
   return '<not a file>';
 }
 
@@ -1129,14 +1257,16 @@ function repositoryRedirects(repository) {
  * @param {object} [options]
  * @param {string[]} [options.exclude] absolute paths a run itself writes (the evaluation's `runs/`)
  * @param {boolean} [options.sharedState] whether to read the shared git state (Story 1.112): `true` for a run whose targets can write it, `false` for a confined run, whose processes the layer denial keeps out of it
+ * @param {string[]} [options.sealed] absolute directories whose files enter the reading by `lstat` metadata, and no byte of one is read (a
+ *   development run's `corpus/held-out/`, Story 1.109): a change to one still moves the reading
  * @returns {object}
  * @throws {WorkspaceRefusal} when git cannot answer
  */
-function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) {
+function adopterTreeState(directory, { exclude = [], sharedState = true, sealed = [] } = {}) {
   const repository = repositoryOf(directory);
   if (repository === null) {
     try {
-      return { repository: null, treeDigest: treeDigest(directory, { exclude }) };
+      return { repository: null, treeDigest: treeDigest(directory, { exclude, sealed }) };
     } catch (error) {
       throw new WorkspaceRefusal(`could not read the state of the adopter's project at ${directory}: ${error.message}`);
     }
@@ -1160,6 +1290,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
   ]);
   if (!status.ok) failed(status);
   const parts = [];
+  const isSealed = sealed.length === 0 ? () => false : sealedUnder(repository.top, sealed);
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
@@ -1169,7 +1300,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true } = {}) 
       index += 1;
       paths.push(records[index]);
     }
-    for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative)));
+    for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative), isSealed(relative)));
   }
   const state = {
     repository: repository.top,
@@ -2013,7 +2144,9 @@ function removeWorkspace(workspace) {
 
 /**
  * Removes every workspace `workspaces` holds when the process is interrupted,
- * since a signal ends the process before any `finally` runs: aborts the
+ * since a signal ends the process before any `finally` runs: stops the
+ * eval-quality stages that are running (a stage still writing would recreate
+ * what the removal below deletes), aborts the
  * in-flight leg (the adapter kills its runner's process group, and the
  * runner's supervisor, dying with it, closes the lifeline that stops the
  * agent's process group), lets the caller record the interruption and
@@ -2024,7 +2157,7 @@ function removeWorkspace(workspace) {
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
  * @param {object} [options]
- * @param {(signal: string) => void} [options.onSignal] runs first, with the signal's name; it must not throw
+ * @param {(signal: string) => void} [options.onSignal] runs once the live stages are stopped and the controller is aborted, with the signal's name; it must not throw
  * @returns {() => void} removes the handlers
  */
 function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
@@ -2036,6 +2169,8 @@ function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
   for (const name of signals) {
     const handler = () => {
       release();
+      // A stage that is still running would recreate the directories `onSignal` removes, so it ends first.
+      stopEngineStages(name, ENGINE_STAGE_GRACE_MS);
       controller.abort();
       onSignal(name);
       // A signal ends the process before its `exit` event, so the audit's log streams are ended here.
@@ -2249,6 +2384,8 @@ module.exports = {
   removePrivateParentDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadMaskRecords,
+  reclaimDeadObserverProbes,
   reclaimDeadPrivateParents,
   reclaimDeadWorkspaces,
   repositoryOf,

@@ -17,16 +17,16 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-49fdf137-1d84-4e66-a38d-94d5df3ef736/target",
-    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-4f295184-1960-4b77-af0b-6d2fbfa8e529/target",
-    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-5f8aac54-4d63-47f2-83a8-6edf38af0b11/target",
-    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-c0f71cba-8b12-4224-9611-0d130de6a220/target",
-    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-376dac28-0215-49e5-85dc-2a306608e80c/target"
+    "pristine": "<workspace>",
+    "mutated:M-005": "<workspace>",
+    "mutated:M-006": "<workspace>",
+    "mutated:M-007": "<workspace>",
+    "mutated:M-008": "<workspace>"
   },
   "confinement": "seatbelt",
   "egress": [],
   "adopterTree": {
-    "repository": "/private/tmp/claude-501/-Users-murat-opensource--wt-evaluate-lane3/a7b59975-f10b-47bd-9c5d-20ba9f9dca05/scratchpad/tr/new/repo",
+    "repository": "<repository>",
     "unchanged": true
   },
   "refused": [],

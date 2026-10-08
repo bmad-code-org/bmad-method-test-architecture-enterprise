@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "runs/20261006T211300848Z-9dcd763f/scores/<score-invocation>/P-001/evidence-artifact.json",
+    "--evidence",
+    "runs/20261006T211300848Z-9dcd763f/scores/<score-invocation>/P-002/evidence-artifact.json",
+    "--floors",
+    "runs/20261006T211300848Z-9dcd763f/scores/<score-invocation>/strength-floors.json",
+    "--policy",
+    "runs/20261006T211300848Z-9dcd763f/scoring-policy.json",
+    "--out",
+    "<staging>/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

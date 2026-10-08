@@ -96,6 +96,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
+const { launchPrefix } = require('../isolation-primitives');
 const { quotedCapture } = require('./arm');
 const { bridgeAccepts, bridgeHostOf, startForwarder } = require('./confinement-relay');
 const { canonicalAddress, loadAdapters, loadConformance, loadEngine } = require('./engine');
@@ -250,13 +251,29 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
     const stdio = ['ignore', 'pipe', 'pipe'];
     stdio[PROTOCOL_FD] = 'pipe';
     // In a confined run the port starts through the evaluation layer's confinement (`confinement.js` `layerPrefix`).
-    const prefix = httpPort.spawnPrefix ?? [];
+    // The prefix as it is at this start: the evaluation layer's lists the host's sockets again, and `settle` closes the start once the process has ended (Story 1.88).
+    let launched;
+    try {
+      launched = launchPrefix(httpPort.spawnPrefix);
+    } catch (error) {
+      // A layer that cannot hide the host's sockets does not start the port: a target that could not run, exit 12.
+      if (error?.name !== 'ConfinementError') throw error;
+      reject(new PortProcessError(`the evaluation's HTTP port ${HTTP_PORT_MODULE} could not start: ${error.message}`, { exitCode: 12 }));
+      return;
+    }
+    const { prefix, settle } = launched;
     const command = prefix.length === 0 ? process.execPath : prefix[0];
-    const child = spawn(command, [...prefix.slice(1), ...(prefix.length === 0 ? [] : [process.execPath]), httpPort.file], {
-      cwd: httpPort.folder,
-      env: portEnvironment(),
-      stdio,
-    });
+    let child;
+    try {
+      child = spawn(command, [...prefix.slice(1), ...(prefix.length === 0 ? [] : [process.execPath]), httpPort.file], {
+        cwd: httpPort.folder,
+        env: portEnvironment(),
+        stdio,
+      });
+    } catch (error) {
+      settle();
+      throw error;
+    }
     const channel = child.stdio[PROTOCOL_FD];
     const decoder = new StringDecoder('utf8');
     let settled = false;
@@ -290,20 +307,25 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
     signal?.addEventListener('abort', onAbort, { once: true });
     // A port's own logging (a console.log, a warning) goes to its standard output or error, which never reach the
     // protocol: both are kept, in the order they arrive, for the failure to quote.
+    // The standard error is also kept alone: Bubblewrap prints its diagnostic before it runs the port, so nothing the port prints precedes it there.
+    let printedToError = '';
     for (const stream of [child.stdout, child.stderr]) {
       stream.setEncoding('utf8');
       stream.on('data', (chunk) => {
         printed += chunk;
+        if (stream === child.stderr && printedToError.length < PORT_OUTPUT_BYTES) printedToError += chunk;
         if (printed.length > PORT_OUTPUT_BYTES) stop(`printed past its output ceiling (${PORT_OUTPUT_BYTES} characters) and was ended`);
       });
     }
     // Each line is handled after the one before it, since answering `send` waits for a server to start.
     let handled = Promise.resolve();
+    let answered = false;
     const handle = async (line) => {
       if (settled) return;
       let answer;
       try {
         answer = JSON.parse(line);
+        answered = true;
       } catch {
         // The line is quoted cut at its end, JSON-escaped first, so the run's scrub finds a secret's leading part there.
         stop(`wrote a line that is not the runtime's protocol: ${JSON.stringify(line).slice(0, 200)}`);
@@ -334,10 +356,21 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       }
     });
     channel.on('error', () => {});
-    child.once('error', (error) => finish(() => reject(failed(`could not start: ${error.message}`, 12))));
+    // The process has ended when it could not start, has exited or has closed, whichever way the exchange ended; the layer's guard is settled then.
+    child.once('exit', settle);
+    child.once('error', (error) => {
+      settle();
+      finish(() => reject(failed(`could not start: ${error.message}`, 12)));
+    });
     child.once('close', (code, signalName) => {
+      settle();
       // A line already read is handled before the process's end is.
-      handled = handled.then(() => finish(() => reject(failed(`ended (${signalName ?? `exit ${code}`}) before it answered`))));
+      // Bubblewrap that stopped because a socket of the vector went away before the start (Story 1.88) is a host condition, exit 12.
+      // Its diagnostic is the first thing on the standard error, its status is 1 and the port had not answered; the same text from the port keeps exit 10.
+      const lostSocket = code === 1 && signalName === null && /^bwrap: Can't (?:find source path|get type of source) /.test(printedToError);
+      handled = handled.then(() =>
+        finish(() => reject(failed(`ended (${signalName ?? `exit ${code}`}) before it answered`, lostSocket && !answered ? 12 : 10))),
+      );
     });
     if (signal?.aborted) onAbort();
     channel.write(`${JSON.stringify(message)}\n`);
@@ -357,7 +390,8 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
  *   protocol; exit 12 for one whose process cannot start or does not answer in time
  */
 async function probeHttpPort(folder, { spawnPrefix = [] } = {}) {
-  const httpPort = { ...httpPortFile(folder), spawnPrefix: [...spawnPrefix] };
+  // The port keeps the prefix itself: a copy would lose its `refresh`.
+  const httpPort = { ...httpPortFile(folder), spawnPrefix };
   let hello;
   try {
     hello = await exchangeWithPort({
@@ -1150,7 +1184,7 @@ function channelCeiling(entry) {
  * @param {{ run: Function, bridges?: boolean }} options.mechanism eval-quality's `nodeCommandMechanism`, or the confined one,
  *   whose `bridges` says a started server runs in a network namespace of its own and is reached through a bridge
  * @param {number} options.maxOutputBytes a server's default output ceiling
- * @param {string[]} [options.scratch] the run's private directories, which a call's port-file and bridge directories join while they exist
+ * @param {string[]} [options.scratch] the run's private directories, which a call's port-file and bridge directories join while they exist; they are made beneath its private parent (`scratch.privateParent`) when it has one
  * @param {{ origins: object, authorizations: object }|null} [options.deployment] on a historical probe's deployment arm,
  *   `deploymentAccess`'s answer: the origin each HTTP interface answers at, where every call goes and no server starts,
  *   and the one authorization eval-quality allowed there
@@ -1165,10 +1199,8 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       // On a deployment arm every HTTP interface answers at the deployment's origin, so no call starts a server.
       const launched = entry?.server === undefined || deployment !== null ? null : entry;
       const reports = launched?.server.portFileEnvironmentKey !== undefined;
-      // The file a server reports its port in lives in a private directory of the call's, on the run's scratch list, so
-      // a signal that ends the run removes it too.
-      const portDirectory = reports ? fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-port-')) : null;
-      if (portDirectory !== null) scratch.push(portDirectory);
+      // The file a server reports its port in lives in a private directory of the call's, on the run's scratch list.
+      const portDirectory = reports ? makePortDirectory(scratch) : null;
       let bridgeDirectory = null;
       let server = null;
       try {
@@ -1251,18 +1283,18 @@ function bridgeDirectoryBase(temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRE
 }
 
 /**
- * A private directory for one call's bridge socket, on the run's scratch list
- * (so a signal that ends the run removes it too), by its real path, which the
- * server's sandbox binds and the runtime connects through. A path too long for
- * a Unix socket even under the fallback is refused here, naming the temp
- * directory, since the shim would otherwise fail to listen with an error that
- * names neither.
+ * A private directory for one call's bridge socket, on the run's scratch list, by its real path.
+ * A signal that ends the run removes it with the rest of the scratch.
+ * The runtime connects through the real path, and the server's sandbox binds the directory (Bubblewrap names it by a path under the synthetic `/dev`, `confinement.js`).
+ * It is made beneath the run's private parent, so a run killed outright leaves it to the recovery of that parent (Story 1.131).
+ * A list with no parent keeps it in the temp directory, or under the fallback when the socket's path under the temp directory is too long for a Unix socket.
+ * A path too long for a Unix socket even there is refused here, naming the directory, since the shim would otherwise fail to listen with an error that names neither.
  *
  * @param {string[]} scratch
- * @param {{ temp?: string, fallback?: string }} [options] where to make it, for a case to drive the choice
+ * @param {{ temp?: string, fallback?: string }} [options] where to make it when the list has no private parent, for a case to drive the choice
  */
 function makeBridgeDirectory(scratch, { temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRECTORY } = {}) {
-  const base = bridgeDirectoryBase(temp, fallback);
+  const base = scratch.privateParent ?? bridgeDirectoryBase(temp, fallback);
   const made = fs.mkdtempSync(path.join(base, BRIDGE_DIRECTORY_PREFIX));
   scratch.push(made);
   let directory = made;
@@ -1275,9 +1307,25 @@ function makeBridgeDirectory(scratch, { temp = os.tmpdir(), fallback = BRIDGE_FA
   if (Buffer.byteLength(path.join(directory, BRIDGE_SOCKET_NAME)) > BRIDGE_SOCKET_PATH_BYTES) {
     releasePortDirectory(scratch, directory);
     throw new Error(
-      `the bridge's socket path under ${base} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind, and so is the one under ${fallback}; point TMPDIR at a shorter directory`,
+      scratch.privateParent === undefined
+        ? `the bridge's socket path under ${base} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind, and so is the one under ${fallback}; point TMPDIR at a shorter directory`
+        : `the bridge's socket path under the run's private parent ${base} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind`,
     );
   }
+  return directory;
+}
+
+/**
+ * A private directory for the file one call's started server reports its port in, on the run's scratch list.
+ * A signal that ends the run removes it with the rest of the scratch.
+ * It is made beneath the run's private parent (the system's temp directory for a list with none), so a run killed outright leaves it to the recovery of that parent (Story 1.131).
+ * A confined server names the file by the path its sandbox gives the directory.
+ *
+ * @param {string[]} scratch
+ */
+function makePortDirectory(scratch) {
+  const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-port-'));
+  scratch.push(directory);
   return directory;
 }
 
@@ -1352,6 +1400,7 @@ module.exports = {
   httpPortFile,
   isApiEntry,
   makeBridgeDirectory,
+  makePortDirectory,
   bridgeDirectoryBase,
   missingCredentials,
   originKey,

@@ -580,7 +580,7 @@ A waiver names the rule, a rationale, a machine-checkable condition, the adopter
 
 ## Compile and seal
 
-From the evaluation folder, run `tea-evaluate check`, `eval-quality compile`, then `eval-quality seal` in that order. Stop on each nonzero exit and report the command, exit code, and stderr. An installed evaluation runs `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate`; TeA development can run `node cli/evaluate.js`.
+From the evaluation folder, run `tea-evaluate check`, `eval-quality compile`, then `eval-quality seal` in that order. Stop on each nonzero exit and report the command, exit code, and stderr. Under a `partitionPlan` `eval-quality compile` and `eval-quality seal` cover `contract.json`, the development view alone; `tea-evaluate ci --tier pr` compiles and seals the held-out and both views through the plan's `compile` and `seal` checks, and the first `--partition held-out` preflight compiles the held-out view and the first `run` with no `--partition` compiles the both view. An installed evaluation runs `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate`; TeA development can run `node cli/evaluate.js`.
 
 ```sh
 npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>

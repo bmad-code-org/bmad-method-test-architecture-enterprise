@@ -177,9 +177,168 @@ function checkWorkingTreeCopy() {
   assert.equal(fs.readFileSync(path.join(copiedRepository, 'nested', '.git', 'config'), 'utf8'), '[core]\n');
 }
 
+/**
+ * An accept over a project under a distinctive absolute path, run with a distinctive temporary directory, writes a `baseline/` that
+ * names neither. The run's own log names the workspace it made, which must sit under the distinctive temporary directory (so the
+ * run really used it and the scan has something to miss). The scan reads every file's bytes for the project's own paths, the run's
+ * temporary directory, the host's, the home directory and the private root of runs, in both spellings of each, and for any path
+ * of a Unix or macOS host at all. The scan itself is held to its job: a path planted in a copy of the baseline, in any one of the
+ * files, is found.
+ */
+function checkMachinePaths() {
+  const canary = test.project('machine-path-canary-4d7a');
+  const tempRoot = path.join(canary.directory, 'distinctive-temp-root-9e21');
+  fs.mkdirSync(tempRoot);
+  canary.env = { ...canary.env, TMPDIR: tempRoot };
+  const ran = test.cli(canary.folder, 'run', [], canary.env);
+  assert.equal(ran.status, 0, ran.output);
+  const logged = /pristine workspace, [^:\n]+: (\/\S+)/.exec(ran.output)?.[1];
+  assert.ok(
+    logged !== undefined &&
+      baselines.spellingsOf(tempRoot).some((spelling) => logged.startsWith(`${spelling}${path.sep}tea-evaluate-pristine-`)),
+    `the run made its workspace at ${logged}; expected a directory under the distinctive temporary directory ${tempRoot}`,
+  );
+  const run = test.latest(canary.folder);
+  const scored = test.cli(canary.folder, 'score', ['--run', path.basename(run)], canary.env);
+  assert.equal(scored.status, 0, scored.output);
+  const accepted = test.cli(canary.folder, 'compare', ['--accept', '--run', path.basename(run)], canary.env);
+  assert.equal(accepted.status, 0, accepted.output);
+  const baseline = path.join(canary.folder, 'baseline');
+  // Every digest the neutral forms sit under still holds: the accepted baseline passes `check` (manifest digests, corpus, contract and policy).
+  const checked = test.cli(canary.folder, 'check', [], canary.env);
+  assert.equal(checked.status, 0, checked.output);
+  const needles = baselines.machinePaths({ project: canary, tempRoot });
+  assert.ok(
+    needles.some((needle) => needle.includes('machine-path-canary-4d7a')) &&
+      needles.some((needle) => needle.includes('distinctive-temp-root-9e21')),
+    `the scan does not look for the distinctive project path and temporary directory: ${JSON.stringify(needles)}`,
+  );
+  assert.deepEqual(baselines.machinePathHits(baseline, needles), [], 'a file of baseline/ names a path of this machine');
+  assert.deepEqual(baselines.machinePathHits(baseline), [], 'a file of baseline/ holds a path of a Unix or macOS host');
+  // The recorded forms: run.json and an observation name the workspace as <workspace>, and the score call names no absolute path.
+  const recorded = read(path.join(run, 'run.json'));
+  assert.deepEqual(recorded.workspaces, { pristine: '<workspace>', 'mutated:M-001': '<workspace>' });
+  const observed = read(path.join(baseline, 'observations', fs.readdirSync(path.join(baseline, 'observations')).sort()[0]));
+  assert.equal(observed.cwd, '<workspace>');
+  const call = read(path.join(baseline, 'scores', latestScore(run), 'P-001', 'score.json'));
+  assert.ok(
+    call.argv.every((argument) => !path.isAbsolute(argument)),
+    `a score call records an absolute path: ${JSON.stringify(call.argv)}`,
+  );
+  assert.ok(call.argv.includes('--out') && call.argv[call.argv.indexOf('--out') + 1] === '<staging>/evidence-artifact.json');
+  assert.equal(call.cli, 'eval-quality/dist/cli/main.js');
+  // The scan finds a path restored in any file: plant the project's path in each file of a copy, one at a time.
+  const scratch = path.join(canary.directory, 'planted');
+  fs.cpSync(baseline, scratch, { recursive: true });
+  for (const file of baselines.filesUnder(scratch)) {
+    const target = path.join(scratch, file);
+    const original = fs.readFileSync(target);
+    fs.appendFileSync(target, canary.repository);
+    assert.deepEqual(
+      baselines.machinePathHits(scratch, needles).map((hit) => hit.file),
+      [file],
+      `${file}: a planted project path is not found`,
+    );
+    fs.writeFileSync(target, original);
+  }
+}
+
+/**
+ * A `score` whose engine stage exits a code the CLI does not document (a shim that exits 1) records the failure in each probe's
+ * `score.json`, and the failure names the executable and the call record in the neutral forms. The run directory, which `runs/`
+ * uploads, holds no path of this machine after it.
+ */
+function checkEngineStageErrorHoldsNoMachinePath() {
+  const canary = test.project('machine-path-canary-engine-2c9f');
+  const run = baselines.runAndScore(test, canary);
+  const shimLog = path.join(canary.directory, 'shim.log');
+  const env = {
+    ...canary.env,
+    TEA_EVALUATE_ENGINE_CLI: path.join(__dirname, 'fixtures', 'evaluate', 'engine-shim.js'),
+    TEA_EVALUATE_SHIM_LOG: shimLog,
+    TEA_EVALUATE_SHIM_EXIT_SCORE: '1',
+  };
+  const scored = test.cli(canary.folder, 'score', ['--run', path.basename(run)], env);
+  assert.equal(scored.status, 12, scored.output);
+  const scoreDirectory = path.join(run, 'scores', latestScore(run));
+  const call = read(path.join(scoreDirectory, 'P-001', 'score.json'));
+  assert.equal(call.cli, 'engine-shim.js');
+  assert.equal(call.substituted, true);
+  const summary = read(path.join(scoreDirectory, 'score.json'));
+  const failure = summary.scores.find((entry) => entry.probeId === 'P-001').failure;
+  assert.match(
+    failure,
+    /^eval-quality score exited 1, which is no exit the CLI documents for score; its output is in runs\/[^/]+\/scores\/[^/]+\/P-001\/score\.json$/,
+  );
+  const needles = baselines.machinePaths({ project: canary });
+  assert.deepEqual(baselines.machinePathHits(run, needles), [], 'a file of the run directory names a path of this machine');
+  assert.deepEqual(baselines.machinePathHits(run), [], 'a file of the run directory holds a path of a Unix or macOS host');
+  // An engine that cannot start: the spawn error names the command it tried. A missing program, and a missing script that Node is asked to run.
+  for (const missing of ['no-such-engine-rv191', 'no-such-engine-rv191.js']) {
+    const lost = test.cli(canary.folder, 'score', ['--run', path.basename(run)], {
+      ...canary.env,
+      TEA_EVALUATE_ENGINE_CLI: path.join(canary.directory, missing),
+    });
+    assert.equal(lost.status, 12, `${missing}: ${lost.output}`);
+    const lostDirectory = path.join(run, 'scores', latestScore(run));
+    const lostSummary = read(path.join(lostDirectory, 'score.json'));
+    assert.ok(
+      lostSummary.scores.every((entry) => entry.failure !== null),
+      `${missing}: ${JSON.stringify(lostSummary.scores)}`,
+    );
+    if (!missing.endsWith('.js')) {
+      const failure = lostSummary.scores[0].failure;
+      assert.match(failure, /^could not run eval-quality score at no-such-engine-rv191: spawn no-such-engine-rv191 ENOENT$/);
+      assert.match(read(path.join(lostDirectory, 'P-001', 'score.json')).error, /^spawn no-such-engine-rv191 ENOENT$/);
+    }
+    assert.deepEqual(baselines.machinePathHits(run, needles), [], `${missing}: a file of the run directory names a path of this machine`);
+    assert.deepEqual(baselines.machinePathHits(run), [], `${missing}: a file of the run directory holds a path of a Unix or macOS host`);
+  }
+}
+
+/** Every `baseline/` committed under `test/fixtures/` and `test/evaluations/` names no path of a Unix or macOS host. */
+function checkCommittedBaselinesHoldNoMachinePath() {
+  const root = path.join(__dirname, '..');
+  const found = baselines.committedBaselines(root);
+  // The twelve accepted baselines, the authored `valid` fixture and the gap-loop `before` placeholder; a later accept adds its own.
+  for (const known of [
+    'test/fixtures/evaluate-api/evals/grader/baseline',
+    'test/fixtures/evaluate-authoring/ai-feature/evaluation/baseline',
+    'test/fixtures/evaluate-authoring/test-review/evaluation/baseline',
+    'test/fixtures/evaluate-ci-repos/nightly-deploy/evals/answer-grade/baseline',
+    'test/fixtures/evaluate-ci-repos/tagged-release/evals/answer-grade/baseline',
+    'test/fixtures/evaluate-gap-loop/after/evaluation/baseline',
+    'test/fixtures/evaluate-gap-loop/before/evaluation/baseline',
+    'test/fixtures/evaluate-learn/evaluation/baseline',
+    'test/fixtures/evaluate-mcp/evals/grader/baseline',
+    'test/fixtures/evaluate-promptfoo/evals/summary/baseline',
+    'test/fixtures/evaluate-tool-use-agent/evals/tool-use/baseline',
+    'test/fixtures/evaluate-workflow/evals/records/baseline',
+    'test/fixtures/evaluate/mutation/evals/verdict-ci/baseline',
+    'test/fixtures/evaluate/valid/baseline',
+  ])
+    assert.ok(found.includes(known), `the scan does not find the committed baseline ${known}`);
+  for (const directory of found) {
+    assert.deepEqual(
+      baselines.machinePathHits(path.join(root, directory)),
+      [],
+      `${directory} holds a path of a Unix or macOS host; re-accept it with tea-evaluate compare --accept`,
+    );
+  }
+}
+
 async function main() {
   try {
     checkWorkingTreeCopy();
+    checkCommittedBaselinesHoldNoMachinePath();
+    if (process.argv.includes('--engine-error-only')) {
+      checkEngineStageErrorHoldsNoMachinePath();
+      return;
+    }
+    if (process.argv.includes('--machine-paths-only')) {
+      checkMachinePaths();
+      return;
+    }
     if (process.argv.includes('--copy-only')) return;
     const engine = await loadEngine();
     const project = test.project('compare');
@@ -290,8 +449,29 @@ async function main() {
         const produced = fs.readFileSync(path.join(runDirectory, 'scores', scores[1], probeId, 'evidence-artifact.json'));
         const accepted = fs.readFileSync(path.join(baseline, 'scores', manifest.scoreInvocationId, probeId, 'evidence-artifact.json'));
         assert.equal(produced.equals(accepted), true, `the replay of ${probeId} did not reproduce the accepted evidence bytes`);
+        // The call records hold neutral path forms, so the replay writes the accepted call's bytes again too.
+        const callRecord = path.join(probeId, 'score.json');
+        assert.equal(
+          fs
+            .readFileSync(path.join(runDirectory, 'scores', scores[1], callRecord))
+            .equals(fs.readFileSync(path.join(baseline, 'scores', manifest.scoreInvocationId, callRecord))),
+          true,
+          `the replay of ${probeId} did not reproduce the accepted call record`,
+        );
       }
+      assert.equal(
+        fs
+          .readFileSync(path.join(runDirectory, 'scores', scores[1], 'aggregate-strength.json'))
+          .equals(fs.readFileSync(path.join(baseline, 'scores', manifest.scoreInvocationId, 'aggregate-strength.json'))),
+        true,
+        'the replay did not reproduce the accepted aggregate call record',
+      );
     }
+
+    // Machine paths: a run made under a distinctive project path and a distinctive temporary directory is accepted, and no file under
+    // baseline/ holds that path, the home directory, the temporary root or the user's private root of runs (Story 1.91, AD-12).
+    checkMachinePaths();
+    checkEngineStageErrorHoldsNoMachinePath();
 
     // Revert check: a baseline without its isolation manifests replays as Invalid, exit 3.
     {

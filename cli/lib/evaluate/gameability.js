@@ -29,6 +29,15 @@
  *
  * A gameability probe seeds nothing into the target, so, like a clean
  * control, its `artifactDigest` is its `implementationDigest`.
+ *
+ * Under a `partitionPlan` (Story 1.109) the answers split where the plan does.
+ * `corpus/gameability/<probeId>.json` answers the steps of `contract.json`
+ * (the shared and the development-only ones) and
+ * `corpus/held-out/gameability/<probeId>.json`, sealed beside the held-out plan,
+ * answers the steps of the held-out plan. An arm answers only the steps of the
+ * view it runs (`answersForView`): the development view reads the first file
+ * and never opens the second, the held-out view takes the shared steps from the
+ * first and its own from the second, and the both view takes every step.
  */
 
 'use strict';
@@ -44,6 +53,37 @@ const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 /** Where a gameability probe's degenerate response is committed, relative to the evaluation folder. */
 function degenerateResponsePath(probeId) {
   return `corpus/gameability/${probeId}.json`;
+}
+
+/**
+ * The answers one arm is given: those of the steps its view declares, in the view's order, from the answers of `contract.json`'s
+ * steps and (held-out and both views) the answers of the held-out plan's. An answer to a step the view does not declare is never
+ * handed on, so a held-out view holds no development-only answer and a development view no held-out one.
+ *
+ * @param {object} options
+ * @param {Record<string, object>} options.steps the answers of `corpus/gameability/<probeId>.json`
+ * @param {Record<string, object>} [options.heldOutSteps] the answers of `corpus/held-out/gameability/<probeId>.json`; absent for a
+ *   view that does not read it
+ * @param {string[]} options.stepIds the step IDs of the view's interaction plan
+ * @returns {Record<string, object>}
+ */
+function answersForView({ steps, heldOutSteps = {}, stepIds }) {
+  const answers = {};
+  for (const stepId of stepIds) {
+    if (Object.hasOwn(steps, stepId)) answers[stepId] = steps[stepId];
+    else if (Object.hasOwn(heldOutSteps, stepId)) answers[stepId] = heldOutSteps[stepId];
+  }
+  return answers;
+}
+
+/**
+ * The record of the files an arm was answered from, which the evidence names: the response file's path and digest, and under the
+ * held-out and both views the held-out answers' own.
+ */
+function responseRecord({ probeId, bytes, heldOut, digestBytes }) {
+  const record = { path: degenerateResponsePath(probeId), digest: digestBytes(bytes) };
+  if (heldOut !== undefined) record.heldOut = { path: heldOut.path, digest: digestBytes(heldOut.bytes) };
+  return record;
 }
 
 /** Which kind of request a degenerate step's answer answers: a tool call's error flag, an HTTP status, or a command's exit. */
@@ -156,8 +196,9 @@ function degenerateArm({ contract, registry, steps, label, provenance, signal })
  * `gameability` probe.
  *
  * @param {object} context `runTrialSets`'s context
- * @param {Array<{ file: string, probe: object, bytes: Buffer, steps: object }>} context.gameability the committed
- *   gameability probes, each with its degenerate response's bytes and steps, read before anything ran
+ * @param {Array<{ file: string, probe: object, bytes: Buffer, heldOut?: { path: string, bytes: Buffer }, steps: object }>} context.gameability
+ *   the committed gameability probes, each with its degenerate response's bytes, the held-out answers' path and bytes when the view
+ *   reads them, and the answers (`answersForView`) of its view's steps, read before anything ran
  * @returns {Promise<Array<{ probe: object, steps: object, response: object }>>}
  */
 async function qualifyGameabilityProbes({
@@ -176,8 +217,8 @@ async function qualifyGameabilityProbes({
   signal,
 }) {
   const materialized = [];
-  for (const { file, probe, bytes, steps } of gameability) {
-    const response = { path: degenerateResponsePath(probe.probeId), digest: engine.digestBytes(bytes) };
+  for (const { file, probe, bytes, heldOut, steps } of gameability) {
+    const response = responseRecord({ probeId: probe.probeId, bytes, heldOut, digestBytes: engine.digestBytes });
     const directory = `qualification/${probe.probeId}`;
     let arm;
     try {
@@ -236,7 +277,7 @@ async function qualifyGameabilityProbes({
           message:
             phase.oracles.length === 0
               ? `${file}: behavior ${probe.behaviorId} declares no oracle, so no disciplined oracle can reject the degenerate response`
-              : `${file}: over the degenerate response ${response.path}, ${phase.role} is ${verdict} where it must be ${phase.expected}, so the probe does not show the response games the naive oracle; the evidence is in ${path.relative(folder, writer.pathOf(files[phase.name]))}`,
+              : `${file}: over the degenerate response ${response.heldOut === undefined ? response.path : `${response.path} and ${response.heldOut.path}`}, ${phase.role} is ${verdict} where it must be ${phase.expected}, so the probe does not show the response games the naive oracle; the evidence is in ${path.relative(folder, writer.pathOf(files[phase.name]))}`,
         });
       }
     }
@@ -274,6 +315,7 @@ async function qualifyGameabilityProbes({
 module.exports = {
   UnansweredCall,
   answeredKind,
+  answersForView,
   degenerateArm,
   degeneratePort,
   degenerateResponsePath,

@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 7,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "refund-check-tutorial",
+  "sourceSpecDigest": "sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "The refund-check skill approves a refund whose amount is exactly the limit.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Asked about a refund of 100 against the limit of 100, the runner prints one JSON object whose status is \"answered\" and whose decision is \"approved\".",
+      "requirementLinks": [
+        {
+          "scheme": "tutorial-requirements",
+          "id": "limit-is-inclusive"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tutorial-requirements",
+          "id": "exclusive-limit-wording"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "The refund-check skill refuses a request that gives no amount and limit.",
+      "severity": "material",
+      "observableSuccessCriterion": "Asked a malformed request, the runner prints one JSON object whose status is \"refused\".",
+      "requirementLinks": [
+        {
+          "scheme": "tutorial-requirements",
+          "id": "malformed-request-refused"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tutorial-requirements",
+          "id": "malformed-request-answered"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The skill answers, and the decision for a refund at the limit is approved. The oracle reads the status claim beside the decision and accepts neither alone.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The status claim and the decision of the JSON object the review-refund step prints on stdout.",
+        "negativeDomain": "A reply whose status is not \"answered\" or whose decision for a refund at the limit is anything but \"approved\".",
+        "evidenceTargets": [
+          "/interactions/review-refund/stdout/status",
+          "/interactions/review-refund/stdout/decision"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/review-refund/stdout/status"
+              },
+              {
+                "literal": "answered"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/review-refund/stdout/decision"
+              },
+              {
+                "literal": "approved"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "A request with no amount and limit gets no decision: the skill refuses it.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The status claim of the JSON object the reject-malformed step prints on stdout.",
+        "negativeDomain": "A reply to a malformed request whose status is anything but \"refused\".",
+        "evidenceTargets": [
+          "/interactions/reject-malformed/stdout/status"
+        ]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/reject-malformed/stdout/status"
+          },
+          {
+            "literal": "refused"
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "refund-skill",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "review-refund",
+          "invocation": {
+            "executable": "tea-skill-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "agent",
+                "agent-cmd",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "permittedKeys": [
+                "agent",
+                "agent-cmd",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "skill-root": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "status"
+            ],
+            "permittedKeys": [
+              "amount",
+              "decision",
+              "status"
+            ],
+            "types": {
+              "amount": "number",
+              "decision": "string",
+              "status": "string"
+            },
+            "successIndicator": "/status",
+            "channelRoles": {
+              "/status": "success-indicator",
+              "/amount": "payload",
+              "/decision": "payload"
+            },
+            "collectionLocations": []
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "reply-follows-the-amount",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-at-limit",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "skill-root": "skill",
+                    "agent": "custom",
+                    "agent-cmd": "./agent.js",
+                    "timeout-ms": "30000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Review a refund of 100 against the limit of 100."
+                  }
+                }
+              },
+              {
+                "legId": "witness-under-limit",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "skill-root": "skill",
+                    "agent": "custom",
+                    "agent-cmd": "./agent.js",
+                    "timeout-ms": "30000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Review a refund of 60 against the limit of 100."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-at-limit/stdout/amount"
+                    },
+                    {
+                      "literal": 100
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-under-limit/stdout/amount"
+                    },
+                    {
+                      "literal": 60
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "review-refund",
+      "interfaceId": "refund-skill",
+      "operationId": "review-refund",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "skill-root": {
+            "literal": "skill"
+          },
+          "agent": {
+            "literal": "custom"
+          },
+          "agent-cmd": {
+            "literal": "./agent.js"
+          },
+          "timeout-ms": {
+            "literal": "30000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Review a refund of 100 against the limit of 100."
+          }
+        }
+      }
+    },
+    {
+      "stepId": "reject-malformed",
+      "interfaceId": "refund-skill",
+      "operationId": "review-refund",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "skill-root": {
+            "literal": "skill"
+          },
+          "agent": {
+            "literal": "custom"
+          },
+          "agent-cmd": {
+            "literal": "./agent.js"
+          },
+          "timeout-ms": {
+            "literal": "30000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "type-violating"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate copies the project into a disposable workspace and runs every leg there.",
+    "cleanup": "Nothing to remove: the agent writes no file.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 2,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The agent writes no file and makes no network call."
+  ],
+  "requiredEvidence": [
+    "The exit code and stdout of every run."
+  ],
+  "probeStepBound": 2,
+  "fixtureReset": null
+}

@@ -2,7 +2,7 @@
   "legId": "p-014-manifest-raw-invalid-json",
   "sequence": 15,
   "workspace": "mutated:M-008",
-  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-c5670008-edf8-421d-b3a1-a8144eb2dfba/target",
+  "cwd": "<workspace>",
   "request": {
     "probeId": "p-014-manifest-raw-invalid-json",
     "interfaceId": "answer-grade",
@@ -29,7 +29,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Sun, 04 Oct 2026 14:41:11 GMT",
+      "date": "Tue, 06 Oct 2026 21:25:17 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

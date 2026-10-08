@@ -32,7 +32,12 @@ const REPO_URL = 'https://github.com/bmad-code-org/bmad-method-test-architecture
 // llms-full.txt is consumed by AI agents as context. Most LLMs have ~200k token limits.
 // 600k chars ≈ 150k tokens (safe margin). Exceeding this breaks AI agent functionality.
 const LLM_MAX_CHARS = 600_000;
-const LLM_WARN_CHARS = 500_000;
+// The bundle must stay this far under the cap so the next page that lands has room. test/test-llms-headroom.js
+// fails when the bundle gets closer: a page that fills the last of the budget would break the build for whoever
+// adds the next one, so the exclusion list below is trimmed in the change that crosses this line.
+const LLM_MIN_HEADROOM_CHARS = 50_000;
+// The build warns exactly where test/test-llms-headroom.js starts to fail.
+const LLM_WARN_CHARS = LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS;
 
 // Every pattern must match at least one document: the build fails on one that
 // matches nothing, so a renamed or deleted page cannot leave a dead exclusion
@@ -63,6 +68,24 @@ const LLM_EXCLUDE_PATTERNS = [
   // them 499,446.
   'reference/tea-evaluate-cli',
   'reference/tea-test-review-cli',
+  // Evaluate's tutorial and its two explanation pages: a fixture walkthrough and
+  // the reasons behind the runtime's rules, about 72k characters together. An
+  // agent that runs an evaluation follows the how-to guides, which stay in the
+  // bundle, and looks the reasons up when a rule needs one, so llms.txt links
+  // these three under "Evaluate". With them in, the bundle measured 652,450
+  // characters before the CI how-to joined it, and the build fails on the cap.
+  'tutorials/evaluate-your-first-skill',
+  'explanation/how-evaluate-works',
+  'explanation/why-evaluate-confines-the-target',
+  // The lookup references: every configuration key, every knowledge fragment and the schema of the
+  // live verification file. An agent reads one entry at a time when a task names it (the fragments
+  // themselves ship in tea-sources.zip and the workflows load them through the tea-index.csv
+  // manifest), and llms.txt links each page under "Reference lookups". They came to about 76k
+  // characters in the bundle (configuration 37.8k, knowledge-base 27.3k, live-verification-results
+  // 11.1k), which keeps room for the pages that are still to come.
+  'reference/configuration',
+  'reference/knowledge-base',
+  'reference/live-verification-results',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -96,10 +119,13 @@ async function main() {
   printBuildSummary(docsDir, artifactsDir, siteDir);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// The build runs when this file is the entry point; tests require it for the bundle builder and its limits.
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
 
 // =============================================================================
 // Pipeline Stages
@@ -202,10 +228,23 @@ function generateLlmsTxt(docsDir, outputDir) {
     `- **[Test Review (RV)](${SITE_URL}/how-to/workflows/run-test-review)** - Quality audit`,
     `- **[NFR Assess (NR)](${SITE_URL}/how-to/workflows/run-nfr-assess)** - Non-functional requirements`,
     '',
+    '## Evaluate',
+    '',
+    `- **[Evaluate Your First Skill](${SITE_URL}/tutorials/evaluate-your-first-skill)** - Tutorial: one skill from requirements to a scored run and an accepted baseline`,
+    `- **[Evaluate a Skill or Agent](${SITE_URL}/how-to/evaluate/evaluate-a-skill-or-agent)** - First how-to guide of the Evaluate group`,
+    `- **[How Evaluate Works](${SITE_URL}/explanation/how-evaluate-works)** - The stack, the rules and the reasons behind an evaluation`,
+    `- **[Why Evaluate Confines the Target](${SITE_URL}/explanation/why-evaluate-confines-the-target)** - Why the target of an evaluation runs under file-system confinement`,
+    '',
     '## Command-line references',
     '',
     `- **[tea-evaluate CLI](${SITE_URL}/reference/tea-evaluate-cli)** - Check, digest, preflight, run, score, compare and run the CI tiers of an evaluation folder: flags, rules and exit codes`,
     `- **[tea-test-review CLI](${SITE_URL}/reference/tea-test-review-cli)** - Headless test review in CI: flags, exit codes and the JSON verdict`,
+    '',
+    '## Reference lookups',
+    '',
+    `- **[Configuration](${SITE_URL}/reference/configuration)** - Every configuration key with its default and the workflows it changes`,
+    `- **[Knowledge Base](${SITE_URL}/reference/knowledge-base)** - The knowledge fragments by category and the tea-index.csv manifest that selects them`,
+    `- **[Live Verification Results](${SITE_URL}/reference/live-verification-results)** - The JSON file trace reads when a requirement was verified by running the system: schema, coverage rules and limits`,
     '',
     '---',
     '',
@@ -243,6 +282,31 @@ function generateLlmsTxt(docsDir, outputDir) {
 function generateLlmsFullTxt(docsDir, outputDir) {
   console.log('  → Generating llms-full.txt...');
 
+  const { text, fileCount, skippedCount, deadPatterns } = buildLlmsFullText(docsDir);
+  if (deadPatterns.length > 0) {
+    console.error(`    ERROR: LLM exclusion patterns match no document: ${deadPatterns.join(', ')}`);
+    process.exit(1);
+  }
+  validateLlmSize(text);
+
+  const outputPath = path.join(outputDir, 'llms-full.txt');
+  fs.writeFileSync(outputPath, text, 'utf-8');
+
+  const tokenEstimate = Math.floor(text.length / 4).toLocaleString();
+  console.log(
+    `    Processed ${fileCount} files (skipped ${skippedCount}), ${text.length.toLocaleString()} chars (~${tokenEstimate} tokens)`,
+  );
+}
+
+/**
+ * Assembles the llms-full.txt text from every Markdown page under docsDir that no exclusion pattern removes.
+ *
+ * Pure with respect to the build: it writes nothing and exits nothing, so a test can measure the bundle the build would write.
+ * @param {string} docsDir - Root directory containing source Markdown files; paths in the output are relative to this directory.
+ * @returns {{text: string, fileCount: number, skippedCount: number, deadPatterns: string[]}} The bundle text, the pages in and out of it,
+ *   and the exclusion patterns that match no page.
+ */
+function buildLlmsFullText(docsDir) {
   const date = new Date().toISOString().split('T')[0];
   const files = getAllMarkdownFiles(docsDir);
 
@@ -256,10 +320,6 @@ function generateLlmsFullTxt(docsDir, outputDir) {
   ];
 
   const deadPatterns = LLM_EXCLUDE_PATTERNS.filter((pattern) => !files.some((file) => file.includes(pattern)));
-  if (deadPatterns.length > 0) {
-    console.error(`    ERROR: LLM exclusion patterns match no document: ${deadPatterns.join(', ')}`);
-    process.exit(1);
-  }
 
   let fileCount = 0;
   let skippedCount = 0;
@@ -280,16 +340,7 @@ function generateLlmsFullTxt(docsDir, outputDir) {
     }
   }
 
-  const result = output.join('\n');
-  validateLlmSize(result);
-
-  const outputPath = path.join(outputDir, 'llms-full.txt');
-  fs.writeFileSync(outputPath, result, 'utf-8');
-
-  const tokenEstimate = Math.floor(result.length / 4).toLocaleString();
-  console.log(
-    `    Processed ${fileCount} files (skipped ${skippedCount}), ${result.length.toLocaleString()} chars (~${tokenEstimate} tokens)`,
-  );
+  return { text: output.join('\n'), fileCount, skippedCount, deadPatterns };
 }
 
 /**
@@ -378,14 +429,33 @@ function compactTables(content) {
     .join('\n');
 }
 
-function validateLlmSize(content) {
-  const charCount = content.length;
-
+/**
+ * Classifies a bundle size against the cap and the headroom floor.
+ * @param {number} charCount - Characters in the bundle.
+ * @returns {{level: 'error'|'warn'|'ok', message: string}} `error` past the cap, `warn` when less than the headroom floor is left, else `ok`.
+ */
+function llmSizeStatus(charCount) {
+  const left = LLM_MAX_CHARS - charCount;
   if (charCount > LLM_MAX_CHARS) {
-    console.error(`    ERROR: ${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit`);
+    return { level: 'error', message: `${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit` };
+  }
+  if (charCount > LLM_WARN_CHARS) {
+    return {
+      level: 'warn',
+      message: `${charCount.toLocaleString()} chars leaves ${left.toLocaleString()} under the ${LLM_MAX_CHARS.toLocaleString()} char limit`,
+    };
+  }
+  return { level: 'ok', message: '' };
+}
+
+function validateLlmSize(content) {
+  const { level, message } = llmSizeStatus(content.length);
+
+  if (level === 'error') {
+    console.error(`    ERROR: ${message}`);
     process.exit(1);
-  } else if (charCount > LLM_WARN_CHARS) {
-    console.warn(`    \u001B[33mWARNING: Approaching ${LLM_WARN_CHARS.toLocaleString()} char limit\u001B[0m`);
+  } else if (level === 'warn') {
+    console.warn(`    \u001B[33mWARNING: ${message}\u001B[0m`);
   }
 }
 
@@ -638,3 +708,5 @@ function checkDocLinks() {
     process.exit(1);
   }
 }
+
+module.exports = { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, LLM_WARN_CHARS, LLM_EXCLUDE_PATTERNS, buildLlmsFullText, llmSizeStatus };

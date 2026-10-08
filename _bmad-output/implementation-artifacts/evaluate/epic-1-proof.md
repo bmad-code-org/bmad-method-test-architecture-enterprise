@@ -136,6 +136,8 @@ The run-wide class gate is unavailable: `tea-evaluate score` calls eval-quality 
 
 ## Story 1.46: the gaps closed
 
+Story 1.116's contract digest `sha256:3fbc635b6f9e0177feb0439becc40701d53d8e5797ae5874c42a4df74663058c` supersedes the digest `sha256:1592b16f…` recorded in this section, and its live PASS supersedes this section's.
+
 Recorded 2026-10-03 by a maintainer session over `test/evaluations/bmad-testarch-evaluate/` through the local Claude Code CLI 2.1.288 (model `claude-sonnet-5`, no API key). The repairs were authored by a throwaway generator (`author.cjs`, session scratch, not committed), as Story 1.16's were; the loop's preflight, rerun and rescore ran live. The Stage 11 gap report for this run is the gitignored `test/eval-artifacts/evaluate/bmad-testarch-evaluate/gap-report.md` (`sha256:5e683480aa053d4db2d14bb687f7f1c645f90715da685bbfe132489ae5680e8f`); its G-1 to G-5 entries carry each gap's before and after outcome, invocation IDs and class component. The live legs ran from a standalone clone of the PR branch at commit `bced8a86`, a clean tree (`dirty: false`, `commit: bced8a86c7f7b72ec7c370239b9fe7d294677e47`), because the runtime refuses a run whose repository state changes mid-run and a lane worktree shares its refs with the other lanes (Story 1.112). Story 1.16's section above stays as found; this section holds the after state.
 
 The live evidence measures the guides and runtime of commit `bced8a86`. Between that commit and the PR head two things moved. `main` changed `references/gaps.md` outside the exit table and the refusal sentence (`sha256:2c11a55e…` at `bced8a86`, the file the rollback digests below name; `sha256:74017abf…` at the head) and `references/evaluator.md`, which none of the evaluation's Stage 1 and Stage 11 steps read. It also changed eight `cli/` files (`agent-adapters.js`, `check.js`, `confinement-audit.js`, `confinement.js`, `records.js`, `registry.js`, `release-report.js` and `run.js`). The probes, mutations, scoring policy, corpus, `corpus-index.json` and the contract body, the exit-table rows, the web-application sentence and the refusal sentence are byte-identical, and only `requirements.md` and the two digests that pin it (`sourceSpecDigest` in the contract and `requirements.digest` in `evaluation.json`) changed, and the Stage 11 legs load all of `gaps.md`, so Story H.1's clean run, which runs at the merged head, is the measurement of that head. A review round then corrected `requirements.md` (the dirty-run sentence and the confirmation line) and restamped `sourceSpecDigest` and `requirements.digest` to `sha256:79298cd4fee0627785ac1e20dbac5870d5396b4d579c33a092692018e5839e62`; the live evidence predates that restamp and carries contract digest `sha256:1592b16f…`, which the restamp changed.
@@ -198,6 +200,102 @@ Digests of the development run: contract `sha256:1592b16f7f14812fd1166d9b6c977f0
 Every qualification restored the target's bytes (restored digest equal to the pre-mutation digest, mutated unequal) and the baseline held on the first re-run. `references/gaps.md` before and after: `sha256:2c11a55e…` for M-001, M-002, M-004 and M-005 (one file, restored each time) and `references/inspection.md` `sha256:6edf888f…` for M-003.
 
 The maintainer ran `eval-quality score` directly with each recorded call's arguments and a fresh `--out`: all nine artifacts reproduce byte for byte with exit 0, equal to the exit `tea-evaluate score` recorded.
+
+## Story 1.116: each exit's class held against its AD-10 row
+
+Recorded on the evening of 2026-10-04 (the invocation IDs carry UTC 2026-10-05) by the Story 1.116 live-run worker through the local Claude Code CLI 2.1.289 (model `claude-sonnet-5`, no API key), over PR #352.
+Every command ran from a standalone clone of the PR branch at commit `6ff6384c0773ade3421a75e30c819a336b398a65`: `dirty: false`, workspace tree `a33b81f079c7730fa13c47fa7c504388b0354849`.
+`git status --porcelain` in the clone was empty before and after every command.
+Story 1.46's section above stays as found.
+This section holds the live proof of the contract that superseded it.
+
+### What changed
+
+O-003 of the dogfood contract held each listed class against the table's class vocabulary (`for-all` over `set-membership`), so a complete listing that swapped the classes of `tea-evaluate 11` and `tea-evaluate 12` passed.
+O-003's `for-all` predicate is now an `any` of one `all` pair of `equality` checks over `@/id` and `@/class` per row of the table.
+The pairs of rows 11 and 12 compare the listed class with the `classify-exits` answer for the same exit, which O-001 holds to the table.
+That scoping keeps the seeds M-001 and M-002 on O-001.
+The contract digest moved from `sha256:1592b16f…` to `sha256:3fbc635b6f9e0177feb0439becc40701d53d8e5797ae5874c42a4df74663058c`, and `requirements.md` carries `sha256:266c9d3c4e7cb0d7de33c4f45ec0a04bd1c5438e7ec6ae0402d1de52cdbf3b59` in `evaluation.json` and `sourceSpecDigest`.
+The corpus digest is `sha256:d653d6d927999d1a4a150c89357004366ecff5623a48479bbe6616086e2a3cf2`.
+
+### Setup
+
+- Engine: eval-quality 7.1.0, the release the `latest` devDependency resolves. TeA 1.27.2. Runner `tea-skill-runner`, `--agent claude`, `--capability read-only`, `--timeout-ms 300000`. Agent: Claude Code 2.1.289, model `claude-sonnet-5`, system prompt digest `sha256:f63c63e55cbb695cc5cfa8b18303d00fdf34ccf729ecfd2a93d3a9d9bbce5463`.
+- `evaluation.json` declares `"confinement": false`, so every `run.json` records `confinement: opt-out`, as in Story 1.46.
+- The runtime refuses a provisioned `node_modules` that is a symbolic link (exit 12 at workspace creation), so the clone holds a full copy of the lane checkout's `node_modules` (`cp -cR`). `_bmad/` is a copy of the lane checkout's gitignored `_bmad/`. Both are excluded through the clone's own `.git/info/exclude`, so the tree stays clean.
+- Two earlier preflight attempts are discarded. `20261004T231826279Z-ee9e9c05` exited 12 at workspace creation with `ENOSPC` on a nearly full volume. `20261004T235010021Z-501aa7fa` was stopped before it finished, and the clone's `node_modules` was recopied in full. The recorded commands below all ran after that, with 43 GiB or more free.
+
+### Commands and exit codes
+
+From the clone root, in the order Stage 6 and Stage 10 run them, with `--evaluation test/evaluations/bmad-testarch-evaluate`:
+
+| Command                                                                                        | Exit                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `node cli/evaluate.js digest --evaluation …`                                                   | 0, `corpusDigest` `sha256:d653d6d927999d1a4a150c89357004366ecff5623a48479bbe6616086e2a3cf2`                                             |
+| `node cli/evaluate.js check --evaluation …`                                                    | 0                                                                                                                                       |
+| `./node_modules/.bin/eval-quality compile --in …/contract.json --out …/compiled-contract.json` | 0, output `sha256:3fbc635b6f9e0177feb0439becc40701d53d8e5797ae5874c42a4df74663058c`                                                     |
+| `./node_modules/.bin/eval-quality seal --in …/contract.json --out …/sealed-brief.json`         | 0, output `sha256:b3a3820bb44ffbf2b44a41413015f5551f8fffa212ae68e2989c13215533abdb`                                                     |
+| `node cli/evaluate.js preflight --evaluation …`                                                | 0, invocation `20261005T001017502Z-fbe06c57`, 26 min; five seeded probes qualified, each rollback proved                                |
+| `node cli/evaluate.js run --evaluation … --partition development`                              | 0, invocation `20261005T003657999Z-c6f9a76e`, 79 min, eight trial sets of five over `clean`, `mutated:M-001`, `M-003`, `M-004`, `M-005` |
+| `node cli/evaluate.js score --evaluation … --run 20261005T003657999Z-c6f9a76e`                 | 0, score invocation `20261005T015550152Z-a9e17e05`, eight probes each exit 0, strength aggregate exit 0                                 |
+| `node cli/evaluate.js run --evaluation … --partition held-out`                                 | 0, invocation `20261005T015558266Z-4ae4d54a`, 17 min, one trial set of five over `mutated:M-002`                                        |
+| `node cli/evaluate.js score --evaluation … --run 20261005T015558266Z-4ae4d54a`                 | 0, score invocation `20261005T021259920Z-f8920bca`, P-003 exit 0, strength aggregate exit 0                                             |
+
+The compile and seal outputs are derived files and are not committed.
+The Stage 6 preflight's own `run.json` records `command: preflight`, `commit: 6ff6384c…`, `dirty: false` and `adopterTree.unchanged: true`, and its verdict file `preflight-verdict.json` records `passed: true` with all fourteen checks `satisfied` (`seeded-faults-scoped` and `seeded-fault-fired` for each of D-001 to D-005, beside `interface-present`, `input-sensitivity`, `state-reset` and `clean-control`).
+
+### Outcomes
+
+Each probe ran five trials with `validCount` 5, and every evidence artifact records `contractVerdict: PASS`, `exitCode: 0` and no coverage gap.
+The oracle columns come from each artifact's `outcomes` array (five trials of four oracles each).
+
+| Probe                      | Behavior | Class         | Outcome                       | Violated oracles | Corroboration               | Evidence artifact digest                                                  |
+| -------------------------- | -------- | ------------- | ----------------------------- | ---------------- | --------------------------- | ------------------------------------------------------------------------- |
+| P-001                      | B-001    | clean control | `passed-clean-control` 5 of 5 | none             | `agrees` in all 20 outcomes | `sha256:44c90a305dec6bb775cf1dff422cf52864477b4bd069cb48e81b3acb36816c11` |
+| P-002 (M-001, development) | B-001    | defect        | `caught` 5 of 5               | O-001            | `agrees` in all 20 outcomes | `sha256:daf199174c50df17849ea5e88f98092d00b1a0532600cd9cc20ef266138bb4b4` |
+| P-003 (M-002, held-out)    | B-001    | defect        | `caught` 5 of 5               | O-001            | `agrees` in all 20 outcomes | `sha256:5cdcce6313c3ba4ed5456a8282bfb8a085e5da3e72772fd08587e151f9cd94b0` |
+| P-004                      | B-002    | clean control | `passed-clean-control` 5 of 5 | none             | `agrees` in all 20 outcomes | `sha256:998581056823848eacdae61918d9cded8f8cdab74df67cdad38d97955f5e70d8` |
+| P-005 (M-003, development) | B-002    | defect        | `caught` 5 of 5               | O-002            | `agrees` in all 20 outcomes | `sha256:4e4f5b749222265e3ad40678b19720617231346f3a9f64222b8d6ce981d06ade` |
+| P-006                      | B-003    | clean control | `passed-clean-control` 5 of 5 | none             | `agrees` in all 20 outcomes | `sha256:2db757027066dff302d0138769d5d0f704ac0de368af267ec9ac115c139b81de` |
+| P-007 (M-004, development) | B-003    | defect        | `caught` 5 of 5               | O-003            | `agrees` in all 20 outcomes | `sha256:2439ff7be8326b41f12663f58b9ed9ffa721dc6385d20157d6872c3c132b8750` |
+| P-008                      | B-004    | clean control | `passed-clean-control` 5 of 5 | none             | `agrees` in all 20 outcomes | `sha256:4b875f0339c6c8b21d9a1c52f8128292fd5544ca82b3d0624bdd2b1f23d91d83` |
+| P-009 (M-005, development) | B-004    | defect        | `caught` 5 of 5               | O-004            | `agrees` in all 20 outcomes | `sha256:4e9eebd811695ba183b31fcdb8757a7ee40ae7fa34b9f38d2c222be4c78d3ed4` |
+
+No outcome of any artifact reads `disagrees`.
+O-003 is violated on P-007 alone, where M-004 removes row 13 from the table.
+O-003 reads `held` in all 40 trials of the other eight probes, so the `list-exit-table` listing and the `classify-exits` answer for rows 11 and 12 agreed across the independent model calls of every trial, on the four clean controls and on the seeds M-001 and M-002.
+The development run's `strength-aggregate.json` reports the `defect` class at four eligible, four exercised, four caught, rate 1, comparable, against the declared floor 1, decision `meets`.
+
+### Digests
+
+| Artifact                       | Digest                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| Contract (`contractDigest`)    | `sha256:3fbc635b6f9e0177feb0439becc40701d53d8e5797ae5874c42a4df74663058c` |
+| Sealed brief                   | `sha256:b3a3820bb44ffbf2b44a41413015f5551f8fffa212ae68e2989c13215533abdb` |
+| Evaluator configuration        | `sha256:53efabdca1f1cacc9417653a64e51f93f36706911eed7813fa8f2777c12cc4dc` |
+| Policy                         | `sha256:3aa0032cf92e3ded04f4290499ae32f0a04ee5fad982a9ce4c25a18cdc348fc1` |
+| Stage 6 preflight verdict file | `sha256:a5c50e9d7707212385021ae97b4dcd0be434463e431c0b759b011196222e1eaf` |
+| Stage 6 preflight `run.json`   | `sha256:d94080f900f54f019a0eab9e42e0e1b30c2b8347749acd637a6830eb6f2f00a9` |
+| Development `run.json` file    | `sha256:957acc487da24d4b2522f9d571372f59268b4c1e390f75eac3e2fc6e40f8440a` |
+| Held-out `run.json` file       | `sha256:5092bdfa4101d628c8cf381e016f145f932b771715ae440706a4abdea57cdcd1` |
+
+The development and held-out runs carry the same contract, sealed brief, evaluator configuration and policy digests.
+The policy digest equals Story 1.46's.
+Both runs record `command: run`, `teaVersion: 1.27.2`, `evalQualityVersion: 7.1.0`, `commit: 6ff6384c…`, `dirty: false`, `confinement: opt-out`, `adopterTree.unchanged: true`, `refused: []` and `model.modelSnapshot: claude-sonnet-5`.
+
+### Rollback
+
+Every qualification, in the Stage 6 preflight, the development run and the held-out run, restored the target's bytes: restored digest equal to the pre-mutation digest, mutated digest unequal, and the baseline `held` on attempt 1 of `reExecutionCap` 2.
+`references/gaps.md` is `sha256:800dc1224c4520eea0fba96865eec5a701df30868a3bc809aa33c0ec73e586fd` before and after for M-001, M-002, M-004 and M-005 (one file, restored each time).
+`references/inspection.md` is `sha256:6edf888fd74f25dd745df5bfc91ac6975d8b9fce940b3da7d229a36c62366d7a` before and after for M-003.
+The mutated digests are `sha256:cb372c9f…` (M-001), `sha256:4986c039…` (M-002), `sha256:c98bdb82…` (M-003), `sha256:df39bc2c…` (M-004) and `sha256:f50586d0…` (M-005).
+`gaps.md` was `sha256:2c11a55e…` at Story 1.46's measured commit, and `main` has changed it since.
+
+### Independent re-score
+
+The worker ran eval-quality directly, outside `tea-evaluate`, with each recorded call's arguments (the `argv` that each probe's `score.json` records, with the `--record`, `--contract`, `--probe`, `--preflight-verdict`, `--policy`, `--corpus-digest`, `--isolation-manifest` and `--evaluator-configuration` values unchanged) and a fresh `--out` under the session scratchpad.
+It compared `shasum -a 256` and the exit code with the files `tea-evaluate score` wrote.
+All nine artifacts reproduce byte for byte with exit 0, equal to the exit `tea-evaluate score` recorded.
 
 ## Kept for Epic 2
 
