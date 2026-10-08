@@ -1,0 +1,41 @@
+# tea-test-review on GitLab merge requests.
+#
+# The CLI runs the review and writes the merge-request note text with
+# --comment-out; the job posts that text. GitLab has no `--github` equivalent,
+# so a note is added on every pipeline. The job's exit code is the verdict:
+# make it a required job (or use the merge request pipeline gate) to block
+# merges on it.
+#
+# Variables to set (CI/CD settings, masked):
+#   ANTHROPIC_API_KEY   the agent credential (--agent claude below)
+#   GITLAB_API_TOKEN    a project access token with the `api` scope, to post the note
+#
+# Pin both packages to the exact versions you vetted.
+tea-test-review:
+  stage: test
+  image: node:22
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: "0" # the review diffs changed test files against the target branch
+  script:
+    - npm install --global bmad-method-test-architecture-enterprise@1.28.0 @anthropic-ai/claude-code@2.1.220
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - |
+      status=0
+      tea-test-review --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --agent claude \
+        --run-url "$CI_JOB_URL" --artifact-name tea-test-review \
+        --output test-review.md --json test-review.json --comment-out tea-comment.md || status=$?
+      if [ -s tea-comment.md ]; then
+        curl --silent --fail --request POST --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+          --data-urlencode "body@tea-comment.md" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || echo "could not post the comment"
+      fi
+      exit "$status"
+  artifacts:
+    name: tea-test-review
+    when: always
+    paths:
+      - test-review.md
+      - test-review.json
+      - tea-comment.md

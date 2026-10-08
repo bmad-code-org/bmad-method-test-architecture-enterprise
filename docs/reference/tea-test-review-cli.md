@@ -49,24 +49,94 @@ Three things worth knowing before the first run:
 
 Authentication is whatever your agent CLI already uses. A `claude` or `codex` subscription login stored under `$HOME` is passed through and needs no API key. For claude, the key variables in Prerequisites work as a fallback; for codex they do not, so see the `--agent codex` note above before running anywhere without an interactive login.
 
-## Try it in CI
+## Run it in CI
 
-The fastest path is the standalone [`tea-test-review` action](https://github.com/muratkeremozcan/tea-test-review), which wraps everything below into one step: it installs the CLI and agent, runs the review, and upserts the report as a single pull-request comment.
+The CLI is the whole integration. It runs the same way in any CI, because everything the review needs is in it: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher. A CI job installs the CLI and an agent, logs the agent in, and runs one command.
+
+### GitHub Actions
+
+`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. The job's exit code is the verdict.
 
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0 # the review diffs changed test files against the base ref
-    persist-credentials: false
-
-- uses: muratkeremozcan/tea-test-review@<sha>
-  with:
-    agent: codex
-    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+name: TEA Test Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions: {}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # Forks receive no secrets, so skip them rather than fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the review diffs changed test files against the base ref
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install the pinned CLI and agent
+        run: npm install --global bmad-method-test-architecture-enterprise@<exact version> @anthropic-ai/claude-code@<exact version>
+      - name: Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tea-test-review
+          path: |
+            test-review.md
+            test-review.json
 ```
 
-The job needs `contents: read` and `pull-requests: write`, and forks receive no secrets, so guard it with `if: github.event.pull_request.head.repo.full_name == github.repository`. Prefer the copy-paste workflow under [Example workflow](#example-workflow) instead when you want the two-job shape in your own repository rather than a third-party action.
+Make the job a required status check to gate merges. [`cli/examples/pr-test-review.yml`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is this workflow with the gate-policy flags annotated.
+
+The standalone [`tea-test-review` action](https://github.com/muratkeremozcan/tea-test-review) adds the GitHub-only conveniences around the same CLI: `@mention` triggers with a trusted-author gate, the agent install and login, and the artifact upload.
+
+### GitLab
+
+GitLab has no `--github` equivalent: the CLI runs the review and writes the comment text, and the job posts it. `--base` names the merge request's target branch, and `--run-url` and `--artifact-name` let the comment link the job and its artifact.
+
+```yaml
+tea-test-review:
+  stage: test
+  image: node:22
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: '0'
+  script:
+    - npm install --global bmad-method-test-architecture-enterprise@<exact version> @anthropic-ai/claude-code@<exact version>
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - |
+      status=0
+      tea-test-review --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --agent claude \
+        --run-url "$CI_JOB_URL" --artifact-name tea-test-review \
+        --output test-review.md --json test-review.json --comment-out tea-comment.md || status=$?
+      if [ -s tea-comment.md ]; then
+        curl --silent --fail --request POST --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+          --data-urlencode "body@tea-comment.md" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || echo "could not post the comment"
+      fi
+      exit "$status"
+  artifacts:
+    when: always
+    paths: [test-review.md, test-review.json, tea-comment.md]
+```
+
+`--comment-out` is written for every outcome, including a run that produced no verdict, so a broken gate is posted too. The note is a new one on every pipeline; to update one in place, look up your earlier note by its hidden marker the way `--github` does on GitHub.
+
+### Jenkins, Buildkite and other CIs
+
+Run the same command, then publish `tea-comment.md` wherever the pull request lives. A GitHub repository on Jenkins or Buildkite passes `--github` and a `GITHUB_TOKEN`, along with `--pr <number>` and `--repo <owner/name>` when the job has no `GITHUB_*` variables, and gets the check run and the comment without any GitHub Actions. `--head-sha`, `--run-url` and `--check-name` fill in what a non-Actions run does not carry.
 
 ## Flags
 
@@ -84,6 +154,13 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--pr <number>`                                        | -                                                                  | Pull request number. When `--base` is not given, resolves the PR's base branch through the GitHub API (`GITHUB_TOKEN`, and `GITHUB_REPOSITORY` or `--repo`; `GITHUB_API_URL` for GitHub Enterprise). `GITHUB_BASE_REF`, set on `pull_request` runs, answers without a request. A failed lookup exits 2 and names `--base` as the bypass. Not combinable with `--files`.                                                                                    |
 | `--repo <owner/name>`                                  | `GITHUB_REPOSITORY`                                                | Repository for the `--pr` lookup.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `--retries <n>`                                        | `1` when `CI` is set, else `0`                                     | Extra attempts after an agent or report-parse failure (exit 3). Each attempt starts from no report and no verdict. Exit 1 and 2 are never retried. At most 5, since every attempt is a paid agent run.                                                                                                                                                                                                                                                     |
+| `--comment-out <file>`                                 | -                                                                  | Also write the pull-request comment, rendered from the final verdict, to this file. Written for every outcome, including a failure that left no verdict.                                                                                                                                                                                                                                                                                                   |
+| `--run-url <url>`                                      | built from the `GITHUB_*` variables                                | Link to this CI run, shown in the comment and on the check run.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `--artifact-name <name>`                               | -                                                                  | Name of the artifact the job uploads the report and verdict to. The comment names it as available once the upload step has finished; without this flag the comment promises no artifact.                                                                                                                                                                                                                                                                   |
+| `--github`                                             | off                                                                | Publish to GitHub: open a check run before the review, close it with the verdict, and upsert one pull-request comment. Repository, pull request, token and API URL come from `--repo`, `--pr` and the standard `GITHUB_*` variables. A failure to publish is a warning and never changes the exit code.                                                                                                                                                    |
+| `--head-sha <sha>`                                     | event payload, then the API                                        | Pull request head commit the check run attaches to. Only with `--github`.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `--check-name <name>`                                  | `TEA Test Review`                                                  | Check run name. Branch protection matches it exactly, so the agent is not part of it. Only with `--github`.                                                                                                                                                                                                                                                                                                                                                |
+| `--no-check-run` / `--no-pr-comment`                   | both published                                                     | With `--github`, publish only the comment or only the check run.                                                                                                                                                                                                                                                                                                                                                                                           |
 | `--output <file>`                                      | `test-review.md`                                                   | Report path the agent writes. Passed to the workflow as `output_file_override`, so it replaces the workflow's own default path.                                                                                                                                                                                                                                                                                                                            |
 | `--json <file>`                                        | -                                                                  | Also write the verdict JSON here.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `--agent <agent>`                                      | `claude`                                                           | `agy`, `claude`, or `codex` use built-in adapters; `custom` uses the portable runner contract; `none` prints the prompt only.                                                                                                                                                                                                                                                                                                                              |
@@ -106,6 +183,46 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--use-playwright-utils` / `--no-use-playwright-utils` | resolved (below)                                                   | Force `tea_use_playwright_utils`.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `--use-pactjs-utils` / `--no-use-pactjs-utils`         | resolved (below)                                                   | Force `tea_use_pactjs_utils`.                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `--pact-mcp <mode>`                                    | resolved (below)                                                   | Force `tea_pact_mcp` (`mcp` \| `none`).                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+## The comment, the check run and `render`
+
+One renderer turns the verdict JSON into every human surface, so the pull-request comment, the check-run text and a job summary cannot disagree. It needs no network.
+
+```bash
+tea-test-review render --verdict test-review.json --as comment   # with the hidden marker
+tea-test-review render --verdict test-review.json --as summary   # the same text, no marker
+tea-test-review render --verdict test-review.json --as check     # first line is the check title
+```
+
+`render` also takes `--agent`, `--run-url`, `--artifact-name`, `--focus` and `--exit-code <0-3>`. A verdict file that is missing or unreadable exits 2, unless `--exit-code` says how the review ended, in which case it renders a broken gate.
+
+For a clean pull-request review the comment is a few lines:
+
+```text
+TeA test quality: Pass for the changed tests
+Reviewed 12 changed test files at 61901be9. No findings attributable to this PR.
+```
+
+It leads with the gate verdict and the reviewed head commit. A failing review adds up to three findings that affect the gate, most severe first, each with its severity, `path:line` and its own title; further findings are counted and left to the report. Findings the gate does not count, the raw score, the cap formula, the list of reviewed files and the report itself stay out of the comment. A compact line names the reviewer (agent and model), the TeA CLI version and the rubric version, so scores are compared with the rubric that produced them. The comment never inlines the report.
+
+Each state reads differently:
+
+| State                    | Headline                                                                  | Check run                                                            |
+| ------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Gate passed              | "Pass for the changed tests"                                              | success                                                              |
+| Gate failed              | "Fail:" and the recommendation, the gate failures and the gating findings | failure                                                              |
+| Failure waived           | the recommendation, "waived until" and the date, and the reason           | success                                                              |
+| No changed tests         | "Skipped" and what the pull request did change                            | neutral, or failure when `--fail-on-skip` turns the skip into exit 1 |
+| `--agent none`           | "No review performed", a dry run and not a verdict                        | neutral                                                              |
+| No verdict (exit 2 or 3) | "Broken gate", the cause, and that it is not approved tests               | failure                                                              |
+
+The comment names an uploaded report only when you pass `--artifact-name`, and says the artifact is available once its upload step has finished, because the comment is usually posted before that step runs.
+
+### Publishing with `--github`
+
+`--github` writes these surfaces to GitHub for you. The check run opens before the review starts, so a slow agent shows as in progress on the pull request; it closes with the verdict's conclusion. The comment is found by its hidden marker, tagged by agent, and updated in place, so a push updates one comment and two agents reviewing one pull request keep one comment each. A comment left by an older untagged version is adopted only by the default `claude` agent, so two agents can never overwrite each other's. A re-run adopts the check run an earlier attempt left in progress instead of stacking a second one under the same name.
+
+Publishing is cosmetic to the verdict. The exit code is the verdict, and any failure to publish is a warning on stderr (a `::warning::` annotation on GitHub Actions): a token without `checks: write`, the Checks API refusing a classic personal access token, a missing `pull-requests: write`, no token at all. Use the default `GITHUB_TOKEN` of the job: the Checks API rejects a classic personal access token.
 
 ## What the review is judged against
 
@@ -361,11 +478,9 @@ The finding blocks are read exactly once, and both this cross-check and the verd
 
 ## Example workflow
 
-[Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: two jobs (review + PR comment), full-history checkout, skill and CLI installed from an exactly-pinned npm version, `--skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review"`, artifacts uploaded for both report and verdict JSON, and a find-and-update PR comment that distinguishes pass, fail, skip, and infrastructure failure. Make the `review` job a required status check to gate merges.
+[Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: one job, full-history checkout, the CLI and agent installed from exactly-pinned npm versions, `--github` for the check run and the comment, and an artifact upload for the report and the verdict JSON. Make the job a required status check to gate merges.
 
-The comment carries the score/recommendation/violations digest, review provenance, and up to three `keyWeaknesses` bullets. It inlines the full report in a collapsed `<details>` block (falling back to an artifact link alone above ~40,000 characters, GitHub's comment body cap is 65,536) so a reviewer can paste it straight into an AI coding agent to apply the fixes.
-
-[Adapting it](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/README.md) covers two common real-world shapes: a central reusable-workflows repo, and a repo already using a third-party review bot like CodeRabbit.
+[Adapting it](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/README.md) covers a central reusable-workflows repo, a repo already using a third-party review bot like CodeRabbit, and GitLab.
 
 ## Security model
 

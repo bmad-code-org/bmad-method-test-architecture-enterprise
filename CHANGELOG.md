@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-test-review` renders and publishes its own result surfaces, so any CI gets what the GitHub Action used to supply.
+  `tea-test-review render --verdict <file> --as comment|check|summary` prints the pull-request comment, the check-run text or a job summary from a verdict file, with no network. `--comment-out <file>` writes the comment on a review run, also when the run produced no verdict.
+  The comment leads with the gate verdict and the reviewed head SHA and lists only the findings that affect the gate, at most three, each with its severity, `path:line` and its own title. Two findings under one registry row keep both titles, where the Action's comment showed the second title twice. Skip, dry-run, waiver and broken-gate states are explicit. The comment inlines no report and names an artifact only when `--artifact-name` says the job uploads one.
+  `--github` opens a check run before the review, closes it with the verdict, and upserts one comment on its hidden marker (one per agent, a legacy untagged comment adopted only by `claude`, an open check run adopted on a re-run). Repository, pull request, token and API URL come from `--repo`, `--pr` and the `GITHUB_*` variables; `--head-sha`, `--check-name`, `--run-url`, `--no-check-run` and `--no-pr-comment` adjust it. A failure to publish is a warning and never changes the exit code.
+  The CLI reference documents the CLI as the primary entry point, with GitHub Actions, GitLab and local examples. `cli/examples/pr-test-review.yml` is now one job that runs `--github`, and `cli/examples/gitlab-ci.yml` is new.
 - `tea-test-review` covers three things the GitHub Action works around today: the skill outside the checkout, the retry after an exit 3, and the base-branch lookup.
   `--project-skill` reviews with the skill a project vendored; the control-plane guard still stops a diff that edits it.
   `--retries <n>` repeats a run after an agent or report-parse failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried. On GitHub Actions each retry also raises a `::warning::` annotation.
