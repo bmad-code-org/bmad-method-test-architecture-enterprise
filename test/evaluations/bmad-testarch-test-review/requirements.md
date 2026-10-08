@@ -14,8 +14,8 @@ Run as `tea-test-review` on a pull request, the review gates only on what the pu
 - **B-008, low.** Criteria that do not apply to the repository are absent from the verdict, and wall-clock duration is reported as not measured when nothing executed the tests.
 - **B-009, material.** An explicit full-file review (`--files`) reports every seeded old defect and names its mode as full-file. A pull request review names its mode as pr.
 
-Some of these fail on the current release by design: B-001's report half, B-006, B-007, B-008, and B-009's mode name.
-The first live run records that as the before state and is not accepted as a baseline.
+These fail on the current release, as measured by the 2026-10-08 preflight: B-001's report half, B-004, B-006, B-007, and B-009's mode name.
+That preflight is the before state; the first accepted baseline comes after the fixes.
 
 ## Admissible evidence
 
@@ -27,7 +27,7 @@ Agent prose in free-text fields is never evidence.
 
 ## Interfaces and resources in scope
 
-A small adopter-owned wrapper in the evaluation folder builds a disposable git repository from a probe's base and pull-request trees, commits both, and runs `node cli/test-review.js --agent claude --skill-root skills/bmad-testarch-test-review --base-ref <base>` against it, passing the CLI's exit code and stdout through unchanged.
+A small adopter-owned wrapper, `test/fixtures/test-review-evaluation/review-fixture.mjs`, builds a disposable git repository from a probe's base and pull-request trees, commits both, and runs `node cli/test-review.js --agent claude --skill-root skills/bmad-testarch-test-review --base <base>` against it, passing the CLI's exit code and stdout through unchanged.
 The review skill under test is this repository's working copy of `skills/bmad-testarch-test-review/`.
 The agent may read the disposable repository and the skill; the CLI's own isolation stays on.
 Fixture repositories are synthetic.
@@ -67,4 +67,4 @@ Feared:
 - a narrowed pull request report that drops a real regression whose symptom sits on an unchanged assertion;
 - a report-size reduction that loses findings in full-file mode.
 
-Confirmed by: the owner (Murat), 2026-10-08, as drafted, three trials on the CLI default Claude model.
+Confirmed by: the owner (Murat), 2026-10-08, as drafted, three trials on the CLI default Claude model; the before-state list and wrapper command corrected to the measured preflight the same day.
