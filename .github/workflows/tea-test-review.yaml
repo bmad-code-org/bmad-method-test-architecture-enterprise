@@ -9,9 +9,10 @@
 # `github.event_name == 'pull_request'`: under workflow_dispatch they are
 # skipped. A run without either secret would just fail and post a confusing
 # broken-gate comment on every real PR. The steps stay real instead of
-# commented out so actionlint (test:workflows-lint) checks them, and so the
-# verdict step's `steps.run-review.outcome` resolves. A skipped step's outcome is
-# `skipped`, which the verdict step reports as "failed".
+# commented out so actionlint (test:workflows-lint) checks them. The verdict step
+# exports the outcome as a job output for jobs that `needs` this one, and its
+# `steps.run-review.outcome` read doubles as the lint check's negative control.
+# A skipped step's outcome is `skipped`, which the verdict step reports as "failed".
 #
 # To enable: add one of the two secrets and switch `on:` back to
 # `pull_request: { types: [opened, synchronize, reopened] }`. The agent steps

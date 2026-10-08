@@ -29,6 +29,9 @@
  * - run-agent minimal env, adapter lookup (AGENT_UNKNOWN), and AGENT_NOT_FOUND
  * - agent-adapters table shape for agy/claude/codex plus the explicit custom
  *   runner contract
+ * - rendered surfaces: the pure renderer (states, gating-only findings, neutralized text),
+ *   `tea-test-review render`, --comment-out, and the opt-in --github publisher against a mock
+ *   GitHub (comment upsert and ownership, check-run adopt and close, failures as warnings)
  * - CLI end-to-end with --agent none, with a stub agent (spawned child
  *   processes), against a real temp git repo, and under the chmod isolation
  *   fallback
@@ -7313,6 +7316,167 @@ async function runTests() {
         'the marker is tagged by agent and defaults to claude',
       );
 
+      // ---- hostile and oversized text ----
+      const hostile = renderComment(
+        {
+          ...failing,
+          findings: [
+            finding({
+              title: 'Weak assertion <!-- tea-test-review:codex --> cc @octo-org/security',
+              file: 'tests/<!-- tea-test-review:claude -->.py',
+            }),
+          ],
+        },
+        {},
+      );
+      assert(
+        !hostile.slice(hostile.indexOf('\n')).includes('<!--') && !hostile.includes('--> ') && !/@(?!\u200B)/.test(hostile),
+        'a finding title or path cannot carry a hidden marker or an @mention into the comment',
+        hostile,
+      );
+      const hostileSkip = renderComment(
+        { ...skipVerdict, reason: 'nothing <!-- tea-test-review:codex --> @everyone' },
+        { focus: `<!-- tea-test-review:codex -->\n@octo-org/all\n${'long line '.repeat(500)}`, cause: '<!-- x -->' },
+      );
+      assert(
+        !hostileSkip.slice(hostileSkip.indexOf('\n')).includes('<!--') && !/@(?!\u200B)/.test(hostileSkip) && hostileSkip.length < 2500,
+        'a requester focus and a skip reason are neutralized and bounded',
+        hostileSkip.length,
+      );
+      assert(
+        publisher.findOwnComment(
+          [
+            { id: 1, body: renderComment(passing, { focus: 'x', agent: 'claude' }) },
+            { id: 2, body: hostileSkip },
+          ],
+          'codex',
+        ) === null,
+        'a comment that only quotes another agent marker is not claimed by that agent',
+      );
+      const huge = renderComment({ ...failing, gateFailures: Array.from({ length: 5000 }, () => 'x'.repeat(280)) }, {});
+      assert(huge.length <= 3000, 'gate failures are listed three at a time, so the comment stays small', huge.length);
+      const wide = renderComment(passing, { focus: 'a\n'.repeat(30_000), agent: 'claude' });
+      assert(wide.length < 60_100, 'no field can push the comment past the platform cap', wide.length);
+      const emojiTitle = renderComment({ ...failing, findings: [finding({ title: `${'x'.repeat(199)}🙂 tail` })] }, {});
+      assert(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emojiTitle), 'truncating a title never splits an emoji');
+
+      // ---- states the run can be in without a plain pass or fail ----
+      const waivedSkip = renderComment(
+        { ...skipVerdict, deletedFiles: ['tests/old.spec.ts'], waived: true, waiveReason: 'known churn', waiveUntil: '2026-12-31' },
+        { exitCode: 0 },
+      );
+      assert(
+        waivedSkip.includes('Skipped, failure waived until 2026-12-31') &&
+          waivedSkip.includes('known churn') &&
+          renderCheck({ ...skipVerdict, waived: true }, { exitCode: 0 }).conclusion === 'neutral',
+        'a waived skip names its waiver and reason',
+        waivedSkip,
+      );
+      const deletionSkip = {
+        ...skipVerdict,
+        reason: 'only test deletions in diff; nothing to review',
+        deletedFiles: ['tests/old.spec.ts'],
+      };
+      assert(
+        renderCheck(deletionSkip, {}).conclusion === 'failure' && renderCheck(deletionSkip, {}).title === 'Skipped, which fails this gate',
+        'a deletions-only skip fails the gate even when the caller gives no exit code',
+      );
+      const dryLong = renderComment({ ...dry, files: Array.from({ length: 14 }, (_, i) => `tests/f${i}.py`) }, {});
+      assert(
+        dryLong.includes('Files that would have been reviewed: 14.') &&
+          dryLong.includes('- `tests/f0.py`') &&
+          dryLong.includes('- `tests/f9.py`') &&
+          !dryLong.includes('f10.py') &&
+          dryLong.includes('... and 4 more'),
+        'a dry run lists up to ten of its files, because the file set is its whole output',
+        dryLong,
+      );
+      assert(
+        renderComment(passing, { headSha: 'abcdef0123456789' }).includes('at `abcdef01`') &&
+          renderComment({ ...passing, reviewProvenance: {} }, { headSha: 'abcdef0123456789' }).includes('at `abcdef01`'),
+        'the head commit the caller names outranks the checkout HEAD in the verdict',
+      );
+      const located = renderComment(passing, { reportPath: 'out/test-review.md', runUrl: 'https://ci.example/run/9' });
+      assert(
+        located.includes(
+          'The report is in the job workspace at `out/test-review.md` and is deleted when the job ends unless the job uploads it.',
+        ) && located.includes('[Workflow run](https://ci.example/run/9)'),
+        'without an artifact the comment says where the report is and that it does not outlive the job',
+        located,
+      );
+      assert(
+        renderComment(passing, { reportMissing: true }).includes('The review wrote no report.') &&
+          !renderComment(passing, { reportMissing: true, artifactName: 'tea' }).includes('wrote no report'),
+        'a missing report is said, but only when no artifact is promised instead',
+      );
+      assert(
+        publisher.clampBytes('🙂'.repeat(20_000), 65_535).length > 0 &&
+          !/[\uD800-\uDBFF]$/.test(publisher.clampBytes('🙂'.repeat(20_000), 65_535).replace(/\n\n_\(truncated\)_$/, '')),
+        'clampBytes never ends on half of a surrogate pair',
+      );
+      assert(
+        publisher.findOwnComment(
+          [
+            { id: 1, body: 'lgtm <!-- tea-test-review:claude -->', user: { type: 'User' } },
+            { id: 2, body: `${buildCommentMarker('claude')}\n## TeA`, user: { type: 'User' } },
+            { id: 3, body: `${buildCommentMarker('claude')}\n## TeA`, user: { type: 'Bot' } },
+          ],
+          'claude',
+        ).id === 3 && publisher.findOwnComment([{ id: 1, body: 'lgtm <!-- tea-test-review:claude -->' }], 'claude') === null,
+        'a comment that only contains the marker is not ours, and a bot-written one outranks a person-written one',
+      );
+
+      // ---- the exit code is the authority on a leftover verdict ----
+      const brokenWithVerdict = renderComment(passing, { exitCode: 3 });
+      assert(
+        brokenWithVerdict.includes('Broken gate') &&
+          !brokenWithVerdict.includes('Reviewer:') &&
+          brokenWithVerdict.includes('Head `61901be9`'),
+        'exit 3 with a leftover verdict is still a broken gate, with no reviewer line and the head commit named',
+        brokenWithVerdict,
+      );
+      assert(
+        renderComment({ ...failing, waived: true, waiveReason: 'r', waiveUntil: '2027-01-01' }, { exitCode: 0 }).includes(
+          'waived until 2027-01-01',
+        ) && renderComment({ ...passing, gateFailures: ['stale'] }, { exitCode: 0 }).includes('Pass for the changed tests'),
+        'exit 0 means the gate passed even when the verdict file still lists failures',
+      );
+      const fiveFailures = renderComment({ ...failing, findings: [], gateFailures: ['a', 'b', 'c', 'd', 'e'] }, {});
+      assert(
+        fiveFailures.includes('- a') &&
+          fiveFailures.includes('- c') &&
+          !fiveFailures.includes('- d') &&
+          fiveFailures.includes('... and 2 more in the verdict JSON'),
+        'gate failures are listed three at a time with the rest counted',
+        fiveFailures,
+      );
+      assert(
+        renderComment({ ...passing, model: undefined, reviewProvenance: { ...provenance, modelIdentifier: 'claude-x' } }, {}).includes(
+          'claude / claude-x',
+        ),
+        'the model falls back to the provenance model identifier',
+      );
+      assert(publisher.clampBytes('x'.repeat(100), 100) === 'x'.repeat(100), 'clampBytes keeps text of exactly the budget');
+      const warned = [];
+      const realError = console.error;
+      console.error = (line) => warned.push(line);
+      publisher.defaultWarn('careful', { GITHUB_ACTIONS: 'true' });
+      publisher.defaultWarn('careful', {});
+      console.error = realError;
+      assert(
+        warned[0] === '::warning::tea-test-review: careful' && warned[1] === 'tea-test-review WARNING: careful',
+        'a publishing warning is an annotation on GitHub Actions and plain text elsewhere',
+        warned.join('|'),
+      );
+      assert(
+        (await publisher.resolveHeadSha(
+          { headSha: 'abc', payload: { pull_request: { head: { sha: 'fromevent' } } } },
+          { owner: 'o', repo: 'r' },
+          7,
+        )) === 'abc',
+        'a --head-sha flag outranks the event payload',
+      );
+
       // ---- tea-test-review render ----
       const renderDir = path.join(tmpRoot, 'b2-render');
       fs.mkdirSync(renderDir, { recursive: true });
@@ -7362,19 +7526,67 @@ async function runTests() {
       fs.writeFileSync(path.join(renderDir, 'garbage.json'), '{not json');
       const renderGarbage = runCli(['render', '--verdict', path.join(renderDir, 'garbage.json'), '--exit-code', '2']);
       assert(
-        renderGarbage.status === 0 && renderGarbage.stdout.includes('Broken gate'),
+        renderGarbage.status === 0 && renderGarbage.stdout.includes('Broken gate') && renderGarbage.stdout.includes('(exit 2)'),
         'an unparseable verdict file renders as a broken gate when the exit code is given',
       );
       for (const [label, args, expected] of [
-        ['a bad --as', ['--as', 'html'], '--as must be comment, check or summary'],
+        ['a bad --as', ['--as', 'html'], '--as must be comment, check, summary or conclusion'],
         ['a bad --exit-code', ['--exit-code', '9'], '--exit-code must be 0, 1, 2 or 3'],
         ['a missing --verdict', null, "required option '--verdict"],
       ]) {
         const bad = runCli(['render', ...(args === null ? [] : ['--verdict', renderVerdict, ...args])]);
         assert(bad.status === 2 && bad.stderr.includes(expected), `render with ${label} exits 2`, `status=${bad.status} ${bad.stderr}`);
       }
+      fs.writeFileSync(path.join(renderDir, 'not-a-verdict.json'), '{"name":"package"}');
+      const notVerdict = runCli(['render', '--verdict', path.join(renderDir, 'not-a-verdict.json')]);
+      assert(
+        notVerdict.status === 2 && notVerdict.stderr.includes('not a verdict or skip payload'),
+        'render refuses JSON that is not a verdict instead of calling it a pass',
+        notVerdict.stderr,
+      );
+      fs.writeFileSync(path.join(renderDir, 'passing.json'), JSON.stringify({ ...passing, findings: [] }));
+      for (const [label, args, expected] of [
+        ['exit 0 for a verdict with unwaived gate failures', ['--verdict', renderVerdict, '--exit-code', '0'], 'different runs'],
+        [
+          'exit 1 for a verdict with no gate failure',
+          ['--verdict', path.join(renderDir, 'passing.json'), '--exit-code', '1'],
+          'different runs',
+        ],
+        ['exit 0 with no verdict at all', ['--verdict', path.join(renderDir, 'nope.json'), '--exit-code', '0'], 'different runs'],
+        ['a malformed --head-sha', ['--verdict', renderVerdict, '--head-sha', 'zz'], '--head-sha must be a commit SHA'],
+      ]) {
+        const refused = runCli(['render', ...args]);
+        assert(
+          refused.status === 2 && refused.stderr.includes(expected),
+          `render refuses ${label}`,
+          `status=${refused.status} ${refused.stderr}`,
+        );
+      }
+      const conclusions = ['failure', 'success'].map((expected, index) => [
+        expected,
+        runCli([
+          'render',
+          '--verdict',
+          index === 0 ? renderVerdict : path.join(renderDir, 'passing.json'),
+          '--as',
+          'conclusion',
+        ]).stdout.trim(),
+      ]);
+      assert(
+        conclusions.every(([expected, actual]) => expected === actual),
+        'render --as conclusion prints the check run conclusion',
+        JSON.stringify(conclusions),
+      );
+      const renderHead = runCli(['render', '--verdict', renderVerdict, '--head-sha', 'abcdef0123', '--report-path', 'out/r.md']);
+      assert(
+        renderHead.stdout.includes('at `abcdef01`') && renderHead.stdout.includes('`out/r.md`'),
+        'render takes the head commit and the report location',
+      );
       assert(runCli(['render', '--help']).status === 0, 'render --help exits 0');
-      assert(renderGarbage.stderr === '' || !renderGarbage.stderr.includes('    at '), 'render never prints a stack');
+      assert(
+        ![renderMissing, renderGarbage, renderBroken, renderDefault].some((run) => run.stderr.includes('    at ')),
+        'render never prints a stack',
+      );
 
       // ---- comment ownership (ported from the action's findOwnComment tests) ----
       const tagged = (agent, extra = '') => ({ body: `${buildCommentMarker(agent)}\n## TeA test quality: Pass${extra}` });
@@ -7640,6 +7852,7 @@ async function runTests() {
         await pub.finish({ exitCode: 0, verdict: passing });
         assert(
           mock.checkRuns[0].status === 'completed' &&
+            mock.checkRuns[0].conclusion === 'success' &&
             mock.checkRuns[0].output.title === 'Review in progress' &&
             warnings.some((m) => /closed as success without one/.test(m)),
           'when the summary is rejected the run is closed bare with its conclusion and the loss is warned about',
@@ -7752,8 +7965,10 @@ async function runTests() {
         assert(
           ghAgain.status === 0 &&
             mock.comments.length === 1 &&
-            urls().filter((u) => u === 'POST /repos/o/r/issues/7/comments').length === 1,
-          'a second run updates the comment instead of adding one',
+            urls().filter((u) => u === 'POST /repos/o/r/issues/7/comments').length === 1 &&
+            mock.checkRuns.length === 2 &&
+            mock.checkRuns.every((run) => run.status === 'completed'),
+          'a second run updates the comment instead of adding one, and a finished check run is never adopted',
         );
 
         // Two agents on one PR keep one comment each.
@@ -8016,20 +8231,230 @@ async function runTests() {
           `status=${outEarly.status} ${outEarly.stderr}`,
         );
 
+        // The flags reach the surfaces: run URL, focus, head SHA over payload, and no promised artifact.
+        resetMock();
+        const wiredEvent = path.join(tmpRoot, 'b2-wired-event.json');
+        fs.writeFileSync(wiredEvent, JSON.stringify({ pull_request: { number: 7, head: { sha: 'f00dfeed12345678' } } }));
+        const urlComment = path.join(tmpRoot, 'b2-comment', 'url.md');
+        const ghWired = await runCliAsync(
+          [
+            '--project-root',
+            b2Repo,
+            '--files',
+            '',
+            '--github',
+            '--pr',
+            '7',
+            '--head-sha',
+            'abc1234',
+            '--run-url',
+            'https://ci.example/run/77',
+            '--focus',
+            'check retries',
+            '--comment-out',
+            urlComment,
+          ],
+          ghEnv('wired', { GITHUB_EVENT_PATH: wiredEvent }),
+        );
+        const wiredComment = mock.comments[0]?.body ?? '';
+        assert(
+          ghWired.status === 0 &&
+            wiredComment.includes('> check retries') &&
+            wiredComment.includes('[Workflow run](https://ci.example/run/77)') &&
+            mock.checkRuns[0]?.details_url === 'https://ci.example/run/77' &&
+            mock.checkRuns[0]?.head_sha === 'abc1234' &&
+            wiredComment.includes('Head `abc1234`') &&
+            !wiredComment.includes('upload step') &&
+            fs.readFileSync(urlComment, 'utf8') === `${wiredComment}\n`,
+          '--run-url, --focus and --head-sha (over the event payload) reach the comment, the check run and the comment file; no artifact is promised without a name',
+          `${ghWired.stderr} ${wiredComment}`,
+        );
+        resetMock();
+        const ghPassComment = await runCliAsync(ghArgs('plain'), ghEnv('plain'));
+        assert(
+          ghPassComment.status === 0 &&
+            !/upload step/.test(mock.comments[0]?.body ?? '') &&
+            /job workspace at `.*test-review\.md`/.test(mock.comments[0]?.body ?? ''),
+          'a --github run without --artifact-name promises no artifact and says where the report is',
+          mock.comments[0]?.body,
+        );
+
+        // A head SHA nobody can name: no check run, one warning, the review still runs.
+        resetMock();
+        mock.rules.push({ method: 'GET', match: /\/pulls\/7$/, status: 200, body: { head: {}, base: { ref: 'main' } } });
+        const ghNoSha = await runCliAsync([...ghArgs('nosha', [], { github: false }), '--github', '--pr', '7'], ghEnv('nosha'));
+        assert(
+          ghNoSha.status === 0 &&
+            !urls().some((u) => /check-runs/.test(u)) &&
+            (ghNoSha.stderr.match(/Could not resolve the head SHA/g) ?? []).length === 1 &&
+            mock.comments.length === 1,
+          'a head SHA that cannot be resolved warns once, skips the check run and still publishes the comment',
+          `status=${ghNoSha.status} ${ghNoSha.stderr} ${urls().join(' | ')}`,
+        );
+
+        // A relative --comment-out lands under --project-root.
+        const relative = await runCliAsync(
+          ['--project-root', b2Repo, '--files', '', '--comment-out', 'out/relative-comment.md'],
+          ghEnv('relative'),
+        );
+        assert(
+          relative.status === 0 && fs.existsSync(path.join(b2Repo, 'out', 'relative-comment.md')),
+          'a relative --comment-out resolves against --project-root',
+          relative.stderr,
+        );
+
         // Misuse is refused up front.
         for (const [label, extra, expected] of [
-          ['--head-sha without --github', ['--head-sha', 'abc1234'], '--head-sha only applies to --github'],
+          [
+            '--head-sha without --github or --comment-out',
+            ['--head-sha', 'abc1234'],
+            '--head-sha only applies to --github or --comment-out',
+          ],
           ['--check-name without --github', ['--check-name', 'x'], '--check-name only applies to --github'],
           ['--no-check-run without --github', ['--no-check-run'], '--no-check-run only applies to --github'],
           ['--no-pr-comment without --github', ['--no-pr-comment'], '--no-pr-comment only applies to --github'],
           ['a malformed --head-sha', ['--github', '--head-sha', 'not-a-sha'], '--head-sha must be a commit SHA'],
           ['nothing left to publish', ['--github', '--no-check-run', '--no-pr-comment'], 'leave --github nothing to publish'],
+          ['--github with --agent none', ['--github', '--agent', 'none'], '--github publishes a review, and --agent none runs none'],
+          ['--pr with --files and no --github', ['--pr', '7'], '--pr resolves the git base ref'],
           ['a bad --run-url', ['--run-url', 'ftp://x'], '--run-url must be an http(s) URL'],
           ['an empty --artifact-name', ['--artifact-name', ' '], '--artifact-name must not be empty'],
         ]) {
-          const bad = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProjectForB2, ...extra]);
+          const bad = runCli(['--files', 'x.spec.ts', '--project-root', emptyProjectForB2, ...extra]);
           assert(bad.status === 2 && bad.stderr.includes(expected), `${label} exits 2`, `status=${bad.status} ${bad.stderr}`);
         }
+
+        // --comment-out must not overwrite the artifacts it sits beside.
+        for (const [label, flag] of [
+          ['--json', 'json'],
+          ['--output', 'output'],
+        ]) {
+          const target = path.join(tmpRoot, 'b2-collide', `${flag}.out`);
+          const collide = await runCliAsync(
+            ['--base', 'main', '--project-root', b2Repo, '--agent', 'none', `--${flag}`, target, '--comment-out', target],
+            ghEnv('collide'),
+          );
+          assert(
+            collide.status === 2 && collide.stderr.includes('--comment-out must not resolve to the same file') && !fs.existsSync(target),
+            `--comment-out equal to ${label} exits 2 before anything is written`,
+            `status=${collide.status} ${collide.stderr}`,
+          );
+        }
+
+        // A refused flag still owes the comment file, and never leaves an old one as the answer.
+        const staleComment = path.join(tmpRoot, 'b2-comment', 'stale.md');
+        fs.mkdirSync(path.dirname(staleComment), { recursive: true });
+        fs.writeFileSync(staleComment, 'STALE PASS COMMENT');
+        const refusedFlag = await runCliAsync(
+          [
+            '--project-root',
+            b2Repo,
+            '--files',
+            'x.spec.ts',
+            '--waive',
+            'legacy',
+            '--waive-until',
+            '2020-01-01',
+            '--comment-out',
+            staleComment,
+          ],
+          ghEnv('stale'),
+        );
+        const staleText = fs.readFileSync(staleComment, 'utf8');
+        assert(
+          refusedFlag.status === 2 && staleText.includes('Broken gate') && !staleText.includes('STALE') && staleText.includes('exit 2'),
+          '--comment-out replaces an old comment with the broken-gate text when a flag is refused',
+          `status=${refusedFlag.status} ${staleText}`,
+        );
+
+        // The pull request head the surfaces name is the PR's, not the merge checkout's HEAD.
+        resetMock();
+        const headFile = path.join(tmpRoot, 'b2-head.json');
+        fs.writeFileSync(headFile, JSON.stringify({ pull_request: { number: 7, head: { sha: 'f00dfeed12345678' } } }));
+        const ghHead = await runCliAsync(
+          [...ghArgs('headsha', [], { github: false }), '--github'],
+          ghEnv('headsha', { GITHUB_EVENT_PATH: headFile }),
+        );
+        assert(
+          ghHead.status === 0 && mock.comments[0]?.body.includes('at `f00dfeed`') && mock.checkRuns[0]?.output.summary.includes('f00dfeed'),
+          'the comment and the check run name the pull request head, not the checkout HEAD',
+          `${mock.comments[0]?.body}`,
+        );
+        const commentHeadFile = path.join(tmpRoot, 'b2-comment', 'head.md');
+        const ghHeadFlag = await runCliAsync(
+          ghArgs('headflag', ['--head-sha', 'abcdef0123', '--comment-out', commentHeadFile], { github: false }),
+          ghEnv('headflag'),
+        );
+        assert(
+          ghHeadFlag.status === 0 && fs.readFileSync(commentHeadFile, 'utf8').includes('at `abcdef01`'),
+          '--head-sha sets the commit --comment-out names',
+          ghHeadFlag.stderr,
+        );
+
+        // --pr names the publish target when --files skips git.
+        resetMock();
+        const ghFiles = await runCliAsync(
+          [
+            '--project-root',
+            b2Repo,
+            '--files',
+            'tests/checkout.spec.ts',
+            '--agent-cmd',
+            stubAgent,
+            '--no-isolate',
+            '--output',
+            path.join(tmpRoot, 'b2-files', 'r.md'),
+            '--github',
+            '--pr',
+            '7',
+            '--head-sha',
+            'abc1234',
+            ...stubPass('STUB_MODE', 'STUB_COUNTER'),
+          ],
+          ghEnv('files'),
+        );
+        assert(
+          ghFiles.status === 0 && mock.comments.length === 1 && !urls().includes('GET /repos/o/r/pulls/7'),
+          '--github --pr publishes a --files run with no base lookup',
+          `status=${ghFiles.status} ${ghFiles.stderr} ${urls().join(' | ')}`,
+        );
+
+        // The check run another agent opened is not ours to adopt.
+        resetMock();
+        mock.checkRuns.push({
+          id: 61,
+          name: 'TEA Test Review',
+          status: 'in_progress',
+          output: { summary: 'The TEA test review is running on codex. [Live log](x)' },
+        });
+        const ghOther = await runCliAsync(ghArgs('otheragent'), ghEnv('otheragent'));
+        assert(
+          ghOther.status === 0 &&
+            mock.checkRuns.length === 2 &&
+            mock.checkRuns[0].status === 'in_progress' &&
+            mock.checkRuns[1].conclusion === 'success',
+          'a check run another agent has open under the same name is left alone and this agent opens its own',
+          urls().join(' | '),
+        );
+
+        // A report the run was meant to write but did not.
+        resetMock();
+        const noReportComment = path.join(tmpRoot, 'b2-comment', 'noreport.md');
+        const noReport = await runCliAsync(
+          ghArgs('noreport', ['--comment-out', noReportComment], { github: false }),
+          ghEnv('noreport', { STUB_MODE: 'fail' }),
+        );
+        assert(
+          noReport.status === 3 && fs.readFileSync(noReportComment, 'utf8').includes('The review wrote no report.'),
+          'a broken gate that left no report says so',
+          `status=${noReport.status}`,
+        );
+        const withReport = fs.readFileSync(commentFile, 'utf8');
+        assert(
+          withReport.includes('`tea-review` artifact') || withReport.includes('job workspace'),
+          'a passing run names where its report is',
+          withReport,
+        );
       } finally {
         mockServer.close();
       }

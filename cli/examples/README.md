@@ -1,6 +1,6 @@
 # CLI examples
 
-`pr-test-review.yml` is the full annotated GitHub Actions template, start there. `gitlab-ci.yml` is the same review on GitLab merge requests. The sections below cover real adaptations.
+`pr-test-review.yml` is the full annotated GitHub Actions template, start there. `gitlab-ci.yaml` is the same review on GitLab merge requests. The sections below cover real adaptations.
 
 ## A central reusable-workflows repo
 

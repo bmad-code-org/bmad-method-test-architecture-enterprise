@@ -18,6 +18,11 @@ const LEGACY_COMMENT_MARKER = '<!-- tea-test-review -->';
 const MAX_LISTED_FINDINGS = 3;
 const MAX_LISTED_GATE_FAILURES = 3;
 const MAX_CAUSE_CHARS = 400;
+const MAX_FOCUS_CHARS = 600;
+const MAX_FOCUS_LINES = 8;
+const MAX_LISTED_DRY_RUN_FILES = 10;
+// GitHub rejects a comment body over 65,536 characters; this leaves room for what the cut adds.
+const MAX_COMMENT_CHARS = 60_000;
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const PASSING_RECOMMENDATIONS = new Set(['Approve', 'Approve with Comments']);
 
@@ -33,8 +38,11 @@ const EXIT_MEANING = {
  * reviewing one pull request keep one comment each.
  */
 function buildCommentMarker(agent = 'claude') {
-  const tag = String(agent || 'claude').trim() || 'claude';
-  return `<!-- tea-test-review:${tag} -->`;
+  // The tag is part of a hidden marker another run searches for, so it keeps to a safe alphabet.
+  const tag = String(agent || 'claude')
+    .trim()
+    .replaceAll(/[^\w.-]/g, '_');
+  return `<!-- tea-test-review:${tag || 'claude'} -->`;
 }
 
 function exitMeaning(exitCode) {
@@ -55,16 +63,35 @@ function fileList(value) {
   return (Array.isArray(value) ? value : []).filter((file) => isNonEmptyString(file));
 }
 
+/** Cut to `limit` UTF-16 units without leaving half of a surrogate pair behind. */
+function cut(text, limit) {
+  if (text.length <= limit) return text;
+  const end = /[\uD800-\uDBFF]/.test(text[limit - 1]) ? limit - 1 : limit;
+  return text.slice(0, end);
+}
+
+/**
+ * Text that came from an agent, a file path, a requester or a verdict file, made safe to place in
+ * a comment: it can no longer carry an HTML comment (and so another run's hidden marker) or ping
+ * a person or team with an @mention.
+ */
+function plain(text) {
+  return String(text ?? '')
+    .replaceAll('<!--', '< !--')
+    .replaceAll('-->', '-- >')
+    .replaceAll(/@(?!\u200B)/g, '@\u200B');
+}
+
 function bounded(text, limit) {
   const flat = String(text ?? '')
     .replaceAll(/\s+/g, ' ')
     .trim();
-  return flat.length > limit ? `${flat.slice(0, limit)}...` : flat;
+  return plain(flat.length > limit ? `${cut(flat, limit)}...` : flat);
 }
 
 /** A code span that cannot be closed early by a backtick inside the text. */
 function code(text) {
-  return `\`${String(text).replaceAll('`', "'")}\``;
+  return `\`${plain(text).replaceAll('`', "'")}\``;
 }
 
 function severityRank(severity) {
@@ -104,6 +131,33 @@ function countsLine(counts) {
   return SEVERITY_ORDER.map(part).join(' / ');
 }
 
+/** Whether a parsed JSON value has the shape of a verdict or skip payload this CLI writes. */
+function looksLikeVerdict(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (value.promptOnly === true || value.skipped === true) return true;
+  return typeof value.recommendation === 'string' && typeof value.gatingViolations === 'object' && value.gatingViolations !== null;
+}
+
+/**
+ * Why an exit code and a verdict cannot both be true of one run, or null. A caller that renders a
+ * run from its verdict file and its exit code gets text that contradicts itself when they come
+ * from different runs, so the pair is refused instead of rendered.
+ */
+function contradiction(verdict, exitCode) {
+  if (exitCode === undefined || exitCode === null) return null;
+  if (!looksLikeVerdict(verdict)) {
+    return exitCode === 0 || exitCode === 1
+      ? `exit code ${exitCode} says the run produced a verdict, and the verdict file is missing or is not one`
+      : null;
+  }
+  if (verdict.promptOnly === true) return exitCode === 0 ? null : `a dry run (--agent none) exits 0, not ${exitCode}`;
+  if (verdict.skipped === true) return null;
+  const failing = Array.isArray(verdict.gateFailures) && verdict.gateFailures.length > 0 && verdict.waived !== true;
+  if (exitCode === 0 && failing) return 'exit code 0 says the gate passed, and the verdict carries unwaived gate failures';
+  if (exitCode === 1 && !failing) return 'exit code 1 says the gate failed, and the verdict carries no gate failure';
+  return null;
+}
+
 /**
  * Decide which state the run is in. The exit code, when the caller has it, is the authority on
  * whether the gate failed, because it folds in every threshold flag and waiver; without it the
@@ -115,7 +169,13 @@ function classify(verdict, exitCode) {
     return { state: 'broken', gateFailed: true };
   }
   if (verdict.promptOnly === true) return { state: 'dry-run', gateFailed: false };
-  if (verdict.skipped === true) return { state: 'skipped', gateFailed: exitCode === 1 };
+  if (verdict.skipped === true) {
+    // A deletions-only skip fails the gate unless it is waived; a --fail-on-skip skip leaves no
+    // trace in the payload, so only the exit code can say so.
+    const deletionsOnly = Array.isArray(verdict.deletedFiles) && verdict.deletedFiles.length > 0;
+    const inferred = deletionsOnly && verdict.waived !== true;
+    return { state: 'skipped', gateFailed: exitCode === undefined || exitCode === null ? inferred : exitCode === 1 };
+  }
   const failures = Array.isArray(verdict.gateFailures) ? verdict.gateFailures : [];
   const failedByVerdict = failures.length > 0 && verdict.waived !== true;
   const gateFailed = exitCode === undefined || exitCode === null ? failedByVerdict : exitCode !== 0;
@@ -133,11 +193,14 @@ function scopeSentence(verdict, files, sha) {
 
 function reviewerLine(verdict) {
   const provenance = verdict.reviewProvenance && typeof verdict.reviewProvenance === 'object' ? verdict.reviewProvenance : {};
-  const reviewer = [verdict.agent, verdict.model ?? provenance.modelIdentifier].filter(isNonEmptyString).join(' / ');
+  const reviewer = [verdict.agent, verdict.model ?? provenance.modelIdentifier]
+    .filter(isNonEmptyString)
+    .map((part) => bounded(part, 80))
+    .join(' / ');
   const versions = [
-    isNonEmptyString(provenance.teaCliVersion) ? `TeA CLI ${provenance.teaCliVersion}` : null,
+    isNonEmptyString(provenance.teaCliVersion) ? `TeA CLI ${bounded(provenance.teaCliVersion, 40)}` : null,
     provenance.skillRubricVersion != null && String(provenance.skillRubricVersion).trim() !== ''
-      ? `rubric ${provenance.skillRubricVersion}`
+      ? `rubric ${bounded(provenance.skillRubricVersion, 40)}`
       : null,
   ].filter(Boolean);
   const parts = [reviewer, ...versions].filter(Boolean);
@@ -145,14 +208,20 @@ function reviewerLine(verdict) {
 }
 
 /** Where the full report lives, said only as far as the caller can vouch for it. */
-function reportLine({ runUrl, artifactName }) {
-  if (isNonEmptyString(artifactName) && isNonEmptyString(runUrl)) {
-    return `Report and verdict JSON: the ${code(artifactName)} artifact of [this workflow run](${runUrl}), once its upload step has finished.`;
-  }
+function reportLine({ runUrl, artifactName, reportPath, reportMissing }) {
+  const run = isNonEmptyString(runUrl) ? ` of [this workflow run](${plain(runUrl).replaceAll(')', '%29')})` : ' of this run';
   if (isNonEmptyString(artifactName)) {
-    return `Report and verdict JSON: the ${code(artifactName)} artifact of this run, once its upload step has finished.`;
+    return `Report and verdict JSON: the ${code(artifactName)} artifact${run}, once its upload step has finished.`;
   }
-  return isNonEmptyString(runUrl) ? `[Workflow run](${runUrl})` : null;
+  const link = isNonEmptyString(runUrl) ? `[Workflow run](${plain(runUrl).replaceAll(')', '%29')})` : null;
+  if (reportMissing === true) {
+    return ['The review wrote no report.', link].filter(Boolean).join(' ');
+  }
+  if (isNonEmptyString(reportPath)) {
+    const where = `The report is in the job workspace at ${code(reportPath)} and is deleted when the job ends unless the job uploads it.`;
+    return [where, link].filter(Boolean).join(' ');
+  }
+  return link;
 }
 
 /**
@@ -164,7 +233,9 @@ function buildModel(verdict, context = {}) {
   const hasVerdict = state !== 'broken' || (verdict && typeof verdict === 'object');
   const v = verdict && typeof verdict === 'object' ? verdict : {};
   const provenance = v.reviewProvenance && typeof v.reviewProvenance === 'object' ? v.reviewProvenance : {};
-  const sha = shortSha(provenance.headSha);
+  // The commit the caller says the pull request is at outranks the checkout's HEAD, which on a
+  // pull_request run is a merge commit no reader will find in the PR.
+  const sha = shortSha(context.headSha) ?? shortSha(provenance.headSha);
   const files = fileList(v.files ?? v.reviewedFiles);
   const model = { state, gateFailed, headline: '', conclusion: 'neutral', lines: [], findings: [], overflow: 0, reviewer: null };
 
@@ -191,22 +262,32 @@ function buildModel(verdict, context = {}) {
       model.lines.push(
         'The CLI ran with `--agent none`, so it built the prompt and stopped. This is a dry run, not a verdict.',
         `Files that would have been reviewed: ${files.length}.`,
+        ...files.slice(0, MAX_LISTED_DRY_RUN_FILES).map((file) => `- ${code(file)}`),
+        ...(files.length > MAX_LISTED_DRY_RUN_FILES ? [`- ... and ${files.length - MAX_LISTED_DRY_RUN_FILES} more`] : []),
       );
       break;
     }
     case 'skipped': {
       const contextCount = Array.isArray(v.contextFiles) ? v.contextFiles.length : 0;
       const changed = contextCount > 0 ? ` (${plural(contextCount, 'other file')} changed)` : '';
-      model.headline = gateFailed ? 'Skipped, which fails this gate' : 'Skipped';
+      const waivedSkip = v.waived === true;
+      const waiverSuffix = waivedSkip ? ` until ${bounded(v.waiveUntil ?? 'an unspecified date', 40)}` : '';
+      if (gateFailed) model.headline = 'Skipped, which fails this gate';
+      else model.headline = waivedSkip ? `Skipped, failure waived${waiverSuffix}` : 'Skipped';
       model.conclusion = gateFailed ? 'failure' : 'neutral';
-      const reason = isNonEmptyString(v.reason) ? v.reason.replace(/\.$/, '') : 'No changed test files in this PR';
+      const reason = isNonEmptyString(v.reason) ? bounded(v.reason, 300).replace(/\.$/, '') : 'No changed test files in this PR';
       model.lines.push(`${reason[0].toUpperCase()}${reason.slice(1)}${changed}.`);
+      if (waivedSkip) {
+        model.lines.push(`Gate failure waived${waiverSuffix}: ${bounded(v.waiveReason ?? 'no reason recorded', 300)}.`);
+      }
       if (isNonEmptyString(context.focus)) {
+        const focusLines = String(context.focus).split('\n').slice(0, MAX_FOCUS_LINES);
+        const shown = cut(focusLines.join('\n'), MAX_FOCUS_CHARS);
         model.lines.push(
           '',
           'You asked me to focus on:',
           '',
-          ...String(context.focus)
+          ...plain(shown)
             .split('\n')
             .map((line) => `> ${line}`),
           '',
@@ -221,21 +302,21 @@ function buildModel(verdict, context = {}) {
       const gating = gatingFindings(v);
       model.findings = gating.slice(0, MAX_LISTED_FINDINGS).map((finding) => ({
         severity: severityLabel(finding.severity),
-        location: findingLocation(finding),
+        location: bounded(findingLocation(finding), 200),
         title: bounded(finding.title ?? finding.criterion_id ?? 'Untitled finding', 200),
       }));
       model.overflow = Math.max(0, gating.length - MAX_LISTED_FINDINGS);
       const recommendation = isNonEmptyString(v.recommendation) ? v.recommendation : null;
-      const waiverSuffix = v.waived === true ? ` until ${v.waiveUntil ?? 'an unspecified date'}` : '';
+      const waiverSuffix = v.waived === true ? ` until ${bounded(v.waiveUntil ?? 'an unspecified date', 40)}` : '';
 
       if (state === 'pass') {
         model.headline = introduced ? 'Pass for the changed tests' : 'Pass for the reviewed tests';
         model.conclusion = 'success';
       } else if (state === 'waived') {
-        model.headline = `${recommendation ?? 'Verdict failure'}, waived${waiverSuffix}`;
+        model.headline = `${bounded(recommendation ?? 'Verdict failure', 60)}, waived${waiverSuffix}`;
         model.conclusion = 'success';
       } else {
-        model.headline = `Fail${recommendation ? `: ${recommendation}` : ''}`;
+        model.headline = `Fail${recommendation ? `: ${bounded(recommendation, 60)}` : ''}`;
         model.conclusion = 'failure';
       }
 
@@ -253,7 +334,7 @@ function buildModel(verdict, context = {}) {
         model.failureOverflow = Math.max(0, failures.length - MAX_LISTED_GATE_FAILURES);
       }
       if (state === 'pass' && recommendation && !PASSING_RECOMMENDATIONS.has(recommendation)) {
-        model.lines.push(`Recommendation: ${recommendation}, which this gate's thresholds do not fail on.`);
+        model.lines.push(`Recommendation: ${bounded(recommendation, 60)}, which this gate's thresholds do not fail on.`);
       }
     }
   }
@@ -285,7 +366,8 @@ function bodyLines(model) {
 /** The pull request comment: its hidden marker, then the same text as the summary. */
 function renderComment(verdict, context = {}) {
   const model = buildModel(verdict, context);
-  return [buildCommentMarker(model.agent), `## TeA test quality: ${model.headline}`, '', ...bodyLines(model)].join('\n');
+  const body = [buildCommentMarker(model.agent), `## TeA test quality: ${model.headline}`, '', ...bodyLines(model)].join('\n');
+  return body.length > MAX_COMMENT_CHARS ? `${cut(body, MAX_COMMENT_CHARS)}\n\n_(truncated)_` : body;
 }
 
 /** A job summary or merge-request note: the comment without its marker. */
@@ -303,6 +385,9 @@ function renderCheck(verdict, context = {}) {
 module.exports = {
   LEGACY_COMMENT_MARKER,
   MAX_LISTED_FINDINGS,
+  MAX_COMMENT_CHARS,
+  looksLikeVerdict,
+  contradiction,
   EXIT_MEANING,
   buildCommentMarker,
   buildModel,

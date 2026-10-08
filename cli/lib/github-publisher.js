@@ -54,12 +54,19 @@ function workflowRunUrl(env = process.env) {
  * silently overwrite the other's review.
  */
 function findOwnComment(comments, agent = 'claude') {
-  const list = comments || [];
-  const marker = buildCommentMarker(agent);
-  const exact = list.find((comment) => comment && comment.body && comment.body.includes(marker));
+  const list = (comments || []).filter((comment) => comment && typeof comment.body === 'string');
+  // The marker is the first line of the comment this CLI writes. A comment that merely contains it
+  // (a quote, a reply, text a drive-by commenter typed) is not ours, and among several candidates
+  // the one a bot account wrote wins over one a person wrote. The author is not checked beyond
+  // that preference: an installation token cannot ask GitHub who it is.
+  const owned = (marker) => {
+    const candidates = list.filter((comment) => comment.body.trimStart().startsWith(marker));
+    return candidates.find((comment) => comment.user?.type === 'Bot') ?? candidates[0] ?? null;
+  };
+  const exact = owned(buildCommentMarker(agent));
   if (exact) return exact;
   if (agent !== 'claude') return null;
-  return list.find((comment) => comment && comment.body && comment.body.includes(LEGACY_COMMENT_MARKER)) || null;
+  return owned(LEGACY_COMMENT_MARKER);
 }
 
 /** Create the comment, or update the one this CLI already owns on the pull request. */
@@ -105,14 +112,17 @@ async function resolveHeadSha({ headSha, payload, token, apiUrl, cache }, repo, 
   return typeof sha === 'string' && sha !== '' ? sha : null;
 }
 
-async function findOpenCheckRun(ctx, headSha, name) {
+async function findOpenCheckRun(ctx, headSha, name, agent) {
   const found = await githubRequest({
     ...ctx,
     method: 'GET',
     path: `/repos/${ctx.owner}/${ctx.repo}/commits/${headSha}/check-runs?check_name=${encodeURIComponent(name)}&per_page=100`,
   });
   const runs = Array.isArray(found?.check_runs) ? found.check_runs : [];
-  const open = runs.find((run) => run && run.status !== 'completed' && Number.isInteger(run.id));
+  // A run another agent opened under the same name is that agent's live review, not a leftover of
+  // this one: adopting it would let whichever job finishes last decide the check.
+  const ours = (run) => !agent || !run.output?.summary || run.output.summary.includes(`running on ${agent}.`);
+  const open = runs.find((run) => run && run.status !== 'completed' && Number.isInteger(run.id) && ours(run));
   return open ? open.id : null;
 }
 
@@ -129,6 +139,8 @@ function clampBytes(text, maxBytes) {
   while (Buffer.byteLength(cut, 'utf8') > budget) {
     cut = cut.slice(0, Math.max(0, cut.length - Math.ceil((Buffer.byteLength(cut, 'utf8') - budget) / 4) - 1));
   }
+  // The cut counted code units, so it can end between the halves of a surrogate pair.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
   return cut + suffix;
 }
 
@@ -190,6 +202,7 @@ function createPublisher(config) {
   const enabled = target.missing === null;
   const ctx = enabled ? { owner: target.repo.owner, repo: target.repo.repo, token: target.token, apiUrl: target.apiUrl } : null;
   let checkRunId = null;
+  let resolvedHeadSha = null;
 
   if (!enabled) {
     warn(`--github is set but ${target.missing}, so nothing was published. The review still runs.`);
@@ -204,7 +217,7 @@ function createPublisher(config) {
       // whichever finishes last decide the gate. Worse, a run that was killed outright left one
       // pinned at in_progress, which a required check has no UI to clear. Adopting the open one
       // fixes both.
-      const open = await findOpenCheckRun(ctx, sha, checkName).catch(() => null);
+      const open = await findOpenCheckRun(ctx, sha, checkName, agent).catch(() => null);
       if (open != null) {
         log(`Reusing the check run left open on ${sha.slice(0, 7)} by an earlier attempt.`);
         return open;
@@ -276,10 +289,15 @@ function createPublisher(config) {
       return checkRunId;
     },
 
+    /** The pull request head the surfaces are attached to, once begin() has resolved it. */
+    get headSha() {
+      return resolvedHeadSha;
+    },
+
     /** Open the check run. Resolves to nothing; a failure is a warning. */
     async begin() {
-      if (!active || !checkRun) return;
-      let sha;
+      if (!active) return;
+      let sha = null;
       try {
         sha = await resolveHeadSha(
           { headSha, payload: target.payload, token: target.token, apiUrl: target.apiUrl, cache },
@@ -287,9 +305,11 @@ function createPublisher(config) {
           target.prNumber,
         );
       } catch (error) {
-        warn(`Could not resolve the head SHA of #${target.prNumber}: ${error.message}. The review still runs without a check run.`);
-        return;
+        if (checkRun)
+          warn(`Could not resolve the head SHA of #${target.prNumber}: ${error.message}. The review still runs without a check run.`);
       }
+      resolvedHeadSha = sha;
+      if (!checkRun) return;
       if (!sha) {
         warn(`Could not resolve the head SHA of #${target.prNumber}, so the review runs without a check run. Pass --head-sha.`);
         return;
@@ -305,9 +325,19 @@ function createPublisher(config) {
      * @param {object|null} outcome.verdict
      * @param {string} [outcome.cause] - Why a run with no verdict ended.
      * @param {string} [outcome.focus]
+     * @param {object} [outcome.extra] - More render context: reportPath, reportMissing.
      */
-    async finish({ exitCode, verdict, cause, focus }) {
-      const context = { agent, runUrl: target.runUrl, artifactName, exitCode, cause, focus };
+    async finish({ exitCode, verdict, cause, focus, extra }) {
+      const context = {
+        ...extra,
+        agent,
+        runUrl: target.runUrl,
+        artifactName,
+        exitCode,
+        cause,
+        focus,
+        headSha: resolvedHeadSha ?? extra?.headSha,
+      };
       if (active && comment) {
         try {
           const note = await upsertComment(ctx, target.prNumber, renderComment(verdict, context), agent);

@@ -39,8 +39,8 @@ const { Command } = require('commander');
 const { resolveSkill, resolvePackagedSkill } = require('./lib/resolve-skill');
 const { assertAgentReady } = require('./lib/agent-presence');
 const { resolvePrBaseRef, parseRepository, tokenFromEnv } = require('./lib/github-api');
-const { createPublisher, resolveTarget, workflowRunUrl, DEFAULT_CHECK_NAME } = require('./lib/github-publisher');
-const { renderComment, renderCheck, renderSummary } = require('./lib/render');
+const { createPublisher, resolveTarget, workflowRunUrl, readEventPayload, DEFAULT_CHECK_NAME } = require('./lib/github-publisher');
+const { renderComment, renderCheck, renderSummary, looksLikeVerdict, contradiction } = require('./lib/render');
 const {
   getChangedFiles,
   getChangedTestFiles,
@@ -406,7 +406,7 @@ async function runReview(session) {
     )
     .option(
       '--pr <number>',
-      'pull request number; when --base is not given, resolve its base branch through the GitHub API (needs GITHUB_TOKEN and GITHUB_REPOSITORY or --repo; GITHUB_API_URL for GitHub Enterprise). A failed lookup exits 2; --base bypasses it',
+      'pull request number. When --base is not given, resolve its base branch through the GitHub API (needs GITHUB_TOKEN and GITHUB_REPOSITORY or --repo; GITHUB_API_URL for GitHub Enterprise); a failed lookup exits 2 and --base bypasses it. With --github it is also the pull request that is published to',
     )
     .option('--repo <owner/name>', 'repository for --pr and --github (default: GITHUB_REPOSITORY)')
     .option(
@@ -422,7 +422,10 @@ async function runReview(session) {
       '--github',
       'publish to GitHub: open a check run before the review, close it with the verdict, and upsert one pull-request comment. Repository, pull request, token and API URL come from flags and the GITHUB_* variables. Failures are warnings and never change the exit code',
     )
-    .option('--head-sha <sha>', 'pull request head commit for the check run (default: the event payload, then the GitHub API)')
+    .option(
+      '--head-sha <sha>',
+      'pull request head commit: the check run attaches to it and the comment shows it (default: the event payload, then the GitHub API). Needs --github or --comment-out',
+    )
     .option('--check-name <name>', `check run name; branch protection matches it exactly (default: ${DEFAULT_CHECK_NAME})`)
     .option('--no-check-run', 'with --github, publish the comment only')
     .option('--no-pr-comment', 'with --github, publish the check run only')
@@ -547,6 +550,18 @@ async function runReview(session) {
   }
   const options = program.opts();
   session.options = options;
+  // The comment file is owed for every outcome, a refused flag included, so the surface exists
+  // before anything is validated. A stale file from an earlier run must never be the answer.
+  session.surface = {
+    agent: typeof options.agent === 'string' ? options.agent : undefined,
+    focus: options.focus,
+    runUrl: options.runUrl?.trim() || workflowRunUrl() || undefined,
+    artifactName: options.artifactName?.trim() || undefined,
+    commentOut: options.commentOut,
+    headSha: options.headSha?.trim() || readEventPayload()?.pull_request?.head?.sha || undefined,
+    reportPath: options.output,
+    publisher: null,
+  };
 
   if (!AGENTS.has(options.agent)) {
     fail(EXIT.ENV_ERROR, `--agent must be one of ${[...AGENTS].join(', ')}; got "${options.agent}".`);
@@ -665,8 +680,8 @@ async function runReview(session) {
       fail(EXIT.ENV_ERROR, `--pr must be a pull request number; got "${options.pr}".`);
     }
     prNumber = Number.parseInt(options.pr, 10);
-    if (options.files.length > 0) {
-      fail(EXIT.ENV_ERROR, '--pr resolves the git base ref, and --files skips git; drop one of the two.');
+    if (options.files.length > 0 && !options.github) {
+      fail(EXIT.ENV_ERROR, '--pr resolves the git base ref, and --files skips git; use --pr with --github only, or drop one of the two.');
     }
   }
   if (options.repo !== undefined && parseRepository(options.repo) === null) {
@@ -675,8 +690,13 @@ async function runReview(session) {
   if (options.projectSkill && options.skillRoot !== undefined) {
     fail(EXIT.ENV_ERROR, '--project-skill and --skill-root both name the skill; drop one of the two.');
   }
+  if (options.headSha !== undefined && !options.github && !options.commentOut) {
+    fail(EXIT.ENV_ERROR, '--head-sha only applies to --github or --comment-out; add one or drop it.');
+  }
+  if (options.github && options.agent === 'none') {
+    fail(EXIT.ENV_ERROR, '--github publishes a review, and --agent none runs none; drop one of the two.');
+  }
   for (const [flag, given] of [
-    ['--head-sha', options.headSha !== undefined],
     ['--check-name', options.checkName !== undefined],
     ['--no-check-run', program.getOptionValueSource('checkRun') === 'cli'],
     ['--no-pr-comment', program.getOptionValueSource('prComment') === 'cli'],
@@ -701,28 +721,19 @@ async function runReview(session) {
     fail(EXIT.ENV_ERROR, '--artifact-name must not be empty.');
   }
 
-  // The surfaces: opened here, after the flags are known good and before anything that can
-  // fail, so a base ref that cannot be resolved or an agent that is not installed shows up on the
-  // pull request as a broken gate instead of in a log nobody opened.
+  // The check run and the comment: opened here, after the flags are known good and before anything
+  // that can fail, so a base ref that cannot be resolved or an agent that is not installed shows up
+  // on the pull request as a broken gate instead of in a log nobody opened.
   const prCache = new Map();
-  const runUrl = options.runUrl?.trim() || workflowRunUrl();
-  session.surface = {
-    agent: options.agent,
-    focus: options.focus,
-    runUrl,
-    artifactName: options.artifactName?.trim(),
-    commentOut: options.commentOut,
-    publisher: null,
-  };
   if (options.github) {
     session.surface.publisher = createPublisher({
-      target: resolveTarget({ repo: options.repo, prNumber: prNumber ?? undefined, runUrl }),
+      target: resolveTarget({ repo: options.repo, prNumber: prNumber ?? undefined, runUrl: session.surface.runUrl }),
       agent: options.agent,
       checkName: options.checkName?.trim() || DEFAULT_CHECK_NAME,
       comment: options.prComment,
       checkRun: options.checkRun,
       headSha: options.headSha,
-      artifactName: options.artifactName?.trim(),
+      artifactName: session.surface.artifactName,
       cache: prCache,
     });
     await session.surface.publisher.begin();
@@ -733,6 +744,17 @@ async function runReview(session) {
   const jsonPath = options.json ? path.resolve(projectRoot, options.json) : null;
   if (jsonPath && jsonPath === outputPath) {
     fail(EXIT.ENV_ERROR, '--output and --json must resolve to different files.');
+  }
+  if (options.commentOut !== undefined) {
+    const commentPath = path.resolve(projectRoot, options.commentOut);
+    if (commentPath === outputPath || commentPath === jsonPath) {
+      // The refusal must not itself overwrite the file it protects.
+      session.surface.commentOut = undefined;
+      fail(
+        EXIT.ENV_ERROR,
+        '--comment-out must not resolve to the same file as --output or --json: it would overwrite the report or the verdict.',
+      );
+    }
   }
 
   // An explicit --skill-root is the trusted source of truth: it bypasses every
@@ -842,7 +864,7 @@ async function runReview(session) {
   // merges into (GITHUB_BASE_REF answers without a request on a pull_request run).
   // Guessing origin/main there would review test files the pull request never touched.
   let baseRef = options.base;
-  if (prNumber !== null && program.getOptionValueSource('base') !== 'cli') {
+  if (prNumber !== null && !filesProvided && program.getOptionValueSource('base') !== 'cli') {
     const stated = String(process.env.GITHUB_BASE_REF || '').trim();
     if (stated === '') {
       try {
@@ -1395,15 +1417,31 @@ async function runReview(session) {
   return gateFailures.length > 0 && !waiver ? EXIT.VERDICT_FAIL : EXIT.PASS;
 }
 
+/**
+ * Where the report is, said only for a run that was meant to write one: a skip and a dry run
+ * write none, and say nothing about it.
+ */
+function reportContext(session) {
+  const { surface, options, verdict } = session;
+  if (!surface || !surface.reportPath || verdict?.skipped === true || verdict?.promptOnly === true) {
+    return {};
+  }
+  const absolute = path.resolve(options.projectRoot, surface.reportPath);
+  return fs.existsSync(absolute) ? { reportPath: surface.reportPath } : { reportMissing: true };
+}
+
 /** What the run produced, in the words every surface shares. */
-function surfaceContext(surface, exitCode, cause) {
+function surfaceContext(session, exitCode) {
+  const { surface } = session;
   return {
+    ...reportContext(session),
     agent: surface.agent,
     runUrl: surface.runUrl,
     artifactName: surface.artifactName,
     focus: surface.focus,
+    headSha: surface.publisher?.headSha ?? surface.headSha,
     exitCode,
-    cause,
+    cause: session.cause,
   };
 }
 
@@ -1421,13 +1459,19 @@ async function finalizeSurfaces(session, exitCode) {
     try {
       const target = path.resolve(session.options.projectRoot, surface.commentOut);
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, `${renderComment(session.verdict, surfaceContext(surface, exitCode, session.cause))}\n`, 'utf8');
+      fs.writeFileSync(target, `${renderComment(session.verdict, surfaceContext(session, exitCode))}\n`, 'utf8');
     } catch (error) {
       console.error(`tea-test-review WARNING: could not write the comment to ${surface.commentOut}: ${error.message}`);
     }
   }
   if (surface.publisher) {
-    await surface.publisher.finish({ exitCode, verdict: session.verdict, cause: session.cause, focus: surface.focus });
+    await surface.publisher.finish({
+      exitCode,
+      verdict: session.verdict,
+      cause: session.cause,
+      focus: surface.focus,
+      extra: { ...reportContext(session), headSha: surface.headSha },
+    });
   }
 }
 
@@ -1444,13 +1488,15 @@ async function renderCommand(argv) {
     .requiredOption('--verdict <file>', 'verdict JSON written by `tea-test-review --json`')
     .option(
       '--as <surface>',
-      'comment (with its hidden marker) | check (first line is the title) | summary (the comment without the marker)',
+      'comment (with its hidden marker) | summary (the comment without the marker) | check (first line is the title) | conclusion (the check run conclusion: success, neutral or failure)',
       'comment',
     )
     .option('--agent <name>', 'agent that produced the verdict, which tags the comment marker (default: the verdict agent, else claude)')
     .option('--exit-code <n>', 'exit code of the review run; it decides pass or fail and renders a missing verdict as a broken gate')
     .option('--run-url <url>', 'link to the CI run')
     .option('--artifact-name <name>', 'artifact the report and verdict are uploaded to; without it the text promises no artifact')
+    .option('--report-path <path>', 'where the report is in the job workspace, said when no artifact is named')
+    .option('--head-sha <sha>', 'pull request head commit to show instead of the commit the review ran at')
     .option('--focus <text>', 'requester focus note, acknowledged when the review was skipped')
     .exitOverride();
   try {
@@ -1467,8 +1513,11 @@ async function renderCommand(argv) {
     console.error(`tea-test-review: ${message}`);
     process.exit(EXIT.ENV_ERROR);
   };
-  if (!['comment', 'check', 'summary'].includes(options.as)) {
-    refuse(`--as must be comment, check or summary; got "${options.as}".`);
+  if (!['comment', 'check', 'summary', 'conclusion'].includes(options.as)) {
+    refuse(`--as must be comment, check, summary or conclusion; got "${options.as}".`);
+  }
+  if (options.headSha !== undefined && !/^[0-9a-f]{7,64}$/i.test(options.headSha.trim())) {
+    refuse(`--head-sha must be a commit SHA; got "${options.headSha}".`);
   }
   let exitCode;
   if (options.exitCode !== undefined) {
@@ -1478,19 +1527,33 @@ async function renderCommand(argv) {
     exitCode = Number.parseInt(options.exitCode, 10);
   }
   let verdict = null;
+  let unreadable = null;
   try {
     verdict = JSON.parse(fs.readFileSync(options.verdict, 'utf8'));
   } catch (error) {
+    unreadable = error.message;
+  }
+  if (unreadable === null && !looksLikeVerdict(verdict)) {
+    unreadable = 'it is JSON, but not a verdict or skip payload written by tea-test-review';
+  }
+  if (unreadable !== null) {
+    verdict = null;
     if (exitCode === undefined) {
       refuse(
-        `cannot read the verdict ${options.verdict}: ${error.message}. Pass --exit-code to render a run that produced none as a broken gate.`,
+        `cannot read the verdict ${options.verdict}: ${unreadable}. Pass --exit-code to render a run that produced none as a broken gate.`,
       );
     }
+  }
+  const conflict = contradiction(verdict, exitCode);
+  if (conflict) {
+    refuse(`${conflict}. The verdict file and the exit code are from different runs.`);
   }
   const context = {
     agent: options.agent,
     runUrl: options.runUrl,
     artifactName: options.artifactName,
+    reportPath: options.reportPath,
+    headSha: options.headSha?.trim(),
     focus: options.focus,
     exitCode,
     cause: verdict === null ? 'the verdict file is missing or unreadable' : undefined,
@@ -1498,6 +1561,8 @@ async function renderCommand(argv) {
   if (options.as === 'check') {
     const check = renderCheck(verdict, context);
     console.log(`${check.title}\n\n${check.summary}`);
+  } else if (options.as === 'conclusion') {
+    console.log(renderCheck(verdict, context).conclusion);
   } else {
     console.log(options.as === 'summary' ? renderSummary(verdict, context) : renderComment(verdict, context));
   }
