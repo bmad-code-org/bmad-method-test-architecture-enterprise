@@ -116,44 +116,39 @@ function checkInspection(inspection, failures) {
 
   const expectedRows = [
     [
-      'Skill',
+      '`skill`',
       '`cli`',
       '`createCommandLineAdapter`',
       'Generic skill runner registry entry with explicit `--skill-root` inside the disposable copy',
     ],
     [
-      'Agent',
+      '`agent`',
       '`cli`',
       '`createCommandLineAdapter`',
       "Adopter's non-interactive command registry entry; use the skill runner when no command exists",
     ],
     [
-      'Workflow',
+      '`workflow`',
       "target's own `cli`, `api` or `mcp` kind",
       'adapter for that kind',
       'Interaction plan with ordered `after` steps and `captured` bindings from earlier observations',
     ],
+    ['`tool-use`', '`cli`', '`createCommandLineAdapter`', 'Calling agent: agent command and tool-call trajectory on stdout for its oracle'],
+    ['`tool-use`', '`mcp`', '`createMcpAdapter`', 'Tool server over stdio: registry entry supplying `McpTargetAuthorization`'],
     [
-      'Tool-use system: calling agent',
-      '`cli`',
-      '`createCommandLineAdapter`',
-      'Agent command and tool-call trajectory on stdout for its oracle',
-    ],
-    ['Tool-use system: tool server', '`mcp`', '`createMcpAdapter`', 'Registry entry supplying `McpTargetAuthorization`'],
-    [
-      'AI feature',
+      '`ai-feature`',
       '`api`',
       'adopter-owned `EnvironmentProbePort`',
       '`adapter/http-probe-port.mjs` and its conformance file, with address decisions delegated to eval-quality',
     ],
     [
-      'Tool server reached over HTTP',
+      '`tool-use`',
       '`api`',
       'adopter-owned `EnvironmentProbePort`',
-      "HTTP port as above; eval-quality's MCP adapter is for stdio",
+      "Tool server over HTTP: HTTP port as above; eval-quality's MCP adapter is for stdio",
     ],
     [
-      'Test-review mechanism',
+      '`test-review-mechanism`',
       'kind of how it runs, usually `cli`',
       'adapter for that kind',
       'Skill runner or own command, with seeded test smells and clean tests in its corpus',
@@ -1963,14 +1958,14 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     );
     const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
     const expectedKinds = [
-      'Skill',
-      'Agent',
-      'Workflow',
-      'Tool-use system: calling agent',
-      'Tool-use system: tool server',
-      'AI feature',
-      'Tool server reached over HTTP',
-      'Test-review mechanism',
+      '`skill`',
+      '`agent`',
+      '`workflow`',
+      '`tool-use`',
+      '`tool-use`',
+      '`ai-feature`',
+      '`tool-use`',
+      '`test-review-mechanism`',
     ];
     const rows = adapterRows
       .split('\n')
