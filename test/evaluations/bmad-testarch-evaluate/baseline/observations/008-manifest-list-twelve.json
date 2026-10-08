@@ -1,0 +1,103 @@
+{
+  "legId": "manifest-list-twelve",
+  "sequence": 8,
+  "workspace": "mutated:M-004",
+  "cwd": "<workspace>",
+  "request": {
+    "probeId": "manifest-list-twelve",
+    "interfaceId": "evaluate-skill",
+    "operationId": "run-skill",
+    "kind": "cli",
+    "executable": "tea-skill-runner",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {
+        "agent": "claude",
+        "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"id\",\"class\"],\"additionalProperties\":false}}},\"required\":[\"basis\",\"status\",\"exits\"],\"additionalProperties\":false}",
+        "capability": "read-only",
+        "model": "claude-sonnet-5",
+        "skill-root": "skills/bmad-testarch-evaluate",
+        "timeout-ms": "300000"
+      },
+      "environment": [
+        "HOME",
+        "LOGNAME",
+        "USER"
+      ],
+      "stdin": {
+        "kind": "text",
+        "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+      }
+    }
+  },
+  "observation": {
+    "probeId": "manifest-list-twelve",
+    "interfaceId": "evaluate-skill",
+    "operationId": "run-skill",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with its id (source and exit) and class columns.",
+        "status": "answered",
+        "exits": [
+          {
+            "id": "eval-quality 0",
+            "class": "pass or CONCERNS"
+          },
+          {
+            "id": "eval-quality 2",
+            "class": "target behavior failure or evidence integrity"
+          },
+          {
+            "id": "eval-quality 3",
+            "class": "infrastructure or integrity"
+          },
+          {
+            "id": "eval-quality 4",
+            "class": "contract authoring defect"
+          },
+          {
+            "id": "eval-quality 5",
+            "class": "runtime fault"
+          },
+          {
+            "id": "eval-quality 64",
+            "class": "wiring defect"
+          },
+          {
+            "id": "tea-evaluate 10",
+            "class": "authoring defect"
+          },
+          {
+            "id": "tea-evaluate 11",
+            "class": "evaluation weakness"
+          },
+          {
+            "id": "tea-evaluate 12",
+            "class": "infrastructure"
+          },
+          {
+            "id": "tea-evaluate 64",
+            "class": "wiring defect"
+          },
+          {
+            "id": "eval-quality-gates 1",
+            "class": "repository policy violation"
+          },
+          {
+            "id": "eval-quality-gates 64",
+            "class": "wiring defect"
+          }
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":78203,\"outputTokens\":1424,\"costUsd\":\"0.0746588\"}\n"
+    },
+    "artifacts": {}
+  }
+}

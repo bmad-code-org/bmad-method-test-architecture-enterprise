@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-003",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "bmad-testarch-evaluate",
+  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
+  "artifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "rationale": "[held-out] Seeded defect: M-002 gives exit 12 the evaluation weakness class, so Stage 11 sends an infrastructure failure to an evaluation repair.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "references/gaps.md: the tea-evaluate 12 row of the AD-10 exit table gives the evaluation weakness class",
+    "mutationOperator": "replace-exact: \"| `tea-evaluate 12`       | infrastructure                                |\" -> \"| `tea-evaluate 12`       | evaluation weakness                           |\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "skills/bmad-testarch-evaluate/references/gaps.md",
+      "privateRef": null,
+      "digest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448"
+    },
+    "expectedObservableFailure": "Asked about a preflight that exited 12, Stage 11 names evaluation weakness, so the classify-exits reply carries exit12 \"evaluation weakness\".",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:a6140360e4efb93b30841d50937bbf3a33c88609a491183e36e0e74b45580bb6"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:99b610b7cefb185b9b4937f6909257e667b37b3e11365c3704d4b598671b4937"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-001",
+      "summary": "The exit table classes an infrastructure failure (exit 12) as an evaluation weakness.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:99b610b7cefb185b9b4937f6909257e667b37b3e11365c3704d4b598671b4937"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-exit-12",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exit11\":{\"type\":\"string\"},\"exit12\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"exit11\",\"exit12\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-exit-12/stdout/exit12"
+            },
+            {
+              "literal": "evaluation weakness"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/exit12"
+          },
+          {
+            "literal": "evaluation weakness"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -27,17 +27,17 @@ const GRADER_ENV = Object.freeze({ GRADER_SECRET: 'grader-secret-value-0123', GR
  * from a clean run of that workspace.
  */
 const EVALUATIONS = Object.freeze([
-  { key: 'mcp', story: '1.10', folder: 'test/fixtures/evaluate-mcp/evals/grader', env: GRADER_ENV, baseline: true },
-  { key: 'api', story: '1.11', folder: 'test/fixtures/evaluate-api/evals/grader', env: GRADER_ENV, baseline: true },
-  { key: 'suite', story: '1.16', folder: 'test/evaluations/bmad-testarch-evaluate', env: {}, baseline: true, workspace: 'git' },
-  { key: 'workflow', story: '1.18', folder: 'test/fixtures/evaluate-workflow/evals/records', env: {}, baseline: true },
-  { key: 'tool-use', story: '1.19', folder: 'test/fixtures/evaluate-tool-use-agent/evals/tool-use', env: {}, baseline: true },
-  { key: 'promptfoo', story: '1.20', folder: 'test/fixtures/evaluate-promptfoo/evals/summary', env: {}, baseline: true },
-  { key: 'ai-feature', story: '1.24', folder: 'test/fixtures/evaluate-authoring/ai-feature/evaluation', env: {}, baseline: true },
-  { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {}, baseline: true },
-  { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {}, baseline: true },
-  { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {}, baseline: true },
-  { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {}, baseline: true },
+  { key: 'mcp', story: '1.10', folder: 'test/fixtures/evaluate-mcp/evals/grader', env: GRADER_ENV },
+  { key: 'api', story: '1.11', folder: 'test/fixtures/evaluate-api/evals/grader', env: GRADER_ENV },
+  { key: 'suite', story: '1.16', folder: 'test/evaluations/bmad-testarch-evaluate', env: {}, workspace: 'git' },
+  { key: 'workflow', story: '1.18', folder: 'test/fixtures/evaluate-workflow/evals/records', env: {} },
+  { key: 'tool-use', story: '1.19', folder: 'test/fixtures/evaluate-tool-use-agent/evals/tool-use', env: {} },
+  { key: 'promptfoo', story: '1.20', folder: 'test/fixtures/evaluate-promptfoo/evals/summary', env: {} },
+  { key: 'ai-feature', story: '1.24', folder: 'test/fixtures/evaluate-authoring/ai-feature/evaluation', env: {} },
+  { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {} },
+  { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {} },
+  { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {} },
+  { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {} },
 ]);
 
 const scriptOf = (entry) => `test:evaluate-pr-${entry.key}`;
@@ -201,9 +201,8 @@ function workflowProblems(workflow) {
 }
 
 /** The ids of the checks a `pr` plan must carry for the evaluation in `folder`. */
-function requiredChecks(folder, entry) {
+function requiredChecks(folder) {
   const ids = ['check', 'compile', 'seal'];
-  if (!entry.baseline) return ids;
   if (read(path.join(folder, 'evaluation.json')).interface === 'api') ids.push('api-conformance');
   const probes = path.join(folder, 'probes');
   const gameability = fs
@@ -222,7 +221,7 @@ function requiredChecks(folder, entry) {
  * whose `evaluation.json` declares that workspace.
  *
  * @param {string} folder the evaluation folder
- * @param {{key: string, baseline: boolean, workspace?: string}} entry
+ * @param {{key: string, workspace?: string}} entry
  * @param {string} engineVersion the installed eval-quality release
  */
 function folderProblems(folder, entry, engineVersion) {
@@ -239,16 +238,11 @@ function folderProblems(folder, entry, engineVersion) {
       problems.push(`${entry.key}: ${item.id} runs over ${JSON.stringify(item.command[flag + 1])}, not ${entry.folder}`);
   }
   const placed = plan.checks.filter((item) => item.placement.tier === 'pr').map((item) => item.id);
-  const required = requiredChecks(folder, entry);
+  const required = requiredChecks(folder);
   for (const id of required) if (!placed.includes(id)) problems.push(`${entry.key}: the pr tier lacks ${id}`);
   for (const id of placed)
     if (!required.includes(id)) problems.push(`${entry.key}: the pr tier places ${id}, which this evaluation does not call for`);
   const baseline = path.join(folder, 'baseline');
-  if (!entry.baseline) {
-    if (fs.existsSync(path.join(baseline, 'baseline.json')))
-      problems.push(`${entry.key}: a baseline exists, so the replay belongs in the pr tier`);
-    return problems;
-  }
   let manifest;
   let accepted;
   try {
@@ -286,8 +280,7 @@ function resultProblems(entry, status, ciJson, plan) {
   if (JSON.stringify(ran) !== JSON.stringify(expected))
     problems.push(`${entry.key}: the checks that ran were ${JSON.stringify(ran)}, the plan places ${JSON.stringify(expected)}`);
   for (const row of ciJson.checks ?? []) if (row.exit !== 0) problems.push(`${entry.key}: ${row.id} exited ${row.exit} (${row.class})`);
-  if (entry.baseline && ciJson.baseline?.stale !== false)
-    problems.push(`${entry.key}: the baseline is stale: ${JSON.stringify(ciJson.baseline?.reasons)}`);
+  if (ciJson.baseline?.stale !== false) problems.push(`${entry.key}: the baseline is stale: ${JSON.stringify(ciJson.baseline?.reasons)}`);
   return problems;
 }
 

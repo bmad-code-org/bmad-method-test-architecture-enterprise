@@ -5012,13 +5012,27 @@ function checkTeaPrTier() {
     ['no baseline', 'api', (folder) => fs.rmSync(path.join(folder, 'baseline'), { recursive: true }), /no accepted baseline/],
     ['no plan', 'mcp', (folder) => fs.rmSync(path.join(folder, 'ci'), { recursive: true }), /evaluation-ci-plan\.json is absent/],
     [
-      'a baseline where the suite has none yet',
+      'a suite baseline from a copy workspace',
+      'suite',
+      (folder) => editBaseline(folder, 'run.json', (value) => (value.workspace.kind = 'copy')),
+      /the baseline came from a copy workspace; its entry names a git workspace/,
+    ],
+    [
+      'a suite that declares a copy workspace',
       'suite',
       (folder) => {
-        fs.mkdirSync(path.join(folder, 'baseline'));
-        write(path.join(folder, 'baseline', 'baseline.json'), {});
+        const file = path.join(folder, 'evaluation.json');
+        const value = read(file);
+        value.workspace = { kind: 'copy' };
+        write(file, value);
       },
-      /so the replay belongs in the pr tier/,
+      /evaluation\.json declares a copy workspace; its entry names a git workspace/,
+    ],
+    [
+      'a suite plan that drops the replay',
+      'suite',
+      (folder) => editPlan(folder, (plan) => (plan.checks = plan.checks.filter((item) => item.id !== 'replay'))),
+      /lacks replay/,
     ],
     [
       'a suite plan that drops the seal',

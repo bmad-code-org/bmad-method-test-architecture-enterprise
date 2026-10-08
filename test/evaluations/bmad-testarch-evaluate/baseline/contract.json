@@ -1,0 +1,1097 @@
+{
+  "schemaVersion": 7,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "bmad-testarch-evaluate",
+  "sourceSpecDigest": "sha256:60178aaff63d0b94a45a6667e30a86dc9b3a51f87f2694cf5093085a65291f70",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Stage 11 keeps the failure classes apart: asked about a failed tea-evaluate command, it names the AD-10 class its gaps guide's exit table assigns to that source and exit.",
+      "severity": "material",
+      "observableSuccessCriterion": "Asked about a tea-evaluate run that exited 11 and a tea-evaluate preflight that exited 12, the runner prints one JSON object whose status is \"answered\", whose exit11 is \"evaluation weakness\" and whose exit12 is \"infrastructure\".",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-10"
+        },
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-11"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "exit-table-class-swap"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "Stage 1 maps a web application, one with no AI features included, to target kind ai-feature reached through its HTTP surface as interface api, and never emits web.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Asked to classify a web application with no AI features, the runner prints one JSON object whose status is \"answered\", whose targetKind is \"ai-feature\" and whose interface is \"api\".",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-1"
+        },
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "interface-kinds"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "web-interface-emitted"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    },
+    {
+      "id": "B-003",
+      "description": "Stage 11 lists every exit the gaps guide's AD-10 table holds, with the class its row gives on each record, and drops none, so a missing row leaves an adopter with no class for that source and exit and a swapped class sends the adopter to the wrong repair.",
+      "severity": "material",
+      "observableSuccessCriterion": "Asked for the complete exit table, the runner prints one JSON object whose status is \"answered\" and whose exits array covers each of the table's thirteen ids exactly once, each record carrying the class its row gives that id.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-10"
+        },
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-11"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "exit-table-row-dropped"
+        },
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "exit-table-class-swap"
+        }
+      ],
+      "oracles": [
+        "O-003"
+      ]
+    },
+    {
+      "id": "B-004",
+      "description": "Stage 11 refuses to guess a class when a request names no usable exit of a failed tea-evaluate command: its gaps guide says such a request has no class, so the reply claims a refusal and carries no class.",
+      "severity": "material",
+      "observableSuccessCriterion": "Given a request whose exit field is not a number, the runner prints one JSON object whose status is \"refused\" and which carries no class.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-10"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "class-guessed-without-an-exit"
+        }
+      ],
+      "oracles": [
+        "O-004"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The gaps guide names exit 11 of tea-evaluate an evaluation weakness and exit 12 infrastructure. The reply claims to have answered, and the two class fields carry the answers, so the oracle reads the claim beside each field and accepts neither alone.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The status claim and the two class fields of the JSON object the classify-exits step prints on stdout.",
+        "negativeDomain": "A reply whose status is not \"answered\", whose exit11 field is anything but \"evaluation weakness\", or whose exit12 field is anything but \"infrastructure\", including a reply that gives both exits one class.",
+        "evidenceTargets": [
+          "/interactions/classify-exits/stdout/status",
+          "/interactions/classify-exits/stdout/exit11",
+          "/interactions/classify-exits/stdout/exit12"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-exits/stdout/status"
+              },
+              {
+                "literal": "answered"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-exits/stdout/exit11"
+              },
+              {
+                "literal": "evaluation weakness"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-exits/stdout/exit12"
+              },
+              {
+                "literal": "infrastructure"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The inspection mapping sends any web application to the ai-feature kind reached as api. The reply claims to have answered, and targetKind and interface carry the answer, so the oracle reads the claim beside both fields and accepts neither alone.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The status claim, the targetKind and the interface fields of the JSON object the classify-web-app step prints on stdout.",
+        "negativeDomain": "A reply whose status is not \"answered\", whose interface is web or any kind but api, or whose targetKind is anything but ai-feature.",
+        "evidenceTargets": [
+          "/interactions/classify-web-app/stdout/status",
+          "/interactions/classify-web-app/stdout/targetKind",
+          "/interactions/classify-web-app/stdout/interface"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-web-app/stdout/status"
+              },
+              {
+                "literal": "answered"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-web-app/stdout/targetKind"
+              },
+              {
+                "literal": "ai-feature"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-web-app/stdout/interface"
+              },
+              {
+                "literal": "api"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The exit table holds thirteen rows, and the reply lists them as records. The oracle reconciles the records against the declared reference set by id, so a dropped or invented row fails. It also holds each record to the class its row gives that id, one alternative per row that pairs the id with the class, so a reply that swaps two classes fails with both ids still covered and both classes still in the vocabulary. The records of tea-evaluate 11 and tea-evaluate 12 compare their class with the answer the classify-exits step gave for the same exit, which O-001 holds to the table, so one seeded edit of either row moves O-001 alone.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The status claim and the exits array of the JSON object the list-exit-table step prints on stdout, with each record's id and class, and the exit11 and exit12 answers of the classify-exits step.",
+        "negativeDomain": "A reply whose status is not \"answered\", whose exits array drops a table row, repeats one or adds one the table lacks, or holds a record whose class is anything but the one its row gives that id, including a reply that swaps the classes of two rows. For tea-evaluate 11 and tea-evaluate 12 the class to match is the one the classify-exits step answered for that exit.",
+        "evidenceTargets": [
+          "/interactions/list-exit-table/stdout/status",
+          "/interactions/list-exit-table/stdout/exits",
+          "/interactions/classify-exits/stdout/exit11",
+          "/interactions/classify-exits/stdout/exit12"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/list-exit-table/stdout/status"
+              },
+              {
+                "literal": "answered"
+              }
+            ]
+          },
+          {
+            "op": "covers-by-key",
+            "operands": [
+              {
+                "referenceSet": "exit-table"
+              },
+              {
+                "pointer": "/interactions/list-exit-table/stdout/exits"
+              }
+            ],
+            "expectedKey": "id",
+            "actualKey": "id"
+          },
+          {
+            "op": "for-all",
+            "collection": {
+              "pointer": "/interactions/list-exit-table/stdout/exits"
+            },
+            "predicate": {
+              "op": "any",
+              "operands": [
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 0"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "pass or CONCERNS"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 2"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "target behavior failure or evidence integrity"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 3"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "infrastructure or integrity"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 4"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "contract authoring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 5"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "runtime fault"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 10"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "authoring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 11"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "pointer": "/interactions/classify-exits/stdout/exit11"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 12"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "pointer": "/interactions/classify-exits/stdout/exit12"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 13"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "evaluation evidence drift"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "tea-evaluate 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality-gates 1"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "repository policy violation"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/id"
+                        },
+                        {
+                          "literal": "eval-quality-gates 64"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "@/class"
+                        },
+                        {
+                          "literal": "wiring defect"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The gaps guide says a request that names no command or no exit, or an exit its table does not list, has no class. The reply must claim a refusal and carry no class, so the oracle reads the claim and the absence of the class field together.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The status claim and the class field of the JSON object the refuse-no-exit step prints on stdout.",
+        "negativeDomain": "A reply whose status is \"answered\", or any reply that carries a class field.",
+        "evidenceTargets": [
+          "/interactions/refuse-no-exit/stdout/status",
+          "/interactions/refuse-no-exit/stdout/class"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/refuse-no-exit/stdout/status"
+              },
+              {
+                "literal": "refused"
+              }
+            ]
+          },
+          {
+            "op": "absence",
+            "operands": [
+              {
+                "pointer": "/interactions/refuse-no-exit/stdout/class"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "evaluate-skill",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "run-skill",
+          "invocation": {
+            "executable": "tea-skill-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "agent",
+                "agent-arg",
+                "capability",
+                "model",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "permittedKeys": [
+                "agent",
+                "agent-arg",
+                "capability",
+                "model",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "types": {
+                "agent": "string",
+                "agent-arg": "string",
+                "capability": "string",
+                "model": "string",
+                "skill-root": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "exit",
+                "prompt"
+              ],
+              "types": {
+                "exit": "number",
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "basis"
+            ],
+            "permittedKeys": [
+              "basis",
+              "class",
+              "exit11",
+              "exit12",
+              "exits",
+              "interface",
+              "status",
+              "targetKind"
+            ],
+            "types": {
+              "basis": "string",
+              "class": "string",
+              "exit11": "string",
+              "exit12": "string",
+              "exits": "array",
+              "interface": "string",
+              "status": "string",
+              "targetKind": "string"
+            },
+            "successIndicator": "/status",
+            "channelRoles": {
+              "/status": "success-indicator",
+              "/basis": "diagnostic",
+              "/class": "payload",
+              "/exit11": "payload",
+              "/exit12": "payload",
+              "/exits": "collection",
+              "/interface": "payload",
+              "/targetKind": "payload"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/exits",
+                "expectedCardinality": {
+                  "mode": "exact",
+                  "count": 13
+                },
+                "referenceSet": "exit-table"
+              }
+            ]
+          },
+          "volatilePointers": [
+            "/basis"
+          ],
+          "sensitivityWitness": {
+            "witnessId": "class-follows-the-exit",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-exit-11",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude",
+                    "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
+                    "capability": "read-only",
+                    "model": "claude-sonnet-5",
+                    "skill-root": "skills/bmad-testarch-evaluate",
+                    "timeout-ms": "300000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports one failed command, with no evidence artifact: `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n\nFind the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide row you used>\", \"class\": \"<the class as the guide names it>\"}\n"
+                  }
+                }
+              },
+              {
+                "legId": "witness-exit-10",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude",
+                    "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
+                    "capability": "read-only",
+                    "model": "claude-sonnet-5",
+                    "skill-root": "skills/bmad-testarch-evaluate",
+                    "timeout-ms": "300000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports one failed command, with no evidence artifact: `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 10.\n\nFind the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide row you used>\", \"class\": \"<the class as the guide names it>\"}\n"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-exit-11/stdout/class"
+                    },
+                    {
+                      "literal": "evaluation weakness"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-exit-10/stdout/class"
+                        },
+                        {
+                          "literal": "evaluation weakness"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {
+    "exit-table": {
+      "keys": [
+        "id"
+      ],
+      "members": [
+        {
+          "id": "eval-quality 0"
+        },
+        {
+          "id": "eval-quality 2"
+        },
+        {
+          "id": "eval-quality 3"
+        },
+        {
+          "id": "eval-quality 4"
+        },
+        {
+          "id": "eval-quality 5"
+        },
+        {
+          "id": "eval-quality 64"
+        },
+        {
+          "id": "tea-evaluate 10"
+        },
+        {
+          "id": "tea-evaluate 11"
+        },
+        {
+          "id": "tea-evaluate 12"
+        },
+        {
+          "id": "tea-evaluate 13"
+        },
+        {
+          "id": "tea-evaluate 64"
+        },
+        {
+          "id": "eval-quality-gates 1"
+        },
+        {
+          "id": "eval-quality-gates 64"
+        }
+      ],
+      "commentary": "The source and exit of each row of the AD-10 table in the skill's references/gaps.md, in table order. test:evaluate-dogfood holds this list equal to the table."
+    }
+  },
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "classify-exits",
+      "interfaceId": "evaluate-skill",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exit11\":{\"type\":\"string\"},\"exit12\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"exit11\",\"exit12\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "skills/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "classify-web-app",
+      "interfaceId": "evaluate-skill",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"targetKind\":{\"type\":\"string\"},\"interface\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"targetKind\",\"interface\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "skills/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 1 (Inspection) of this skill for the target described below, and stop once it is classified. Answer from the skill's own guides; do not run commands and do not write files.\n\nTarget: a web application for booking dental appointments. Patients use it in a browser; it serves HTML pages and a JSON HTTP API. It has no AI features.\n\nClassify the target with the skill's mapping. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"targetKind\": \"<the targetKind value>\", \"interface\": \"<the interface kind>\"}\n"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "list-exit-table",
+      "interfaceId": "evaluate-skill",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"id\",\"class\"],\"additionalProperties\":false}}},\"required\":[\"basis\",\"status\",\"exits\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "skills/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "refuse-no-exit",
+      "interfaceId": "evaluate-skill",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\",\"description\":\"One sentence saying what the request asked and why you answered or refused.\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"],\"description\":\"answered when you give an AD-10 class, refused when you give none.\"},\"class\":{\"type\":\"string\",\"description\":\"The AD-10 class you give. Omit this property when status is refused.\"}},\"required\":[\"basis\",\"status\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "skills/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 11 (Gaps) of this skill for the request below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe request is the JSON object that carries this text. Its exit field is the exit code of a failed `node cli/evaluate.js run --evaluation test/evaluations/example --partition development`, the one failed command, with no evidence artifact.\n\nGive the AD-10 class the gaps guide assigns to that source and exit, or refuse. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written. Answer with status \"answered\" and a class, or with status \"refused\" and no class property:\n{\"basis\": \"<one sentence>\", \"status\": \"answered or refused\", \"class\": \"<the class as the guide names it>\"}\n"
+          },
+          "exit": {
+            "matcher": "type-violating"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate copies the repository into a disposable workspace, provisions _bmad/ (the gitignored TEA config the skill loads) and node_modules/ read-only, and runs the skill runner there.",
+    "cleanup": "Nothing to remove: the agent runs read-only, and tea-evaluate removes every workspace when the run ends.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 4,
+    "maxWallClockMinutes": 12,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The agent runs with the read-only capability: it can read and search files and cannot write files or run commands.",
+    "Live legs run through the local Claude Code CLI on the owner's subscription, with no API key and no metered spend."
+  ],
+  "requiredEvidence": [
+    "The exit code and stdout of every skill runner call."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

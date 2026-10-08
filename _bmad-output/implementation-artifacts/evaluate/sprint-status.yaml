@@ -273,7 +273,7 @@ owner_handoff:
     note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
       /bmad-build worker picks it up. Runs on main after all five lanes drain,
       using the published engine resolved by the final TeA lockfile."
-    status: backlog
+    status: done
     depends_on:
       - 2-6-document-evaluate-for-the-people-who-use-it
       - 1-76-require-an-explicit-custom-agent-version-response

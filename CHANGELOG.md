@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The Evaluate skill's own evaluation (`test/evaluations/bmad-testarch-evaluate`) has an accepted baseline from a clean live run, and `test:evaluate-pr-suite` replays it on every pull request.
+  The run was clean (`dirty: false`) and executed 9 trial sets of 5 trials through the local Claude Code CLI. Every probe scored `PASS` with no coverage gap: the four clean controls `passed-clean-control`, the five seeded defects `caught`, and each mutation's rollback verified.
+  The suite's `pr` plan now places `oracle-agreement` and `replay`, and the `pr` tier holds each evaluation to the workspace its entry names: copy for a fixture target, git for the suite, which evaluates the skill in this repository.
+  The requirements statement records the owner's confirmation of B-003 and B-004.
+
 - Evaluate documentation (Story 2.6).
   A tutorial, `docs/tutorials/evaluate-your-first-skill.md`, takes one small skill from intake to a scored run, an accepted baseline and a green `ci --tier pr` against the shipped fixture `test/fixtures/evaluate-tutorial/`, and `test:docs-tutorial` runs its commands and holds its shown output.
   Eight how-to pages under `docs/how-to/evaluate/` cover evaluating a skill or agent, an MCP tool server and an HTTP API, choosing an evaluator and calibrating a judge, reading the gaps, comparing runs and accepting a baseline, putting an evaluation in CI, and bringing an existing suite.
