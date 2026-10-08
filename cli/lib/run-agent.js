@@ -210,8 +210,9 @@ function agentInvocation(
 /**
  * Whether `command` names an executable file: a path resolved against `cwd`, or a bare name looked up on `searchPath`.
  *
- * On Windows a command is found the way the spawn finds it: backslash is a path separator, and the
- * bare name is also tried with each PATHEXT extension (claude's native installer ships `claude.exe`).
+ * On Windows backslash is a path separator, and the bare name is also tried with each PATHEXT
+ * extension (claude's native installer ships `claude.exe`). A shim the spawn cannot run still
+ * fails at the spawn.
  */
 function executableFound(command, searchPath, cwd, { platform = process.platform, pathExt = process.env.PATHEXT } = {}) {
   const windows = platform === 'win32';

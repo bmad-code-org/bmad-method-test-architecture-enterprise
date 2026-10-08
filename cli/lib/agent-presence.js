@@ -37,7 +37,8 @@ const AGENT_SETUP = {
     install: 'npm install -g @openai/codex',
     statusArgv: ['login', 'status'],
     credentialEnv: ['CODEX_API_KEY'],
-    login: 'run `codex login`, or in CI `printenv OPENAI_API_KEY | codex login --with-api-key`',
+    login:
+      'run `codex login`, or in CI `printenv OPENAI_API_KEY | codex login --with-api-key`, or pass CODEX_API_KEY through with `--env-pass CODEX_API_KEY`',
   },
   agy: {
     install: null,

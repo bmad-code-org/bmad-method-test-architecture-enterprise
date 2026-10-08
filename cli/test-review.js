@@ -986,6 +986,20 @@ async function main() {
     }
   }
 
+  // An output the agent cannot write fails every attempt after the paid agent run,
+  // so the directories are made and checked once, up front, as an environment error.
+  for (const artifact of [outputPath, jsonPath]) {
+    if (artifact === null) {
+      continue;
+    }
+    try {
+      fs.mkdirSync(path.dirname(artifact), { recursive: true });
+      fs.accessSync(path.dirname(artifact), fs.constants.W_OK);
+    } catch (error) {
+      fail(EXIT.ENV_ERROR, `Cannot write ${artifact}: ${error.message}`);
+    }
+  }
+
   // A missing or logged-out agent CLI is an environment error with a fix, so it
   // is named here, before any attempt is paid for and where --retries cannot
   // repeat it. Installing and logging in the agent stays the caller's job.
@@ -1248,8 +1262,9 @@ async function main() {
     }
   };
 
-  // Exit 3 is the only retried outcome: an agent, report, or parse failure can be
-  // transient, while a verdict (1) or an environment error (2) will repeat itself.
+  // Only an agent or report-parse failure (exit 3) is retried: it can be transient,
+  // while a verdict (1) or an environment error (2) will repeat itself, and so will
+  // a failure to write the report artifact.
   let gateFailures;
   for (let attempt = 0; ; attempt += 1) {
     try {

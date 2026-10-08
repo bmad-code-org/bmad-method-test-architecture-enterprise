@@ -6817,6 +6817,21 @@ async function runTests() {
           // Nothing to restore when the stub never got that far.
         }
       }
+      if (process.platform !== 'win32' && !(typeof process.getuid === 'function' && process.getuid() === 0)) {
+        const readOnlyDir = path.join(tmpRoot, 'b1-readonly');
+        fs.mkdirSync(readOnlyDir, { recursive: true });
+        fs.chmodSync(readOnlyDir, 0o555);
+        const unwritable = runCli(
+          [...retryArgs('retry-unwritable', ['--retries', '1']), '--output', path.join(readOnlyDir, 'sub', 'test-review.md')],
+          retryEnv('retry-unwritable'),
+        );
+        fs.chmodSync(readOnlyDir, 0o755);
+        assert(
+          unwritable.status === 2 && attemptsOf('retry-unwritable') === 0 && unwritable.stderr.includes('Cannot write'),
+          'an output path the CLI cannot write exits 2 before any agent run',
+          `status=${unwritable.status} attempts=${attemptsOf('retry-unwritable')} stderr=${unwritable.stderr}`,
+        );
+      }
       const localDefault = runCli(retryArgs('retry-local'), retryEnv('retry-local', { STUB_FIRST_MODE: 'fail' }));
       assert(
         localDefault.status === 3 && attemptsOf('retry-local') === 1,
@@ -6937,6 +6952,7 @@ async function runTests() {
         assert(
           codexOut.status === 2 &&
             codexOut.stderr.includes('codex login --with-api-key') &&
+            codexOut.stderr.includes('--env-pass CODEX_API_KEY') &&
             fs.readFileSync(statusLog, 'utf8').trim() === 'login status',
           'a logged-out codex CLI exits 2 and names the API-key login',
           `status=${codexOut.status} stderr=${codexOut.stderr}`,

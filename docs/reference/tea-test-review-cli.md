@@ -190,12 +190,12 @@ A missing config is normal: CI installs the skill without running `bmad setup te
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                                                                                |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Review passed, was skipped, or a verdict failure was waived.                                                                                                                           |
-| `1`  | Review verdict fail: failing recommendation, `--min-score`, `--max-critical`, `--min-files`, `--fail-on-skip`, or a deletions-only diff, without an active waiver.                     |
-| `2`  | Environment or config error: skill not found, agent CLI missing or logged out, invalid flags, unsafe paths, git diff failure, a failed `--pr` base lookup, or the control-plane guard. |
-| `3`  | Agent or parse failure: agent errored, wrote no fresh report, or the report failed strict validation. `--retries` repeats the run first.                                               |
+| Code | Meaning                                                                                                                                                                                                           |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Review passed, was skipped, or a verdict failure was waived.                                                                                                                                                      |
+| `1`  | Review verdict fail: failing recommendation, `--min-score`, `--max-critical`, `--min-files`, `--fail-on-skip`, or a deletions-only diff, without an active waiver.                                                |
+| `2`  | Environment or config error: skill not found, agent CLI missing or logged out, invalid flags, unsafe paths, git diff failure, a failed `--pr` base lookup, or the control-plane guard.                            |
+| `3`  | Agent or parse failure: agent errored, wrote no fresh report, or the report failed strict validation. `--retries` repeats an agent or parse failure first; a failure to write the report artifact is not retried. |
 
 ### Waived semantics
 
