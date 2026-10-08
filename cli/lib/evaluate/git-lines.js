@@ -307,4 +307,13 @@ function run(job) {
 
 const input = [];
 process.stdin.on('data', (chunk) => input.push(chunk));
-process.stdin.on('end', () => run(JSON.parse(Buffer.concat(input).toString('utf8'))));
+process.stdin.on('error', (error) => fail(1, `the job on standard input could not be read: ${error.code ?? error.message}`));
+process.stdin.on('end', () => {
+  let job;
+  try {
+    job = JSON.parse(Buffer.concat(input).toString('utf8'));
+  } catch (error) {
+    return fail(1, `the job on standard input is not JSON: ${error.message}`);
+  }
+  run(job);
+});

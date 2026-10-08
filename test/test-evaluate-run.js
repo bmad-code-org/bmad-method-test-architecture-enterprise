@@ -10964,6 +10964,13 @@ async function checkWithheldHistoryReachUnits() {
     `the streaming reader over a failing git ended ${failedRead.status} and printed ${JSON.stringify(failedRead.stdout)}`,
   );
 
+  // A job that is not JSON is refused with a sentence and status 1, and nothing runs.
+  const garbled = spawnSync(process.execPath, [reader], { encoding: 'utf8', input: '{"mode": "missing", ', env: BASE_ENV });
+  check(
+    garbled.status === 1 && garbled.stdout === '' && garbled.stderr.includes('is not JSON'),
+    `the streaming reader over a job that is not JSON ended ${garbled.status}, printed ${JSON.stringify(garbled.stdout)} and said ${JSON.stringify(garbled.stderr.slice(0, 200))}`,
+  );
+
   // A stage that dies partway fails the whole job and prints nothing, so a history read in part never reads as a whole.
   const dying = tempDir('reach-unit-dying');
   fs.writeFileSync(
