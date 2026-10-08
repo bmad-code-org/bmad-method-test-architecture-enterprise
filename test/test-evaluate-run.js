@@ -245,6 +245,7 @@ function targetSandbox(options) {
 const {
   WorkspaceRefusal,
   adopterTreeState,
+  describeTreeChange,
   copyTreeInto,
   createWorkspace,
   gitAccessOf,
@@ -8512,6 +8513,36 @@ async function checkSharedStateAcrossSessions() {
     check(recorded(edited.runDirectory).adopterTree?.unchanged === false, `${label}: run.json does not record the adopter tree as changed`);
   }
 
+  // The exit 12 refusal names what changed: a ref moved mid-run by another session's fetch (the opted-out run reads the refs), then a
+  // tracked file edited mid-run, each named by its ref or its path, so nobody diagnoses the stop from file timestamps.
+  for (const [label, act, named] of [
+    [
+      'named-ref',
+      (project) => {
+        git(project.repository, ['update-ref', 'refs/remotes/origin/moved-while-in-flight', 'HEAD']);
+      },
+      ['refs: refs/remotes/origin/moved-while-in-flight added', 'shared git state'],
+    ],
+    [
+      'named-file',
+      (project) => fs.appendFileSync(path.join(project.project, 'rules', 'policy.txt'), '# edited while the run was in flight\n'),
+      ['files: rules/policy.txt (now in git status as M)'],
+    ],
+  ]) {
+    const project = makeProject(label, { toolchain: true, unconfined: true });
+    const edited = await heldRun(project, () => act(project));
+    check(edited.held, `${label}: the target never held, so the case proves nothing\n${edited.output}`);
+    check(edited.status === 12, `${label}: a run whose tree changed exited ${edited.status}; expected 12\n${edited.output}`);
+    check(edited.output.includes("the adopter's tree"), `${label}: the refusal does not name the adopter's tree:\n${edited.output}`);
+    check(/changed during the [a-z ]+, so no /.test(edited.output), `${label}: the refusal lost its existing wording:\n${edited.output}`);
+    for (const part of named) {
+      check(
+        edited.output.includes(`what changed: `) && edited.output.includes(part),
+        `${label}: the refusal does not name "${part}":\n${edited.output}`,
+      );
+    }
+  }
+
   // The evaluation layer (the command evaluator) runs outside the target's sandbox, and its profile denies a write under the
   // project's common git directory and under the hooks directory `core.hooksPath` names outside it: an evaluator that runs
   // `git update-ref`, appends to `.git/config` and writes a hook into each directory is refused each time, and the project's refs,
@@ -9102,15 +9133,57 @@ function checkAdopterTreeModes() {
   const baseline = { confined: read(project, false), full: read(project, true) };
   const keys = Object.keys(JSON.parse(baseline.confined));
   check(
-    JSON.stringify(keys) === JSON.stringify(['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes']),
-    `a confined reading holds the keys ${JSON.stringify(keys)}; expected the repository, HEAD, git directory, gitfile, hooks path, status and changes alone`,
+    JSON.stringify(keys) === JSON.stringify(['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes', 'files']),
+    `a confined reading holds the keys ${JSON.stringify(keys)}; expected the repository, HEAD, git directory, gitfile, hooks path, status, changes and files alone`,
   );
   const fullKeys = Object.keys(JSON.parse(baseline.full));
   check(
-    ['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes', 'refs', 'shared'].every((key) =>
+    ['repository', 'head', 'gitDirectory', 'gitFile', 'hooks', 'status', 'changes', 'files', 'refs', 'shared'].every((key) =>
       fullKeys.includes(key),
     ),
     `a full reading holds the keys ${JSON.stringify(fullKeys)}; expected the confined keys plus the refs and shared digest`,
+  );
+
+  // The difference between two full readings names the part that moved: a ref by its name, a file by its path, HEAD by its
+  // commits, the redirects and the shared git state by the part, and nothing when the readings are equal.
+  const described = (change) => {
+    const before = adopterTreeState(mutable.repository, { sharedState: true });
+    change();
+    return describeTreeChange(before, adopterTreeState(mutable.repository, { sharedState: true })).join('; ');
+  };
+  const mutable = makeProject('tree-described');
+  const policyFile = path.join(mutable.project, 'rules', 'policy.txt');
+  check(
+    describeTreeChange(JSON.parse(baseline.full), JSON.parse(baseline.full)).length === 0,
+    'two equal readings of the adopter tree were described as different',
+  );
+  const refMoved = described(() => git(mutable.repository, ['update-ref', 'refs/remotes/origin/named-by-test', 'HEAD']));
+  check(
+    refMoved.includes('refs: refs/remotes/origin/named-by-test added') && refMoved.includes('shared git state'),
+    `a ref created mid-run was described as "${refMoved}"; expected its name and the shared git state`,
+  );
+  const fileMoved = described(() => fs.appendFileSync(policyFile, '# first edit\n'));
+  check(
+    fileMoved.includes('files: rules/policy.txt (now in git status as M)'),
+    `a tracked file edited mid-run was described as "${fileMoved}"; expected its path`,
+  );
+  const contentMoved = described(() => fs.appendFileSync(policyFile, '# second edit\n'));
+  check(
+    contentMoved === 'files: rules/policy.txt (content)',
+    `a file edited again while already modified was described as "${contentMoved}"; expected its path with (content)`,
+  );
+  const created = [1, 2, 3, 4, 5].map((index) => path.join(mutable.project, `named-${index}.txt`));
+  const manyMoved = described(() => {
+    for (const file of created) fs.writeFileSync(file, 'new\n');
+  });
+  check(
+    manyMoved.includes('and 2 more') && manyMoved.split('named-').length === 4,
+    `five created files were described as "${manyMoved}"; expected three named and "and 2 more"`,
+  );
+  const headMoved = described(() => git(mutable.repository, ['commit', '--quiet', '--allow-empty', '--message', 'moved mid-run']));
+  check(
+    /^HEAD moved from [0-9a-f]{12} to [0-9a-f]{12}/.test(headMoved),
+    `a commit mid-run was described as "${headMoved}"; expected HEAD from and to`,
   );
 
   // What another session does in a second worktree of the repository moves no confined reading and every full one.

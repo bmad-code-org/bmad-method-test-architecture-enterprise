@@ -126,6 +126,7 @@ const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const {
   WorkspaceRefusal,
   adopterTreeState,
+  describeTreeChange,
   cleanUpOnSignal,
   createWorkspace,
   gitAccessOf,
@@ -930,7 +931,8 @@ async function runInWorkspaces({
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
   const treeUnchanged = (when, { record = true } = {}) => {
-    const unchanged = JSON.stringify(readTree()) === JSON.stringify(before);
+    const after = readTree();
+    const unchanged = JSON.stringify(after) === JSON.stringify(before);
     run.adopterTree.unchanged = unchanged;
     if (record || !unchanged) writeRun();
     if (!unchanged) {
@@ -944,7 +946,7 @@ async function runInWorkspaces({
           sealing: 'trial',
         }[when],
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents${confines(confinement) ? ' or HEAD' : ', HEAD or the refs and shared git state'})`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'qualification attempts', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents${confines(confinement) ? ' or HEAD' : ', HEAD or the refs and shared git state'})`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'qualification attempts', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; what changed: ${describeTreeChange(before, after).join('; ')}; if you edited files meanwhile, run again`,
       });
     }
   };
