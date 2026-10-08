@@ -441,7 +441,7 @@ function containLinks({ sourceTop, copyTop, scan }) {
  * not, or `null` when this host has none. Node's own `fs.cpSync` and `fs.copyFileSync` never clone on macOS, whatever
  * `COPYFILE_FICLONE` they are given: a workspace made through them costs the full size of its tree (the project's
  * `node_modules` is gigabytes), where `cp -c` on APFS and `cp --reflink=auto` on btrfs and XFS cost almost nothing.
- * Found once per process by running the command over a small file, so a `cp` that does not take the flags (busybox) or a
+ * Found once per process by offering the command its clone flag, so a `cp` that does not take it (busybox) or a
  * host without one (Windows) is `null` and the copy falls back to `fs.cpSync`.
  */
 let cloneCopierFound;
@@ -450,23 +450,17 @@ function cloneCopier() {
   cloneCopierFound = null;
   const candidate =
     process.platform === 'darwin'
-      ? { command: '/bin/cp', flags: ['-c', '-p'] }
+      ? { command: '/bin/cp', clone: '-c', flags: ['-c', '-p'] }
       : process.platform === 'linux'
-        ? { command: 'cp', flags: ['--reflink=auto', '--preserve=mode,timestamps'] }
+        ? { command: 'cp', clone: '--reflink=auto', flags: ['--reflink=auto', '--preserve=mode,timestamps'] }
         : null;
   if (candidate === null) return cloneCopierFound;
-  let probe = null;
-  try {
-    probe = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-clone-probe-'));
-    fs.writeFileSync(path.join(probe, 'from'), 'probe');
-    const copied = spawnSync(candidate.command, [...candidate.flags, path.join(probe, 'from'), path.join(probe, 'to')], {
-      stdio: 'ignore',
-    });
-    if (copied.status === 0 && fs.readFileSync(path.join(probe, 'to'), 'utf8') === 'probe') cloneCopierFound = candidate;
-  } catch {
-    // No usable copier: the plain copy below serves.
-  } finally {
-    if (probe !== null) fs.rmSync(probe, { recursive: true, force: true });
+  // A copy of a path that cannot exist fails for its missing source, and for a flag the command does not take it fails
+  // naming the flag; either way nothing is made, so the probe leaves nothing behind.
+  const missing = path.join(os.devNull, 'probe');
+  const probe = spawnSync(candidate.command, [candidate.clone, missing, `${missing}-copy`], { encoding: 'utf8' });
+  if (!probe.error && !/illegal option|unrecognized option|invalid option|unknown option|usage:/i.test(probe.stderr)) {
+    cloneCopierFound = candidate;
   }
   return cloneCopierFound;
 }
