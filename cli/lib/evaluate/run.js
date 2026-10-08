@@ -86,6 +86,14 @@ const AjvModule = require('ajv/dist/2020');
 const { AGENT_VERSION_CEILING_MS, observeAgentVersion } = require('../agent-adapters');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
+const {
+  KNOWN_DEFECT_PREFIX,
+  NOT_A_BASELINE,
+  beforeStateNote,
+  declaresKnownDefect,
+  mayFailBaseline,
+  undecidedNote,
+} = require('./before-state');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
@@ -224,11 +232,16 @@ function refusal({ folder, selectedProbeIds = null }) {
  * @param {string} [options.partition] `development` or `held-out`; everything when absent
  * @param {number} [options.trials] trials per arm, for a caller that asks for a count other than `evaluation.json`'s
  *   (`tea-evaluate ci`'s twin run asks for the scoring policy's `minimumTrialCount`); the evaluation's own when absent
+ * @param {boolean} [options.beforeState] record a before state: a clean control that declares a known defect
+ *   (`before-state.js`) may fail its baseline, and the run is marked so it is never accepted as a baseline
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
  * @returns {Promise<PreflightOutcome>}
  */
-function runRunCommand(folder, { fromWorkingTree = false, partition, trials, seed, env = process.env, log = () => {} } = {}) {
+function runRunCommand(
+  folder,
+  { fromWorkingTree = false, partition, trials, seed, beforeState = false, env = process.env, log = () => {} } = {},
+) {
   if (trials !== undefined && !(Number.isInteger(trials) && trials >= 1))
     return Promise.resolve(
       new PreflightOutcome({
@@ -266,8 +279,18 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
     prepare: async (context) => {
       const refused = refusal({ ...context, selectedProbeIds });
       if (refused !== null) return refused;
-      const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
       const probes = committedProbes(folder);
+      if (
+        beforeState &&
+        !probes.some(({ probe }) => (selectedProbeIds === null || selectedProbeIds.has(probe.probeId)) && declaresKnownDefect(probe))
+      ) {
+        return new PreflightOutcome({
+          stage: 'check',
+          exitCode: 64,
+          message: `--before-state needs a clean control whose noKnownDefectStatement begins "${KNOWN_DEFECT_PREFIX}" in ${partition === undefined ? 'the evaluation' : `the ${partition} partition`}; none does, so run without it`,
+        });
+      }
+      const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
       let layer;
       try {
         layer = readEvaluatorLayer({
@@ -293,6 +316,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
         operationPhases: structuredClone(context.evaluation.operationPhases ?? {}),
         partition: partition ?? 'both',
         trials: trials ?? null,
+        beforeState,
         calibration: readCalibration(folder),
         layer,
       };
@@ -353,6 +377,8 @@ async function qualifyCleanControls({
   seed,
   signal,
   snapshot,
+  run,
+  writeRun,
 }) {
   const controls = committedProbes(folder).filter(
     ({ probe }) =>
@@ -377,6 +403,7 @@ async function qualifyCleanControls({
     discard(workspace);
   }
   const materialized = [];
+  const beforeControls = [];
   for (const { file, probe } of controls) {
     const oracles = await evaluateOracles({
       contract,
@@ -385,24 +412,35 @@ async function qualifyCleanControls({
       regexMatchStepBudget: policy.regexMatchStepBudget,
     });
     const verdict = armVerdict(oracles);
-    const evidenceFile = `qualification/${probe.probeId}/baseline-pass.json`;
+    // A before-state run lets a control that declares its defect fail, provided every oracle decided and one violated.
+    const knownFailing = snapshot.beforeState && mayFailBaseline(probe, oracles);
+    const evidenceFile = `qualification/${probe.probeId}/${knownFailing ? 'baseline-known-failing' : 'baseline-pass'}.json`;
     writer.writeJson(evidenceFile, {
       probeId: probe.probeId,
-      phase: 'baseline-pass',
+      phase: knownFailing ? 'baseline-known-failing' : 'baseline-pass',
       workspace: workspace.label,
       verdict,
       oracles,
       steps: arm.steps,
     });
-    if (oracles.length === 0 || verdict !== 'held') {
+    if (oracles.length === 0 || (verdict !== 'held' && !knownFailing)) {
       throw stop({
         stage: 'qualification',
         exitCode: oracles.length === 0 ? 10 : 11,
         message:
           oracles.length === 0
             ? `${file}: behavior ${probe.behaviorId} declares no oracle, so the clean control has nothing to pass`
-            : `${file}: the clean control's baseline does not pass (its oracles are ${verdict}), so it cannot qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}`,
+            : `${file}: the clean control's baseline does not pass (its oracles are ${verdict}), so it cannot qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}${
+                snapshot.beforeState
+                  ? `; --before-state lets a control fail only when its noKnownDefectStatement begins "${KNOWN_DEFECT_PREFIX}" and every oracle decided with one violated${undecidedNote(oracles)}`
+                  : declaresKnownDefect(probe)
+                    ? '; its statement declares a known defect, so record the before state with tea-evaluate run --before-state'
+                    : ''
+              }`,
       });
+    }
+    if (snapshot.beforeState && declaresKnownDefect(probe)) {
+      beforeControls.push({ probeId: probe.probeId, statement: probe.qualification.noKnownDefectStatement, baseline: verdict });
     }
     const candidate = {
       schemaVersion: expectedSchemaVersion('probe'),
@@ -428,8 +466,20 @@ async function qualifyCleanControls({
     };
     const refused = await admissionRefusal({ candidate, contract, engine, validate });
     if (refused !== null) throw stop({ stage: 'qualification', exitCode: 10, message: `${file}: ${refused}` });
-    log(`${file}: qualified; its baseline passed`);
+    log(
+      knownFailing
+        ? `${file}: recorded as known-failing; its baseline does not pass, as its statement declares`
+        : `${file}: qualified; its baseline passed${
+            declaresKnownDefect(probe)
+              ? `; its statement still declares a known defect, so update it: compare refuses a run whose clean control declares one${snapshot.beforeState ? '' : ', and --before-state records the starting point'}`
+              : ''
+          }`,
+    );
     materialized.push(candidate);
+  }
+  if (snapshot.beforeState) {
+    run.beforeState = { notABaseline: NOT_A_BASELINE, controls: beforeControls };
+    writeRun();
   }
   return materialized;
 }
@@ -2039,15 +2089,15 @@ async function completeRun(
     .join(' ');
   const sealedMessage =
     trialCount === null
-      ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}`;
+      ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}${beforeStateNote(run.beforeState)}`
+      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}${beforeStateNote(run.beforeState)}`;
   const result = outcome({
     stage: 'trial',
     exitCode: mountsRefusal === '' ? 0 : 3,
     message:
       mountsRefusal === ''
         ? sealedMessage
-        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.`,
+        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path${beforeStateNote(run.beforeState)}.`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.

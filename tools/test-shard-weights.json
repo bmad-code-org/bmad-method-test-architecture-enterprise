@@ -61,6 +61,7 @@
   "test:evaluate-arms-deployments": 364.1,
   "test:evaluate-arms-historical": 269,
   "test:evaluate-authoring": 18.5,
+  "test:evaluate-before-state": 12,
   "test:evaluate-boundaries": 84.3,
   "test:evaluate-calibration": 63.1,
   "test:evaluate-check": 530.3,
