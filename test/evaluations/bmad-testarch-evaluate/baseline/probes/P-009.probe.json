@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-009",
+  "probeClass": "defect",
+  "behaviorId": "B-004",
+  "systemId": "bmad-testarch-evaluate",
+  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
+  "artifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "rationale": "[malformed] Seeded defect: M-005 gives a request with no usable exit the evaluation weakness class, so Stage 11 guesses a class where its guide says it has none.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "references/gaps.md: the sentence that says a request naming no usable exit has no class gives it a class",
+    "mutationOperator": "replace-exact: \"has no class: say so, ask for the source, exit and stderr, and never guess a class.\" -> \"is an evaluation weakness: give that class and never ask for more.\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "skills/bmad-testarch-evaluate/references/gaps.md",
+      "privateRef": null,
+      "digest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448"
+    },
+    "expectedObservableFailure": "Given a request whose exit field is not a number, Stage 11 names the evaluation weakness class, so the refuse-no-exit reply carries status \"answered\" and a class.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-009/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:d83bc11b89d5cfd0ec51cef00bf6549c71e0dd531a6eeae3b84420b2aff2d0bc"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-009/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:0c769a137f4402636af89ea19d0cb5a99e06fa6e1fd7e0ecdb84eb89d12a9a60"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-005",
+      "behaviorId": "B-004",
+      "summary": "The gaps guide gives a request with no usable exit a class instead of a refusal.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261008T091018365Z-868be12a/qualification/P-009/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:0c769a137f4402636af89ea19d0cb5a99e06fa6e1fd7e0ecdb84eb89d12a9a60"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-guessed-class",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\",\"description\":\"One sentence saying what the request asked and why you answered or refused.\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"],\"description\":\"answered when you give an AD-10 class, refused when you give none.\"},\"class\":{\"type\":\"string\",\"description\":\"The AD-10 class you give. Omit this property when status is refused.\"}},\"required\":[\"basis\",\"status\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": "Run only Stage 11 (Gaps) of this skill for the request below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe request is the JSON object that carries this text. Its exit field is the exit code of a failed `node cli/evaluate.js run --evaluation test/evaluations/example --partition development`, the one failed command, with no evidence artifact.\n\nGive the AD-10 class the gaps guide assigns to that source and exit, or refuse. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written. Answer with status \"answered\" and a class, or with status \"refused\" and no class property:\n{\"basis\": \"<one sentence>\", \"status\": \"answered or refused\", \"class\": \"<the class as the guide names it>\"}\n",
+              "exit": "malformed"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-guessed-class/stdout/status"
+                },
+                {
+                  "literal": "answered"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-guessed-class/stdout/class"
+                },
+                {
+                  "literal": "evaluation weakness"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Run only Stage 11 (Gaps) of this skill for the request below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe request is the JSON object that carries this text. Its exit field is the exit code of a failed `node cli/evaluate.js run --evaluation test/evaluations/example --partition development`, the one failed command, with no evidence artifact.\n\nGive the AD-10 class the gaps guide assigns to that source and exit, or refuse. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written. Answer with status \"answered\" and a class, or with status \"refused\" and no class property:\n{\"basis\": \"<one sentence>\", \"status\": \"answered or refused\", \"class\": \"<the class as the guide names it>\"}\n"
+            },
+            "exit": {
+              "matcher": "type-violating"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/status"
+              },
+              {
+                "literal": "answered"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/class"
+              },
+              {
+                "literal": "evaluation weakness"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

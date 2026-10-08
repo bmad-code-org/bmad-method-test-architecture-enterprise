@@ -21,21 +21,23 @@ const ROOT = path.join(__dirname, '..', '..');
 const GRADER_ENV = Object.freeze({ GRADER_SECRET: 'grader-secret-value-0123', GRADER_TOKEN: 'grader-token-value-4567' });
 
 /**
- * Every evaluation TeA runs on `pr`, by the Story that added it. `baseline` is false for the Evaluate-authored suite: its
- * `check`, `compile` and `seal` run now, and its replay joins them when Story H.1 accepts the clean baseline.
+ * Every evaluation TeA runs on `pr`, by the Story that added it, each with the workspace its `evaluation.json` declares. A
+ * fixture target declares a copy workspace (AD-8). The Evaluate-authored suite evaluates the skill in this repository, so it
+ * declares a git workspace with `_bmad` and `node_modules` provisioned, and its replay holds the baseline Story H.1 accepted
+ * from a clean run of that workspace.
  */
 const EVALUATIONS = Object.freeze([
-  { key: 'mcp', story: '1.10', folder: 'test/fixtures/evaluate-mcp/evals/grader', env: GRADER_ENV, baseline: true },
-  { key: 'api', story: '1.11', folder: 'test/fixtures/evaluate-api/evals/grader', env: GRADER_ENV, baseline: true },
-  { key: 'suite', story: '1.16', folder: 'test/evaluations/bmad-testarch-evaluate', env: {}, baseline: false },
-  { key: 'workflow', story: '1.18', folder: 'test/fixtures/evaluate-workflow/evals/records', env: {}, baseline: true },
-  { key: 'tool-use', story: '1.19', folder: 'test/fixtures/evaluate-tool-use-agent/evals/tool-use', env: {}, baseline: true },
-  { key: 'promptfoo', story: '1.20', folder: 'test/fixtures/evaluate-promptfoo/evals/summary', env: {}, baseline: true },
-  { key: 'ai-feature', story: '1.24', folder: 'test/fixtures/evaluate-authoring/ai-feature/evaluation', env: {}, baseline: true },
-  { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {}, baseline: true },
-  { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {}, baseline: true },
-  { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {}, baseline: true },
-  { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {}, baseline: true },
+  { key: 'mcp', story: '1.10', folder: 'test/fixtures/evaluate-mcp/evals/grader', env: GRADER_ENV },
+  { key: 'api', story: '1.11', folder: 'test/fixtures/evaluate-api/evals/grader', env: GRADER_ENV },
+  { key: 'suite', story: '1.16', folder: 'test/evaluations/bmad-testarch-evaluate', env: {}, workspace: 'git' },
+  { key: 'workflow', story: '1.18', folder: 'test/fixtures/evaluate-workflow/evals/records', env: {} },
+  { key: 'tool-use', story: '1.19', folder: 'test/fixtures/evaluate-tool-use-agent/evals/tool-use', env: {} },
+  { key: 'promptfoo', story: '1.20', folder: 'test/fixtures/evaluate-promptfoo/evals/summary', env: {} },
+  { key: 'ai-feature', story: '1.24', folder: 'test/fixtures/evaluate-authoring/ai-feature/evaluation', env: {} },
+  { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {} },
+  { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {} },
+  { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {} },
+  { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {} },
 ]);
 
 const scriptOf = (entry) => `test:evaluate-pr-${entry.key}`;
@@ -199,9 +201,8 @@ function workflowProblems(workflow) {
 }
 
 /** The ids of the checks a `pr` plan must carry for the evaluation in `folder`. */
-function requiredChecks(folder, entry) {
+function requiredChecks(folder) {
   const ids = ['check', 'compile', 'seal'];
-  if (!entry.baseline) return ids;
   if (read(path.join(folder, 'evaluation.json')).interface === 'api') ids.push('api-conformance');
   const probes = path.join(folder, 'probes');
   const gameability = fs
@@ -215,11 +216,12 @@ function requiredChecks(folder, entry) {
 
 /**
  * The problems of an evaluation folder at rest: its plan places the `pr` checks its probes and interface call for, and its
- * baseline holds a clean (`dirty` false), completed copy-workspace run of both partitions, recorded on the installed engine
- * release, that its manifest names as `acceptedRun`, in an evaluation whose `evaluation.json` declares the copy workspace.
+ * baseline holds a clean (`dirty` false), completed run of both partitions from the workspace its entry names (copy unless the
+ * entry says otherwise), recorded on the installed engine release, that its manifest names as `acceptedRun`, in an evaluation
+ * whose `evaluation.json` declares that workspace.
  *
  * @param {string} folder the evaluation folder
- * @param {{key: string, baseline: boolean}} entry
+ * @param {{key: string, workspace?: string}} entry
  * @param {string} engineVersion the installed eval-quality release
  */
 function folderProblems(folder, entry, engineVersion) {
@@ -236,16 +238,11 @@ function folderProblems(folder, entry, engineVersion) {
       problems.push(`${entry.key}: ${item.id} runs over ${JSON.stringify(item.command[flag + 1])}, not ${entry.folder}`);
   }
   const placed = plan.checks.filter((item) => item.placement.tier === 'pr').map((item) => item.id);
-  const required = requiredChecks(folder, entry);
+  const required = requiredChecks(folder);
   for (const id of required) if (!placed.includes(id)) problems.push(`${entry.key}: the pr tier lacks ${id}`);
   for (const id of placed)
     if (!required.includes(id)) problems.push(`${entry.key}: the pr tier places ${id}, which this evaluation does not call for`);
   const baseline = path.join(folder, 'baseline');
-  if (!entry.baseline) {
-    if (fs.existsSync(path.join(baseline, 'baseline.json')))
-      problems.push(`${entry.key}: a baseline exists, so the replay belongs in the pr tier`);
-    return problems;
-  }
   let manifest;
   let accepted;
   try {
@@ -260,13 +257,14 @@ function folderProblems(folder, entry, engineVersion) {
     );
   if (accepted.dirty !== false) problems.push(`${entry.key}: the baseline records a dirty run`);
   if (accepted.completed !== true) problems.push(`${entry.key}: the baseline run did not complete`);
+  const expected = entry.workspace ?? 'copy';
+  const why = expected === 'copy' ? 'a fixture target declares a copy workspace (AD-8)' : `its entry names a ${expected} workspace`;
   const declared = read(path.join(folder, 'evaluation.json')).workspace?.kind;
-  if (declared !== 'copy')
-    problems.push(`${entry.key}: evaluation.json declares a ${declared} workspace; a fixture target declares a copy workspace (AD-8)`);
-  if (accepted.workspace?.kind !== 'copy')
-    problems.push(
-      `${entry.key}: the baseline came from a ${accepted.workspace?.kind} workspace; a fixture target declares a copy workspace (AD-8)`,
-    );
+  if (declared !== expected) problems.push(`${entry.key}: evaluation.json declares a ${declared} workspace; ${why}`);
+  // A run records the workspace it made: a `git` evaluation's run records the detached `git-worktree` it ran in.
+  const made = expected === 'git' ? 'git-worktree' : expected;
+  if (accepted.workspace?.kind !== made)
+    problems.push(`${entry.key}: the baseline came from a ${accepted.workspace?.kind} workspace; ${why}`);
   if (accepted.invocationId !== manifest.acceptedRun)
     problems.push(`${entry.key}: the baseline manifest names another run than the one it holds`);
   if (manifest.partition !== 'both') problems.push(`${entry.key}: the baseline records the ${manifest.partition} partition, not both`);
@@ -282,8 +280,7 @@ function resultProblems(entry, status, ciJson, plan) {
   if (JSON.stringify(ran) !== JSON.stringify(expected))
     problems.push(`${entry.key}: the checks that ran were ${JSON.stringify(ran)}, the plan places ${JSON.stringify(expected)}`);
   for (const row of ciJson.checks ?? []) if (row.exit !== 0) problems.push(`${entry.key}: ${row.id} exited ${row.exit} (${row.class})`);
-  if (entry.baseline && ciJson.baseline?.stale !== false)
-    problems.push(`${entry.key}: the baseline is stale: ${JSON.stringify(ciJson.baseline?.reasons)}`);
+  if (ciJson.baseline?.stale !== false) problems.push(`${entry.key}: the baseline is stale: ${JSON.stringify(ciJson.baseline?.reasons)}`);
   return problems;
 }
 

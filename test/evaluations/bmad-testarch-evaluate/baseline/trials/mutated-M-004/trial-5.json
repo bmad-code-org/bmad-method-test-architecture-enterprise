@@ -1,0 +1,304 @@
+{
+  "conditionArm": "mutated:M-004",
+  "trialIndex": 5,
+  "workspace": "trial-mutated-M-004-5",
+  "elapsedMs": 96844,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-5-classify-exits"
+      ]
+    },
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-5-classify-web-app"
+      ]
+    },
+    {
+      "oracleId": "O-003",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "trial-5-list-exit-table",
+        "trial-5-classify-exits"
+      ]
+    },
+    {
+      "oracleId": "O-004",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-5-refuse-no-exit"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "classify-exits",
+      "request": {
+        "probeId": "trial-5-classify-exits",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exit11\":{\"type\":\"string\"},\"exit12\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"exit11\",\"exit12\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": [
+            "HOME",
+            "LOGNAME",
+            "USER"
+          ],
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-5-classify-exits",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "basis": "Gaps guide's AD-10 table rows `tea-evaluate 11` (evaluation weakness) and `tea-evaluate 12` (infrastructure), since both commands run via `node cli/evaluate.js` (the `tea-evaluate` source) per Stage 6's TeA-own-package convention.",
+            "status": "answered",
+            "exit11": "evaluation weakness",
+            "exit12": "infrastructure"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49785,\"outputTokens\":763,\"costUsd\":\"0.0779646\"}\n"
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "classify-web-app",
+      "request": {
+        "probeId": "trial-5-classify-web-app",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"targetKind\":{\"type\":\"string\"},\"interface\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"targetKind\",\"interface\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": [
+            "HOME",
+            "LOGNAME",
+            "USER"
+          ],
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 1 (Inspection) of this skill for the target described below, and stop once it is classified. Answer from the skill's own guides; do not run commands and do not write files.\n\nTarget: a web application for booking dental appointments. Patients use it in a browser; it serves HTML pages and a JSON HTTP API. It has no AI features.\n\nClassify the target with the skill's mapping. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"targetKind\": \"<the targetKind value>\", \"interface\": \"<the interface kind>\"}\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-5-classify-web-app",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "basis": "Per references/inspection.md's mapping table, a web application is classified as the `ai-feature` target kind even with no AI behavior, taking the interface of that row's `ai-feature` / `api` entry.",
+            "status": "answered",
+            "targetKind": "ai-feature",
+            "interface": "api"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43999,\"outputTokens\":643,\"costUsd\":\"0.053700399999999995\"}\n"
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "list-exit-table",
+      "request": {
+        "probeId": "trial-5-list-exit-table",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"id\",\"class\"],\"additionalProperties\":false}}},\"required\":[\"basis\",\"status\",\"exits\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": [
+            "HOME",
+            "LOGNAME",
+            "USER"
+          ],
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-5-list-exit-table",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "basis": "Rows transcribed top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in skills/bmad-testarch-evaluate/references/gaps.md, taking column 1 (source and exit) and column 2 (AD-10 class) exactly as written.",
+            "status": "answered",
+            "exits": [
+              {
+                "id": "eval-quality 0",
+                "class": "pass or CONCERNS"
+              },
+              {
+                "id": "eval-quality 2",
+                "class": "target behavior failure or evidence integrity"
+              },
+              {
+                "id": "eval-quality 3",
+                "class": "infrastructure or integrity"
+              },
+              {
+                "id": "eval-quality 4",
+                "class": "contract authoring defect"
+              },
+              {
+                "id": "eval-quality 5",
+                "class": "runtime fault"
+              },
+              {
+                "id": "eval-quality 64",
+                "class": "wiring defect"
+              },
+              {
+                "id": "tea-evaluate 10",
+                "class": "authoring defect"
+              },
+              {
+                "id": "tea-evaluate 11",
+                "class": "evaluation weakness"
+              },
+              {
+                "id": "tea-evaluate 12",
+                "class": "infrastructure"
+              },
+              {
+                "id": "tea-evaluate 64",
+                "class": "wiring defect"
+              },
+              {
+                "id": "eval-quality-gates 1",
+                "class": "repository policy violation"
+              },
+              {
+                "id": "eval-quality-gates 64",
+                "class": "wiring defect"
+              }
+            ]
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":37446,\"outputTokens\":989,\"costUsd\":\"0.0447082\"}\n"
+        },
+        "artifacts": {}
+      }
+    },
+    {
+      "stepId": "refuse-no-exit",
+      "request": {
+        "probeId": "trial-5-refuse-no-exit",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "executable": "tea-skill-runner",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\",\"description\":\"One sentence saying what the request asked and why you answered or refused.\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"],\"description\":\"answered when you give an AD-10 class, refused when you give none.\"},\"class\":{\"type\":\"string\",\"description\":\"The AD-10 class you give. Omit this property when status is refused.\"}},\"required\":[\"basis\",\"status\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": [
+            "HOME",
+            "LOGNAME",
+            "USER"
+          ],
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "prompt": "Run only Stage 11 (Gaps) of this skill for the request below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe request is the JSON object that carries this text. Its exit field is the exit code of a failed `node cli/evaluate.js run --evaluation test/evaluations/example --partition development`, the one failed command, with no evidence artifact.\n\nGive the AD-10 class the gaps guide assigns to that source and exit, or refuse. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written. Answer with status \"answered\" and a class, or with status \"refused\" and no class property:\n{\"basis\": \"<one sentence>\", \"status\": \"answered or refused\", \"class\": \"<the class as the guide names it>\"}\n",
+              "exit": "malformed"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-5-refuse-no-exit",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "json",
+          "value": {
+            "basis": "The gaps guide's exit-to-class table lists only exits 10, 11, 12 and 64 for tea-evaluate, and its own rule says a request naming an exit the table does not list has no class and must not be guessed, so an exit of \\\"malformed\\\" is refused.",
+            "status": "refused"
+          }
+        },
+        "stderr": {
+          "kind": "text",
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50256,\"outputTokens\":946,\"costUsd\":\"0.0806488\"}\n"
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "legId": "manifest-exit-11",
+  "sequence": 5,
+  "workspace": "mutated:M-001",
+  "cwd": "<workspace>",
+  "request": {
+    "probeId": "manifest-exit-11",
+    "interfaceId": "evaluate-skill",
+    "operationId": "run-skill",
+    "kind": "cli",
+    "executable": "tea-skill-runner",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {
+        "agent": "claude",
+        "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exit11\":{\"type\":\"string\"},\"exit12\":{\"type\":\"string\"}},\"required\":[\"basis\",\"status\",\"exit11\",\"exit12\"],\"additionalProperties\":false}",
+        "capability": "read-only",
+        "model": "claude-sonnet-5",
+        "skill-root": "skills/bmad-testarch-evaluate",
+        "timeout-ms": "300000"
+      },
+      "environment": [
+        "HOME",
+        "LOGNAME",
+        "USER"
+      ],
+      "stdin": {
+        "kind": "text",
+        "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"status\": \"answered\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+      }
+    }
+  },
+  "observation": {
+    "probeId": "manifest-exit-11",
+    "interfaceId": "evaluate-skill",
+    "operationId": "run-skill",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "basis": "Gaps guide table 'Map AD-10 exits and classes to repairs' rows 'tea-evaluate 11' and 'tea-evaluate 12' both name the source as tea-evaluate (the node cli/evaluate.js CLI) and assign class 'infrastructure' to each exit.",
+        "status": "answered",
+        "exit11": "infrastructure",
+        "exit12": "infrastructure"
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":34749,\"outputTokens\":616,\"costUsd\":\"0.073917\"}\n"
+    },
+    "artifacts": {}
+  }
+}

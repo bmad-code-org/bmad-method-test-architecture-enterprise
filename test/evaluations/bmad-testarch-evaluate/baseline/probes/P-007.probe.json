@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "systemId": "bmad-testarch-evaluate",
+  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
+  "artifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "rationale": "[representative] Seeded defect: M-004 removes the tea-evaluate 13 row from the exit table, so Stage 11 lists twelve exits and an adopter learns no class for the evidence-drift exit.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "references/gaps.md: the tea-evaluate 13 row of the AD-10 exit table is gone",
+    "mutationOperator": "replace-exact: \"| `tea-evaluate 13`       | evaluation evidence drift                     | Read the differences the `pr` replay lists and repair what moved them, or run `tea-evaluate compare --accept` once the adopter confirms the new evidence is intended; `ci --tier pr` exits 13 on drift.                                                                                                                                                                                                                                                                                                                                      |\\n\" -> \"\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "skills/bmad-testarch-evaluate/references/gaps.md",
+      "privateRef": null,
+      "digest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448"
+    },
+    "expectedObservableFailure": "Asked for the complete exit table, Stage 11 lists twelve rows, so the list-exit-table reply carries an exits array of twelve records without tea-evaluate 13.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-007/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:d7efa4cdb496b420d9938146baa6f55d7240ac37928a164e27bef6e40b7dfd68"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-007/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:2d82ec306e5bca04094ee727052c46aacd9ff91d5c42de7b08bc3970f74a4948"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-004",
+      "behaviorId": "B-003",
+      "summary": "The exit table lacks its tea-evaluate 13 row.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261008T091018365Z-868be12a/qualification/P-007/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:2d82ec306e5bca04094ee727052c46aacd9ff91d5c42de7b08bc3970f74a4948"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-list-twelve",
+        "interfaceId": "evaluate-skill",
+        "operationId": "run-skill",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude",
+            "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"]},\"exits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"id\",\"class\"],\"additionalProperties\":false}}},\"required\":[\"basis\",\"status\",\"exits\"],\"additionalProperties\":false}",
+            "capability": "read-only",
+            "model": "claude-sonnet-5",
+            "skill-root": "skills/bmad-testarch-evaluate",
+            "timeout-ms": "300000"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+          }
+        },
+        "relation": {
+          "op": "count-tolerance",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-list-twelve/stdout/exits"
+            }
+          ],
+          "expected": 12,
+          "tolerance": 0,
+          "relative": false
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-skill-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter asks for the complete content of the AD-10 exit table: every source-and-exit row of the gaps guide's table \"Map AD-10 exits and classes to repairs\".\n\nList every row of that table in the table's top-to-bottom order. For each row give its id, which is the first column without backticks (for example \"tea-evaluate 11\"), and its class, which is the second column exactly as written. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence>\", \"status\": \"answered\", \"exits\": [{\"id\": \"<source and exit>\", \"class\": \"<class>\"}]}\n"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "count-tolerance",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/exits"
+          }
+        ],
+        "expected": 12,
+        "tolerance": 0,
+        "relative": false
+      }
+    }
+  }
+}

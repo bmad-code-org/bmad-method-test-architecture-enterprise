@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "invocationId": "20261008T091018365Z-868be12a",
+  "corpusDigest": "sha256:56f4df83272e44b161942474c6c4f0d490e051a5b9506ba1a045440a1862d803",
+  "contract": "eval-contract.json",
+  "policy": "scoring-policy.json",
+  "preflightVerdict": "preflight-verdict.json",
+  "evaluatorConfiguration": "evaluator-configuration.json",
+  "trialSets": [
+    {
+      "probeId": "P-001",
+      "runId": "20261008T091018365Z-868be12a-P-001",
+      "conditionArm": "clean",
+      "probe": "probes/P-001.probe.json",
+      "records": [
+        "trial-sets/P-001/record-1.json",
+        "trial-sets/P-001/record-2.json",
+        "trial-sets/P-001/record-3.json",
+        "trial-sets/P-001/record-4.json",
+        "trial-sets/P-001/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-001/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-004",
+      "runId": "20261008T091018365Z-868be12a-P-004",
+      "conditionArm": "clean",
+      "probe": "probes/P-004.probe.json",
+      "records": [
+        "trial-sets/P-004/record-1.json",
+        "trial-sets/P-004/record-2.json",
+        "trial-sets/P-004/record-3.json",
+        "trial-sets/P-004/record-4.json",
+        "trial-sets/P-004/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-004/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-006",
+      "runId": "20261008T091018365Z-868be12a-P-006",
+      "conditionArm": "clean",
+      "probe": "probes/P-006.probe.json",
+      "records": [
+        "trial-sets/P-006/record-1.json",
+        "trial-sets/P-006/record-2.json",
+        "trial-sets/P-006/record-3.json",
+        "trial-sets/P-006/record-4.json",
+        "trial-sets/P-006/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-006/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-008",
+      "runId": "20261008T091018365Z-868be12a-P-008",
+      "conditionArm": "clean",
+      "probe": "probes/P-008.probe.json",
+      "records": [
+        "trial-sets/P-008/record-1.json",
+        "trial-sets/P-008/record-2.json",
+        "trial-sets/P-008/record-3.json",
+        "trial-sets/P-008/record-4.json",
+        "trial-sets/P-008/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-008/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-002",
+      "runId": "20261008T091018365Z-868be12a-P-002",
+      "conditionArm": "mutated:M-001",
+      "probe": "probes/P-002.probe.json",
+      "records": [
+        "trial-sets/P-002/record-1.json",
+        "trial-sets/P-002/record-2.json",
+        "trial-sets/P-002/record-3.json",
+        "trial-sets/P-002/record-4.json",
+        "trial-sets/P-002/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-002/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-003",
+      "runId": "20261008T091018365Z-868be12a-P-003",
+      "conditionArm": "mutated:M-002",
+      "probe": "probes/P-003.probe.json",
+      "records": [
+        "trial-sets/P-003/record-1.json",
+        "trial-sets/P-003/record-2.json",
+        "trial-sets/P-003/record-3.json",
+        "trial-sets/P-003/record-4.json",
+        "trial-sets/P-003/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-003/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-005",
+      "runId": "20261008T091018365Z-868be12a-P-005",
+      "conditionArm": "mutated:M-003",
+      "probe": "probes/P-005.probe.json",
+      "records": [
+        "trial-sets/P-005/record-1.json",
+        "trial-sets/P-005/record-2.json",
+        "trial-sets/P-005/record-3.json",
+        "trial-sets/P-005/record-4.json",
+        "trial-sets/P-005/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-005/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-007",
+      "runId": "20261008T091018365Z-868be12a-P-007",
+      "conditionArm": "mutated:M-004",
+      "probe": "probes/P-007.probe.json",
+      "records": [
+        "trial-sets/P-007/record-1.json",
+        "trial-sets/P-007/record-2.json",
+        "trial-sets/P-007/record-3.json",
+        "trial-sets/P-007/record-4.json",
+        "trial-sets/P-007/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-007/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-009",
+      "runId": "20261008T091018365Z-868be12a-P-009",
+      "conditionArm": "mutated:M-005",
+      "probe": "probes/P-009.probe.json",
+      "records": [
+        "trial-sets/P-009/record-1.json",
+        "trial-sets/P-009/record-2.json",
+        "trial-sets/P-009/record-3.json",
+        "trial-sets/P-009/record-4.json",
+        "trial-sets/P-009/record-5.json"
+      ],
+      "isolationManifest": "trial-sets/P-009/isolation-manifest.json"
+    }
+  ]
+}

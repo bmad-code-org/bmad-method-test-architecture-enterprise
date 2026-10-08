@@ -9,13 +9,14 @@
  *  - the folder's plan omits a `pr` check its probes or interface call for (the gameability arm when a probe takes that
  *    route, the HTTP port conformance for an `api` evaluation), or places one they do not,
  *  - the baseline was recorded on another eval-quality release than the installed one, records a dirty or incomplete run or a
- *    non-copy workspace, names another run than the one it holds as `acceptedRun`, or records a partition other than both,
- *    or the evaluation's `evaluation.json` declares a non-copy workspace,
+ *    workspace other than the one its entry names (copy for a fixture, git for the suite), names another run than the one
+ *    it holds as `acceptedRun`, or records a partition other than both, or the evaluation's `evaluation.json` declares
+ *    another workspace,
  *  - `ci` exits non-zero, runs other checks than the plan places, or finds the baseline stale.
  *
  * The invocation leaves `runs/<invocationId>/` in the evaluation folder, which the `chain` job uploads as a build artifact.
  * The script also scans every file of that directory for a path of this machine (`machinePathHits`).
- * The Evaluate-authored suite (`suite`) has no baseline yet: its `check`, `compile` and `seal` run now.
+ * The Evaluate-authored suite (`suite`) replays the baseline Story H.1 accepted from a clean live run of the skill.
  */
 
 const fs = require('node:fs');

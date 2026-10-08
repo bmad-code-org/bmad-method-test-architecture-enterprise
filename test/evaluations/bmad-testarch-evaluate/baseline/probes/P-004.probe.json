@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-004",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "systemId": "bmad-testarch-evaluate",
+  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
+  "artifactDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
+  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "rationale": "[representative] Clean control: a web application with no AI features is an ai-feature target reached as api under the committed inspection mapping.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261008T091018365Z-868be12a/qualification/P-004/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:83e013bf8760436178a7835447bf7971c481438f43d41ec25aa1de33cc1a0804"
+    },
+    "revisionCommitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+    "noKnownDefectStatement": "The inspection mapping sends any web application to api at this revision, which the guidance gate holds."
+  },
+  "expectedClean": true,
+  "defects": []
+}
