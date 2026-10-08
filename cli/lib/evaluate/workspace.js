@@ -1380,6 +1380,7 @@ function repositoryRedirects(repository) {
  * fire on other sessions only (a push, a rebase, a worktree add or a gc in
  * another worktree or the main checkout all write it).
  * `--no-optional-locks` keeps `git status` from rewriting the index.
+ * `files` keeps the content reading of each path `git status` names, so `describeTreeChange` can name the path that moved.
  * Gitignored paths are not read.
  * Outside a repository: the tree digest of `directory`, the paths in
  * `exclude` left out.
@@ -1421,6 +1422,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true, sealed 
   ]);
   if (!status.ok) failed(status);
   const parts = [];
+  const files = {};
   const isSealed = sealed.length === 0 ? () => false : sealedUnder(repository.top, sealed);
   const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
   for (let index = 0; index < records.length; index += 1) {
@@ -1431,7 +1433,11 @@ function adopterTreeState(directory, { exclude = [], sharedState = true, sealed 
       index += 1;
       paths.push(records[index]);
     }
-    for (const relative of paths) parts.push(relative, contentOf(path.join(repository.top, relative), isSealed(relative)));
+    for (const relative of paths) {
+      const content = contentOf(path.join(repository.top, relative), isSealed(relative));
+      files[relative] = content;
+      parts.push(relative, content);
+    }
   }
   const state = {
     repository: repository.top,
@@ -1439,6 +1445,7 @@ function adopterTreeState(directory, { exclude = [], sharedState = true, sealed 
     ...redirects,
     status: status.stdout,
     changes: digest(parts),
+    files,
   };
   if (!sharedState) return state;
   const refs = runGit(['-C', repository.top, 'for-each-ref', '--format=%(refname) %(objectname)']);
@@ -1448,6 +1455,106 @@ function adopterTreeState(directory, { exclude = [], sharedState = true, sealed 
     refs: refs.stdout,
     shared: sharedStateDigest(repository.gitDirectory, hooksDirectory(repository.top, repository.gitDirectory)),
   };
+}
+
+/** How many differing paths or refs `describeTreeChange` names for one part of the reading before it counts the rest. */
+const TREE_CHANGE_NAMED = 3;
+
+/**
+ * What differs between two readings of the adopter's tree (`adopterTreeState`), for the refusal that says the tree changed:
+ * the part that moved (HEAD, a ref, a file, where the checkout reads its repository from, the shared git state), with the
+ * first few paths or ref names of each part and a count of the rest. The readings are compared by the caller as they are;
+ * this only reads their fields to say where they differ. Empty when the two readings are equal.
+ *
+ * @param {object} before the reading taken when the run started
+ * @param {object} after the reading taken when the run found a change
+ * @returns {string[]} one clause per part that differs
+ */
+function describeTreeChange(before, after) {
+  if (JSON.stringify(before) === JSON.stringify(after)) return [];
+  const named = (items) => {
+    const shown = items.slice(0, TREE_CHANGE_NAMED).join(', ');
+    return items.length > TREE_CHANGE_NAMED ? `${shown} and ${items.length - TREE_CHANGE_NAMED} more` : shown;
+  };
+  const clauses = [];
+  const covered = new Set();
+  if (before.repository === null || after.repository === null || before.repository === undefined || after.repository === undefined) {
+    if (before.repository === after.repository && before.treeDigest !== after.treeDigest) {
+      return ['the content of the project directory (no per-path reading outside a git repository)'];
+    }
+    return ['whether the project is a git repository'];
+  }
+  const short = (commit) => String(commit).slice(0, 12);
+  if (before.head !== after.head) {
+    covered.add('head');
+    clauses.push(`HEAD moved from ${short(before.head)} to ${short(after.head)}`);
+  }
+  if (before.refs !== undefined && after.refs !== undefined && before.refs !== after.refs) {
+    covered.add('refs');
+    const read = (text) =>
+      new Map(
+        text
+          .split('\n')
+          .filter((line) => line !== '')
+          .map((line) => line.split(' ')),
+      );
+    const was = read(before.refs);
+    const now = read(after.refs);
+    const moved = [];
+    for (const [name, commit] of now) {
+      if (!was.has(name)) moved.push(`${name} added`);
+      else if (was.get(name) !== commit) moved.push(`${name} moved`);
+    }
+    for (const name of was.keys()) if (!now.has(name)) moved.push(`${name} removed`);
+    clauses.push(`refs: ${named(moved)}`);
+  }
+  if (before.status !== after.status || before.changes !== after.changes) {
+    covered.add('status').add('changes').add('files');
+    const codes = (text) => {
+      const map = new Map();
+      const records = text.split('\u0000').filter((record) => record.length > 0);
+      for (let index = 0; index < records.length; index += 1) {
+        map.set(records[index].slice(3), records[index].slice(0, 2));
+        if (/^[RC]/.test(records[index]) && index + 1 < records.length) index += 1;
+      }
+      return map;
+    };
+    const was = codes(before.status);
+    const now = codes(after.status);
+    const paths = new Set([...Object.keys(before.files ?? {}), ...Object.keys(after.files ?? {}), ...was.keys(), ...now.keys()]);
+    const moved = [];
+    for (const name of [...paths].sort()) {
+      const listedBefore = was.has(name);
+      const listedAfter = now.has(name);
+      if (!listedBefore && listedAfter) moved.push(`${name} (now in git status as ${now.get(name).trim()})`);
+      else if (listedBefore && !listedAfter) moved.push(`${name} (no longer in git status)`);
+      else if (was.get(name) !== now.get(name)) moved.push(`${name} (git status ${was.get(name).trim()} to ${now.get(name).trim()})`);
+      else if (before.files?.[name] !== after.files?.[name]) moved.push(`${name} (content)`);
+    }
+    clauses.push(moved.length > 0 ? `files: ${named(moved)}` : 'files: the git status or the content of a path it names');
+  }
+  if (before.gitDirectory !== after.gitDirectory || before.gitFile !== after.gitFile || before.hooks !== after.hooks) {
+    covered.add('gitDirectory').add('gitFile').add('hooks');
+    const redirected = [
+      ['gitDirectory', 'the git directory the checkout resolves to'],
+      ['gitFile', "the checkout's .git file"],
+      ['hooks', 'the hooks directory core.hooksPath names'],
+    ]
+      .filter(([key]) => before[key] !== after[key])
+      .map(([, label]) => label);
+    clauses.push(`where the checkout reads its repository from: ${named(redirected)}`);
+  }
+  if (before.shared !== after.shared) {
+    covered.add('shared');
+    clauses.push(
+      'shared git state (the files of the common git directory outside its objects, reflogs and index, and the hooks directory core.hooksPath names)',
+    );
+  }
+  const unnamed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+    (key) => !covered.has(key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+  );
+  if (unnamed.length > 0) clauses.push(`the reading of ${named(unnamed)}`);
+  return clauses;
 }
 
 /**
@@ -2492,6 +2599,7 @@ function cacheOnlyPort({ cacheDir, counters = [], readJson = readJsonFromDisk, h
 module.exports = {
   WorkspaceRefusal,
   adopterTreeState,
+  describeTreeChange,
   cacheOnlyPort,
   cachingPort,
   cleanUpOnSignal,

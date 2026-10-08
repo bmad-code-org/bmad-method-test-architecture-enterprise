@@ -751,6 +751,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The exit 12 refusal that says the adopter's tree changed during a run now names what changed.
+  It lists the part that moved, with the first three paths or ref names of each: HEAD by its old and new commit, a ref as added, moved or removed, a file by its path with how git status lists it, where the checkout reads its repository from, or the shared git state, and counts the rest.
+  A background `git fetch` that rewrote `refs/remotes/origin` during a two-hour live run stopped it with the old message, which named every part the reading covers and none that moved.
+  The reading of the tree now keeps the content of each path `git status` names so the path can be named; the comparison itself is unchanged and the existing wording of the refusal stays.
 - The Evaluate skill states the web-application rule in two parts of its inspection guide, each said once: the sentence sends a web application to the `ai-feature` target kind, and the `ai-feature` row of the mapping table gives that kind's interface, `api`.
   Once the table named `ai-feature` by its value, the sentence's own "reached as `api`" restated the row, and the dogfood evaluation's seeded web-application defect, which edited the sentence alone, stopped manifesting: the live model answered from the row (`api`) in place of the edited sentence (`web`), so P-005's mutated arm held and the run exited 11.
   M-003 now edits the row; live, the clean arm answered `api` and the mutated arm `web` in 6 of 6 trials each.
