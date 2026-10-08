@@ -2,7 +2,7 @@
  * Release metadata validation for publishable builds.
  *
  * Verifies:
- * - package.json, package-lock.json, and marketplace.json share the same version
+ * - package.json, package-lock.json, marketplace.json, and the bmod module record share the same version
  * - the package is not marked private
  * - publishConfig.access remains public
  * - the active stable-release step transports large changelog notes outside argv
@@ -18,11 +18,13 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const semver = require('semver');
 const { parse: parseYaml } = require('yaml');
+const { parse: parseToml } = require('smol-toml');
 
 const projectRoot = path.join(__dirname, '..');
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const packageLockPath = path.join(projectRoot, 'package-lock.json');
 const marketplacePath = path.join(projectRoot, '.claude-plugin', 'marketplace.json');
+const bmodPath = path.join(projectRoot, 'skills', 'bmod-tea', 'bmod.toml');
 const publishWorkflowPath = path.join(projectRoot, '.github', 'workflows', 'publish.yaml');
 
 function readJson(filePath, label) {
@@ -89,6 +91,28 @@ if (!marketplacePlugin) {
   errors.push(
     `.claude-plugin/marketplace.json version ${marketplacePlugin.version} does not match package.json version ${packageJson.version}.`,
   );
+}
+
+// The module record `bmad setup` reads carries the release version too. The publish workflow rewrites its version line and commits it
+// with the other release files; running the same rewrite over the committed record has to be a no-op.
+let bmodVersion = null;
+try {
+  bmodVersion = parseToml(readText(bmodPath, 'skills/bmod-tea/bmod.toml')).bmod?.version ?? null;
+} catch (error) {
+  errors.push(`skills/bmod-tea/bmod.toml does not parse: ${error.message}`);
+}
+if (bmodVersion !== packageJson.version) {
+  errors.push(
+    `skills/bmod-tea/bmod.toml [bmod] version ${JSON.stringify(bmodVersion)} does not match package.json version ${packageJson.version}.`,
+  );
+}
+const syncStep = parseYaml(publishWorkflow)?.jobs?.publish?.steps?.find((step) => step?.name === 'Sync marketplace and bmod versions');
+if (!syncStep?.run?.includes('skills/bmod-tea/bmod.toml')) {
+  errors.push('publish.yaml has no step that syncs skills/bmod-tea/bmod.toml to the release version.');
+}
+const commitStep = parseYaml(publishWorkflow)?.jobs?.publish?.steps?.find((step) => step?.name === 'Commit version bump');
+if (!commitStep?.run?.includes('skills/bmod-tea/bmod.toml')) {
+  errors.push('publish.yaml does not commit skills/bmod-tea/bmod.toml with the version bump.');
 }
 
 // Evaluate's runtime: the bin, and eval-quality as an optional peer no older
