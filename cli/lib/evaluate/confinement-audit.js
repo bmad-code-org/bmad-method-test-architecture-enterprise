@@ -24,7 +24,15 @@
  *                reach is made through the same token every 50 ms while the
  *                trial runs, and the count of canaries the log delivered
  *                against the count sent says how complete the trial's
- *                reports were (Story 1.81).
+ *                reports were (Story 1.81). A canary samples the log every
+ *                50 ms, so it cannot see the one report the log drops between
+ *                two canaries. The kernel drops reports when they arrive faster
+ *                than its log keeps them, to every reader of the log alike and
+ *                without a trace, so a second `log stream` the runtime owns
+ *                (the report meter) counts every sandbox report on the host
+ *                by the log's own microsecond timestamps, and a trial during
+ *                which reports came faster than the log was measured to keep
+ *                them is `lossy` whatever its canaries delivered.
  *
  *   Bubblewrap   the command runs as the child of `strace -f --seccomp-bpf`,
  *                started outside the namespace, so no target process can
@@ -62,6 +70,22 @@ const CANARY_MS = 50;
 const CANARY_IN_FLIGHT = 8;
 /** The longest the runtime may go without attempting a canary before the trial counts as having missed some: a freeze, a starved host or a refused spawn all show as a gap. */
 const CANARY_GAP_MS = 4 * CANARY_MS;
+
+/**
+ * How fast sandbox reports may reach the kernel's log before it drops some. On the macOS host these were measured on, a
+ * sandboxed reader's bursts of 8 to 31 reports inside a millisecond lost nothing in 130 runs and a steady 5,000 reports a second
+ * lost nothing in 2,400, while 19 of 150 runs of 32 or more inside a millisecond lost reports and a steady 10,000 a second lost
+ * 0.5 percent, with the log reporting no loss and every canary delivered. Both limits sit below those first losses; a host's own
+ * traffic is a few reports a second.
+ */
+const BURST_WINDOW_US = 1000;
+const BURST_REPORTS = 16;
+const FLOOD_WINDOW_US = 100_000;
+const FLOOD_REPORTS = 250;
+/** What the report meter streams: every sandbox report the kernel logs, whichever sandbox made it. */
+const METER_PREDICATE = 'process == "kernel" AND eventMessage CONTAINS "Sandbox: "';
+/** The log's own timestamp of an ndjson event, to the microsecond. */
+const EVENT_TIMESTAMP = /"timestamp":"(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{6})/;
 
 /** How long the barrier waits for the stream to return a read the runtime made, and how often it makes another. */
 const BARRIER_MS = 10_000;
@@ -203,6 +227,116 @@ function trackStream(child) {
   process.once('exit', killLiveStreams);
 }
 
+/** The log's own timestamp in an ndjson line, in microseconds since the epoch (the calendar fields as UTC, which only differences use), or `null`. */
+function eventMicroseconds(text) {
+  const matched = EVENT_TIMESTAMP.exec(text);
+  if (matched === null) return null;
+  const [year, month, day, hour, minute, second, micro] = matched.slice(1).map(Number);
+  return Date.UTC(year, month - 1, day, hour, minute, second) * 1000 + micro;
+}
+
+/**
+ * How fast sandbox reports reached the kernel's log while a sandbox lived. A second `log stream` the runtime owns writes every
+ * sandbox report on the host, whichever sandbox made it, to a pipe; the meter reads the log's own timestamp of each (no
+ * report is parsed beyond that) and keeps the most reports inside `BURST_WINDOW_US` and inside `FLOOD_WINDOW_US` that it saw.
+ * The kernel drops reports that arrive faster than its log keeps them, to every reader alike and without a trace, and no
+ * canary sees the one report dropped between two canaries; a trial that reports `overloaded` ran while reports came faster
+ * than the log was measured to keep them, or while the meter could not count them.
+ */
+class ReportMeter {
+  /**
+   * @param {object} options
+   * @param {string} [options.logExecutable]
+   * @param {number} [options.burstReports] the most reports inside `BURST_WINDOW_US` the meter allows
+   * @param {number} [options.floodReports] the most reports inside `FLOOD_WINDOW_US` the meter allows
+   */
+  constructor({ logExecutable = LOG_EXECUTABLE, burstReports = BURST_REPORTS, floodReports = FLOOD_REPORTS } = {}) {
+    this.logExecutable = logExecutable;
+    this.burstReports = burstReports;
+    this.floodReports = floodReports;
+    this.times = [];
+    this.head = 0;
+    this.carry = '';
+    this.decoder = new StringDecoder('utf8');
+    this.total = 0;
+    this.latest = 0;
+    this.burstPeak = 0;
+    this.floodPeak = 0;
+    this.unsettled = false;
+    this.lost = false;
+    this.closing = false;
+    this.ended = null;
+    this.child = null;
+  }
+
+  /** Spawns the broad stream; its output is read from the pipe, never kept. */
+  spawnStream() {
+    this.child = spawn(this.logExecutable, ['stream', '--style', 'ndjson', '--timeout', LOG_TIMEOUT, '--predicate', METER_PREDICATE], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    this.child.stdout.on('data', (chunk) => this.take(chunk));
+    // The pipe's end is the stream's; a reader that errors has no more to count.
+    this.child.stdout.on('error', () => {});
+    this.child.once('error', (error) => {
+      this.ended = { error };
+    });
+    this.child.once('exit', (code, signal) => {
+      this.ended = { code, signal };
+    });
+    this.child.unref();
+    this.child.stdout.unref?.();
+    trackStream(this.child);
+  }
+
+  /** Counts the reports in one chunk of the stream's output. */
+  take(chunk) {
+    const lines = (this.carry + this.decoder.write(chunk)).split('\n');
+    this.carry = lines.pop();
+    for (const line of lines) {
+      // The meter's stream sees every sandbox report on the host, so it is the stream most likely to lose some: its own loss event
+      // means it counted fewer reports than the kernel logged.
+      if (line.includes('"lossEvent"')) {
+        this.lost = true;
+        continue;
+      }
+      const time = line.includes('"eventMessage"') ? eventMicroseconds(line) : null;
+      if (time !== null) this.count(time);
+    }
+  }
+
+  /** Notes one report at `time` (microseconds): the most the last `BURST_WINDOW_US` and `FLOOD_WINDOW_US` held so far. */
+  count(time) {
+    this.total += 1;
+    if (time > this.latest) this.latest = time;
+    this.times.push(time);
+    while (this.head < this.times.length && this.times[this.head] < time - FLOOD_WINDOW_US) this.head += 1;
+    if (this.head > 4096) {
+      this.times = this.times.slice(this.head);
+      this.head = 0;
+    }
+    this.floodPeak = Math.max(this.floodPeak, this.times.length - this.head);
+    let burst = 0;
+    for (let at = this.times.length - 1; at >= this.head && this.times[at] >= time - BURST_WINDOW_US; at -= 1) burst += 1;
+    this.burstPeak = Math.max(this.burstPeak, burst);
+  }
+
+  /** Whether reports came faster than the log was measured to keep them, or the meter ended before it could say they did not. */
+  overloaded() {
+    return (
+      this.burstPeak >= this.burstReports ||
+      this.floodPeak >= this.floodReports ||
+      this.unsettled ||
+      this.lost ||
+      (this.ended !== null && !this.closing)
+    );
+  }
+
+  close() {
+    this.closing = true;
+    killChild(this.child);
+  }
+}
+
 /**
  * One sandbox's reports on macOS: the `log stream` child, the file it writes
  * and what has been read from it.
@@ -215,8 +349,9 @@ class ReportStream {
    * @param {string} options.sandboxExec the Seatbelt executable
    * @param {(message: string) => Error} options.fail builds the error an audit failure throws
    * @param {string} [options.logExecutable]
+   * @param {ReportMeter} [options.meter] the sandbox's report meter (one is made when none is given)
    */
-  constructor({ directory, token, sandboxExec, fail, logExecutable = LOG_EXECUTABLE }) {
+  constructor({ directory, token, sandboxExec, fail, logExecutable = LOG_EXECUTABLE, meter = new ReportMeter({ logExecutable }) }) {
     this.directory = fs.realpathSync.native(directory);
     this.token = token;
     this.sandboxExec = sandboxExec;
@@ -226,6 +361,8 @@ class ReportStream {
     this.errorFile = path.join(this.directory, 'log.stderr');
     this.paths = new Set();
     this.sentinels = new Set();
+    this.sentinelTimes = new Map();
+    this.meter = meter;
     this.offset = 0;
     this.carry = '';
     this.decoder = new StringDecoder('utf8');
@@ -272,6 +409,7 @@ class ReportStream {
     });
     this.child.unref();
     trackStream(this.child);
+    this.meter.spawnStream();
   }
 
   /** What the stream said on standard error, for a refusal to quote. */
@@ -324,8 +462,10 @@ class ReportStream {
       this.lost = true;
       return;
     }
-    if (report.path.startsWith(`${this.directory}/sentinel-`) && !report.denied) this.sentinels.add(report.path);
-    else if (report.path.startsWith(`${this.directory}/canary-`) && !report.denied) this.canaryReported.add(report.path);
+    if (report.path.startsWith(`${this.directory}/sentinel-`) && !report.denied) {
+      this.sentinels.add(report.path);
+      this.sentinelTimes.set(report.path, eventMicroseconds(line));
+    } else if (report.path.startsWith(`${this.directory}/canary-`) && !report.denied) this.canaryReported.add(report.path);
     else this.paths.add(report.path);
   }
 
@@ -434,7 +574,7 @@ class ReportStream {
   canaries() {
     let delivered = 0;
     for (const file of this.canarySent) if (this.canaryReported.has(file)) delivered += 1;
-    return { sent: this.canarySent.size + this.canaryMissed, delivered, lostEvents: this.lost };
+    return { sent: this.canarySent.size + this.canaryMissed, delivered, lostEvents: this.lost, overloaded: this.meter.overloaded() };
   }
 
   /**
@@ -457,10 +597,36 @@ class ReportStream {
     }
   }
 
+  /**
+   * Whether the report meter has counted every report up to now: reads of fresh sentinels until one has come back through
+   * the meter's stream too, which delivers in order, so everything the trial reported before it has been counted. A meter that
+   * did not count one within `ms` leaves the trial `overloaded`, since how fast its reports came is unmeasured.
+   */
+  async settleMeter(ms = BARRIER_MS) {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      if (this.meter.ended !== null) break;
+      const sentinel = await this.sentinelRead();
+      for (let waited = 0; waited < BARRIER_STEP_MS; waited += 10) {
+        this.read();
+        const time = this.sentinelTimes.get(sentinel);
+        if (time !== undefined && time !== null && this.meter.latest >= time) {
+          this.meter.unsettled = false;
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      if (Date.now() >= deadline) break;
+    }
+    this.meter.unsettled = true;
+    return false;
+  }
+
   close() {
     clearTimeout(this.canaryTimer);
     this.canaryTimer = null;
     killChild(this.child);
+    this.meter.close();
   }
 }
 
@@ -1720,6 +1886,7 @@ module.exports = {
   EXACT_GRANTS,
   REQUESTED_ROOTS,
   LOG_EXECUTABLE,
+  ReportMeter,
   ReportStream,
   SYSTEM_ROOTS,
   TRACE_CLONES: CLONES,
@@ -1729,6 +1896,7 @@ module.exports = {
   TraceReader,
   auditToken,
   decodeString,
+  eventMicroseconds,
   killLiveStreams,
   makeProbeDirectory,
   nodeInstallRoot,

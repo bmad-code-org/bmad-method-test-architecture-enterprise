@@ -1172,12 +1172,14 @@ async function runInWorkspaces({
         const answered = await audited.port.probe(request, signal);
         if (auditLegs) {
           // An audit that cannot confirm what it saw leaves the leg unjudged, as it does a trial. One that lost reports says so
-          // (the log's lost events, or canaries it did not deliver), and no verdict rests on that leg (`isolation-allowlist.js`).
+          // (the log's lost events, canaries it did not deliver, or reports that came faster than it keeps them), and no verdict rests on that leg (`isolation-allowlist.js`).
           const mounts = await audited.observedMounts();
           const channel = audited.auditChannel();
           legMounts.set(request.probeId, {
             mounts,
-            lossy: channel !== null && (channel.canariesDelivered < channel.canariesSent || channel.logReportedLoss),
+            lossy:
+              channel !== null &&
+              (channel.canariesDelivered < channel.canariesSent || channel.logReportedLoss || channel.logOverloaded === true),
           });
         }
         return answered;

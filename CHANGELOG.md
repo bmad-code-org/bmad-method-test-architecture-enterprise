@@ -720,6 +720,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The macOS audit no longer calls a trial `complete` when the kernel's log dropped a report of the target without a trace.
+  The audit counted canary reads every 50 ms, so a report the log dropped between two canaries left the trial `complete` with every canary delivered and no loss event, and the observed mounts missing a read (the keychain sidecar write of the subscription-login case went missing this way on a host that other audited work was flooding with reports).
+  The log drops reports that reach it faster than it keeps them, to every reader of the stream alike: 0.5 percent at a steady 10,000 reports a second and 19 of 150 bursts of 32 or more inside a millisecond lost reports, none below 5,000 a second or in 130 bursts of 8 to 31.
+  Each audited sandbox now runs a second `log stream` that counts every sandbox report on the host by the log's own timestamps, and a trial during which 16 reports arrived inside a millisecond or 250 inside 100 ms, or whose counter ended, lost events itself or could not confirm its last count, is `lossy`.
+  `run.json`'s `observedMountsChannel` entries gain `logOverloaded`, the run summary names such a trial, and `preflight` leaves such a leg out of its comparison of legs.
+  Under a flood of reports from other sandboxes, the subscription-login case failed 3 of 12 runs before with a read missing, every canary delivered and no loss reported, and 0 of 12 after; the 2 runs that still failed said so.
+  The log has also been seen to drop a single read of a Node process in a window of a second or two on a quiet host, with no flood and every canary delivered; no count of the log's own reports can see that loss, so `complete` makes a missing read unlikely and does not rule it out.
+  The Linux trace has no such race: `strace` writes each traced read as it happens (a killed one keeps every read it saw) and the call ends when `strace` does.
 - `npm test` lints this repository's own GitHub Actions workflows with `actionlint`, and `tea-test-review.yaml` is lint clean again.
   `test/eval-ci.js` lints the workflows an agent writes, but nothing linted the ones in `.github/workflows/`, so `actionlint` failed on `tea-test-review.yaml` (`property "run-review" is not defined`) while every gate stayed green.
   The verdict step reads `steps.run-review.outcome`, and the step that declares that id had been commented out until a repository secret exists.

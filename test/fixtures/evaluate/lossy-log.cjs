@@ -21,8 +21,16 @@ const [every, pidDirectory, ...given] = process.argv.slice(2);
 // The argument after `--timeout`, whatever the runtime sets it to, becomes a minute.
 const args = given.map((argument, index) => (given[index - 1] === '--timeout' ? '60s' : argument));
 const child = spawn('/usr/bin/log', args, { stdio: ['ignore', 'pipe', 'inherit'] });
-fs.writeFileSync(path.join(pidDirectory, `log-${child.pid}`), `${child.pid}\n`);
+try {
+  fs.writeFileSync(path.join(pidDirectory, `log-${child.pid}`), `${child.pid}\n`);
+} catch (error) {
+  child.kill('SIGKILL');
+  throw error;
+}
 
+// The runtime's report meter streams every sandbox report on the host, not the sandbox's own token; it loses nothing here, since
+// a pattern of losses that other traffic on a shared host can keep in step with the sandbox's own reads is no loss of the kernel's.
+const meter = given.some((argument) => argument.includes('Sandbox: "'));
 let carry = '';
 let seen = 0;
 child.stdout.setEncoding('utf8');
@@ -31,7 +39,7 @@ child.stdout.on('data', (chunk) => {
   carry = lines.pop();
   for (const line of lines) {
     seen += 1;
-    if (seen % Number(every) !== 0) process.stdout.write(`${line}\n`);
+    if (meter || seen % Number(every) !== 0) process.stdout.write(`${line}\n`);
   }
 });
 child.once('exit', (code, signal) => process.exit(code ?? (signal === null ? 1 : 128)));
