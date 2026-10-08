@@ -10964,6 +10964,13 @@ async function checkWithheldHistoryReachUnits() {
     `the streaming reader over a failing git ended ${failedRead.status} and printed ${JSON.stringify(failedRead.stdout)}`,
   );
 
+  // A job that is not JSON is refused with a sentence and status 1, and nothing runs.
+  const garbled = spawnSync(process.execPath, [reader], { encoding: 'utf8', input: '{"mode": "missing", ', env: BASE_ENV });
+  check(
+    garbled.status === 1 && garbled.stdout === '' && garbled.stderr.includes('is not JSON'),
+    `the streaming reader over a job that is not JSON ended ${garbled.status}, printed ${JSON.stringify(garbled.stdout)} and said ${JSON.stringify(garbled.stderr.slice(0, 200))}`,
+  );
+
   // A stage that dies partway fails the whole job and prints nothing, so a history read in part never reads as a whole.
   const dying = tempDir('reach-unit-dying');
   fs.writeFileSync(
@@ -11029,6 +11036,22 @@ async function checkWithheldHistoryReachUnits() {
   check(
     source.includes("mode: 'missing'") && source.includes("mode: 'pack'") && source.includes("mode: 'reached'"),
     "the build no longer reads the store walk, the folder's objects and a partial clone's pack through the streaming reader",
+  );
+
+  // The reader ends by letting the event loop drain. `process.exit` shuts the engine's worker threads down with the heap still
+  // live, and a heap held to 48 MB makes a worker that compiles in the background ask the main thread for a collection: the
+  // exiting main thread never answers, the process hangs with no child left and the 60 seconds of the pack cases below run out
+  // (one parallel run in the failing-pack loop ended `null ETIMEDOUT` this way after 20 serial runs had passed).
+  const readerSource = fs.readFileSync(reader, 'utf8');
+  check(
+    !/\bprocess\.exit\s*\(/.test(readerSource),
+    'the streaming reader ends through process.exit, which hangs for good when a background compile waits for a collection under a small heap',
+  );
+  // The job arrives as a stream too: a blocking read of a standard input that a macOS parent filled with 800 KB never saw its end
+  // once in about a thousand runs, and the process waited there until the 60 seconds ran out.
+  check(
+    !/\breadFileSync\(\s*0\b/.test(readerSource),
+    'the streaming reader reads its job with a blocking read of standard input, which never sees the end of a large input on some runs on macOS',
   );
 
   // A pack job runs its stages as one pipeline: the revisions go to the first stage's standard input and each stage's output into

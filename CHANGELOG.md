@@ -746,6 +746,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The streaming git reader (`cli/lib/evaluate/git-lines.js`) no longer hangs for good on a rare run, which the failing-pack loop caught once.
+  One parallel run of the loop ended the walk, pack and index case `null ETIMEDOUT` after its 60 seconds with all 20 serial runs green; the case streams 82 MB through three stages in about half a second, so the 60 seconds were a hang.
+  A process dump of a stuck reader on Linux showed no stage left and the main thread joining a V8 worker inside `process.exit`.
+  The worker was compiling a function in the background, had run out of room under the 48 MB heap the test imposes and waited for the main thread to collect, which an exiting main thread never does.
+  The reader now ends a job by letting the event loop drain, which disposes the heap before the engine's threads and releases such a worker.
+  `leave` records the status, prints the answer and releases every stage's handles, so a grandchild that holds a pipe open cannot keep the reader alive.
+  A second hang showed up on macOS: a reader that reads its job with a blocking `readFileSync(0)` never saw the end of an 800 KB input about once in a thousand runs, and a child that does nothing but that read hangs at the same rate under `spawnSync`.
+  The reader now reads its job from standard input as a stream, which ran 6,000 times on macOS without a hang.
+  Both hangs can strike a build on a large history, since every job the reader runs starts and ends this way.
+  The reach-unit case holds the source to no `process.exit` call and no blocking read of standard input; its walk, pack and index case, the `streamed` marker, the heap limit and the handed output are unchanged, and a reader that holds the walk whole or starts the pack stage after the walk still fails it.
 - The macOS audit no longer calls a trial `complete` when the kernel's log dropped a report of the target without a trace.
   The audit counted canary reads every 50 ms, so a report the log dropped between two canaries left the trial `complete` with every canary delivered and no loss event, and the observed mounts missing a read (the keychain sidecar write of the subscription-login case went missing this way on a host that other audited work was flooding with reports).
   The log drops reports that reach it faster than it keeps them, to every reader of the stream alike: 0.5 percent at a steady 10,000 reports a second and 19 of 150 bursts of 32 or more inside a millisecond lost reports, none below 5,000 a second or in 130 bursts of 8 to 31.
