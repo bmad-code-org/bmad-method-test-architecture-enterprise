@@ -12447,10 +12447,13 @@ function checkWorkspaceClones() {
       removeTree(target);
       return spent;
     };
-    const control = cost((target) => systemCloneCopy(big, target));
-    if (control > MEGABYTES / 2) {
+    let controlStatus = null;
+    const control = cost((target) => {
+      controlStatus = systemCloneCopy(big, target).status;
+    });
+    if (controlStatus !== 0 || control > MEGABYTES / 2) {
       console.log(
-        `  skipped the free-space half: ${os.tmpdir()} is on a file system whose clone copy cost ${control.toFixed(0)} of ${MEGABYTES} MB (no copy-on-write clones here)`,
+        `  skipped the free-space half: ${os.tmpdir()} is on a file system with no copy-on-write clones (the system's clone copy ${controlStatus === 0 ? `cost ${control.toFixed(0)} of ${MEGABYTES} MB` : `exited ${controlStatus}`})`,
       );
     } else {
       // Other processes write to the volume too. A copy that cloned is under the bound in at least one of three tries; one that
