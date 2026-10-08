@@ -7027,7 +7027,7 @@ async function runTests() {
         fs.mkdirSync(path.join(tmpRoot, 'b1-win'), { recursive: true });
         fs.writeFileSync(path.join(tmpRoot, 'b1-win', 'claude.exe'), '', { mode: 0o755 });
         assert(
-          executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'win32', pathExt: '.COM;.EXE' }) &&
+          executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'win32', pathExt: '.com;.exe' }) &&
             !executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'linux' }),
           'on Windows a bare agent name is found through PATHEXT (claude.exe), elsewhere it is not',
         );
