@@ -22,7 +22,8 @@ on:
         required: true
 jobs:
   review:
-    # ...same steps as pr-test-review.yml's `review` job...
+    # ...same steps as pr-test-review.yml's `review` job, including its env block
+    # (GITHUB_TOKEN: ${{ github.token }} and PR_NUMBER: ${{ github.event.pull_request.number }})...
     run: tea-test-review --github --pr "$PR_NUMBER" --min-score ${{ inputs.min_score }} --agent claude --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```
 
@@ -33,6 +34,12 @@ on:
     types: [opened, synchronize, reopened]
 jobs:
   tea-test-review:
+    # A reusable workflow's token is limited by the caller's job permissions, and a
+    # permission that is missing only shows up as a warning that nothing was published.
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
     uses: <org>/<central-repo>/.github/workflows/rwf-tea-test-review.yml@v1
     with:
       min_score: 80
