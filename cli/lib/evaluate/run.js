@@ -86,7 +86,14 @@ const AjvModule = require('ajv/dist/2020');
 const { AGENT_VERSION_CEILING_MS, observeAgentVersion } = require('../agent-adapters');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect, mayFailBaseline } = require('./before-state');
+const {
+  KNOWN_DEFECT_PREFIX,
+  NOT_A_BASELINE,
+  beforeStateNote,
+  declaresKnownDefect,
+  mayFailBaseline,
+  undecidedNote,
+} = require('./before-state');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
@@ -425,7 +432,7 @@ async function qualifyCleanControls({
             ? `${file}: behavior ${probe.behaviorId} declares no oracle, so the clean control has nothing to pass`
             : `${file}: the clean control's baseline does not pass (its oracles are ${verdict}), so it cannot qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}${
                 snapshot.beforeState
-                  ? `; --before-state lets a control fail only when its noKnownDefectStatement begins "${KNOWN_DEFECT_PREFIX}" and its oracles are violated`
+                  ? `; --before-state lets a control fail only when its noKnownDefectStatement begins "${KNOWN_DEFECT_PREFIX}" and every oracle decided with one violated${undecidedNote(oracles)}`
                   : declaresKnownDefect(probe)
                     ? '; its statement declares a known defect, so record the before state with tea-evaluate run --before-state'
                     : ''
@@ -2090,7 +2097,7 @@ async function completeRun(
     message:
       mountsRefusal === ''
         ? sealedMessage
-        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.${beforeStateNote(run.beforeState)}`,
+        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path${beforeStateNote(run.beforeState)}.`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.

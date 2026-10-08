@@ -20,7 +20,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { declaresKnownDefect, mayFailBaseline } = require('../cli/lib/evaluate/before-state');
+const { declaresKnownDefect, mayFailBaseline, undecidedNote } = require('../cli/lib/evaluate/before-state');
 const { suite } = require('./lib/evaluate-story-121');
 
 const test = suite('tea-evaluate-before-state');
@@ -180,6 +180,14 @@ function main() {
     assert.equal(mayFailBaseline(probe, [undecided]), false);
     assert.equal(mayFailBaseline(probe, [held]), false);
     assert.equal(mayFailBaseline(probe, []), false);
+    assert.equal(
+      undecidedNote([
+        { oracleId: 'O-1', disposition: 'violated' },
+        { oracleId: 'O-2', disposition: 'not-attempted' },
+      ]),
+      ' (O-2 is not-attempted)',
+    );
+    assert.equal(undecidedNote([{ oracleId: 'O-1', disposition: 'held' }]), '');
     assert.equal(
       mayFailBaseline({ qualification: { route: 'clean-control', noKnownDefectStatement: 'No known defect at this revision.' } }, [
         violated,

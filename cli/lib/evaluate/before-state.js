@@ -40,6 +40,12 @@ function mayFailBaseline(probe, oracles) {
   );
 }
 
+/** The oracles of a control that neither held nor violated, as a clause for a refusal, or '' when every one decided. */
+function undecidedNote(oracles) {
+  const undecided = oracles.filter((oracle) => oracle.disposition !== 'held' && oracle.disposition !== 'violated');
+  return undecided.length === 0 ? '' : ` (${undecided.map((oracle) => `${oracle.oracleId} is ${oracle.disposition}`).join(', ')})`;
+}
+
 /** The sentence a before-state run, its `score` and its refusals share. */
 const NOT_A_BASELINE = 'a before state is never accepted as a baseline';
 
@@ -57,4 +63,4 @@ function beforeStateNote(beforeState) {
   );
 }
 
-module.exports = { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect, mayFailBaseline };
+module.exports = { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect, mayFailBaseline, undecidedNote };

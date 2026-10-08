@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `tea-evaluate run --before-state` records the starting point of a target with known defects.
-  A clean control whose `noKnownDefectStatement` begins `Known defect at this revision:` may fail its baseline under the flag; any other failing control still exits 11, and a control whose oracles cannot decide does too.
+  A clean control whose `noKnownDefectStatement` begins `Known defect at this revision:` may fail its baseline under the flag; any other failing control still exits 11, and a control with an oracle that cannot decide does too.
   The run records `beforeState` in `run.json`, writes the control's evidence to `qualification/<probeId>/baseline-known-failing.json`, and says `BEFORE STATE` in its closing line and in `score`'s.
   `eval-quality` computes every state, so a known-failing control whose trials violate its oracles reads `false-positive` and `score` exits 2.
   `compare` and `compare --accept` exit 10 on a before state, also after `beforeState` is deleted from `run.json` by hand, because they read the sealed clean controls too.
