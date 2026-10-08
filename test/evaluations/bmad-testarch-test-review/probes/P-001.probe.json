@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: one clean test added beside three old defects. Before state: the current release reports the old defects as pre-existing findings.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "Known defect at this revision: the review writes whole-file findings for a pull request, so the old defects appear as pre-existing findings. This control records the before state."
+  }
+}

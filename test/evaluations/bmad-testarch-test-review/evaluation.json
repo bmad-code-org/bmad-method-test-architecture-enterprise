@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "evaluationId": "bmad-testarch-test-review",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:b0d6732414994289a388c9127f9d383f699d4f199642df8a35e22cb7d7661593"
+  },
+  "targetKind": "test-review-mechanism",
+  "interface": "cli",
+  "operationPhases": {
+    "review-fixture": {
+      "review": "outcome"
+    }
+  },
+  "registry": [
+    {
+      "interfaceId": "review-fixture",
+      "executable": "review-fixture",
+      "target": "test/fixtures/test-review-evaluation/review-fixture.mjs",
+      "subcommandPaths": [[]],
+      "artifacts": {},
+      "environmentKeys": ["HOME", "LOGNAME", "USER"],
+      "maxElapsedMs": 1500000,
+      "infrastructureExitCodes": [2, 3],
+      "egress": [
+        {
+          "host": "api.anthropic.com",
+          "port": 443,
+          "addresses": ["160.79.104.10", "2607:6bc0::10"]
+        }
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../../.."
+  },
+  "workspace": {
+    "kind": "git",
+    "provision": ["_bmad", "node_modules"]
+  },
+  "confinement": false,
+  "arms": ["clean", "mutated"],
+  "heldOutProbes": ["P-011"],
+  "trials": 3,
+  "tiers": ["pr"],
+  "strengthFloor": {
+    "defect": 1
+  }
+}

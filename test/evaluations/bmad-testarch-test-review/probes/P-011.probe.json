@@ -1,0 +1,93 @@
+{
+  "probeId": "P-011",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[held-out] Seeded defect: M-002 keeps introduced findings out of the gate, so the introduced hard waits are advisory and the review approves.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "M-002 keeps introduced findings out of the gate, so the introduced hard waits are advisory and the review approves.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-011",
+        "interfaceId": "review-fixture",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "fixture": "adds-defects",
+              "review": "head",
+              "mode": "pr"
+            }
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-p-011/stdout/recommendation"
+            },
+            {
+              "literal": "Approve"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "review-fixture",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "fixture": {
+              "literal": "adds-defects"
+            },
+            "review": {
+              "literal": "head"
+            },
+            "mode": {
+              "literal": "pr"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/recommendation"
+          },
+          {
+            "literal": "Approve"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
