@@ -6754,6 +6754,34 @@ async function runTests() {
         '--retries 2: three attempts, then exit 3',
         `status=${exhausted.status} attempts=${attemptsOf('retry-exhausted')}`,
       );
+      const annotated = runCli(
+        retryArgs('retry-annotation', ['--retries', '1']),
+        retryEnv('retry-annotation', { STUB_FIRST_MODE: 'fail', GITHUB_ACTIONS: 'true' }),
+      );
+      assert(
+        annotated.status === 0 &&
+          annotated.stderr.includes('::warning::tea-test-review: attempt 1 of 2 failed') &&
+          !annotated.stdout.includes('::warning::') &&
+          JSON.parse(annotated.stdout).recommendation !== undefined,
+        'on GitHub Actions a retry raises a ::warning:: annotation on stderr and leaves stdout as the verdict JSON',
+        `status=${annotated.status} stdout=${annotated.stdout.slice(0, 200)} stderr=${annotated.stderr}`,
+      );
+      const lockedOutput = runCli(
+        retryArgs('retry-locked', ['--retries', '1', '--env-pass', 'STUB_LOCK_OUTPUT']),
+        retryEnv('retry-locked', { STUB_LOCK_OUTPUT: '1', STUB_MODE: 'score-mismatch' }),
+      );
+      assert(
+        lockedOutput.status === 3 && attemptsOf('retry-locked') === 1 && !lockedOutput.stderr.includes('retrying'),
+        '--retries does not repeat a report-artifact failure: an unwritable output fails the same way every time',
+        `status=${lockedOutput.status} attempts=${attemptsOf('retry-locked')} stderr=${lockedOutput.stderr}`,
+      );
+      try {
+        // The stub locked the output directory; make it removable again so the temp tree can be cleaned.
+        fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked'), 0o755);
+        fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked', 'test-review.md'), 0o644);
+      } catch {
+        // Nothing to restore when the stub never got that far.
+      }
       const localDefault = runCli(retryArgs('retry-local'), retryEnv('retry-local', { STUB_FIRST_MODE: 'fail' }));
       assert(
         localDefault.status === 3 && attemptsOf('retry-local') === 1,

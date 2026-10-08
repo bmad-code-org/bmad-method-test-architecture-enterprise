@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tea-test-review` takes over three workarounds the GitHub Action carried: packing the skill, retrying, and looking up the base branch.
   `--project-skill` reviews with the skill a project vendored; the control-plane guard still stops a diff that edits it.
-  `--retries <n>` repeats a run after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried. On GitHub Actions each retry also raises a `::warning::` annotation.
+  `--retries <n>` repeats a run after an agent or report-parse failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried. On GitHub Actions each retry also raises a `::warning::` annotation.
   `--pr <number>` (with `--repo`) resolves the pull request's base branch through the GitHub API when `--base` is not given (`GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_API_URL`), and a failed lookup exits 2 and names `--base` as the bypass.
   A logged-out agent CLI exits 2 with the login command before any agent call. The CLI prints which skill it reviews with (`packaged`, `project`, or `--skill-root`) on stderr.
 

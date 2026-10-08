@@ -397,7 +397,7 @@ async function main() {
     .option('--repo <owner/name>', 'repository for --pr lookups (default: GITHUB_REPOSITORY)')
     .option(
       '--retries <n>',
-      'extra attempts after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; exit 1 and 2 are never retried (default: 1 when CI is set, else 0)',
+      'extra attempts after an agent or report-parse failure (exit 3), clearing the report and verdict between attempts; exit 1 and 2 are never retried (default: 1 when CI is set, else 0)',
     )
     .option(
       '--files <list>',
@@ -1256,19 +1256,19 @@ async function main() {
       gateFailures = attemptReview();
       break;
     } catch (error) {
-      if (
-        error.code === 'AGENT_FAILED' ||
-        error.code === 'REPORT_MISSING' ||
-        error.code === 'REPORT_UNPARSEABLE' ||
-        error.code === 'REPORT_ARTIFACT'
-      ) {
+      if (error.code === 'REPORT_ARTIFACT') {
+        // An unwritable output path fails the same way every time; a retry would only repeat it.
+        fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
+      }
+      if (error.code === 'AGENT_FAILED' || error.code === 'REPORT_MISSING' || error.code === 'REPORT_UNPARSEABLE') {
         if (attempt < retries) {
           console.error(`tea-test-review: ${error.message}`);
           const retryNotice = `attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`;
           console.error(`tea-test-review: ${retryNotice}`);
           // On GitHub Actions the annotation is what makes a retry visible on the run page.
+          // It goes to stderr: stdout is the verdict JSON, and the runner reads commands from either stream.
           if (process.env.GITHUB_ACTIONS) {
-            console.log(`::warning::tea-test-review: ${retryNotice}`);
+            console.error(`::warning::tea-test-review: ${retryNotice}`);
           }
           continue;
         }
