@@ -36,7 +36,7 @@ function mountsOutsideAllowlist(observed, allowed) {
 
 /**
  * What one preflight leg's audit reported: the mounts it listed and whether the audit lost reports while the leg ran (the log
- * reported lost events or delivered fewer canaries than were sent, `channelEntry` in `run.js`). A lossy leg's list may lack
+ * reported lost events, delivered fewer canaries than were sent or was handed reports faster than it keeps them, `channelEntry` in `run.js`). A lossy leg's list may lack
  * a path the leg opened, so no verdict rests on it.
  *
  * @typedef {{ mounts: string[], lossy: boolean }} LegMounts
