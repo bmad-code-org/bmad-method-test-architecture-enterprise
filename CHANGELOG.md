@@ -746,6 +746,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Evaluate skill's inspection and adapter mapping tables name each target kind by the exact `targetKind` value `evaluation.json` records (`skill`, `agent`, `workflow`, `tool-use`, `ai-feature`, `test-review-mechanism`).
+  The tables named the kinds in words ("AI feature", "Tool-use system"), so a Stage 1 asked for the `targetKind` value could answer `AI feature`, which the evaluation schema rejects; the dogfood evaluation's web-application probe failed its clean arm this way in a live run.
+
 - The streaming git reader (`cli/lib/evaluate/git-lines.js`) no longer hangs for good on a rare run, which the failing-pack loop caught once.
   One parallel run of the loop ended the walk, pack and index case `null ETIMEDOUT` after its 60 seconds with all 20 serial runs green; the case streams 82 MB through three stages in about half a second, so the 60 seconds were a hang.
   A process dump of a stuck reader on Linux showed no stage left and the main thread joining a V8 worker inside `process.exit`.
