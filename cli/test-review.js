@@ -390,17 +390,23 @@ function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
   return `${report.trimEnd()}\n${lines.join('\n')}\n`;
 }
 
+/** Case-folded where the filesystem usually is, so `R.md` and `r.md` are one file there. */
+function foldPath(file) {
+  return process.platform === 'linux' ? file : file.toLowerCase();
+}
+
 /** The value after `name` (or in `name=value`) in raw argv, or null. */
 function argvValue(argv, name) {
+  // The last occurrence wins, as it does when the parser accepts the line.
+  let found = null;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === name) {
-      return argv[index + 1] !== undefined && !argv[index + 1].startsWith('--') ? argv[index + 1] : null;
-    }
-    if (argv[index].startsWith(`${name}=`)) {
-      return argv[index].slice(name.length + 1);
+      found = argv[index + 1] !== undefined && !argv[index + 1].startsWith('--') ? argv[index + 1] : null;
+    } else if (argv[index].startsWith(`${name}=`)) {
+      found = argv[index].slice(name.length + 1);
     }
   }
-  return null;
+  return found;
 }
 
 /**
@@ -412,7 +418,7 @@ function safeCommentOut(options, commentOut, protectedPaths) {
     return;
   }
   const root = fs.existsSync(options.projectRoot) ? path.resolve(options.projectRoot) : process.cwd();
-  const fold = (file) => (process.platform === 'linux' ? file : file.toLowerCase());
+  const fold = foldPath;
   const target = fold(path.resolve(root, commentOut));
   return protectedPaths.some((file) => typeof file === 'string' && fold(path.resolve(root, file)) === target) ? undefined : commentOut;
 }
@@ -787,7 +793,7 @@ async function runReview(session) {
   const projectRoot = path.resolve(options.projectRoot);
   const outputPath = path.resolve(projectRoot, options.output);
   const jsonPath = options.json ? path.resolve(projectRoot, options.json) : null;
-  if (jsonPath && jsonPath === outputPath) {
+  if (jsonPath && foldPath(jsonPath) === foldPath(outputPath)) {
     fail(EXIT.ENV_ERROR, '--output and --json must resolve to different files.');
   }
   if (options.commentOut !== undefined && session.surface.commentOut === undefined) {

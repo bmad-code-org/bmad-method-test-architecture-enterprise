@@ -210,7 +210,7 @@ function reviewerLine(verdict) {
 }
 
 /** Where the full report lives, said only as far as the caller can vouch for it. */
-function reportLine({ runUrl, artifactName, reportPath, reportMissing, evidence }) {
+function reportLine({ runUrl, artifactName, reportPath, reportMissing, evidence, verdictOnly }) {
   const safeUrl = isNonEmptyString(runUrl) ? plain(runUrl).replaceAll(')', '%29') : null;
   const link = safeUrl ? `[Workflow run](${safeUrl})` : null;
   // A run that wrote no report uploads no artifact, so there is nothing to promise.
@@ -219,8 +219,10 @@ function reportLine({ runUrl, artifactName, reportPath, reportMissing, evidence 
   }
   if (isNonEmptyString(artifactName) && evidence !== false) {
     const run = safeUrl ? ` of [this workflow run](${safeUrl})` : ' of this run';
-    return `Report and verdict JSON: the ${code(artifactName)} artifact${run}, once its upload step has finished.`;
+    // A skip and a dry run write no report; only the verdict JSON is left to carry.
+    return `${verdictOnly ? 'Verdict JSON' : 'Report and verdict JSON'}: the ${code(artifactName)} artifact${run}, once its upload step has finished.`;
   }
+  if (verdictOnly) return link;
   if (isNonEmptyString(reportPath)) {
     const where = `The report is in the job workspace at ${code(reportPath)} and is deleted when the job ends unless the job uploads it.`;
     return [where, link].filter(Boolean).join(' ');
@@ -344,7 +346,11 @@ function buildModel(verdict, context = {}) {
   }
 
   if (hasVerdict && state !== 'broken') model.reviewer = reviewerLine(v);
-  model.report = reportLine(state === 'broken' ? { ...context, evidence: isNonEmptyString(context.reportPath) } : context);
+  if (state === 'broken') {
+    model.report = reportLine({ ...context, evidence: isNonEmptyString(context.reportPath) });
+  } else {
+    model.report = reportLine(state === 'skipped' || state === 'dry-run' ? { ...context, verdictOnly: true } : context);
+  }
   model.agent = isNonEmptyString(context.agent) ? context.agent : isNonEmptyString(v.agent) ? v.agent : 'claude';
   return model;
 }

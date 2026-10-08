@@ -53,16 +53,20 @@ function workflowRunUrl(env = process.env) {
  * matrix jobs) could both GET the same legacy comment before either PATCH lands and one would
  * silently overwrite the other's review.
  */
-function findOwnComment(comments, agent = 'claude', { botOnly = false } = {}) {
-  // With botOnly (a GitHub Actions run, where the comment is written by github-actions[bot]) a
-  // comment a person wrote cannot be ours, so nobody can capture the comment by typing the marker.
-  const list = (comments || []).filter(
-    (comment) => comment && typeof comment.body === 'string' && !(botOnly && comment.user?.type && comment.user.type !== 'Bot'),
-  );
+function findOwnComment(comments, agent = 'claude', { botOnly = false, login = null } = {}) {
+  // Who may have written the comment, when the token can tell us. A token that is a person (a
+  // personal access token) writes as `login`, so only that account's comments are ours. An
+  // installation token cannot ask who it is, and on GitHub Actions it writes as a bot, so there
+  // only a bot's comments are ours. Either way nobody can capture the comment by typing the marker.
+  const mayHaveWritten = (comment) => {
+    if (login) return comment.user?.login === login;
+    if (botOnly) return comment.user?.type === 'Bot';
+    return true;
+  };
+  const list = (comments || []).filter((comment) => comment && typeof comment.body === 'string' && mayHaveWritten(comment));
   // The marker is the first line of the comment this CLI writes. A comment that merely contains it
-  // (a quote, a reply, text a drive-by commenter typed) is not ours, and among several candidates
-  // the one a bot account wrote wins over one a person wrote. The author is not checked beyond
-  // that preference: an installation token cannot ask GitHub who it is.
+  // (a quote, a reply, text a drive-by commenter typed) is not ours. With no identity to go on,
+  // among several candidates the one a bot account wrote wins over one a person wrote.
   const owned = (marker) => {
     const candidates = list.filter((comment) => comment.body.trimStart().startsWith(marker));
     return candidates.find((comment) => comment.user?.type === 'Bot') ?? candidates[0] ?? null;
@@ -71,6 +75,19 @@ function findOwnComment(comments, agent = 'claude', { botOnly = false } = {}) {
   if (exact) return exact;
   if (agent !== 'claude') return null;
   return owned(LEGACY_COMMENT_MARKER);
+}
+
+/**
+ * The account the token writes as, or null. An installation token (the job's default GITHUB_TOKEN)
+ * is refused here, which is how a bot token is told from a person's.
+ */
+async function whoAmI(ctx) {
+  try {
+    const me = await githubRequest({ ...ctx, method: 'GET', path: '/user' });
+    return typeof me?.login === 'string' && me.login !== '' ? me.login : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Create the comment, or update the one this CLI already owns on the pull request. */
@@ -353,7 +370,10 @@ function createPublisher(config) {
       };
       if (active && comment) {
         try {
-          const note = await upsertComment(ctx, target.prNumber, renderComment(verdict, context), agent, { botOnly: target.botOnly });
+          const note = await upsertComment(ctx, target.prNumber, renderComment(verdict, context), agent, {
+            botOnly: target.botOnly,
+            login: await whoAmI(ctx),
+          });
           log(`${note} the review comment on #${target.prNumber}.`);
         } catch (error) {
           warn(
@@ -382,5 +402,6 @@ module.exports = {
   resolvePrNumber,
   resolveTarget,
   upsertComment,
+  whoAmI,
   workflowRunUrl,
 };

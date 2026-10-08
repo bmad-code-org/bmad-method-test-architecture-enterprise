@@ -7415,6 +7415,14 @@ async function runTests() {
           !/[\uD800-\uDBFF]$/.test(publisher.clampBytes('🙂'.repeat(20_000), 65_535).replace(/\n\n_\(truncated\)_$/, '')),
         'clampBytes never ends on half of a surrogate pair',
       );
+      const skipArtifact = renderComment(skipVerdict, { artifactName: 'tea-review', runUrl: 'https://ci.example/run/9' });
+      assert(
+        skipArtifact.includes('Verdict JSON: the `tea-review` artifact') &&
+          !skipArtifact.includes('Report and verdict JSON') &&
+          !renderComment(dry, { artifactName: 'tea-review' }).includes('Report and verdict JSON'),
+        'a skip and a dry run wrote no report, so they name only the verdict JSON',
+        skipArtifact,
+      );
       assert(
         publisher.findOwnComment(
           [
@@ -7523,6 +7531,22 @@ async function runTests() {
           }).id === 1 &&
           publisher.findOwnComment([{ id: 1, body: `${buildCommentMarker('claude')}\nmine`, user: { type: 'User' } }], 'claude').id === 1,
         'on GitHub Actions a comment a person wrote cannot be taken for ours; elsewhere the token owner may be a person',
+      );
+
+      // ---- whose comment is ours ----
+      const owned = `${buildCommentMarker('claude')}\n## TeA`;
+      assert(
+        publisher.findOwnComment(
+          [
+            { id: 1, body: owned, user: { login: 'bob', type: 'User' } },
+            { id: 2, body: owned, user: { login: 'alice', type: 'User' } },
+          ],
+          'claude',
+          { login: 'alice' },
+        ).id === 2 &&
+          publisher.findOwnComment([{ id: 1, body: owned, user: { login: 'bob', type: 'User' } }], 'claude', { login: 'alice' }) === null &&
+          publisher.findOwnComment([{ id: 1, body: owned }], 'claude', { botOnly: true }) === null,
+        'a token that is a person owns only that person comments; a bot token owns only bot comments',
       );
 
       // ---- tea-test-review render ----
@@ -7706,7 +7730,11 @@ async function runTests() {
             return send(200, mock.comments.slice((Number(m[1]) - 1) * 100, Number(m[1]) * 100));
           }
           if (req.method === 'POST' && req.url === '/repos/o/r/issues/7/comments') {
-            const comment = { id: mock.nextId++, body: body.body };
+            const comment = {
+              id: mock.nextId++,
+              body: body.body,
+              user: mock.me ? { login: mock.me, type: 'User' } : { login: 'github-actions[bot]', type: 'Bot' },
+            };
             mock.comments.push(comment);
             return send(201, comment);
           }
@@ -7731,6 +7759,11 @@ async function runTests() {
             Object.assign(run, body);
             return send(200, run);
           }
+          if (req.method === 'GET' && req.url === '/user') {
+            // What an installation token (the job's default GITHUB_TOKEN) is told.
+            if (!mock.me) return send(403, { message: 'Resource not accessible by integration' });
+            return send(200, { login: mock.me });
+          }
           if (req.method === 'GET' && req.url === '/repos/o/r/pulls/7') {
             return send(200, { head: { sha: 'cafebabe1234567' }, base: { ref: 'main' } });
           }
@@ -7745,6 +7778,7 @@ async function runTests() {
         mock.checkRuns.length = 0;
         mock.rules.length = 0;
         mock.onRequest = null;
+        mock.me = null;
       };
       const writes = () => mock.requests.filter((r) => r.method !== 'GET');
       const ctx = { owner: 'o', repo: 'r', token: 't', apiUrl: mockUrl };
@@ -7990,6 +8024,7 @@ async function runTests() {
               [
                 'GET /repos/o/r/commits/abc1234/check-runs',
                 'POST /repos/o/r/check-runs',
+                'GET /user',
                 'GET /repos/o/r/issues/7/comments',
                 'POST /repos/o/r/issues/7/comments',
                 `PATCH /repos/o/r/check-runs/${mock.checkRuns[0]?.id}`,
@@ -8436,6 +8471,70 @@ async function runTests() {
           'an unparseable report was written, so a broken gate names the artifact that carries it',
           fs.readFileSync(unparsedComment, 'utf8'),
         );
+
+        // A personal access token writes as a person: its own comment is found again, and a stranger's is not.
+        resetMock();
+        mock.me = 'alice';
+        mock.comments.push({ id: 1, body: `${buildCommentMarker('claude')}\nbob typed this`, user: { login: 'bob', type: 'User' } });
+        const patEnv = ghEnv('pat', { GITHUB_ACTIONS: 'true' });
+        const patArgs = ghArgs('pat', ['--no-check-run']);
+        const patFirst = await runCliAsync(patArgs, patEnv);
+        const patSecond = await runCliAsync(patArgs, ghEnv('pat2', { GITHUB_ACTIONS: 'true' }));
+        assert(
+          patFirst.status === 0 &&
+            patSecond.status === 0 &&
+            mock.comments.length === 2 &&
+            mock.comments[0].body.includes('bob typed this') &&
+            mock.comments[1].user.login === 'alice' &&
+            mock.comments[1].body.includes('Pass for the changed tests'),
+          'a person-owned token updates its own comment run after run and leaves a stranger that typed the marker alone',
+          `${patFirst.stderr} ${JSON.stringify(mock.comments.map((c) => c.id))}`,
+        );
+        // The job token (a bot) on Actions: a person's marker comment is never taken over.
+        resetMock();
+        mock.comments.push({ id: 1, body: `${buildCommentMarker('claude')}\nbob typed this`, user: { login: 'bob', type: 'User' } });
+        const botRun = await runCliAsync(ghArgs('botrun', ['--no-check-run']), ghEnv('botrun', { GITHUB_ACTIONS: 'true' }));
+        assert(
+          botRun.status === 0 &&
+            mock.comments.length === 2 &&
+            mock.comments[0].body.includes('bob typed this') &&
+            mock.comments[1].user.type === 'Bot',
+          'on GitHub Actions the job token posts its own comment instead of taking over a person comment',
+          botRun.stderr,
+        );
+
+        // Repeated flags: the last one wins on the refusal path, as it does when the line parses.
+        const lastWins = path.join(guardDir, 'last-wins.md');
+        const lastFirst = path.join(guardDir, 'first-wins.md');
+        const repeated = await runCliAsync(
+          ['--project-root', guardDir, '--comment-out', lastFirst, '--comment-out', lastWins, '--bogus-flag'],
+          ghEnv('repeat'),
+        );
+        assert(
+          repeated.status === 2 && fs.existsSync(lastWins) && !fs.existsSync(lastFirst),
+          'with a repeated --comment-out the refusal path writes the last, like the parser would',
+          repeated.stderr,
+        );
+        const guardReport = path.join(guardDir, 'r.md');
+        fs.writeFileSync(guardReport, 'KEEP');
+        const repeatedOutput = await runCliAsync(
+          ['--project-root', guardDir, '--output', 'x.md', '--output', 'r.md', '--comment-out', 'r.md', '--bogus-flag'],
+          ghEnv('repeat2'),
+        );
+        assert(
+          repeatedOutput.status === 2 && fs.readFileSync(guardReport, 'utf8') === 'KEEP',
+          'a repeated --output is guarded by its last value',
+        );
+        if (process.platform !== 'linux') {
+          const foldJson = await runCliAsync(
+            ['--project-root', guardDir, '--files', 'x.spec.ts', '--output', 'R2.md', '--json', 'r2.md'],
+            ghEnv('foldjson'),
+          );
+          assert(
+            foldJson.status === 2 && foldJson.stderr.includes('--output and --json must resolve to different files'),
+            '--output and --json differing only in case are one file where the filesystem folds case',
+          );
+        }
 
         // Misuse is refused up front.
         for (const [label, extra, expected] of [
