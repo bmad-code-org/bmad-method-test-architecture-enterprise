@@ -21,7 +21,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required, so the pr tier is the default home; no inspection moved it."
+        "reason": "Deterministic and secret-free, so it runs on every pull request. .github/workflows/ci.yml starts on pull_request and CONTRIBUTING.md says fork pull requests run without any secret."
       }
     },
     {
@@ -46,7 +46,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free; it stays on pr with the rest of the deterministic set (CAP-11). ci.yml runs on pull_request with no secret."
+        "reason": "Deterministic and secret-free, so it runs on every pull request (.github/workflows/ci.yml triggers on pull_request; CONTRIBUTING.md: fork runs get no secret)."
       }
     },
     {
@@ -71,7 +71,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and secret-free; it stays on pr with the rest of the deterministic set (CAP-11). ci.yml runs on pull_request with no secret."
+        "reason": "Deterministic and secret-free, so it runs on every pull request (.github/workflows/ci.yml triggers on pull_request; CONTRIBUTING.md: fork runs get no secret)."
       }
     },
     {
@@ -96,7 +96,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "The evaluation declares an api interface (evaluation.json interface api, adapter/http-probe-port.conformance.mjs), so the check applies; it needs no secret and stays on pr."
+        "reason": "The evaluation declares an HTTP target (registry kind api, POST /grade), the check is secret-free, and .github/workflows/ci.yml runs on every pull_request."
       }
     },
     {
@@ -121,7 +121,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Probes P-009 and P-015 take the gameability route and the arm calls no model; CAP-11 keeps it on pr, and ci.yml gives pull requests no secret."
+        "reason": "Probes P-009 and P-015 take the gameability route. The check is secret-free and CAP-11 requires it on every pull request (.github/workflows/ci.yml triggers on pull_request)."
       }
     },
     {
@@ -146,7 +146,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic oracle against scorer check with no secret; CAP-11 keeps it on pr."
+        "reason": "Deterministic and secret-free, so CAP-11 requires it on every pull request (.github/workflows/ci.yml triggers on pull_request). It reads baseline/, so the adopter accepts the first baseline in the same reviewed change."
       }
     },
     {
@@ -172,7 +172,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Replays the recorded run with no secret and no model call; CAP-11 keeps it on pr. It reads baseline/, which the maintainer accepts from the latest scored run."
+        "reason": "Deterministic and secret-free, so it runs on every pull request (.github/workflows/ci.yml triggers on pull_request). It reads baseline/, accepted by the adopter in the same reviewed change."
       }
     },
     {
@@ -195,7 +195,7 @@
       "placement": {
         "tier": "merge",
         "defaultTier": "merge",
-        "reason": "The registry names no environmentKeys and the target is the loopback stand-in app/server/grade.mjs, so it needs no secret and defaults to merge. .github/workflows/ci.yml lists merge_group and CONTRIBUTING.md says the merge queue re-runs the test check on the queued commit, so a post-merge run exists; the preflight runs locally against that stand-in and fits ci.yml's 15 minute timeout."
+        "reason": "The registry names no environmentKeys (server/grade.mjs applies app/rules/policy.json in place of the vendor model), so the target needs no secret and AD-10 defaults the live preflight to merge. .github/workflows/ci.yml lists merge_group and CONTRIBUTING.md says the queue re-runs the test check on the queued commit, so a post-merge run exists; the preflight starts a local server and sends two requests, well inside the 15-minute timeout of that job."
       }
     },
     {
@@ -221,7 +221,7 @@
       "placement": {
         "tier": "scheduled",
         "defaultTier": "scheduled",
-        "reason": "Live set at its default. .github/workflows/nightly.yml runs on schedule and workflow_dispatch, and docs/DEPLOYING.md says a grading defect reaches learners within 24 hours of the nightly deploy, so a nightly run bounds a defect's life. The evaluation itself needs no key and makes no model call. It reports only (warn), since deploy.yml does not wait for nightly.yml."
+        "reason": "Default tier. .github/workflows/nightly.yml runs on schedule (17 2 * * *) and workflow_dispatch against main, and CONTRIBUTING.md says it runs against main nightly. B-001 is critical and docs/DEPLOYING.md says a defect reaches learners within 24 hours, so a nightly run is warranted. One run costs 0 USD (contract budgets.maxCostUsd 0.00, no model call), so cadence is free."
       }
     },
     {
@@ -247,7 +247,7 @@
       "placement": {
         "tier": "scheduled",
         "defaultTier": "scheduled",
-        "reason": "Held-out partition at its default. nightly.yml has a schedule trigger, and the evaluation makes no model call, so a nightly run costs nothing beyond runner minutes."
+        "reason": "Default tier. .github/workflows/nightly.yml has a schedule and a workflow_dispatch trigger, and the held-out probes P-011, P-012, P-013 and P-015 run locally at no model cost. docs/DEPLOYING.md says the nightly run does not stop that night's deploy, so this tier warns and gates nothing."
       }
     },
     {
@@ -273,7 +273,7 @@
       "placement": {
         "tier": "scheduled",
         "defaultTier": "scheduled",
-        "reason": "Compares against baseline/ on the nightly schedule of .github/workflows/nightly.yml; no cost beyond runner minutes, the evaluator is deterministic."
+        "reason": "Default tier. .github/workflows/nightly.yml has a schedule and a workflow_dispatch trigger, and the comparison reads the accepted baseline/. A strength regression is a warning under AD-10."
       }
     },
     {
@@ -299,7 +299,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "The release event is the trigger of .github/workflows/deploy.yml, a nightly cron at 03:47 UTC plus workflow_dispatch (docs/DEPLOYING.md), hence release and manual-dispatch. Contract B-001 is critical and the grade decides whether a learner passes a course, so this tier blocks. The production job of deploy.yml shares the file the CI skill edits, so it waits for this tier through gates. deploy.yml is independent of nightly.yml (docs/DEPLOYING.md), which is why the scheduled run cannot serve as the gate."
+        "reason": "Default tier. .github/workflows/deploy.yml ships main to production at 03:47 UTC on schedule and on workflow_dispatch, and those triggers are the release event. docs/DEPLOYING.md says deploy and nightly are independent, so the scheduled tier gates nothing; this tier blocks the production job, which shares deploy.yml with the evaluation jobs and so waits for them through needs."
       },
       "gates": [
         "production"
@@ -328,8 +328,11 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "Held-out partition at its default on the deploy.yml trigger (nightly cron and workflow_dispatch); B-001 is critical and a missed defect ships within 24 hours (docs/DEPLOYING.md)."
-      }
+        "reason": "Default tier. .github/workflows/deploy.yml (schedule plus workflow_dispatch) is the release event and B-001 is critical, so the held-out partition blocks the nightly production deploy. The production job shares that file."
+      },
+      "gates": [
+        "production"
+      ]
     },
     {
       "id": "strength-comparison",
@@ -354,8 +357,11 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "Default placement on the deploy.yml trigger. It warns only, since AD-10 gives this check no block on release."
-      }
+        "reason": "Default tier. .github/workflows/deploy.yml (schedule plus workflow_dispatch) is the release event; a strength regression against baseline/ is a warning under AD-10 and does not stop the deploy."
+      },
+      "gates": [
+        "production"
+      ]
     }
   ]
 }
