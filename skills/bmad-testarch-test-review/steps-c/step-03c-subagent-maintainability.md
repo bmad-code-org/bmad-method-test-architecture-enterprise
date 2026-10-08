@@ -21,6 +21,7 @@ This is an **isolated subagent** running in parallel with other quality dimensio
 - ✅ Read `criteria_registry` before evaluating anything; severities come from it
 - ✅ Score Convention rows against `convention_baseline`, never against an absolute standard
 - ✅ Output structured JSON to temp file
+- ✅ In `review_mode: pr`, report only a violation on a line in `changed_lines`, or one a changed line causes (new setup, a changed fixture, hook, constant or parametrize table that leaves an untouched assertion unable to fail). Cite the changed line as the location and name the unchanged assertion in the description. A test that lost lines is the pull request's. Report nothing else about code the pull request did not touch
 - ❌ Do NOT check determinism, isolation, coverage, or performance
 - ❌ Do NOT choose a severity, invent a row, or step a severity outside the registry's Convention schedule
 

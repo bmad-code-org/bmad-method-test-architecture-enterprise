@@ -99,10 +99,17 @@ const subagentContext = {
     pactjs_utils_installed: /* from Step 1: @seontechnologies/pactjs-utils in package.json */,
     pact_mcp: config.tea_pact_mcp || 'mcp',  // "mcp" | "none"; broker steps degrade when the tools are unreachable
   },
+  // `pr` or `full-file`. In `pr` mode the changed-line ranges ride along, and a
+  // worker reports only a defect on a changed line or one a changed line causes
+  // (the finding's location is that changed line); it never writes up old code.
+  review_mode: /* from the headless prompt, else 'full-file' */,
+  changed_lines: /* from the headless prompt in `pr` mode: { "<path>": ["7", "10-14"] } */,
   run_key: runKey,
   timestamp: timestamp
 };
 ```
+
+**Every worker also receives `review_mode` and, in `pr` mode, `changed_lines`, written out in its launch prompt.** A worker that reads a whole file and writes up every old defect it finds produces a report that contradicts the pull request gate.
 
 **Every worker loads `criteria-registry.md` before evaluating anything, and every
 worker receives `convention_baseline` verbatim.** A worker that scores from its own

@@ -31,6 +31,7 @@ From `workflow.yaml`, resolve:
 
 - `date` (`test_artifacts`, `user_name`, `communication_language` and `document_output_language` come from activation)
 - `test_dir`, `review_scope`
+- `review_mode`: `pr` or `full-file`. In `pr` mode the run is a pull request review: read every review file whole, but score and report only the defects the pull request introduced or worsened (see Step 1). `full-file` scores every line.
 - `headless` — when `true`, skip the greeting and interactive menu, execute Create mode directly, and never prompt the user
 - `review_files` — comma-separated authoritative review set; when non-empty it IS the complete review set (takes precedence over `review_scope` discovery)
 - `context_files` — comma-separated read-only context artifacts (story, PRD, test design, changed source). Read for understanding, never reviewed and never scored. Step 1 resolves `{context_basis}` from what it actually read, and step 4 publishes it

@@ -1225,6 +1225,50 @@ function extractFindings(text, registryRowSeverities) {
   return findings;
 }
 
+/**
+ * Where each documented finding sits in the original report, so a caller can
+ * cut one out. Walks the same two sections and the same "### " blocks as
+ * extractFindings, on the fence-intact text, so entry N is finding N of
+ * extractFindings(stripFencedCodeBlocks(reportText)).
+ *
+ * @param {string} reportText - The report as written, fences included.
+ * @param {object|null} registryRowSeverities - See extractFindings.
+ * @returns {Array<{section: string, start: number, end: number}>} The finding's
+ *   section heading and its half-open line range into `reportText.split('\n')`,
+ *   one per finding.
+ */
+function findingBlockSpans(reportText, registryRowSeverities) {
+  const lines = reportText.split('\n');
+  const depths = fenceDepths(reportText);
+  const outsideFence = (index) => depths[index] === 0;
+  const spans = [];
+  for (const heading of [CRITICAL_ISSUES_HEADING, RECOMMENDATIONS_HEADING]) {
+    const headingLine = new RegExp(`^## ${escapeRegExp(heading)}[ \\t]*\\r?$`);
+    const sectionStart = lines.findIndex((line, index) => outsideFence(index) && headingLine.test(line));
+    if (sectionStart === -1) continue;
+    let sectionEnd = lines.length;
+    for (let index = sectionStart + 1; index < lines.length; index += 1) {
+      if (outsideFence(index) && lines[index].startsWith('## ')) {
+        sectionEnd = index;
+        break;
+      }
+    }
+    const starts = [];
+    for (let index = sectionStart + 1; index < sectionEnd; index += 1) {
+      if (outsideFence(index) && lines[index].startsWith('### ')) starts.push(index);
+    }
+    for (const [position, start] of starts.entries()) {
+      const end = position + 1 < starts.length ? starts[position + 1] : sectionEnd;
+      const block = lines
+        .slice(start, end)
+        .filter((_, offset) => outsideFence(start + offset))
+        .join('\n');
+      if (parseFindingBlock(block, heading, registryRowSeverities) !== null) spans.push({ section: heading, start, end });
+    }
+  }
+  return spans;
+}
+
 /** Documented findings per severity; one with no resolvable severity counts in none. */
 function findingCountsBySeverity(findings) {
   const counts = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -1725,6 +1769,8 @@ module.exports = {
   EXECUTION_MODE_ENUM,
   verifyFindingSeverityCounts,
   extractFindings,
+  findingBlockSpans,
+  assessmentForRecommendation,
   FINDING_KEYS,
   RECOMMENDATION_ENUM,
   rawScoreForViolations,

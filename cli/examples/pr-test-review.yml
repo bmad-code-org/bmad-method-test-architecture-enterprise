@@ -231,15 +231,13 @@ jobs:
                     marker,
                     `## TEA Test Review: ${verdict.recommendation}`,
                     "",
+                    `- **Review mode**: ${verdict.reviewMode ?? "full-file"}`,
                     `- **Gate mode**: ${verdict.gateOn ?? "all"}`,
                     `- **Gating quality score**: ${verdict.gatingQualityScore ?? verdict.qualityScore ?? "n/a"}/100`,
-                    `- **Full-review effective score**: ${verdict.qualityScore ?? "n/a"}/100`,
+                    `- **${verdict.reviewMode === "pr" ? "Effective" : "Full-review effective"} score**: ${verdict.qualityScore ?? "n/a"}/100`,
                     `- **Raw deduction score**: ${verdict.rawQualityScore ?? "n/a"}/100`,
-                    `- **Full-review score rule**: ${verdict.scoreOverrideRule ?? "n/a"}`,
+                    `- **${verdict.reviewMode === "pr" ? "Score" : "Full-review score"} rule**: ${verdict.scoreOverrideRule ?? "n/a"}`,
                     `- **Recommendation**: ${verdict.recommendation}`,
-                    ...(verdict.allFindingsRecommendation
-                      ? [`- **Full-review recommendation**: ${verdict.allFindingsRecommendation}`]
-                      : []),
                     `- **Gating violations**: ${violations}`,
                     `- **Verdict rule**: ${verdict.verdictRule ?? "n/a"}`,
                     `- **Reviewed files**: ${reviewed.length}`,

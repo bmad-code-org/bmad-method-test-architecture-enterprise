@@ -47,6 +47,15 @@ Use `review_scope`:
 
 When `review_files` is non-empty, it is the authoritative review set and takes precedence over `review_scope` discovery.
 
+Use `review_mode`:
+
+- **full-file**: score every line of every file in the review set.
+- **pr**: the review set is the test files a pull request changed, and the headless prompt supplies the changed-line ranges per file. Read each file whole, and read the surrounding source, as context. Score and write up only a defect the pull request introduced or worsened:
+  - a defect on a changed line;
+  - a defect on an unchanged line that a changed line causes: new setup, a changed fixture or helper, or a changed value that leaves an untouched assertion unable to fail. Cite the **changed** line as the finding's `**Location**` and name the unchanged assertion in the description as context;
+  - a test that lost lines (`deleted-after:N` in the changed ranges): a deleted assertion is the pull request's;
+  - nothing on code the pull request did not touch or affect. Such a defect gets no finding, no violation count, no deduction, no weakness bullet and no sentence in the report.
+
 If unclear, ask the user — except in headless mode (`headless: true`), which never asks: resolve the scope from the supplied inputs (`review_scope`, `review_files`) and continue.
 
 **Stack Detection** (for context-aware loading):

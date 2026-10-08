@@ -153,6 +153,7 @@
   "test:tea-workflow-descriptions": 0.4,
   "test:teach-me-testing-scoring": 0.6,
   "test:test-design-qualification": 7,
+  "test:test-review-pr-scope": 2,
   "test:test-review-qualification": 5,
   "test:trace-qualification": 4.9,
   "test:transcript-harness": 3.9,

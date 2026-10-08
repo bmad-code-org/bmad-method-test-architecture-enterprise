@@ -16,6 +16,7 @@ template: "./test-review-template.md"
 variables:
   test_dir: "{project-root}/tests" # Root test directory
   review_scope: "single" # single (one file), directory (folder), suite (all tests)
+  review_mode: "full-file" # pr (score and report only what the pull request changed or broke) or full-file (score every line of every review file)
   test_stack_type: "auto" # auto, frontend, backend, fullstack, mobile - from config or auto-detected
 
   # Headless mode (non-interactive runs, e.g. the tea-test-review CLI)
