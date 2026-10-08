@@ -4,7 +4,7 @@ Read the target before choosing probes. Copy `assets/inspection-record.md` to `{
 
 ## Classify the target and choose its adapter
 
-Record `targetKind` only in `evaluation.json`. The contract names permitted interfaces and operations, never a target kind. The following mapping is AD-4's choice table; its first column is the exact `targetKind` value `evaluation.json` records. A web application is an `ai-feature` target reached as `api`, including a web application with no AI behavior. An HTTP tool server is reached as `api`; a stdio tool server is reached as `mcp`.
+Record `targetKind` only in `evaluation.json`. The contract names permitted interfaces and operations, never a target kind. The following mapping is AD-4's choice table; its first column is the exact `targetKind` value `evaluation.json` records. A web application is an `ai-feature` target, including a web application with no AI behavior, and takes the interface kind of the `ai-feature` row. An HTTP tool server is reached as `api`; a stdio tool server is reached as `mcp`.
 
 | Target kind             | Interface kind                          | Adapter                              | Generated shape                                                                                          |
 | ----------------------- | --------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |

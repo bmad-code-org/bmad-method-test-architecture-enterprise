@@ -14,7 +14,7 @@
  *  - the replay scores every evidence artifact `PASS` with no unsatisfied coverage gap, every clean control
  *    `passed-clean-control` and every seeded probe, development and held-out, `caught` at `minimumTrialCount`; removing a
  *    repair brings its engine rule back as a `CONCERNS` artifact (the four variants at the end),
- *  - the seed of B-002 (M-003) edits the one sentence that states the web-application rule; `test:evaluate-guidance` holds
+ *  - the seed of B-002 (M-003) edits the mapping row that gives a web application's interface kind; `test:evaluate-guidance` holds
  *    that the rule is stated once, so a second statement fails there, and the live preflight qualifies the seed against the
  *    model, which this replay cannot (its reader takes the sentence it finds),
  *  - the reference set equals the exit table of `references/gaps.md`, so a row added or dropped there fails here,

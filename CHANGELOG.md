@@ -746,6 +746,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Evaluate skill states the web-application rule in two parts of its inspection guide, each said once: the sentence sends a web application to the `ai-feature` target kind, and the `ai-feature` row of the mapping table gives that kind's interface, `api`.
+  Once the table named `ai-feature` by its value, the sentence's own "reached as `api`" restated the row, and the dogfood evaluation's seeded web-application defect, which edited the sentence alone, stopped manifesting: the live model answered from the row (`api`) in place of the edited sentence (`web`), so P-005's mutated arm held and the run exited 11.
+  M-003 now edits the row; live, the clean arm answered `api` and the mutated arm `web` in 6 of 6 trials each.
+
 - The Evaluate skill's inspection and adapter mapping tables name each target kind by the exact `targetKind` value `evaluation.json` records (`skill`, `agent`, `workflow`, `tool-use`, `ai-feature`, `test-review-mechanism`).
   The tables named the kinds in words ("AI feature", "Tool-use system"), so a Stage 1 asked for the `targetKind` value could answer `AI feature`, which the evaluation schema rejects; the dogfood evaluation's web-application probe failed its clean arm this way in a live run.
 
