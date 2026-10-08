@@ -746,6 +746,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Evaluate workspaces are copy-on-write clones on macOS (APFS) and on Linux file systems with reflinks (btrfs, XFS), so a run no longer fills the disk.
+  Node's `fs.cpSync` and `fs.copyFileSync` ignore `COPYFILE_FICLONE` on macOS and copy every byte, so the pristine, qualify and mutated workspaces each cost the full size of the project's provisioned `node_modules` (2.8 GB for TeA's own evaluation, 6 GB of free space gone for the pristine plus one qualify workspace); a run on a host with 11 GB free died with `ENOSPC` and exit 12 after 33 minutes.
+  The workspace copy and the staged copy of a directory now run the system `cp` (`cp -c` on macOS, `cp --reflink=auto` on Linux), one command per directory that holds nothing left out, so a clone costs almost no space and a file system without clones gets a plain copy.
+  Modes, verbatim links, the skip filters and the refusal of FIFOs, sockets and devices are unchanged; a host without a usable `cp` (Windows, busybox) keeps `fs.cpSync`.
+  A regression case measures the free space of the volume across a 192 MB copy with `df` and fails when the copy spends the tree's size.
+
 - The Evaluate skill's inspection and adapter mapping tables name each target kind by the exact `targetKind` value `evaluation.json` records (`skill`, `agent`, `workflow`, `tool-use`, `ai-feature`, `test-review-mechanism`).
   The tables named the kinds in words ("AI feature", "Tool-use system"), so a Stage 1 asked for the `targetKind` value could answer `AI feature`, which the evaluation schema rejects; the dogfood evaluation's web-application probe failed its clean arm this way in a live run.
 

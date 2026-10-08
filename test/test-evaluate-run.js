@@ -245,6 +245,7 @@ function targetSandbox(options) {
 const {
   WorkspaceRefusal,
   adopterTreeState,
+  copyTreeInto,
   createWorkspace,
   gitAccessOf,
   journalDirectory,
@@ -255,6 +256,8 @@ const {
   reclaimDeadWorkspaces,
   removeScratchDirectory,
   removeWorkspace,
+  stageDirectories,
+  treeDigest,
 } = require('../cli/lib/evaluate/workspace');
 const { CLOCK_SLACK_MS, removePlaceholders, startMaskGuard, sweepMaskRecords } = require('../cli/lib/evaluate/mask-guard');
 const { HttpPortError, makeBridgeDirectory, makePortDirectory, probeHttpPort } = require('../cli/lib/evaluate/http-target');
@@ -12328,6 +12331,160 @@ function checkConfinementReference() {
   );
 }
 
+/** Free kilobytes on the volume that holds `directory`, as `df -Pk` reports them after a `sync`. */
+function freeKilobytes(directory) {
+  spawnSync('sync');
+  const row = spawnSync('df', ['-Pk', directory], { encoding: 'utf8' }).stdout.trim().split('\n').pop().split(/\s+/);
+  return Number(row.at(-3));
+}
+
+/** Removes a tree that holds read-only directories. */
+function removeTree(directory) {
+  spawnSync('chmod', ['-R', 'u+rwx', directory]);
+  fs.rmSync(directory, { recursive: true, force: true });
+}
+
+/** The system's own clone copy of `from` to `to`: free where the file system clones, the full size where it does not. */
+function systemCloneCopy(from, to) {
+  const [command, args] = process.platform === 'darwin' ? ['/bin/cp', ['-cR']] : ['cp', ['--reflink=always', '-R']];
+  return spawnSync(command, [...args, from, to]);
+}
+
+/**
+ * Every workspace copy is a clone where the file system has them. Node's `fs.cpSync` and `fs.copyFileSync` never clone on macOS
+ * even with `COPYFILE_FICLONE`, so a workspace over a project with a 2.8 GB `node_modules` cost its full size on APFS and a run
+ * died at minute 33 with ENOSPC. Over a tree of 192 MB the free space of the volume must fall by far less than the tree's size;
+ * a host whose file system does not clone (the system's own clone copy costs the full size there) skips that half, with the
+ * reason printed. The copy keeps the tree exactly (modes, links verbatim, a read-only directory), leaves out what `skip` names,
+ * refuses a FIFO, merges into a directory that exists, and `stageDirectories` follows a link.
+ */
+function checkWorkspaceClones() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-clone-case-'));
+  try {
+    // The semantics, over a small tree on any host.
+    const source = path.join(root, 'source');
+    fs.mkdirSync(path.join(source, 'pkg', 'lib'), { recursive: true });
+    fs.mkdirSync(path.join(source, 'locked'));
+    fs.mkdirSync(path.join(source, 'left-out'));
+    fs.writeFileSync(path.join(source, '.hidden'), 'hidden\n');
+    fs.writeFileSync(path.join(source, 'pkg', 'index.js'), 'module.exports = 1;\n');
+    fs.writeFileSync(path.join(source, 'pkg', 'lib', 'run.sh'), '#!/bin/sh\n');
+    fs.chmodSync(path.join(source, 'pkg', 'lib', 'run.sh'), 0o755);
+    fs.writeFileSync(path.join(source, 'pkg', 'skipped.txt'), 'left out\n');
+    fs.writeFileSync(path.join(source, 'left-out', 'file'), 'left out\n');
+    fs.writeFileSync(path.join(source, 'locked', 'file'), 'locked\n');
+    fs.chmodSync(path.join(source, 'locked', 'file'), 0o444);
+    fs.symlinkSync(path.join('..', 'pkg', 'index.js'), path.join(source, 'locked', 'inside-link'));
+    fs.chmodSync(path.join(source, 'locked'), 0o555);
+    fs.symlinkSync('/nonexistent/target', path.join(source, 'dangling'));
+    fs.symlinkSync('pkg', path.join(source, 'directory-link'));
+    const skipped = [path.join(source, 'pkg', 'skipped.txt'), path.join(source, 'left-out')];
+    const skip = (entry) => skipped.includes(entry);
+
+    const whole = path.join(root, 'whole');
+    copyTreeInto(source, whole);
+    check(
+      treeDigest(whole) === treeDigest(source),
+      'a copy of a tree with hidden files, an executable, a read-only directory and links is not the tree it copies',
+    );
+    check(
+      fs.readlinkSync(path.join(whole, 'dangling')) === '/nonexistent/target' &&
+        fs.readlinkSync(path.join(whole, 'directory-link')) === 'pkg' &&
+        fs.readlinkSync(path.join(whole, 'locked', 'inside-link')) === path.join('..', 'pkg', 'index.js'),
+      'a copy rewrote a symbolic link where it keeps it verbatim',
+    );
+
+    const partial = path.join(root, 'partial');
+    fs.mkdirSync(partial);
+    copyTreeInto(source, partial, { skip });
+    check(
+      treeDigest(partial) === treeDigest(source, { exclude: skipped }) &&
+        !fs.existsSync(path.join(partial, 'left-out')) &&
+        !fs.existsSync(path.join(partial, 'pkg', 'skipped.txt')),
+      'a copy that leaves paths out, into a directory that exists, is not the tree without them',
+    );
+
+    // A read-only source root copied into a directory that exists leaves that directory's mode as it was.
+    const closed = path.join(root, 'closed');
+    fs.mkdirSync(closed);
+    fs.writeFileSync(path.join(closed, 'file'), 'closed\n');
+    fs.chmodSync(closed, 0o555);
+    const open = path.join(root, 'open');
+    fs.mkdirSync(open, { mode: 0o755 });
+    copyTreeInto(closed, open);
+    check(
+      (fs.statSync(open).mode & 0o7777) === 0o755 && fs.readFileSync(path.join(open, 'file'), 'utf8') === 'closed\n',
+      `a copy of a read-only root changed the mode of the directory it copied into to ${(fs.statSync(open).mode & 0o7777).toString(8)}`,
+    );
+
+    if (process.platform !== 'win32') {
+      const withFifo = path.join(root, 'with-fifo');
+      fs.mkdirSync(path.join(withFifo, 'inner'), { recursive: true });
+      check(spawnSync('mkfifo', [path.join(withFifo, 'inner', 'pipe')]).status === 0, 'mkfifo could not make the FIFO the case needs');
+      let refused = null;
+      try {
+        copyTreeInto(withFifo, path.join(root, 'fifo-copy'));
+      } catch (error) {
+        refused = error;
+      }
+      check(
+        refused instanceof WorkspaceRefusal && refused.message.includes('inner/pipe') && refused.message.includes('FIFO'),
+        `a tree holding a FIFO was not refused naming it: ${refused?.message}`,
+      );
+    }
+
+    const staged = stageDirectories({ from: source, directories: ['pkg', 'locked'], prefix: 'tea-evaluate-clone-stage-' });
+    try {
+      check(
+        !fs.lstatSync(path.join(staged.root, 'locked', 'inside-link')).isSymbolicLink() &&
+          fs.readFileSync(path.join(staged.root, 'locked', 'inside-link'), 'utf8') === 'module.exports = 1;\n',
+        'a staged directory kept a link where it follows it',
+      );
+    } finally {
+      removeTree(staged.root);
+    }
+
+    // The space, over a tree of 192 MB, with the system's own clone copy as the control.
+    const MEGABYTES = 192;
+    const big = path.join(root, 'big');
+    for (let index = 0; index < 12; index += 1) {
+      const directory = path.join(big, 'node_modules', `package-${index % 3}`);
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, `file-${index}.map`), crypto.randomBytes((MEGABYTES / 12) * 1024 * 1024));
+    }
+    const cost = (copy) => {
+      const target = path.join(root, `cost-${crypto.randomBytes(4).toString('hex')}`);
+      const before = freeKilobytes(root);
+      copy(target);
+      const spent = (before - freeKilobytes(root)) / 1024;
+      removeTree(target);
+      return spent;
+    };
+    let controlStatus = null;
+    const control = cost((target) => {
+      controlStatus = systemCloneCopy(big, target).status;
+    });
+    if (controlStatus !== 0 || control > MEGABYTES / 2) {
+      console.log(
+        `  skipped the free-space half: ${os.tmpdir()} is on a file system with no copy-on-write clones (the system's clone copy ${controlStatus === 0 ? `cost ${control.toFixed(0)} of ${MEGABYTES} MB` : `exited ${controlStatus}`})`,
+      );
+    } else {
+      // Other processes write to the volume too. A copy that cloned is under the bound in at least one of three tries; one that
+      // copied the bytes spends the full size in every try.
+      const tries = [];
+      while (tries.length < 3 && !tries.some((spent) => spent < MEGABYTES / 4)) {
+        tries.push(cost((target) => copyTreeInto(big, target, { skip: (entry) => entry === path.join(big, 'missing') })));
+      }
+      check(
+        tries.some((spent) => spent < MEGABYTES / 4),
+        `copying a ${MEGABYTES} MB tree spent ${tries.map((spent) => spent.toFixed(0)).join(', ')} MB of free space on a file system that clones (a clone costs about 0), so the workspace copy is a plain copy`,
+      );
+    }
+  } finally {
+    removeTree(root);
+  }
+}
+
 /**
  * The workspace section of the reference, read under its exact heading, says which readings of the project a run compares: a
  * confined run the working tree and the checkout's `HEAD`, an opted-out run the refs and the shared git state as well, and a maintainer who shares
@@ -21936,6 +22093,7 @@ const CASES = [
   { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement-git-state' },
   { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement-git-state' },
   { name: 'the subscription login reference', body: checkSubscriptionLoginReference, group: 'confinement-git-state' },
+  { name: 'the workspace clone copies', body: checkWorkspaceClones, group: 'confinement-git-state' },
   { name: 'the workspace reference', body: checkWorkspaceReference, group: 'confinement-git-state' },
   { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
   { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },
