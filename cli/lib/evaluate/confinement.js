@@ -1703,9 +1703,10 @@ function targetSandbox({
     },
     /**
      * How complete the reports behind `observedMounts` were, once it has been read: `{ canariesSent, canariesDelivered,
-     * logReportedLoss }`, the reads of a file no target can reach that the audit attempted through the sandbox's own token (one the host could not start,
-     * one a cap skipped and one a frozen runtime missed count as sent), the ones the kernel's log delivered and whether the log itself reported lost events (Story 1.81); `null` for a port that does not
-     * audit. Linux's trace loses nothing and sends no canary.
+     * logReportedLoss, logOverloaded }`, the reads of a file no target can reach that the audit attempted through the sandbox's own token (one the host could not start,
+     * one a cap skipped and one a frozen runtime missed count as sent), the ones the kernel's log delivered, whether the log itself reported lost events (Story 1.81) and
+     * whether sandbox reports reached the kernel's log, from every sandbox on the host, faster than the log was measured to keep them, which loses a report without a trace
+     * that no canary need meet; `null` for a port that does not audit. Linux's trace loses nothing and sends no canary.
      */
     auditChannel() {
       return observer === null ? null : observer.channel();
@@ -1770,6 +1771,11 @@ function makeObserver({ confinement, audit, cwd }) {
             `the audit's log stream did not report the runtime's first read within the barrier${stream.said() ? ` (${stream.said()})` : ''}`,
           );
         }
+        if (!(await stream.settleMeter())) {
+          throw new ConfinementError(
+            "the audit's report meter did not count the runtime's first read within the barrier, so how fast the trial's reports come is unmeasured",
+          );
+        }
         stream.startCanaries();
       },
       collect: async () => {},
@@ -1777,6 +1783,8 @@ function makeObserver({ confinement, audit, cwd }) {
         // The canaries end with the trial's calls; the final one and the barrier's sentinel then come back through the stream after every report of the trial.
         await stream.stopCanaries({ final: true });
         const confirmed = await stream.confirm(audit.barrierMs);
+        // The report meter has counted every report of the trial once a read made after it has come back through the meter's stream too.
+        await stream.settleMeter(audit.barrierMs);
         stream.read();
         const gone = stream.endedBecause();
         if (gone !== null) throw new ConfinementError(`the audit's log stream ended during the trial: ${gone}`);
@@ -1793,8 +1801,8 @@ function makeObserver({ confinement, audit, cwd }) {
         return [...stream.paths].sort();
       },
       channel() {
-        const { sent, delivered, lostEvents } = stream.canaries();
-        return { canariesSent: sent, canariesDelivered: delivered, logReportedLoss: lostEvents };
+        const { sent, delivered, lostEvents, overloaded } = stream.canaries();
+        return { canariesSent: sent, canariesDelivered: delivered, logReportedLoss: lostEvents, logOverloaded: overloaded };
       },
       release: () => stream.close(),
     };
@@ -1831,7 +1839,7 @@ function makeObserver({ confinement, audit, cwd }) {
       return [...paths].sort();
     },
     // `strace` reports every traced syscall of the call, so the trace has no canaries to count (Story 1.81).
-    channel: () => ({ canariesSent: 0, canariesDelivered: 0, logReportedLoss: false }),
+    channel: () => ({ canariesSent: 0, canariesDelivered: 0, logReportedLoss: false, logOverloaded: false }),
     release: () => {},
   };
 }

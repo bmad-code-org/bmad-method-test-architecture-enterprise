@@ -668,7 +668,7 @@ A read of a path that does not exist and a metadata probe (`stat`, `access`) are
 The execution of a binary reads it, so an ungranted binary is listed like any ungranted file (macOS also lists the directory the shell looked in); declare the toolchain a target runs in `systemPaths`.
 
 `run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`, and the summary line of `run` names every `lossy` trial.
-On macOS the kernel's report log can drop a report on a heavily loaded host, so a `lossy` trial's observed mounts may be missing a read.
+On macOS the kernel's report log can drop a report when sandbox reports reach it faster than it keeps them, from the trial or from anything else on the host, so a `lossy` trial's observed mounts may be missing a read; a trial is `lossy` when the log delivered fewer of the audit's canary reads than were sent, reported lost events, or was handed reports at that rate (`logOverloaded`).
 Every Linux trial is `complete`.
 A run whose observer fails exits 12 and leaves the trial with no record.
 
@@ -1079,7 +1079,7 @@ The steps run in order, each stopping the run with its own exit:
    The message names the first paths and the two setups that work for such a target, `tea-skill-runner` named by its bare name for one: a registry `target` that is a path inside `launch.root` (`node_modules/.bin/tea-skill-runner` over a copy workspace, or over a git workspace with `workspace.provision`), or the bare name with the directories it runs from listed in `systemPaths`, the bin directory that holds its link on `PATH` among them.
    A path that only some legs opened is no refusal: `preflight` prints a note naming the path and the legs that opened it, and its exit does not change, since `score` judges the trials and not the legs.
    Only the legs whose audit lost no report take part in that check, because a path a lossy audit dropped is no evidence that the leg did not open it.
-   A leg whose audit lost events, or delivered fewer of its canary reads than it sent, is left out, and `preflight` prints a note naming it; no note says the other legs did not open a path on its word.
+   A leg whose audit lost events, delivered fewer of its canary reads than it sent, or ran while reports reached the log faster than it keeps them, is left out, and `preflight` prints a note naming it; no note says the other legs did not open a path on its word.
    When every leg's audit lost reports, no leg can say what it opened, so `preflight` exits 12 with `the legs yield no audit` and the advice to run again on a quieter host, in place of passing.
    The check grants nothing and widens no allowlist; a run that opted out of confinement observes no path and is not refused.
 
