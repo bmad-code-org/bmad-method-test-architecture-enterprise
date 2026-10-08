@@ -437,12 +437,129 @@ function containLinks({ sourceTop, copyTop, scan }) {
 }
 
 /**
+ * The command that copies files as copy-on-write clones where the file system has them and as plain copies where it has
+ * not, or `null` when this host has none. Node's own `fs.cpSync` and `fs.copyFileSync` never clone on macOS, whatever
+ * `COPYFILE_FICLONE` they are given: a workspace made through them costs the full size of its tree (the project's
+ * `node_modules` is gigabytes), where `cp -c` on APFS and `cp --reflink=auto` on btrfs and XFS cost almost nothing.
+ * Found once per process by running the command over a small file, so a `cp` that does not take the flags (busybox) or a
+ * host without one (Windows) is `null` and the copy falls back to `fs.cpSync`.
+ */
+let cloneCopierFound;
+function cloneCopier() {
+  if (cloneCopierFound !== undefined) return cloneCopierFound;
+  cloneCopierFound = null;
+  const candidate =
+    process.platform === 'darwin'
+      ? { command: '/bin/cp', flags: ['-c', '-p'] }
+      : process.platform === 'linux'
+        ? { command: 'cp', flags: ['--reflink=auto', '--preserve=mode,timestamps'] }
+        : null;
+  if (candidate === null) return cloneCopierFound;
+  let probe = null;
+  try {
+    probe = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-clone-probe-'));
+    fs.writeFileSync(path.join(probe, 'from'), 'probe');
+    const copied = spawnSync(candidate.command, [...candidate.flags, path.join(probe, 'from'), path.join(probe, 'to')], {
+      stdio: 'ignore',
+    });
+    if (copied.status === 0 && fs.readFileSync(path.join(probe, 'to'), 'utf8') === 'probe') cloneCopierFound = candidate;
+  } catch {
+    // No usable copier: the plain copy below serves.
+  } finally {
+    if (probe !== null) fs.rmSync(probe, { recursive: true, force: true });
+  }
+  return cloneCopierFound;
+}
+
+/** Runs the clone copier over `args`; a failure (a full disk, say) is thrown with the copier's own words. */
+function runCloneCopier(copier, args) {
+  const result = spawnSync(copier.command, [...copier.flags, ...args], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8' });
+  if (result.error || result.status !== 0) {
+    const said = (result.error?.message ?? result.stderr ?? '').trim() || `exit ${result.status}`;
+    throw new Error(`${path.basename(copier.command)} could not copy: ${said}`);
+  }
+}
+
+/** Clones `files` (absolute paths) into the existing directory `into`, in batches the command line can hold. */
+function cloneFilesInto(copier, files, into) {
+  const BATCH_BYTES = 65_536;
+  let batch = [];
+  let size = 0;
+  const flush = () => {
+    if (batch.length > 0) runCloneCopier(copier, ['--', ...batch, into]);
+    batch = [];
+    size = 0;
+  };
+  for (const file of files) {
+    if (size + file.length > BATCH_BYTES) flush();
+    batch.push(file);
+    size += file.length + 1;
+  }
+  flush();
+}
+
+/**
+ * What `copyTreeInto` copies from `source`, read before anything is copied: a node per file, link and directory that
+ * `skip` does not leave out, each directory marked `whole` when nothing under it is left out (and so one command can
+ * clone it). An entry that is neither a file, a directory nor a link is refused, named relative to `root`.
+ */
+function copyPlanOf(source, { skip, root }) {
+  if (skip(source)) return null;
+  const stats = fs.lstatSync(source);
+  if (stats.isSymbolicLink()) return { source, kind: 'link', whole: true };
+  if (stats.isFile()) return { source, kind: 'file', whole: true };
+  if (!stats.isDirectory()) {
+    throw new WorkspaceRefusal(
+      `${posix(path.relative(root, source))} in launch.root is neither a file, a directory nor a symbolic link (a FIFO, a socket or a device), which the disposable workspace cannot hold; remove it or move it out of the project`,
+    );
+  }
+  const names = fs.readdirSync(source);
+  const children = names.map((name) => copyPlanOf(path.join(source, name), { skip, root })).filter((child) => child !== null);
+  const whole = children.length === names.length && children.every((child) => child.whole);
+  return { source, kind: 'directory', mode: stats.mode & 0o7777, whole, children: whole ? [] : children };
+}
+
+/** Makes `plan` at `to` with the clone copier: a whole directory in one command, the rest entry by entry. */
+function cloneCopyPlan(copier, plan, to) {
+  if (plan.kind === 'link') {
+    fs.symlinkSync(fs.readlinkSync(plan.source), to);
+    return;
+  }
+  if (plan.kind === 'file') {
+    runCloneCopier(copier, ['--', plan.source, to]);
+    return;
+  }
+  const made = !fs.existsSync(to);
+  fs.mkdirSync(to, { recursive: true });
+  if (plan.whole) {
+    runCloneCopier(copier, ['-R', '-P', '--', `${plan.source}${path.sep}.`, to]);
+  } else {
+    cloneFilesInto(
+      copier,
+      plan.children.filter((child) => child.kind === 'file').map((child) => child.source),
+      to,
+    );
+    for (const child of plan.children) {
+      if (child.kind !== 'file') cloneCopyPlan(copier, child, path.join(to, path.basename(child.source)));
+    }
+  }
+  // The directory takes its own mode last, so a read-only one is filled before it is closed.
+  if (made) fs.chmodSync(to, plan.mode);
+}
+
+/**
  * Copies `from` to `to`: files, directories and symbolic links (verbatim), as
  * copy-on-write clones where the file system offers them, leaving out every
  * path `skip` answers true for. An entry that is neither a file, a directory
  * nor a link is refused, named relative to `root`.
  */
 function copyTreeInto(from, to, { skip = () => false, root = from } = {}) {
+  const copier = cloneCopier();
+  if (copier !== null) {
+    const plan = copyPlanOf(from, { skip, root });
+    if (plan !== null) cloneCopyPlan(copier, plan, to);
+    return;
+  }
   fs.cpSync(from, to, {
     recursive: true,
     verbatimSymlinks: true,
@@ -458,6 +575,25 @@ function copyTreeInto(from, to, { skip = () => false, root = from } = {}) {
       return true;
     },
   });
+}
+
+/**
+ * Copies `from` to `to` following every link, as clones where the file system offers them: the staged copy of a
+ * directory a leg reads.
+ */
+function copyTreeFollowingLinks(from, to) {
+  const copier = cloneCopier();
+  if (copier === null) {
+    fs.cpSync(from, to, { recursive: true, dereference: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (fs.statSync(from).isDirectory()) {
+    fs.mkdirSync(to, { recursive: true });
+    runCloneCopier(copier, ['-R', '-L', '--', `${from}${path.sep}.`, to]);
+  } else {
+    runCloneCopier(copier, ['--', from, to]);
+  }
 }
 
 /** Every directory and file under `directory` (itself included), without following a link. */
@@ -2208,7 +2344,7 @@ function stageDirectories({ from, directories = [], prefix = 'tea-evaluate-stage
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   try {
     for (const relative of directories) {
-      fs.cpSync(path.join(from, relative), path.join(root, relative), { recursive: true, dereference: true });
+      copyTreeFollowingLinks(path.join(from, relative), path.join(root, relative));
     }
   } catch (error) {
     fs.rmSync(root, { recursive: true, force: true });
@@ -2365,6 +2501,7 @@ module.exports = {
   cachingPort,
   cleanUpOnSignal,
   containLinks,
+  copyTreeInto,
   createWorkspace,
   gitAccessOf,
   isDirectory,
