@@ -12404,6 +12404,19 @@ function checkWorkspaceClones() {
       'a copy that leaves paths out, into a directory that exists, is not the tree without them',
     );
 
+    // A read-only source root copied into a directory that exists leaves that directory's mode as it was.
+    const closed = path.join(root, 'closed');
+    fs.mkdirSync(closed);
+    fs.writeFileSync(path.join(closed, 'file'), 'closed\n');
+    fs.chmodSync(closed, 0o555);
+    const open = path.join(root, 'open');
+    fs.mkdirSync(open, { mode: 0o755 });
+    copyTreeInto(closed, open);
+    check(
+      (fs.statSync(open).mode & 0o7777) === 0o755 && fs.readFileSync(path.join(open, 'file'), 'utf8') === 'closed\n',
+      `a copy of a read-only root changed the mode of the directory it copied into to ${(fs.statSync(open).mode & 0o7777).toString(8)}`,
+    );
+
     if (process.platform !== 'win32') {
       const withFifo = path.join(root, 'with-fifo');
       fs.mkdirSync(path.join(withFifo, 'inner'), { recursive: true });

@@ -523,7 +523,7 @@ function cloneCopyPlan(copier, plan, to) {
     runCloneCopier(copier, ['--', plan.source, to]);
     return;
   }
-  const made = !fs.existsSync(to);
+  const existingMode = fs.existsSync(to) ? fs.statSync(to).mode & 0o7777 : null;
   fs.mkdirSync(to, { recursive: true });
   if (plan.whole) {
     runCloneCopier(copier, ['-R', '-P', '--', `${plan.source}${path.sep}.`, to]);
@@ -537,8 +537,9 @@ function cloneCopyPlan(copier, plan, to) {
       if (child.kind !== 'file') cloneCopyPlan(copier, child, path.join(to, path.basename(child.source)));
     }
   }
-  // The directory takes its own mode last, so a read-only one is filled before it is closed.
-  if (made) fs.chmodSync(to, plan.mode);
+  // The directory takes its own mode last, so a read-only one is filled before it is closed; a directory that was already
+  // there (the workspace's root) keeps the mode it had, which the copy command may have changed to the source's.
+  fs.chmodSync(to, existingMode ?? plan.mode);
 }
 
 /**
