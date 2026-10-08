@@ -63,10 +63,13 @@ If intent is unclear, ask:
 
 If user intent is unclear:
 
-- If `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode**
+- If an initiative is active and its ticket tree holds an epic → **Epic-Level Mode**
+- Otherwise, on a v6 project, if `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode**
 - Otherwise → **System-Level Mode**
 
-`{implementation_artifacts}` is a BMM setting that TEA's config does not define. Read `modules.bmm.implementation_artifacts` with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.bmm.implementation_artifacts`. When it is not set, use `{output_folder}/implementation-artifacts`.
+The active initiative and the output folder belong to BMad core, not TEA's config. Read them with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. When `core.active_initiative` is set, the initiative folder is `{output_folder}/{active_initiative}/`; it holds an epic when its `tickets.toml` has an `[[epic]]` table or an `epic-*/` folder sits inside it.
+
+`{implementation_artifacts}` exists only on a v6 project and is a BMM setting that TEA's config does not define. Read `modules.bmm.implementation_artifacts` with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.bmm.implementation_artifacts`. When it is not set, use `{output_folder}/implementation-artifacts`; a v7 project has no such key, so a missing sprint-status file there means System-Level Mode.
 
 ### C) Ambiguous → Ask
 

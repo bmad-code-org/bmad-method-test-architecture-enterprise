@@ -10,7 +10,7 @@ This fragment instantiates `library-integration-mandate.md`. Read that one for t
 
 **Applies when all of these hold:**
 
-- `tea_use_playwright_utils` is `true` in `{config_source}`
+- `tea_use_playwright_utils` is `true` under `[modules.tea]` (`config.tea_use_playwright_utils`)
 - `@seontechnologies/playwright-utils` is a dependency in the project's `package.json`
 - The suite runs on the Playwright test runner (`@playwright/test`)
 - The language is JavaScript or TypeScript

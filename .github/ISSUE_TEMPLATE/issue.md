@@ -53,7 +53,7 @@ Add any other context about the problem:
 Before submitting, please check:
 
 - [ ] I've read the [Troubleshooting Guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/troubleshooting/)
-- [ ] I've verified TEA is installed: `ls -la _bmad/tea/`
+- [ ] I've verified TEA is installed: `ls .claude/skills/bmod-tea` (or your assistant's skills folder) and `bmad setup tea` reports no pending questions
 - [ ] I'm using the current invocation: `/bmad-testarch-*` (Claude Code, Cursor, Windsurf) or `$bmad-testarch-*` (Codex)
 - [ ] I've checked for existing issues on GitHub
 

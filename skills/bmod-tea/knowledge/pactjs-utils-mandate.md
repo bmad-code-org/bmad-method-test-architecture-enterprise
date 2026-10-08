@@ -10,7 +10,7 @@ This fragment instantiates `library-integration-mandate.md`. Read that one for t
 
 **Applies when all of these hold:**
 
-- `tea_use_pactjs_utils` is `true` in `{config_source}`
+- `tea_use_pactjs_utils` is `true` under `[modules.tea]` (`config.tea_use_pactjs_utils`)
 - `@seontechnologies/pactjs-utils` is a dependency in the project's `package.json`
 - The file is a JavaScript or TypeScript Pact artifact: a consumer test (`.pacttest.ts`), a provider verification test, a message consumer or provider test, or their support files
 

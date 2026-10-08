@@ -156,7 +156,7 @@ function main() {
     console.error(
       `publish refused: ${reason}.\n` +
         'Publishing happens only through .github/workflows/publish.yaml. ' +
-        'Run a release from that workflow (workflow_dispatch, or a push to main that touches src/) rather than npm publish directly.',
+        'Run a release from that workflow (workflow_dispatch, or a push to main that touches skills/) rather than npm publish directly.',
     );
     return 1;
   }

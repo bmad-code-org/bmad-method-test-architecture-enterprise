@@ -331,7 +331,7 @@ test('should do something', async ({ {fixtureName} }) => {
 6. **Work one activated test at a time** (red → green for each)
 7. **Share progress** in daily standup
 8. **When all activated tests pass**, refactor code for quality
-9. **When refactoring complete**, manually update story status to 'done' in sprint-status.yaml
+9. **When refactoring complete**, manually mark the story done where your project tracks it (the story's ticket entry in `tickets.toml`, or `sprint-status.yaml` on a v6 project)
 
 ---
 

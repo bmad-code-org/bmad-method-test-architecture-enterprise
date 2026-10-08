@@ -879,14 +879,19 @@ function main() {
     const relativeSkillRoot = path.relative(projectRoot, skillRoot);
     const skillInsideProject = relativeSkillRoot === '' || (!relativeSkillRoot.startsWith('..') && !path.isAbsolute(relativeSkillRoot));
     if (skillInsideProject) {
-      const skillPrefix = relativeSkillRoot === '' ? './' : relativeSkillRoot.split(path.sep).join('/') + '/';
-      const touched = relativeSkillRoot === '' ? allChangedFiles : allChangedFiles.filter((file) => file.startsWith(skillPrefix));
-      if (touched.length > 0) {
-        fail(
-          EXIT.ENV_ERROR,
-          `The diff modifies the reviewer control plane (${skillPrefix}): ${touched.join(', ')}. ` +
-            'The gate cannot trust a review defined by the change under review; review the skill change separately or vendor a pinned skill from outside the checkout.',
-        );
+      // The reviewer is the skill plus the bmod-tea knowledge base it reads beside itself, so a diff to either rewrites the gate.
+      const guarded = [relativeSkillRoot, path.relative(projectRoot, path.join(skillRoot, '..', 'bmod-tea'))]
+        .filter((relative) => relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative)))
+        .map((relative) => (relative === '' ? './' : relative.split(path.sep).join('/') + '/'));
+      for (const prefix of guarded) {
+        const touched = prefix === './' ? allChangedFiles : allChangedFiles.filter((file) => file.startsWith(prefix));
+        if (touched.length > 0) {
+          fail(
+            EXIT.ENV_ERROR,
+            `The diff modifies the reviewer control plane (${prefix}): ${touched.join(', ')}. ` +
+              'The gate cannot trust a review defined by the change under review; review the skill change separately or vendor a pinned skill from outside the checkout.',
+          );
+        }
       }
     }
   }

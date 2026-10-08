@@ -564,6 +564,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The classic installer's `_bmad/tea/workflows/testarch/` copy is probed last, so a project upgraded from v6 reviews with the skill it just installed.
   The CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is not beside the skill.
   CI that pins a TEA tarball unpacks the skill from `package/skills/bmad-testarch-test-review` (it was `package/src/workflows/testarch/...`) and copies `package/skills/bmod-tea` beside it; `cli/examples/pr-test-review.yml` shows both.
+- The `tea-test-review` control-plane guard also refuses a diff that edits the `bmod-tea` knowledge base beside the skill, since the reviewer's criteria now live there.
+- `bmad-testarch-test-design` detects epic-level mode from the active initiative's ticket tree on a v7 project and keeps the `sprint-status.yaml` check as the v6 fallback.
+  The Playwright Utils, Pact.js Utils and library mandates name `[modules.tea]` as the flag source, the library mandate no longer asks to verify per-workflow knowledge copies, and generated ATDD checklists no longer point at `sprint-status.yaml` alone.
 - The publish workflow writes the release version into `skills/bmod-tea/bmod.toml` and commits it with `package.json` and the marketplace entry, and `test:release-metadata` fails when the three disagree.
 - `bmad-testarch-ci` and `bmad-testarch-test-design` read `tea_capability_probe` with the same string-aware parse the other skills use, so a setup answer of `"false"` turns the probe off.
 - `test:knowledge` also holds that every skill reading `{tea-knowledge}` defines it as `{skill-root}/../bmod-tea/knowledge`, that `bmod.toml` and the plugin marketplace list every skill folder under `skills/`, and that each skill's `bmod.toml` names `bmod-tea` and the module's `update_source`; a missing teaching menu fails the suite instead of warning.

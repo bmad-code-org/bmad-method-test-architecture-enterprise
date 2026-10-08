@@ -12,7 +12,7 @@ The failure this exists to prevent: a flag that only changes which fragments loa
 
 A mandate binds only when **both** hold:
 
-1. **The flag is `true`** in `{config_source}`.
+1. **The flag is `true`** under `[modules.tea]`, read as `config.<flag>`.
 2. **The package is a dependency** in the project's manifest (`package.json` for the Node libraries).
 
 A flag with no install is an intention, not a capability. Generation must not scaffold imports against a package the project does not have, and review must not deduct per file for not using one. In that state: say so once, recommend the `framework` workflow, and generate the vanilla path.
@@ -73,7 +73,6 @@ When TEA takes on another integration library, these are the places it has to la
 8. **Review**: a `criteria-registry.md` row for "configured utility bypassed", gated on flag plus install, plus a published criterion row in `test-review-template.md`. Where partial migration is expected, a convention key in `step-02-discover-tests.md` and `cli/lib/convention-baseline.js` so adoption reads as a ratio rather than a pass or fail.
 9. **Docs**: the TEA documentation's configuration reference (what `true` actually means), its knowledge-base reference (the fragment rows and the used-in line), and a how-to under its customization section.
 10. **Changelog** under `[Unreleased]`.
-11. **Verify the copies.** Every workflow's copy must match the agent's exactly, byte for byte. This step exists because it is the one that was missing: a mandate edited only at the agent level ships one rule to the reviewer and a different one to the generator, and the workflows load their own copy.
 
 ## Relationship to Principle Fragments
 

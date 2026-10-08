@@ -416,7 +416,7 @@ Every TEA skill also reads the `[core]` table of the same config layers. `bmad s
 
 **Type:** `string` · **Default:** `{project-root}/_bmad-output`
 
-Base output folder for core BMad artifacts. TEA writes its own artifacts under `test_artifacts`, which defaults to `{project-root}/_bmad-output/test-artifacts`.
+Base output folder for core BMad artifacts. TEA writes its own artifacts under `test_artifacts`, which defaults to `{project-root}/_bmad-output/test-artifacts`. The default does not follow a different `output_folder`; when you changed it, answer the `test_artifacts` setup question to match.
 
 ```toml
 [core]
