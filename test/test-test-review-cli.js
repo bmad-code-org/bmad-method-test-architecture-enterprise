@@ -48,6 +48,7 @@ const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 const http = require('node:http');
+const { retryAfterMs, isRetryableStatus } = require('../cli/lib/github-api');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 
@@ -6733,6 +6734,18 @@ async function runTests() {
         '--retries 1: a report that fails to parse (exit 3) is retried',
         `status=${parseRetried.status} attempts=${attemptsOf('retry-parse')} stderr=${parseRetried.stderr}`,
       );
+      const missingRetried = runCli(
+        retryArgs('retry-missing', ['--retries', '1']),
+        retryEnv('retry-missing', { STUB_FIRST_MODE: 'nothing' }),
+      );
+      assert(
+        missingRetried.status === 0 && attemptsOf('retry-missing') === 2,
+        '--retries 1: an agent that exits 0 without writing a report (exit 3) is retried',
+        `status=${missingRetried.status} attempts=${attemptsOf('retry-missing')} stderr=${missingRetried.stderr}`,
+      );
+      // A verdict left by an earlier run must not survive a failing run, and a retry must need a report newer than its own attempt.
+      fs.mkdirSync(path.join(tmpRoot, 'b1-retry-stale'), { recursive: true });
+      fs.writeFileSync(path.join(tmpRoot, 'b1-retry-stale', 'test-review.json'), '{"stale":true}\n');
       const staleBetween = runCli(
         retryArgs('retry-stale', ['--retries', '1']),
         retryEnv('retry-stale', { STUB_FIRST_MODE: 'partial', STUB_MODE: 'nothing' }),
@@ -6742,7 +6755,7 @@ async function runTests() {
           attemptsOf('retry-stale') === 2 &&
           !fs.existsSync(path.join(tmpRoot, 'b1-retry-stale', 'test-review.json')) &&
           staleBetween.stderr.includes('no fresh report'),
-        '--retries: the failed attempt report is cleared, so a retry that writes nothing exits 3 and leaves no verdict',
+        '--retries: each attempt starts without the earlier verdict, and a retry needs a report newer than its own start',
         `status=${staleBetween.status} stderr=${staleBetween.stderr}`,
       );
       const exhausted = runCli(
@@ -6754,6 +6767,22 @@ async function runTests() {
         '--retries 2: three attempts, then exit 3',
         `status=${exhausted.status} attempts=${attemptsOf('retry-exhausted')}`,
       );
+      const notOnActions = runCli(
+        retryArgs('retry-no-annotation', ['--retries', '1']),
+        retryEnv('retry-no-annotation', { STUB_FIRST_MODE: 'fail', GITHUB_ACTIONS: '' }),
+      );
+      assert(
+        notOnActions.status === 0 && !notOnActions.stderr.includes('::warning::') && notOnActions.stderr.includes('retrying'),
+        'outside GitHub Actions a retry is plain stderr text with no annotation',
+        `status=${notOnActions.status} stderr=${notOnActions.stderr}`,
+      );
+      const verdictOf = (stdout) => {
+        try {
+          return JSON.parse(stdout);
+        } catch {
+          return null;
+        }
+      };
       const annotated = runCli(
         retryArgs('retry-annotation', ['--retries', '1']),
         retryEnv('retry-annotation', { STUB_FIRST_MODE: 'fail', GITHUB_ACTIONS: 'true' }),
@@ -6762,25 +6791,31 @@ async function runTests() {
         annotated.status === 0 &&
           annotated.stderr.includes('::warning::tea-test-review: attempt 1 of 2 failed') &&
           !annotated.stdout.includes('::warning::') &&
-          JSON.parse(annotated.stdout).recommendation !== undefined,
+          verdictOf(annotated.stdout)?.recommendation !== undefined,
         'on GitHub Actions a retry raises a ::warning:: annotation on stderr and leaves stdout as the verdict JSON',
         `status=${annotated.status} stdout=${annotated.stdout.slice(0, 200)} stderr=${annotated.stderr}`,
       );
-      const lockedOutput = runCli(
-        retryArgs('retry-locked', ['--retries', '1', '--env-pass', 'STUB_LOCK_OUTPUT']),
-        retryEnv('retry-locked', { STUB_LOCK_OUTPUT: '1', STUB_MODE: 'score-mismatch' }),
-      );
-      assert(
-        lockedOutput.status === 3 && attemptsOf('retry-locked') === 1 && !lockedOutput.stderr.includes('retrying'),
-        '--retries does not repeat a report-artifact failure: an unwritable output fails the same way every time',
-        `status=${lockedOutput.status} attempts=${attemptsOf('retry-locked')} stderr=${lockedOutput.stderr}`,
-      );
-      try {
-        // The stub locked the output directory; make it removable again so the temp tree can be cleaned.
-        fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked'), 0o755);
-        fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked', 'test-review.md'), 0o644);
-      } catch {
-        // Nothing to restore when the stub never got that far.
+      // chmod cannot lock a directory against root, or on Windows.
+      if (process.platform !== 'win32' && !(typeof process.getuid === 'function' && process.getuid() === 0)) {
+        const lockedOutput = runCli(
+          retryArgs('retry-locked', ['--retries', '1', '--env-pass', 'STUB_LOCK_OUTPUT']),
+          retryEnv('retry-locked', { STUB_LOCK_OUTPUT: '1', STUB_MODE: 'score-mismatch' }),
+        );
+        assert(
+          lockedOutput.status === 3 &&
+            attemptsOf('retry-locked') === 1 &&
+            lockedOutput.stderr.includes('report artifact') &&
+            !lockedOutput.stderr.includes('retrying'),
+          '--retries does not repeat a report-artifact failure: an unwritable output fails the same way every time',
+          `status=${lockedOutput.status} attempts=${attemptsOf('retry-locked')} stderr=${lockedOutput.stderr}`,
+        );
+        try {
+          // The stub locked the output directory; make it removable again so the temp tree can be cleaned.
+          fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked'), 0o755);
+          fs.chmodSync(path.join(tmpRoot, 'b1-retry-locked', 'test-review.md'), 0o644);
+        } catch {
+          // Nothing to restore when the stub never got that far.
+        }
       }
       const localDefault = runCli(retryArgs('retry-local'), retryEnv('retry-local', { STUB_FIRST_MODE: 'fail' }));
       assert(
@@ -6812,6 +6847,8 @@ async function runTests() {
         '--retries never retries a failing verdict (exit 1)',
         `status=${verdictFailNotRetried.status} attempts=${attemptsOf('retry-verdict')}`,
       );
+      const maxRetries = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject, '--retries', '5']);
+      assert(maxRetries.status === 0, '--retries 5 (the ceiling) is accepted', `status=${maxRetries.status} stderr=${maxRetries.stderr}`);
       for (const bad of ['-1', 'abc', '1.5', '', '6', '99999999999999999999']) {
         const badRetries = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject, '--retries', bad]);
         assert(
@@ -6821,127 +6858,159 @@ async function runTests() {
         );
       }
 
-      // ---- agent presence ----
-      const fakeBin = path.join(tmpRoot, 'b1-bin');
-      fs.mkdirSync(fakeBin, { recursive: true });
-      const statusLog = path.join(tmpRoot, 'b1-status.log');
-      const fakeVendor = (name, statusBody, helpBody = String.raw`printf "Commands:\n  login\n  status  Show status\n"`) => {
-        fs.writeFileSync(
-          path.join(fakeBin, name),
-          `#!/bin/sh\nif [ "$1" = "auth" ] || [ "$1" = "login" ]; then\n  if [ "$2" = "--help" ]; then\n    ${helpBody}\n    exit 0\n  fi\n  echo "$@" >> "${statusLog}"\n  ${statusBody}\nfi\nexec "${process.execPath}" "${stubAgent}" "$@"\n`,
-          { mode: 0o755 },
-        );
-      };
-      const presenceArgs = (agent, extra = []) => [
-        '--files',
-        'tests/checkout.spec.ts',
-        '--project-root',
-        repo,
-        '--agent',
-        agent,
-        '--no-isolate',
-        '--output',
-        path.join(tmpRoot, `b1-presence-${agent}`, 'test-review.md'),
-        ...extra,
-      ];
-      const emptyBin = path.join(tmpRoot, 'b1-empty-bin');
-      fs.mkdirSync(emptyBin, { recursive: true });
-      for (const [agent, install] of [
-        ['claude', 'npm install -g @anthropic-ai/claude-code'],
-        ['codex', 'npm install -g @openai/codex'],
-      ]) {
-        const missing = runCli(presenceArgs(agent), { PATH: emptyBin });
-        assert(
-          missing.status === 2 && missing.stderr.includes(`agent executable not found: ${agent}`) && missing.stderr.includes(install),
-          `a missing ${agent} CLI exits 2 with the install command`,
-          `status=${missing.status} stderr=${missing.stderr}`,
-        );
-      }
-      fakeVendor('claude', 'if [ -n "$ANTHROPIC_API_KEY" ]; then exit 0; fi; exit 1');
-      fs.rmSync(statusLog, { force: true });
-      const loggedOut = runCli(presenceArgs('claude'), { PATH: fakeBin, ANTHROPIC_API_KEY: '', CLAUDE_CODE_OAUTH_TOKEN: '' });
+      // ---- GitHub client retry policy ----
       assert(
-        loggedOut.status === 2 &&
-          loggedOut.stderr.includes('installed but not logged in') &&
-          loggedOut.stderr.includes('claude auth login') &&
-          fs.readFileSync(statusLog, 'utf8').includes('auth status'),
-        'a logged-out claude CLI exits 2 and says how to log in',
-        `status=${loggedOut.status} stderr=${loggedOut.stderr}`,
+        retryAfterMs(new Headers({ 'retry-after': '3' }), 1) === 3000 &&
+          retryAfterMs(new Headers({ 'retry-after': '120' }), 1) === 60_000 &&
+          retryAfterMs(new Headers(), 2) === 2000,
+        'retryAfterMs honors Retry-After up to 60 s and otherwise backs off linearly',
       );
-      const loggedInByEnv = runCli(presenceArgs('claude'), { PATH: fakeBin, ANTHROPIC_API_KEY: 'sk-test', STUB_MODE: 'approve' });
       assert(
-        loggedInByEnv.status === 0,
-        'a claude CLI that reports logged in (credential in the environment) proceeds to the review',
-        `status=${loggedInByEnv.status} stderr=${loggedInByEnv.stderr}`,
-      );
-      fakeVendor('codex', 'echo "Not logged in" >&2; exit 1');
-      const codexOut = runCli(presenceArgs('codex'), { PATH: fakeBin });
-      assert(
-        codexOut.status === 2 && codexOut.stderr.includes('codex login --with-api-key'),
-        'a logged-out codex CLI exits 2 and names the API-key login',
-        `status=${codexOut.status} stderr=${codexOut.stderr}`,
-      );
-      fakeVendor('codex', 'kill -9 $$');
-      const statusKilled = runCli(presenceArgs('codex'), { PATH: fakeBin, STUB_MODE: 'approve' });
-      assert(
-        statusKilled.status === 0,
-        'a status command that cannot answer does not refuse a run that would have worked',
-        `status=${statusKilled.status} stderr=${statusKilled.stderr}`,
-      );
-      fs.rmSync(statusLog, { force: true });
-      const overridden = runCli(presenceArgs('claude', ['--agent-cmd', path.join(fakeBin, 'claude')]), {
-        PATH: fakeBin,
-        ANTHROPIC_API_KEY: '',
-        STUB_MODE: 'approve',
-      });
-      assert(
-        overridden.status === 0 && !fs.existsSync(statusLog),
-        '--agent-cmd is not the vendor CLI, so no login status is asked of it',
-        `status=${overridden.status} stderr=${overridden.stderr}`,
-      );
-      // codex reads CODEX_API_KEY straight from the environment, so its login status says nothing about that run.
-      fakeVendor('codex', 'echo "Not logged in" >&2; exit 1');
-      fs.rmSync(statusLog, { force: true });
-      const codexEnvKey = runCli(presenceArgs('codex', ['--env-pass', 'CODEX_API_KEY']), {
-        PATH: fakeBin,
-        CODEX_API_KEY: 'sk-test',
-        STUB_MODE: 'approve',
-      });
-      assert(
-        codexEnvKey.status === 0 && !fs.existsSync(statusLog),
-        'a credential variable the vendor reads from the environment skips the login question',
-        `status=${codexEnvKey.status} stderr=${codexEnvKey.stderr}`,
-      );
-      // An older CLI that does not list the status command would read `auth status` as a prompt and spend a model call.
-      fakeVendor('claude', 'exit 1', String.raw`printf "Usage: claude [options]\n"`);
-      fs.rmSync(statusLog, { force: true });
-      const oldClaude = runCli(presenceArgs('claude'), {
-        PATH: fakeBin,
-        ANTHROPIC_API_KEY: '',
-        CLAUDE_CODE_OAUTH_TOKEN: '',
-        STUB_MODE: 'approve',
-      });
-      assert(
-        oldClaude.status === 0 && !fs.existsSync(statusLog),
-        'a vendor CLI that does not list its status command is never asked it',
-        `status=${oldClaude.status} stderr=${oldClaude.stderr}`,
-      );
-      fs.mkdirSync(path.join(tmpRoot, 'b1-win'), { recursive: true });
-      fs.writeFileSync(path.join(tmpRoot, 'b1-win', 'claude.exe'), '', { mode: 0o755 });
-      assert(
-        executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'win32', pathExt: '.COM;.EXE' }) &&
-          !executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'linux' }),
-        'on Windows a bare agent name is found through PATHEXT (claude.exe), elsewhere it is not',
+        isRetryableStatus(429) &&
+          isRetryableStatus(503) &&
+          isRetryableStatus(403, 'You have exceeded a secondary rate limit') &&
+          !isRetryableStatus(403, 'Resource not accessible by integration') &&
+          !isRetryableStatus(404) &&
+          !isRetryableStatus(401),
+        'isRetryableStatus retries 429, 5xx and a secondary-rate-limit 403, and nothing else',
       );
 
-      const noneNeedsNoAgent = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject], { PATH: emptyBin });
-      assert(noneNeedsNoAgent.status === 0, '--agent none needs no agent CLI', `status=${noneNeedsNoAgent.status}`);
-      const skipNeedsNoAgent = runCli(['--project-root', repo, '--files', '', '--agent', 'claude'], { PATH: emptyBin });
-      assert(
-        skipNeedsNoAgent.status !== 3 && !skipNeedsNoAgent.stderr.includes('agent executable not found'),
-        'a skipped review (nothing to review) does not demand an agent CLI',
-        `status=${skipNeedsNoAgent.status} stderr=${skipNeedsNoAgent.stderr}`,
-      );
+      // The vendor stubs are POSIX shell scripts.
+      if (process.platform !== 'win32') {
+        // ---- agent presence ----
+        const fakeBin = path.join(tmpRoot, 'b1-bin');
+        fs.mkdirSync(fakeBin, { recursive: true });
+        const statusLog = path.join(tmpRoot, 'b1-status.log');
+        const fakeVendor = (name, statusBody, helpBody = String.raw`printf "Commands:\n  login\n  status  Show status\n"`) => {
+          fs.writeFileSync(
+            path.join(fakeBin, name),
+            `#!/bin/sh\nif [ "$1" = "auth" ] || [ "$1" = "login" ]; then\n  if [ "$2" = "--help" ]; then\n    ${helpBody}\n    exit 0\n  fi\n  echo "$@" >> "${statusLog}"\n  ${statusBody}\nfi\nexec "${process.execPath}" "${stubAgent}" "$@"\n`,
+            { mode: 0o755 },
+          );
+        };
+        const presenceArgs = (agent, extra = []) => [
+          '--files',
+          'tests/checkout.spec.ts',
+          '--project-root',
+          repo,
+          '--agent',
+          agent,
+          '--no-isolate',
+          '--output',
+          path.join(tmpRoot, `b1-presence-${agent}`, 'test-review.md'),
+          ...extra,
+        ];
+        const emptyBin = path.join(tmpRoot, 'b1-empty-bin');
+        fs.mkdirSync(emptyBin, { recursive: true });
+        for (const [agent, install] of [
+          ['claude', 'npm install -g @anthropic-ai/claude-code'],
+          ['codex', 'npm install -g @openai/codex'],
+        ]) {
+          const missing = runCli(presenceArgs(agent), { PATH: emptyBin });
+          assert(
+            missing.status === 2 && missing.stderr.includes(`agent executable not found: ${agent}`) && missing.stderr.includes(install),
+            `a missing ${agent} CLI exits 2 with the install command`,
+            `status=${missing.status} stderr=${missing.stderr}`,
+          );
+        }
+        fakeVendor('claude', 'if [ -n "$ANTHROPIC_API_KEY" ]; then exit 0; fi; exit 1');
+        fs.rmSync(statusLog, { force: true });
+        const loggedOut = runCli(presenceArgs('claude'), { PATH: fakeBin, ANTHROPIC_API_KEY: '', CLAUDE_CODE_OAUTH_TOKEN: '' });
+        assert(
+          loggedOut.status === 2 &&
+            loggedOut.stderr.includes('installed but not logged in') &&
+            loggedOut.stderr.includes('claude auth login') &&
+            fs.readFileSync(statusLog, 'utf8').includes('auth status'),
+          'a logged-out claude CLI exits 2 and says how to log in',
+          `status=${loggedOut.status} stderr=${loggedOut.stderr}`,
+        );
+        fs.rmSync(statusLog, { force: true });
+        const loggedInByEnv = runCli(presenceArgs('claude'), { PATH: fakeBin, ANTHROPIC_API_KEY: 'sk-test', STUB_MODE: 'approve' });
+        assert(
+          loggedInByEnv.status === 0 && !fs.existsSync(statusLog),
+          'a claude credential in the environment proceeds to the review without asking the login status',
+          `status=${loggedInByEnv.status} stderr=${loggedInByEnv.stderr}`,
+        );
+        fakeVendor('codex', 'echo "Not logged in" >&2; exit 1');
+        fs.rmSync(statusLog, { force: true });
+        const codexOut = runCli(presenceArgs('codex'), { PATH: fakeBin });
+        assert(
+          codexOut.status === 2 &&
+            codexOut.stderr.includes('codex login --with-api-key') &&
+            fs.readFileSync(statusLog, 'utf8').trim() === 'login status',
+          'a logged-out codex CLI exits 2 and names the API-key login',
+          `status=${codexOut.status} stderr=${codexOut.stderr}`,
+        );
+        fakeVendor('codex', 'kill -9 $$');
+        const statusKilled = runCli(presenceArgs('codex'), { PATH: fakeBin, STUB_MODE: 'approve' });
+        assert(
+          statusKilled.status === 0,
+          'a status command that cannot answer does not refuse a run that would have worked',
+          `status=${statusKilled.status} stderr=${statusKilled.stderr}`,
+        );
+        fs.rmSync(statusLog, { force: true });
+        const overridden = runCli(presenceArgs('claude', ['--agent-cmd', path.join(fakeBin, 'claude')]), {
+          PATH: fakeBin,
+          ANTHROPIC_API_KEY: '',
+          STUB_MODE: 'approve',
+        });
+        assert(
+          overridden.status === 0 && !fs.existsSync(statusLog),
+          '--agent-cmd is not the vendor CLI, so no login status is asked of it',
+          `status=${overridden.status} stderr=${overridden.stderr}`,
+        );
+        // codex reads CODEX_API_KEY straight from the environment, so its login status says nothing about that run.
+        fakeVendor('codex', 'echo "Not logged in" >&2; exit 1');
+        fs.rmSync(statusLog, { force: true });
+        const codexEnvKey = runCli(presenceArgs('codex', ['--env-pass', 'CODEX_API_KEY']), {
+          PATH: fakeBin,
+          CODEX_API_KEY: 'sk-test',
+          STUB_MODE: 'approve',
+        });
+        assert(
+          codexEnvKey.status === 0 && !fs.existsSync(statusLog),
+          'a credential variable the vendor reads from the environment skips the login question',
+          `status=${codexEnvKey.status} stderr=${codexEnvKey.stderr}`,
+        );
+        // The question is about the agent's own environment: a host variable that --env-pass never forwards does not reach it.
+        fs.rmSync(statusLog, { force: true });
+        const hostOnlyKey = runCli(presenceArgs('codex'), { PATH: fakeBin, CODEX_API_KEY: 'sk-test' });
+        assert(
+          hostOnlyKey.status === 2 && fs.readFileSync(statusLog, 'utf8').includes('login status'),
+          'a credential variable the agent will not receive does not skip the login question',
+          `status=${hostOnlyKey.status} stderr=${hostOnlyKey.stderr}`,
+        );
+        // An older CLI that does not list the status command would read `auth status` as a prompt and spend a model call.
+        fakeVendor('claude', 'exit 1', String.raw`printf "Usage: claude [options]\n"`);
+        fs.rmSync(statusLog, { force: true });
+        const oldClaude = runCli(presenceArgs('claude'), {
+          PATH: fakeBin,
+          ANTHROPIC_API_KEY: '',
+          CLAUDE_CODE_OAUTH_TOKEN: '',
+          STUB_MODE: 'approve',
+        });
+        assert(
+          oldClaude.status === 0 && !fs.existsSync(statusLog),
+          'a vendor CLI that does not list its status command is never asked it',
+          `status=${oldClaude.status} stderr=${oldClaude.stderr}`,
+        );
+        fs.mkdirSync(path.join(tmpRoot, 'b1-win'), { recursive: true });
+        fs.writeFileSync(path.join(tmpRoot, 'b1-win', 'claude.exe'), '', { mode: 0o755 });
+        assert(
+          executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'win32', pathExt: '.COM;.EXE' }) &&
+            !executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'linux' }),
+          'on Windows a bare agent name is found through PATHEXT (claude.exe), elsewhere it is not',
+        );
+
+        const noneNeedsNoAgent = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject], { PATH: emptyBin });
+        assert(noneNeedsNoAgent.status === 0, '--agent none needs no agent CLI', `status=${noneNeedsNoAgent.status}`);
+        const skipNeedsNoAgent = runCli(['--project-root', repo, '--files', '', '--agent', 'claude'], { PATH: emptyBin });
+        assert(
+          skipNeedsNoAgent.status === 0 && verdictOf(skipNeedsNoAgent.stdout.slice(skipNeedsNoAgent.stdout.indexOf('{')))?.skipped === true,
+          'a skipped review (nothing to review) does not demand an agent CLI',
+          `status=${skipNeedsNoAgent.status} stderr=${skipNeedsNoAgent.stderr}`,
+        );
+      }
 
       // ---- --pr: base ref through the GitHub API ----
       const requests = [];
@@ -6997,6 +7066,7 @@ async function runTests() {
           `status=${explicitBase.status} requests=${requests.length}`,
         );
 
+        requests.length = 0;
         const fromEvent = await runCliAsync(prArgs('event'), { ...prEnv, GITHUB_BASE_REF: 'release' });
         assert(
           fromEvent.status === 0 && requests.length === 0 && fromEvent.stderr.includes('origin/release'),
@@ -7005,14 +7075,19 @@ async function runTests() {
         );
 
         respond = () => ({ status: 404, body: { message: 'Not Found' } });
+        requests.length = 0;
         const notFound = await runCliAsync(prArgs('404'), prEnv);
         assert(
-          notFound.status === 2 && notFound.stderr.includes('GitHub API returned 404') && notFound.stderr.includes('--base <ref>'),
+          notFound.status === 2 &&
+            requests.length === 1 &&
+            notFound.stderr.includes('GitHub API returned 404') &&
+            notFound.stderr.includes('--base <ref>'),
           'a failed --pr lookup exits 2 and names the --base bypass',
           `status=${notFound.status} stderr=${notFound.stderr}`,
         );
 
         respond = () => ({ status: 200, body: { base: {} } });
+        requests.length = 0;
         const noBase = await runCliAsync(prArgs('nobase'), prEnv);
         assert(
           noBase.status === 2 && noBase.stderr.includes('returned no base ref for #7') && noBase.stderr.includes('--base <ref>'),
@@ -7029,6 +7104,45 @@ async function runTests() {
           'a rate-limited (429) lookup is retried after Retry-After',
           `status=${throttled.status} requests=${requests.length} stderr=${throttled.stderr}`,
         );
+
+        respond = (count) => (count === 1 ? { status: 503, body: {} } : { status: 200, body: { base: { ref: 'release' } } });
+        requests.length = 0;
+        const unavailable = await runCliAsync(prArgs('503'), prEnv);
+        assert(
+          unavailable.status === 0 && requests.length === 2,
+          'a 5xx lookup is retried',
+          `status=${unavailable.status} requests=${requests.length} stderr=${unavailable.stderr}`,
+        );
+
+        respond = (count) =>
+          count === 1
+            ? { status: 403, body: { message: 'You have exceeded a secondary rate limit.' }, headers: { 'retry-after': '1' } }
+            : { status: 200, body: { base: { ref: 'release' } } };
+        requests.length = 0;
+        const secondary = await runCliAsync(prArgs('secondary'), prEnv);
+        assert(
+          secondary.status === 0 && requests.length === 2,
+          'a 403 that names a secondary rate limit is retried',
+          `status=${secondary.status} requests=${requests.length} stderr=${secondary.stderr}`,
+        );
+
+        respond = () => ({ status: 403, body: { message: 'Resource not accessible by integration' } });
+        requests.length = 0;
+        const forbidden = await runCliAsync(prArgs('403'), prEnv);
+        assert(
+          forbidden.status === 2 && requests.length === 1 && forbidden.stderr.includes('--base <ref>'),
+          'a plain 403 is not retried and exits 2 naming the --base bypass',
+          `status=${forbidden.status} requests=${requests.length} stderr=${forbidden.stderr}`,
+        );
+
+        respond = () => ({ status: 200, body: { base: { ref: 'release' } } });
+        requests.length = 0;
+        const repoFlag = await runCliAsync(prArgs('repoflag', ['--repo', 'other/place']), prEnv);
+        assert(
+          repoFlag.status === 0 && requests.length === 1 && requests[0].url === '/repos/other/place/pulls/7',
+          '--repo wins over GITHUB_REPOSITORY for the lookup',
+          `status=${repoFlag.status} requests=${JSON.stringify(requests)} stderr=${repoFlag.stderr}`,
+        );
       } finally {
         server.close();
       }
@@ -7043,16 +7157,6 @@ async function runTests() {
         noRepo.status === 2 && noRepo.stderr.includes('no repository') && noRepo.stderr.includes('--base <ref>'),
         '--pr without a repository exits 2 and names the --base bypass',
         `status=${noRepo.status} stderr=${noRepo.stderr}`,
-      );
-      const withRepoFlag = await runCliAsync(prArgs('repoflag', ['--repo', 'other/place']), {
-        ...prEnv,
-        GITHUB_REPOSITORY: '',
-        GITHUB_API_URL: 'http://127.0.0.1:1',
-      });
-      assert(
-        withRepoFlag.status === 2 && withRepoFlag.stderr.includes('network error contacting the GitHub API'),
-        '--repo supplies the repository when GITHUB_REPOSITORY is unset (the lookup is attempted)',
-        `status=${withRepoFlag.status} stderr=${withRepoFlag.stderr}`,
       );
       for (const [label, extra, expected] of [
         ['--pr 0', ['--pr', '0'], '--pr must be a pull request number'],
