@@ -11,9 +11,11 @@
  * 2. For a vendor CLI the adapter names itself, the vendor's own login status command succeeds.
  *    A command the caller overrides with --agent-cmd is not the vendor CLI, so it is not asked.
  *
- * Only a definitive "not logged in" (a non-zero exit from the status command) refuses the run. A
- * status command that cannot run, times out, or does not exist in an older vendor CLI proves
- * nothing, and refusing on it would block a run that would have worked.
+ * Only a definitive "not logged in" (a non-zero exit from the status command) refuses the run, and
+ * the command is asked only when the vendor CLI lists it in its own help. An older CLI without it
+ * would read `auth status` as a prompt and spend a model call, and a status command that cannot
+ * run or times out proves nothing, so neither refuses a run that would have worked. A credential
+ * variable the vendor reads straight from the environment makes the question moot.
  */
 
 const { spawnSync } = require('node:child_process');
@@ -28,15 +30,17 @@ const AGENT_SETUP = {
   claude: {
     install: 'npm install -g @anthropic-ai/claude-code',
     statusArgv: ['auth', 'status'],
+    credentialEnv: ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
     login: 'run `claude auth login`, or set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)',
   },
   codex: {
     install: 'npm install -g @openai/codex',
     statusArgv: ['login', 'status'],
+    credentialEnv: ['CODEX_API_KEY'],
     login: 'run `codex login`, or in CI `printenv OPENAI_API_KEY | codex login --with-api-key`',
   },
   agy: {
-    install: 'install the agy CLI and put it on PATH',
+    install: null,
     statusArgv: null,
     login: null,
   },
@@ -66,19 +70,26 @@ function assertAgentReady({ agent, agentCommand, envPass = [], cwd = process.cwd
   const env = buildMinimalEnv(envPass, sourceEnv, adapter.envNames);
   const setup = AGENT_SETUP[agent];
   if (!executableFound(command, env.PATH, cwd)) {
-    const remedy = agentCommand ? `Check --agent-cmd ${agentCommand}.` : setup ? `Install it with: ${setup.install}` : '';
+    const remedy = agentCommand
+      ? `Check --agent-cmd ${agentCommand}.`
+      : setup?.install
+        ? `Install it with: ${setup.install}`
+        : `Install the ${agent} CLI and put it on PATH.`;
     throw unavailable(`agent executable not found: ${command}. ${remedy}`.trim());
   }
   if (agentCommand || !setup?.statusArgv) {
     return;
   }
-  const status = spawnSync(command, setup.statusArgv, {
-    env,
-    cwd,
-    encoding: 'utf8',
-    timeout: STATUS_TIMEOUT_MS,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  if ((setup.credentialEnv ?? []).some((name) => String(env[name] ?? '').trim() !== '')) {
+    return;
+  }
+  const spawnOptions = { env, cwd, encoding: 'utf8', timeout: STATUS_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'pipe'] };
+  const [group, subcommand] = setup.statusArgv;
+  const help = spawnSync(command, [group, '--help'], spawnOptions);
+  if (help.error || help.status !== 0 || !new RegExp(`^\\s+${subcommand}\\b`, 'm').test(String(help.stdout))) {
+    return;
+  }
+  const status = spawnSync(command, setup.statusArgv, spawnOptions);
   if (status.error || status.signal || status.status === null || status.status === 0) {
     return;
   }

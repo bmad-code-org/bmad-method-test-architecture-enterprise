@@ -93,6 +93,7 @@ const AGENTS = new Set([...Object.keys(AGENT_ADAPTERS), 'none']);
 const SCOPES = new Set(['single', 'directory', 'suite']);
 const FAIL_ON_LEVELS = new Set(['request-changes', 'block']);
 const GATE_ON_MODES = new Set(['introduced', 'all']);
+const MAX_RETRIES = 5;
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes: the ceiling, and the value for a large review set
 // Nothing bounds how many turns the agent takes, and no supported vendor CLI
 // offers a turn cap (claude 2.1.266 has --max-budget-usd and no --max-turns;
@@ -620,8 +621,9 @@ async function main() {
 
   let retries = process.env.CI ? 1 : 0;
   if (options.retries !== undefined) {
-    if (!/^\d+$/.test(String(options.retries).trim())) {
-      fail(EXIT.ENV_ERROR, `--retries must be a non-negative integer; got "${options.retries}".`);
+    // Every attempt is a paid agent run of up to the timeout, so the count is bounded.
+    if (!/^\d+$/.test(String(options.retries).trim()) || Number.parseInt(options.retries, 10) > MAX_RETRIES) {
+      fail(EXIT.ENV_ERROR, `--retries must be a non-negative integer no greater than ${MAX_RETRIES}; got "${options.retries}".`);
     }
     retries = Number.parseInt(options.retries, 10);
   }
@@ -655,8 +657,10 @@ async function main() {
   // review cannot edit its own reviewer. --project-skill opts into the project's
   // vendored copy, which the control-plane guard below then protects.
   let skillRoot;
+  let skillSource = 'packaged';
   if (options.skillRoot === undefined) {
     try {
+      skillSource = options.projectSkill ? 'project' : 'packaged';
       skillRoot = options.projectSkill ? resolveSkill(projectRoot) : resolvePackagedSkill();
     } catch (error) {
       if (error.code === 'SKILL_MISSING') {
@@ -665,11 +669,14 @@ async function main() {
       throw error;
     }
   } else {
+    skillSource = '--skill-root';
     skillRoot = path.resolve(projectRoot, options.skillRoot);
     if (!fs.existsSync(path.join(skillRoot, 'SKILL.md'))) {
       fail(EXIT.ENV_ERROR, `--skill-root "${options.skillRoot}" does not contain a SKILL.md (resolved: ${skillRoot}).`);
     }
   }
+
+  console.error(`tea-test-review: skill ${skillRoot} (${skillSource})`);
 
   // The skill reads its knowledge base from the bmod-tea folder beside it. Without it a headless run
   // would stop at activation after the paid agent call has started, so refuse before any call.
@@ -1257,7 +1264,12 @@ async function main() {
       ) {
         if (attempt < retries) {
           console.error(`tea-test-review: ${error.message}`);
-          console.error(`tea-test-review: attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`);
+          const retryNotice = `attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`;
+          console.error(`tea-test-review: ${retryNotice}`);
+          // On GitHub Actions the annotation is what makes a retry visible on the run page.
+          if (process.env.GITHUB_ACTIONS) {
+            console.log(`::warning::tea-test-review: ${retryNotice}`);
+          }
           continue;
         }
         fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);

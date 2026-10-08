@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tea-test-review` runs the same in any CI, without the GitHub Action's workarounds.
-  The review skill now resolves from the CLI's own package by default, so the skill and the CLI are one version and a pull request cannot edit the reviewer that judges it. `--project-skill` opts into the copy a project vendored, and the control-plane guard still stops a diff that edits it. `--skill-root` is unchanged.
-  `--retries <n>` repeats a run after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried.
-  A missing or logged-out agent CLI exits 2 with the install or login command before any agent call, where a missing `--agent-cmd` executable used to exit 3.
-  `--pr <number>` resolves the pull request's base branch through the GitHub API when `--base` is not given (`GITHUB_TOKEN`, `GITHUB_REPOSITORY` or `--repo`, `GITHUB_API_URL`), and a failed lookup exits 2 and names `--base` as the bypass.
+- `tea-test-review` takes over three workarounds the GitHub Action carried: packing the skill, retrying, and looking up the base branch.
+  `--project-skill` reviews with the skill a project vendored; the control-plane guard still stops a diff that edits it.
+  `--retries <n>` repeats a run after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried. On GitHub Actions each retry also raises a `::warning::` annotation.
+  `--pr <number>` (with `--repo`) resolves the pull request's base branch through the GitHub API when `--base` is not given (`GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_API_URL`), and a failed lookup exits 2 and names `--base` as the bypass.
+  A logged-out agent CLI exits 2 with the login command before any agent call. The CLI prints which skill it reviews with (`packaged`, `project`, or `--skill-root`) on stderr.
 
 - The Evaluate skill's own evaluation (`test/evaluations/bmad-testarch-evaluate`) has an accepted baseline from a clean live run, and `test:evaluate-pr-suite` replays it on every pull request.
   The run was clean (`dirty: false`) and executed 9 trial sets of 5 trials through the local Claude Code CLI. Every probe scored `PASS` with no coverage gap: the four clean controls `passed-clean-control`, the five seeded defects `caught`, and each mutation's rollback verified.
@@ -498,6 +498,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `tea-test-review` reviews with the skill and knowledge base shipped in its own package by default, so the skill and the CLI are one version. When the CLI is installed outside the checkout, a pull request cannot edit the reviewer that judges it. A project that relied on the CLI finding its vendored skill adds `--project-skill`.
+  A missing agent executable, including a missing `--agent-cmd` command, now exits 2 with the install command where it used to exit 3.
 - `tea-evaluate check` refuses a `judge.modelSnapshot` in `policy/evaluator-conditions.json` that differs from the model the judge runs.
   `judge.model` selects the model of every judge call, and a recorded snapshot that named another model put a false condition on every run.
   The `judge` finding (exit 10) names both values and says which field selects the model and which records it.

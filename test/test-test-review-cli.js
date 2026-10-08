@@ -103,7 +103,7 @@ const {
 const { resolveSkill, resolvePackagedSkill } = require('../cli/lib/resolve-skill');
 const { buildPrompt } = require('../cli/lib/build-prompt');
 const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable } = require('../cli/lib/isolate');
-const { runAgent, buildMinimalEnv } = require('../cli/lib/run-agent');
+const { runAgent, buildMinimalEnv, executableFound } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel, strongestCapability } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
 const { changedRanges, classifyFinding, applyFindingProvenance, subtractCounts } = require('../cli/lib/diff-evidence');
@@ -6784,7 +6784,7 @@ async function runTests() {
         '--retries never retries a failing verdict (exit 1)',
         `status=${verdictFailNotRetried.status} attempts=${attemptsOf('retry-verdict')}`,
       );
-      for (const bad of ['-1', 'abc', '1.5', '']) {
+      for (const bad of ['-1', 'abc', '1.5', '', '6', '99999999999999999999']) {
         const badRetries = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject, '--retries', bad]);
         assert(
           badRetries.status === 2 && badRetries.stderr.includes('--retries must be a non-negative integer'),
@@ -6797,10 +6797,10 @@ async function runTests() {
       const fakeBin = path.join(tmpRoot, 'b1-bin');
       fs.mkdirSync(fakeBin, { recursive: true });
       const statusLog = path.join(tmpRoot, 'b1-status.log');
-      const fakeVendor = (name, statusBody) => {
+      const fakeVendor = (name, statusBody, helpBody = String.raw`printf "Commands:\n  login\n  status  Show status\n"`) => {
         fs.writeFileSync(
           path.join(fakeBin, name),
-          `#!/bin/sh\nif [ "$1" = "auth" ] || [ "$1" = "login" ]; then\n  echo "$@" >> "${statusLog}"\n  ${statusBody}\nfi\nexec "${process.execPath}" "${stubAgent}" "$@"\n`,
+          `#!/bin/sh\nif [ "$1" = "auth" ] || [ "$1" = "login" ]; then\n  if [ "$2" = "--help" ]; then\n    ${helpBody}\n    exit 0\n  fi\n  echo "$@" >> "${statusLog}"\n  ${statusBody}\nfi\nexec "${process.execPath}" "${stubAgent}" "$@"\n`,
           { mode: 0o755 },
         );
       };
@@ -6871,6 +6871,41 @@ async function runTests() {
         '--agent-cmd is not the vendor CLI, so no login status is asked of it',
         `status=${overridden.status} stderr=${overridden.stderr}`,
       );
+      // codex reads CODEX_API_KEY straight from the environment, so its login status says nothing about that run.
+      fakeVendor('codex', 'echo "Not logged in" >&2; exit 1');
+      fs.rmSync(statusLog, { force: true });
+      const codexEnvKey = runCli(presenceArgs('codex', ['--env-pass', 'CODEX_API_KEY']), {
+        PATH: fakeBin,
+        CODEX_API_KEY: 'sk-test',
+        STUB_MODE: 'approve',
+      });
+      assert(
+        codexEnvKey.status === 0 && !fs.existsSync(statusLog),
+        'a credential variable the vendor reads from the environment skips the login question',
+        `status=${codexEnvKey.status} stderr=${codexEnvKey.stderr}`,
+      );
+      // An older CLI that does not list the status command would read `auth status` as a prompt and spend a model call.
+      fakeVendor('claude', 'exit 1', String.raw`printf "Usage: claude [options]\n"`);
+      fs.rmSync(statusLog, { force: true });
+      const oldClaude = runCli(presenceArgs('claude'), {
+        PATH: fakeBin,
+        ANTHROPIC_API_KEY: '',
+        CLAUDE_CODE_OAUTH_TOKEN: '',
+        STUB_MODE: 'approve',
+      });
+      assert(
+        oldClaude.status === 0 && !fs.existsSync(statusLog),
+        'a vendor CLI that does not list its status command is never asked it',
+        `status=${oldClaude.status} stderr=${oldClaude.stderr}`,
+      );
+      fs.mkdirSync(path.join(tmpRoot, 'b1-win'), { recursive: true });
+      fs.writeFileSync(path.join(tmpRoot, 'b1-win', 'claude.exe'), '', { mode: 0o755 });
+      assert(
+        executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'win32', pathExt: '.COM;.EXE' }) &&
+          !executableFound('claude', path.join(tmpRoot, 'b1-win'), tmpRoot, { platform: 'linux' }),
+        'on Windows a bare agent name is found through PATHEXT (claude.exe), elsewhere it is not',
+      );
+
       const noneNeedsNoAgent = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', emptyProject], { PATH: emptyBin });
       assert(noneNeedsNoAgent.status === 0, '--agent none needs no agent CLI', `status=${noneNeedsNoAgent.status}`);
       const skipNeedsNoAgent = runCli(['--project-root', repo, '--files', '', '--agent', 'claude'], { PATH: emptyBin });

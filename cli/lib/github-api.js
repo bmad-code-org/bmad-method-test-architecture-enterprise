@@ -1,7 +1,6 @@
 /**
  * The smallest GitHub REST client the review CLI needs: one request function with bounded retry,
- * and the pull request lookups built on it. Shared by the base-ref resolution (`--pr`) and the
- * opt-in publisher (`--github`).
+ * and the pull request lookups built on it. Used by the base-ref resolution (`--pr`).
  */
 
 const REQUEST_TIMEOUT_MS = 30_000;
