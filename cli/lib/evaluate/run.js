@@ -639,18 +639,20 @@ async function readObservedMounts(observedMounts, { stop, label }) {
 /**
  * The `run.json` entry of one audited trial (Story 1.81): the canaries the audit sent (reads of a file no target can reach,
  * through the sandbox's own token), the ones the kernel's log delivered and whether the log itself reported lost events.
- * The trial is `lossy` when the log delivered fewer canaries than were sent or reported a loss, and `complete` otherwise.
+ * The trial is `lossy` when the log delivered fewer canaries than were sent, reported a loss, or was handed reports (by any sandbox
+ * on the host) faster than it was measured to keep them, and `complete` otherwise.
  * Linux's trace loses nothing and sends none, so its trials are `complete` with none sent.
  */
 function channelEntry(arm, trial) {
-  const { canariesSent, canariesDelivered, logReportedLoss } = trial.auditChannel;
+  const { canariesSent, canariesDelivered, logReportedLoss, logOverloaded = false } = trial.auditChannel;
   return {
     conditionArm: arm.conditionArm,
     trialIndex: trial.trialIndex,
-    completeness: canariesDelivered < canariesSent || logReportedLoss ? 'lossy' : 'complete',
+    completeness: canariesDelivered < canariesSent || logReportedLoss || logOverloaded ? 'lossy' : 'complete',
     canariesSent,
     canariesDelivered,
     logReportedLoss,
+    logOverloaded,
   };
 }
 
@@ -716,6 +718,7 @@ function lostCanaryNote(entries) {
       const lost = entry.canariesSent - entry.canariesDelivered;
       const counts = lost > 0 ? [`${lost} of ${entry.canariesSent}`] : [];
       if (entry.logReportedLoss) counts.push('the log reported lost events');
+      if (entry.logOverloaded) counts.push('reports reached the log faster than it keeps them');
       return `${entry.conditionArm} trial ${entry.trialIndex} (${counts.join('; ')})`;
     })
     .join(', ');

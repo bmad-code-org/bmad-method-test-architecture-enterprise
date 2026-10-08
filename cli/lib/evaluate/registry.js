@@ -863,7 +863,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * (`confinement-audit.js`), which `observedMounts()` reads (async) and which
    * is empty otherwise; `releaseHome()` ends the audit and removes the home.
    *
-   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => Promise<string[]>, auditChannel: () => ({ canariesSent: number, canariesDelivered: number, logReportedLoss: boolean }|null), hostSocketReport: () => ({ calls: number, truncatedCalls: number, socketsLeftReachable: number }|null), releaseHome: () => void, resetHome: () => void}>}
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => Promise<string[]>, auditChannel: () => ({ canariesSent: number, canariesDelivered: number, logReportedLoss: boolean, logOverloaded: boolean }|null), hostSocketReport: () => ({ calls: number, truncatedCalls: number, socketsLeftReachable: number }|null), releaseHome: () => void, resetHome: () => void}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);

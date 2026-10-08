@@ -189,12 +189,14 @@ const {
 /** The list of the host's sockets with no well-known path pinned, which a case names itself (this host's `/var/run/docker.sock` is a link into the user's home on macOS). */
 const hostPathSockets = (options) => listedHostSockets({ pinned: [], ...options });
 const {
+  ReportMeter,
   TRACE_CLONES,
   TRACE_PATH_SYSCALLS,
   TRACE_SOCKET_CALLS,
   TRACE_SYSCALLS,
   TraceReader,
   decodeString,
+  eventMicroseconds,
   parseReportLine,
   probeReportStream,
   probeTrace,
@@ -286,6 +288,7 @@ const WRAP_RUN_DIRECTORY = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate
 const REPORT_LISTENER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'report-listener.cjs');
 const CONFINEMENT_STATUS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
 const LOSSY_LOG = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'lossy-log.cjs');
+const DROP_LOG = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'drop-log.cjs');
 const CUT_SOCKET_REPORT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'cut-socket-report.cjs');
 const REFUSED_EGRESS_REPORT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'refused-egress-report.cjs');
 const EVALUATION = path.join('evals', 'verdict');
@@ -4008,7 +4011,15 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
     const what = `the audit channel of ${entry.conditionArm} trial ${entry.trialIndex}`;
     check(
       JSON.stringify(Object.keys(entry).sort()) ===
-        JSON.stringify(['canariesDelivered', 'canariesSent', 'completeness', 'conditionArm', 'logReportedLoss', 'trialIndex']),
+        JSON.stringify([
+          'canariesDelivered',
+          'canariesSent',
+          'completeness',
+          'conditionArm',
+          'logOverloaded',
+          'logReportedLoss',
+          'trialIndex',
+        ]),
       `${what} holds the fields ${JSON.stringify(Object.keys(entry))}`,
     );
     check(
@@ -4017,8 +4028,10 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
         entry.canariesDelivered >= 0 &&
         entry.canariesDelivered <= entry.canariesSent &&
         typeof entry.logReportedLoss === 'boolean' &&
-        entry.completeness === (entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss ? 'lossy' : 'complete'),
-      `${what} is ${JSON.stringify(entry)}; expected counts with delivered at most sent and 'lossy' exactly when fewer were delivered or the log reported a loss`,
+        typeof entry.logOverloaded === 'boolean' &&
+        entry.completeness ===
+          (entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss || entry.logOverloaded ? 'lossy' : 'complete'),
+      `${what} is ${JSON.stringify(entry)}; expected counts with delivered at most sent and 'lossy' exactly when fewer were delivered, the log reported a loss or reports reached the log faster than it keeps them`,
     );
     if (process.platform === 'darwin') {
       check(entry.canariesSent >= 2, `${what} sent fewer than its first and final canary on macOS: ${JSON.stringify(entry)}`);
@@ -4030,7 +4043,11 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
       }
     } else {
       check(
-        entry.canariesSent === 0 && entry.canariesDelivered === 0 && entry.logReportedLoss === false && entry.completeness === 'complete',
+        entry.canariesSent === 0 &&
+          entry.canariesDelivered === 0 &&
+          entry.logReportedLoss === false &&
+          entry.logOverloaded === false &&
+          entry.completeness === 'complete',
         `${what} is ${JSON.stringify(entry)}; a Linux trial records complete with no canary sent`,
       );
     }
@@ -5053,9 +5070,22 @@ async function checkAuditMechanism() {
     };
     return { sandbox, run };
   };
+  // Whether any sandbox read since the scenario began said its audit lost reports (`channelEntry`'s rule), so a path a scenario
+  // lacks is a loss the audit reported, which may run again, and not one it kept to itself.
+  let scenarioReportedLoss = false;
+  let scenarioChannels = [];
   const mountsOf = async ({ sandbox }) => {
     try {
-      return await sandbox.observedMounts();
+      const mounts = await sandbox.observedMounts();
+      const channel = sandbox.auditChannel();
+      scenarioChannels.push(channel);
+      if (
+        channel !== null &&
+        (channel.canariesDelivered < channel.canariesSent || channel.logReportedLoss || channel.logOverloaded === true)
+      ) {
+        scenarioReportedLoss = true;
+      }
+      return mounts;
     } finally {
       sandbox.release();
     }
@@ -5092,7 +5122,17 @@ async function checkAuditMechanism() {
   const eventually = async (scenario) => {
     let result = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
+      scenarioReportedLoss = false;
+      scenarioChannels = [];
       result = await scenario();
+      // A path missing from an audit that reported no loss is a read the log lost without saying so: the loss signal does not
+      // cover it (a Node process's read goes missing in windows of a second or two on a quiet host, with every canary delivered),
+      // so the scenario still runs again, and the run says so, where the trial cases above fail on it (`checkTrialMounts`).
+      if (result.lost && !scenarioReportedLoss && process.platform === 'darwin') {
+        console.error(
+          `a scenario lost a read the audit did not report (attempt ${attempt + 1}; ${JSON.stringify(scenarioChannels)}): ${result.failure}`,
+        );
+      }
       if (result.failure === null || !result.lost) break;
       // The loss comes in windows of a second or two on a loaded host, so the next attempt waits one out.
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -5315,17 +5355,30 @@ async function checkShellTargetAudit() {
  * names; `end()` ends the real `log` it started, which the runtime's SIGKILL of the stub leaves running.
  */
 function lossyLogStub(every) {
+  return logStub(LOSSY_LOG, String(every));
+}
+
+/**
+ * A `log` that drops every line holding `dropped` from the sandbox's own stream and hands the report meter `flood` reports in one
+ * microsecond (`fixtures/evaluate/drop-log.cjs`), written as the executable the sandbox's observer names; `end()` ends the real `log`s.
+ */
+function dropLogStub(dropped, flood) {
+  return logStub(DROP_LOG, `${JSON.stringify(dropped)} ${flood}`);
+}
+
+function logStub(fixture, leading) {
   const directory = tempDir('lossy-log');
   const pids = tempDir('lossy-log-pids');
   const executable = path.join(directory, 'log');
-  fs.writeFileSync(executable, `#!/bin/sh\nexec "${process.execPath}" "${LOSSY_LOG}" ${every} "${pids}" "$@"\n`, { mode: 0o755 });
+  fs.writeFileSync(executable, `#!/bin/sh\nexec "${process.execPath}" "${fixture}" ${leading} "${pids}" "$@"\n`, { mode: 0o755 });
   return {
     executable,
     end() {
       for (const name of fs.readdirSync(pids)) {
         const pid = Number(fs.readFileSync(path.join(pids, name), 'utf8'));
         const command = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' }).stdout;
-        if (!command.includes('/usr/bin/log stream') || !command.includes('tea-evaluate-audit-')) continue;
+        if (!command.includes('/usr/bin/log stream') || !(command.includes('tea-evaluate-audit-') || command.includes('Sandbox: ')))
+          continue;
         try {
           process.kill(pid, 'SIGKILL');
         } catch {
@@ -5438,7 +5491,12 @@ async function checkAuditChannelRun() {
  */
 async function checkAuditChannelUnits() {
   const arm = { conditionArm: 'mutated:M-001' };
-  const counts = (canariesSent, canariesDelivered, logReportedLoss = false) => ({ canariesSent, canariesDelivered, logReportedLoss });
+  const counts = (canariesSent, canariesDelivered, logReportedLoss = false, logOverloaded = false) => ({
+    canariesSent,
+    canariesDelivered,
+    logReportedLoss,
+    logOverloaded,
+  });
   check(
     JSON.stringify(channelEntry(arm, { trialIndex: 2, auditChannel: counts(41, 38) })) ===
       JSON.stringify({
@@ -5448,6 +5506,7 @@ async function checkAuditChannelUnits() {
         canariesSent: 41,
         canariesDelivered: 38,
         logReportedLoss: false,
+        logOverloaded: false,
       }),
     'a trial that lost 3 of 41 canaries was not recorded as lossy with its counts',
   );
@@ -5461,9 +5520,43 @@ async function checkAuditChannelUnits() {
     channelEntry(arm, { trialIndex: 1, auditChannel: counts(41, 41, true) }).completeness === 'lossy',
     'a trial whose log reported lost events was recorded as complete',
   );
+  check(
+    channelEntry(arm, { trialIndex: 1, auditChannel: counts(41, 41, false, true) }).completeness === 'lossy',
+    'a trial whose reports reached the log faster than it keeps them, with every canary delivered, was recorded as complete',
+  );
+  check(
+    channelEntry(arm, { trialIndex: 1, auditChannel: { canariesSent: 4, canariesDelivered: 4, logReportedLoss: false } }).logOverloaded ===
+      false,
+    'a channel with no overload field was not recorded as not overloaded',
+  );
   const entries = [
-    { conditionArm: 'clean', trialIndex: 1, completeness: 'complete', canariesSent: 40, canariesDelivered: 40, logReportedLoss: false },
-    { conditionArm: 'clean', trialIndex: 2, completeness: 'lossy', canariesSent: 40, canariesDelivered: 37, logReportedLoss: false },
+    {
+      conditionArm: 'clean',
+      trialIndex: 1,
+      completeness: 'complete',
+      canariesSent: 40,
+      canariesDelivered: 40,
+      logReportedLoss: false,
+      logOverloaded: false,
+    },
+    {
+      conditionArm: 'clean',
+      trialIndex: 2,
+      completeness: 'lossy',
+      canariesSent: 40,
+      canariesDelivered: 37,
+      logReportedLoss: false,
+      logOverloaded: false,
+    },
+    {
+      conditionArm: 'clean',
+      trialIndex: 3,
+      completeness: 'lossy',
+      canariesSent: 40,
+      canariesDelivered: 40,
+      logReportedLoss: false,
+      logOverloaded: true,
+    },
     {
       conditionArm: 'mutated:M-001',
       trialIndex: 1,
@@ -5471,20 +5564,80 @@ async function checkAuditChannelUnits() {
       canariesSent: 52,
       canariesDelivered: 51,
       logReportedLoss: false,
+      logOverloaded: false,
     },
-    { conditionArm: 'mutated:M-001', trialIndex: 2, completeness: 'lossy', canariesSent: 52, canariesDelivered: 52, logReportedLoss: true },
+    {
+      conditionArm: 'mutated:M-001',
+      trialIndex: 2,
+      completeness: 'lossy',
+      canariesSent: 52,
+      canariesDelivered: 52,
+      logReportedLoss: true,
+      logOverloaded: false,
+    },
   ];
   const note = lostCanaryNote(entries);
   check(
     note.includes('clean trial 2 (3 of 40)') &&
       note.includes('mutated:M-001 trial 1 (1 of 52)') &&
       note.includes('mutated:M-001 trial 2 (the log reported lost events)') &&
+      note.includes('clean trial 3 (reports reached the log faster than it keeps them)') &&
       !note.includes('clean trial 1') &&
       note.includes('those trials'),
-    `the summary's note on lost canaries is ${JSON.stringify(note)}; expected the three lossy trials with their counts and not the complete one`,
+    `the summary's note on lost canaries is ${JSON.stringify(note)}; expected the four lossy trials with their counts and not the complete one`,
   );
   check(lostCanaryNote(entries.slice(0, 1)) === '', 'a run whose trials lost no canary got a note on lost canaries');
   check(lostCanaryNote([]) === '', 'a run with no audited trial got a note on lost canaries');
+
+  // The report meter (the kernel drops reports that arrive faster than its log keeps them, with no trace and every canary delivered).
+  const metered = (times, options = {}) => {
+    const meter = new ReportMeter(options);
+    for (const time of times) meter.count(time);
+    return meter;
+  };
+  const evenly = (count, spacing, from = 1_000_000) => Array.from({ length: count }, (_, index) => from + index * spacing);
+  check(!metered([]).overloaded(), 'a meter that counted no report was overloaded');
+  check(!metered(evenly(15, 50)).overloaded(), 'fifteen reports inside a millisecond overloaded the meter');
+  check(metered(evenly(16, 50)).overloaded(), 'sixteen reports inside a millisecond did not overload the meter');
+  check(!metered(evenly(16, 100)).overloaded(), 'sixteen reports spread over 1.6 milliseconds overloaded the meter');
+  check(!metered(evenly(1000, 1000)).overloaded(), 'a thousand reports a second (a hundred per 100 ms) overloaded the meter');
+  check(metered(evenly(300, 300)).overloaded(), 'three thousand reports a second did not overload the meter');
+  check(
+    !metered([...evenly(10, 50), ...evenly(10, 50, 1_500_000), ...evenly(10, 50, 3_000_000)]).overloaded(),
+    'three bursts of ten reports, a millisecond and a half apart or more, overloaded the meter',
+  );
+  check(
+    metered([...evenly(10, 50), ...evenly(10, 50, 1_050_000)]).burstPeak === 10 &&
+      metered([...evenly(10, 50), ...evenly(10, 50, 1_050_000)]).floodPeak === 20,
+    'the meter did not keep a burst peak of one burst and a flood peak of both',
+  );
+  const ended = new ReportMeter();
+  ended.ended = { code: 1, signal: null };
+  check(ended.overloaded(), 'a meter whose stream ended before the sandbox did was not overloaded');
+  ended.closing = true;
+  check(!ended.overloaded(), 'a meter the sandbox closed itself was overloaded');
+  const unsettled = new ReportMeter();
+  unsettled.unsettled = true;
+  check(unsettled.overloaded(), 'a meter that could not confirm it had counted every report was not overloaded');
+  // The log's own timestamp, split across chunks of its output, never parsed beyond that.
+  const chunked = new ReportMeter();
+  const event = JSON.stringify({
+    eventType: 'logEvent',
+    timestamp: '2026-10-07 12:00:00.000500-0500',
+    eventMessage: 'Sandbox: x(1) allow file-read-data /x\nt',
+  });
+  chunked.take(Buffer.from(`Filtering the log data using "x"\n${event}\n${event.slice(0, 30)}`));
+  chunked.take(Buffer.from(`${event.slice(30)}\n{"eventType":"lossEvent"}\n`));
+  check(
+    chunked.total === 2 && chunked.burstPeak === 2,
+    `a meter fed a header, two events split across chunks and a loss event counted ${chunked.total} reports`,
+  );
+  check(
+    eventMicroseconds('{"timestamp":"2026-10-07 12:00:00.000500-0500"}') -
+      eventMicroseconds('{"timestamp":"2026-10-07 11:59:59.999900-0500"}') ===
+      600 && eventMicroseconds('{"eventType":"lossEvent"}') === null,
+    "the meter's reading of the log's timestamps is wrong",
+  );
 
   // A burst under the floor is retried only when the audit reported the loss (`judgeBurst`), on any host through stand-ins for the sandbox.
   const burstFloor = 500;
@@ -5589,6 +5742,10 @@ async function checkAuditChannelUnits() {
     checkReport(
       quiet.channel.canariesDelivered === quiet.channel.canariesSent && quiet.channel.logReportedLoss === false,
       `the real log lost canaries: ${JSON.stringify(quiet.channel)}`,
+    );
+    checkReport(
+      quiet.channel.logOverloaded === false,
+      `the real log of a quiet host was recorded as overloaded: ${JSON.stringify(quiet.channel)}`,
     );
     check(JSON.stringify(quiet.mounts) === '[]', `canary reads were listed as observed mounts: ${JSON.stringify(quiet.mounts)}`);
     check(
@@ -5769,6 +5926,33 @@ async function checkAuditChannelUnits() {
       loss.channel.logReportedLoss === true && JSON.stringify(loss.mounts) === JSON.stringify([fs.realpathSync(outside)]),
       `a log that reported lost events was recorded as ${JSON.stringify(loss.channel)} with the mounts ${JSON.stringify(loss.mounts)}`,
     );
+    // A report the kernel's log dropped between two canaries, with every canary delivered and no loss event, is the loss no canary
+    // sees; the reports that came faster than the log keeps them are what mark the trial lossy (the stub drops the read and floods the meter).
+    const dropStub = dropLogStub('host-notes', 40);
+    try {
+      const dropped = await read(dropStub.executable, {
+        waitMs: 0,
+        act: async (sandbox) => {
+          const wrapped = sandbox.wrap('/bin/cat', [outside]);
+          await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
+        },
+      });
+      check(
+        JSON.stringify(dropped.mounts) === '[]',
+        `the stub did not drop the read of the target: the audit listed ${JSON.stringify(dropped.mounts)}`,
+      );
+      checkReport(
+        dropped.channel.canariesDelivered === dropped.channel.canariesSent && dropped.channel.logReportedLoss === false,
+        `the stub lost a canary or reported a loss, so the case does not show the blind spot: ${JSON.stringify(dropped.channel)}`,
+      );
+      check(
+        dropped.channel.logOverloaded === true &&
+          channelEntry({ conditionArm: 'clean' }, { trialIndex: 1, auditChannel: dropped.channel }).completeness === 'lossy',
+        `a trial whose read the log dropped while reports came faster than it keeps them, with every canary delivered, was recorded as ${JSON.stringify(dropped.channel)}; expected lossy`,
+      );
+    } finally {
+      dropStub.end();
+    }
   } else {
     skipCase('macOS canary reads', `the kernel's log exists on macOS only, and this host is ${process.platform}; the macOS hosts run it`);
   }
