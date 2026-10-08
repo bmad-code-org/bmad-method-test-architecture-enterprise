@@ -1,0 +1,12 @@
+{
+  "probeId": "P-005",
+  "probeClass": "zero-action",
+  "behaviorId": "B-004",
+  "expectedClean": true,
+  "rationale": "[negative] Clean control: a changed setup line turns an unchanged assertion into a self-comparison.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "Known defect at this revision: the self-comparison is located on the unchanged assertion, classified pre-existing, and the review approves. This control records the before state."
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "probeId": "P-003",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[representative] Seeded defect: M-001 marks every changed line unchanged, so every finding of the pull request is pre-existing and the introduced hard waits pass the gate.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-002",
+      "summary": "M-001 marks every changed line unchanged, so every finding of the pull request is pre-existing and the introduced hard waits pass the gate.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-003",
+        "interfaceId": "review-fixture",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "fixture": "adds-defects",
+              "review": "head",
+              "mode": "pr"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-003/stdout/recommendation"
+                },
+                {
+                  "literal": "Approve"
+                }
+              ]
+            },
+            {
+              "op": "for-any",
+              "collection": {
+                "pointer": "/interactions/manifest-p-003/stdout/findings"
+              },
+              "predicate": {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/row"
+                      },
+                      {
+                        "literal": "H1"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "set-membership",
+                    "operands": [
+                      {
+                        "pointer": "@/line"
+                      },
+                      {
+                        "literal": [
+                          15,
+                          16,
+                          17,
+                          18,
+                          19,
+                          20,
+                          23,
+                          24,
+                          25,
+                          26,
+                          27,
+                          28
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/provenance"
+                      },
+                      {
+                        "literal": "pre_existing"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "review-fixture",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "fixture": {
+              "literal": "adds-defects"
+            },
+            "review": {
+              "literal": "head"
+            },
+            "mode": {
+              "literal": "pr"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/recommendation"
+              },
+              {
+                "literal": "Approve"
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/observed/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/provenance"
+                    },
+                    {
+                      "literal": "pre_existing"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

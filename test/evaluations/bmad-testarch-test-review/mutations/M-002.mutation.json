@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "cli/lib/diff-evidence.js: applyFindingProvenance gives introduced findings no verdict impact",
+  "targetArtifact": "cli/lib/diff-evidence.js",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "    return { ...result, verdict_impact: gateOn === 'all' || result.provenance !== 'pre_existing' };",
+    "replace": "    return { ...result, verdict_impact: gateOn === 'all' };",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The adds-defects review marks its introduced findings advisory, gates on none, and recommends Approve on stdout."
+}

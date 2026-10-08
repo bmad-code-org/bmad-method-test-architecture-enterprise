@@ -1,0 +1,12 @@
+{
+  "probeId": "P-007",
+  "probeClass": "zero-action",
+  "behaviorId": "B-006",
+  "expectedClean": true,
+  "rationale": "[boundary] Clean control: the H3 pair, a redundant branch that checks the expected value on every path beside an assertion chosen by system output. Before state: the current rubric is expected to rate the redundant branch High.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "Known defect at this revision: H3 fires on any if/else around an assertion. This control records the before state."
+  }
+}

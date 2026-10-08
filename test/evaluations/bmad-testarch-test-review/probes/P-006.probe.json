@@ -1,0 +1,12 @@
+{
+  "probeId": "P-006",
+  "probeClass": "zero-action",
+  "behaviorId": "B-005",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: two hard waits in two added tests stay two findings.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

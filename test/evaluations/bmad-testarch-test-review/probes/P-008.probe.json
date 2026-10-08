@@ -1,0 +1,12 @@
+{
+  "probeId": "P-008",
+  "probeClass": "zero-action",
+  "behaviorId": "B-007",
+  "expectedClean": true,
+  "rationale": "[boundary] Clean control: the H10 pair, a covariance test the CI type-checks beside a shape-only value test. Before state: the current rubric is expected to rate the covariance test High.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "Known defect at this revision: H10 does not consult the type checker the CI runs. This control records the before state."
+  }
+}
