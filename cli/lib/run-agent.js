@@ -207,22 +207,40 @@ function agentInvocation(
   }
 }
 
-/** Whether `command` names an executable file: a path resolved against `cwd`, or a bare name looked up on `searchPath`. */
-function executableFound(command, searchPath, cwd) {
-  const candidates = command.includes('/')
+/**
+ * Whether `command` names an executable file: a path resolved against `cwd`, or a bare name looked up on `searchPath`.
+ *
+ * On Windows backslash is a path separator, and the bare name is also tried with each PATHEXT
+ * extension (claude's native installer ships `claude.exe`). A shim the spawn cannot run still
+ * fails at the spawn.
+ */
+function executableFound(command, searchPath, cwd, { platform = process.platform, pathExt = process.env.PATHEXT } = {}) {
+  const windows = platform === 'win32';
+  const extensions = windows
+    ? [
+        '',
+        ...String(pathExt || '.COM;.EXE;.BAT;.CMD')
+          .split(';')
+          .filter(Boolean),
+      ]
+    : [''];
+  const isPath = command.includes('/') || (windows && command.includes('\\'));
+  const bases = isPath
     ? [path.resolve(cwd, command)]
     : String(searchPath ?? '')
         .split(path.delimiter)
         .filter(Boolean)
         .map((directory) => path.resolve(cwd, directory, command));
-  return candidates.some((candidate) => {
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      return fs.statSync(candidate).isFile();
-    } catch {
-      return false;
-    }
-  });
+  return bases
+    .flatMap((base) => extensions.map((extension) => `${base}${extension}`))
+    .some((candidate) => {
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return fs.statSync(candidate).isFile();
+      } catch {
+        return false;
+      }
+    });
 }
 
 /**
@@ -457,4 +475,4 @@ async function runAgentAsync(prompt, options = {}) {
   }
 }
 
-module.exports = { runAgent, runAgentAsync, runSupervised, buildMinimalEnv };
+module.exports = { runAgent, runAgentAsync, runSupervised, buildMinimalEnv, executableFound };

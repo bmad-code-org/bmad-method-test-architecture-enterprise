@@ -13,11 +13,13 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ---
 
-## Eight problems, nine modules
+## Ten problems, eleven modules
 
 | Problem                                          | Module                               |
 | ------------------------------------------------ | ------------------------------------ |
-| Find the skill                                   | `lib/resolve-skill.js`               |
+| Find the skill (packaged by default)             | `lib/resolve-skill.js`               |
+| Know what the pull request merges into           | `lib/github-api.js`                  |
+| Know the agent CLI can run                       | `lib/agent-presence.js`              |
 | Decide what to feed it                           | `lib/changed-tests.js`               |
 | Measure the house convention it's judged against | `lib/convention-baseline.js`         |
 | Know what severity a finding is really allowed   | `lib/registry-rows.js`               |
@@ -26,7 +28,7 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 | Spawn it without trusting it                     | `lib/run-agent.js`, `lib/isolate.js` |
 | Turn prose into an exit code                     | `lib/parse-report.js`                |
 
-`cli/test-review.js` runs them in order: resolve skill, resolve config, split the diff, measure the convention baseline, load the registry's row severities, build prompt, spawn agent under isolation, parse report, emit verdict, exit.
+`cli/test-review.js` runs them in order: resolve skill, resolve config, look up the pull request base (with `--pr`), split the diff, measure the convention baseline, load the registry's row severities, build prompt, check the agent CLI is installed and logged in, then spawn agent under isolation and parse report, once per attempt (`--retries` repeats the pair after an agent or parse failure), emit verdict, exit.
 
 `lib/registry-rows.js` closes a gap found while auditing the parser: a report could document a real, row-cited Critical finding in prose while its `**Total Violations**:` summary line claimed zero, and nothing compared the two. The CLI computed Approve at 100/100 straight from the summary line, with the finding sitting right there unread. It now reads `criteria-registry.md`'s row → severity map directly from the skill, never a hardcoded copy that could drift, and `parse-report.js` binds every `**Row**: <id>` citation to a real row with a matching severity and reconciles the documented Critical/High finding blocks against the counts the summary claims. Scoped to Critical and High, the two severities that flip `deriveRecommendation`'s output.
 
@@ -124,12 +126,12 @@ Prompt contract, parser, and report template are one contract in three files; th
 
 ## Trying it locally
 
-From a clone of this repo, the skill isn't installed under `_bmad/`, so point `--skill-root` at the source instead.
+The CLI reviews with the skill shipped in its own package, so a clone of this repo needs no install step and no skill flag.
 
 `--agent none` builds the prompt, prints it, exits. No subprocess, no API cost:
 
 ```bash
-node cli/test-review.js --agent none --files test/test-test-review-cli.js --skill-root skills/bmad-testarch-test-review
+node cli/test-review.js --agent none --files test/test-test-review-cli.js
 ```
 
 Add a second file and `review_scope` flips from `single` to `directory`.
@@ -138,10 +140,10 @@ With a real agent, same flags, swap in `--agent claude` and export `ANTHROPIC_AP
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-node cli/test-review.js --agent claude --files test/test-test-review-cli.js --skill-root skills/bmad-testarch-test-review --output test-review.md
+node cli/test-review.js --agent claude --files test/test-test-review-cli.js --output test-review.md
 ```
 
-Once the package is installed in a consuming repo, the bare `tea-test-review` binary resolves the skill on its own; drop `--skill-root`.
+Installed in a consuming repo, the bare `tea-test-review` binary does the same. `--project-skill` reviews with a copy the project vendored, and `--skill-root` names an exact skill directory.
 
 ---
 

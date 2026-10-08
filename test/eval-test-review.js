@@ -521,7 +521,7 @@ async function runReview(agent, runIndex, runner = {}) {
       const stderr = observedText(observation.stderr);
       if (stderr) console.error(`  ${colors.dim}${stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
       // Exit 2 is the CLI's own environment class: a missing skill, an unusable
-      // option, or no isolation backend. It never started the agent, so no
+      // option, no isolation backend, or an agent CLI that is missing or logged out. It never started the agent, so no
       // verdict was ever going to exist.
       return {
         ok: false,

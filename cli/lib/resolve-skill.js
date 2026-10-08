@@ -42,4 +42,29 @@ function resolveSkill(projectRoot) {
   throw error;
 }
 
-module.exports = { resolveSkill, SKILL_CANDIDATES, SKILL_NAME };
+/** The skill this CLI ships with, one folder up from cli/ in the published package. */
+const PACKAGED_SKILLS_DIR = path.join(__dirname, '..', '..', 'skills');
+
+/**
+ * Find the skill root shipped in the CLI's own package.
+ *
+ * The CLI and the skill it drives come from one published version, and the skill sits outside any
+ * checkout under review, so a pull request cannot edit the reviewer that judges it.
+ *
+ * @param {string} [skillsDir] - Directory holding the packaged skills (test seam).
+ * @returns {string} Absolute skill root path.
+ * @throws {Error} With code SKILL_MISSING when the package carries no skill.
+ */
+function resolvePackagedSkill(skillsDir = PACKAGED_SKILLS_DIR) {
+  const skillRoot = path.join(skillsDir, SKILL_NAME);
+  if (fs.existsSync(path.join(skillRoot, 'SKILL.md'))) {
+    return skillRoot;
+  }
+  const error = new Error(
+    `${SKILL_NAME} skill not found in the tea-test-review package (expected ${skillRoot}).\nReinstall bmad-method-test-architecture-enterprise, or pass --skill-root <path>.`,
+  );
+  error.code = 'SKILL_MISSING';
+  throw error;
+}
+
+module.exports = { resolveSkill, resolvePackagedSkill, SKILL_CANDIDATES, SKILL_NAME };

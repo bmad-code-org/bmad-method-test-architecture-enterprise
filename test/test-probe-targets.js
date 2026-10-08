@@ -474,6 +474,7 @@ async function checkTestReviewProbe(runDir) {
       option: {
         files: './tests/checkout.spec.ts,tests/extra.spec.ts',
         'project-root': REVIEW_FIXTURE_PROJECT,
+        'project-skill': true,
         output: path.join(runDir, 'test-review.md'),
         json: path.join(runDir, 'verdict.json'),
         'agent-cmd': REVIEW_STUB_AGENT,
@@ -523,6 +524,7 @@ async function checkTestReviewProbe(runDir) {
       option: {
         files: './tests/checkout.spec.ts',
         'project-root': REVIEW_FIXTURE_PROJECT,
+        'project-skill': true,
         output: path.join(runDir, 'test-review.md'),
         json: path.join(runDir, 'verdict.json'),
         'agent-cmd': REVIEW_STUB_AGENT,
@@ -550,6 +552,7 @@ async function checkTestReviewProbe(runDir) {
       option: {
         files: './tests/checkout.spec.ts',
         'project-root': REVIEW_FIXTURE_PROJECT,
+        'project-skill': true,
         output: path.join(runDir, 'test-review.md'),
         json: path.join(runDir, 'verdict.json'),
         'agent-cmd': REVIEW_STUB_AGENT,

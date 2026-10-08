@@ -407,12 +407,10 @@ Every TEA contract declares `fixtureReset: null`, so pre-flight plans nothing to
 legs, and a directory per spawned leg is the only thing that makes a leg's evidence its own. With
 that fixed the witness passes, and the fix cost the twelve minutes of the first pair.
 
-**`test-review`'s witness legs need the skill on disk.** They name their fixtures by
+**`test-review`'s witness legs name their skill.** They name their fixtures by
 repository-relative path, name no project root, and write a bare `verdict.json`, so all three resolve
-against the policy's `cwd`. A run directory holding only the fixtures fails before the agent starts,
-because `cli/lib/resolve-skill.js` probes four candidates under the project root and finds none. The
-run directory is given the skill at `skills/bmad-testarch-test-review`, which is the
-fourth candidate and the one a checkout of this repository satisfies.
+against the policy's `cwd`. The CLI reviews with the skill packaged beside it (`cli/lib/resolve-skill.js`),
+so a run directory holding only the fixtures starts the agent and needs no skill of its own.
 
 ### The witness legs were not runnable, and now they are
 

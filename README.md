@@ -316,7 +316,7 @@ Installing this package also installs a `tea-test-review` binary that runs the r
 npx tea-test-review --base origin/main --min-score 80
 ```
 
-It scopes to changed tests (`--base`, `--files`), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment or configuration failure, and `3` agent failure or an unparseable or untrusted report. For example, a missing credential exits `2`, while a runner crash after launch exits `3`.
+It reviews with the skill shipped in its own package, scopes to changed tests (`--base`, `--files`, or `--pr` to look up the base branch), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment or configuration failure, and `3` agent failure or an unparseable or untrusted report. For example, a missing credential exits `2`, while a runner crash after launch exits `3`.
 
 The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
 
