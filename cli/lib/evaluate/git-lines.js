@@ -32,11 +32,16 @@
  *
  * The exit status is git's own, a failed stage's standard error reaches the
  * caller, and nothing is printed on failure.
+ *
+ * The job ends by letting the event loop drain (`leave`). `process.exit` shuts the engine's worker threads down while the
+ * heap is still live, and a worker that is compiling a function in the background and has asked the main thread for a
+ * collection then waits for an answer that never comes: the process hangs for good with no child left. A heap near its limit
+ * asks for those collections often, and the test that holds this reader to 48 MB saw the hang once in about two thousand runs.
+ * Draining the loop disposes the heap first, which releases such a worker.
  */
 
 'use strict';
 
-const fs = require('node:fs');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 
@@ -59,9 +64,36 @@ function eachLine(stream, onLine, onEnd) {
   });
 }
 
-function fail(status, message) {
+/** Every git stage the job started, so that leaving can release their handles. */
+const started = [];
+let left = false;
+
+/** Starts `git <args>` with the given stdio and registers it with `leave`. */
+function start(args, stdio) {
+  const child = spawn('git', args, { stdio });
+  started.push(child);
+  return child;
+}
+
+/**
+ * Ends the job once: records the exit status, prints `output` and `message` and releases every stage's handles so that nothing
+ * keeps the event loop alive, even a stage's grandchild that still holds a pipe open. The process then ends when the loop drains.
+ * Later calls do nothing, so a stage that exits after the job ended cannot print or change the status.
+ */
+function leave(status, output = '', message = '') {
+  if (left) return;
+  left = true;
+  process.exitCode = status;
   if (message) process.stderr.write(`${message}\n`);
-  process.exit(status === 0 ? 1 : status);
+  if (output) process.stdout.write(output);
+  for (const child of started) {
+    child.unref();
+    for (const stream of [child.stdin, child.stdout]) stream?.destroy();
+  }
+}
+
+function fail(status, message) {
+  leave(status === 0 ? 1 : status, '', message);
 }
 
 /** The git subcommand an argument list runs (`rev-list`, `cat-file`, `pack-objects`), for a message that names the stage. */
@@ -84,14 +116,14 @@ function outcome(stage, code, signal) {
 function missing(job) {
   const keep = job.keep === null ? null : new Set(job.keep);
   const kept = [];
-  const child = spawn('git', job.git, { stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = start(job.git, ['ignore', 'pipe', 'inherit']);
   child.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   let drained = false;
   let ended = null;
   const finish = () => {
     if (!drained || ended === null) return;
-    if (ended.status !== 0) fail(ended.status, ended.note);
-    process.stdout.write(kept.map((id) => `${id}\n`).join(''), () => process.exit(0));
+    if (ended.status !== 0) return fail(ended.status, ended.note);
+    leave(0, kept.map((id) => `${id}\n`).join(''));
   };
   eachLine(
     child.stdout,
@@ -113,7 +145,7 @@ function missing(job) {
 
 function reached(job) {
   const kept = [];
-  const child = spawn('git', job.git, { stdio: ['pipe', 'pipe', 'inherit'] });
+  const child = start(job.git, ['pipe', 'pipe', 'inherit']);
   child.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   child.stdin.on('error', () => {});
   child.stdin.end(`${job.revs.join('\n')}\n`);
@@ -121,8 +153,8 @@ function reached(job) {
   let ended = null;
   const finish = () => {
     if (!drained || ended === null) return;
-    if (ended.status !== 0) fail(ended.status, ended.note);
-    process.stdout.write(kept.map((id) => `${id}\n`).join(''), () => process.exit(0));
+    if (ended.status !== 0) return fail(ended.status, ended.note);
+    leave(0, kept.map((id) => `${id}\n`).join(''));
   };
   eachLine(
     child.stdout,
@@ -142,16 +174,16 @@ function reached(job) {
 
 function trees(job) {
   const found = new Set();
-  const list = spawn('git', job.list, { stdio: ['ignore', 'pipe', 'inherit'] });
-  const ask = spawn('git', job.ask, { stdio: ['pipe', 'pipe', 'inherit'] });
+  const list = start(job.list, ['ignore', 'pipe', 'inherit']);
+  const ask = start(job.ask, ['pipe', 'pipe', 'inherit']);
   list.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   ask.on('error', (error) => fail(1, `git could not run: ${error.code ?? error.message}`));
   ask.stdin.on('error', () => {});
   const state = { list: null, ask: null, answers: false, delivered: false, sent: 0, answered: 0, failure: null };
   const finish = () => {
     if (state.list === null || state.ask === null || !state.answers) return;
-    if (state.failure !== null) fail(state.failure.status, state.failure.note);
-    process.stdout.write([...found].map((id) => `${id}\n`).join(''), () => process.exit(0));
+    if (state.failure !== null) return fail(state.failure.status, state.failure.note);
+    leave(0, [...found].map((id) => `${id}\n`).join(''));
   };
   let batch = [];
   const flush = () => {
@@ -218,9 +250,7 @@ function trees(job) {
 }
 
 function pack(job) {
-  const stages = job.stages.map((args, index) =>
-    spawn('git', args, { stdio: ['pipe', index === job.stages.length - 1 ? 'ignore' : 'pipe', 'inherit'] }),
-  );
+  const stages = job.stages.map((args, index) => start(args, ['pipe', index === job.stages.length - 1 ? 'ignore' : 'pipe', 'inherit']));
   const state = { ended: Array.from({ length: stages.length }, () => null), failure: null };
   stages[0].stdin.end(`${job.revs.join('\n')}\n`);
   for (const [index, stage] of stages.entries()) {
@@ -230,8 +260,8 @@ function pack(job) {
   }
   const finish = () => {
     if (state.ended.includes(null)) return;
-    if (state.failure !== null) fail(state.failure.status, state.failure.note);
-    process.exit(0);
+    if (state.failure !== null) return fail(state.failure.status, state.failure.note);
+    leave(0);
   };
   // A stage that ends badly stops the others, which would otherwise wait on a pipe nobody reads or writes.
   // A stage ends on its `exit`: `close` waits for the stage's standard output to be read to its end, and the pipe into the next
@@ -249,26 +279,32 @@ function pack(job) {
   }
 }
 
-// The job arrives on standard input: a pack job's revisions can outgrow one argument.
-const job = JSON.parse(fs.readFileSync(0, 'utf8'));
-switch (job.mode) {
-  case 'missing': {
-    missing(job);
-    break;
-  }
-  case 'reached': {
-    reached(job);
-    break;
-  }
-  case 'trees': {
-    trees(job);
-    break;
-  }
-  case 'pack': {
-    pack(job);
-    break;
-  }
-  default: {
-    fail(2, `unknown mode ${JSON.stringify(job.mode)}`);
+// The job arrives on standard input: a pack job's revisions can outgrow one argument. It is read as a stream: a blocking read of
+// a socket that a macOS parent writes 800 KB to never saw the end of its input once in about a thousand runs.
+function run(job) {
+  switch (job.mode) {
+    case 'missing': {
+      missing(job);
+      break;
+    }
+    case 'reached': {
+      reached(job);
+      break;
+    }
+    case 'trees': {
+      trees(job);
+      break;
+    }
+    case 'pack': {
+      pack(job);
+      break;
+    }
+    default: {
+      fail(2, `unknown mode ${JSON.stringify(job.mode)}`);
+    }
   }
 }
+
+const input = [];
+process.stdin.on('data', (chunk) => input.push(chunk));
+process.stdin.on('end', () => run(JSON.parse(Buffer.concat(input).toString('utf8'))));
