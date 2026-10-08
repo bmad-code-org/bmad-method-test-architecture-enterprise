@@ -133,8 +133,8 @@ function checkInspection(inspection, failures) {
       'adapter for that kind',
       'Interaction plan with ordered `after` steps and `captured` bindings from earlier observations',
     ],
-    ['`tool-use`: calling agent', '`cli`', '`createCommandLineAdapter`', 'Agent command and tool-call trajectory on stdout for its oracle'],
-    ['`tool-use`: tool server', '`mcp`', '`createMcpAdapter`', 'Registry entry supplying `McpTargetAuthorization`'],
+    ['`tool-use`', '`cli`', '`createCommandLineAdapter`', 'Calling agent: agent command and tool-call trajectory on stdout for its oracle'],
+    ['`tool-use`', '`mcp`', '`createMcpAdapter`', 'Tool server over stdio: registry entry supplying `McpTargetAuthorization`'],
     [
       '`ai-feature`',
       '`api`',
@@ -142,10 +142,10 @@ function checkInspection(inspection, failures) {
       '`adapter/http-probe-port.mjs` and its conformance file, with address decisions delegated to eval-quality',
     ],
     [
-      '`tool-use`: server over HTTP',
+      '`tool-use`',
       '`api`',
       'adopter-owned `EnvironmentProbePort`',
-      "HTTP port as above; eval-quality's MCP adapter is for stdio",
+      "Tool server over HTTP: HTTP port as above; eval-quality's MCP adapter is for stdio",
     ],
     [
       '`test-review-mechanism`',
@@ -1961,10 +1961,10 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       '`skill`',
       '`agent`',
       '`workflow`',
-      '`tool-use`: calling agent',
-      '`tool-use`: tool server',
+      '`tool-use`',
+      '`tool-use`',
       '`ai-feature`',
-      '`tool-use`: server over HTTP',
+      '`tool-use`',
       '`test-review-mechanism`',
     ];
     const rows = adapterRows
