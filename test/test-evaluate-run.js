@@ -9146,13 +9146,15 @@ function checkAdopterTreeModes() {
 
   // The difference between two full readings names the part that moved: a ref by its name, a file by its path, HEAD by its
   // commits, the redirects and the shared git state by the part, and nothing when the readings are equal.
+  const mutable = makeProject('tree-described');
+  const policyFile = path.join(mutable.project, 'rules', 'policy.txt');
+  // Each call reads the tree just before its change, but the cases that follow build on the repository the earlier ones left:
+  // the second edit of the policy file needs the first, and the HEAD case runs last. Keep them in this order.
   const described = (change) => {
     const before = adopterTreeState(mutable.repository, { sharedState: true });
     change();
     return describeTreeChange(before, adopterTreeState(mutable.repository, { sharedState: true })).join('; ');
   };
-  const mutable = makeProject('tree-described');
-  const policyFile = path.join(mutable.project, 'rules', 'policy.txt');
   check(
     describeTreeChange(JSON.parse(baseline.full), JSON.parse(baseline.full)).length === 0,
     'two equal readings of the adopter tree were described as different',
@@ -9177,7 +9179,7 @@ function checkAdopterTreeModes() {
     for (const file of created) fs.writeFileSync(file, 'new\n');
   });
   check(
-    manyMoved.includes('and 2 more') && manyMoved.split('named-').length === 4,
+    manyMoved.includes('and 2 more') && (manyMoved.match(/named-\d\.txt/g) ?? []).length === 3,
     `five created files were described as "${manyMoved}"; expected three named and "and 2 more"`,
   );
   const headMoved = described(() => git(mutable.repository, ['commit', '--quiet', '--allow-empty', '--message', 'moved mid-run']));
