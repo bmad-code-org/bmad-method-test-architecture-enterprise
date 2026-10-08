@@ -390,6 +390,33 @@ function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
   return `${report.trimEnd()}\n${lines.join('\n')}\n`;
 }
 
+/** The value after `name` (or in `name=value`) in raw argv, or null. */
+function argvValue(argv, name) {
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === name) {
+      return argv[index + 1] !== undefined && !argv[index + 1].startsWith('--') ? argv[index + 1] : null;
+    }
+    if (argv[index].startsWith(`${name}=`)) {
+      return argv[index].slice(name.length + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * The comment file path, or undefined when it would overwrite the report or the verdict. Compared
+ * case-insensitively where the filesystem usually is, so `R.md` and `r.md` are one file there.
+ */
+function safeCommentOut(options, commentOut, protectedPaths) {
+  if (typeof commentOut !== 'string') {
+    return;
+  }
+  const root = fs.existsSync(options.projectRoot) ? path.resolve(options.projectRoot) : process.cwd();
+  const fold = (file) => (process.platform === 'linux' ? file : file.toLowerCase());
+  const target = fold(path.resolve(root, commentOut));
+  return protectedPaths.some((file) => typeof file === 'string' && fold(path.resolve(root, file)) === target) ? undefined : commentOut;
+}
+
 async function runReview(session) {
   const program = new Command();
 
@@ -546,19 +573,37 @@ async function runReview(session) {
     if (error.exitCode === 0) {
       return EXIT.PASS;
     }
+    // A flag commander refused still owes the comment file, so read the one flag that names it
+    // straight from argv.
+    const commentOut = argvValue(normalizedArgv.argv, '--comment-out');
+    if (typeof commentOut === 'string') {
+      session.options = { projectRoot: argvValue(normalizedArgv.argv, '--project-root') ?? process.cwd() };
+      session.surface = {
+        commentOut: safeCommentOut(session.options, commentOut, [
+          argvValue(normalizedArgv.argv, '--output') ?? 'test-review.md',
+          argvValue(normalizedArgv.argv, '--json'),
+        ]),
+        publisher: null,
+      };
+    }
     fail(EXIT.ENV_ERROR, error.message);
   }
   const options = program.opts();
   session.options = options;
   // The comment file is owed for every outcome, a refused flag included, so the surface exists
   // before anything is validated. A stale file from an earlier run must never be the answer.
+  // Only values this CLI would accept reach it: a refused --run-url or --head-sha is not published.
+  const acceptedRunUrl =
+    typeof options.runUrl === 'string' && /^https?:\/\/\S+$/.test(options.runUrl.trim()) ? options.runUrl.trim() : undefined;
+  const acceptedHeadSha =
+    typeof options.headSha === 'string' && /^[0-9a-f]{7,64}$/i.test(options.headSha.trim()) ? options.headSha.trim() : undefined;
   session.surface = {
     agent: typeof options.agent === 'string' ? options.agent : undefined,
     focus: options.focus,
-    runUrl: options.runUrl?.trim() || workflowRunUrl() || undefined,
+    runUrl: acceptedRunUrl ?? (options.runUrl === undefined ? workflowRunUrl() || undefined : undefined),
     artifactName: options.artifactName?.trim() || undefined,
-    commentOut: options.commentOut,
-    headSha: options.headSha?.trim() || readEventPayload()?.pull_request?.head?.sha || undefined,
+    commentOut: safeCommentOut(options, options.commentOut, [options.output, options.json]),
+    headSha: acceptedHeadSha ?? (options.headSha === undefined ? readEventPayload()?.pull_request?.head?.sha || undefined : undefined),
     reportPath: options.output,
     publisher: null,
   };
@@ -745,16 +790,11 @@ async function runReview(session) {
   if (jsonPath && jsonPath === outputPath) {
     fail(EXIT.ENV_ERROR, '--output and --json must resolve to different files.');
   }
-  if (options.commentOut !== undefined) {
-    const commentPath = path.resolve(projectRoot, options.commentOut);
-    if (commentPath === outputPath || commentPath === jsonPath) {
-      // The refusal must not itself overwrite the file it protects.
-      session.surface.commentOut = undefined;
-      fail(
-        EXIT.ENV_ERROR,
-        '--comment-out must not resolve to the same file as --output or --json: it would overwrite the report or the verdict.',
-      );
-    }
+  if (options.commentOut !== undefined && session.surface.commentOut === undefined) {
+    fail(
+      EXIT.ENV_ERROR,
+      '--comment-out must not resolve to the same file as --output or --json: it would overwrite the report or the verdict.',
+    );
   }
 
   // An explicit --skill-root is the trusted source of truth: it bypasses every
@@ -1147,6 +1187,7 @@ async function runReview(session) {
   // One attempt: a fresh report, verdict, run id and isolation directory each
   // time, so a retry never inherits anything from the attempt that failed.
   const attemptReview = () => {
+    session.attempted = true;
     // Never parse a leftover report or verdict from a previous run: delete both
     // first, then require artifacts newer than this run's start time.
     try {
@@ -1423,7 +1464,9 @@ async function runReview(session) {
  */
 function reportContext(session) {
   const { surface, options, verdict } = session;
-  if (!surface || !surface.reportPath || verdict?.skipped === true || verdict?.promptOnly === true) {
+  // Only a run that got as far as starting the agent has a report to point at; an earlier failure
+  // would otherwise cite whatever file an old run left in the workspace.
+  if (!session.attempted || !surface || !surface.reportPath || verdict?.skipped === true || verdict?.promptOnly === true) {
     return {};
   }
   const absolute = path.resolve(options.projectRoot, surface.reportPath);
@@ -1457,7 +1500,9 @@ async function finalizeSurfaces(session, exitCode) {
   }
   if (surface.commentOut) {
     try {
-      const target = path.resolve(session.options.projectRoot, surface.commentOut);
+      // A --project-root that does not exist is a refused flag, so the file lands relative to where the job runs.
+      const root = fs.existsSync(session.options.projectRoot) ? session.options.projectRoot : process.cwd();
+      const target = path.resolve(root, surface.commentOut);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, `${renderComment(session.verdict, surfaceContext(session, exitCode))}\n`, 'utf8');
     } catch (error) {
@@ -1546,7 +1591,7 @@ async function renderCommand(argv) {
   }
   const conflict = contradiction(verdict, exitCode);
   if (conflict) {
-    refuse(`${conflict}. The verdict file and the exit code are from different runs.`);
+    refuse(`${conflict}.`);
   }
   const context = {
     agent: options.agent,

@@ -7406,8 +7406,9 @@ async function runTests() {
       );
       assert(
         renderComment(passing, { reportMissing: true }).includes('The review wrote no report.') &&
-          !renderComment(passing, { reportMissing: true, artifactName: 'tea' }).includes('wrote no report'),
-        'a missing report is said, but only when no artifact is promised instead',
+          renderComment(passing, { reportMissing: true, artifactName: 'tea' }).includes('The review wrote no report.') &&
+          !renderComment(passing, { reportMissing: true, artifactName: 'tea' }).includes('artifact'),
+        'a run that wrote no report says so and promises no artifact, named or not',
       );
       assert(
         publisher.clampBytes('🙂'.repeat(20_000), 65_535).length > 0 &&
@@ -7475,6 +7476,53 @@ async function runTests() {
           7,
         )) === 'abc',
         'a --head-sha flag outranks the event payload',
+      );
+
+      // ---- a tampered verdict file ----
+      const tampered = renderComment(
+        {
+          ...failing,
+          gateFailures: ['x'],
+          gatingViolations: { critical: '@octo-org/all <!-- x', high: 1 },
+          findings: [finding({ severity: `cc @octo-org/security <!-- ${'y'.repeat(70_000)}` })],
+        },
+        {},
+      );
+      assert(
+        !tampered.slice(tampered.indexOf('\n')).includes('<!--') && !/@(?!\u200B)/.test(tampered) && tampered.length < 60_100,
+        'an unknown severity and a non-numeric count are neutralized and bounded',
+        tampered.length,
+      );
+      const counted = renderComment(
+        { ...failing, findings: [], gateFailures: [], gatingViolations: { critical: '@octo-org/all <!-- x', high: 1 } },
+        { exitCode: 1 },
+      );
+      assert(counted.includes('Gating violations: 0 Critical / 1 High'), 'a count that is not an integer reads as zero', counted);
+      const huge70 = renderComment(
+        { ...failing, findings: Array.from({ length: 3 }, () => finding({ severity: 'z'.repeat(70_000) })) },
+        {},
+      );
+      assert(huge70.length <= 60_100, 'no verdict field can push the comment past the platform cap', huge70.length);
+      const brokenCause = renderComment(null, { exitCode: 3, cause: 'boom <!-- tea-test-review:codex --> @everyone' });
+      assert(
+        !brokenCause.slice(brokenCause.indexOf('\n')).includes('<!--') && !/@(?!\u200B)/.test(brokenCause),
+        'a failure cause is neutralized',
+        brokenCause,
+      );
+      assert(
+        !renderComment(null, { exitCode: 2, artifactName: 'tea-test-review' }).includes('artifact') &&
+          renderComment(null, { exitCode: 3, artifactName: 'tea-test-review', reportPath: 'r.md' }).includes('`tea-test-review` artifact'),
+        'a broken gate promises an artifact only when a report was written for it to carry',
+      );
+      assert(
+        publisher.findOwnComment([{ id: 1, body: `${buildCommentMarker('claude')}\nI control this`, user: { type: 'User' } }], 'claude', {
+          botOnly: true,
+        }) === null &&
+          publisher.findOwnComment([{ id: 1, body: `${buildCommentMarker('claude')}\nreal`, user: { type: 'Bot' } }], 'claude', {
+            botOnly: true,
+          }).id === 1 &&
+          publisher.findOwnComment([{ id: 1, body: `${buildCommentMarker('claude')}\nmine`, user: { type: 'User' } }], 'claude').id === 1,
+        'on GitHub Actions a comment a person wrote cannot be taken for ours; elsewhere the token owner may be a person',
       );
 
       // ---- tea-test-review render ----
@@ -7552,7 +7600,11 @@ async function runTests() {
           ['--verdict', path.join(renderDir, 'passing.json'), '--exit-code', '1'],
           'different runs',
         ],
-        ['exit 0 with no verdict at all', ['--verdict', path.join(renderDir, 'nope.json'), '--exit-code', '0'], 'different runs'],
+        [
+          'exit 0 with no verdict at all',
+          ['--verdict', path.join(renderDir, 'nope.json'), '--exit-code', '0'],
+          'says the run produced a verdict',
+        ],
         ['a malformed --head-sha', ['--verdict', renderVerdict, '--head-sha', 'zz'], '--head-sha must be a commit SHA'],
       ]) {
         const refused = runCli(['render', ...args]);
@@ -8301,6 +8353,88 @@ async function runTests() {
           relative.status === 0 && fs.existsSync(path.join(b2Repo, 'out', 'relative-comment.md')),
           'a relative --comment-out resolves against --project-root',
           relative.stderr,
+        );
+
+        // Refusals must not overwrite what they sit beside, cite stale files, or publish refused values.
+        const guardDir = path.join(tmpRoot, 'b2-guard');
+        fs.mkdirSync(guardDir, { recursive: true });
+        const keepReport = path.join(guardDir, 'test-review.md');
+        fs.writeFileSync(keepReport, 'REPORT');
+        const refusedCollision = await runCliAsync(
+          ['--project-root', guardDir, '--output', 'test-review.md', '--comment-out', 'test-review.md', '--agent', 'bogus'],
+          ghEnv('guard'),
+        );
+        assert(
+          refusedCollision.status === 2 && fs.readFileSync(keepReport, 'utf8') === 'REPORT',
+          'a refusal that comes before the collision check still leaves --output alone',
+          `status=${refusedCollision.status}`,
+        );
+        if (process.platform !== 'linux') {
+          const foldCollision = await runCliAsync(
+            ['--project-root', guardDir, '--output', 'R.md', '--comment-out', 'r.md', '--agent', 'bogus'],
+            ghEnv('fold'),
+          );
+          assert(
+            foldCollision.status === 2 && !fs.existsSync(path.join(guardDir, 'R.md')),
+            'a case-only difference counts as the same file on a case-insensitive filesystem',
+          );
+        }
+        const parseStale = path.join(guardDir, 'parse.md');
+        fs.writeFileSync(parseStale, 'STALE');
+        const parseRefused = await runCliAsync(['--project-root', guardDir, '--comment-out', parseStale, '--bogus-flag'], ghEnv('parse'));
+        assert(
+          parseRefused.status === 2 &&
+            fs.readFileSync(parseStale, 'utf8').includes('Broken gate') &&
+            !fs.readFileSync(parseStale, 'utf8').includes('STALE'),
+          'a flag the parser refuses still replaces an old comment file',
+          `status=${parseRefused.status} ${fs.readFileSync(parseStale, 'utf8')}`,
+        );
+        const staleReportComment = path.join(guardDir, 'stale-report.md');
+        const staleRefusal = await runCliAsync(
+          ['--project-root', guardDir, '--min-score', 'abc', '--comment-out', staleReportComment],
+          ghEnv('stalereport'),
+        );
+        assert(
+          staleRefusal.status === 2 &&
+            !fs.readFileSync(staleReportComment, 'utf8').includes('job workspace') &&
+            !fs.readFileSync(staleReportComment, 'utf8').includes('REPORT'),
+          'a failure before the agent starts does not point at a report an earlier run left behind',
+          fs.readFileSync(staleReportComment, 'utf8'),
+        );
+        const refusedValues = path.join(guardDir, 'refused-values.md');
+        const refusedRun = await runCliAsync(
+          ['--project-root', guardDir, '--run-url', 'javascript:alert(1)', '--head-sha', 'not-a-sha', '--comment-out', refusedValues],
+          ghEnv('refusedvalues'),
+        );
+        const refusedText = fs.readFileSync(refusedValues, 'utf8');
+        assert(
+          refusedRun.status === 2 &&
+            !refusedText.includes('](javascript') &&
+            !refusedText.includes('Workflow run') &&
+            !refusedText.includes('Head `'),
+          'a --run-url or --head-sha the CLI refused is not published in the comment',
+          refusedText,
+        );
+        const typoRoot = path.join(tmpRoot, 'b2-typo-comment.md');
+        const typoRun = await runCliAsync(
+          ['--project-root', path.join(tmpRoot, 'no', 'such', 'root'), '--comment-out', typoRoot, '--agent', 'bogus'],
+          ghEnv('typo'),
+        );
+        assert(
+          typoRun.status === 2 && fs.existsSync(typoRoot) && !fs.existsSync(path.join(tmpRoot, 'no')),
+          'a --project-root that does not exist creates nothing to hold the comment',
+          typoRun.stderr,
+        );
+        resetMock();
+        const unparsedComment = path.join(guardDir, 'unparsed.md');
+        const unparsed = await runCliAsync(
+          [...ghArgs('unparsed', ['--artifact-name', 'tea-test-review', '--comment-out', unparsedComment], { github: false })],
+          ghEnv('unparsed', { STUB_MODE: 'partial' }),
+        );
+        assert(
+          unparsed.status === 3 && fs.readFileSync(unparsedComment, 'utf8').includes('`tea-test-review` artifact'),
+          'an unparseable report was written, so a broken gate names the artifact that carries it',
+          fs.readFileSync(unparsedComment, 'utf8'),
         );
 
         // Misuse is refused up front.

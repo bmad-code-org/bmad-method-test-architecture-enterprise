@@ -53,8 +53,12 @@ function workflowRunUrl(env = process.env) {
  * matrix jobs) could both GET the same legacy comment before either PATCH lands and one would
  * silently overwrite the other's review.
  */
-function findOwnComment(comments, agent = 'claude') {
-  const list = (comments || []).filter((comment) => comment && typeof comment.body === 'string');
+function findOwnComment(comments, agent = 'claude', { botOnly = false } = {}) {
+  // With botOnly (a GitHub Actions run, where the comment is written by github-actions[bot]) a
+  // comment a person wrote cannot be ours, so nobody can capture the comment by typing the marker.
+  const list = (comments || []).filter(
+    (comment) => comment && typeof comment.body === 'string' && !(botOnly && comment.user?.type && comment.user.type !== 'Bot'),
+  );
   // The marker is the first line of the comment this CLI writes. A comment that merely contains it
   // (a quote, a reply, text a drive-by commenter typed) is not ours, and among several candidates
   // the one a bot account wrote wins over one a person wrote. The author is not checked beyond
@@ -70,7 +74,7 @@ function findOwnComment(comments, agent = 'claude') {
 }
 
 /** Create the comment, or update the one this CLI already owns on the pull request. */
-async function upsertComment(ctx, prNumber, body, agent = 'claude') {
+async function upsertComment(ctx, prNumber, body, agent = 'claude', options = {}) {
   const comments = [];
   for (let page = 1; page <= COMMENT_PAGES; page += 1) {
     const batch = await githubRequest({
@@ -83,7 +87,7 @@ async function upsertComment(ctx, prNumber, body, agent = 'claude') {
     if (batch.length < 100) break;
   }
 
-  const existing = findOwnComment(comments, agent);
+  const existing = findOwnComment(comments, agent, options);
   if (existing) {
     await githubRequest({
       ...ctx,
@@ -167,7 +171,16 @@ function resolveTarget(options = {}, env = process.env) {
   let missing = null;
   if (!token) missing = 'GITHUB_TOKEN is empty';
   else if (!repo) missing = 'there is no repository (set GITHUB_REPOSITORY or pass --repo owner/name)';
-  return { repo, prNumber, token, apiUrl, payload, missing, runUrl: options.runUrl || workflowRunUrl(env) };
+  return {
+    repo,
+    prNumber,
+    token,
+    apiUrl,
+    payload,
+    missing,
+    runUrl: options.runUrl || workflowRunUrl(env),
+    botOnly: env.GITHUB_ACTIONS === 'true',
+  };
 }
 
 /**
@@ -340,7 +353,7 @@ function createPublisher(config) {
       };
       if (active && comment) {
         try {
-          const note = await upsertComment(ctx, target.prNumber, renderComment(verdict, context), agent);
+          const note = await upsertComment(ctx, target.prNumber, renderComment(verdict, context), agent, { botOnly: target.botOnly });
           log(`${note} the review comment on #${target.prNumber}.`);
         } catch (error) {
           warn(

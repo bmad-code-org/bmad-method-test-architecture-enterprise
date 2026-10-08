@@ -105,7 +105,7 @@ function severityLabel(severity) {
   if (text === '') return 'Finding';
   // "P0 (Critical)" style labels reduce to the name the summary counts use.
   const named = SEVERITY_ORDER.find((name) => text.toLowerCase().includes(name));
-  return named ? named[0].toUpperCase() + named.slice(1) : text;
+  return named ? named[0].toUpperCase() + named.slice(1) : bounded(text, 40);
 }
 
 function findingLocation(finding) {
@@ -127,7 +127,7 @@ function gatingFindings(verdict) {
 }
 
 function countsLine(counts) {
-  const part = (name) => `${counts?.[name] ?? 0} ${name[0].toUpperCase()}${name.slice(1)}`;
+  const part = (name) => `${Number.isInteger(counts?.[name]) ? counts[name] : 0} ${name[0].toUpperCase()}${name.slice(1)}`;
   return SEVERITY_ORDER.map(part).join(' / ');
 }
 
@@ -153,8 +153,10 @@ function contradiction(verdict, exitCode) {
   if (verdict.promptOnly === true) return exitCode === 0 ? null : `a dry run (--agent none) exits 0, not ${exitCode}`;
   if (verdict.skipped === true) return null;
   const failing = Array.isArray(verdict.gateFailures) && verdict.gateFailures.length > 0 && verdict.waived !== true;
-  if (exitCode === 0 && failing) return 'exit code 0 says the gate passed, and the verdict carries unwaived gate failures';
-  if (exitCode === 1 && !failing) return 'exit code 1 says the gate failed, and the verdict carries no gate failure';
+  if (exitCode === 0 && failing)
+    return 'exit code 0 says the gate passed, and the verdict carries unwaived gate failures (they are from different runs)';
+  if (exitCode === 1 && !failing)
+    return 'exit code 1 says the gate failed, and the verdict carries no gate failure (they are from different runs)';
   return null;
 }
 
@@ -208,14 +210,16 @@ function reviewerLine(verdict) {
 }
 
 /** Where the full report lives, said only as far as the caller can vouch for it. */
-function reportLine({ runUrl, artifactName, reportPath, reportMissing }) {
-  const run = isNonEmptyString(runUrl) ? ` of [this workflow run](${plain(runUrl).replaceAll(')', '%29')})` : ' of this run';
-  if (isNonEmptyString(artifactName)) {
-    return `Report and verdict JSON: the ${code(artifactName)} artifact${run}, once its upload step has finished.`;
-  }
-  const link = isNonEmptyString(runUrl) ? `[Workflow run](${plain(runUrl).replaceAll(')', '%29')})` : null;
+function reportLine({ runUrl, artifactName, reportPath, reportMissing, evidence }) {
+  const safeUrl = isNonEmptyString(runUrl) ? plain(runUrl).replaceAll(')', '%29') : null;
+  const link = safeUrl ? `[Workflow run](${safeUrl})` : null;
+  // A run that wrote no report uploads no artifact, so there is nothing to promise.
   if (reportMissing === true) {
     return ['The review wrote no report.', link].filter(Boolean).join(' ');
+  }
+  if (isNonEmptyString(artifactName) && evidence !== false) {
+    const run = safeUrl ? ` of [this workflow run](${safeUrl})` : ' of this run';
+    return `Report and verdict JSON: the ${code(artifactName)} artifact${run}, once its upload step has finished.`;
   }
   if (isNonEmptyString(reportPath)) {
     const where = `The report is in the job workspace at ${code(reportPath)} and is deleted when the job ends unless the job uploads it.`;
@@ -340,7 +344,7 @@ function buildModel(verdict, context = {}) {
   }
 
   if (hasVerdict && state !== 'broken') model.reviewer = reviewerLine(v);
-  model.report = reportLine(context);
+  model.report = reportLine(state === 'broken' ? { ...context, evidence: isNonEmptyString(context.reportPath) } : context);
   model.agent = isNonEmptyString(context.agent) ? context.agent : isNonEmptyString(v.agent) ? v.agent : 'claude';
   return model;
 }
