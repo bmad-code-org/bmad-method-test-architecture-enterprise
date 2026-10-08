@@ -26,6 +26,20 @@ function declaresKnownDefect(probe) {
   );
 }
 
+/**
+ * Whether a clean control may fail its baseline under `--before-state`: it declares a known defect, and every oracle of its
+ * behavior decided (held or violated) with at least one violated. An oracle that could not decide stays a weakness of the
+ * evaluation, so a control with one still stops the run.
+ */
+function mayFailBaseline(probe, oracles) {
+  return (
+    declaresKnownDefect(probe) &&
+    oracles.length > 0 &&
+    oracles.every((oracle) => oracle.disposition === 'held' || oracle.disposition === 'violated') &&
+    oracles.some((oracle) => oracle.disposition === 'violated')
+  );
+}
+
 /** The sentence a before-state run, its `score` and its refusals share. */
 const NOT_A_BASELINE = 'a before state is never accepted as a baseline';
 
@@ -39,8 +53,8 @@ function beforeStateNote(beforeState) {
     `; BEFORE STATE: ${failing.length} clean control(s) recorded as known-failing (${failing.join(', ') || 'none'}), so ${NOT_A_BASELINE}` +
     (passing.length === 0
       ? ''
-      : `; ${passing.join(', ')} declare a known defect yet their baseline passed, so update the statement once the defect is fixed`)
+      : `; ${passing.join(', ')} ${passing.length === 1 ? 'declares' : 'declare'} a known defect yet ${passing.length === 1 ? 'its' : 'their'} baseline passed, so update the statement once the defect is fixed`)
   );
 }
 
-module.exports = { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect };
+module.exports = { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect, mayFailBaseline };

@@ -86,7 +86,7 @@ const AjvModule = require('ajv/dist/2020');
 const { AGENT_VERSION_CEILING_MS, observeAgentVersion } = require('../agent-adapters');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect } = require('./before-state');
+const { KNOWN_DEFECT_PREFIX, NOT_A_BASELINE, beforeStateNote, declaresKnownDefect, mayFailBaseline } = require('./before-state');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
@@ -405,9 +405,8 @@ async function qualifyCleanControls({
       regexMatchStepBudget: policy.regexMatchStepBudget,
     });
     const verdict = armVerdict(oracles);
-    // A before-state run lets a control that declares its defect fail; only oracles that violate count as that failure,
-    // since oracles that cannot decide are a weakness of the evaluation, not a measured defect.
-    const knownFailing = snapshot.beforeState && declaresKnownDefect(probe) && oracles.length > 0 && verdict === 'violated';
+    // A before-state run lets a control that declares its defect fail, provided every oracle decided and one violated.
+    const knownFailing = snapshot.beforeState && mayFailBaseline(probe, oracles);
     const evidenceFile = `qualification/${probe.probeId}/${knownFailing ? 'baseline-known-failing' : 'baseline-pass'}.json`;
     writer.writeJson(evidenceFile, {
       probeId: probe.probeId,
@@ -428,7 +427,7 @@ async function qualifyCleanControls({
                 snapshot.beforeState
                   ? `; --before-state lets a control fail only when its noKnownDefectStatement begins "${KNOWN_DEFECT_PREFIX}" and its oracles are violated`
                   : declaresKnownDefect(probe)
-                    ? '; its statement declares a known defect, so record the before state with --before-state'
+                    ? '; its statement declares a known defect, so record the before state with tea-evaluate run --before-state'
                     : ''
               }`,
       });
@@ -463,7 +462,11 @@ async function qualifyCleanControls({
     log(
       knownFailing
         ? `${file}: recorded as known-failing; its baseline does not pass, as its statement declares`
-        : `${file}: qualified; its baseline passed`,
+        : `${file}: qualified; its baseline passed${
+            declaresKnownDefect(probe)
+              ? `; its statement still declares a known defect, so update it: compare refuses a run whose clean control declares one${snapshot.beforeState ? '' : ', and --before-state records the starting point'}`
+              : ''
+          }`,
     );
     materialized.push(candidate);
   }
@@ -2087,7 +2090,7 @@ async function completeRun(
     message:
       mountsRefusal === ''
         ? sealedMessage
-        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.`,
+        : `${mountsRefusal} The ${trialSets.length} trial set(s) are sealed in runs/${invocationId}; tea-evaluate score --run ${invocationId} prints one reason per path.${beforeStateNote(run.beforeState)}`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.

@@ -9,8 +9,9 @@
  *
  *  - without the flag the run still exits 11 and names the flag; with the flag it exits 0 and marks `run.json`,
  *  - the flag over an evaluation that declares no known defect exits 64 before any workspace,
- *  - a control that does not declare its defect still exits 11 under the flag, and so does one whose oracles cannot decide,
- *  - `score` computes the state through eval-quality alone: P-001 scores `false-positive`, never a TeA-written verdict,
+ *  - a control that does not declare its defect still exits 11 under the flag, and an oracle that cannot decide keeps a declared control from failing (`mayFailBaseline`),
+ *  - the flag over a partition that holds no declaring control exits 64,
+ *  - `score` computes the state through eval-quality alone: P-001 scores `false-positive`,
  *  - `compare` and `compare --accept` refuse the run, also after its `run.json` mark is removed by hand,
  *  - a declared control whose baseline passes is recorded as `held` and named as a stale statement.
  */
@@ -19,6 +20,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { declaresKnownDefect, mayFailBaseline } = require('../cli/lib/evaluate/before-state');
 const { suite } = require('./lib/evaluate-story-121');
 
 const test = suite('tea-evaluate-before-state');
@@ -46,7 +48,7 @@ function main() {
     let result = test.cli(declared.folder, 'run', [], { ...declared.env, ...FAILING });
     assert.equal(result.status, 11, result.output);
     assert.match(result.output, /clean control's baseline does not pass/);
-    assert.match(result.output, /record the before state with --before-state/);
+    assert.match(result.output, /record the before state with tea-evaluate run --before-state/);
 
     // The before state.
     result = test.cli(declared.folder, 'run', ['--before-state'], { ...declared.env, ...FAILING });
@@ -108,6 +110,19 @@ function main() {
       'a refused flag made a run directory',
     );
 
+    // The flag counts only the controls of the selected partition.
+    const partitioned = test.project('held-out', ({ folder }) => {
+      const file = path.join(folder, 'probes', 'P-001.probe.json');
+      const probe = read(file);
+      probe.qualification.noKnownDefectStatement = KNOWN;
+      write(file, probe);
+      const manifest = path.join(folder, 'evaluation.json');
+      write(manifest, { ...read(manifest), heldOutProbes: ['P-002'] });
+    });
+    result = test.cli(partitioned.folder, 'run', ['--partition', 'held-out', '--before-state'], partitioned.env);
+    assert.equal(result.status, 64, result.output);
+    assert.match(result.output, /in the held-out partition; none does/);
+
     // A control that fails without declaring its defect is a real weakness under the flag.
     const mixed = test.project('mixed', ({ folder }) => {
       // P-001 declares its defect; P-003 is a second control that does not.
@@ -128,14 +143,49 @@ function main() {
     const stale = projectDeclaring('stale', KNOWN);
     result = test.cli(stale.folder, 'run', ['--before-state'], stale.env);
     assert.equal(result.status, 0, result.output);
-    assert.match(result.output, /P-001 declare a known defect yet their baseline passed/);
+    assert.match(result.output, /P-001 declares a known defect yet its baseline passed/);
     assert.equal(read(path.join(test.latest(stale.folder), 'run.json')).beforeState.controls[0].baseline, 'held');
+
+    // Without the flag a stale statement is named, and compare words its refusal for the control.
+    const unflagged = projectDeclaring('stale-unflagged', KNOWN);
+    result = test.cli(unflagged.folder, 'run', [], unflagged.env);
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /its statement still declares a known defect, so update it/);
+    const unflaggedRun = test.latest(unflagged.folder);
+    test.cli(unflagged.folder, 'score', ['--run', path.basename(unflaggedRun)], unflagged.env);
+    result = test.cli(unflagged.folder, 'compare', ['--accept']);
+    assert.equal(result.status, 10, result.output);
+    assert.match(result.output, /has a clean control that declares a known defect/);
+    assert.doesNotMatch(result.output, /is a before state/);
 
     // An ordinary run carries no mark, and its accept path is untouched.
     const ordinary = projectDeclaring('ordinary', 'No known defect at this revision.');
     result = test.cli(ordinary.folder, 'run', [], ordinary.env);
     assert.equal(result.status, 0, result.output);
     assert.equal('beforeState' in read(path.join(test.latest(ordinary.folder), 'run.json')), false);
+
+    // An oracle that cannot decide keeps a declared control from failing its baseline.
+    const probe = { qualification: { route: 'clean-control', noKnownDefectStatement: KNOWN } };
+    const held = { disposition: 'held' };
+    const violated = { disposition: 'violated' };
+    const undecided = { disposition: 'not-attempted' };
+    assert.equal(declaresKnownDefect({ qualification: { route: 'clean-control', noKnownDefectStatement: `  ${KNOWN}` } }), true);
+    assert.equal(
+      declaresKnownDefect({ qualification: { route: 'clean-control', noKnownDefectStatement: 'known defect at this revision: x' } }),
+      false,
+    );
+    assert.equal(mayFailBaseline(probe, [violated]), true);
+    assert.equal(mayFailBaseline(probe, [held, violated]), true);
+    assert.equal(mayFailBaseline(probe, [violated, undecided]), false);
+    assert.equal(mayFailBaseline(probe, [undecided]), false);
+    assert.equal(mayFailBaseline(probe, [held]), false);
+    assert.equal(mayFailBaseline(probe, []), false);
+    assert.equal(
+      mayFailBaseline({ qualification: { route: 'clean-control', noKnownDefectStatement: 'No known defect at this revision.' } }, [
+        violated,
+      ]),
+      false,
+    );
 
     process.stdout.write('Evaluate before-state runs passed.\n');
   } finally {

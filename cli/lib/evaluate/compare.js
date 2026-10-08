@@ -508,7 +508,10 @@ function resolveScoredRun(folder, invocationId) {
  */
 function beforeStateFinding({ runDirectory, record, index }) {
   if (record?.beforeState !== undefined) {
-    return finding('run.json', 'before-state', `records a before state; ${NOT_A_BASELINE}, and it has no baseline to compare with`);
+    return {
+      finding: finding('run.json', 'before-state', `records a before state; ${NOT_A_BASELINE}, and it has no baseline to compare with`),
+      message: 'is a before state',
+    };
   }
   for (const set of index.trialSets ?? []) {
     let probe;
@@ -519,11 +522,14 @@ function beforeStateFinding({ runDirectory, record, index }) {
       continue;
     }
     if (declaresKnownDefect(probe)) {
-      return finding(
-        set.probe,
-        'before-state',
-        `clean control ${probe.probeId} attests a known defect, so the run measures a before state and ${NOT_A_BASELINE}; once the defect is fixed, change its noKnownDefectStatement and run again`,
-      );
+      return {
+        finding: finding(
+          set.probe,
+          'before-state',
+          `clean control ${probe.probeId} attests a known defect, so ${NOT_A_BASELINE}; once the defect is fixed, change its noKnownDefectStatement and run again`,
+        ),
+        message: 'has a clean control that declares a known defect',
+      };
     }
   }
   return null;
@@ -1210,8 +1216,8 @@ async function runCompareCommand(folder, { run: invocationId, accept = false, lo
       return new CompareOutcome({
         exitCode: AUTHORING,
         runDirectory: resolved.runDirectory,
-        findings: [before],
-        message: `run ${path.basename(resolved.runDirectory)} is a before state; nothing was compared or written under ${BASELINE}/`,
+        findings: [before.finding],
+        message: `run ${path.basename(resolved.runDirectory)} ${before.message}; nothing was compared or written under ${BASELINE}/`,
       });
     }
     log(`${accept ? 'accepting' : 'comparing'} run ${path.basename(resolved.runDirectory)}`);

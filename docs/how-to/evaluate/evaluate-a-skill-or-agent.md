@@ -312,8 +312,9 @@ npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --b
 npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run <invocationId>
 ```
 
-`score` exits 2 and reads each known-failing control as `false-positive`; `eval-quality` computes that, and the summary lines say `BEFORE STATE`.
-The result is a measurement and never a baseline: `compare` and `compare --accept` exit 10 on it.
+`score` reads each known-failing control whose trials violate its oracles as `false-positive` and exits 2; `eval-quality` computes that, and the summary lines say `BEFORE STATE`.
+The flag covers clean controls only, so a seeded probe whose baseline the defect breaks still stops `preflight` with exit 11.
+The result is a measurement. `compare` and `compare --accept` exit 10 on it.
 After the fix, change the statement to `No known defect at this revision.`, run without the flag and accept that run.
 [The `run` reference](/docs/reference/tea-evaluate-cli.md#record-a-before-state) lists what changes under the flag.
 

@@ -59,7 +59,9 @@
  *   10  also compare: a run whose scores or members cannot be read as files the run wrote, a baseline holding a link
  *       or an entry that is not a regular file, or a baseline artifact that does not meet its schema; compare
  *       --accept: a run whose run.json says dirty: true, a probe with no evidence artifact, or a member a replay
- *       through score needs that is missing, a link or not a regular file (nothing is written under baseline/)
+ *       through score needs that is missing, a link or not a regular file (nothing is written under baseline/);
+ *       compare and compare --accept: a before state, a run.json that records beforeState or a sealed clean control
+ *       that declares a known defect
  *   10  also ci: a plan that fails its schema or its placement rules (a check with no non-blank reason, a trigger its
  *       tier does not use, a <evaluation-folder> left in a command or an evidence path, a preflight-live default that
  *       disagrees with the registry, evaluation.json tiers that differ from the plan's, an api-conformance check over
