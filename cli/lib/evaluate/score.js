@@ -120,6 +120,7 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
+const { beforeStateNote } = require('./before-state');
 const { digestScannedJson, loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { newInvocationId, readJson } = require('./preflight');
@@ -572,6 +573,8 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   const optedOutNote = optedOut
     ? '; the run opted out of file-system confinement (run.json records confinement "opt-out"), so its targets ran unconfined and could reach the evaluation folder'
     : '';
+  const beforeNote = beforeStateNote(located.record?.beforeState);
+  if (beforeNote !== '') log(beforeNote.slice(2));
   if (optedOut) log('the run opted out of file-system confinement: its targets ran unconfined and could reach the evaluation folder');
 
   const scoreInvocationId = newInvocationId();
@@ -627,6 +630,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       refused,
       refusedNote,
       optedOutNote,
+      beforeNote,
     });
   } finally {
     release();
@@ -1045,6 +1049,7 @@ async function scoreProbes({
   refused,
   refusedNote,
   optedOutNote,
+  beforeNote,
 }) {
   const validate = createArtifactValidator();
   const scores = [];
@@ -1162,7 +1167,7 @@ async function scoreProbes({
     scores,
     message: stageFailed
       ? `an eval-quality score or aggregate-strength call could not run, exited with a code the CLI does not document, staged an artifact that fails the copy check or disagrees with what this command persisted, or ran over inputs that changed or that its artifact does not reproduce; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
-      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}`,
+      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}${beforeNote}`,
   });
 }
 

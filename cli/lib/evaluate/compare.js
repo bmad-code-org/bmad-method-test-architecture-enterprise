@@ -131,6 +131,7 @@ const { baselineDigestFindings } = require('./baseline-digests');
 const { loadEngine } = require('./engine');
 const { createArtifactValidator } = require('./records');
 const { holdRunInputs, inputFindings, phaseSnapshotProblems, runDirectoryFor } = require('./score');
+const { NOT_A_BASELINE, declaresKnownDefect } = require('./before-state');
 const { regularFileBytes, scoreInputList } = require('./score-inputs');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -499,6 +500,33 @@ function resolveScoredRun(folder, invocationId) {
   if (index !== null && probes === null) findings.push(finding(TRIAL_SETS_NAME, 'run-file', 'does not name its trial sets by probe'));
   if (findings.length > 0) return { findings, runDirectory };
   return { runDirectory, record: located.record, index, probes, scoreId: invocations.at(-1) };
+}
+
+/**
+ * Why the run is a before state (`before-state.js`), or null: its `run.json` says so, or one of its sealed clean controls
+ * still attests a known defect, which keeps a `run.json` edited by hand from passing a before state off as a baseline.
+ */
+function beforeStateFinding({ runDirectory, record, index }) {
+  if (record?.beforeState !== undefined) {
+    return finding('run.json', 'before-state', `records a before state; ${NOT_A_BASELINE}, and it has no baseline to compare with`);
+  }
+  for (const set of index.trialSets ?? []) {
+    let probe;
+    try {
+      probe = JSON.parse(regularFileBytes(absolute(runDirectory, set.probe)).toString('utf8'));
+    } catch {
+      // A probe the run cannot read is the score-input checks' finding; this one only looks for the declaration.
+      continue;
+    }
+    if (declaresKnownDefect(probe)) {
+      return finding(
+        set.probe,
+        'before-state',
+        `clean control ${probe.probeId} attests a known defect, so the run measures a before state and ${NOT_A_BASELINE}; once the defect is fixed, change its noKnownDefectStatement and run again`,
+      );
+    }
+  }
+  return null;
 }
 
 /** The outcome that stops a command at a wiring or authoring problem of the run. */
@@ -1177,6 +1205,15 @@ async function runCompareCommand(folder, { run: invocationId, accept = false, lo
     }
     const resolved = resolveScoredRun(folder, invocationId);
     if (resolved.wiring !== undefined || resolved.findings !== undefined) return stopped(resolved);
+    const before = beforeStateFinding(resolved);
+    if (before !== null) {
+      return new CompareOutcome({
+        exitCode: AUTHORING,
+        runDirectory: resolved.runDirectory,
+        findings: [before],
+        message: `run ${path.basename(resolved.runDirectory)} is a before state; nothing was compared or written under ${BASELINE}/`,
+      });
+    }
     log(`${accept ? 'accepting' : 'comparing'} run ${path.basename(resolved.runDirectory)}`);
     const validate = createArtifactValidator();
     if (accept) return await acceptBaseline({ folder, resolved, validate, log });

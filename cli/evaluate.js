@@ -20,6 +20,9 @@
  *                                             gameability) `trials` times in fresh workspaces, judged by the
  *                                             deterministic evaluator and any rubric judge, sealed as one
  *                                             trial set per probe under runs/<invocationId>/
+ *                                             with --before-state, a clean control whose noKnownDefectStatement begins
+ *                                             "Known defect at this revision:" may fail its baseline; the run records a
+ *                                             before state that compare and compare --accept refuse
  *   tea-evaluate score --evaluation <path> [--run <invocationId>]
  *                                             eval-quality score once per probe over a completed run's trial sets
  *   tea-evaluate compare --evaluation <path> [--run <invocationId>] [--accept]
@@ -71,7 +74,8 @@
  *       artifact that does not meet its schema or does not agree with its run, before any engine call
  *   11  preflight and run: an evaluation weakness, a seeded probe whose baseline does not pass or whose mutated
  *       arm does not fail, a historical probe that does not fail before its fix or pass after it, a clean
- *       control whose baseline does not pass, or a gameability probe whose degenerate response the naive
+ *       control whose baseline does not pass (with --before-state, one that does not declare a known defect or whose
+ *       oracles cannot decide), or a gameability probe whose degenerate response the naive
  *       oracle rejects or the disciplined oracle accepts; run: a rubric judge whose calibration agreement is
  *       below judgeCalibration.minimumAgreement, or a sealed-brief agent whose agreement on an arm is below
  *       evaluatorQualification.minimumAgreement
@@ -102,6 +106,7 @@
  *   64  also preflight: no --partition over an evaluation whose evaluation.json declares a partitionPlan, since the
  *       command would derive the both view and launch the held-out request; the refusal names --partition and both
  *       values, and a folder with no partitionPlan preflights with no flag
+ *   64  also run: --before-state over an evaluation, or a partition of it, with no clean control that declares a known defect
  *   64  also digest --file: a path outside the folder, through a symbolic link, to a directory, to a file the folder
  *       does not hold or to something that is not a regular file, and --file with --calibration-inputs
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
@@ -246,6 +251,7 @@ function runCommand(options) {
     fromWorkingTree: options.fromWorkingTree === true,
     partition: options.partition,
     seed: options.seed,
+    beforeState: options.beforeState === true,
   });
 }
 
@@ -310,6 +316,10 @@ function buildProgram(run) {
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
     .option('--partition <name>', 'development or held-out; omitted runs both')
     .option('--seed <value>', 'seed matcher bindings and record it in run.json')
+    .option(
+      '--before-state',
+      'record a before state: a clean control whose noKnownDefectStatement begins "Known defect at this revision:" may fail its baseline; the run is never accepted as a baseline',
+    )
     .action((options) => run(runCommand, options));
   program
     .command('score')

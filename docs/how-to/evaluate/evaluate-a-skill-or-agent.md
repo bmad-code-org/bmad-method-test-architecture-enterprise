@@ -294,6 +294,29 @@ Repair the target, because declaring that path would hide the defect.
 Then run `check` and run the evaluation again.
 The reference describes both setups in [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the audit in [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement).
 
+## If Your Target Already Has Known Defects
+
+A clean control fails when the target has a defect, and `run` stops with exit 11 and `the clean control's baseline does not pass`.
+To record the starting point before you fix the target, declare each failing control in its probe and run with `--before-state`.
+Begin the control's `qualification.noKnownDefectStatement` with `Known defect at this revision:` and name the defect:
+
+```json
+{
+  "route": "clean-control",
+  "noKnownDefectStatement": "Known defect at this revision: the review ignores the type checker. This control records the before state."
+}
+```
+
+```bash
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --before-state
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run <invocationId>
+```
+
+`score` exits 2 and reads each known-failing control as `false-positive`; `eval-quality` computes that, and the summary lines say `BEFORE STATE`.
+The result is a measurement and never a baseline: `compare` and `compare --accept` exit 10 on it.
+After the fix, change the statement to `No known defect at this revision.`, run without the flag and accept that run.
+[The `run` reference](/docs/reference/tea-evaluate-cli.md#record-a-before-state) lists what changes under the flag.
+
 ## How You Know It Worked
 
 - `check` prints `has no authoring defects`
