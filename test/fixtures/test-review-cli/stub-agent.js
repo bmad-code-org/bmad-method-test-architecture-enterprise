@@ -27,6 +27,10 @@
  *   STUB_OLD_REPORT    stale-copy source: a report pre-placed with an old mtime
  *   STUB_LOCK_OUTPUT   when "1", make the report and its parent read-only after
  *                      writing so artifact replacement failure handling runs
+ *   STUB_COUNTER       path of a file counting this stub's invocations. With it, the
+ *                      first STUB_FIRST_ATTEMPTS (default 1) invocations run
+ *                      STUB_FIRST_MODE instead of STUB_MODE, so a test can fail an
+ *                      attempt and let the retry succeed.
  *   STUB_DELAY_MS      milliseconds to block before acting on STUB_MODE, so a
  *                      test can act on the CLI while its agent is running
  */
@@ -110,7 +114,13 @@ if (process.env.STUB_ASSERT_MODEL) {
 const delayMs = Number(process.env.STUB_DELAY_MS);
 if (delayMs > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
 
-const mode = process.env.STUB_MODE || 'approve';
+let mode = process.env.STUB_MODE || 'approve';
+if (process.env.STUB_COUNTER) {
+  const counterPath = process.env.STUB_COUNTER;
+  const invocation = (fs.existsSync(counterPath) ? Number(fs.readFileSync(counterPath, 'utf8')) : 0) + 1;
+  fs.writeFileSync(counterPath, String(invocation));
+  if (invocation <= Number(process.env.STUB_FIRST_ATTEMPTS || 1)) mode = process.env.STUB_FIRST_MODE || mode;
+}
 
 if (mode === 'fail') {
   console.error('stub-agent: simulated agent failure (STUB_MODE=fail)');

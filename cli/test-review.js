@@ -2,7 +2,8 @@
 /**
  * tea-test-review — headless runner for the bmad-testarch-test-review skill.
  *
- * Locates the installed skill in a consuming project, splits the PR diff into
+ * Runs the review skill shipped in this package (or, with --project-skill, the
+ * copy a consuming project vendored), splits the PR diff into
  * the test files to review and the rest of the change to read as context,
  * builds a headless prompt that bypasses the skill's interactive menu, spawns
  * the agent with the prompt on stdin (optionally under filesystem isolation),
@@ -35,7 +36,9 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { Command } = require('commander');
 
-const { resolveSkill } = require('./lib/resolve-skill');
+const { resolveSkill, resolvePackagedSkill } = require('./lib/resolve-skill');
+const { assertAgentReady } = require('./lib/agent-presence');
+const { resolvePrBaseRef, parseRepository, tokenFromEnv } = require('./lib/github-api');
 const {
   getChangedFiles,
   getChangedTestFiles,
@@ -372,7 +375,7 @@ function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
   return `${report.trimEnd()}\n${lines.join('\n')}\n`;
 }
 
-function main() {
+async function main() {
   const program = new Command();
 
   program
@@ -381,7 +384,20 @@ function main() {
     .description(
       "Headless runner for the bmad-testarch-test-review skill: scopes the review to the PR's changed test files, reads the rest of the diff as context, and emits a JSON verdict with CI-friendly exit codes.",
     )
-    .option('--base <ref>', 'git base ref used to diff changed files', 'origin/main')
+    .option(
+      '--base <ref>',
+      'git base ref used to diff changed files (default: origin/main, or the pull request base with --pr)',
+      'origin/main',
+    )
+    .option(
+      '--pr <number>',
+      'pull request number; when --base is not given, resolve its base branch through the GitHub API (needs GITHUB_TOKEN and GITHUB_REPOSITORY or --repo; GITHUB_API_URL for GitHub Enterprise). A failed lookup exits 2; --base bypasses it',
+    )
+    .option('--repo <owner/name>', 'repository for --pr lookups (default: GITHUB_REPOSITORY)')
+    .option(
+      '--retries <n>',
+      'extra attempts after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; exit 1 and 2 are never retried (default: 1 when CI is set, else 0)',
+    )
     .option(
       '--files <list>',
       'file list used verbatim as the review set; repeatable and comma-separated (skips git diff and the test-file filter)',
@@ -406,7 +422,11 @@ function main() {
     .option('--project-root <dir>', 'consuming project root', process.cwd())
     .option(
       '--skill-root <path>',
-      'explicit trusted skill root (directory containing SKILL.md); skips the install probe. When it resolves outside --project-root the control-plane guard is moot: the PR diff cannot touch a reviewer that lives outside the checkout',
+      'explicit trusted skill root (directory containing SKILL.md); skips both the packaged skill and the install probe. When it resolves outside --project-root the control-plane guard is moot: the PR diff cannot touch a reviewer that lives outside the checkout',
+    )
+    .option(
+      '--project-skill',
+      'review with the skill installed in --project-root (probes .claude/skills, .agents/skills, skills, _bmad) instead of the one shipped in this package; the control-plane guard applies to it, because the PR under review can edit that copy',
     )
     .option('--output <file>', 'report path the agent must write', 'test-review.md')
     .option('--json <file>', 'also write the verdict JSON to this file')
@@ -598,6 +618,30 @@ function main() {
     throw error;
   }
 
+  let retries = process.env.CI ? 1 : 0;
+  if (options.retries !== undefined) {
+    if (!/^\d+$/.test(String(options.retries).trim())) {
+      fail(EXIT.ENV_ERROR, `--retries must be a non-negative integer; got "${options.retries}".`);
+    }
+    retries = Number.parseInt(options.retries, 10);
+  }
+  let prNumber = null;
+  if (options.pr !== undefined) {
+    if (!/^[1-9]\d*$/.test(String(options.pr).trim())) {
+      fail(EXIT.ENV_ERROR, `--pr must be a pull request number; got "${options.pr}".`);
+    }
+    prNumber = Number.parseInt(options.pr, 10);
+    if (options.files.length > 0) {
+      fail(EXIT.ENV_ERROR, '--pr resolves the git base ref, and --files skips git; drop one of the two.');
+    }
+  }
+  if (options.repo !== undefined && parseRepository(options.repo) === null) {
+    fail(EXIT.ENV_ERROR, `--repo must be owner/name; got "${options.repo}".`);
+  }
+  if (options.projectSkill && options.skillRoot !== undefined) {
+    fail(EXIT.ENV_ERROR, '--project-skill and --skill-root both name the skill; drop one of the two.');
+  }
+
   const projectRoot = path.resolve(options.projectRoot);
   const outputPath = path.resolve(projectRoot, options.output);
   const jsonPath = options.json ? path.resolve(projectRoot, options.json) : null;
@@ -605,12 +649,15 @@ function main() {
     fail(EXIT.ENV_ERROR, '--output and --json must resolve to different files.');
   }
 
-  // An explicit --skill-root is the trusted source of truth: it bypasses the
-  // install probe entirely and is validated directly.
+  // An explicit --skill-root is the trusted source of truth: it bypasses every
+  // probe and is validated directly. Without one the skill is the copy shipped
+  // beside this CLI, so the two are one version and the pull request under
+  // review cannot edit its own reviewer. --project-skill opts into the project's
+  // vendored copy, which the control-plane guard below then protects.
   let skillRoot;
   if (options.skillRoot === undefined) {
     try {
-      skillRoot = resolveSkill(projectRoot);
+      skillRoot = options.projectSkill ? resolveSkill(projectRoot) : resolvePackagedSkill();
     } catch (error) {
       if (error.code === 'SKILL_MISSING') {
         fail(EXIT.ENV_ERROR, error.message);
@@ -700,6 +747,31 @@ function main() {
       '--gate-on introduced requires git diff evidence; --files skips git. Drop --files and use --base, or use --gate-on all.',
     );
   }
+  // --base wins; otherwise --pr asks the GitHub API which branch the pull request
+  // merges into (GITHUB_BASE_REF answers without a request on a pull_request run).
+  // Guessing origin/main there would review test files the pull request never touched.
+  let baseRef = options.base;
+  if (prNumber !== null && program.getOptionValueSource('base') !== 'cli') {
+    const stated = String(process.env.GITHUB_BASE_REF || '').trim();
+    if (stated === '') {
+      try {
+        baseRef = await resolvePrBaseRef({
+          prNumber,
+          repo: parseRepository(options.repo ?? process.env.GITHUB_REPOSITORY),
+          token: tokenFromEnv(),
+          apiUrl: process.env.GITHUB_API_URL,
+        });
+      } catch (error) {
+        if (error.code === 'BASE_LOOKUP_FAILED') {
+          fail(EXIT.ENV_ERROR, error.message);
+        }
+        throw error;
+      }
+    } else {
+      baseRef = `origin/${stated}`;
+    }
+    console.error(`tea-test-review: base ref for #${prNumber}: ${baseRef}`);
+  }
   let allChangedFiles = null;
   let changedTestFiles;
   let contextFiles = [];
@@ -714,9 +786,9 @@ function main() {
     if (filesProvided) {
       changedTestFiles = getChangedTestFiles({ files: options.files, projectRoot });
     } else {
-      allChangedFiles = getChangedFiles({ base: options.base, projectRoot });
+      allChangedFiles = getChangedFiles({ base: baseRef, projectRoot });
       changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
-      diffEvidence = getDiffEvidence({ base: options.base, projectRoot, files: changedTestFiles });
+      diffEvidence = getDiffEvidence({ base: baseRef, projectRoot, files: changedTestFiles });
       ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
       unscorableTestArtifacts = getUnscorableTestArtifacts(allChangedFiles);
     }
@@ -730,7 +802,7 @@ function main() {
   const reviewProvenance = buildReviewProvenance({
     projectRoot,
     skillRoot,
-    baseRef: options.base,
+    baseRef,
     filesProvided,
     modelIdentifier: resolvedModel,
     gateMode: gateOn,
@@ -761,7 +833,7 @@ function main() {
     let deletedTestFiles = [];
     if (!filesProvided) {
       try {
-        deletedTestFiles = getDeletedTestFiles({ base: options.base, projectRoot });
+        deletedTestFiles = getDeletedTestFiles({ base: baseRef, projectRoot });
       } catch (error) {
         if (error.code === 'GIT_DIFF_FAILED' || error.code === 'BASE_UNRESOLVABLE') {
           fail(EXIT.ENV_ERROR, error.message);
@@ -907,6 +979,18 @@ function main() {
     }
   }
 
+  // A missing or logged-out agent CLI is an environment error with a fix, so it
+  // is named here, before any attempt is paid for and where --retries cannot
+  // repeat it. Installing and logging in the agent stays the caller's job.
+  try {
+    assertAgentReady({ agent: options.agent, agentCommand: options.agentCmd, envPass: options.envPass, cwd: projectRoot });
+  } catch (error) {
+    if (error.code === 'AGENT_UNAVAILABLE') {
+      fail(EXIT.ENV_ERROR, error.message);
+    }
+    throw error;
+  }
+
   // Isolation defaults on in CI unless explicitly overridden either way.
   const isolateExplicit = program.getOptionValueSource('isolate') === 'cli';
   const isolateRequested = isolateExplicit ? options.isolate : Boolean(process.env.CI);
@@ -930,242 +1014,259 @@ function main() {
     }
   }
 
-  // Never parse a leftover report or verdict from a previous run: delete both
-  // first, then require artifacts newer than this run's start time.
-  fs.rmSync(outputPath, { force: true });
-  if (jsonPath) {
-    fs.rmSync(jsonPath, { force: true });
-  }
-  const runStart = Date.now();
-
-  const copiedReportTemporaryPath = reportTemporaryPath(outputPath);
-  const normalizedReportTemporaryPath = reportTemporaryPath(outputPath);
-  let redirectDir = null;
-  let gateFailures = [];
-
-  // cli/lib/heartbeat.js prints progress while runAgent's spawnSync blocks
-  // this process (see that file for why it is a process of its own, and how
-  // it ends when this one is gone). TEA_TEST_REVIEW_HEARTBEAT_SECONDS
-  // shortens the 15 s interval so the CLI's tests can watch it within a few
-  // seconds; a value outside the heartbeat's accepted range falls back to 15.
-  const heartbeatSeconds = heartbeatSecondsFrom(process.env);
-  const startHeartbeat = () => {
-    console.error(`tea-test-review: agent running (${options.agent}, model ${resolvedModel})...`);
-    const heartbeat = spawn(process.execPath, [HEARTBEAT_SCRIPT, String(process.pid), String(heartbeatSeconds)], {
-      stdio: ['ignore', 'ignore', 'inherit'],
-    });
-    // Cosmetic (progress dots for a long blocking spawnSync call): a spawn
-    // failure here must never surface as an uncaught 'error' event and take
-    // the real review down with it.
-    heartbeat.on('error', () => {});
-    heartbeat.unref();
-    return () => heartbeat.kill();
-  };
-
-  // Under isolation the agent writes into a fresh tmpdir. Artifact processing
-  // happens after withIsolation restores the project, so an atomic rename never
-  // needs a project directory to be writable while the agent is running.
-  if (isolationActive) {
-    redirectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-review-'));
-  }
-  const agentOutputPath = redirectDir ? path.join(redirectDir, 'test-review.md') : outputPath;
-  const prompt = buildPrompt({
-    skillRoot,
-    files: changedTestFiles,
-    outputPath: agentOutputPath,
-    scope: options.scope,
-    testDir: options.testDir,
-    teaConfig,
-    installedPackages,
-    contextFiles,
-    contextBasis,
-    focus: options.focus,
-    unscorableTestArtifacts,
-    forcedUnscorableCandidates,
-    conventionBaseline,
-    runId,
-  });
-
-  const executeAgent = ({ agentCwd, spawnPrefix }) => {
-    const stopHeartbeat = startHeartbeat();
-    let agentResult;
-    try {
-      agentResult = runAgent(prompt, {
-        agent: options.agent,
-        agentCommand: options.agentCmd,
-        agentArgs: options.agentArg,
-        model: options.model,
-        timeout: timeoutMs,
-        cwd: agentCwd,
-        envPass: options.envPass,
-        spawnPrefix,
-      });
-    } finally {
-      stopHeartbeat();
-    }
-
-    if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
-      printMissingReportDiagnostics(agentResult);
-      const error = new Error(
-        `Agent finished but no fresh report was written to ${agentOutputPath}; refusing to parse a stale or missing report.`,
-      );
-      error.code = 'REPORT_MISSING';
-      throw error;
-    }
-  };
-
-  const processReport = () => {
-    // The report is copied back even when the verdict fails or parsing fails;
-    // on agent failure nothing was produced and nothing is copied.
-    if (redirectDir) {
-      copyReportArtifact(agentOutputPath, outputPath, copiedReportTemporaryPath);
-    }
-
-    const rawReport = fs.readFileSync(agentOutputPath, 'utf8');
-    let parsed;
-    try {
-      parsed = parseReport(rawReport, {
-        reviewedFiles: changedTestFiles,
-        contextFiles,
-        contextBasis,
-        unscorableTestArtifacts,
-        conventionBaseline,
-        registryRowSeverities,
-      });
-    } catch (error) {
-      if (error.code === 'REPORT_UNPARSEABLE') {
-        const wrapped = new Error(`${error.message} (report: ${outputPath})`);
-        wrapped.code = 'REPORT_UNPARSEABLE';
-        throw wrapped;
-      }
-      throw error;
-    }
-
-    const normalizedReport = normalizeReportScore(rawReport, parsed);
-    writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
-    if (parsed.reportedQualityScore !== undefined) {
-      console.error(
-        `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to effective score ${parsed.qualityScore} ` +
-          `(raw deduction score ${parsed.rawQualityScore}; cap ${parsed.scoreCap}).`,
-      );
-    }
-    // Loudly, because it is the gate that moved. The agent's recommendation is a
-    // free-text field; the one the gate acts on is now computed from the counts, so a
-    // substitution here means the report would have let something through (or blocked
-    // something) that its own findings do not support.
-    if (parsed.reportedRecommendation !== undefined) {
-      console.error(
-        `tea-test-review: normalized agent Recommendation "${parsed.reportedRecommendation}" to "${parsed.recommendation}", ` +
-          `required by ${parsed.violations.critical} Critical / ${parsed.violations.high} High / ` +
-          `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
-      );
-    }
-    const allFindingsRecommendation = parsed.recommendation;
-    parsed.findings = applyFindingProvenance(parsed.findings, diffEvidence, gateOn);
-    const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
-    const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
-    const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
-    const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
-    const gatingRecommendation = deriveRecommendation(gatingViolations, gatingQualityScore);
-    const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore, advisoryFindings.length);
-    if (gateOn === 'introduced') {
-      parsed.recommendation = gatingRecommendation;
-      parsed.verdictRule = gatingVerdictRule;
-      const currentReport = fs.readFileSync(outputPath, 'utf8');
-      writeReportArtifact(
-        outputPath,
-        normalizedReportTemporaryPath,
-        appendDeltaAdvisory(currentReport, parsed.findings, gatingRecommendation, gatingQualityScore),
-      );
-    }
-    const gated = { ...parsed, gatingQualityScore, gatingViolations };
-    gateFailures = evaluateGates(gated);
-
-    // The verdict JSON files manifest is the report's own Reviewed Files
-    // section — what the agent actually reviewed — never the input list.
-    // agent/model travel with it so a stored verdict says what produced it:
-    // a score is only comparable against another score from the same reviewer.
-    // parsed.findings rides along for the same reason: violations alone is four
-    // severity counts, so a consumer that wants to know WHICH defects were found
-    // had to re-parse the markdown report to learn it.
-    const verdictPayload = {
-      report: path.relative(projectRoot, outputPath),
-      files: parsed.reviewedFiles,
-      agent: options.agent,
-      model: resolvedModel,
-      gateOn,
-      gatingQualityScore,
-      gatingViolations,
-      reviewProvenance,
-      ...parsed,
-    };
-    if (allFindingsRecommendation !== gatingRecommendation) {
-      verdictPayload.allFindingsRecommendation = allFindingsRecommendation;
-    }
-    // Also CLI-computed, so a consumer reading only the verdict learns that a
-    // changed test artifact went unscored. parseReport separately refuses a
-    // report that dropped any of these from its disclosure section.
-    if (unscorableTestArtifacts.length > 0) {
-      verdictPayload.unscorableTestArtifacts = unscorableTestArtifacts;
-    }
-    if (gateFailures.length > 0) {
-      verdictPayload.gateFailures = gateFailures;
-    }
-    const finalPayload = assertDeclaredKeys(applyWaiver(verdictPayload, gateFailures.length > 0), VERDICT_KEYS, 'verdict');
-    console.log(JSON.stringify(finalPayload, null, 2));
-
+  // One attempt: a fresh report, verdict, run id and isolation directory each
+  // time, so a retry never inherits anything from the attempt that failed.
+  const attemptReview = () => {
+    // Never parse a leftover report or verdict from a previous run: delete both
+    // first, then require artifacts newer than this run's start time.
+    fs.rmSync(outputPath, { force: true });
     if (jsonPath) {
-      // No freshness check here, unlike the report: the CLI is the only writer of
-      // the verdict JSON and writeJsonFile already fails closed on a write error,
-      // so a stale verdict is not reachable. The pre-run rm still applies, so a
-      // failed run leaves no previous verdict behind.
-      writeJsonFile(jsonPath, finalPayload);
+      fs.rmSync(jsonPath, { force: true });
     }
-  };
+    const runStart = Date.now();
 
-  const cleanupRunArtifacts = () => {
-    for (const temporaryPath of [copiedReportTemporaryPath, normalizedReportTemporaryPath]) {
-      try {
-        fs.rmSync(temporaryPath, { force: true });
-      } catch (error) {
-        console.error(`tea-test-review WARNING: failed to remove temporary report ${temporaryPath}: ${error.message}`);
-      }
-    }
-    if (redirectDir) {
-      try {
-        fs.rmSync(redirectDir, { recursive: true, force: true });
-      } catch (error) {
-        console.error(`tea-test-review WARNING: failed to remove temporary directory ${redirectDir}: ${error.message}`);
-      }
-      redirectDir = null;
-    }
-  };
+    const copiedReportTemporaryPath = reportTemporaryPath(outputPath);
+    const normalizedReportTemporaryPath = reportTemporaryPath(outputPath);
+    let redirectDir = null;
+    let gateFailures = [];
 
-  try {
+    // cli/lib/heartbeat.js prints progress while runAgent's spawnSync blocks
+    // this process (see that file for why it is a process of its own, and how
+    // it ends when this one is gone). TEA_TEST_REVIEW_HEARTBEAT_SECONDS
+    // shortens the 15 s interval so the CLI's tests can watch it within a few
+    // seconds; a value outside the heartbeat's accepted range falls back to 15.
+    const heartbeatSeconds = heartbeatSecondsFrom(process.env);
+    const startHeartbeat = () => {
+      console.error(`tea-test-review: agent running (${options.agent}, model ${resolvedModel})...`);
+      const heartbeat = spawn(process.execPath, [HEARTBEAT_SCRIPT, String(process.pid), String(heartbeatSeconds)], {
+        stdio: ['ignore', 'ignore', 'inherit'],
+      });
+      // Cosmetic (progress dots for a long blocking spawnSync call): a spawn
+      // failure here must never surface as an uncaught 'error' event and take
+      // the real review down with it.
+      heartbeat.on('error', () => {});
+      heartbeat.unref();
+      return () => heartbeat.kill();
+    };
+
+    // Under isolation the agent writes into a fresh tmpdir. Artifact processing
+    // happens after withIsolation restores the project, so an atomic rename never
+    // needs a project directory to be writable while the agent is running.
     if (isolationActive) {
-      withIsolation(projectRoot, [], executeAgent);
-    } else {
-      executeAgent({ agentCwd: projectRoot, spawnPrefix: [] });
+      redirectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-review-'));
     }
-    processReport();
-  } catch (error) {
-    if (
-      error.code === 'AGENT_FAILED' ||
-      error.code === 'AGENT_NOT_FOUND' ||
-      error.code === 'REPORT_MISSING' ||
-      error.code === 'REPORT_UNPARSEABLE' ||
-      error.code === 'REPORT_ARTIFACT'
-    ) {
+    const agentOutputPath = redirectDir ? path.join(redirectDir, 'test-review.md') : outputPath;
+    const prompt = buildPrompt({
+      skillRoot,
+      files: changedTestFiles,
+      outputPath: agentOutputPath,
+      scope: options.scope,
+      testDir: options.testDir,
+      teaConfig,
+      installedPackages,
+      contextFiles,
+      contextBasis,
+      focus: options.focus,
+      unscorableTestArtifacts,
+      forcedUnscorableCandidates,
+      conventionBaseline,
+      runId: randomUUID(),
+    });
+
+    const executeAgent = ({ agentCwd, spawnPrefix }) => {
+      const stopHeartbeat = startHeartbeat();
+      let agentResult;
+      try {
+        agentResult = runAgent(prompt, {
+          agent: options.agent,
+          agentCommand: options.agentCmd,
+          agentArgs: options.agentArg,
+          model: options.model,
+          timeout: timeoutMs,
+          cwd: agentCwd,
+          envPass: options.envPass,
+          spawnPrefix,
+        });
+      } finally {
+        stopHeartbeat();
+      }
+
+      if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
+        printMissingReportDiagnostics(agentResult);
+        const error = new Error(
+          `Agent finished but no fresh report was written to ${agentOutputPath}; refusing to parse a stale or missing report.`,
+        );
+        error.code = 'REPORT_MISSING';
+        throw error;
+      }
+    };
+
+    const processReport = () => {
+      // The report is copied back even when the verdict fails or parsing fails;
+      // on agent failure nothing was produced and nothing is copied.
+      if (redirectDir) {
+        copyReportArtifact(agentOutputPath, outputPath, copiedReportTemporaryPath);
+      }
+
+      const rawReport = fs.readFileSync(agentOutputPath, 'utf8');
+      let parsed;
+      try {
+        parsed = parseReport(rawReport, {
+          reviewedFiles: changedTestFiles,
+          contextFiles,
+          contextBasis,
+          unscorableTestArtifacts,
+          conventionBaseline,
+          registryRowSeverities,
+        });
+      } catch (error) {
+        if (error.code === 'REPORT_UNPARSEABLE') {
+          const wrapped = new Error(`${error.message} (report: ${outputPath})`);
+          wrapped.code = 'REPORT_UNPARSEABLE';
+          throw wrapped;
+        }
+        throw error;
+      }
+
+      const normalizedReport = normalizeReportScore(rawReport, parsed);
+      writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
+      if (parsed.reportedQualityScore !== undefined) {
+        console.error(
+          `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to effective score ${parsed.qualityScore} ` +
+            `(raw deduction score ${parsed.rawQualityScore}; cap ${parsed.scoreCap}).`,
+        );
+      }
+      // Loudly, because it is the gate that moved. The agent's recommendation is a
+      // free-text field; the one the gate acts on is now computed from the counts, so a
+      // substitution here means the report would have let something through (or blocked
+      // something) that its own findings do not support.
+      if (parsed.reportedRecommendation !== undefined) {
+        console.error(
+          `tea-test-review: normalized agent Recommendation "${parsed.reportedRecommendation}" to "${parsed.recommendation}", ` +
+            `required by ${parsed.violations.critical} Critical / ${parsed.violations.high} High / ` +
+            `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
+        );
+      }
+      const allFindingsRecommendation = parsed.recommendation;
+      parsed.findings = applyFindingProvenance(parsed.findings, diffEvidence, gateOn);
+      const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
+      const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
+      const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
+      const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
+      const gatingRecommendation = deriveRecommendation(gatingViolations, gatingQualityScore);
+      const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore, advisoryFindings.length);
+      if (gateOn === 'introduced') {
+        parsed.recommendation = gatingRecommendation;
+        parsed.verdictRule = gatingVerdictRule;
+        const currentReport = fs.readFileSync(outputPath, 'utf8');
+        writeReportArtifact(
+          outputPath,
+          normalizedReportTemporaryPath,
+          appendDeltaAdvisory(currentReport, parsed.findings, gatingRecommendation, gatingQualityScore),
+        );
+      }
+      const gated = { ...parsed, gatingQualityScore, gatingViolations };
+      gateFailures = evaluateGates(gated);
+
+      // The verdict JSON files manifest is the report's own Reviewed Files
+      // section — what the agent actually reviewed — never the input list.
+      // agent/model travel with it so a stored verdict says what produced it:
+      // a score is only comparable against another score from the same reviewer.
+      // parsed.findings rides along for the same reason: violations alone is four
+      // severity counts, so a consumer that wants to know WHICH defects were found
+      // had to re-parse the markdown report to learn it.
+      const verdictPayload = {
+        report: path.relative(projectRoot, outputPath),
+        files: parsed.reviewedFiles,
+        agent: options.agent,
+        model: resolvedModel,
+        gateOn,
+        gatingQualityScore,
+        gatingViolations,
+        reviewProvenance,
+        ...parsed,
+      };
+      if (allFindingsRecommendation !== gatingRecommendation) {
+        verdictPayload.allFindingsRecommendation = allFindingsRecommendation;
+      }
+      // Also CLI-computed, so a consumer reading only the verdict learns that a
+      // changed test artifact went unscored. parseReport separately refuses a
+      // report that dropped any of these from its disclosure section.
+      if (unscorableTestArtifacts.length > 0) {
+        verdictPayload.unscorableTestArtifacts = unscorableTestArtifacts;
+      }
+      if (gateFailures.length > 0) {
+        verdictPayload.gateFailures = gateFailures;
+      }
+      const finalPayload = assertDeclaredKeys(applyWaiver(verdictPayload, gateFailures.length > 0), VERDICT_KEYS, 'verdict');
+      console.log(JSON.stringify(finalPayload, null, 2));
+
+      if (jsonPath) {
+        // No freshness check here, unlike the report: the CLI is the only writer of
+        // the verdict JSON and writeJsonFile already fails closed on a write error,
+        // so a stale verdict is not reachable. The pre-run rm still applies, so a
+        // failed run leaves no previous verdict behind.
+        writeJsonFile(jsonPath, finalPayload);
+      }
+    };
+
+    const cleanupRunArtifacts = () => {
+      for (const temporaryPath of [copiedReportTemporaryPath, normalizedReportTemporaryPath]) {
+        try {
+          fs.rmSync(temporaryPath, { force: true });
+        } catch (error) {
+          console.error(`tea-test-review WARNING: failed to remove temporary report ${temporaryPath}: ${error.message}`);
+        }
+      }
+      if (redirectDir) {
+        try {
+          fs.rmSync(redirectDir, { recursive: true, force: true });
+        } catch (error) {
+          console.error(`tea-test-review WARNING: failed to remove temporary directory ${redirectDir}: ${error.message}`);
+        }
+        redirectDir = null;
+      }
+    };
+
+    try {
+      if (isolationActive) {
+        withIsolation(projectRoot, [], executeAgent);
+      } else {
+        executeAgent({ agentCwd: projectRoot, spawnPrefix: [] });
+      }
+      processReport();
+      return gateFailures;
+    } finally {
       cleanupRunArtifacts();
-      fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
     }
-    if (error.code === 'ISOLATION_ERROR') {
-      cleanupRunArtifacts();
-      fail(EXIT.ENV_ERROR, error.message);
+  };
+
+  // Exit 3 is the only retried outcome: an agent, report, or parse failure can be
+  // transient, while a verdict (1) or an environment error (2) will repeat itself.
+  let gateFailures;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      gateFailures = attemptReview();
+      break;
+    } catch (error) {
+      if (
+        error.code === 'AGENT_FAILED' ||
+        error.code === 'REPORT_MISSING' ||
+        error.code === 'REPORT_UNPARSEABLE' ||
+        error.code === 'REPORT_ARTIFACT'
+      ) {
+        if (attempt < retries) {
+          console.error(`tea-test-review: ${error.message}`);
+          console.error(`tea-test-review: attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`);
+          continue;
+        }
+        fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
+      }
+      if (error.code === 'ISOLATION_ERROR' || error.code === 'AGENT_NOT_FOUND') {
+        fail(EXIT.ENV_ERROR, error.message);
+      }
+      throw error;
     }
-    throw error;
-  } finally {
-    cleanupRunArtifacts();
   }
 
   for (const failure of gateFailures) {
@@ -1177,13 +1278,11 @@ function main() {
 // Guarded so tools/generate-contracts.js can read VERDICT_KEYS without running a
 // review; this file is only ever executed as the `tea-test-review` bin.
 if (require.main === module) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     // Exit code 1 is reserved strictly for a failing review verdict; anything
     // unexpected reaching here is an agent/runner failure.
     fail(EXIT.AGENT_OR_PARSE_ERROR, error && error.message ? error.message : String(error));
-  }
+  });
 }
 
 module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom };

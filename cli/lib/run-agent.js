@@ -457,4 +457,4 @@ async function runAgentAsync(prompt, options = {}) {
   }
 }
 
-module.exports = { runAgent, runAgentAsync, runSupervised, buildMinimalEnv };
+module.exports = { runAgent, runAgentAsync, runSupervised, buildMinimalEnv, executableFound };

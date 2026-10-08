@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-test-review` runs the same in any CI, without the GitHub Action's workarounds.
+  The review skill now resolves from the CLI's own package by default, so the skill and the CLI are one version and a pull request cannot edit the reviewer that judges it. `--project-skill` opts into the copy a project vendored, and the control-plane guard still stops a diff that edits it. `--skill-root` is unchanged.
+  `--retries <n>` repeats a run after an agent, parse, or report-artifact failure (exit 3), clearing the report and verdict between attempts; the default is 1 when `CI` is set and 0 otherwise, and exit 1 and 2 are never retried.
+  A missing or logged-out agent CLI exits 2 with the install or login command before any agent call, where a missing `--agent-cmd` executable used to exit 3.
+  `--pr <number>` resolves the pull request's base branch through the GitHub API when `--base` is not given (`GITHUB_TOKEN`, `GITHUB_REPOSITORY` or `--repo`, `GITHUB_API_URL`), and a failed lookup exits 2 and names `--base` as the bypass.
+
 - The Evaluate skill's own evaluation (`test/evaluations/bmad-testarch-evaluate`) has an accepted baseline from a clean live run, and `test:evaluate-pr-suite` replays it on every pull request.
   The run was clean (`dirty: false`) and executed 9 trial sets of 5 trials through the local Claude Code CLI. Every probe scored `PASS` with no coverage gap: the four clean controls `passed-clean-control`, the five seeded defects `caught`, and each mutation's rollback verified.
   The suite's `pr` plan now places `oracle-agreement` and `replay`, and the `pr` tier holds each evaluation to the workspace its entry names: copy for a fixture target, git for the suite, which evaluates the skill in this repository.
