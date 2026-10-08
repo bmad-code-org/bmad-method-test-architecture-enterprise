@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-evaluate",
-  "sourceSpecDigest": "sha256:cf94db416535936acfa4cc7dce758ec2c536dacde4252a17e4c7451eaa5ae220",
+  "sourceSpecDigest": "sha256:60178aaff63d0b94a45a6667e30a86dc9b3a51f87f2694cf5093085a65291f70",
   "behaviors": [
     {
       "id": "B-001",

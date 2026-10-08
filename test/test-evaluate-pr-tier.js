@@ -15,7 +15,7 @@
  *
  * The invocation leaves `runs/<invocationId>/` in the evaluation folder, which the `chain` job uploads as a build artifact.
  * The script also scans every file of that directory for a path of this machine (`machinePathHits`).
- * The Evaluate-authored suite (`suite`) has no baseline yet: its `check`, `compile` and `seal` run now.
+ * The Evaluate-authored suite (`suite`) replays the baseline Story H.1 accepted from a clean live run of the skill.
  */
 
 const fs = require('node:fs');
