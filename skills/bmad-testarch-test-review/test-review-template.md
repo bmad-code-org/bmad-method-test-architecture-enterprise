@@ -16,7 +16,7 @@ inputDocuments: []
 **Score Cap**: {score_cap}/100
 **Score Override Rule**: {score_override_rule}
 **Review Date**: {YYYY-MM-DD}
-**Review Scope**: {single | directory | suite}
+**Review Mode**: {pr | full-file}
 **Reviewer**: {user_name or TEA Agent}
 
 ---

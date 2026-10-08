@@ -237,7 +237,7 @@
       "id": "B-013",
       "description": "The verdict artifact is the object the CLI declares, key for key.",
       "severity": "material",
-      "observableSuccessCriterion": "The verdict carries all 23 keys the CLI always writes, each typed key of its declared type, and no key the CLI does not declare.",
+      "observableSuccessCriterion": "The verdict carries all 24 keys the CLI always writes, each typed key of its declared type, and no key the CLI does not declare.",
       "requirementLinks": [
         {
           "scheme": "tea-cli-contract",
@@ -938,17 +938,18 @@
     {
       "id": "O-014",
       "polarity": "expects-hold",
-      "commentary": "The verdict is the object the CLI declares: all 23 keys it always writes are present, each typed key of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.",
+      "commentary": "The verdict is the object the CLI declares: all 24 keys it always writes are present, each typed key of its declared type, and no key beyond the ones it declares appears. The other oracles read the findings and four fields beside them.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "Every one of the 23 keys the verdict always carries, in the verdict artifact of the one review invocation.",
+        "scope": "Every one of the 24 keys the verdict always carries, in the verdict artifact of the one review invocation.",
         "negativeDomain": "A verdict missing a key the CLI always writes, carrying a key it does not declare, or holding a key the contract types as another type.",
         "evidenceTargets": [
           "/interactions/review-corpus/artifact/verdict/report",
           "/interactions/review-corpus/artifact/verdict/files",
           "/interactions/review-corpus/artifact/verdict/agent",
           "/interactions/review-corpus/artifact/verdict/model",
+          "/interactions/review-corpus/artifact/verdict/reviewMode",
           "/interactions/review-corpus/artifact/verdict/gateOn",
           "/interactions/review-corpus/artifact/verdict/gatingQualityScore",
           "/interactions/review-corpus/artifact/verdict/gatingViolations",
@@ -986,6 +987,7 @@
                 "files",
                 "agent",
                 "model",
+                "reviewMode",
                 "gateOn",
                 "gatingQualityScore",
                 "gatingViolations",
@@ -1011,6 +1013,7 @@
                 "files",
                 "agent",
                 "model",
+                "reviewMode",
                 "gateOn",
                 "gatingQualityScore",
                 "gatingViolations",
@@ -1038,14 +1041,14 @@
                 "gateFailures",
                 "waived",
                 "waiveReason",
-                "waiveUntil",
-                "allFindingsRecommendation"
+                "waiveUntil"
               ],
               "types": {
                 "report": "string",
                 "files": "array",
                 "agent": "string",
                 "model": null,
+                "reviewMode": "string",
                 "gateOn": "string",
                 "gatingQualityScore": "number",
                 "gatingViolations": "object",
@@ -1073,8 +1076,7 @@
                 "gateFailures": "array",
                 "waived": "boolean",
                 "waiveReason": "string",
-                "waiveUntil": "string",
-                "allFindingsRecommendation": "string"
+                "waiveUntil": "string"
               }
             }
           },
@@ -1107,6 +1109,14 @@
             "operands": [
               {
                 "pointer": "/interactions/review-corpus/artifact/verdict/model"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/reviewMode"
               }
             ]
           },
@@ -1365,6 +1375,7 @@
               "files",
               "agent",
               "model",
+              "reviewMode",
               "gateOn",
               "gatingQualityScore",
               "gatingViolations",
@@ -1390,6 +1401,7 @@
               "files",
               "agent",
               "model",
+              "reviewMode",
               "gateOn",
               "gatingQualityScore",
               "gatingViolations",
@@ -1417,14 +1429,14 @@
               "gateFailures",
               "waived",
               "waiveReason",
-              "waiveUntil",
-              "allFindingsRecommendation"
+              "waiveUntil"
             ],
             "types": {
               "report": "string",
               "files": "array",
               "agent": "string",
               "model": null,
+              "reviewMode": "string",
               "gateOn": "string",
               "gatingQualityScore": "number",
               "gatingViolations": "object",
@@ -1452,8 +1464,7 @@
               "gateFailures": "array",
               "waived": "boolean",
               "waiveReason": "string",
-              "waiveUntil": "string",
-              "allFindingsRecommendation": "string"
+              "waiveUntil": "string"
             },
             "successIndicator": "/recommendation",
             "channelRoles": {

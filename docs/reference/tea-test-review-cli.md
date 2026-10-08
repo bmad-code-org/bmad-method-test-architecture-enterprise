@@ -98,7 +98,7 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--max-critical <n>`                                   | no cap                                                             | Fail when Critical violations exceed `n`.                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `--min-files <n>`                                      | `1`                                                                | Fail when fewer than `n` files are reviewed.                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `--fail-on <level>`                                    | `request-changes`                                                  | Weakest recommendation that fails CI.                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `--gate-on <mode>`                                     | `introduced` for git diff; `all` with `--files`                    | Gate on PR-owned findings (`introduced`) or every finding (`all`).                                                                                                                                                                                                                                                                                                                                                                                         |
+| `--gate-on <mode>`                                     | `introduced` for git diff; `all` with `--files`                    | Gate on PR-owned findings (`introduced`, review mode `pr`) or every finding (`all`, review mode `full-file`).                                                                                                                                                                                                                                                                                                                                              |
 | `--fail-on-skip`                                       | off                                                                | Exit 1 instead of 0 on skip (no changed test files).                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `--waive <reason>`                                     | -                                                                  | Waive a fail (exit 0), record the reason; requires `--waive-until`. Exit 2/3 never waivable.                                                                                                                                                                                                                                                                                                                                                               |
 | `--waive-until <YYYY-MM-DD>`                           | -                                                                  | Waiver expiry; must be a real future calendar date.                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -132,7 +132,8 @@ Why the two lists are separated, and why context can never waive: [Test Review C
 
 ### Delta-aware PR verdicts
 
-Git-diff reviews default to `--gate-on introduced`. The CLI reads local
+Git-diff reviews default to `--gate-on introduced` and run in `pr` review mode. The agent is handed the changed
+line ranges of each review file and writes up only what the pull request introduced or worsened. The CLI reads local
 `<base>...HEAD` hunks and classifies every finding:
 
 - `introduced`: the finding is in a file added by the pull request or on a
@@ -141,14 +142,44 @@ Git-diff reviews default to `--gate-on introduced`. The CLI reads local
   line is treated as modified, so missing evidence cannot bypass the gate.
 - `pre_existing`: its reported line is outside the pull request's changed lines.
 
-Introduced and modified findings affect the PR verdict. Pre-existing findings stay
-in `findings`, carry `verdict_impact: false`, and appear in the report's
-`Pre-existing Findings (Advisory)` section. They do not affect the gating
-recommendation, gating severity counts, `--min-score`, or `--max-critical`.
+An unchanged line can still be broken by a changed one. New setup can turn `expected = 18.0` into
+`expected = apply_discount(...)`, which leaves the untouched assertion below it unable to fail. The agent places that
+finding on the changed setup line. When it reports the unchanged assertion instead, the CLI looks for a changed line
+that defines something the assertion reads, directly or through the test's own assignments: an assignment (a wrapped
+statement counts as one), a mock, patch or spy, a new or changed parameter, or a changed parametrize table. For a name the
+test does not define itself it also looks at module-level lines, fixtures and setup hooks of the file, and at changed
+test-support files such as `conftest.py`. It moves the finding to that line, in that file, and keeps the original in
+`changed_line_evidence.symptomLine`. This applies to the rows that ask whether an assertion can still fail (C3, C4, C5,
+C6, H3 and H10). A comment, a rename, a changed line that only shares a name with the assertion, and a change in another
+test never take a finding.
+
+Three more cases belong to the pull request. A test that lost an assertion, or had one replaced by a statement. A test
+the pull request changed, for the rows that describe the whole test (C4, C5 and H10). A finding whose location is a
+range such as `path:4-8` that covers a changed line. A finding with no usable line, or a line outside the file, counts
+against the pull request.
+
+Two rows judge the whole file. Row M4 (ungrouped suite) belongs to the base in a file the pull request modified,
+unless the pull request changed a `describe`, `context`, `suite` or `class` line. Row H5 (oversize file) belongs to the
+pull request that takes a file over 1000 lines.
+
+Introduced and modified findings are the PR verdict. A finding that is still pre-existing is cut from the report and
+left out of `findings`, `violations`, `qualityScore` and the recommendation. The cut removes its finding block, the
+counts, ledger and score lines, the list items and table rows that name it, and the Immediate Actions and Re-Review
+sections, then parses the result again with the same strict parser. The report's `PR Delta Gate` section says how many
+findings were left out, and stderr prints the same count.
 
 Use `--gate-on all` for a baseline audit. An explicit `--files` review skips git,
 so it defaults to `all`; combining `--files` with `--gate-on introduced` is
 rejected instead of guessing provenance.
+
+### Review mode
+
+The verdict's `reviewMode` and the report's `**Review Mode**:` line name how the review was scoped:
+
+| `reviewMode` | When                                                 | What it scores                               |
+| ------------ | ---------------------------------------------------- | -------------------------------------------- |
+| `pr`         | a git-diff review with `--gate-on introduced`        | what the pull request introduced or worsened |
+| `full-file`  | `--files`, or a git-diff review with `--gate-on all` | every line of every file in the review set   |
 
 ## Which model does the reviewing
 
@@ -162,7 +193,7 @@ Each built-in adapter resolves a model. `--model` overrides that resolution.
 
 The Claude and Codex defaults are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations. Agy's session default is unpinned until an explicit model is supplied.
 
-The resolved built-in model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through a built-in adapter's `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. `agy` records `model: null` when it uses the session default and records the explicit value when `--model` is supplied.
+The model that ran travels in the verdict JSON as `model`, alongside `agent`. With `claude` it is the model ID the run reported (`claude-sonnet-5-5`), and several IDs are listed, most output first, when workers ran on more than one model. An adapter that does not report a model keeps the resolved value. Two scores are only comparable when those two fields match. A model supplied through a built-in adapter's `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. `agy` records `model: null` when it uses the session default and records the explicit value when `--model` is supplied.
 
 `--agent custom` has no universal model flag. Select its model through `--agent-arg`; its verdict records `agent: "custom"` and `model: null`. Keep the custom runner command and model in CI configuration when results need to be compared over time. `--model` is rejected with `custom` and with `none`, which runs no agent.
 
@@ -210,42 +241,44 @@ A review verdict (also written to `--json <file>` when given):
   "report": "test-review.md",
   "files": ["tests/checkout.spec.ts"],
   "agent": "claude",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "reviewMode": "pr",
   "gateOn": "introduced",
-  "gatingQualityScore": 89,
-  "gatingViolations": { "critical": 0, "high": 0, "medium": 2, "low": 3 },
-  "recommendation": "Approve with Comments",
-  "rawQualityScore": 92,
-  "qualityScore": 79,
-  "scoreCap": 79,
-  "scoreOverrideRule": "Highest severity High caps effective score at 79: min(raw deduction score 92, 79) = 79.",
-  "verdictRule": "No Critical or High, effective score >= 70, and findings remain => Approve with Comments.",
-  "violations": { "critical": 0, "high": 1, "medium": 2, "low": 3 },
+  "gatingQualityScore": 69,
+  "gatingViolations": { "critical": 1, "high": 0, "medium": 0, "low": 0 },
+  "recommendation": "Block",
+  "rawQualityScore": 90,
+  "qualityScore": 69,
+  "scoreCap": 69,
+  "scoreOverrideRule": "Highest severity Critical caps effective score at 69: min(raw deduction score 90, 69) = 69.",
+  "verdictRule": "Critical > 0 => Block (1 Critical).",
+  "violations": { "critical": 1, "high": 0, "medium": 0, "low": 0 },
   "findings": [
     {
-      "criterion_id": "H1",
-      "severity": "High",
+      "criterion_id": "C3",
+      "severity": "Critical",
       "path": "tests/checkout.spec.ts",
       "line": 16,
-      "provenance": "pre_existing",
+      "provenance": "modified",
       "changed_line_evidence": {
         "fileStatus": "modified",
-        "changed": false,
-        "ranges": [{ "start": 40, "end": 52, "provenance": "modified" }],
-        "reason": "the reported line is outside every added-side diff hunk"
+        "changed": true,
+        "ranges": [{ "start": 16, "end": 16, "provenance": "modified" }],
+        "symptomLine": 17,
+        "reason": "the reported line 17 is unchanged, but changed line 16 defines expected, which it reads; the finding is attributed to the changed line"
       },
-      "deduction": 5,
-      "verdict_impact": false,
-      "row": "H1",
+      "deduction": 10,
+      "verdict_impact": true,
+      "row": "C3",
       "file": "tests/checkout.spec.ts",
-      "section": "Recommendations (Should Fix)",
-      "title": "Hard wait orders two steps"
+      "section": "Critical Issues (Must Fix)",
+      "title": "The expected discount is computed by the code under test"
     }
   ],
   "reviewProvenance": {
     "teaCliVersion": "1.24.0",
     "skillRubricVersion": "4.0",
-    "modelIdentifier": "sonnet",
+    "modelIdentifier": "claude-sonnet-5-5",
     "baseSha": "0123456789abcdef0123456789abcdef01234567",
     "headSha": "89abcdef0123456789abcdef0123456789abcdef",
     "triggerComment": null,
@@ -279,7 +312,7 @@ A review verdict (also written to `--json <file>` when given):
 }
 ```
 
-`findings` is one entry per finding block documented under `## Critical Issues (Must Fix)` and `## Recommendations (Should Fix)`, in report order. The stable automation fields are `criterion_id`, `severity`, `path`, `line`, `provenance`, `deduction`, and `verdict_impact`. PR classification also adds `changed_line_evidence`. The old `row` and `file` names and the display-only `section` and `title` remain for compatibility. `provenance` is `introduced`, `modified`, or `pre_existing` when diff evidence is available; older or unclassified reports use `unknown`. `violations` and `qualityScore` remain the full-review values. `gatingViolations` and `gatingQualityScore` are used by the selected gate mode. When the delta gate changes the recommendation, `allFindingsRecommendation` preserves the full-review recommendation.
+`findings` is one entry per finding block documented under `## Critical Issues (Must Fix)` and `## Recommendations (Should Fix)`, in report order. The stable automation fields are `criterion_id`, `severity`, `path`, `line`, `provenance`, `deduction`, and `verdict_impact`. PR classification also adds `changed_line_evidence`. The old `row` and `file` names and the display-only `section` and `title` remain for compatibility. `provenance` is `introduced`, `modified`, or `pre_existing` when diff evidence is available; older or unclassified reports use `unknown`. In `pr` mode `violations`, `qualityScore` and `recommendation` describe the pull request's findings, which are the gating ones. In `full-file` mode they describe the whole review set. `gatingViolations` and `gatingQualityScore` are the values the selected gate mode acts on.
 
 Per severity, `findings` agrees with `violations`: exactly for Critical and High, and never exceeding it for Medium and Low, which a report may summarize in prose. A disagreement is a parse failure (exit 3), so the two fields can never describe different reviews.
 

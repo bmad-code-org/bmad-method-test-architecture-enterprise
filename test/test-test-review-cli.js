@@ -3002,7 +3002,7 @@ async function runTests() {
         gateOn: 'introduced',
         gatingQualityScore: 95,
         gatingViolations: { critical: 0, high: 0, medium: 2, low: 1 },
-        allFindingsRecommendation: 'Block',
+        reviewMode: 'pr',
         reviewedFiles,
         findings: [],
         keyWeaknesses: ['n/a', '[L2] Optional marker adoption'],
@@ -3028,9 +3028,9 @@ async function runTests() {
             commentBody.includes('- **Gate mode**: introduced') &&
             commentBody.includes('- **Gating quality score**: 95/100') &&
             commentBody.includes('- **Gating violations**: 0 Critical / 0 High / 2 Medium / 1 Low') &&
-            commentBody.includes('- **Full-review effective score**: 69/100') &&
+            commentBody.includes('- **Effective score**: 69/100') &&
             commentBody.includes('- **Raw deduction score**: 100/100') &&
-            commentBody.includes('- **Full-review recommendation**: Block') &&
+            commentBody.includes('- **Review mode**: pr') &&
             commentBody.includes('- **Verdict rule**: No Critical or High and no gating findings => Approve.') &&
             commentBody.includes(`  - \`\`${hostileReviewedPath}\`\``) &&
             commentBody.includes(`  - \`${normalReviewedPath}\``) &&
@@ -3044,13 +3044,6 @@ async function runTests() {
             !commentBody.includes('tests/extra-8.spec.ts'),
           `${path.relative(repoRoot, workflowPath)} safely renders paths, provenance, and count/truncation`,
           commentBody,
-        );
-        const { allFindingsRecommendation: _omittedDeltaRecommendation, ...verdictWithoutDelta } = commentVerdict;
-        const noDeltaCommentBody = await buildWorkflowComment(workflowPath, verdictWithoutDelta);
-        assert(
-          !noDeltaCommentBody.includes('Full-review recommendation'),
-          `${path.relative(repoRoot, workflowPath)} omits the full-review recommendation when the gate never overrode it`,
-          noDeltaCommentBody,
         );
         assert(
           !commentBody.includes('**Key weaknesses**:') &&
@@ -4690,20 +4683,28 @@ async function runTests() {
       assert(
         introducedGateRun.status === 0 &&
           introducedPayload?.gateOn === 'introduced' &&
+          introducedPayload?.reviewMode === 'pr' &&
           introducedPayload?.recommendation === 'Approve' &&
-          introducedPayload?.allFindingsRecommendation === 'Block' &&
+          !('allFindingsRecommendation' in introducedPayload) &&
           introducedPayload?.gatingViolations?.critical === 0 &&
-          introducedPayload?.findings?.[0]?.provenance === 'pre_existing' &&
-          introducedPayload?.findings?.[0]?.verdict_impact === false,
-        'git fixture: default PR gate makes an unchanged-line Critical finding advisory',
+          introducedPayload?.violations?.critical === 0 &&
+          introducedPayload?.qualityScore === 100 &&
+          introducedPayload?.findings?.length === 0,
+        'git fixture: a pull request review carries no finding from a line the pull request did not change, and no all-findings recommendation',
         `status=${introducedGateRun.status} payload=${JSON.stringify(introducedPayload)} stderr=${introducedGateRun.stderr}`,
       );
       const introducedReport = fs.existsSync(introducedReportPath) ? fs.readFileSync(introducedReportPath, 'utf8') : '';
       assert(
-        introducedReport.includes('### Pre-existing Findings (Advisory)') &&
-          introducedReport.includes('Verdict impact: no') &&
-          introducedReport.includes('reported line is outside every added-side diff hunk'),
-        'git fixture: introduced mode writes advisory changed-line evidence',
+        !introducedReport.includes('Disabled test hides a real regression') &&
+          !introducedReport.includes('### Pre-existing Findings') &&
+          /^\*\*Total Violations\*\*: 0 Critical, 0 High, 0 Medium, 0 Low$/m.test(introducedReport) &&
+          /^\*\*Recommendation\*\*: Approve$/m.test(introducedReport) &&
+          /^\*\*Quality Score\*\*: 100\/100/m.test(introducedReport) &&
+          /^\*\*Review Mode\*\*: pr$/m.test(introducedReport) &&
+          !introducedReport.includes('**Review Scope**') &&
+          introducedReport.includes('1 finding on lines this pull request did not change was left out of this report.') &&
+          introducedGateRun.stderr.includes('left 1 finding on lines the pull request did not change out of the report and the verdict'),
+        'git fixture: the pull request report drops the old-line finding block, restates its counts, score and recommendation, and names its mode',
         introducedReport,
       );
 

@@ -27,6 +27,7 @@ This is an **isolated subagent** running in parallel with other quality dimensio
 - ✅ Check DETERMINISM only (not other quality dimensions)
 - ✅ Read `criteria_registry` before evaluating anything; severities come from it
 - ✅ Output structured JSON to temp file
+- ✅ In `review_mode: pr`, report only a violation on a line in `changed_lines`, or one a changed line causes (new setup, a changed fixture, hook, constant or parametrize table that leaves an untouched assertion unable to fail). Cite the changed line as the location and name the unchanged assertion in the description. A test that lost lines is the pull request's. Report nothing else about code the pull request did not touch
 - ❌ Do NOT check isolation, maintainability, coverage, or performance (other subagents)
 - ❌ Do NOT modify test files (read-only analysis)
 - ❌ Do NOT run tests (just analyze code)

@@ -2239,7 +2239,7 @@
   },
   "test-review": {
     "contractId": "tea-test-review-behavioral",
-    "corpusDigest": "sha256:e8f1afccaae56d9868f711164452ea79414ce879f7d05aa2f8c85426124eb3bb",
+    "corpusDigest": "sha256:5eab700586667ce40fc3ecc3a1dfb1a2b264c6f82457b9b88d7b4d59dd792b86",
     "probeCount": 11,
     "strength": {
       "defect": {
@@ -5959,7 +5959,7 @@
   },
   "fragment-selection/bmad-testarch-test-review": {
     "contractId": "tea-fragment-selection-test-review",
-    "corpusDigest": "sha256:ab80f3d1ee9577d046f30b4ac20d06a1566c1405af27a080c2288fdff6c77bf1",
+    "corpusDigest": "sha256:e415057b09c7b6274dd49de56bc88280eecb5dc10fe4d67783bf9f98bbca78e8",
     "probeCount": 2,
     "strength": {
       "defect": null,

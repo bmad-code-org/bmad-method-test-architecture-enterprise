@@ -49,6 +49,8 @@ Use `test-review-template.md` to produce `{outputFile}` including:
   `auto`, which is the request rather than the result. `cli/lib/parse-report.js` reads this line into
   the verdict, so a headless run that silently fell back to `sequential` says so in its own artifact.
 
+In `review_mode: pr`, the report speaks only to what the pull request changed or broke. Write no Next Steps, Immediate Actions, Re-Review, Decision rationale or appendix row for code the pull request did not touch, and fill the template's Review Mode line with `pr`. The CLI computes the pull request decision and appends it after provenance is known.
+
 Build `### Key Weaknesses` only from `reviewSummary.key_weaknesses`. Each
 rendered bullet must keep its `[row]` prefix and must have a matching scored
 finding under Critical Issues or Recommendations. Put useful unscored ideas from

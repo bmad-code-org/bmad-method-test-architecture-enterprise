@@ -234,6 +234,9 @@ const AGENT_ADAPTERS = {
     parseVersion: (output) => parseInstalledVersion(output),
     defaultModel: 'sonnet',
     modelFlags: ['--model'],
+    // The --output-format json answer names the model IDs that served the run
+    // (modelUsage), so a verdict can record the model that ran.
+    reportsResolvedModel: true,
     // --safe-mode strips repo customizations for the review run; --tools/
     // --allowedTools scope the run to the tool surface the caller's declared
     // capabilities allow: search and read always, write and delegation only
@@ -556,6 +559,46 @@ function parseCustomAgentVersion(output) {
   return repeatsAgentVersionKey(line) ? null : version;
 }
 
+/**
+ * The model ID a run resolved to, read off the agent's structured answer.
+ *
+ * `--model sonnet` is an alias; the claude JSON answer names the model IDs that
+ * served the run in `modelUsage`, which is what a score should be tied to. More
+ * than one ID (a worker subagent on another model) is listed, most output first.
+ * Returns null when the answer is not that JSON or names no model, and the caller
+ * keeps the configured value.
+ *
+ * @param {string} agent - Adapter key.
+ * @param {string} stdout - What the agent printed.
+ * @returns {string|null}
+ */
+function resolvedModelFromAnswer(agent, stdout) {
+  if (agent !== 'claude') return null;
+  let usage;
+  try {
+    usage = JSON.parse(stdout)?.modelUsage;
+  } catch {
+    return null;
+  }
+  if (usage === null || typeof usage !== 'object' || Array.isArray(usage)) return null;
+  const outputTokens = (entry) => (Number.isFinite(entry?.outputTokens) ? entry.outputTokens : 0);
+  const models = Object.keys(usage)
+    .filter((model) => model.length > 0)
+    .sort((left, right) => outputTokens(usage[right]) - outputTokens(usage[left]) || left.localeCompare(right));
+  return models.length > 0 ? models.join(', ') : null;
+}
+
+/** What the agent said: the `result` of a claude JSON answer, or the raw output when it is not one. */
+function agentAnswerText(agent, stdout) {
+  if (agent !== 'claude') return stdout;
+  try {
+    const result = JSON.parse(stdout)?.result;
+    return typeof result === 'string' ? result : stdout;
+  } catch {
+    return stdout;
+  }
+}
+
 /** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */
 function agentReplyAndUsage(agent, stdout, stderr) {
   if (agent === 'claude') {
@@ -670,6 +713,8 @@ module.exports = {
   AGENT_VERSION_CEILING_MS,
   AGENT_VERSION_TIMEOUT_MS,
   agentReplyAndUsage,
+  resolvedModelFromAnswer,
+  agentAnswerText,
   bridgedArgsRefused,
   DEFAULT_CAPABILITIES,
   RUNNER_CAPABILITIES,
