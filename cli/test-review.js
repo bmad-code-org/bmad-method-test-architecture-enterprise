@@ -624,6 +624,17 @@ function main() {
     }
   }
 
+  // The skill reads its knowledge base from the bmod-tea folder beside it. Without it a headless run
+  // would stop at activation after the paid agent call has started, so refuse before any call.
+  const knowledgeIndex = path.join(skillRoot, '..', 'bmod-tea', 'knowledge', 'tea-index.csv');
+  if (!fs.existsSync(knowledgeIndex)) {
+    fail(
+      EXIT.ENV_ERROR,
+      `The TEA knowledge base is not installed beside the skill (expected ${path.resolve(knowledgeIndex)}).\n` +
+        'Install bmod-tea next to bmad-testarch-test-review: npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea',
+    );
+  }
+
   // Every config key step-01 branches on is resolved here (flag, then the
   // project's [modules.tea] config, then the module default) and stated in the prompt.
   // An unstated key is one the agent decides per run.

@@ -23,11 +23,13 @@ description: Install the TEA skills from a local clone or internal mirror when G
 
    This adds the TEA skills and `bmod-tea`, which holds the setup questions and the knowledge base.
 
-3. Add the `bmad` skill from BMad Method core the same way, from a clone or mirror of `BMAD-METHOD`, if the project does not have it:
+3. Add the `bmad` skill and its module record `bmod-core-tools` from BMad Method core the same way, from a clone or mirror of `BMAD-METHOD`, if the project does not have them:
 
    ```bash
-   npx skills add /path/to/local/BMAD-METHOD --skill bmad
+   npx skills add /path/to/local/BMAD-METHOD --skill bmad bmod-core-tools
    ```
+
+   `bmad setup` runs through [uv](https://docs.astral.sh/uv/) with Python 3.11 or later. Install uv from an internal mirror, and make a Python 3.11 interpreter available to it, because uv downloads Python from the internet when none is installed.
 
 4. In your assistant chat, run:
 

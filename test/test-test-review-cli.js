@@ -169,6 +169,14 @@ function suiteEnabled(n) {
 const repoRoot = path.join(__dirname, '..');
 const fixturesRoot = path.join(__dirname, 'fixtures', 'test-review-cli');
 const fixtureProject = path.join(fixturesRoot, 'project');
+
+/** The bmod-tea knowledge base beside a fixture skill, as `npx skills add` installs it; the CLI refuses a skill without it. */
+function installKnowledgeBeside(skillDir) {
+  const knowledgeDir = path.join(skillDir, '..', 'bmod-tea', 'knowledge');
+  fs.mkdirSync(knowledgeDir, { recursive: true });
+  fs.copyFileSync(path.join(__dirname, '..', 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv'), path.join(knowledgeDir, 'tea-index.csv'));
+}
+
 const stubAgent = path.join(fixturesRoot, 'stub-agent.js');
 const cliPath = path.join(repoRoot, 'cli', 'test-review.js');
 
@@ -1986,6 +1994,22 @@ async function runTests() {
         assert(false, 'resolves _bmad/tea/workflows skill root', error.message);
       }
 
+      // A project upgraded from v6 holds the classic installer's copy and the skill the v7 install added;
+      // the fresh install wins, and the classic copy is the last resort.
+      const upgraded = fs.mkdtempSync(path.join(tmpRoot, 'upgraded-'));
+      for (const relative of [
+        path.join('_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review'),
+        path.join('.claude', 'skills', 'bmad-testarch-test-review'),
+      ]) {
+        fs.mkdirSync(path.join(upgraded, relative), { recursive: true });
+        fs.writeFileSync(path.join(upgraded, relative, 'SKILL.md'), '# skill\n');
+      }
+      assert(
+        resolveSkill(upgraded).endsWith(path.join('.claude', 'skills', 'bmad-testarch-test-review')),
+        'a classic-installer copy never shadows the skill a v7 install added',
+        resolveSkill(upgraded),
+      );
+
       try {
         const claudeRoot = resolveSkill(path.join(fixturesRoot, 'project-claude'));
         assert(
@@ -3045,6 +3069,27 @@ async function runTests() {
     // ============================================================
     console.log(`${colors.yellow}Test Suite 7: CLI end-to-end${colors.reset}\n`);
     if (suiteEnabled(7)) {
+      const noKnowledge = fs.mkdtempSync(path.join(tmpRoot, 'no-knowledge-'));
+      fs.mkdirSync(path.join(noKnowledge, 'bmad-testarch-test-review'));
+      fs.writeFileSync(path.join(noKnowledge, 'bmad-testarch-test-review', 'SKILL.md'), '# skill\n');
+      const missingKnowledge = runCli([
+        '--agent',
+        'none',
+        '--files',
+        'x.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--skill-root',
+        path.join(noKnowledge, 'bmad-testarch-test-review'),
+      ]);
+      assert(
+        missingKnowledge.status === 2 &&
+          missingKnowledge.stderr.includes('knowledge base is not installed beside the skill') &&
+          missingKnowledge.stderr.includes('--skill bmod-tea'),
+        'a skill with no bmod-tea knowledge base beside it exits 2 with the install command, before any agent call',
+        `status=${missingKnowledge.status} stderr=${missingKnowledge.stderr}`,
+      );
+
       const promptOnly = runCli(['--agent', 'none', '--files', 'x.spec.ts', '--project-root', fixtureProject]);
       assert(promptOnly.status === 0, 'prompt-only run exits 0', `status=${promptOnly.status} stderr=${promptOnly.stderr}`);
       assert(
@@ -4521,6 +4566,10 @@ async function runTests() {
         path.join(repoRoot, 'skills', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md'),
         path.join(gitSkillDir, 'steps-c', 'criteria-registry.md'),
       );
+      // The knowledge base the skill reads sits beside it, as `npx skills add` installs bmod-tea.
+      const gitKnowledgeDir = path.join(gitSkillDir, '..', 'bmod-tea', 'knowledge');
+      fs.mkdirSync(gitKnowledgeDir, { recursive: true });
+      fs.copyFileSync(path.join(repoRoot, 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv'), path.join(gitKnowledgeDir, 'tea-index.csv'));
       fs.mkdirSync(path.join(gitRepo, 'tests'));
       fs.writeFileSync(path.join(gitRepo, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
       fs.mkdirSync(path.join(gitRepo, 'src'));
@@ -5196,6 +5245,7 @@ async function runTests() {
       const isoRoot = path.join(tmpRoot, 'isolation-project');
       const isoSkillDir = path.join(isoRoot, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
       fs.mkdirSync(isoSkillDir, { recursive: true });
+      installKnowledgeBeside(isoSkillDir);
       fs.copyFileSync(
         path.join(fixtureProject, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review', 'SKILL.md'),
         path.join(isoSkillDir, 'SKILL.md'),
@@ -5263,6 +5313,7 @@ async function runTests() {
         const isoRootLevel = path.join(tmpRoot, 'isolation-project-root-level');
         const isoRootLevelSkill = path.join(isoRootLevel, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
         fs.mkdirSync(isoRootLevelSkill, { recursive: true });
+        installKnowledgeBeside(isoRootLevelSkill);
         fs.copyFileSync(path.join(isoSkillDir, 'SKILL.md'), path.join(isoRootLevelSkill, 'SKILL.md'));
         const rootLevelRun = runCli(
           [
@@ -5308,6 +5359,7 @@ async function runTests() {
         const isoModes = path.join(tmpRoot, 'isolation-modes');
         const isoModesSkill = path.join(isoModes, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
         fs.mkdirSync(isoModesSkill, { recursive: true });
+        installKnowledgeBeside(isoModesSkill);
         fs.copyFileSync(path.join(isoSkillDir, 'SKILL.md'), path.join(isoModesSkill, 'SKILL.md'));
         const groupWritable = path.join(isoModes, 'shared.txt');
         const readOnly = path.join(isoModes, 'locked.txt');
@@ -5350,6 +5402,7 @@ async function runTests() {
         const isoParseFail = path.join(tmpRoot, 'isolation-parse-fail');
         const isoParseFailSkill = path.join(isoParseFail, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
         fs.mkdirSync(isoParseFailSkill, { recursive: true });
+        installKnowledgeBeside(isoParseFailSkill);
         fs.copyFileSync(path.join(isoSkillDir, 'SKILL.md'), path.join(isoParseFailSkill, 'SKILL.md'));
         const parseFailRun = runCli(
           [
@@ -5424,6 +5477,7 @@ async function runTests() {
       const controlRoot = path.join(tmpRoot, 'isolation-control');
       const controlSkillDir = path.join(controlRoot, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
       fs.mkdirSync(controlSkillDir, { recursive: true });
+      installKnowledgeBeside(controlSkillDir);
       fs.copyFileSync(
         path.join(fixtureProject, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review', 'SKILL.md'),
         path.join(controlSkillDir, 'SKILL.md'),

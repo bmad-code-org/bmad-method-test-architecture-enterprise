@@ -42,7 +42,7 @@ If GitHub itself is blocked, see [Install TEA Behind a Corporate Firewall](/how-
 
 **Cause**: `_bmad/config.toml` is missing or has no `[modules.tea]` table. Installing the skills does not answer the setup questions.
 
-**Fix**: run `bmad setup tea` in the assistant chat. It needs the `bmad` skill from BMad Method core; if that is missing, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad`.
+**Fix**: run `bmad setup tea` in the assistant chat. It needs [uv](https://docs.astral.sh/uv/) and the `bmad` skill from BMad Method core; if the skill is missing, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools`.
 
 ### TEA Offers to Install the Knowledge Base
 
@@ -186,7 +186,7 @@ If the key name matches [Configuration](/reference/configuration/), save the fil
 
 ```bash
 grep tea_use_playwright_utils _bmad/config.toml       # should show: "true"
-grep -ic playwright-utils .claude/skills/bmod-tea/knowledge/tea-index.csv   # 21
+grep -ic playwright-utils .claude/skills/bmod-tea/knowledge/tea-index.csv   # 19
 npm ls @seontechnologies/playwright-utils              # the package must actually be installed
 ```
 

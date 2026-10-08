@@ -62,8 +62,6 @@ bmad setup
 
 When it asks:
 
-- **Project name:** Keep default or enter your project name
-- **Planning, implementation, and project knowledge folders:** Keep defaults
 - **Test artifacts folder:** Keep default
 - **Playwright Utils:** Answer `false` for now (we'll explore this later)
 - **Browser automation:** Answer `none` for now (we'll explore this later)

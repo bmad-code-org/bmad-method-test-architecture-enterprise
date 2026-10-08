@@ -472,7 +472,7 @@ document_output_language = "english"
 
 ## Removed Keys
 
-TEA no longer uses the classic installer, so `_bmad/tea/config.yaml`, `src/module.yaml`, and `src/module-help.csv` are gone. A `_bmad/tea/config.yaml` left by an earlier install is not read by any skill; move its values into `[modules.tea]` with `bmad setup tea`, then delete the file. The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working. See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
+TEA no longer uses the classic installer, so `_bmad/tea/config.yaml`, `src/module.yaml`, and `src/module-help.csv` are gone. Upgrading from the classic installer takes one step: ask `bmad` to migrate (`bmad migrate`). The v6 installer in bmad-method 6.12 already writes `[modules.tea]` into `_bmad/config.toml`, so setup asks nothing on an upgraded project and the old keys stay there. The migration keeps your answers, moves a non-default `ci_platform` and `tea_evaluations_folder` into the customization files of the one skill that reads each, drops the keys no skill reads, and offers to delete `_bmad/tea/config.yaml` and `_bmad/tea/module-help.csv`. A `_bmad/tea/config.yaml` that is left is not read by any skill. The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working. See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
 
 The `risk_threshold` key was never read by a workflow and is no longer asked at setup. `tea_evaluations_folder` and `ci_platform` moved to [Per-Workflow Settings](#per-workflow-settings).
 

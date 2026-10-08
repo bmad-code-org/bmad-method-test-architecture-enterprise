@@ -415,7 +415,7 @@ You took a skill from a confirmed requirements statement to a scored evaluation:
 The steps above need none of this.
 To hold the intake conversation for your own skill, you need:
 
-- BMad with the TEA module installed in your project (`npx bmad-method install`)
+- TEA installed in your project (`npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`) and set up with `bmad setup tea`
 - A coding agent that runs BMad workflows, such as Claude Code, Cursor, Windsurf or Codex
 - A model that agent can use
 

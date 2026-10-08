@@ -25,7 +25,7 @@ Risk assessment, test design, NFR planning, traceability, and release gates appl
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-Then type `bmad setup tea` in your assistant chat to answer TEA's setup questions. Setup needs the `bmad` skill from BMad Method core; add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad` if you do not have it.
+Then type `bmad setup tea` in your assistant chat to answer TEA's setup questions. Setup runs through [uv](https://docs.astral.sh/uv/) and needs the `bmad` skill from BMad Method core; install uv and add the skill with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools` if you do not have them.
 
 Then run a workflow. Each one has a command you can type in a fresh session:
 

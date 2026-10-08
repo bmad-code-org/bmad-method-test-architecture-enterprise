@@ -10,11 +10,12 @@ const path = require('node:path');
 
 const SKILL_NAME = 'bmad-testarch-test-review';
 
+// The classic installer's location comes last: a project upgraded from v6 can still hold that copy, and it must not shadow the skill the v7 install added.
 const SKILL_CANDIDATES = [
-  path.join('_bmad', 'tea', 'workflows', 'testarch', SKILL_NAME),
   path.join('.claude', 'skills', SKILL_NAME),
   path.join('.agents', 'skills', SKILL_NAME),
   path.join('skills', SKILL_NAME),
+  path.join('_bmad', 'tea', 'workflows', 'testarch', SKILL_NAME),
 ];
 
 const INSTALL_REMEDIATION =

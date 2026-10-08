@@ -116,6 +116,62 @@ async function runTests() {
     assert(false, 'bmad-testarch-evaluate customize.toml loads', error.message);
   }
 
+  try {
+    const bmod = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/bmod.toml'), 'utf8')).bmod;
+    const migration = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/migration-1.toml'), 'utf8')).migration || {};
+    const questionKeys = new Set((bmod.config_questions || []).map((question) => question.key));
+
+    // `bmad migrate` lists only a migration that carries every one of these fields.
+    const missingFields = ['module', 'from', 'to', 'title', 'summary', 'detect', 'guide', 'checklist'].filter(
+      (field) =>
+        migration[field] === undefined || migration[field] === '' || (Array.isArray(migration[field]) && migration[field].length === 0),
+    );
+    assert(missingFields.length === 0, 'migration-1.toml carries every field bmad migrate requires', missingFields.join(', '));
+    assert(
+      migration.module === bmod.code && migration.from === '6' && migration.to === '7',
+      'migration-1.toml migrates module tea from 6 to 7',
+    );
+
+    // The keys it keeps are exactly the keys setup asks; the keys it moves or drops are not asked.
+    const kept = [...(migration.target.match(/`([a-z_]+)`/g) || [])].map((token) => token.slice(1, -1));
+    const keptQuestions = new Set(kept.filter((key) => questionKeys.has(key)));
+    assert(
+      questionKeys.size === 9 && [...questionKeys].every((key) => keptQuestions.has(key)),
+      'migration-1.toml keeps every key bmod.toml asks',
+      [...questionKeys].filter((key) => !keptQuestions.has(key)).join(', '),
+    );
+    for (const gone of [
+      'ci_platform',
+      'tea_evaluations_folder',
+      'risk_threshold',
+      'test_design_output',
+      'test_review_output',
+      'trace_output',
+    ]) {
+      assert(!questionKeys.has(gone), `bmod.toml does not ask the v6 key ${gone}, which migration-1.toml moves or drops`);
+      assert(
+        migration.detect.includes(gone) || gone === 'tea_evaluations_folder' || gone === 'ci_platform',
+        `migration-1.toml detects ${gone}`,
+      );
+    }
+
+    // The two moved keys land on keys their skill's customize.toml declares.
+    const ciCustomize = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-ci/customize.toml'), 'utf8'));
+    const evaluateCustomize = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-evaluate/customize.toml'), 'utf8'));
+    assert(
+      ciCustomize.workflow?.ci_platform === 'auto',
+      'bmad-testarch-ci customize.toml declares ci_platform, the destination migration-1.toml names',
+    );
+    assert(
+      typeof evaluateCustomize.workflow?.evaluations_folder === 'string' &&
+        migration.guide.includes('bmad-testarch-evaluate.toml') &&
+        migration.guide.includes('bmad-testarch-ci.toml'),
+      'migration-1.toml writes evaluations_folder and ci_platform to the customization files of the skills that declare them',
+    );
+  } catch (error) {
+    assert(false, 'migration-1.toml loads and validates', error.message);
+  }
+
   console.log('');
 
   // ============================================================

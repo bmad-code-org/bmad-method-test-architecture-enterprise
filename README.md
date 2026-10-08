@@ -251,7 +251,9 @@ This adds the TEA skills and `bmod-tea`, the module record that holds the setup 
 bmad setup tea
 ```
 
-The `bmad` skill comes from BMad Method core. If you do not have it, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad`. Setup asks TEA's questions and writes the answers to `_bmad/config.toml`. Run `bmad setup tea` again later to see or change them.
+`bmad setup` runs through [uv](https://docs.astral.sh/uv/) (Python 3.11 or later, which uv fetches when it is missing), so install uv first. The `bmad` skill comes from BMad Method core. If you do not have it, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools`. Setup asks TEA's questions and writes the answers to `_bmad/config.toml`. Run `bmad setup tea` again later to see or change them.
+
+`npx skills add` installs the head of `main`. To install a release, point it at the release tag instead: `npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills`.
 
 Murat is listed in the module's roster, so party mode can bring him into a group discussion alongside other BMad agents.
 

@@ -10,6 +10,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('csv-parse/sync');
+const { parse: parseToml } = require('smol-toml');
 
 // ANSI colors
 const colors = {
@@ -283,6 +284,55 @@ function runTests() {
     };
     for (const name of skillDirs) walk(path.join(skillsRoot, name));
     assert(wrongIndex.length === 0, "every knowledgeIndex is '{tea-knowledge}/tea-index.csv'", wrongIndex.join('; '));
+
+    // Every step file reads the base through {tea-knowledge}; SKILL.md is the one place that says where it is.
+    const KNOWLEDGE_DEFINITION = '`{skill-root}/../bmod-tea/knowledge`';
+    const usesKnowledge = (dir) =>
+      fs.readdirSync(dir, { withFileTypes: true }).some((entry) => {
+        const absolute = path.join(dir, entry.name);
+        if (entry.isDirectory()) return usesKnowledge(absolute);
+        return entry.name.endsWith('.md') && entry.name !== 'SKILL.md' && fs.readFileSync(absolute, 'utf8').includes('{tea-knowledge}');
+      });
+    const undefinedKnowledge = skillDirs.filter((name) => {
+      const dir = path.join(skillsRoot, name);
+      if (!usesKnowledge(dir)) return false;
+      const skillMd = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8');
+      return !skillMd.includes(
+        `- \`{tea-knowledge}\` is the \`knowledge/\` folder of the \`bmod-tea\` skill, installed beside this one: ${KNOWLEDGE_DEFINITION}.`,
+      );
+    });
+    assert(
+      undefinedKnowledge.length === 0,
+      'every skill that reads {tea-knowledge} defines it as {skill-root}/../bmod-tea/knowledge in SKILL.md',
+      undefinedKnowledge.join(', '),
+    );
+
+    // The module record, the plugin marketplace and each member record name the same set of skills.
+    const bmodRecord = parseToml(fs.readFileSync(path.join(skillsRoot, 'bmod-tea', 'bmod.toml'), 'utf8')).bmod;
+    const marketplace = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'marketplace.json'), 'utf8'));
+    const marketplaceSkills = (marketplace.plugins || []).flatMap((plugin) => plugin.skills || []);
+    const onDisk = [...skillDirs].sort();
+    assert(
+      JSON.stringify([...(bmodRecord.skills || [])].sort()) === JSON.stringify(onDisk),
+      'bmod.toml lists every skill folder under skills/ except bmod-tea',
+      `bmod.toml: ${(bmodRecord.skills || []).join(', ')}; on disk: ${onDisk.join(', ')}`,
+    );
+    assert(
+      JSON.stringify([...marketplaceSkills].sort()) === JSON.stringify([...onDisk, 'bmod-tea'].map((name) => `./skills/${name}`).sort()),
+      'the plugin marketplace lists every skill folder under skills/, bmod-tea included',
+      marketplaceSkills.join(', '),
+    );
+    const badMemberRecords = skillDirs.filter((name) => {
+      const file = path.join(skillsRoot, name, 'bmod.toml');
+      if (!fs.existsSync(file)) return true;
+      const record = parseToml(fs.readFileSync(file, 'utf8')).skill || {};
+      return record.bmod !== `bmod-${bmodRecord.code}` || record.source !== bmodRecord.update_source;
+    });
+    assert(
+      badMemberRecords.length === 0,
+      "every skill has a bmod.toml naming bmod-tea and the module's update_source",
+      badMemberRecords.join(', '),
+    );
   } else {
     assert(false, 'skills/bmod-tea/knowledge exists');
   }
@@ -366,7 +416,7 @@ function runTests() {
       `states ${wrongTotals.join(', ')} instead`,
     );
   } else {
-    warn('teach-me-testing session 7 not found - skipping menu coverage check');
+    assert(false, 'teach-me-testing session 7 exists', menuPath);
   }
 
   console.log('');

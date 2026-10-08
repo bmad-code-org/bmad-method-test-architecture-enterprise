@@ -81,7 +81,7 @@ jobs:
 
       - name: Install the review skill from the pinned package
         # Deterministic, non-interactive install: the skill content the CLI
-        # discovers under _bmad/ comes from the vetted package tarball, never
+        # reviews with comes from the vetted package tarball, never
         # from the PR checkout. bmod-tea goes beside the skill: it carries the
         # knowledge base the skill reads from {skill-root}/../bmod-tea/knowledge.
         run: |

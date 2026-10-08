@@ -552,13 +552,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TEA is a bmod: `bmad setup tea` sets it up, replacing the classic installer.
   `skills/bmod-tea/` holds the module's `bmod.toml` with nine setup questions, `roster.toml` with Murat, and `help/` for the `bmad` help agent; each skill has a member `bmod.toml`.
   Every skill reads its settings as `modules.tea.<key>` through `resolve_config.py` instead of `_bmad/tea/config.yaml`, and tells the user to run `bmad setup tea` when TEA is not set up.
-  Answers in an existing `_bmad/tea/config.yaml` are not carried over, so `bmad setup tea` asks again.
+  A project upgraded from the classic installer keeps its answers: bmad-method 6.12 already wrote them into `_bmad/config.toml`, and `bmad migrate` (TEA's `migration-1.toml`) moves a non-default `ci_platform` and `tea_evaluations_folder` into the customization files of `bmad-testarch-ci` and `bmad-testarch-evaluate`, drops `risk_threshold` and the three output-folder keys, and offers to delete `_bmad/tea/config.yaml` and `_bmad/tea/module-help.csv`.
+  A project with only a `_bmad/tea/config.yaml` runs `bmad setup tea` and answers the nine questions again.
   Two settings that only one skill reads moved to that skill's `customize.toml`: `evaluations_folder` (was `tea_evaluations_folder`) in `bmad-testarch-evaluate`, and `ci_platform` in `bmad-testarch-ci`.
   The installer's post-install notes are in `help/integrations.md`.
 - The skills moved from `src/agents/` and `src/workflows/testarch/` to root `skills/`, and `bmod-tea` is `skills/bmod-tea/`.
 - The knowledge base is one copy in `skills/bmod-tea/knowledge/` instead of nine copies in each skill's `resources/`.
   `tea-index.csv` paths are relative to that folder.
   A skill that uses the knowledge base checks that `bmod-tea` is installed beside it and offers to install it when it is not.
+- `tea-test-review` reads `[modules.tea]` from the `_bmad` TOML layers (and a v6 `_bmad/tea/config.yaml` only when `_bmad/config.toml` does not exist) and probes `skills/bmad-testarch-test-review` as well as `.claude/skills` and `.agents/skills`.
+  The classic installer's `_bmad/tea/workflows/testarch/` copy is probed last, so a project upgraded from v6 reviews with the skill it just installed.
+  The CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is not beside the skill.
+  CI that pins a TEA tarball unpacks the skill from `package/skills/bmad-testarch-test-review` (it was `package/src/workflows/testarch/...`) and copies `package/skills/bmod-tea` beside it; `cli/examples/pr-test-review.yml` shows both.
+- The publish workflow writes the release version into `skills/bmod-tea/bmod.toml` and commits it with `package.json` and the marketplace entry, and `test:release-metadata` fails when the three disagree.
+- `bmad-testarch-ci` and `bmad-testarch-test-design` read `tea_capability_probe` with the same string-aware parse the other skills use, so a setup answer of `"false"` turns the probe off.
+- `test:knowledge` also holds that every skill reading `{tea-knowledge}` defines it as `{skill-root}/../bmod-tea/knowledge`, that `bmod.toml` and the plugin marketplace list every skill folder under `skills/`, and that each skill's `bmod.toml` names `bmod-tea` and the module's `update_source`; a missing teaching menu fails the suite instead of warning.
+  `test:eval-routing-evidence` maps the frozen live-run envelope's `src/agents/` paths onto the relocated files, and the docs workflow also runs when `skills/**` changes, since the published source zips are built from it.
+- The install docs name `uv` as a prerequisite of `bmad setup` and add `bmod-core-tools` to the `bmad` install command.
 - `tea-evaluate check` and `tea-evaluate ci` check the fields of a CI plan that follow from other fields (Story 1.96, CAP-11, AD-10).
   Six `ci-plan` findings exit 10.
   `trigger`: a check names an event its tier does not use (`pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, `release` allows `release` and `manual-dispatch`).

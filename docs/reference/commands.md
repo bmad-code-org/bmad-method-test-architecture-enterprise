@@ -260,12 +260,12 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 - The target to evaluate, which the workflow inspects
 - Behavioral requirements you confirm
-- The `tea_evaluations_folder` config value (default `evals`)
+- The `evaluations_folder` setting in `_bmad/custom/bmad-testarch-evaluate.toml` (default `evals`)
 
 **Key Outputs:**
 
-- `{tea_evaluations_folder}/<evaluationId>/`: `evaluation.json`, `requirements.md`, `contract.json`, probes, corpus, scored runs under `runs/`, and the committed `baseline/`
-- `{tea_evaluations_folder}/<evaluationId>/ci/evaluation-ci-plan.json`, which `ci` renders into a pipeline
+- `<evaluations_folder>/<evaluationId>/`: `evaluation.json`, `requirements.md`, `contract.json`, probes, corpus, scored runs under `runs/`, and the committed `baseline/`
+- `<evaluations_folder>/<evaluationId>/ci/evaluation-ci-plan.json`, which `ci` renders into a pipeline
 - `{test_artifacts}/evaluate/<evaluationId>/inspection-record.md`
 
 **Runtime:** [`tea-evaluate`](/docs/reference/tea-evaluate-cli.md) validates, digests, preflights, runs, scores and compares the folder and runs its CI tiers.
