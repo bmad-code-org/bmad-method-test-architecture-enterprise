@@ -6832,6 +6832,17 @@ async function runTests() {
           `status=${unwritable.status} attempts=${attemptsOf('retry-unwritable')} stderr=${unwritable.stderr}`,
         );
       }
+      const outputIsDirectory = path.join(tmpRoot, 'b1-output-is-dir', 'test-review.md');
+      fs.mkdirSync(path.join(outputIsDirectory, 'inside'), { recursive: true });
+      const uncleared = runCli(
+        retryArgs('retry-uncleared', ['--retries', '1', '--output', outputIsDirectory]),
+        retryEnv('retry-uncleared'),
+      );
+      assert(
+        uncleared.status === 2 && attemptsOf('retry-uncleared') === 0 && uncleared.stderr.includes('Failed to clear the previous report'),
+        'a report path that cannot be cleared exits 2 instead of reaching the retry loop',
+        `status=${uncleared.status} attempts=${attemptsOf('retry-uncleared')} stderr=${uncleared.stderr}`,
+      );
       const localDefault = runCli(retryArgs('retry-local'), retryEnv('retry-local', { STUB_FIRST_MODE: 'fail' }));
       assert(
         localDefault.status === 3 && attemptsOf('retry-local') === 1,
@@ -6877,8 +6888,11 @@ async function runTests() {
       assert(
         retryAfterMs(new Headers({ 'retry-after': '3' }), 1) === 3000 &&
           retryAfterMs(new Headers({ 'retry-after': '120' }), 1) === 60_000 &&
-          retryAfterMs(new Headers(), 2) === 2000,
-        'retryAfterMs honors Retry-After up to 60 s and otherwise backs off linearly',
+          retryAfterMs(new Headers(), 2) === 2000 &&
+          Math.abs(retryAfterMs(new Headers({ 'retry-after': new Date(Date.now() + 10_000).toUTCString() }), 1) - 10_000) <= 1500 &&
+          retryAfterMs(new Headers({ 'retry-after': new Date(Date.now() + 600_000).toUTCString() }), 1) === 60_000 &&
+          retryAfterMs(new Headers({ 'retry-after': new Date(Date.now() - 60_000).toUTCString() }), 3) === 3000,
+        'retryAfterMs honors Retry-After (seconds or HTTP-date) up to 60 s and otherwise backs off linearly',
       );
       assert(
         isRetryableStatus(429) &&

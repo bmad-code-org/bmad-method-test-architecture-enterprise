@@ -1040,9 +1040,14 @@ async function main() {
   const attemptReview = () => {
     // Never parse a leftover report or verdict from a previous run: delete both
     // first, then require artifacts newer than this run's start time.
-    fs.rmSync(outputPath, { force: true });
-    if (jsonPath) {
-      fs.rmSync(jsonPath, { force: true });
+    try {
+      fs.rmSync(outputPath, { force: true });
+      if (jsonPath) {
+        fs.rmSync(jsonPath, { force: true });
+      }
+    } catch (error) {
+      // Clearing is what lets a retry start clean; a path that cannot be cleared fails every attempt the same way.
+      fail(EXIT.ENV_ERROR, `Failed to clear the previous report or verdict: ${error.message}`);
     }
     const runStart = Date.now();
 

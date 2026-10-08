@@ -18,11 +18,13 @@ function isRetryableStatus(status, body = '') {
   return status === 403 && /secondary rate limit/i.test(String(body));
 }
 
-/** Milliseconds GitHub asked to wait (Retry-After, capped at 60 s), else a linear backoff. */
+/** Milliseconds GitHub asked to wait (Retry-After as seconds or an HTTP-date, capped at 60 s), else a linear backoff. */
 function retryAfterMs(headers, attempt) {
   const raw = headers && typeof headers.get === 'function' ? headers.get('retry-after') : null;
   const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds, 60) * 1000;
+  if (raw !== null && String(raw).trim() !== '' && Number.isFinite(seconds) && seconds > 0) return Math.min(seconds, 60) * 1000;
+  const until = raw ? Date.parse(raw) : Number.NaN;
+  if (Number.isFinite(until) && until > Date.now()) return Math.min(until - Date.now(), 60_000);
   return 1000 * attempt;
 }
 
