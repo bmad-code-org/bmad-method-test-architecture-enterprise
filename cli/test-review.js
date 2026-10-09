@@ -457,6 +457,49 @@ function argvValue(argv, name) {
   return found;
 }
 
+/** A value of `--publish-as` the comment marker can carry as it is: it keeps to the marker's alphabet. */
+const PUBLISH_TAG = /^[A-Za-z0-9][\w.-]*$/;
+
+/**
+ * Open the GitHub publisher from whatever the command line states, before anything is validated.
+ * A bad flag, an absent agent or an unreadable skill is exactly a failure the pull request should
+ * show as a broken gate, so the publisher must exist for those exits too. It reads each value
+ * leniently: one it cannot use falls back to its default here, and the validation that follows
+ * still refuses it with exit 2. Publishing never changes an exit code.
+ *
+ * @param {object} session - Receives the publisher on its surface.
+ * @param {object} raw - The flags as written: github, repo, pr, checkName, checkRun, prComment,
+ *   headSha, agent, publishAs, artifactName.
+ */
+async function openPublisher(session, raw) {
+  if (!raw.github) {
+    return;
+  }
+  const trimmed = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined);
+  const prNumber = /^[1-9]\d*$/.test(String(raw.pr ?? '').trim()) ? Number.parseInt(raw.pr, 10) : undefined;
+  const headSha = /^[0-9a-f]{7,64}$/i.test(String(raw.headSha ?? '').trim()) ? raw.headSha.trim() : undefined;
+  const publishAs = PUBLISH_TAG.test(String(raw.publishAs ?? '').trim()) ? raw.publishAs.trim() : undefined;
+  // A typo'd --agent must not mint a comment of its own, so only a real adapter names the reviewer.
+  const agent = publishAs ?? (AGENTS.has(raw.agent) && raw.agent !== 'none' ? raw.agent : DEFAULT_AGENT);
+  session.surface.agent = agent;
+  session.prCache = new Map();
+  try {
+    session.surface.publisher = createPublisher({
+      target: resolveTarget({ repo: trimmed(raw.repo), prNumber, runUrl: session.surface.runUrl }),
+      agent,
+      checkName: trimmed(raw.checkName) ?? DEFAULT_CHECK_NAME,
+      comment: raw.prComment,
+      checkRun: raw.checkRun,
+      headSha,
+      artifactName: session.surface.artifactName,
+      cache: session.prCache,
+    });
+    await session.surface.publisher.begin();
+  } catch (error) {
+    console.error(`tea-test-review WARNING: could not open the GitHub publisher: ${error.message}`);
+  }
+}
+
 /**
  * The comment file path, or undefined when it would overwrite the report or the verdict. Compared
  * case-insensitively where the filesystem usually is, so `R.md` and `r.md` are one file there.
@@ -508,6 +551,10 @@ async function runReview(session) {
       'pull request head commit: the check run attaches to it and the comment shows it (default: the event payload, then the GitHub API). Needs --github or --comment-out',
     )
     .option('--check-name <name>', `check run name; branch protection matches it exactly (default: ${DEFAULT_CHECK_NAME})`)
+    .option(
+      '--publish-as <tag>',
+      'tag the pull-request comment marker and the check run\'s "running on" text with this instead of the agent, so a custom vendor run as `--agent claude --agent-cmd X` keeps a comment of its own (default: the agent). Needs --github or --comment-out',
+    )
     .option('--no-check-run', 'with --github, publish the comment only')
     .option('--no-pr-comment', 'with --github, publish the check run only')
     .option(
@@ -627,19 +674,32 @@ async function runReview(session) {
     if (error.exitCode === 0) {
       return EXIT.PASS;
     }
-    // A flag commander refused still owes the comment file, so read the one flag that names it
-    // straight from argv.
-    const commentOut = argvValue(normalizedArgv.argv, '--comment-out');
-    if (typeof commentOut === 'string') {
-      session.options = { projectRoot: argvValue(normalizedArgv.argv, '--project-root') ?? process.cwd() };
-      session.surface = {
-        commentOut: safeCommentOut(session.options, commentOut, [
-          argvValue(normalizedArgv.argv, '--output') ?? 'test-review.md',
-          argvValue(normalizedArgv.argv, '--json'),
-        ]),
-        publisher: null,
-      };
-    }
+    // A flag commander refused still owes the surfaces: the comment file and, with --github, the
+    // broken gate on the pull request. Read the flags that name them straight from argv.
+    const argv = normalizedArgv.argv;
+    const commentOut = argvValue(argv, '--comment-out');
+    session.options = { projectRoot: argvValue(argv, '--project-root') ?? process.cwd() };
+    session.surface = {
+      agent: argvValue(argv, '--agent') ?? undefined,
+      artifactName: argvValue(argv, '--artifact-name')?.trim() || undefined,
+      runUrl: workflowRunUrl() || undefined,
+      commentOut: safeCommentOut(session.options, commentOut ?? undefined, [
+        argvValue(argv, '--output') ?? 'test-review.md',
+        argvValue(argv, '--json'),
+      ]),
+      publisher: null,
+    };
+    await openPublisher(session, {
+      github: argv.includes('--github'),
+      repo: argvValue(argv, '--repo'),
+      pr: argvValue(argv, '--pr'),
+      checkName: argvValue(argv, '--check-name'),
+      checkRun: !argv.includes('--no-check-run'),
+      prComment: !argv.includes('--no-pr-comment'),
+      headSha: argvValue(argv, '--head-sha'),
+      agent: argvValue(argv, '--agent'),
+      publishAs: argvValue(argv, '--publish-as'),
+    });
     fail(EXIT.ENV_ERROR, error.message);
   }
   const options = program.opts();
@@ -661,6 +721,22 @@ async function runReview(session) {
     reportPath: options.output,
     publisher: null,
   };
+  // --publish-as names the reviewer on every surface, the comment file included.
+  if (PUBLISH_TAG.test(String(options.publishAs ?? '').trim())) {
+    session.surface.agent = options.publishAs.trim();
+  }
+  // Opened before the first validation, so every exit 2 below reaches the pull request as a broken gate.
+  await openPublisher(session, {
+    github: options.github,
+    repo: options.repo,
+    pr: options.pr,
+    checkName: options.checkName,
+    checkRun: options.checkRun,
+    prComment: options.prComment,
+    headSha: options.headSha,
+    agent: options.agent,
+    publishAs: options.publishAs,
+  });
 
   if (!AGENTS.has(options.agent)) {
     fail(EXIT.ENV_ERROR, `--agent must be one of ${[...AGENTS].join(', ')}; got "${options.agent}".`);
@@ -792,6 +868,17 @@ async function runReview(session) {
   if (options.headSha !== undefined && !options.github && !options.commentOut) {
     fail(EXIT.ENV_ERROR, '--head-sha only applies to --github or --comment-out; add one or drop it.');
   }
+  if (options.publishAs !== undefined) {
+    if (!options.github && !options.commentOut) {
+      fail(EXIT.ENV_ERROR, '--publish-as only applies to --github or --comment-out; add one or drop it.');
+    }
+    if (!PUBLISH_TAG.test(options.publishAs.trim())) {
+      fail(
+        EXIT.ENV_ERROR,
+        `--publish-as must be letters, digits, dots, dashes and underscores, starting with a letter or digit; got "${options.publishAs}".`,
+      );
+    }
+  }
   if (options.github && options.agent === 'none') {
     fail(EXIT.ENV_ERROR, '--github publishes a review, and --agent none runs none; drop one of the two.');
   }
@@ -820,23 +907,7 @@ async function runReview(session) {
     fail(EXIT.ENV_ERROR, '--artifact-name must not be empty.');
   }
 
-  // The check run and the comment: opened here, after the flags are known good and before anything
-  // that can fail, so a base ref that cannot be resolved or an agent that is not installed shows up
-  // on the pull request as a broken gate instead of in a log nobody opened.
-  const prCache = new Map();
-  if (options.github) {
-    session.surface.publisher = createPublisher({
-      target: resolveTarget({ repo: options.repo, prNumber: prNumber ?? undefined, runUrl: session.surface.runUrl }),
-      agent: options.agent,
-      checkName: options.checkName?.trim() || DEFAULT_CHECK_NAME,
-      comment: options.prComment,
-      checkRun: options.checkRun,
-      headSha: options.headSha,
-      artifactName: session.surface.artifactName,
-      cache: prCache,
-    });
-    await session.surface.publisher.begin();
-  }
+  const prCache = session.prCache ?? new Map();
 
   const projectRoot = path.resolve(options.projectRoot);
   const outputPath = path.resolve(projectRoot, options.output);

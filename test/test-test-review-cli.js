@@ -8111,6 +8111,106 @@ async function runTests() {
           `status=${ghEnvFail.status} ${ghEnvFail.stderr}`,
         );
 
+        // Every exit 2 the CLI can see reaches the pull request, whatever stage refused: the
+        // publisher opens before the first flag is validated.
+        for (const [label, extra, cause] of [
+          ['a malformed --min-score', ['--min-score', '80%'], /--min-score must be an integer/],
+          ['an expired --waive-until', ['--waive', 'legacy', '--waive-until', '2020-01-01'], /--waive-until/],
+          ['--waive without --waive-until', ['--waive', 'legacy'], /--waive requires --waive-until/],
+          ['an agent executable that is not installed', ['--agent-cmd', path.join(tmpRoot, 'no-such-agent')], /agent executable not found/],
+          ['an unknown flag', ['--no-such-flag'], /unknown option/],
+          ['a flag with no value', ['--fail-on'], /argument missing/],
+        ]) {
+          resetMock();
+          const early = await runCliAsync(ghArgs('early', extra), ghEnv('early'));
+          assert(
+            early.status === 2 &&
+              mock.checkRuns[0]?.status === 'completed' &&
+              mock.checkRuns[0]?.conclusion === 'failure' &&
+              mock.checkRuns[0]?.output?.title === 'Broken gate' &&
+              mock.comments.length === 1 &&
+              /Broken gate/.test(mock.comments[0].body) &&
+              cause.test(mock.comments[0].body),
+            `${label} exits 2 and reaches the pull request as a broken gate naming the cause`,
+            `status=${early.status} ${early.stderr}\n${JSON.stringify(mock.checkRuns[0])}\n${mock.comments[0]?.body}`,
+          );
+        }
+
+        // Without --github a refused flag makes no GitHub request.
+        resetMock();
+        const earlyNoGithub = await runCliAsync(ghArgs('earlyoff', ['--min-score', '80%'], { github: false }), ghEnv('earlyoff'));
+        assert(
+          earlyNoGithub.status === 2 && mock.requests.length === 0,
+          'a refused flag without --github makes no GitHub request',
+          `status=${earlyNoGithub.status} requests=${mock.requests.length}`,
+        );
+
+        // Publishing never changes the exit code: an unreachable API leaves the refusal as exit 2.
+        resetMock();
+        const earlyDown = await runCliAsync(ghArgs('earlydown', ['--min-score', '80%']), {
+          ...ghEnv('earlydown'),
+          GITHUB_API_URL: 'http://127.0.0.1:1',
+        });
+        assert(
+          earlyDown.status === 2 && /warning/i.test(earlyDown.stderr),
+          'an unreachable GitHub API turns a refused flag into a warning and leaves exit 2',
+          `status=${earlyDown.status} ${earlyDown.stderr}`,
+        );
+
+        // --publish-as gives a custom vendor run as --agent claude its own comment and check text.
+        resetMock();
+        const asClaude = await runCliAsync(ghArgs('pubclaude'), ghEnv('pubclaude'));
+        const asGemini = await runCliAsync(ghArgs('pubgemini', ['--publish-as', 'gemini']), ghEnv('pubgemini'));
+        const createBodies = mock.requests
+          .filter((r) => r.method === 'POST' && r.url === '/repos/o/r/check-runs')
+          .map((r) => r.body.output.summary);
+        assert(
+          asClaude.status === 0 &&
+            asGemini.status === 0 &&
+            mock.comments.length === 2 &&
+            mock.comments[0].body.startsWith('<!-- tea-test-review:claude -->') &&
+            mock.comments[1].body.startsWith('<!-- tea-test-review:gemini -->') &&
+            createBodies[0].includes('running on claude.') &&
+            createBodies[1].includes('running on gemini.'),
+          '--publish-as tags the comment marker and the "running on" text, so two vendors keep one comment each',
+          `${asClaude.status} ${asGemini.status} ${mock.comments.map((c) => c.body.split('\n')[0])} ${createBodies}`,
+        );
+        await runCliAsync(ghArgs('pubgemini2', ['--publish-as', 'gemini']), ghEnv('pubgemini2'));
+        assert(
+          mock.comments.length === 2,
+          'a second run under the same --publish-as updates its comment instead of adding one',
+          `${mock.comments.length}`,
+        );
+
+        // The comment file carries the tag too.
+        const pubFile = path.join(tmpRoot, 'b2-pubfile', 'comment.md');
+        const asFile = await runCliAsync(
+          [
+            '--base',
+            'main',
+            '--project-root',
+            b2Repo,
+            '--agent-cmd',
+            stubAgent,
+            '--no-isolate',
+            '--retries',
+            '0',
+            '--publish-as',
+            'gemini',
+            '--comment-out',
+            pubFile,
+            '--output',
+            path.join(tmpRoot, 'b2-pubfile', 'test-review.md'),
+            ...stubPass('STUB_MODE', 'STUB_COUNTER', 'STUB_FIRST_MODE'),
+          ],
+          ghEnv('pubfile'),
+        );
+        assert(
+          asFile.status === 0 && fs.readFileSync(pubFile, 'utf8').startsWith('<!-- tea-test-review:gemini -->'),
+          '--publish-as tags the --comment-out file too',
+          `${asFile.status} ${asFile.stderr}`,
+        );
+
         // A skip.
         resetMock();
         const ghSkip = await runCliAsync(
@@ -8558,6 +8658,12 @@ async function runTests() {
           ['nothing left to publish', ['--github', '--no-check-run', '--no-pr-comment'], 'leave --github nothing to publish'],
           ['--github with --agent none', ['--github', '--agent', 'none'], '--github publishes a review, and --agent none runs none'],
           ['--pr with --files and no --github', ['--pr', '7'], '--pr resolves the git base ref'],
+          [
+            '--publish-as without --github or --comment-out',
+            ['--publish-as', 'x'],
+            '--publish-as only applies to --github or --comment-out',
+          ],
+          ['a --publish-as the marker cannot carry', ['--github', '--publish-as', 'a b'], '--publish-as must be letters, digits'],
           ['a bad --run-url', ['--run-url', 'ftp://x'], '--run-url must be an http(s) URL'],
           ['an empty --artifact-name', ['--artifact-name', ' '], '--artifact-name must not be empty'],
         ]) {
