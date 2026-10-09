@@ -95,11 +95,10 @@ does. Then `criteria-registry.md` scores each Convention row against the result.
 > independently re-checks every `Convention: <key> (<adopted> of <sampled> sampled)`
 > citation against what it measured and rejects a report that disagrees — most
 > pointedly, a report that claims nonzero adoption for a key the CLI's own scan
-> found zero real occurrences of anywhere in the scanned corpus. `bddNaming` and
-> `assertionStyle` carry no mechanical signal (no single token distinguishes
-> "adopted" from "not" for a naming style or a dialect choice), so read the named
-> files yourself and judge those two; the sampled/corpusSize grounding still
-> applies to them.
+> found zero real occurrences of anywhere in the scanned corpus. `assertionStyle`
+> carries no mechanical signal (no single token distinguishes "adopted" from "not"
+> for a dialect choice), so read the named files yourself and judge it; the
+> sampled/corpusSize grounding still applies to it.
 
 **No CLI, no exception: never estimate.** In every other context (an interactive
 run inside an editor, a `suite`-scope review with no headless wrapper), you must
@@ -153,7 +152,6 @@ verbatim so the report can quote it back:
 | ----------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `priorityMarkers` | carries a priority marker on its tests                         | the observed shape, e.g. `[P0] in the test name`, `@P1 tag`, `{ tag: ['@p2'] }`  |
 | `testIds`         | locates elements by a stable test id                           | the attribute or helper, e.g. `data-testid`, `getByTestId`                       |
-| `bddNaming`       | names tests by behavior rather than implementation             | e.g. `starts with a verb phrase`, `Given/When/Then`                              |
 | `networkFirst`    | registers interception or a readiness signal before navigating | the helper, e.g. `interceptNetworkCall`, `page.route`                            |
 | `playwrightUtils` | imports any `@seontechnologies/playwright-utils` subpath       | the observed entry point, e.g. `apiRequest fixture`, `merged-fixtures re-export` |
 | `dataFactories`   | builds domain payloads through a factory or builder            | e.g. `@couture/testing factories`, `build*` helpers                              |

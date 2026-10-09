@@ -83,7 +83,7 @@ const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel, resolvedModelFromAnswer, agentAnswerText } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
-const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
+const { RUBRIC_VERSION, TEA_CLI_VERSION, buildReviewProvenance, skillRubricVersion } = require('./lib/review-provenance');
 const { validInterval } = require('./lib/heartbeat');
 
 const HEARTBEAT_SCRIPT = path.join(__dirname, 'lib', 'heartbeat.js');
@@ -1115,6 +1115,23 @@ async function runReview(session) {
   // trusted. null on a skill root with no registry file (e.g. a bare test fixture);
   // parseReport treats that as "no grounding available" rather than failing closed.
   const registryRowSeverities = loadRegistryRowSeverities(skillRoot);
+  // The parser, the prompt and the convention baseline all encode the current
+  // rubric. A skill copy from another rubric would cost paid agent calls and then
+  // fail the report check, so refuse it here. A root with no registry is a bare
+  // test stub and carries no rubric to compare.
+  if (registryRowSeverities) {
+    const declared = skillRubricVersion(skillRoot);
+    if (declared !== RUBRIC_VERSION) {
+      fail(
+        EXIT.ENV_ERROR,
+        `The skill at ${skillRoot} declares rubric ${declared ?? 'none'}; this CLI scores rubric ${RUBRIC_VERSION}. ${
+          skillSource === 'packaged'
+            ? 'Reinstall the CLI so the packaged skill matches it.'
+            : 'Upgrade that skill copy, or drop --project-skill and --skill-root to use the packaged one.'
+        }`,
+      );
+    }
+  }
 
   if (options.agent === 'none') {
     const prompt = buildPrompt({

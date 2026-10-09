@@ -62,13 +62,12 @@ Coverage analysis is out of scope for this workflow. Use `trace` for coverage me
 
 - [ ] Describe block count calculated
 - [ ] It/test block count calculated
-- [ ] BDD structure identified (Given-When-Then)
 - [ ] Fixture usage detected
 - [ ] Data factory usage detected
 - [ ] Network interception patterns identified
 - [ ] Assertions counted
 - [ ] Waits and timeouts cataloged
-- [ ] Conditionals (if/else) detected
+- [ ] Branches around assertions detected (an `if`/ternary that can leave a path with no assertion)
 - [ ] Try/catch blocks detected
 - [ ] Shared state or globals detected
 
@@ -77,13 +76,6 @@ Coverage analysis is out of scope for this workflow. Use `trace` for coverage me
 Coverage criteria are intentionally excluded from this checklist.
 
 **For Each Enabled Criterion:**
-
-#### BDD Format (if `check_given_when_then: true`)
-
-- [ ] Given-When-Then structure evaluated
-- [ ] Status assigned (PASS/WARN/FAIL)
-- [ ] Violations recorded with line numbers
-- [ ] Examples of good/bad patterns noted
 
 #### Test IDs (if `check_test_ids: true`)
 
@@ -107,7 +99,7 @@ Coverage criteria are intentionally excluded from this checklist.
 
 #### Determinism (if `check_determinism: true`)
 
-- [ ] Conditionals (if/else/switch) detected
+- [ ] Assertions that can be skipped, swallowed or selected from system output detected
 - [ ] Try/catch abuse detected
 - [ ] Random values (Math.random, Date.now) detected
 - [ ] Status assigned (PASS/WARN/FAIL)
@@ -223,8 +215,7 @@ Row M10. Gate closes and the row is left out of the report when the flag is fals
 - [ ] High violations deducted (-5 each)
 - [ ] Medium violations deducted (-2 each)
 - [ ] Low violations deducted (-1 each)
-- [ ] Bonus points added (max +30):
-  - [ ] Excellent BDD structure (+5 if applicable)
+- [ ] Bonus points added (max +25):
   - [ ] Comprehensive fixtures (+5 if applicable)
   - [ ] Comprehensive data factories (+5 if applicable)
   - [ ] Network-first pattern (+5 if applicable)

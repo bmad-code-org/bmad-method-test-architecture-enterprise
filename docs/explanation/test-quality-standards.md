@@ -301,8 +301,7 @@ test('fast test', async ({ page }) => {
 
 ### Structure (10 points)
 
-- Test size ≤ 1000 lines: 5
-- Clear naming: 5
+- Test size ≤ 1000 lines: 10
 
 ### Performance (10 points)
 
@@ -319,7 +318,7 @@ test('fast test', async ({ page }) => {
 ### Worked example: user login
 
 ```typescript
-// Score: 25/100
+// Score: 30/100
 test('login test', async ({ page }) => {
   await page.goto('/login');
   await page.waitForTimeout(3000); // hard wait: -10, and network-first: -5
@@ -339,18 +338,18 @@ test('login test', async ({ page }) => {
     // try-catch as flow control: -10
   }
 
-  // No assertions: -20. No cleanup: -15. Name says nothing: -5.
+  // No assertions: -20. No cleanup: -15.
 });
 ```
 
-| Category    | Awarded | Why                                                                |
-| ----------- | ------- | ------------------------------------------------------------------ |
-| Determinism | 0/35    | Hard wait, conditional, try-catch flow, no network-first wait      |
-| Isolation   | 10/25   | No cleanup (0/15); no globals (5/5); parallel-safe (5/5)           |
-| Assertions  | 0/20    | The test asserts nothing, so it cannot fail                        |
-| Structure   | 5/10    | Size is fine (5/5); `login test` does not say what is tested (0/5) |
-| Performance | 10/10   | Runs in seconds despite the waste                                  |
-| **Total**   | **25**  | Critical: significant refactoring needed                           |
+| Category    | Awarded | Why                                                           |
+| ----------- | ------- | ------------------------------------------------------------- |
+| Determinism | 0/35    | Hard wait, conditional, try-catch flow, no network-first wait |
+| Isolation   | 10/25   | No cleanup (0/15); no globals (5/5); parallel-safe (5/5)      |
+| Assertions  | 0/20    | The test asserts nothing, so it cannot fail                   |
+| Structure   | 10/10   | Size is fine                                                  |
+| Performance | 10/10   | Runs in seconds despite the waste                             |
+| **Total**   | **30**  | Critical: significant refactoring needed                      |
 
 ```typescript
 // Score: 100/100
@@ -409,7 +408,6 @@ Determinism 35/35, Isolation 25/25, Assertions 20/20, Structure 10/10, Performan
 - [ ] Network-first patterns used
 - [ ] Assertions explicit in test body
 - [ ] Test size ≤ 1000 lines
-- [ ] Clear, descriptive test name
 - [ ] Self-cleaning (cleanup in afterEach or in the test)
 - [ ] Unique test data (no hard-coded values)
 - [ ] Execution time < 1.5 minutes

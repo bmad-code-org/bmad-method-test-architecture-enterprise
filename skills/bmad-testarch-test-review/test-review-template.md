@@ -64,12 +64,11 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 | Criterion                            | Status                          | Violations | Basis        | Notes                           |
 | ------------------------------------ | ------------------------------- | ---------- | ------------ | ------------------------------- |
-| BDD Format (Given-When-Then)         | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 | Test IDs                             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 | Priority Markers (P0/P1/P2/P3)       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 | Disabled or Focused Tests            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
 | Hard Waits (sleep, waitForTimeout)   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
-| Determinism (no conditionals)        | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Determinism (assertions always run)  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 | Isolation (cleanup, no shared state) | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
 | Fixture Patterns                     | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 | Data Factories                       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
@@ -119,7 +118,6 @@ Medium Violations:       -{medium_count} × 2 = -{medium_deduction}
 Low Violations:          -{low_count} × 1 = -{low_deduction}
 
 Bonus Points:
-  Excellent BDD:         +{0|5}
   Comprehensive Fixtures: +{0|5}
   Data Factories:        +{0|5}
   Network-First:         +{0|5}
@@ -135,7 +133,7 @@ Grade:                   {grade}
 ```
 
 <!-- This ledger is the workflow's only scoring model (see steps-c/step-03f-aggregate-scores.md).
-     Every bonus line is 0 or 5, never a partial value, and the six categories above are the
+     Every bonus line is 0 or 5, never a partial value, and the five categories above are the
      complete set. {grade} is exactly one of A, B, C, D, F, with no modifier such as A+ or B-.
      The deduction lines and bonus must sum to {raw_score}. The highest finding severity caps
      that raw score at Critical 69, High 79, Medium 89, or Low 99; no findings use cap 100.

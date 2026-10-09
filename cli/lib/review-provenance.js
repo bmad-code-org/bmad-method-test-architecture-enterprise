@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const yaml = require('js-yaml');
 
 // A relative require() of package.json reads as an import escaping this file's
 // declared dependency-direction root (cli/), since package.json sits outside
@@ -30,10 +31,16 @@ function gitSha(projectRoot, ref) {
   return result.error || result.status !== 0 ? null : result.stdout.trim() || null;
 }
 
+// The rubric this CLI scores against: five bonus categories, a 25-point ceiling,
+// seven convention keys. A skill copy that declares another version asks for a
+// different report shape, so the CLI refuses it before any agent call.
+const RUBRIC_VERSION = '5.0';
+
 function skillRubricVersion(skillRoot) {
   try {
-    const template = fs.readFileSync(path.join(skillRoot, 'test-review-template.md'), 'utf8');
-    return /^\*\*Workflow\*\*:\s*testarch-test-review\s+v([^\s]+)\s*$/m.exec(template)?.[1] ?? null;
+    const workflow = yaml.load(fs.readFileSync(path.join(skillRoot, 'workflow.yaml'), 'utf8'));
+    const version = workflow?.rubric_version;
+    return typeof version === 'string' && /^\d+(\.\d+)*$/.test(version) ? version : null;
   } catch {
     return null;
   }
@@ -82,8 +89,8 @@ function buildReviewProvenance({ projectRoot, skillRoot, baseRef, filesProvided,
     sources: {
       teaCliVersion: 'package.json',
       skillRubricVersion: rubricVersion
-        ? 'test-review-template.md Workflow metadata'
-        : 'unavailable: skill template has no readable Workflow version',
+        ? 'workflow.yaml rubric_version'
+        : 'unavailable: skill workflow.yaml has no readable rubric_version',
       modelIdentifier:
         modelIdentifier == null ? 'unavailable: selected adapter does not expose a model identifier' : 'resolved agent adapter model',
       baseSha: filesProvided
@@ -106,4 +113,4 @@ function buildReviewProvenance({ projectRoot, skillRoot, baseRef, filesProvided,
   return provenance;
 }
 
-module.exports = { TEA_CLI_VERSION, REVIEW_PROVENANCE_KEYS, buildReviewProvenance, gitSha, skillRubricVersion };
+module.exports = { RUBRIC_VERSION, TEA_CLI_VERSION, REVIEW_PROVENANCE_KEYS, buildReviewProvenance, gitSha, skillRubricVersion };

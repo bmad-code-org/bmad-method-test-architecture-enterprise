@@ -23,7 +23,7 @@ stepsCompleted:
 
 ### Summary
 
-The six bonus categories are worth 0 or 5 each, so +11 cannot be a legal total.
+The five bonus categories are worth 0 or 5 each, so +11 cannot be a legal total.
 A live run awarded +3 twice and reached this state, which is how an invented
 scoring scale reaches the gate.
 
@@ -39,9 +39,9 @@ Medium Violations:       -3 × 2 = -6
 Low Violations:          -3 × 1 = -3
 
 Bonus Points:
-  Excellent BDD:         +3
   Network-First:         +3
   Comprehensive Fixtures: +5
+  Perfect Isolation:     +3
 
 Total Bonus:             +11
 

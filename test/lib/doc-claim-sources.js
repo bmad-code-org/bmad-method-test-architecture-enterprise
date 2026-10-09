@@ -175,9 +175,9 @@ exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
  */
 exports.EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE = /^\d+\.\d+\.\d+$/.test(evalQualityVersion);
 
-/** README.md:397, "All 36 rows are currently mapped across 50 anchors." */
+/** README.md:410, "All 35 rows are currently mapped across 51 anchors." */
 const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fragments.js');
-exports.THIRTY_SIX_ROWS_MAPPED = registryRows.length === 36 && Object.keys(fragmentManifest).length === registryRows.length;
+exports.THIRTY_FIVE_ROWS_MAPPED = registryRows.length === 35 && Object.keys(fragmentManifest).length === registryRows.length;
 
 /** docs/how-to/workflows/run-atdd.md:8, "TEA currently emits these scaffolds with `test.skip()`." */
 const atddStepsRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'steps-c');

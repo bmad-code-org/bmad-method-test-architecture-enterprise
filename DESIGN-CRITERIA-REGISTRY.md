@@ -308,6 +308,12 @@ three, not the fabrication bug, so `convention-baseline.js` still grounds all se
 uniformly (future-proofing, and Notes prose can cite any of them), but the deduction
 schedule only reads three of the seven back.
 
+Rubric 5.0 (2026-10-09) removed row `L5` and the `bddNaming` key, because test
+names are not scored. The baseline measures the seven remaining keys, three
+criteria are Convention-gated (`priorityMarkers` → L2, `testIds` → L3 and
+`playwrightUtils` → M9 and L9), and the paragraphs above describe the 4.0 rubric
+as it stood on the day they were written.
+
 ## 2026-08-10, same day: the summary line was never checked against the findings either
 
 Auditing the fix above for the same class of defect elsewhere turned up a second one,

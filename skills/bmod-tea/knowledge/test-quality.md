@@ -2,7 +2,7 @@
 
 ## Principle
 
-Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain 1000 lines or fewer, avoid hard waits and conditionals, keep assertions visible in test bodies, and clean up after itself for parallel execution.
+Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain 1000 lines or fewer, avoid hard waits and branches that skip a step or an assertion, keep assertions visible in test bodies, and clean up after itself for parallel execution.
 
 ## Rationale
 
@@ -12,7 +12,7 @@ Quality tests provide reliable signal about application health. Flaky tests erod
 
 ### Example 1: Deterministic Test Pattern
 
-**Context**: When writing tests, eliminate all sources of non-determinism: hard waits, conditionals controlling flow, try-catch for flow control, and random data without seeds.
+**Context**: When writing tests, eliminate all sources of non-determinism: hard waits, branches that skip a step or an assertion, try-catch for flow control, and random data without seeds.
 
 **Implementation**:
 
@@ -92,7 +92,7 @@ describe('Dashboard', () => {
 **Key Points**:
 
 - Replace `waitForTimeout()` with `waitForResponse()` or element state checks
-- Never use if/else to control test flow - tests should be deterministic
+- Never branch on which actions run, and never let a branch leave an assertion unrun: tests should be deterministic
 - Avoid try-catch for flow control - let failures bubble up clearly
 - Use factory functions with controlled data, not `Math.random()`
 - Network-first pattern prevents race conditions
@@ -761,6 +761,29 @@ assert total == Decimal("42.00")
 - An assertion after an unconditional `return`, or inside a `catch` the happy path never enters, or inside a callback the test never awaits, does not run
 - Prefer `rejects`/`raises` forms over `try`/`catch` around the thing you expect to throw: they fail when nothing throws
 
+**A branch in a test is a defect only when it can hide a wrong result.** An `if` that leaves a path with no assertion skips the check, whatever decides the branch: a guard on the system's own output skips it exactly when the system is wrong, and a parameter guard with no `else` skips it for every other case. An expected value picked by a branch on the system's output makes the test agree with whatever the system did, and so does a branch the system's output decides when each path asserts a literal: `if response.ok: assert body == order` with `else: assert response.status_code == 404` passes a regression that answers 404 for a valid order.
+
+```python
+# ❌ BAD: the assertion runs only when the system already returned a lower total
+total = apply_discount(cart, "SAVE10")
+if total < cart.total():
+    assert total == 18.0
+
+# ✅ GOOD: always asserted
+assert apply_discount(cart, "SAVE10") == 18.0
+
+# ✅ ACCEPTABLE, a readability note at most: a test input decides the branch and every path asserts the expected value
+@pytest.mark.parametrize(("code", "expected"), [("SAVE10", 0.10), ("NOPE", None)])
+def test_lookup(code, expected):
+    rate = lookup_discount(code)
+    if expected is None:
+        assert rate is None
+    else:
+        assert rate == expected
+```
+
+The branch runs a different line per case, but each case still checks the expected value, so a wrong rate fails either way. Drop the `else` and the cases that miss the `if` assert nothing, which is H3. Moving the expectation into the parameter table (`assert rate == expected`) makes the test easier to audit, and that is advice with no severity.
+
 **The assertion that can fail and still cannot tell you anything.** One step past the three above sits an assertion that would fail on a wrong type and passes on every wrong value of the right type. It is not an assertion that cannot fail, so none of the rows above reach it, and it is the most common way a test looks thorough and proves nothing.
 
 ```typescript
@@ -774,13 +797,27 @@ expect(created.id).toBe(input.idempotencyKey);
 expect(created.total).toBe(4299);
 ```
 
-`toBeDefined`, `toBeTruthy`, `not.toBeNull`, a bare `toBeInstanceOf`, and `toHaveProperty` with no expected value are the same shape wearing different names. Three cases are not violations: a value assertion standing beside the type check, a value the system generates that the test genuinely cannot predict such as a server-assigned id or a timestamp, where the line should say why the type is all there is to assert, and a presence assertion about a UI element such as `toBeVisible`, where being on the screen is the behavior under test.
+`toBeDefined`, `toBeTruthy`, `not.toBeNull`, a bare `toBeInstanceOf`, and `toHaveProperty` with no expected value are the same shape wearing different names. A value test that accepts every wrong value of the right shape (`assert receipt.total is not None` where the total is the behavior) is the defect; a test whose purpose is that one type is assignable to another is a different test.
 
-### Example 8: Suite Structure, Naming, and One Dialect
+```python
+# ❌ BAD: the total is the behavior, and any total passes
+assert receipt.total is not None
+
+# ✅ GOOD
+assert receipt.total == 20.0
+
+# ✅ NOT A VIOLATION when CI runs mypy: the typed assignment is the assertion
+result: Result[Receipt] = wrap(receipt)
+widened: Result[object] = result  # fails the static check if covariance breaks
+```
+
+Read the project's CI and type-check configuration before judging such a test. With a static type check that CI runs over the test file (mypy, pyright or `tsc` invoked by the workflow or a script it calls, with the file inside its file list or `include` and no `exclude` or `ignore_errors` for it), the check is what fails when assignability breaks, and the runtime line beside it is incidental. A checker that is only configured (`[tool.mypy]`, a `tsconfig.json`) and never run does not count: the same test asserts nothing about the type and the shape-only finding stands. Three more cases are not violations: a value assertion standing beside the type check, a value the system generates that the test genuinely cannot predict such as a server-assigned id or a timestamp, where the line should say why the type is all there is to assert, and a presence assertion about a UI element such as `toBeVisible`, where being on the screen is the behavior under test.
+
+### Example 8: Suite Structure and One Dialect
 
 **Context**: These do not make a test wrong. They make a failure expensive to read, which is the same cost paid every time the suite goes red for the next several years.
 
-A test that asserts against three unrelated subjects does not localize: the failure says the test broke, not which behavior broke. Count subjects, not `expect` calls: three assertions about one response is one concern, and one assertion each about a response, a database row, and an email is three. An ungrouped file prints failures with no subject line. Nesting past three levels means the reader reconstructs the setup from four `beforeEach` blocks before they can read the test. A name that states the implementation goes stale the moment the implementation changes and tells the reader nothing when it fails. And a file that mixes assertion dialects makes every reader translate between two styles for no benefit.
+A test that asserts against three unrelated subjects does not localize: the failure says the test broke, not which behavior broke. Count subjects, not `expect` calls: three assertions about one response is one concern, and one assertion each about a response, a database row, and an email is three. An ungrouped file prints failures with no subject line. Nesting past three levels means the reader reconstructs the setup from four `beforeEach` blocks before they can read the test. And a file that mixes assertion dialects makes every reader translate between two styles for no benefit.
 
 **Implementation**:
 
@@ -793,7 +830,7 @@ test('checkout works correctly', async ({ page, request }) => {
   expect(await lastEmail()).toContain('Order confirmed'); // subject: email
 });
 
-// ✅ GOOD: one subject per test, grouped, named for the behavior
+// ✅ GOOD: one subject per test, grouped
 describe('checkout', () => {
   test('records the order', async ({ request }) => {
     /* one subject */
@@ -805,14 +842,6 @@ describe('checkout', () => {
     /* one subject */
   });
 });
-
-// ❌ BAD: names the implementation, or nothing at all
-test('calls handleSubmit()', ...);
-test('getUserById works correctly', ...);
-
-// ✅ GOOD: names the behavior, so the failure line is the bug report
-test('rejects a submission with no email', ...);
-test('returns 404 for an unknown user id', ...);
 
 // ❌ BAD: two dialects in one file
 expect(response.status()).toBe(200);
@@ -828,7 +857,6 @@ expect(body.role).toBe('admin');
 - One concern per test, counted by subject rather than by `expect` call
 - Group with `describe`/`context` once a file has three or more tests, so failures print with a subject
 - Keep `describe` nesting and block nesting at three levels or fewer
-- Name the behavior, not the method, the selector, or "works correctly"
 - One assertion dialect per file, matching whatever the repo already uses
 
 ## Integration Points
@@ -846,7 +874,7 @@ expect(body.role).toBe('admin');
 Every test must pass these criteria:
 
 - [ ] **No Hard Waits** - Use `waitForResponse`, `waitForLoadState`, or element state (not `waitForTimeout`)
-- [ ] **No Conditionals** - Tests execute the same path every time (no if/else, try/catch for flow control)
+- [ ] **No Conditionals** - An assertion is never skipped, swallowed or selected from the system's own output (no `if` that leaves a path with no assertion, no try/catch for flow control); a branch that asserts the expected value on every path is a readability note at most
 - [ ] **≤ 1000 Lines** - Keep tests focused; split large tests or extract setup to fixtures
 - [ ] **< 1.5 Minutes** - Optimize with API setup, parallel operations, and shared auth
 - [ ] **Self-Cleaning** - Use fixtures with auto-cleanup or explicit `afterEach()` teardown
@@ -858,6 +886,6 @@ Every test must pass these criteria:
 - [ ] **Assertions Can Fail** - No self-comparison, no assertion against only the mock the test configured, nothing after an unconditional `return`
 - [ ] **One Concern** - Counted by subject, not by `expect` call
 - [ ] **Grouped and Shallow** - `describe`/`context` once a file has three tests; nesting three levels or fewer
-- [ ] **Behavioral Names, One Dialect** - Names state the behavior; the file uses a single assertion style
+- [ ] **One Dialect** - The file uses a single assertion style
 
 _Source: Murat quality checklist, Definition of Done requirements (lines 370-381, 406-422)._

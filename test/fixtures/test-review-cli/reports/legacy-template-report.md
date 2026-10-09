@@ -45,7 +45,6 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 
 ### Key Strengths
 
-- Behavior-focused Given-When-Then naming across all three tests
 - Tenant and user setup is isolated through project fixtures
 - Stable test IDs and explicit assertions make failures diagnosable
 
@@ -59,12 +58,11 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 
 | Criterion                            | Status        | Violations | Basis                                                                   | Notes                                                    |
 | ------------------------------------ | ------------- | ---------: | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| BDD Format (Given-When-Then)         | ✅ PASS       |          0 | Convention: bddNaming (6 of 8 sampled)                                  | All names state user-visible behavior                    |
 | Test IDs                             | ✅ PASS       |          0 | Convention: testIds (7 of 8 sampled)                                    | All DOM lookups use stable test IDs                      |
 | Priority Markers (P0/P1/P2/P3)       | ⚠️ WARN       |          1 | Convention: priorityMarkers (7 of 8 sampled)                            | Test at line 81 has no marker                            |
 | Disabled or Focused Tests            | ✅ PASS       |          0 | Absolute                                                                | No skip, fixme, only, or focus marker                    |
 | Hard Waits (sleep, waitForTimeout)   | ❌ FAIL       |          1 | Absolute                                                                | Fixed 2-second timer at line 37                          |
-| Determinism (no conditionals)        | ✅ PASS       |          0 | Absolute                                                                | No branching, catches, or wall-clock fixtures            |
+| Determinism (assertions always run) | ✅ PASS       |          0 | Absolute                                                                | No branching, catches, or wall-clock fixtures            |
 | Isolation (cleanup, no shared state) | ✅ PASS       |          0 | Absolute                                                                | Fixtures create and remove each preference record        |
 | Fixture Patterns                     | ✅ PASS       |          0 | Applicability: the file needs authenticated setup                       | Existing merged fixtures are reused                      |
 | Data Factories                       | ✅ PASS (n/a) |          0 | Applicability: the file does not construct domain payloads              | No payload shape to extract                              |
@@ -90,12 +88,11 @@ Medium Violations:       -1 × 2 = -2
 Low Violations:          -1 × 1 = -1
 
 Bonus Points:
-  Excellent BDD:         +5
   Comprehensive Fixtures: +0
   Data Factories:        +0
   Network-First:         +0
   Perfect Isolation:     +0
-  All Test IDs:          +0
+  All Test IDs:          +5
                          --------
 Total Bonus:             +5
 
