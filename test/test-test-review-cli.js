@@ -8546,6 +8546,34 @@ async function runTests() {
           fs.existsSync(k20File) ? fs.readFileSync(k20File, 'utf8') : 'no file',
         );
 
+        // A stated --repo that names no repository never falls back to the environment's repository.
+        for (const [label, extra] of [
+          ['an empty --repo', ['--repo', '', '--no-such-flag']],
+          ['a blank --repo', ['--repo', ' ']],
+          ['a trailing --repo', ['--repo']],
+          ['a malformed --repo', ['--repo', 'bad']],
+        ]) {
+          resetMock();
+          const noRepo = await runCliAsync(ghArgs('norepo', extra), ghEnv('norepo'));
+          assert(
+            noRepo.status === 2 && mock.requests.length === 0,
+            `${label} publishes nothing instead of falling back to GITHUB_REPOSITORY`,
+            `status=${noRepo.status} ${mock.requests.map((r) => r.url)}`,
+          );
+        }
+
+        // A switch with a value is an unknown option, not the switch.
+        resetMock();
+        const switchValue = await runCliAsync([...ghArgs('switchvalue', ['--no-such-flag'], { github: false }), '--github=false'], {
+          ...ghEnv('switchvalue'),
+          GITHUB_REF: 'refs/pull/7/merge',
+        });
+        assert(
+          switchValue.status === 2 && mock.requests.length === 0,
+          '--github=false is an unknown option and publishes nothing',
+          `status=${switchValue.status} ${mock.requests.map((r) => r.url)}`,
+        );
+
         // A skip.
         resetMock();
         const ghSkip = await runCliAsync(

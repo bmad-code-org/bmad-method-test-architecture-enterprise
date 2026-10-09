@@ -473,7 +473,10 @@ function statedFlags(argv, program) {
       continue;
     }
     if (!option.required && !option.optional) {
-      stated.set(name, true);
+      // A switch takes no value: `--github=false` is an unknown option to the parser, not --github.
+      if (equals === -1) {
+        stated.set(name, true);
+      }
     } else if (equals === -1) {
       stated.set(name, argv[index + 1] ?? null);
       index += 1;
@@ -531,7 +534,12 @@ async function openPublisher(session, raw) {
   session.prCache = new Map();
   try {
     session.surface.publisher = createPublisher({
-      target: resolveTarget({ repo: trimmed(raw.repo), prNumber, runUrl: session.surface.runUrl }),
+      // A stated --repo that is blank reaches resolveTarget as '', which it refuses, not as the environment's repository.
+      target: resolveTarget({
+        repo: raw.repo === undefined ? undefined : String(raw.repo).trim(),
+        prNumber,
+        runUrl: session.surface.runUrl,
+      }),
       agent,
       checkName: trimmed(raw.checkName) ?? DEFAULT_CHECK_NAME,
       comment: raw.prComment,
@@ -738,7 +746,7 @@ async function runReview(session) {
     };
     await openPublisher(session, {
       github: stated.get('--github') === true,
-      repo: text('--repo'),
+      repo: stated.has('--repo') ? (text('--repo') ?? '') : undefined,
       pr: stated.has('--pr') ? (text('--pr') ?? null) : undefined,
       checkName: stated.has('--check-name') ? (text('--check-name') ?? '') : undefined,
       checkRun: stated.get('--no-check-run') !== true,
