@@ -190,7 +190,7 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 
 ### Workflow Dependencies
 
-- [ ] Framework configured or created and validated in this same combined run
+- [ ] Existing or newly created framework validated against the agreed contract in this run (CI-only existing; both-scope new or reused)
 - [ ] Can proceed to `atdd` workflow after CI setup
 - [ ] Can proceed to `automate` workflow
 - [ ] CI integrates with `gate` workflow

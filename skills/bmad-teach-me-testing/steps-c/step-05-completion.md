@@ -283,7 +283,7 @@ You've successfully completed the entire TEA Academy curriculum!
 **You're now equipped to:**
 
 - Write high-quality tests following TEA principles
-- Use all 9 TEA workflows effectively
+- Use all 10 registered TEA workflow entries effectively
 - Apply risk-based testing (P0-P3 prioritization)
 - Implement architecture patterns (fixtures, network-first)
 - Maintain quality through Test Review and Trace

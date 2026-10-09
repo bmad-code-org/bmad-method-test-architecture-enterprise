@@ -33,7 +33,7 @@ Canonical and CI activation prepend/append entries each have their own stable le
 For every applicable hook, in order:
 
 1. If the key is in `hooks_completed`, skip execution.
-2. If the key is in `hooks_started` and has no completed marker, halt before further writes or hooks. Explain that the prior hook's outcome is uncertain and ask whether it finished. Only an explicit answer can mark it completed or authorize a retry; elapsed time and headless mode cannot answer. A retry is a recorded recovery decision.
+2. If the key is in `hooks_started` and has no completed marker, halt before further writes or hooks. Explain that the prior hook's outcome is uncertain and ask whether it finished. Only an explicit answer can mark it completed or authorize a retry; elapsed time and headless mode cannot answer. Use interactive Resume or explicit operator confirmation to recover: when the operator confirms the side effect completed, the coordinator records that confirmation and marks the hook completed; when the operator confirms the hook was unapplied and authorizes retry, the coordinator records that retry decision before executing it. Save the hook key, operator answer, disposition and timestamp in the journal's hook recovery record. The coordinator updates the journal and continues the saved operation.
 3. Save the key and exact instruction in `hooks_started` before executing it. A save failure stops before execution.
 4. Execute the hook. Save its key in `hooks_completed` only after success. On failure, leave the journal in progress with the failure and stop.
 

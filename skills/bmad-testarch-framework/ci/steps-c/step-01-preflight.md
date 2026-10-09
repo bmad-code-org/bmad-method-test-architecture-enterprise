@@ -78,17 +78,17 @@ Record detected `test_stack_type` in step output.
   - **Backend (C#/.NET)**: `*.csproj` with xUnit/NUnit/MSTest references
   - **Backend (Ruby)**: `Gemfile` with rspec or `.rspec` config file
 - If `test_framework` is `"auto"`, detect from config files and project manifests found
-- Verify test dependencies are installed (language-appropriate package manager)
+- Inspect installed test dependencies read-only and record any missing declared dependencies for the section 6c contract; defer installation until that contract is saved.
 
 Search both the project root and contract/configured test directories; follow test scripts to their config paths. For `setup_worker = ci` in a both Create run, the agreed future configs and dependency plan satisfy this generation prerequisite. Mark actual existence/dependency checks as deferred until the coordinator's combined validation.
 
-If the framework is missing in an ordinary CI Create run, apply the shared router's read-only framework-first offer before checkpoint writes: ask “There is no test framework yet. Set it up now and continue CI in this run?” Acceptance selects both scope and loads `{skill-root}/steps-c/step-01-preflight.md`; preserve the CI request and return here after framework completion. Declining stops and leaves the project untouched. Skip this question when the router already recorded acceptance. If the framework exists and only its dependencies are missing, install its declared dependencies through the agreed package manager and verify them before continuing.
+If the framework is missing in an ordinary CI Create run, apply the shared router's read-only framework-first offer before checkpoint writes: ask “There is no test framework yet. Set it up now and continue CI in this run?” Acceptance selects both scope and loads `{skill-root}/steps-c/step-01-preflight.md`; preserve the CI request and return here after framework completion. Declining stops and leaves the project untouched. Skip this question when the router already recorded acceptance. If the framework exists and only its dependencies are missing, record the declared dependency/install plan for section 6c. This inventory step performs no dependency installation or test execution.
 
 ---
 
 ## 4. Ensure Tests Pass Locally
 
-Resolve the project's exact local test commands, package-manager invocation and required service startup/readiness from its existing scripts/configs and documentation. Use language/framework defaults only when the project has no established command. Record all surfaces for fullstack/mobile. Hold execution until section 6c freezes the complete contract.
+Resolve the project's exact local test commands, package-manager invocation and required service startup/readiness from its existing scripts/configs and documentation. Use language/framework defaults only when the project has no established command. Record all surfaces for fullstack/mobile. Hold dependency installation and test execution until section 6c freezes and journals the complete contract.
 
 For a CI worker in both Create, defer test execution until the framework worker finishes. Record pending validation; YAML generation may begin from the agreed future contract. The coordinator must run the resulting test commands and check pipeline consistency before completion.
 
@@ -139,9 +139,9 @@ Also record whether `@seontechnologies/playwright-utils` is in `package.json`. I
 
 ## 6c. Freeze the Existing-Framework Contract and Execute Tests
 
-For CI-only, construct and atomically journal the complete immutable contract now, before pipeline generation: detected stack/language/frameworks, toolchain, actual package manager and lockfile, install commands, exact local and CI test commands, config/test directories, required services/startup/readiness, reporters/artifacts, effective CI platform, integration dependencies and Pact relevance. Read existing package scripts/config files and service docs; preserve `pnpm`, `yarn`, `npm`, or the language-specific manager the project uses. An empty or unresolved command/services contract stops generation until resolved. All later CI steps consume this same contract.
+For CI-only, resolve required dependency choices and the declared installation plan, then construct and atomically journal the complete immutable contract now, before dependency installation, test execution or pipeline generation: detected stack/language/frameworks, toolchain, actual package manager and lockfile, install commands, exact local and CI test commands, config/test directories, required services/startup/readiness, reporters/artifacts, effective CI platform, integration dependencies and Pact relevance. Read existing package scripts/config files and service docs; preserve `pnpm`, `yarn`, `npm`, or the language-specific manager the project uses. An empty or unresolved command/services contract stops generation until resolved. All later CI steps consume this same contract.
 
-For both, verify the already agreed contract and report drift to the coordinator; workers do not change it independently. A parallel CI worker may use future framework paths from that frozen contract and defer execution. Ordinary CI-only and sequential runs execute the contract's actual local commands with their required services now. If they fail, halt before pipeline generation and record failures in the run journal. The coordinator's final validator repeats execution only when generated or edited outputs need revalidation.
+For both, verify the already agreed contract and report drift to the coordinator; workers do not change it independently. A parallel CI worker may use future framework paths from that frozen contract and defer execution. After the complete contract is successfully journaled, ordinary CI-only and sequential runs install any missing declared dependencies through its agreed package manager/install commands, verify dependency readiness, start its required services, and execute its actual local test commands. Installation and execution failures stop before pipeline generation. If they fail, halt before pipeline generation and record failures in the run journal. The coordinator's final validator repeats execution only when generated or edited outputs need revalidation.
 
 ---
 

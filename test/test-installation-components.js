@@ -34,6 +34,37 @@ function extractFrontmatter(content) {
   return match ? match[1] : '';
 }
 
+/** CI preflight must inventory inputs and save its contract before project-changing commands. */
+function ciPreflightOrderProblems(content) {
+  const problems = [];
+  const headings = [...content.matchAll(/^## (.+)$/gm)];
+  const sections = Object.fromEntries(
+    headings.map((heading, index) => [
+      heading[1],
+      { position: heading.index, body: content.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? content.length) },
+    ]),
+  );
+  const inventory = sections['3. Verify Test Framework'];
+  const commands = sections['4. Ensure Tests Pass Locally'];
+  const contract = sections['6c. Freeze the Existing-Framework Contract and Execute Tests'];
+  if (!inventory || !commands || !contract) return ['missing inventory, command-discovery, or contract section'];
+  if (!(inventory.position < commands.position && commands.position < contract.position)) problems.push('contract stages reordered');
+  if (!inventory.body.includes('Inspect installed test dependencies read-only')) problems.push('inventory permits dependency writes');
+  if (!commands.body.includes('Hold dependency installation and test execution until section 6c freezes and journals'))
+    problems.push('command discovery permits early execution');
+  for (const section of [inventory, commands]) {
+    if (/\b(?:install (?:its|any|the|declared) .*dependencies|(?:Run|Execute) [^\n.]*test commands now|runs install)\b/.test(section.body))
+      problems.push('dependency installation or local tests precede the frozen contract');
+  }
+  const journal = contract.body.indexOf('construct and atomically journal the complete immutable contract');
+  const install = contract.body.indexOf('runs install any missing declared dependencies');
+  const execute = contract.body.indexOf('execute its actual local test commands');
+  if (!(journal !== -1 && journal < install && install < execute)) problems.push('installation or tests precede contract journaling');
+  if (!contract.body.includes('After the complete contract is successfully journaled'))
+    problems.push('execution lacks journal-success gate');
+  return problems;
+}
+
 // ANSI colors
 const colors = {
   reset: '\u001B[0m',
@@ -660,6 +691,39 @@ async function runTests() {
       router.includes('For CI-only, build this contract from the existing framework scripts/configs and service documentation') &&
         router.includes('an empty contract cannot proceed to generation'),
       'CI-only generation and validation use the existing framework contract',
+    );
+    const ciPreflight = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/ci/steps-c/step-01-preflight.md'), 'utf8');
+    assert(
+      ciPreflightOrderProblems(ciPreflight).length === 0,
+      'CI inventories dependencies and freezes its contract before installation or tests',
+    );
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          'Inspect installed test dependencies read-only',
+          'install its declared test dependencies now.\n- Inspect installed test dependencies read-only',
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects dependency installation during inventory',
+    );
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          '## 4. Ensure Tests Pass Locally',
+          "Run the project's local test commands now.\n\n## 4. Ensure Tests Pass Locally",
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects tests before command discovery and contract journaling',
+    );
+    const prematureInstall = 'runs install any missing declared dependencies and execute its actual local test commands. ';
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          'For CI-only, resolve required dependency choices',
+          prematureInstall + 'For CI-only, resolve required dependency choices',
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects installation and tests ahead of contract journaling in the contract section',
     );
     const savedExample = yaml.load(
       extractFrontmatter(
