@@ -182,23 +182,26 @@ jobs:
               END { exit found ? 0 : 1 }
             ' <<< "$1"
           }
-          BODY=$(awk -v ver="$VERSION" '
+          # Each lookup prints the section's heading line first, then its body.
+          SECTION=$(awk -v ver="$VERSION" '
             /^## / {
               if (found) exit
-              if ($0 ~ ("^##[[:space:]]*\\[?[[:space:]]*v?" ver "[[:space:]]*\\]?([[:space:]]*-[[:space:]].*)?$")) found=1
+              if ($0 ~ ("^##[[:space:]]*\\[?[[:space:]]*v?" ver "[[:space:]]*\\]?([[:space:]]*-[[:space:]].*)?$")) { found=1; print }
               next
             }
             found { print }
           ' CHANGELOG.md)
+          BODY=$(sed 1d <<< "$SECTION")
           if ! has_release_notes "$BODY"; then
-            BODY=$(awk '
-              /^##[[:space:]]*\[Unreleased\]/ { found=1; next }
+            SECTION=$(awk '
+              /^##[[:space:]]*\[Unreleased\]/ { found=1; print; next }
               /^## / {
                 if (found) exit
                 next
               }
               found { print }
             ' CHANGELOG.md)
+            BODY=$(sed 1d <<< "$SECTION")
             if has_release_notes "$BODY"; then
               echo "::notice::No CHANGELOG.md entry for $TAG — using [Unreleased] notes"
             fi
@@ -207,7 +210,9 @@ jobs:
             echo "::warning::No CHANGELOG.md entry for $TAG — falling back to auto-generated notes"
             gh release create "$TAG" --generate-notes
           else
-            gh release create "$TAG" --notes-file - <<< "$BODY"
+            # A GitHub Release body is capped at 125,000 characters; longer notes are cut at a bullet and link the full section.
+            NOTES=$(node tools/release-notes.js --version "$VERSION" --tag "$TAG" --repo "$GITHUB_REPOSITORY" --heading "$(head -n1 <<< "$SECTION")" <<< "$BODY")
+            gh release create "$TAG" --notes-file - <<< "$NOTES"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

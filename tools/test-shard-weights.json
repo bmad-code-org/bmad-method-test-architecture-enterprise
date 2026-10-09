@@ -145,6 +145,7 @@
   "test:probe-sources": 2.6,
   "test:probe-targets": 68.8,
   "test:release-metadata": 1,
+  "test:release-notes": 0.3,
   "test:schema-versions": 0.9,
   "test:schemas": 0.4,
   "test:shards": 1,

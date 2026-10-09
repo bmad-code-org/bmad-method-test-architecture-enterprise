@@ -5,7 +5,8 @@
  * - package.json, package-lock.json, marketplace.json, and the bmod module record share the same version
  * - the package is not marked private
  * - publishConfig.access remains public
- * - the active stable-release step transports large changelog notes outside argv
+ * - the active stable-release step transports large changelog notes outside argv, posts notes that fit unchanged, and cuts notes over
+ *   GitHub's 125,000 character limit at a bullet with a link to the full CHANGELOG section
  * - the release job that mints the GitHub App token and runs `git push` runs no tests, mints the token before checkout,
  *   and waits on the reused quality workflow (an installation token expires after an hour; the chain runs longer)
  * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 8.0.0)
@@ -23,6 +24,8 @@ const { parse: parseYaml } = require('yaml');
 const { parse: parseToml } = require('smol-toml');
 
 const projectRoot = path.join(__dirname, '..');
+// GitHub rejects a release body longer than this many characters (HTTP 422).
+const GITHUB_RELEASE_BODY_LIMIT = 125_000;
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const packageLockPath = path.join(projectRoot, 'package-lock.json');
 const marketplacePath = path.join(projectRoot, '.claude-plugin', 'marketplace.json');
@@ -231,15 +234,7 @@ if (releaseStep?.run) {
     const fakeBin = path.join(fixtureRoot, 'bin');
     const argsPath = path.join(fixtureRoot, 'gh-args.json');
     const stdinPath = path.join(fixtureRoot, 'gh-stdin.txt');
-    const line = `- ${'release-note '.repeat(7)}`.trimEnd();
-    const largeBody = Array.from({ length: 40_000 }, (_, index) => `${line}${index}`).join('\n');
-    const expectedNotes = `### Fixed\n\n${largeBody}`;
     fs.mkdirSync(fakeBin);
-    fs.writeFileSync(path.join(fixtureRoot, 'package.json'), '{"version":"9.9.9"}\n');
-    fs.writeFileSync(
-      path.join(fixtureRoot, 'CHANGELOG.md'),
-      `# Changelog\n\n## [Unreleased]\n\n## [9.9.9] - 2026-09-17\n\n${expectedNotes}\n\n## [9.9.8] - 2026-09-16\n`,
-    );
     const fakeGhPath = path.join(fakeBin, 'gh');
     fs.writeFileSync(
       fakeGhPath,
@@ -247,32 +242,80 @@ if (releaseStep?.run) {
     );
     fs.chmodSync(fakeGhPath, 0o755);
 
-    const result = spawnSync('bash', ['-e', '-c', releaseStep.run], {
-      cwd: fixtureRoot,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
-        GH_ARGS_FILE: argsPath,
-        GH_STDIN_FILE: stdinPath,
-      },
-    });
-    if (result.status === 0) {
-      const args = JSON.parse(fs.readFileSync(argsPath, 'utf8'));
-      const receivedNotes = fs.readFileSync(stdinPath, 'utf8');
+    // Runs the real release step in the fixture folder against a fake `gh` and returns what `gh` was handed.
+    const runReleaseStep = (changelog) => {
+      for (const file of [argsPath, stdinPath]) fs.rmSync(file, { force: true });
+      fs.writeFileSync(path.join(fixtureRoot, 'package.json'), '{"version":"9.9.9"}\n');
+      fs.writeFileSync(path.join(fixtureRoot, 'CHANGELOG.md'), changelog);
+      // `tools/` is the real tool the step calls; the fixture folder is the step's working directory.
+      fs.rmSync(path.join(fixtureRoot, 'tools'), { recursive: true, force: true });
+      fs.symlinkSync(path.join(projectRoot, 'tools'), path.join(fixtureRoot, 'tools'));
+      const result = spawnSync('bash', ['-e', '-c', releaseStep.run], {
+        cwd: fixtureRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+          GH_ARGS_FILE: argsPath,
+          GH_STDIN_FILE: stdinPath,
+          GITHUB_REPOSITORY: 'owner/repo',
+        },
+      });
+      if (result.status !== 0) return { failure: result.stderr || result.stdout };
+      return { args: JSON.parse(fs.readFileSync(argsPath, 'utf8')), notes: fs.readFileSync(stdinPath, 'utf8') };
+    };
+    const checkGhArguments = (label, args) => {
       if (JSON.stringify(args.slice(0, 3)) !== JSON.stringify(['release', 'create', 'v9.9.9'])) {
-        errors.push(`publish.yaml passed unexpected GitHub CLI arguments: ${JSON.stringify(args)}`);
+        errors.push(`publish.yaml passed unexpected GitHub CLI arguments for ${label}: ${JSON.stringify(args)}`);
       }
       if (args.some((argument) => Buffer.byteLength(argument) > 1024)) {
-        errors.push('publish.yaml passed release-note content through a GitHub CLI argument.');
+        errors.push(`publish.yaml passed ${label} release-note content through a GitHub CLI argument.`);
       }
-      if (receivedNotes !== `\n${expectedNotes}\n`) {
+    };
+    const bulletLine = `- ${'release-note '.repeat(7)}`.trimEnd();
+    const bulletsBody = (count) => Array.from({ length: count }, (_, index) => `${bulletLine}${index}`).join('\n');
+    const changelogWith = (notes, unreleased = '') =>
+      `# Changelog\n\n## [Unreleased]${unreleased}\n\n## [9.9.9] - 2026-09-17\n\n${notes}\n\n## [9.9.8] - 2026-09-16\n`;
+
+    // Notes within the budget reach `gh` byte for byte, through stdin.
+    const fittingNotes = `### Fixed\n\n${bulletsBody(1000)}`;
+    const fitting = runReleaseStep(changelogWith(fittingNotes));
+    if (fitting.failure) {
+      errors.push(`publish.yaml failed to create a release from large notes: ${fitting.failure}`);
+    } else {
+      checkGhArguments('large notes', fitting.args);
+      if (fitting.notes !== `\n${fittingNotes}\n`) {
         errors.push(
-          `publish.yaml truncated or changed the ${Buffer.byteLength(expectedNotes)}-byte release notes body; received ${Buffer.byteLength(receivedNotes)} bytes.`,
+          `publish.yaml changed the ${Buffer.byteLength(fittingNotes)}-byte release notes body that fits in a GitHub Release; received ${Buffer.byteLength(fitting.notes)} bytes.`,
         );
       }
+    }
+
+    // Notes over GitHub's 125,000 character limit are cut at a bullet and point at the full CHANGELOG section.
+    const overlongBullets = bulletsBody(40_000);
+    const overlong = runReleaseStep(changelogWith(`### Fixed\n\n${overlongBullets}`));
+    if (overlong.failure) {
+      errors.push(`publish.yaml failed to create a release from notes over the GitHub limit: ${overlong.failure}`);
     } else {
-      errors.push(`publish.yaml failed to create a release from large notes: ${result.stderr || result.stdout}`);
+      checkGhArguments('notes over the limit', overlong.args);
+      const link = 'https://github.com/owner/repo/blob/v9.9.9/CHANGELOG.md#999---2026-09-17';
+      const pointer = `These notes are longer than a GitHub Release allows, so this page shows the first part. The full notes for 9.9.9 are in [CHANGELOG.md](${link}).\n\n`;
+      const closing = `\n\n_Truncated here. Continue in [CHANGELOG.md](${link})._\n`;
+      const received = overlong.notes;
+      if (received.length >= GITHUB_RELEASE_BODY_LIMIT) {
+        errors.push(
+          `publish.yaml posted ${received.length} characters of release notes; GitHub rejects a body over ${GITHUB_RELEASE_BODY_LIMIT}.`,
+        );
+      }
+      if (!received.startsWith(pointer))
+        errors.push('publish.yaml did not start over-limit release notes with the pointer to the full CHANGELOG section.');
+      if (!received.endsWith(closing))
+        errors.push('publish.yaml did not end over-limit release notes with the truncation line linking the CHANGELOG section.');
+      const kept = received.slice(pointer.length, received.length - closing.length);
+      const original = `### Fixed\n\n${overlongBullets}`;
+      if (!original.startsWith(kept) || !original.slice(kept.length).startsWith('\n- ')) {
+        errors.push('publish.yaml did not cut over-limit release notes at a top-level bullet boundary.');
+      }
     }
   } finally {
     fs.rmSync(fixtureRoot, { recursive: true, force: true });
