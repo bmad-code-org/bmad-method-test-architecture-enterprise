@@ -13,9 +13,9 @@ The commands below use `.claude/skills/`; substitute your host's folder.
 
 ### TEA Skills Not Found After Installation
 
-after `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, the TEA agent or workflows are not available.
+**Symptom**: After `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, the TEA agent or workflows are not available.
 
-the install did not finish, it went to a different scope (project or global) than the one your host reads, or the host was started before the skills existed.
+**Cause**: The install did not finish, it went to a different scope (project or global) than the one your host reads, or the host was started before the skills existed.
 
 ```bash
 ls .claude/skills/ | grep -E 'bmad-tea|bmad-testarch|bmad-teach|bmod-tea'
@@ -27,9 +27,9 @@ Restart the host or start a fresh chat after installing.
 
 ### Install Hangs or Cannot Reach GitHub
 
-`npx skills add` hangs, times out, or cannot fetch the repository.
+**Symptom**: `npx skills add` hangs, times out, or cannot fetch the repository.
 
-network connectivity, an npm registry timeout, or a firewall that blocks GitHub.
+**Cause**: Network connectivity, an npm registry timeout, or a firewall that blocks GitHub.
 
 ```bash
 ping registry.npmjs.org
@@ -41,30 +41,30 @@ If GitHub itself is blocked, see [Install TEA Behind a Corporate Firewall](/how-
 
 ### TEA Says It Is Not Set Up
 
-a TEA skill stops and asks you to run `bmad setup tea`.
+**Symptom**: A TEA skill stops and asks you to run `bmad setup tea`.
 
-`_bmad/config.toml` is missing or has no `[modules.tea]` table.
-Installing the skills does not answer the setup questions.
+**Cause**: `_bmad/config.toml` is missing or has no `[modules.tea]` table.
+The setup questions come from `bmad setup tea`.
 
-run `bmad setup tea` in the assistant chat.
+**Fix**: Run `bmad setup tea` in the assistant chat.
 It needs [uv](https://docs.astral.sh/uv/) and the `bmad` skill from BMad Method core; if the skill is missing, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools`.
 
 ### TEA Offers to Install the Knowledge Base
 
-a TEA skill says the knowledge base is not installed and offers to install `bmod-tea`.
+**Symptom**: A TEA skill says the knowledge base is not installed and offers to install `bmod-tea`.
 
-the `bmod-tea` skill is missing from the folder the TEA skills sit in.
+**Cause**: The `bmod-tea` skill is missing from the folder the TEA skills sit in.
 Skills find the knowledge base at `../bmod-tea/knowledge` from their own folder, so `bmod-tea` must be installed beside them, in the same scope.
 
-accept the offer, or run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea` yourself.
+**Fix**: Accept the offer, or run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea` yourself.
 
 ## Agent Loading Issues
 
 ### TEA Loads But Commands Don't Work
 
-the TEA agent loads, but workflow codes (TF, TD, AT, and the rest) do not execute.
+**Symptom**: The TEA agent loads, but workflow codes (TF, TD, AT, and the rest) do not execute.
 
-workflow skills are missing from the install.
+**Cause**: Workflow skills are missing from the install.
 
 ```bash
 ls .claude/skills/ | grep bmad-testarch   # all nine must be present
@@ -84,31 +84,31 @@ If a skill is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state)
 
 ### Custom TEA Workflow Does Not Appear
 
-a custom workflow that used to appear in the `bmad-tea` menu is gone after an update.
+**Symptom**: A custom workflow that used to appear in the `bmad-tea` menu is gone after an update.
 
-TEA is a standalone module.
+**Cause**: TEA is a standalone module.
 Custom workflows are not merged into TEA core automatically.
 
-install the workflow as its own skill, add it to the `bmad-tea` menu with an `[[agent.menu]]` entry in `_bmad/custom/bmad-tea.toml`, then start a fresh chat.
+**Fix**: Install the workflow as its own skill, add it to the `bmad-tea` menu with an `[[agent.menu]]` entry in `_bmad/custom/bmad-tea.toml`, then start a fresh chat.
 See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Workflow Execution Issues
 
 ### GitHub Copilot Slash Command Fails with "No such file or directory"
 
-a workflow launched through GitHub Copilot in VS Code fails with an error such as `can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory`.
+**Symptom**: A workflow launched through GitHub Copilot in VS Code fails with an error such as `can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory`.
 
-GitHub Copilot runs skill commands from the workspace root.
+**Cause**: GitHub Copilot runs skill commands from the workspace root.
 Paths relative to the installed skill under `.github/skills/` therefore fail to resolve.
 
-shipped TEA workflows already anchor every path with `{skill-root}` or `{project-root}`.
+**Fix**: Shipped TEA workflows already anchor every path with `{skill-root}` or `{project-root}`.
 If you hit this in a workflow you wrote, apply the same anchoring; see [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ### Workflow Starts But Produces No Output
 
-the workflow runs but generates no test designs, reports, or tests.
+**Symptom**: The workflow runs but generates no test designs, reports, or tests.
 
-the output directory is missing or not writable, `test_artifacts` is misconfigured, or the run stopped before its output step.
+**Cause**: The output directory is missing or not writable, `test_artifacts` is misconfigured, or the run stopped before its output step.
 
 ```bash
 grep test_artifacts _bmad/config.toml   # default: {project-root}/_bmad-output/test-artifacts
@@ -121,9 +121,9 @@ When a run stops early, the last step it names is where to look.
 
 ### Subagent Fails to Execute
 
-the workflow reports a subagent failure, for example "API test generation subagent failed".
+**Symptom**: The workflow reports a subagent failure, for example "API test generation subagent failed".
 
-a subagent step file is missing, `/tmp` is not writable, the subagent returned an unparseable payload, or the runtime cannot launch parallel workers.
+**Cause**: A subagent step file is missing, `/tmp` is not writable, the subagent returned an unparseable payload, or the runtime cannot launch parallel workers.
 
 ```bash
 # 1. The subagent step files must exist
@@ -148,9 +148,9 @@ tea_capability_probe = "true"
 
 ### Knowledge Fragments Not Loading
 
-the workflow runs but never references knowledge base patterns such as `test-quality` or `network-first`.
+**Symptom**: The workflow runs but never references knowledge base patterns such as `test-quality` or `network-first`.
 
-the `bmod-tea` skill is missing or not beside the other TEA skills, or `tea-index.csv` or fragment files are missing.
+**Cause**: The `bmod-tea` skill is missing or not beside the other TEA skills, or `tea-index.csv` or fragment files are missing.
 
 ```bash
 wc -l < .claude/skills/bmod-tea/knowledge/tea-index.csv      # 60 (header + 59 fragments)
@@ -170,19 +170,18 @@ grep -r knowledgeIndex .claude/skills/bmad-testarch-test-design/steps-c/
 
 ### Setup Questions Were Never Asked
 
-TEA runs with defaults you did not choose, or you want to change an answer.
+**Symptom**: TEA runs with defaults you did not choose, or you want to change an answer.
 
-installing the skills does not ask the setup questions.
-`bmad setup tea` does.
+**Cause**: The setup questions come from `bmad setup tea`.
 
-run `bmad setup tea` in the assistant chat.
+**Fix**: Run `bmad setup tea` in the assistant chat.
 On an existing setup it shows each answer with its value and file, and changes the ones you name.
 
 ### Config Values Ignored
 
-TEA ignores the values you set or keeps old values after a config edit.
+**Symptom**: TEA ignores the values you set or keeps old values after a config edit.
 
-the value is in the wrong file or table, the TOML does not parse, a key is misspelled, a later layer overrides it, or the chat started before the edit.
+**Cause**: The value is in the wrong file or table, the TOML does not parse, a key is misspelled, a later layer overrides it, or the chat started before the edit.
 TEA reads config once at activation and does not reload mid-chat.
 
 ```bash
@@ -199,7 +198,7 @@ If the key name matches [Configuration](/reference/configuration/), save the fil
 
 ### Playwright Utils Integration Not Working
 
-workflows produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
+**Symptom**: Workflows produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
 
 ```bash
 grep tea_use_playwright_utils _bmad/config.toml       # should show: "true"
@@ -235,9 +234,9 @@ Then start a fresh chat: fragment selection happens at step 01, so a run that al
 
 ### Test Files Generated in Wrong Location
 
-test files are created in an unexpected directory.
+**Symptom**: Test files are created in an unexpected directory.
 
-`test_artifacts` resolves against the project root, so a misconfigured value or a shell sitting in a subdirectory moves the target.
+**Cause**: `test_artifacts` resolves against the project root, so a misconfigured value or a shell sitting in a subdirectory moves the target.
 
 ```bash
 grep test_artifacts _bmad/config.toml   # default: {project-root}/_bmad-output/test-artifacts
@@ -247,11 +246,11 @@ pwd                                         # must be the project root
 
 ### Generated Tests Have Syntax Errors
 
-TEA generates tests with JavaScript or TypeScript syntax errors.
+**Symptom**: TEA generates tests with JavaScript or TypeScript syntax errors.
 
-a framework mismatch, usually Playwright syntax emitted for a Cypress project or the reverse.
+**Cause**: A framework mismatch, usually Playwright syntax emitted for a Cypress project or the reverse.
 
-name the framework and language explicitly in the prompt, for example "Generate Playwright tests using TypeScript", then lint what came back:
+**Fix**: Name the framework and language explicitly in the prompt, for example "Generate Playwright tests using TypeScript", then lint what came back:
 
 ```bash
 npx eslint tests/**/*.spec.ts
@@ -259,9 +258,9 @@ npx eslint tests/**/*.spec.ts
 
 ### File Permission Errors
 
-`EACCES: permission denied` when writing files.
+**Symptom**: `EACCES: permission denied` when writing files.
 
-the target directory is not writable, is owned by another user, or the disk is full.
+**Cause**: The target directory is not writable, is owned by another user, or the disk is full.
 
 ```bash
 ls -la _bmad-output/test-artifacts
@@ -273,7 +272,7 @@ df -h
 
 ### Playwright Utils Not Found
 
-tests reference Playwright Utils but the imports fail.
+**Symptom**: Tests reference Playwright Utils but the imports fail.
 
 ```bash
 npm install @seontechnologies/playwright-utils
@@ -281,18 +280,23 @@ npm ls @seontechnologies/playwright-utils   # confirms the resolved version
 ```
 
 For a single utility, import `test` from its fixture subpath and `expect` from Playwright.
-When combining utilities, specs import `test` from the project's merged fixtures:
 
 ```typescript
 import { expect } from '@playwright/test';
 import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 ```
 
+When combining utilities, import from the project's merged fixtures:
+
+```typescript
+import { test, expect } from '../support/merged-fixtures';
+```
+
 ### Pact MCP Reports the Broker as Unreachable
 
-a workflow says the broker was unreachable and fell back to provider source or an OpenAPI spec.
+**Symptom**: A workflow says the broker was unreachable and fell back to provider source or an OpenAPI spec.
 
-`tea_pact_mcp` defaults to `"mcp"`, so TEA probes for the SmartBear MCP tools on any contract-testing step.
+**Cause**: `tea_pact_mcp` defaults to `"mcp"`, so TEA probes for the SmartBear MCP tools on any contract-testing step.
 Without a broker, that probe fails and the workflow degrades on purpose.
 
 The workflow continues with provider source or an OpenAPI spec.
@@ -308,7 +312,7 @@ To use broker tools, install the server and configure its credentials:
 npm install -g @smartbear/mcp    # Node.js 20+ required
 ```
 
-Installing the server is not enough: the MCP client has to be told about it, since the probe checks the session's tool list.
+Register the server with your MCP client too; the probe reads the session's tool list.
 For Claude Code:
 
 ```bash
@@ -322,9 +326,9 @@ The report identifies the source used for provider states and records when broke
 
 ### Browser Automation Not Working
 
-`tea_browser_automation` is set to `auto`, `cli`, or `mcp`, but outputs contain no browser features.
+**Symptom**: `tea_browser_automation` is set to `auto`, `cli`, or `mcp`, but outputs contain no browser features.
 
-for `cli` or `auto`, the CLI is not installed globally.
+**Cause**: For `cli` or `auto`, the CLI is not installed globally.
 For `mcp` or `auto`, the MCP server is not configured in the IDE.
 
 ```bash
@@ -354,11 +358,11 @@ See [Configure Browser Automation: MCP Setup](/docs/how-to/customization/configu
 
 ### Workflows Taking Too Long
 
-a workflow runs for several minutes without completing.
+**Symptom**: A workflow runs for several minutes without completing.
 
-a large codebase to explore, many test files to review, or subagent overhead.
+**Cause**: A large codebase to explore, many test files to review, or subagent overhead.
 
-scope the run to a directory, for example "Review tests in tests/e2e/checkout/".
+**Fix**: Scope the run to a directory, for example "Review tests in tests/e2e/checkout/".
 Use `automate` for targeted generation and `test-review` for specific files.
 Check `top` for CPU and memory pressure.
 

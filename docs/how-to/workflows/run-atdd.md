@@ -6,7 +6,7 @@ description: Generate red-phase acceptance test scaffolds before implementation 
 # How to Run ATDD with TEA
 
 Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds before implementation.
-TEA currently emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
+TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
 
 ## When to Use This
 

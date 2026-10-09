@@ -151,7 +151,7 @@ The `playwright-utils-mandate` fragment defines the rule.
 Seven things the utility changes:
 
 1. **Automatic JSON parsing.** No `await response.json()` anywhere.
-2. **Different result shapes for different utilities**, and the distinction matters.
+2. **Different result shapes for different utilities.**
    `interceptNetworkCall` resolves to `{ status, responseJson, requestJson }` because it observes a browser round trip and can see both directions.
    `apiRequest` resolves to `{ status, body }` because it issues the request itself.
 3. **Glob matching.** Use `url: '**/api/users'`.

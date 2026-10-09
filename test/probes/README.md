@@ -64,7 +64,7 @@ The reads run over the probes the builder emits and over the committed probe fil
 
 `tea-routing-intents.probes.json` and `tea-routing-controls.probes.json` ship a gameability probe and a clean control each, and nothing else.
 A defect probe needs a controlled mutation of the system under test with baseline and mutated evidence, and the system here is `skills/bmad-tea/SKILL.md`.
-Mutating the skill to prove that the eval catches the mutation is an edit to the thing being measured, These corpora contain no controlled mutation of that skill.
+Mutating the skill to prove that the eval catches the mutation edits the thing being measured. These corpora contain no controlled mutation of that skill.
 The fragment-selection corpora carry the same two classes for the same reason.
 
 The gameability probe is worth reading, because it is about the scoring the routing suite chose.
@@ -189,7 +189,7 @@ A `stdout` pointer resolves only where the operation declares standard output as
 `tea-fragment-selection-runner` does, so its signatures qualify and its gameability probes score.
 `tea-test-review`, `tea-trace-runner`, `tea-nfr-runner` and `tea-ci-runner` all write their deliverable to a file, so a signature that says something true about their plants is refused, and the refusal is recorded in `expected-strength.json` with its qualification reason.
 
-The channel comparison is measured: Scoring `trace`'s three defect probes through `runScore` with each channel in turn, over the same stored evidence: the committed `artifact` signature is refused as `condition-artifact-channel-contract-local`, a `stdout` signature over the same field is refused as `condition-pointer-unwritable` because the operation's descriptor channel is the summary artifact, and an `exit-code` signature is admitted.
+Scoring `trace`'s three defect probes through `runScore` with each channel in turn over the same stored evidence gives these results: the committed `artifact` signature is refused as `condition-artifact-channel-contract-local`, a `stdout` signature over the same field is refused as `condition-pointer-unwritable` because the operation's descriptor channel is the summary artifact, and an `exit-code` signature is admitted.
 The admitted one is the one that says nothing: `cli/lib/runner-exit-codes.js` gives 0 to every run whose agent completed, so a trace run that wrote a summary full of gaps and the clean control both exit 0 and the condition is true on both.
 `tea-test-review` is the case where the exit code does discriminate, and its nine plant probes carry it.
 `tea-trace-runner` has no such channel, so its three probes keep the signature that states the truth about the plant and stay refused, with the reason code recorded per probe.
@@ -200,7 +200,7 @@ Like `tea-nfr-runner`'s, all three clear pre-flight, because each manifestation 
 **A document-level oracle reaches a domain only through the rollup.** The nfr contract addresses one markdown report, which is one string to this vocabulary, so its claims are about the document: the four sections exist, the Gate YAML publishes the expected overall status, a threshold no source states is recorded as `UNKNOWN`.
 Two of the three plants have an oracle that a run getting them wrong would violate.
 The third does not: a run that passed maintainability on a prose claim still publishes `FAIL`, because reliability breaches a threshold in the same bundle, and still records `UNKNOWN`, because performance states no target.
-`tools/generate-probes.js` points that probe at the gate oracle and says so, and the harness is where that domain's status is actually scored.
+`tools/generate-probes.js` points that probe at the gate oracle and says so, and the harness is where that domain's status is scored.
 
 The ci contract reaches the same shape from the request side.
 Its oracles are one substring claim per requested or forbidden element (two of the evaluation-plan project's are quote-tolerant regex claims and the full project's burn-in job is a regex that reads a mapping key or a name line outside a comment), so each of the three planted probes (a missing trigger, a missing permission, the full-request template copied onto the minimal project) has an oracle of its own that a run producing the plant would violate directly; nothing here needed the gate-oracle workaround nfr's third plant does, because a missing element and a forbidden one are each their own claim.

@@ -147,7 +147,7 @@ sessions:
       - test-review
       - trace
     key_concepts:
-      - "5 dimensions of test quality"
+      - "Registry criteria, severity deductions, bonuses, and score caps"
       - "Quality scoring (0-100)"
       - "Requirements traceability"
       - "Release gate decisions"

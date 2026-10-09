@@ -2565,7 +2565,7 @@ function buildTraceContract() {
               // withheld run writes `none`, the same pair the seeded set writes.
               //
               // The legs run against a staged workspace, which is the coupling
-              // docs/explanation/eval-quality-command-adapter.md records for
+              // test/docs/eval-quality-command-adapter.md records for
               // artifact-writing commands, and the prompt names which set that
               // workspace holds through its project root.
               witnessId: 'gate-follows-allow-gate',

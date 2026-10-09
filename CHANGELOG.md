@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page and removed duplicate site headings.
+- Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page, removed duplicate site headings, and revised issue templates and banner text.
 
 ### Fixed
 
+- Teach Me Testing teaches rubric 5.0 scoring and the ten workflows, including Evaluate.
 - Evaluation call-count checks now include the two teaching turns in `eval:all`: 117 calls per runner and 351 across the three built-in runners.
 - A stable release whose notes exceed GitHub's 125,000 character limit now posts the first part, cut at a whole entry, with a link to the full CHANGELOG section, instead of failing after the npm publish. `tools/release-notes.js` does the cutting and `test:release-notes` covers it.
 

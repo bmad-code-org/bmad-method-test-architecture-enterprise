@@ -35,14 +35,14 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral eval, `teach-me-testing` | One case, two turns, against a real vendor: turn 1 plays a full first session with a seeded wrong quiz answer and the review it triggers, turn 2 is a fresh process proving progress persisted                                                                                                                                                                                                                                                      | `test/eval-teach-me-testing.js`            |
 | Evaluate-authored eval, `evaluate`  | Evaluate's own suite: five seeded probes (two gap-guide class swaps, one held out, plus the web-interface seed, the dropped exit-table row and the guessed class) and four clean controls, five trials each through the skill runner; `tea-evaluate` runs it and `eval:all` skips it                                                                                                                                                                | `test/evaluations/bmad-testarch-evaluate/` |
 | Behavioral Evaluation Contracts     | Sixteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                                                                                                                                                                                                                                                                                                               | `test/contracts/`                          |
-| Replay corpus                       | 158 stored outputs scored with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 54 ci runs, 14 test-design documents, 20 replies                                                                                                                                                                                                                                                                          | `test/replay/`                             |
+| Replay corpus                       | A corpus containing 158 cases replayed with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 54 ci runs, 14 test-design documents, 20 replies                                                                                                                                                                                                                                                             | `test/replay/`                             |
 
-All eleven of TEA's skills now have a real suite.
+All eleven of TEA's skills now have a suite.
 The eleventh, `bmad-testarch-evaluate`, is covered by the suite Evaluate authored and ran on itself, registered in `test/evals/suite-manifest.json` as `evalType: evaluate-authored`.
-Evaluate ships as a TEA workflow: [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) teaches it by doing, and [How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains it.
+Evaluate ships as a TEA workflow: [Evaluate Your First Skill](../../docs/tutorials/evaluate-your-first-skill.md) teaches it by doing, and [How Evaluate Works](../../docs/explanation/how-evaluate-works.md) explains it.
 
 Live baselines across the complete suite are recorded in `test/results/eval-all/latest.json` with timestamped history.
-[How TEA Is Tested](/docs/explanation/how-tea-is-tested.md) explains the verification layers, clean and seeded controls, and the boundary with `eval-quality` in plain language.
+[How TEA Is Tested](../../docs/explanation/how-tea-is-tested.md) explains the verification layers, clean and seeded controls, and the boundary with `eval-quality` in plain language.
 
 ## 1. What you need before you start
 
@@ -191,7 +191,7 @@ These exclusions are checked before a model call.
 ### Independence, and where TEA does not have it
 
 The fragment-selection suite names the same paths under `fixtures` and `groundTruth`, and the manifest's own comment says why: the oracle there was derived from each workflow's step files.
-That is an honest limit, and it is the reason fragment selection does not discharge a skill's coverage obligation in the manifest.
+This limit is why fragment selection does not discharge a skill's coverage obligation in the manifest.
 Fragment selection measures a routing decision taken before the workflow produces anything.
 
 ### Every key in the ground truth must be read by something
@@ -216,7 +216,7 @@ Name the measurements before writing any of them, and keep the list in the file 
 Two structural decisions in that list transfer to any skill:
 
 - **Score the discriminating judgments on their own.** A pooled accuracy over ten criteria hides the one that flips the answer.
-- **Do not lead with the aggregate.** The `trace` gate is one bit, and scoring one criterion wrongly flips it.
+- **Score component decisions separately.** The `trace` gate is one bit, and scoring one criterion wrongly flips it.
   So the gate carries the same weight in the summary as one criterion status.
   A harness that led with the gate would leave six of the seeded set's ten judgments unmeasured.
 
@@ -245,7 +245,7 @@ The dependency-direction purity rule keeps that module synchronous.
 `npm run test:schema-versions` checks committed source and artifacts against those constants before generator diffs run.
 A version mismatch names the artifact and both stamps.
 
-### The rule this repository learned the hard way
+### A failed model call gets no score
 
 A failed model call receives no quality score.
 Authentication, timeout, transport, parsing, and missing-artifact failures mean the harness could not complete measurement.
@@ -273,7 +273,7 @@ A harness of your own can adopt them when its callers need to tell "the skill go
 
 `tea-evaluate` does not use the convention.
 It passes `eval-quality`'s own exits through verbatim (`2` is a scored FAIL, `3` an invalid run, `4` a contract defect, `5` a runtime fault, `64` a wiring defect) and adds `10` to `13` for authoring defects, weak evaluations, infrastructure and baseline drift.
-In `tea-evaluate`, exit `2` therefore means a measured failure, and its exit table is in the [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#exit-codes) reference.
+In `tea-evaluate`, exit `2` therefore means a measured failure, and its exit table is in the [tea-evaluate CLI](../../docs/reference/tea-evaluate-cli.md#exit-codes) reference.
 
 ### The one promotion TEA declines, and why
 
@@ -310,12 +310,13 @@ Live-agent harnesses support three modes:
 
 The manifest declares `preflightArgs`.
 `tools/validate-eval-schemas.js` checks that missing and present runners produce the expected exits and result records.
-Framework and automate instead execute deterministic fixtures; their default runs can need local services or dependency downloads.
+Framework and automate execute deterministic fixtures; their default runs can need local services or dependency downloads.
 
 ### Replay the scorers without a model
 
 A harness is mostly scoring logic, and scoring logic is code that needs its own regression test.
-`test/replay/` holds 158 stored outputs and `npm run test:eval-replay` scores them with no model call and no network.
+`test/replay/` holds 158 cases and `npm run test:eval-replay` replays them with no model call and no network.
+Some cases assert refusal or missing-artifact behavior and receive no numeric quality score.
 Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test.
@@ -335,7 +336,7 @@ A Behavioral Evaluation Contract states what a skill has to do in a vocabulary t
 The module owns the fixtures, the seeded defects, the ground truth, and the runners.
 The dependency is one-way: `eval-quality` does not need the module installed and does not launch its agents.
 
-### Generate contracts, never hand-write them
+### Generate contracts from the declared inputs
 
 `tools/generate-contracts.js` writes all sixteen TEA contracts from authoritative sources.
 Its `--check` mode regenerates in memory and fails on changed bytes.
@@ -442,14 +443,14 @@ The confirming `trace` run was measured against Codex because the Claude account
 
 One default `npm run eval:all` for one runner spends 117 calls: 48 fragment selections (24 cases at two repetitions), 38 routing intents (19 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), 12 complete pipelines (six ci projects at two repetitions), 4 complete traces (two cases at two repetitions), 2 complete atdd generations (one story at two repetitions), and 2 teaching turns (one case at one repetition).
 
-Repetition counts are a real cost multiplier and are declared per suite.
+Repetition counts are a cost multiplier and are declared per suite.
 Two is the smallest number that can say whether an answer is reproducible.
 `test-review` uses three because it also measures score variance.
 
 `eval-quality`'s own pre-flight is a separate spend.
 It drives each contract's witness legs through the same port for real, and TEA ran its first one on 2026-09-09 against `claude`: twenty-one legs spawned and 55 minutes of model time, with every leg cached under a digest of its request so a second invocation pays for nothing it has already answered.
 The eight fragment-selection contracts took sixteen legs and 919 seconds between them, `trace` two legs and 872 seconds, and `test-review` three legs and 1,485 seconds.
-`docs/explanation/eval-quality-command-adapter.md` records what each one returned.
+`test/docs/eval-quality-command-adapter.md` records what each one returned.
 Budget a pre-flight as its own line, and expect the first one to find something.
 
 ### Wall clock
@@ -463,9 +464,10 @@ Each harness bounds its own vendor call and the adapter backstops it a minute or
 | trace              | 20 minutes    | 21 minutes       |
 
 These are timeout bounds.
-One real data point: the first `test-review` measurement defaulted to the codex runner, hit the fifteen-minute bound, and measured nothing, so the recorded numbers come from an explicit `--agent claude`.
+One recorded data point: the first `test-review` measurement defaulted to the codex runner, hit the fifteen-minute bound, and measured nothing, so the recorded numbers come from an explicit `--agent claude`.
 Live-agent harnesses default to `claude` now.
-Budget a full matrix in tens of minutes, and note that `eval-all.js` deliberately keeps its own child spawn with `stdio: 'inherit'` so a long matrix prints as it goes.
+Budget a full matrix in tens of minutes.
+`eval-all.js` keeps its own child spawn with `stdio: 'inherit'` so a long matrix prints as it goes.
 
 ### The parts that stay manual
 
@@ -511,8 +513,9 @@ The escape is the same byte at runtime.
 
 **Four characters of headroom.** `llms-full.txt` sat at 599,996 characters of a 600,000 cap marked DO NOT CHANGE, so the next documentation change of any size would have failed the build.
 Measure the bundle when you add a document.
-This one is 44,322 characters: with it in, the bundle measures 615,953 and `npm run docs:build` exits 1 on the cap, so `tools/build-docs.js` excludes it alongside the roadmap and the command-adapter document, on the same reasoning.
-The bundle is 571,631 characters without it.
+At adoption, this guide added 44,322 characters: the bundle measured 615,953 with it and 571,631 without it.
+`npm run docs:build` exceeded the cap, so `tools/build-docs.js` excluded these three contributor guides from the public bundle.
+They now live under `test/docs/`.
 
 ## What does not transfer
 
@@ -531,8 +534,8 @@ All eight skills covered by fragment selection now have behavioral suites of the
 
 | You want                                             | Read                                                                             |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
-| The implementation history and remaining runner work | `docs/explanation/eval-quality-roadmap.md`                                       |
-| What the adapter replaced, and its limits            | `docs/explanation/eval-quality-command-adapter.md`                               |
+| The implementation history and remaining runner work | `test/docs/eval-quality-roadmap.md`                                              |
+| What the adapter replaced, and its limits            | `test/docs/eval-quality-command-adapter.md`                                      |
 | The contract record and its findings                 | `test/contracts/README.md`                                                       |
 | How a suite declares itself                          | `test/evals/suite-manifest.json` and `test/schema/suite-manifest.js`             |
 | The execution-target registry                        | `cli/lib/evaluate/registry.js`, and TEA's entries in `test/lib/probe-targets.js` |

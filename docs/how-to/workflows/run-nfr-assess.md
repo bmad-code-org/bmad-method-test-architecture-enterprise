@@ -8,7 +8,7 @@ description: Audit non-functional requirement evidence for security, performance
 Use TEA's `nfr-assess` workflow to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability.
 
 Use `test-design` before implementation to define NFR thresholds, planned validation, and expected evidence.
-Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL.
+Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL, or N/A for findings that do not apply.
 
 ## When to Use This
 
@@ -163,14 +163,14 @@ The `run_key` is `epic-{epic_num}` or `story-{story_key}` for the epic or story 
 
 **Date:** 2026-01-13
 **Scope:** User Profile Management
-**Overall decision:** CONCERNS
+**Overall decision:** FAIL
 
-| Category        | Status   | Evidence                                             |
-| --------------- | -------- | ---------------------------------------------------- |
-| Security        | PASS     | Dependency scan, auth tests, penetration-test report |
-| Performance     | CONCERNS | k6 results and database query timings                |
-| Reliability     | PASS     | Recovery test and staging error-rate report          |
-| Maintainability | PASS     | Coverage and code-quality reports                    |
+| Category        | Status   | Evidence                                                  |
+| --------------- | -------- | --------------------------------------------------------- |
+| Security        | PASS     | Dependency scan, auth tests, penetration-test report      |
+| Performance     | FAIL     | k6 results and database query timings                     |
+| Reliability     | CONCERNS | Recovery and error-rate evidence; uptime baseline missing |
+| Maintainability | PASS     | Coverage and code-quality reports                         |
 
 ## Security Assessment
 
@@ -191,12 +191,14 @@ The penetration-test report is `reports/pentest-2026-01.pdf`; its two low findin
 The query trace shows missing indexes and an N+1 query in the profile endpoint.
 The backend lead owns the fix: add the index and batch the queries by January 20.
 QA will rerun the same load test before the next audit.
-The release record must name the approved mitigation while the result remains CONCERNS.
+The four breached thresholds make Performance and the overall decision FAIL.
+Record any release approval separately; mitigations leave the audit status unchanged.
 
 ## Reliability Assessment
 
 Recovery test: 4 minutes against a 5-minute RTO.
 Staging error rate: 0.01% during the recorded load test.
+The uptime baseline is missing, so Reliability is CONCERNS.
 Link the recovery report and measurement window in the evidence record.
 
 ## Maintainability Assessment
@@ -228,9 +230,9 @@ It carries the same status the domain's `## <Domain> Assessment` section states,
 nfr_assessment:
   audited_domains:
     security: 'PASS'
-    performance: 'CONCERNS'
-    reliability: 'FAIL'
-    maintainability: 'CONCERNS'
+    performance: 'FAIL'
+    reliability: 'CONCERNS'
+    maintainability: 'PASS'
   overall_status: 'FAIL'
 ```
 
@@ -238,10 +240,13 @@ A domain is PASS, CONCERNS or FAIL, and N/A only when nothing in it carried a ju
 
 ### Gate Decision
 
-- **PASS** ✅: All NFRs met, ready to release
-- **CONCERNS** ⚠️: Some NFRs not met, mitigation plan exists
-- **FAIL** ❌: Critical NFRs not met, blocks release
-  A business-approved waiver belongs in the release record with its accepted risk and conditions.
+- **PASS** ✅: Applicable NFR thresholds met, backed by evidence
+- **CONCERNS** ⚠️: Thresholds met with caveats, trending toward a limit, or supporting evidence missing
+- **FAIL** ❌: A threshold breached, or a vulnerability or defect blocks confidence
+- **N/A**: No applicable findings in the domain
+
+A business-approved waiver belongs in a separate release record with its accepted risk and conditions.
+It leaves the audit status unchanged.
 
 ### Mitigation Plans
 
@@ -341,7 +346,8 @@ After implementing mitigations:
 4. Verify PASS status
 ```
 
-Don't deploy with CONCERNS without mitigation or waiver.
+Resolve findings or obtain release approval under your team's policy before deployment.
+Record any accepted risk separately from the audit verdict.
 
 ### Integrate with Release Checklist
 
@@ -353,7 +359,8 @@ Don't deploy with CONCERNS without mitigation or waiver.
 - [ ] All tests passing
 - [ ] Test coverage > 80%
 - [ ] Run nfr-assess
-- [ ] NFR status: PASS or WAIVED
+- [ ] NFR audit status recorded: PASS, CONCERNS, FAIL, or N/A
+- [ ] Release approval recorded, with any accepted risk and waiver conditions
 
 ### Performance
 
@@ -413,10 +420,11 @@ Audit the highest-risk categories first, then complete the remaining evidence.
 
 ### CONCERNS vs FAIL: When to Block?
 
-Use the requirement's agreed threshold and criticality to decide the status.
-Missing evidence or a non-critical shortfall is CONCERNS.
-A critical unmet requirement is FAIL.
-Record mitigations and approval separately; monitoring alone does not satisfy an unmet critical requirement.
+Use the requirement's agreed threshold and evidence to decide the status.
+A breached threshold is FAIL.
+CONCERNS applies when a threshold is met with caveats, trends toward a limit, or supporting evidence is missing.
+An unknown threshold or missing measurement is CONCERNS.
+Record mitigations and release approval separately; they leave the audit verdict unchanged.
 
 ## Related Guides
 

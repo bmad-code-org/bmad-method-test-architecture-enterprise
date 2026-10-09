@@ -233,23 +233,23 @@ One import, every fixture, and TypeScript knows the type of each one.
 
 ## How It Works in TEA
 
-`framework` creates helpers and fixtures under `tests/support/`.
+`framework` scaffolds project fixtures under `{test_dir}/support/`.
+The layout below uses `tests/` as the configured test directory.
 With Playwright Utils enabled, tests import the composed fixtures from `support/merged-fixtures.ts`:
 
 ```text
 tests/
 ├── support/
-│   ├── helpers/           # Pure functions
-│   │   ├── api-request.ts
-│   │   └── auth-session.ts
+│   ├── auth-fixture.ts    # Project auth provider and auth fixtures
 │   ├── merged-fixtures.ts # Composition
-│   └── fixtures/          # Framework wrappers
-│       ├── api-request.ts
-│       ├── auth-session.ts
-│       └── auth-fixture.ts # Project auth provider
+│   ├── fixtures/        # Project fixture extensions
+│   └── helpers/         # Project data factories, setup, and cleanup
 └── e2e/
     └── example.spec.ts    # Uses composed fixtures
 ```
+
+`merged-fixtures.ts` imports `api-request` and the other enabled utility fixtures from `@seontechnologies/playwright-utils`.
+It imports the project auth fixture from `./auth-fixture`.
 
 `test-review` checks the applicable fixture, isolation, and configured-utility criteria.
 Its criteria registry determines which findings affect the score.

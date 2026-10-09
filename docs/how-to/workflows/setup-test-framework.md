@@ -109,10 +109,24 @@ Set `tea_use_playwright_utils = "false"` under `[modules.tea]` for plain Playwri
 
 ## Write-Time Quality Checks
 
-On Claude Code, TEA installs `.claude/hooks/tea-enforce.cjs` and registers pre-write, post-write, and stop hooks in `.claude/settings.json`.
-Rules apply to the test paths in `.tea/enforce-config.json`; the workflow preserves existing hook settings.
-The pre-write hook blocks supported violations such as focused tests and hard waits.
-Post-write and stop checks report violations that bypassed the pre-write hook.
+The framework workflow's Create mode installs the hook on Claude Code; Resume installs it when continuing through that setup step.
+TEA copies `.claude/hooks/tea-enforce.cjs` and registers pre-write, post-write, and stop hooks in the project's `.claude/settings.json`, preserving existing settings.
+The hooks run in ordinary coding sessions in that project.
+Rules apply to the test and Pact config paths in `.tea/enforce-config.json`.
+
+Seven rules block supported violations:
+
+- Focused tests such as `.only`
+- Tautological assertions such as `expect(value).toBe(value)`
+- Hard waits such as `waitForTimeout`
+- Test files above the configured line limit, which defaults to 1,000
+- Maestro flows with no assertion or destination-state wait that can fail
+- Pact config without `fileParallelism: false`
+- Pact settings that defeat serialization, such as concurrent execution, multiple workers, or disabled isolation
+
+Undocumented disabled tests produce a warning.
+Post-write and stop checks catch violations that bypassed the pre-write hook.
+If the hook itself errors, it fails open and allows the write.
 
 The workflow skips hook installation on platforms without this interception point and records that in its summary.
 Run `test-review` to audit test quality on those platforms.

@@ -21,7 +21,7 @@
  * Four hand-authored Playwright spec sets under
  * `test/fixtures/automate-eval/cases/` stand in for what a real
  * `bmad-testarch-automate` run could produce. Running the suite against a real
- * model is the residual `docs/explanation/eval-quality-roadmap.md` records on
+ * model is the residual `test/docs/eval-quality-roadmap.md` records on
  * this skill's row, the same way it is recorded on `bmad-testarch-atdd`'s.
  *
  * `--agent` / `--agent-cmd` / `--runs` are still accepted, only so this

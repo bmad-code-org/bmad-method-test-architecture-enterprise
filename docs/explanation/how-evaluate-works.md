@@ -139,7 +139,7 @@ The runtime qualifies it through six steps in a workspace of its own:
 6. The clean arm runs again until it passes, within a cap the scoring policy sets.
 
 The run proves the rollback: `rollbackVerified` is true only when the restored bytes match and the clean arm passes again.
-If the restored workspace fails, the run exits 12 for target drift.
+If the harness cannot reproduce its clean baseline after restoration, the run exits 12 because the harness is unfit to qualify that mutation.
 A mutation that does not change the behavior exits 11, because an evaluation that cannot see a defect it was designed to see is the weakness Evaluate exists to find.
 
 Two more arms exist for particular probes.

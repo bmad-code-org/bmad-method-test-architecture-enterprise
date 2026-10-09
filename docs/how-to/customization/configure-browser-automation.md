@@ -30,11 +30,15 @@ tea_browser_automation = "auto" # auto | cli | mcp | none
 
 ```bash
 npm install -g @playwright/cli@latest    # Install globally (Node.js 18+)
-playwright-cli install --skills          # Register as an agent skill
+playwright-cli install --skills          # Claude Code: .claude/skills/playwright-cli
+# For Codex, use this skills layout:
+playwright-cli install --skills=agents   # .agents/skills/playwright-cli
 ```
 
 The global npm install is one-time.
-The skills install (`playwright-cli install --skills`) should be run from your project root; it registers skills in your active tool's project skills directory (for example, Claude Code uses `.claude/skills/` and Codex uses `.agents/skills/`).
+Run the skills install from your project root.
+`playwright-cli install --skills` uses the Claude Code layout; Codex uses `playwright-cli install --skills=agents`.
+See the [Playwright CLI skills documentation](https://github.com/microsoft/playwright.dev/blob/main/agent-cli/skills.mdx) for global installation options.
 Agents without skills support can still use the CLI directly via `playwright-cli --help`.
 
 ### For MCP (`mcp` or `auto` mode)
@@ -83,14 +87,15 @@ See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact--co
 | VS Code (Copilot) | `.vscode/mcp.json`                    | JSON (`servers`)       |
 
 Use `claude mcp add` to register servers in Claude Code.
-Use `-s user` for all projects; omit it for the default project scope.
+Use `-s user` for all projects or `-s project` for a shared project configuration in `.mcp.json`.
+Omitting `-s` uses `local` scope, private to you in the current project.
 
 #### CLI shortcuts
 
 Claude Code and Codex support adding MCP servers from the command line:
 
 ```bash
-# Claude Code: Playwright (use -s user for global, omit for per-project)
+# Claude Code: Playwright (user scope; use -s project to share with the project)
 claude mcp add -s user --transport stdio playwright -- npx -y @playwright/mcp@latest
 claude mcp add -s user --transport stdio playwright-test -- npx playwright run-test-mcp-server
 

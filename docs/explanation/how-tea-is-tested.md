@@ -112,7 +112,7 @@ TEA evaluates runs with strict separation between test failures and infrastructu
 
 Exit 1 records measured quality failures across workflow, model, harness, corpus, or oracle defects.
 Exit 2 records environment or unexpected runtime errors, preventing infrastructure failures from skewing quality metrics.
-The convention is optional and belongs to TEA's own harnesses; [Adopting eval-quality](/docs/explanation/eval-quality-adoption-guide.md#the-012-exit-convention-an-optional-pattern) describes it for a harness of your own.
+The convention is optional and belongs to TEA's own harnesses; [Adopting eval-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/docs/eval-quality-adoption-guide.md#the-012-exit-convention-an-optional-pattern) describes it for a harness of your own.
 
 ### 7. Recorded Results and Provenance
 
@@ -160,7 +160,7 @@ Evaluate authored and ran its own suite; `test/evaluations/bmad-testarch-evaluat
 ## Further Reading
 
 - [Verification Architecture](/docs/explanation/verification-architecture.md): how TEA separates stack-neutral verification reasoning from stack-specific execution targets.
-- [Eval Quality Roadmap](/docs/explanation/eval-quality-roadmap.md): the completed transition from fragment selection to full behavioral coverage.
-- [Adopting eval-quality, One Skill at a Time](/docs/explanation/eval-quality-adoption-guide.md): guide for bringing behavioral evaluations to other BMAD skills.
-- [The eval-quality Command Adapter](/docs/explanation/eval-quality-command-adapter.md): how TEA probes CLI-based workflows and captures structured observations.
+- [Eval Quality Roadmap](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/docs/eval-quality-roadmap.md): the completed transition from fragment selection to full behavioral coverage.
+- [Adopting eval-quality, One Skill at a Time](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/docs/eval-quality-adoption-guide.md): guide for bringing behavioral evaluations to other BMAD skills.
+- [The eval-quality Command Adapter](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/docs/eval-quality-command-adapter.md): how TEA probes CLI-based workflows and captures structured observations.
 - [Recorded eval:all Results](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/results/eval-all/latest.json): live baseline evidence and historical run records.

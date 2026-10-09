@@ -17,9 +17,9 @@
     ],
     "purity": {
       "layers": ["eval-quality-schema-versions"],
-      "awaitRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and an await here would break it",
-      "asyncFunctionRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and an async function here would break it",
-      "newDateRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and new Date here would break it"
+      "awaitRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; test/docs/eval-quality-command-adapter.md documents the invariant and an await here would break it",
+      "asyncFunctionRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; test/docs/eval-quality-command-adapter.md documents the invariant and an async function here would break it",
+      "newDateRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; test/docs/eval-quality-command-adapter.md documents the invariant and new Date here would break it"
     },
     "commonjs": "check",
     "reportOnly": false

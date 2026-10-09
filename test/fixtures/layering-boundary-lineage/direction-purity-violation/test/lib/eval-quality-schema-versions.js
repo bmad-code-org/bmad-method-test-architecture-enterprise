@@ -8,7 +8,7 @@ try {
 }
 
 // Seeded violations: this cluster is supposed to stay synchronous, the one
-// invariant `docs/explanation/eval-quality-command-adapter.md` documents and
+// invariant `test/docs/eval-quality-command-adapter.md` documents and
 // `eval-quality.config.json`'s `dependency-direction` purity block holds this
 // file to. All three purity bans fire independently in one scan, so this
 // function carries all three: `async`, `new Date`, and `await`.

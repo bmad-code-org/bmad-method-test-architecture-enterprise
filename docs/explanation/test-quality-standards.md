@@ -30,7 +30,7 @@ test('user can do stuff', async ({ page }) => {
   await page.waitForTimeout(5000); // hard wait: flaky and wastes time
 
   if (await page.locator('.banner').isVisible()) {
-    await page.click('.dismiss'); // conditional: non-deterministic behavior
+    await expect(page.locator('.banner')).toContainText('Welcome'); // assertion skipped if the banner is absent
   }
 
   try {
@@ -39,8 +39,7 @@ test('user can do stuff', async ({ page }) => {
     // try-catch as flow control: hides failures
   }
 
-  // ... 1100 more lines: too large to maintain, and no explicit assertions
-  // Vague name: what is "stuff"?
+  // ... 1100 more lines: too large to maintain
 });
 ```
 
@@ -63,7 +62,7 @@ test('flaky test', async ({ page }) => {
   await page.waitForTimeout(2000); // might be too short on CI
 
   if (await page.locator('.modal').isVisible()) {
-    await page.click('.dismiss'); // non-deterministic
+    await expect(page.locator('.modal')).toContainText('Submitted'); // assertion skipped if the modal is absent
   }
 
   try {
@@ -221,10 +220,9 @@ The review registry flags test files over 1000 lines.
 
 - ✅ Reviewed test file ≤ 1000 lines
 - ✅ Single responsibility
-- ✅ Clear describe and test names
 - ✅ Appropriate scope: neither too granular nor too broad
 
-A 2000-line `test('complete user flow')` covering registration, profile setup, settings, and export fails on all four counts: a failure at line 50 blocks the other 1950, nobody can tell which feature broke, and the whole thing runs even when you only care about registration.
+A 2000-line `test('complete user flow')` covering registration, profile setup, settings, and export exceeds the size budget and combines several responsibilities: a failure at line 50 blocks the other 1950, nobody can tell which feature broke, and the whole thing runs even when you only care about registration.
 
 ```typescript
 // ✅ One responsibility each
@@ -287,7 +285,6 @@ test('fast test', async ({ page }) => {
 ## TEA's Quality Scoring
 
 All 35 registry rows are mapped to knowledge fragments.
-`npm run test:criteria-fragments` checks that traceability against the registry and the fragment index.
 
 `test-review` starts at 100 and applies a severity deduction ledger.
 The criteria registry fixes the severity of each finding and the conditions under which it applies.
@@ -334,12 +331,19 @@ A numeric score alone does not establish that the test exercises the right behav
 
 `test-review` audits existing tests and reports violations with the deduction attached:
 
-```markdown
+````markdown
 ## High Issues
 
-### Conditional Flow Control (tests/profile.spec.ts:45)
+### Conditional Assertion (tests/profile.spec.ts:45)
 
-**Issue:** `if (await page.locator('.banner').isVisible())`
+**Issue:** The assertion is skipped when the banner is absent.
+
+```typescript
+if (await page.locator('.banner').isVisible()) {
+  await expect(page.locator('.banner')).toContainText('Welcome');
+}
+```
+
 **Severity:** HIGH
 **Score Impact:** -5, with the HIGH score cap of 79
 **Fix:** Make banner presence deterministic
@@ -351,7 +355,7 @@ A numeric score alone does not establish that the test exercises the right behav
 **Issue:** Login code repeated 5 times
 **Score Impact:** Determined by the matching registry row
 **Fix:** Extract to authSession fixture
-```
+````
 
 ## Definition of Done Checklist
 
@@ -381,14 +385,14 @@ A numeric score alone does not establish that the test exercises the right behav
 ### "My test needs conditionals for optional elements"
 
 ```typescript
-// ❌ Branching on what the app happened to render
+// ❌ The assertion is skipped when the banner is absent
 if (await page.locator('.banner').isVisible()) {
-  await page.click('.dismiss');
+  await expect(page.locator('.banner')).toContainText('Welcome');
 }
 
 // ✅ Option 1: control the precondition so the banner always shows
 await expect(page.locator('.banner')).toBeVisible();
-await page.click('.dismiss');
+await expect(page.locator('.banner')).toContainText('Welcome');
 
 // ✅ Option 2: split into two tests, each with a known precondition
 test('should show banner for new users', ...);

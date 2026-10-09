@@ -49,7 +49,7 @@ Dana Whitfield has demonstrated proficiency in:
 - ✅ **Architecture Patterns:** Fixture composition, network-first patterns, data factories, step-file architecture
 - ✅ **Test Design:** Risk assessment (Probability × Impact), coverage planning, test levels framework
 - ✅ **Test Development:** ATDD red-green TDD approach, test automation, API testing patterns
-- ✅ **Quality Assurance:** Test review (5 dimensions), traceability, release gates, quality metrics
+- ✅ **Quality Assurance:** Test review (rubric 5.0 scoring), traceability, release gates, quality metrics
 - ✅ **Advanced Techniques:** 47 of 59 knowledge fragments explored, with deep dives on flaky test diagnosis and contract testing, plus Playwright Utils integration
 
 ---

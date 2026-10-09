@@ -105,7 +105,7 @@ The original implementation recorded:
 - `node test/eval-test-review.js --preflight-only`: exit 2 naming the missing credential, or exit 0 with it present; fixture paths and ground-truth lines were validated.
 
 A live evaluation ran on 2026-09-08 with Claude/Sonnet across three suites.
-[The roadmap](./docs/explanation/eval-quality-roadmap.md) records their results; that run committed no result artifact.
+[The roadmap](./test/docs/eval-quality-roadmap.md) records their results; that run committed no result artifact.
 
 ## Derived recommendation in the CLI
 
@@ -137,6 +137,7 @@ The former boundary test allowed one Critical with `--max-critical 1 --fail-on b
 A recorded waiver with a reason and expiry remains the exception path.
 
 Both effects were accepted on 2026-08-04: Critical remains Block, and `--fail-on block` rejects it.
+This ruling is settled. Do not reopen it by proposing a Request Changes cap or a max-critical escape.
 The H1 severity change was separately noted: aligning hard waits with the published HIGH rule increased their deduction from 2 to 5 points.
 
 ## Estimated effect on #103

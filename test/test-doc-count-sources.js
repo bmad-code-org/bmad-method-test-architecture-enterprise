@@ -252,7 +252,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const entries = config['doc-counts'].entries;
 
-  const roadmap = entries.find((entry) => entry.file === 'docs/explanation/eval-quality-roadmap.md');
+  const roadmap = entries.find((entry) => entry.file === 'test/docs/eval-quality-roadmap.md');
   assert.deepStrictEqual(roadmap.counts, [
     'fragmentSelectionCalls',
     'routingIntentCalls',
@@ -264,7 +264,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'atddCalls',
   ]);
 
-  const adoptionGuide = entries.find((entry) => entry.file === 'docs/explanation/eval-quality-adoption-guide.md');
+  const adoptionGuide = entries.find((entry) => entry.file === 'test/docs/eval-quality-adoption-guide.md');
   assert.deepStrictEqual(adoptionGuide.counts, [
     'totalCalls',
     'fragmentSelectionCalls',

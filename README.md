@@ -104,6 +104,13 @@ npm install --save-dev bmad-method-test-architecture-enterprise
 - [`tea-test-review`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/) runs the review workflow against changed tests and returns a gate verdict.
 - [`tea-evaluate`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-evaluate-cli/) checks, runs, scores, and compares behavioral evaluations.
 
+For `tea-evaluate`, install `eval-quality` alongside TEA in the evaluations folder:
+
+```bash
+npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality
+npm exec --prefix evals -- tea-evaluate --help
+```
+
 The npm package includes the workflow skills used by the tools.
 See the [CI examples](./cli/examples/README.md) for test-review integration.
 

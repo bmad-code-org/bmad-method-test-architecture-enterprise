@@ -62,7 +62,9 @@ BMad Method and Enterprise use all phases based on project needs.
 %%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#fff','primaryTextColor':'#000','primaryBorderColor':'#000','lineColor':'#000','secondaryColor':'#fff','tertiaryColor':'#fff','fontSize':'16px','fontFamily':'arial'}}}%%
 graph TB
     subgraph Phase2["<b>Phase 2: PLANNING</b>"]
+        TraceBaseline["<b>TEA: trace coverage baseline (brownfield)</b>"]
         PM["<b>PM: prd (creates PRD with FRs/NFRs)</b>"]
+        TraceBaseline -.-> PM
         PlanNote["<b>Business requirements phase</b>"]
         PrdNfr["<b>NFRs captured in PRD</b>"]
         PM -.-> PrdNfr
@@ -136,7 +138,8 @@ graph TB
     style Fail fill:#f44336,stroke:#b71c1c,stroke-width:3px,color:#000
 ```
 
-TEA runs nothing in Phase 2.
+TEA's Phase 2 work is the Brownfield baseline: run `trace` Phase 1 during planning to record existing coverage.
+Greenfield projects start TEA in Phase 3.
 The Phase 3 workflows run once per project, the Phase 4 workflows run per epic and per story, and the gate workflows run per epic or per release.
 `teach-me-testing` sits outside the lifecycle entirely and runs once per learner.
 

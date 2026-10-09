@@ -61,6 +61,7 @@ const REPLAY = {
   trace: docCounts.REPLAY_TRACE,
   nfr: docCounts.REPLAY_NFR,
   ciFullAndMinimal: docCounts.REPLAY_CI_FULL_AND_MINIMAL,
+  ci: docCounts.REPLAY_CI,
 };
 
 const ONES = [
@@ -813,24 +814,26 @@ function wordsDrift(file, claim, template, count, moved) {
 const README = 'test/README.md';
 const HEADER = 'test/test-eval-replay.js';
 const REPLAY_OFF_BY_ONE = [
-  digitsDrift(README, 'the replay corpus size', (n) => `Of the ${n} cases`, REPLAY.total, REPLAY.total + 1),
+  digitsDrift(README, 'the replay corpus size', (n) => `Of ${n} cases`, REPLAY.total, REPLAY.total + 1),
+  digitsDrift(README, 'the total replay cases in the suite breakdown', (n) => `The ${n} cases include`, REPLAY.total, REPLAY.total + 1),
+  wordsDrift(README, 'the ci replay cases across every project', (w) => `${w.toLowerCase()} CI runs`, REPLAY.ci, REPLAY.ci + 1),
   digitsDrift(README, 'the replay corpus size', (n) => `${REPLAY.total} cases, ${n} produce`, REPLAY.scored, REPLAY.scored + 1),
   digitsDrift(README, 'the replay corpus size', (n) => `and ${n} of those are constructed`, REPLAY.constructed, REPLAY.constructed + 1),
-  digitsDrift(README, 'the cases that carry captured bytes', (n) => `${n} cases carry captured bytes`, REPLAY.bytes, REPLAY.bytes + 1),
-  digitsDrift(
+  wordsDrift(README, 'the cases that carry captured bytes', (w) => `${w} carry captured bytes`, REPLAY.bytes, REPLAY.bytes + 1),
+  wordsDrift(
     README,
     'the cases that carry captured bytes',
-    (n) => `${n} from the ATDD fixture corpus`,
+    (w) => `${w.toLowerCase()} ATDD corpus reports`,
     REPLAY.atddBytes,
     REPLAY.atddBytes + 1,
   ),
-  wordsDrift(README, 'the trace replay cases', (w) => `${w} trace cases`, REPLAY.trace, REPLAY.trace - 1),
-  wordsDrift(README, 'the nfr replay cases', (w) => `${w} \`nfr\` cases`, REPLAY.nfr, REPLAY.nfr - 1),
-  wordsDrift(README, 'the ci replay cases', (w) => `${w} \`ci\` cases`, REPLAY.ciFullAndMinimal, REPLAY.ciFullAndMinimal - 1),
+  wordsDrift(README, 'the trace replay cases', (w) => `${w.toLowerCase()} trace pairs`, REPLAY.trace, REPLAY.trace - 1),
+  wordsDrift(README, 'the nfr replay cases', (w) => `${w.toLowerCase()} NFR reports`, REPLAY.nfr, REPLAY.nfr - 1),
+  digitsDrift(README, 'the ci replay cases', (n) => `${n} CI replays`, REPLAY.ciFullAndMinimal, REPLAY.ciFullAndMinimal - 1),
   wordsDrift(
     README,
     'the test-review captures',
-    (w) => `The ${w.toLowerCase()} test-review captures`,
+    (w) => `The ${w.toLowerCase()} review captures`,
     REPLAY.testReviewBytes,
     REPLAY.testReviewBytes + 1,
   ),
@@ -853,10 +856,7 @@ for (const [from, to, expected] of [
   });
 }
 
-const ciCasesMoved = new RegExp(
-  `the ci replay cases.*reads "${capital(word(REPLAY.ciFullAndMinimal))}" and is ${capital(word(REPLAY.ciFullAndMinimal + 1))}`,
-  'i',
-);
+const ciCasesMoved = new RegExp(`the ci replay cases.*reads "${REPLAY.ciFullAndMinimal}" and is ${REPLAY.ciFullAndMinimal + 1}`, 'i');
 
 check('adding a replay case without moving the totals fails the gate in every sentence that states them', () => {
   const extra = read('test/replay/ci/full-correct-pipeline/expected.json');
@@ -917,8 +917,8 @@ check('only a ci case over the full or minimal project moves the count of ci cas
   });
   assert.match(runGate(withFixtureSet('full-extra-project')).output, ciCasesMoved);
   assert.match(runGate(withFixtureSet('minimal-extra-project')).output, ciCasesMoved);
-  assert.doesNotMatch(runGate(withFixtureSet('fullstack-extra-project')).output, /the ci replay cases/);
-  assert.doesNotMatch(runGate(withFixtureSet('evaluation-extra-project')).output, /the ci replay cases/);
+  assert.doesNotMatch(runGate(withFixtureSet('fullstack-extra-project')).output, /the ci replay cases reads/);
+  assert.doesNotMatch(runGate(withFixtureSet('evaluation-extra-project')).output, /the ci replay cases reads/);
 });
 
 for (const [from, to, expected] of [
@@ -1045,12 +1045,12 @@ check('gate: the fifth lane gone from both files fails the sentence that says fi
 // The configuration
 // ---------------------------------------------------------------------------
 
-// The doc-counts entries and sources that existed before Story 1.95, as origin/main held them.
+// The existing doc-counts entries and sources, updated for the public docs cleanup.
 // Each entry is pinned as its whole object (file, claim, pattern, counts, rendering and any other key), and each source by the module and export it reads.
 // An entry that changes in any key, and a source that exports another value, fails the check that holds them.
 const PRE_EXISTING_ENTRIES = [
   {
-    file: 'docs/explanation/eval-quality-roadmap.md',
+    file: 'test/docs/eval-quality-roadmap.md',
     claim: 'the per-suite call counts one eval:all run makes',
     pattern: {
       match: String.raw`It runs (\d+) fragment selections, (\d+) routing intents, (\d+) complete test designs, (\d+) complete reviews, (\d+) complete audits, (\d+) complete pipelines, (\d+) complete traces, and (\d+) generations for one runner\.`,
@@ -1068,49 +1068,47 @@ const PRE_EXISTING_ENTRIES = [
     rendering: 'digits',
   },
   {
-    file: 'README.md',
+    file: 'test/README.md',
     claim: 'the fragment-selection case count',
     pattern: {
-      match: '`test:eval-data` checks that all (\\d+) fragment-selection cases are structurally usable',
+      match: String.raw`The fragment-selection corpus contains (\d+) cases\.`,
     },
     counts: ['fragmentSelectionCases'],
     rendering: 'digits',
   },
   {
-    file: 'README.md',
+    file: 'test/README.md',
     claim: 'how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe',
     pattern: {
-      match:
-        'for ([a-z-]+) of the ([a-z-]+) suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential\\.',
+      match: String.raw`A preflight run checks (\d+) suites, including (\d+) that probe the selected agent executable, version, and credentials\.`,
     },
-    counts: ['agentPreflightedSuiteCount', 'totalSuiteCount'],
-  },
-  {
-    file: 'README.md',
-    claim: 'the npm test chain length',
-    pattern: {
-      match:
-        '`npm test` chains (\\d+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Twelve of the (\\d+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:',
-    },
-    counts: ['npmTestChainLength', 'npmTestChainLength'],
+    counts: ['totalSuiteCount', 'agentPreflightedSuiteCount'],
     rendering: 'digits',
   },
   {
-    file: 'README.md',
+    file: 'test/README.md',
+    claim: 'the npm test chain length',
+    pattern: {
+      match: '`npm test` chains (\\d+) checks;',
+    },
+    counts: ['npmTestChainLength'],
+    rendering: 'digits',
+  },
+  {
+    file: 'docs/reference/knowledge-base.md',
     claim: 'the knowledge-fragment tier breakdown',
     pattern: {
-      match:
-        '`tea-index.csv` classifies all (\\d+) fragments into three tiers: \\*\\*core\\*\\* \\((\\d+), always loaded\\), \\*\\*extended\\*\\* \\((\\d+), loaded when deeper analysis is called for\\), and \\*\\*specialized\\*\\* \\((\\d+), loaded only when the case matches, such as contract testing on a real consumer-provider boundary\\)\\.',
+      match: String.raw`The index contains (\d+) fragments: (\d+) core, (\d+) extended, and (\d+) specialized\.`,
     },
     counts: ['knowledgeFragmentTotal', 'knowledgeFragmentCore', 'knowledgeFragmentExtended', 'knowledgeFragmentSpecialized'],
     rendering: 'digits',
   },
   {
-    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    file: 'test/docs/eval-quality-adoption-guide.md',
     claim: "one eval:all run's total model calls and their per-suite breakdown",
     pattern: {
       match:
-        'One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\.',
+        'One default `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), (\\d+) complete atdd generations \\(one story at two repetitions\\), and (\\d+) teaching turns \\(one case at one repetition\\)\\.',
     },
     counts: [
       'totalCalls',
@@ -1122,15 +1120,16 @@ const PRE_EXISTING_ENTRIES = [
       'ciCalls',
       'traceCalls',
       'atddCalls',
+      'teachMeTestingCalls',
     ],
     rendering: 'digits',
   },
   {
-    file: 'README.md',
+    file: 'test/README.md',
     claim: "one eval:all run's total agent calls and all three built-in runners' total",
     pattern: {
       match:
-        '`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, and (\\d+) ATDD generations\\. All three built-in runners make (\\d+) calls\\.',
+        'One `eval:all` run makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, (\\d+) ATDD generations, and (\\d+) teaching turns\\.\\nRunning all three built-in runners makes (\\d+) calls\\.',
     },
     counts: [
       'totalCalls',
@@ -1142,6 +1141,7 @@ const PRE_EXISTING_ENTRIES = [
       'testDesignCalls',
       'traceCalls',
       'atddCalls',
+      'teachMeTestingCalls',
       'totalCallsThreeRunners',
     ],
     rendering: 'digits',
@@ -1155,10 +1155,10 @@ const PRE_EXISTING_ENTRIES = [
     counts: ['advisoryObservationsMaxItems'],
   },
   {
-    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    file: 'test/docs/eval-quality-adoption-guide.md',
     claim: 'the replay corpus row: the stored output total and its per-suite breakdown',
     pattern: {
-      match: String.raw`(\d+) stored outputs scored with no model call: (\d+) selections, (\d+) atdd reports, (\d+) verdicts, (\d+) trace pairs, (\d+) nfr reports, (\d+) ci runs, (\d+) test-design documents, (\d+) replies`,
+      match: String.raw`(\d+) cases replayed with no model call: (\d+) selections, (\d+) atdd reports, (\d+) verdicts, (\d+) trace pairs, (\d+) nfr reports, (\d+) ci runs, (\d+) test-design documents, (\d+) replies`,
     },
     counts: [
       'replayTotal',
@@ -1174,16 +1174,16 @@ const PRE_EXISTING_ENTRIES = [
     rendering: 'digits',
   },
   {
-    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    file: 'test/docs/eval-quality-adoption-guide.md',
     claim: "the replay section's stored output total",
     pattern: {
-      match: '`test/replay/` holds (\\d+) stored outputs',
+      match: '`test/replay/` holds (\\d+) cases',
     },
     counts: ['replayTotal'],
     rendering: 'digits',
   },
   {
-    file: 'docs/explanation/eval-quality-adoption-guide.md',
+    file: 'test/docs/eval-quality-adoption-guide.md',
     claim: 'how many stored outputs are real captures, captured and constructed',
     pattern: {
       match: String.raw`(\d+) of the (\d+) stored outputs are real captures, (\d+) are captured reports and the other (\d+) are constructed\.`,
@@ -1192,11 +1192,11 @@ const PRE_EXISTING_ENTRIES = [
     rendering: 'digits',
   },
   {
-    file: 'docs/explanation/eval-quality-roadmap.md',
+    file: 'test/docs/eval-quality-roadmap.md',
     claim: 'the replay corpus size and its per-suite breakdown',
     pattern: {
       match:
-        'score (\\d+) stored cases with no model call and no network: (\\d+) fragment-selection outputs, (\\d+) `atdd` reports, (\\d+) `test-review` verdicts, (\\d+) `test-design` documents, (\\d+) `trace` artifact pairs, (\\d+) `bmad-tea-routing` replies, (\\d+) `nfr` reports, and (\\d+) `ci` runs under `test/replay/`',
+        '`test:eval-replay` replays a corpus containing (\\d+) cases: (\\d+) fragment selections, (\\d+) ATDD reports, (\\d+) review verdicts, (\\d+) test-design documents, (\\d+) trace pairs, (\\d+) routing replies, (\\d+) NFR reports, and (\\d+) CI runs\\.',
     },
     counts: [
       'replayTotal',
@@ -1212,12 +1212,12 @@ const PRE_EXISTING_ENTRIES = [
     rendering: 'digits',
   },
   {
-    file: 'docs/explanation/eval-quality-roadmap.md',
+    file: 'test/docs/eval-quality-roadmap.md',
     claim: 'how many stored outputs are real captures, captured and constructed',
     pattern: {
-      match: String.raw`(\d+) of the (\d+) stored outputs are real captures, (\d+) are captured reports and (\d+) are constructed\.`,
+      match: String.raw`Of the (\d+) stored outputs, (\d+) are real captures, (\d+) are captured reports, and (\d+) are constructed\.`,
     },
-    counts: ['replayRealCaptures', 'replayTotal', 'replayCaptured', 'replayConstructed'],
+    counts: ['replayTotal', 'replayRealCaptures', 'replayCaptured', 'replayConstructed'],
     rendering: 'digits',
   },
 ];
@@ -1233,6 +1233,7 @@ const PRE_EXISTING_SOURCES = {
   traceCalls: 'TRACE_CALLS',
   ciCalls: 'CI_CALLS',
   atddCalls: 'ATDD_CALLS',
+  teachMeTestingCalls: 'TEACH_ME_TESTING_CALLS',
   fragmentSelectionCases: 'FRAGMENT_SELECTION_CASES',
   totalSuiteCount: 'TOTAL_SUITE_COUNT',
   agentPreflightedSuiteCount: 'AGENT_PREFLIGHTED_SUITE_COUNT',
@@ -1293,23 +1294,23 @@ check('every doc-counts entry and source that existed before Story 1.95 reads wh
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   assert.deepStrictEqual(preExistingProblems(config), []);
   assert.strictEqual(PRE_EXISTING_ENTRIES.length, 13);
-  assert.strictEqual(Object.keys(PRE_EXISTING_SOURCES).length, 31);
+  assert.strictEqual(Object.keys(PRE_EXISTING_SOURCES).length, 32);
   const entryOf = (copy, claim) => copy['doc-counts'].entries.find((entry) => entry.claim === claim);
   const ADOPTION = "the replay section's stored output total";
   const widened = structuredClone(config);
   entryOf(widened, ADOPTION).counts = ['replayScored'];
   assert.deepStrictEqual(preExistingProblems(widened), [
-    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: counts is ["replayScored"] and was ["replayTotal"]`,
+    `"${ADOPTION}" of test/docs/eval-quality-adoption-guide.md: counts is ["replayScored"] and was ["replayTotal"]`,
   ]);
   const retargetedPattern = structuredClone(config);
   entryOf(retargetedPattern, ADOPTION).pattern.match = String.raw`6 of the (\d+) stored outputs are real captures`;
   assert.deepStrictEqual(preExistingProblems(retargetedPattern), [
-    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: pattern is {"match":"6 of the (\\\\d+) stored outputs are real captures"} and was {"match":"\`test/replay/\` holds (\\\\d+) stored outputs"}`,
+    `"${ADOPTION}" of test/docs/eval-quality-adoption-guide.md: pattern is {"match":"6 of the (\\\\d+) stored outputs are real captures"} and was {"match":"\`test/replay/\` holds (\\\\d+) cases"}`,
   ]);
   const flipped = structuredClone(config);
   entryOf(flipped, ADOPTION).rendering = 'word';
   assert.deepStrictEqual(preExistingProblems(flipped), [
-    `"${ADOPTION}" of docs/explanation/eval-quality-adoption-guide.md: rendering is "word" and was "digits"`,
+    `"${ADOPTION}" of test/docs/eval-quality-adoption-guide.md: rendering is "word" and was "digits"`,
   ]);
   const wrapped = structuredClone(config);
   entryOf(wrapped, ADOPTION).wrap = true;

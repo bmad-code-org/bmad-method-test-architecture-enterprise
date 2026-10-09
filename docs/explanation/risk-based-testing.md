@@ -44,12 +44,12 @@ TEA applies this in `test-design`.
 
 ### What each band buys
 
-| Score   | Level    | Mitigation                | Gate impact             | Actions                                                                                                                                                                                                                                                                              |
-| ------- | -------- | ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **9**   | Critical | Mandatory, blocks release | FAIL without mitigation | Comprehensive suite (E2E, API, security); multiple environments including a prod mirror; load and performance validation; security audit and penetration testing; monitoring and alerting; documented rollback; on-call rotation assigned. Resolve the critical risk before release. |
-| **6-8** | High     | Required, documented plan | CONCERNS if incomplete  | Targeted suite covering happy path plus critical errors; test environment set up; monitoring plan; mitigation and owners documented. Deploys with an approved plan.                                                                                                                  |
-| **4-5** | Medium   | Recommended               | Advisory only           | Basic coverage; standard monitoring; known limitations documented.                                                                                                                                                                                                                   |
-| **1-3** | Low      | Optional                  | None                    | Smoke test if desired; feature flag for easy disable.                                                                                                                                                                                                                                |
+| Score   | Level    | Mitigation                | Gate impact            | Actions                                                                                                                                                                                                                                                                              |
+| ------- | -------- | ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **9**   | Critical | Mandatory, blocks release | FAIL until resolved    | Comprehensive suite (E2E, API, security); multiple environments including a prod mirror; load and performance validation; security audit and penetration testing; monitoring and alerting; documented rollback; on-call rotation assigned. Resolve the critical risk before release. |
+| **6-8** | High     | Required, documented plan | CONCERNS if incomplete | Targeted suite covering happy path plus critical errors; test environment set up; monitoring plan; mitigation and owners documented. Deploys with an approved plan.                                                                                                                  |
+| **4-5** | Medium   | Recommended               | Advisory only          | Basic coverage; standard monitoring; known limitations documented.                                                                                                                                                                                                                   |
+| **1-3** | Low      | Optional                  | None                   | Smoke test if desired; feature flag for easy disable.                                                                                                                                                                                                                                |
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
@@ -153,7 +153,7 @@ describe('User profile - High Value (P1)', () => {
 });
 
 // P2 theme preference: one smoke test
-// P3 last-login display: skipped, read-only and low value
+// P3 last-login display: one smoke test
 ```
 
 Worked at project scale, on a checkout redesign from five steps to three with a 40-hour test budget:
@@ -175,14 +175,14 @@ Use it on enterprise projects (high stakes, many features competing for effort),
 Skip it on tiny projects with five features you can test exhaustively, and on throwaway prototypes.
 The scoring is overhead when there is nothing to prioritize.
 
-## Three Misconceptions
+## Coverage and reassessment
 
-**"Risk-based means less testing."** It usually means more testing, differently placed: 50 evenly spread tests become 70 concentrated on P0 and P1.
+Risk-based planning concentrates coverage on the highest priorities: 50 evenly spread tests become 70 concentrated on P0 and P1.
 
-**"Low priority means no testing."** P3 still gets a smoke test proving the feature works at all.
+P3 still gets a smoke test.
 P2 adds the happy path, P1 adds error cases, P0 covers everything.
 
-**"Risk scores are permanent."** Re-assess after mitigations, production evidence, or scope changes.
+Re-score risks as evidence changes.
 A lower score needs evidence for a lower probability or impact.
 
 ## Related

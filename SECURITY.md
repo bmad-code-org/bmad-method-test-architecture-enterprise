@@ -7,6 +7,8 @@ Update older versions to receive those fixes.
 
 ## Report a vulnerability
 
+Do not report security vulnerabilities through public GitHub issues.
+
 Send security reports privately through [BMad's vulnerability reporting form](https://github.com/bmad-code-org/BMAD-METHOD/security/advisories/new) or a maintainer DM in [Discord](https://discord.gg/gk8jAdXWmj).
 The private reporting form is hosted by the BMad Method repository.
 Include:

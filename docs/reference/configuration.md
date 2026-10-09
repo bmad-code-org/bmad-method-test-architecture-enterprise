@@ -55,7 +55,7 @@ npm install -g @playwright/cli@latest  # needed for 'cli' and 'auto' browser mod
 ```
 
 Pact scaffolding requires an applicable consumer-provider boundary.
-For those suites, `tea_use_pactjs_utils: true` selects Pact.js Utils; `false` selects raw Pact.
+For applicable Pact suites, `tea_use_pactjs_utils: true` selects Pact.js Utils; `false` selects raw Pact.
 `tea_pact_mcp: mcp` uses available broker tools, with provider source or an OpenAPI spec as the fallback.
 The report identifies the source used.
 
@@ -157,7 +157,8 @@ When the flag is `true` and the package is installed, `pactjs-utils-mandate` def
 | PactV4 request/response bodies | `setJsonContent` / `setJsonBody` |
 
 Raw Pact is allowed where the helpers cannot cover a capability, with a `// pactjs-utils deviation: <reason>` comment and an entry in the output summary.
-The relevance check looks for existing Pact artifacts, dependencies, configuration, broker variables, or an explicit request for contract testing.
+Before creating contract scaffolds, TEA checks whether contract testing applies to the project.
+Existing Pact artifacts, a dependency on `@pact-foundation/pact`, broker variables, two or more independently deployable services in the repo that call each other, or an explicit request for contract testing each establish relevance.
 See `pactjs-utils-mandate` for the full rules.
 
 `zodToPactMatchers` and the `pact-consumer-di` injection are recommended integrations.
@@ -349,7 +350,7 @@ Whether TEA probes runtime capabilities before resolving the execution mode.
 
 **Setup question:** `Check what the tool supports before choosing an execution mode, and fall back when it is missing?`
 
-When enabled, TEA checks whether `agent-team` or `subagent` execution is actually supported and falls back safely.
+When enabled, TEA checks whether `agent-team` or `subagent` execution is supported and falls back safely.
 When disabled, TEA honors the configured mode strictly and fails if it is unsupported.
 
 ```toml
@@ -528,10 +529,14 @@ document_output_language = "english"
 
 ## Removed Keys
 
-TEA no longer uses the classic installer, so `_bmad/tea/config.yaml`, `src/module.yaml`, and `src/module-help.csv` are gone.
-Upgrading from the classic installer takes one step: ask `bmad` to migrate (`bmad migrate`).
-The v6 installer in bmad-method 6.12 already writes `[modules.tea]` into `_bmad/config.toml`, so setup asks nothing on an upgraded project and the old keys stay there.
-The migration keeps your answers, moves a non-default `ci_platform` and `tea_evaluations_folder` into the customization files of the one skill that reads each, drops the keys no skill reads, and offers to delete `_bmad/tea/config.yaml` and `_bmad/tea/module-help.csv`.
+Older projects may still hold classic-installer files under `_bmad/tea/`.
+To upgrade, run `bmad migrate` in the assistant chat.
+The v6 installer in bmad-method 6.12 already writes `[modules.tea]` into `_bmad/config.toml`.
+A project with that table can still carry v6 keys.
+If `[modules.tea]` is missing from every config layer, run `bmad setup tea` first, then run the migration.
+The migration keeps the nine current module settings, converts their values to strings, and moves non-default `ci_platform` and `tea_evaluations_folder` values into their workflow customization files.
+It removes both moved keys and all unread keys from every `[modules.tea]` layer, and offers to delete the classic installer's config, help file, and TEA agent or workflow copies under `_bmad/tea/`.
+If answers survive only in the classic YAML while the TOML holds defaults, the migration proposes restoring them for your approval.
 A `_bmad/tea/config.yaml` that is left is not read by any skill.
 The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working.
 See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
@@ -542,8 +547,6 @@ The `risk_threshold` key was never read by a workflow and is no longer asked at 
 Earlier releases also declared three FUTURE output-folder keys: `test_design_output`, `test_review_output`, and `trace_output`.
 No workflow ever read them, and they are removed.
 Every workflow now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
-
-Wiring the three keys was turned down because a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
 
 ---
 

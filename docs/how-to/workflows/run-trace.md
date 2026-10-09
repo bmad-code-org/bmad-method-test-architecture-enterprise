@@ -230,7 +230,7 @@ test('should update bio via API', async ({ apiRequest, authToken }) => {
 `authToken` requires auth-session fixture setup.
 See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
 
-### 2. Add Avatar Upload Tests
+Add avatar upload tests the same way:
 
 **Tests Needed:**
 
@@ -285,10 +285,11 @@ After Phase 1 coverage analysis is complete, run Phase 2 for the gate decision.
 **Prerequisites:**
 
 - Phase 1 traceability matrix complete
-- Test execution results available (must have test results)
+- Collection eligible for a gate decision
 
-Phase 2 will skip if test execution results aren't provided.
-The workflow requires actual test run results to make gate decisions.
+A collection is gate-eligible when `allow_gate` is true and `collection_status` is COLLECTED.
+Statuses `waived`, `restricted`, `inaccessible`, and `deferred_shared` leave the gate unevaluated.
+TEA still writes the trace summary for these runs, with no `gate_status` or `gate-decision-{run_key}.json` artifact.
 
 ### 7. Run Phase 2
 
@@ -311,14 +312,13 @@ TEA will ask for:
 - Release gate (production deployment)
 - Hotfix gate (emergency fix)
 
-TEA derives the decision from coverage thresholds, oracle confidence, live evidence, and the execution results.
+TEA derives the decision from coverage thresholds, oracle confidence, and live-evidence overlays.
 It validates any filed waiver and reports its validity alongside the derived decision.
 
 **Example:**
 
 ```text
 Gate type: Epic gate
-Decision mode: Deterministic
 ```
 
 ### 9. Provide Supporting Evidence
@@ -353,7 +353,9 @@ TEA takes the first NFR audit it finds, in this order:
 3. `nfr/nfr-assessment-system.md`.
 4. `nfr-assessment.md` at the root of `{test_artifacts}`, written by TEA versions before the `nfr/` folder.
 
-Test-review reports are a separate quality record, and trace does not read them.
+The NFR audit and test design provide context; their results do not determine the trace gate.
+Test-review reports and test execution results are separate release evidence.
+Trace does not use them to derive its decision.
 
 ### 10. Review Gate Decision
 
@@ -377,10 +379,9 @@ When the collection is gate-eligible, it also writes the machine-readable gate s
 | P3       | 0       | 1     | 0%       |
 
 Overall coverage: 13/15 (87%).
-The test execution results pass, and the NFR audit is PASS.
+Coverage meets the P0, P1, and overall thresholds.
+The requirements come from a confirmed oracle, and none relies solely on recorded live verification.
 The profile-export gap is P2 and scheduled for v1.3.
-
-Approval record: Product Manager, Tech Lead, QA Lead; 2026-01-13.
 ```
 
 ### Gate Decision Rules
@@ -398,10 +399,10 @@ For a gate-eligible collection, TEA applies these coverage thresholds:
 **Detailed Rules:**
 
 - **PASS:** P0=100%, P1≥90%, Overall≥80%
-- **CONCERNS:** P0=100%, P1 80-89%, Overall≥80% (below threshold but not critical)
+- **CONCERNS:** P0=100%, P1 80-89%, Overall≥80%
 - **FAIL:** P0<100% OR P1<80% OR Overall<80% (critical gaps)
 
-**PASS** ✅: All criteria met, ready to release
+**PASS** ✅: Coverage thresholds and evidence overlays met
 
 For a CONCERNS decision, document:
 
@@ -410,12 +411,9 @@ For a CONCERNS decision, document:
 - Team approves proceeding
 - Monitoring in place
 
-**FAIL** ❌: Critical criteria not met:
+**FAIL** ❌: P0 coverage below 100%, P1 coverage below 80%, or overall coverage below 80%.
 
-- P0 requirements not tested
-- Critical security vulnerabilities
-- System is broken
-- Cannot deploy
+Release approval also considers test execution, NFR audits, and test quality under the team's policy.
 
 A human can approve a waiver of FAIL under the team's release policy.
 Trace checks the filed waiver and records its validity; the reported coverage and derived decision remain unchanged.
@@ -443,11 +441,6 @@ Trace checks the filed waiver and records its validity; the reported coverage an
 - Avatar upload not critical for v1.2 launch
 - The avatar-upload gap has an owner and target release
 - Monitoring alerts configured
-
-**Approvals:**
-
-- Product Manager: APPROVED (business priority to launch)
-- Tech Lead: APPROVED (technical risk acceptable)
 ```
 
 ### Example FAIL Decision
@@ -460,7 +453,6 @@ Trace checks the filed waiver and records its validity; the reported coverage an
 **Evidence:**
 
 - P0 coverage: 60% (below required 100%)
-- Critical SQL injection finding in the NFR audit
 - Overall coverage: 65%
 
 **Blockers:**
@@ -469,16 +461,11 @@ Trace checks the filed waiver and records its validity; the reported coverage an
    - Critical path completely untested
    - Must add E2E and API tests
 
-2. **SQL injection vulnerability**
-   - Critical security issue
-   - Must fix before deployment
-
 **Actions Required:**
 
 1. Add login tests (QA team, 2 days)
-2. Fix SQL injection (backend team, 1 day)
-3. Re-run security scan (DevOps, 1 hour)
-4. Re-run trace after fixes
+2. Cover the remaining requirements to reach 80% overall coverage
+3. Re-run trace after fixes
 
 **Cannot proceed until all blockers resolved.**
 ```
@@ -496,7 +483,7 @@ Trace checks the filed waiver and records its validity; the reported coverage an
 
 - Derived gate decision (PASS, CONCERNS, or FAIL)
 - Evidence summary
-- Approval signatures
+- Waiver validity when a register is filed
 - Next steps and monitoring plan
 
 ## Usage Patterns
@@ -527,8 +514,8 @@ After each epic/story:
 Before deployment:
 1. Run trace Phase 1 (final coverage check)
 2. Run trace Phase 2 (make gate decision)
-3. Get approvals
-4. Deploy (if PASS or WAIVED)
+3. Record release approval under the team's policy, including any approved waiver
+4. Deploy for PASS, or for FAIL with a valid waiver approved under the team's release policy
 ```
 
 ### Brownfield Projects
@@ -558,7 +545,7 @@ Before deployment:
 1. Run trace Phase 1 (final check)
 2. Run trace Phase 2 (gate decision)
 3. Compare to baseline
-4. Deploy if coverage maintained or improved
+4. Record release approval under the team's policy before deployment
 ```
 
 ## Tips
@@ -629,7 +616,7 @@ Don't aim for 100% across all priorities:
 
 Use traceability in CI:
 
-Run trace with execution evidence available, then read its scoped gate artifact.
+Run trace with a gate-eligible collection, then read its scoped gate artifact.
 For an epic 1 run:
 
 ```bash
@@ -640,46 +627,40 @@ Adjust the artifact path to your `test_artifacts` configuration and scope.
 This example blocks every decision except PASS.
 Define how your pipeline handles CONCERNS and human-approved waivers before using it.
 
-### Document Waivers Clearly
+### Document Waivers
 
-File the approved waiver in the register for this gate.
-Include the approver, approval date, reason, expiry, monitoring plan, remediation owner, and fix target.
-Trace reports which validation checks each entry passes or fails.
+File the approved waiver in `{test_artifacts}/gate-waivers.md`.
+Use a `## {ID}: {title}` heading for each entry.
+Include the covered gap, priority, FAIL decision, business justification, approver name and role, approval date, expiry, monitoring plan, and remediation plan with a fix target, due date, owner, and verification.
+The approver must have VP, CTO, or product-owner authority.
+Security vulnerabilities and authentication or authorization gaps cannot be waived.
+Trace reports which validation checks each entry passes or fails and preserves the derived decision.
 
 ```markdown
-## Waiver Documentation
+# Gate Waivers
 
-**Waived By:** VP Engineering, Product Lead
-**Date:** 2026-01-15
-**Gate Type:** Release Gate v1.2
+## W-001: Deferred profile-export coverage
 
-**Justification:**
-Business critical to launch by Q1 for investor demo.
-Performance concerns acceptable for initial user base.
+**Covers:** REQ-EXPORT-01: User can export their profile
+**Priority:** P1
+**Scope:** Release v1.2 only
+**Derived decision:** FAIL
+**Reason for failure:** P1 coverage is 3/4 (75%). P0 is 5/5 (100%) and overall is 9/10 (90%).
 
-**Conditions:**
+**Waiver reason:** The investor-demo launch needs to proceed on January 16.
+Manual export is available for the initial customer group while automated coverage is completed.
+**Approver:** Alex Chen, VP Engineering
+**Approval date:** 2026-01-15
+**Expiry:** 2026-01-31
 
-- Set monitoring alerts for P99 > 300ms
-- Plan optimization for v1.3 (due February 28)
-- Monitor user feedback closely
+**Monitoring plan:** The support lead checks export requests daily and escalates any failed manual export to the backend lead.
 
-**Accepted Risks:**
+**Remediation plan:**
 
-- 1% of users may experience 350ms latency
-- Avatar upload feature incomplete
-- Profile export deferred to next release
-
-**Quantified Impact:**
-
-- Affects <100 users at current scale
-- Workaround exists (manual export)
-- Monitoring will catch issues early
-
-**Approvals:**
-
-- VP Engineering: [Signature] Date: 2026-01-15
-- Product Lead: [Signature] Date: 2026-01-15
-- QA Lead: [Signature] Date: 2026-01-15
+- Fix target: Add automated profile-export coverage for v1.3
+- Due date: 2026-01-29
+- Owner: Jamie Rivera, QA Lead
+- Verification: Run the profile-export E2E tests and rerun trace to confirm P1 coverage meets the 90% PASS threshold
 ```
 
 ## Common Issues
@@ -688,7 +669,7 @@ Performance concerns acceptable for initial user base.
 
 Phase 1 shows 50 uncovered requirements.
 
-Prioritize ruthlessly:
+Prioritize the gaps:
 
 1. Fix all P0 gaps (critical path)
 2. Fix high-risk P1 gaps
@@ -749,14 +730,14 @@ Result: PARTIAL coverage (3/4 criteria)
 ### Gate Decision Unclear
 
 Use the [gate decision rules](#gate-decision-rules) and the report's evidence.
-Check P0, P1, and overall coverage, then review oracle confidence, live-only coverage, execution failures, and NFR findings.
-A missing or unreliable collection leaves the gate unevaluated; obtain the missing evidence before making a release decision.
+Check P0, P1, and overall coverage, then review oracle confidence and live-only coverage.
+An ineligible collection leaves the gate unevaluated; resolve the collection restrictions before making a gate decision.
 
 ## Related Guides
 
 - [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Provides requirements for traceability
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Test quality audit, a separate record from the gate
-- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md): NFR status feeds gate
+- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md): Separate NFR evidence for release approval
 
 ## Understanding the Concepts
 

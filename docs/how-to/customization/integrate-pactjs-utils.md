@@ -70,8 +70,7 @@ For other package gaps, TEA adds `// pactjs-utils deviation: <reason>` and lists
 
 ## What Never Relaxes
 
-The mandate does not soften the correctness rules from the per-utility fragments.
-They apply with or without the utilities:
+The correctness rules from the per-utility fragments apply with or without the utilities:
 
 - **One `pact.addInteraction()` per `it()` block.** PactV4's Rust FFI drops interactions non-deterministically otherwise. Use `it.each` for parameterized cases.
 - **Consumer Vitest config** carries `fileParallelism: false` AND `pool: 'forks'` AND `poolOptions.forks.singleFork: true`.
@@ -211,8 +210,8 @@ tea_use_pactjs_utils = "false" # TEA writes raw @pact-foundation/pact instead
 tea_pact_mcp = "none"          # TEA never attempts a broker call
 ```
 
-Turning `tea_use_pactjs_utils` off does not disable contract testing.
-It changes which API the generated tests are written against; the determinism rules and provider scrutiny still apply.
+With `tea_use_pactjs_utils` off, TEA writes contract tests against raw `@pact-foundation/pact`.
+The determinism rules and provider scrutiny still apply.
 
 ## Installation
 

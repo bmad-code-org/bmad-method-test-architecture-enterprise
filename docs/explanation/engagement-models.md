@@ -17,12 +17,11 @@ There are five engagement models; pick one intentionally and change it later if 
 | 5   | TEA Integrated (Brownfield) | Yes                  | 8              | Existing codebases               |
 
 The Enterprise track adds compliance, security, and audit steps to either Integrated model.
-See [Model 4](#model-4-tea-integrated-greenfield).
+See [Enterprise track deltas](#enterprise-track-deltas).
 
 TEA Academy runs alongside any engagement model.
 `teach-me-testing` (menu code `TMT`) teaches testing progressively through 7 structured sessions, 30-90 minutes each, over 1-2 weeks self-paced.
 It persists state so you can pause and resume, adapts examples to your role (QA, Dev, Lead, VP), validates with quizzes, and ends with a completion summary.
-It runs alongside any of the five models.
 See [Learn Testing with TEA Academy](/docs/tutorials/learn-testing-tea-academy.md).
 
 ## Model 1: No TEA
@@ -76,16 +75,16 @@ See [TEA Lite Quickstart](/docs/tutorials/tea-lite-quickstart.md) for the 30-min
 Use TEA in Phase 3, Phase 4, and the release gate.
 Model 5 adapts this sequence to an existing codebase.
 
-| Phase                      | TEA                                                                | Dev / Team                                                                       | Outputs                                                                |
-| -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Phase 1**: Discovery     | -                                                                  | Analyst `product-brief` (optional)                                               | `product-brief.md`                                                     |
-| **Phase 2**: Planning      | -                                                                  | PM `prd`                                                                         | PRD with FRs and NFRs                                                  |
-| **Phase 3**: Solutioning   | `test-design` (system-level), then `framework` and `ci`            | Architect `architecture`, `create-epics-and-stories`, `implementation-readiness` | Testability review, NFR evidence plan, test scaffold, CI pipeline      |
-| **Phase 4**: Sprint start  | -                                                                  | SM `sprint-planning`                                                             | Sprint status file with all epics and stories                          |
-| **Phase 4**: Epic planning | `test-design` for THIS epic                                        | Review epic scope                                                                | `test-design/test-design-epic-N.md` with risk assessment and test plan |
-| **Phase 4**: Story dev     | `atdd` before dev (optional), then `automate`                      | SM `create-story`, DEV implements                                                | Tests, story implementation                                            |
-| **Phase 4**: Story review  | `test-review` (optional), re-run `trace`                           | Address recommendations, update code and tests                                   | Quality report, refreshed coverage matrix                              |
-| **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2 | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, gate YAML, release summary          |
+| Phase                      | TEA                                                                | Dev / Team                                                                       | Outputs                                                                            |
+| -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Phase 1**: Discovery     | -                                                                  | Analyst `product-brief` (optional)                                               | `product-brief.md`                                                                 |
+| **Phase 2**: Planning      | -                                                                  | PM `prd`                                                                         | PRD with FRs and NFRs                                                              |
+| **Phase 3**: Solutioning   | `test-design` (system-level), then `framework` and `ci`            | Architect `architecture`, `create-epics-and-stories`, `implementation-readiness` | Testability review, NFR evidence plan, test scaffold, CI pipeline                  |
+| **Phase 4**: Sprint start  | -                                                                  | SM `sprint-planning`                                                             | Sprint status file with all epics and stories                                      |
+| **Phase 4**: Epic planning | `test-design` for THIS epic                                        | Review epic scope                                                                | `test-design/test-design-epic-N.md` with risk assessment and test plan             |
+| **Phase 4**: Story dev     | `atdd` before dev (optional), then `automate`                      | SM `create-story`, DEV implements                                                | Tests, story implementation                                                        |
+| **Phase 4**: Story review  | `test-review` (optional), re-run `trace`                           | Address recommendations, update code and tests                                   | Quality report, refreshed coverage matrix                                          |
+| **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2 | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, `gate-decision-{run_key}.json`, release summary |
 
 `test-design` runs before `framework` and `ci` so NFR evidence needs can shape the infrastructure.
 `framework` and `ci` run once, in Phase 3, after architecture.
@@ -94,8 +93,8 @@ The gate decision is one of PASS, CONCERNS, or FAIL.
 ### Enterprise track deltas
 
 - **Phase 1**: `research` for domain and compliance research (recommended)
-- **Phase 3**: `test-design` captures NFR thresholds and planned evidence early (security, performance, reliability)
 - **Phase 2**: PM `prd` plus UX `create-ux-design`
+- **Phase 3**: `test-design` captures NFR thresholds and planned evidence early (security, performance, reliability)
 - **Phase 4**: `test-design` focuses on compliance and security architecture alignment
 - **Release gate**: `nfr-assess` audits NFR evidence before the final gate
 - **Release gate**: archive artifacts and compliance evidence for audits

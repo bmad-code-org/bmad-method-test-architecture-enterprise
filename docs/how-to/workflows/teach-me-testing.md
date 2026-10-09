@@ -25,7 +25,7 @@ The workflow saves your progress so you can pause and resume.
 3. **Architecture & Patterns (60 min)**: Fixtures, network-first patterns, data factories
 4. **Test Design (60 min)**: Risk assessment and coverage planning workflow
 5. **ATDD & Automate (60 min)**: TDD red-green approach, test generation
-6. **Quality & Trace (45 min)**: Test review (5 dimensions), coverage traceability
+6. **Quality & Trace (45 min)**: Test review (rubric 5.0 criteria and severity scoring), coverage traceability
 7. **Advanced Patterns (ongoing)**: Explore 59 knowledge fragments on-demand
 
 ### What You'll Gain
@@ -182,7 +182,7 @@ Skip fundamentals, focus on:
 
 **Topics:**
 
-- Test Review workflow (5 dimensions: determinism, isolation, maintainability, coverage, performance)
+- Test Review workflow: rubric 5.0 criteria, deductions, severity caps (69/79/89/99), and a bonus cap of 25
 - Trace workflow (coverage traceability)
 - Quality metrics that matter (P0/P1 coverage vs vanity metrics)
 - Release gate decisions

@@ -18767,7 +18767,7 @@ function checkSocketConnectionReference() {
   const section = parts.filter((part) => part !== null).join('\n');
   const sentences = section
     .split('\n')
-    .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+    .flatMap((line) => line.split(/(?<=\.) (?=[A-Za-z`])/))
     .map((sentence) => sentence.replace(/^[-\s]+/, ''));
   const audit = sentences.find((sentence) =>
     sentence.startsWith('On Linux the audit also lists a connection, or a datagram sent, to a Unix socket file'),
@@ -18832,7 +18832,7 @@ function unbackedNetworkSentences(reference, mechanism, claims) {
   const sentencesOf = (text) =>
     text
       .split('\n')
-      .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+      .flatMap((line) => line.split(/(?<=\.) (?=[A-Za-z`])/))
       .map((sentence) => sentence.replace(/^[-\s]+/, ''));
   // The earlier stories' sentences that mention a socket, the bridge, a namespace or a host for their own reasons.
   const earlier = [
@@ -19204,7 +19204,7 @@ function checkBridgeReference() {
   const lines = new Set(
     `${reference}\n${mechanism}`
       .split('\n')
-      .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+      .flatMap((line) => line.split(/(?<=\.) (?=[A-Za-z`])/))
       .map((sentence) => sentence.replace(/^[-\s]+/, '')),
   );
   for (const [sentence, backedBy] of claims) {
@@ -19231,6 +19231,12 @@ function checkBridgeReference() {
   // Each kind is placed in the reference's confinement section and in the confinement page's sections that hold the mechanism.
   const movedHeading = '## Host services\n';
   const movedAt = mechanism.indexOf(movedHeading) + movedHeading.length;
+  const lowercaseClaim = 'macOS targets can connect to a path-based socket of the host.';
+  const joined = `${mechanism.slice(0, movedAt)}A supported setup is documented. ${lowercaseClaim}\n${mechanism.slice(movedAt)}`;
+  check(
+    unbackedNetworkSentences(reference, joined, claims).includes(lowercaseClaim),
+    'an unbacked lowercase-initial sentence joined to another sentence passed the network screen',
+  );
   for (const sentence of scratch) {
     const inSection = `${reference.slice(0, at)}${sentence}\n${reference.slice(at)}`;
     check(

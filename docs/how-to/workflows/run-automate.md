@@ -362,7 +362,9 @@ test('should update profile', async ({ page, authToken, testProfile }) => {
 });
 ```
 
-The merged fixture provides authentication and per-test data setup and cleanup.
+The merged fixture exposes an auth token and generates profile data for each test.
+Configure the auth provider and browser session separately before visiting an authenticated page.
+Add cleanup if the test creates persistent records.
 
 ### 5. Review Additional Artifacts
 

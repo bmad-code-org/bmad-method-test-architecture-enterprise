@@ -89,8 +89,6 @@ tea_use_playwright_utils = "true"
 When the flag is enabled and the package is installed, TEA uses the utilities for supported operations.
 The `playwright-utils-mandate` knowledge fragment defines the rule for generation and review.
 
-Two enforcement levels:
-
 Use the following utilities for supported operations:
 
 | You need                                     | TEA emits                                           | Not                                                       |
@@ -104,8 +102,7 @@ Use the following utilities for supported operations:
 | Catching a 4xx/5xx a green UI hides          | the `network-error-monitor` fixture                 | per-spec `page.on('response')` handlers                   |
 
 The following utilities need project setup: `auth-session` needs an auth provider, `network-recorder` a HAR directory, the webhook module a mock provider, and `burn-in` a config file and script.
-TEA proposes them and adds the setup when it falls within the workflow's scope.
-It records any fallback in the summary.
+TEA scaffolds this wiring when the workflow covers setup, and states any fallback to the vanilla equivalent in its output.
 
 Use `page.route` directly to block analytics, fonts, or third-party scripts.
 For other package gaps, TEA adds `// playwright-utils deviation: <reason>` and lists the reason in its summary.

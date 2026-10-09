@@ -55,7 +55,7 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
  * line can never reach real `npm`, whichever path it arrives by.
  */
 const ALLOWLIST_BY_COMMENT = new Map([
-  // docs/explanation/eval-quality-adoption-guide.md
+  // test/docs/eval-quality-adoption-guide.md
   ['fragment-selection corpus, static', 'test:eval-data'],
   ['trace corpus, static', 'test:eval-trace-data'],
   ['manifest against harness constants, and the preflight argv', 'test:eval-schemas'],

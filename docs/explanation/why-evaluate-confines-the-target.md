@@ -116,7 +116,8 @@ A run whose observer fails (the log stream ended, or a read the runtime made did
 
 The services your machine runs for you, such as the container engine or a key agent, are closed to a confined target.
 A call to one is refused: under Bubblewrap the runtime masks each of them when a call starts and the call answers `ECONNREFUSED`, and under Seatbelt the profile answers `EPERM`.
-The audit lists only a connection the kernel did not refuse, so a refused call leaves no entry. macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.
+The audit lists only a connection the kernel did not refuse, so a refused call leaves no entry.
+macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.
 These are the details of the masking under Bubblewrap.
 
 The runtime reads the kernel's table of bound Unix sockets (`/proc/net/unix`) and walks those directories one level down for each call, so a socket a host process binds after the call started stays reachable for that call, and so does one bound in another network namespace outside those directories, one whose path holds a line break in a directory the runtime does not walk, one whose file name is no UTF-8, and a second path to the same socket file through a hard link or another mount; the audit lists a connection to any of them as an observed mount.
@@ -219,7 +220,7 @@ It then aggregates the held bytes in process with eval-quality's `aggregateStren
 A policy rewritten for the aggregate's read and put back is caught here, because the engine refuses an evidence set whose recorded policy digest it does not name; an aggregate substituted for the staged one is caught by the byte comparison; a call that leaves no aggregate where the held bytes give one is caught by the exit.
 The aggregate's diagnostic text is the CLI's own rendering of an error and is not compared.
 
-The in-process re-score checks integrity; the eval-quality CLI supplies the enforced verdict and exit.
+The in-process re-score compares and refuses mismatches; the eval-quality CLI still decides every enforced verdict and exit.
 The comparison covers the artifact, the exit and the `eval-quality:` stderr lines, the three things `score` copies or classifies from; the call's stdout and its other stderr text are recorded as they came and are not compared.
 A refused call copies no evidence; its reason is on the probe's entry in the invocation's `score.json`, the other probes still run, and `score` exits 12.
 The recorded argv names the run directory's own files, so rerunning `eval-quality score` by hand on it with a fresh `--out` reproduces the persisted evidence byte for byte on a run no process changed.

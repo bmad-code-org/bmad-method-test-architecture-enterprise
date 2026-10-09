@@ -37,10 +37,11 @@ The original adoption bounded ten probes: six version checks, three git reads, a
 
 ## The policy is the seam
 
-A contract names a logical executable: `ProbeRequest` validates it against `executable` is constrained to `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`.
+A contract names a logical executable.
+`ProbeRequest` constrains `executable` to `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`, so a contract cannot carry a filesystem path.
 The policy maps that name to a real executable.
 `test/lib/probe-targets.js` holds the mapping to a real file, the working directory, the artifact map, and both budgets.
-One module decides all of it, absolute paths stay out of sixteen contracts, and a free gate binds differently from a live run without touching one.
+One module holds every mapping, so contracts carry no absolute paths and a gate can bind a stub where a live run binds the command.
 
 Artifact paths have two resolution bases:
 
@@ -57,7 +58,7 @@ The first three are what a command reads to know what to do; `environment` is wh
 `CommandTargetPolicy.permittedEnvironmentKeys` is required from `eval-quality` 3.0.0 with no default, so a target with no explicit list authorizes nothing: the adapter refuses any key a request declares that is not on that target's own list, before a process spawns.
 Undeclared keys are refused.
 
-`vendorEnvironmentNames()` in `cli/lib/runner-exit-codes.js` is what each of TEA's runner commands actually authorizes: the union of every shipped vendor adapter's own `envNames`, plus `HOME` and `USER`, because both shipped vendors resolve a stored login through `HOME` and the adapter otherwise passes the child nothing else that could reach one.
+`vendorEnvironmentNames()` in `cli/lib/runner-exit-codes.js` is what each of TEA's runner commands authorizes: the union of every shipped vendor adapter's own `envNames`, plus `HOME` and `USER`, because both shipped vendors resolve a stored login through `HOME` and the adapter otherwise passes the child nothing else that could reach one.
 `test/lib/probe-targets.js` reads that function, and `test/test-probe-targets.js` holds every contract's declared environment keys equal to its authorization's permitted keys in both directions.
 
 `PATH` is on no target's list, and cannot be: a request names its `target` as a bare command, so a declared `PATH` would let the request choose which binary answers for a logical name like `tea-test-review`.
@@ -97,7 +98,7 @@ Schema-version constants are read synchronously in `cli/lib/evaluate/engine.js` 
 A dependency-direction purity rule keeps that module synchronous.
 `test/lib/eval-quality-inputs.js` re-exports its schema-version helpers.
 
-## How much of eval-quality TEA actually uses
+## How much of eval-quality TEA uses
 
 TEA uses contract compilation, environment probing, and scoring.
 The table records its use of published package surfaces.
@@ -211,7 +212,7 @@ The scoring pipeline exposed three contract weaknesses:
 
 1. Coverage rules remain unsatisfied.
    Review leaves `malformed-input` and `state-change-read-back` open; fragment selection leaves `malformed-input` open.
-   Whole-body checks added later closed that coverage rule for review, trace, and routing.
+   Whole-body checks added later satisfied the `whole-body` coverage rule for review, trace, and routing.
    These lower the verdict to CONCERNS.
 2. Trace's clean control originally selected one observation for both plan steps.
    Five seeded `for-any` oracles abstained on clean collections, and two empty-collection assertions also abstained before 1.4.0.
@@ -281,14 +282,15 @@ The request shape and policy now read `vendorEnvironmentNames()` from the same s
 The shared registry, policy, command port, and failure classification live in `cli/lib/evaluate/registry.js` and `test/lib/probe-targets.js`.
 `npm run test:probe-targets` checks default-deny, observation shape, artifact reads and absence, budget kills, environment-key admission, and contract-to-registry agreement with stub vendors.
 
-The review, fragment-selection, and trace harnesses invoke their real commands through the port.
+The review, fragment-selection, and trace harnesses invoke their commands through the port.
 They return real artifacts or stdout and score them with no model call in the integration checks.
 Review passes an explicit `--project-root` and absolute artifact paths.
 Each selection invocation gets its own scratch `cwd`.
 Each trace invocation gets the fixture workspace its prompt names.
 Relative custom-agent paths resolve from the operator's directory before staging.
 
-Trace's contract has 26 summary oracles checked against fifteen stored runs under both sets' oracles.
+Trace's contract has 28 oracles, O-001 through O-028, checked against fifteen stored runs under both sets' oracles.
+O-027 and O-028 check the summaries.
 The end-to-end stub checks verify a passing run, a quality failure for fixture mutation, and a missing-artifact failure.
 Its witnesses compare `allow_gate` within the clean workspace; fixture sets themselves differ through workspace contents.
 

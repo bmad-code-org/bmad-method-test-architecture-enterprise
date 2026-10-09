@@ -169,15 +169,15 @@ session-05-atdd-automate:
 session-06-quality-trace:
   passing_score: 70
   questions:
-    - id: q1-five-dimensions
-      question: "What are the 5 dimensions in Test Review workflow?"
+    - id: q1-review-scoring
+      question: "How does rubric 5.0 calculate the test-review score?"
       options:
-        A: "Speed, cost, coverage, bugs, time"
-        B: "Determinism, Isolation, Assertions, Structure, Performance"
-        C: "Unit, integration, E2E, manual, exploratory"
-        D: "P0, P1, P2, P3, P4"
+        A: "Average five dimension scores"
+        B: "Start at 100, apply severity deductions and up to 25 bonus points, then apply the highest-severity cap"
+        C: "Count the number of tests"
+        D: "Use line coverage alone"
       correct: B
-      explanation: "Test Review evaluates 5 dimensions: Determinism (no flakiness), Isolation (parallel-safe), Assertions (correct checks), Structure (readable/maintainable organization), Performance (speed)."
+      explanation: "Registry findings deduct 10/5/2/1 points by severity. Bonuses total at most 25. The effective score is capped at 69/79/89/99 when CRITICAL/HIGH/MEDIUM/LOW findings are present."
 
     - id: q2-release-gate
       question: "When should the Trace workflow gate decision be RED (block release)?"

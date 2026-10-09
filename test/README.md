@@ -174,7 +174,7 @@ The two review captures score zero recall because they report no findings.
 All routing replays are constructed; `test:eval-routing-evidence` checks live Story 1.3 evidence separately.
 
 The suite also runs credential-free checks for `test/lib/eval-record.js`.
-Constructed replay cases establish scorer regression behavior; recorded live evidence establishes how the skill actually performed.
+Constructed replay cases establish scorer regression behavior; recorded live evidence establishes how the skill performed.
 
 ## nfr eval suite
 
@@ -290,3 +290,108 @@ The remaining suites check corpus and execution tooling.
 One `eval:all` run makes 117 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 12 pipelines, 4 test designs, 4 traces, 2 ATDD generations, and 2 teaching turns.
 Running all three built-in runners makes 351 calls.
 These counts follow the repetitions in `test/evals/suite-manifest.json`.
+
+## Live evaluations
+
+A live evaluation launches an authenticated agent CLI headlessly and scores its response. From the repository root, run one built-in adapter or the complete matrix:
+
+```bash
+npm run eval:all -- --agent codex
+npm run eval:all -- --agent claude
+npm run eval:all -- --agent agy
+npm run eval:all -- --agent agy --agent claude --agent codex
+```
+
+Preflight checks the corpus, executable, version, credentials, and execution tools without a model call:
+
+```bash
+npm run eval:all -- --agent codex --preflight-only
+npm run eval:all -- --agent claude --preflight-only
+npm run eval:all -- --agent agy --preflight-only
+```
+
+`nothing measured` is the expected result. A successful preflight establishes that the setup is usable; the later live call still has to authenticate and complete.
+
+### Focus one suite or skill
+
+```bash
+# One review measures recall and false positives; repeated runs also measure stability.
+npm run eval:test-review -- --agent codex --runs 1
+npm run eval:test-review -- --agent codex
+# One trace per fixture set, or just the named fixture set.
+npm run eval:trace -- --agent codex --runs 1
+npm run eval:trace -- --agent codex --set seeded-tenant-data-export
+npm run eval:nfr -- --agent codex
+npm run eval:ci -- --agent codex
+npm run eval:test-design -- --agent codex
+npm run eval:atdd -- --agent codex
+npm run eval:teach-me-testing -- --agent codex
+```
+
+Fragment selection accepts a workflow ID. These examples run one repetition; use `--runs 2` for stability measurement:
+
+| Skill       | Command                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| ATDD        | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-atdd --runs 1`        |
+| Automate    | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-automate --runs 1`    |
+| CI          | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-ci --runs 1`          |
+| Framework   | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-framework --runs 1`   |
+| NFR         | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-nfr --runs 1`         |
+| Test design | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-design --runs 1` |
+| Test review | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-review --runs 1` |
+| Trace       | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-trace --runs 1`       |
+
+Omit `--workflow` to run every fragment-selection case. Add `--json` for machine-readable evidence:
+
+```bash
+npm run eval:all -- --agent codex --json results/eval-all.json
+npm run eval:test-review -- --agent codex --json results/test-review.json
+```
+
+Each record captures the commit, suite/case IDs, runner/version/model, parameters, fixture/prompt digests, expected and completed repetitions, measurements, duration, and failure class. Its schema is validated before writing.
+
+### Custom runner contract
+
+Use `--agent custom` and an explicit `--agent-cmd`. The runner must read the complete prompt from stdin, run non-interactively in the staged working directory, print its final response on stdout, and exit nonzero on failure. Artifact-writing suites also require it to write the paths named in the prompt.
+
+For an installed and authenticated [Gemini CLI](https://geminicli.com/docs/cli/headless/):
+
+```bash
+npm run eval:all -- \
+  --agent custom \
+  --agent-cmd gemini \
+  --agent-arg -p \
+  --agent-arg "Follow the complete instructions from standard input." \
+  --agent-arg --output-format \
+  --agent-arg text \
+  --agent-arg --approval-mode \
+  --agent-arg yolo \
+  --agent-arg --skip-trust \
+  --env-pass GEMINI_API_KEY \
+  --env-pass GOOGLE_API_KEY
+```
+
+`yolo` permits the artifact writes these suites require. Fragment selection alone can use Gemini's `plan` approval mode. Pass environment credentials with `--env-pass`; stored CLI logins use the home directory passed by the harness. Supply a custom model flag and value through repeated `--agent-arg` options.
+
+### Thresholds and result handling
+
+The [suite manifest](./evals/suite-manifest.json) owns the full threshold set. `test:eval-schemas` checks that harness constants agree with it. Key thresholds are:
+
+| Suite              | Required measurements                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fragment selection | Required recall ≥90%, forbidden selection ≤10%, stable repeated choices                                                                                       |
+| Test review        | Recall ≥70%, CRITICAL recall 100%, non-false-positive rate ≥80%, score standard deviation ≤3, stable verdict                                                  |
+| Trace              | Criterion accuracy and citation precision ≥90%; gate, arithmetic, oracle, waiver, and live-evidence checks 100%; no clean false positives or fixture mutation |
+| Routing            | Route accuracy ≥90%, reason recall ≥80%, scope fidelity ≥87.5%, clarification and decline recall ≥75%; no confident unsupported/ambiguous route               |
+| NFR                | Domain accuracy ≥87.5%, threshold fidelity ≥90%, undecidable domains/overall status/domain coverage 100%; no unsupported PASS or fabricated evidence          |
+| CI                 | Requested-element recall ≥97%, trigger accuracy 100%, no parse/lint failures, unrequested elements, rule violations, instability, or fixture mutation         |
+| Test design        | Grounded recall, precision, and coverage mapping ≥80%; risk arithmetic, bands, categories, IDs, links, and priority ordering 100%                             |
+| ATDD               | Red-for-intended-reason rate and criterion coverage 100%; no vacuous pass, skipped test, load error, unmapped test, or production mutation                    |
+
+Every declared repetition must complete. Exit `0` means thresholds passed, `1` means a measured result missed a threshold, and `2` means the environment could not measure the result. A lost call receives no score.
+
+Only the clean review fixture establishes a definite false positive. Unmatched seeded-fixture findings are recorded as `unattributed`, because they may describe an incidental defect.
+
+Run credential-free repository checks on pull requests. Run live evaluations in scheduled or manually triggered jobs with an authenticated runner, and archive their JSON evidence. Live jobs consume model quota.
+
+Contributor guides: [adoption](./docs/eval-quality-adoption-guide.md), [command adapter](./docs/eval-quality-command-adapter.md), and [roadmap](./docs/eval-quality-roadmap.md).

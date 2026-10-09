@@ -39,4 +39,4 @@ Remove credentials and private project data.
 
 Include relevant custom settings and related workflows.
 If you are working on a fix, link your branch or PR.
-See [CONTRIBUTING.md](../../CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/CONTRIBUTING.md).

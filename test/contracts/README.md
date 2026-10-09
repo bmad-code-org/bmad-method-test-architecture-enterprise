@@ -80,7 +80,7 @@ The evidence side is already command-aware and the declaration side is not.
 `EVIDENCE_CHANNELS` in `eval-quality`'s `src/core/schemas/pointer.ts` already carries `stdout`, `stderr`, and `exit-code`, and `SealedRunRecord`'s observation already records all three.
 Only `Interface` and `Operation` are HTTP-only in that release.
 
-`0.2.0` prints the failure code and the artifact and stops there, so a run against it shows the code without the located issue list the table below breaks down.
+`0.2.0` prints the failure code and the artifact and stops there, so a run against it shows the code without the located issue list the table above breaks down.
 The list comes from a later revision of the renderer.
 The issues themselves are the same either way; only whether the tool prints them differs.
 
@@ -110,8 +110,8 @@ Its two plan steps send two prompts, each written against its own fixture set's 
 The summaries the two sets produce differ because of the files staged under those roots, so a differential across the two sets would attribute to the prompt a difference the staged workspace produced, and an invariance claim over them would be false.
 `allow_gate` is the one prompt value the ground truth establishes an effect for, through `skillRuleCitations.gateEligibility`: step-05 evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts differing in that value, over one staged fixture set, produce two `gate_basis` values.
 That is a true and checkable claim that the command reads its standard input, and it is the claim the witness makes.
-Both its legs stage the clean set, because AD-10 reads every other leg of an operation as a clean leg, and they are runnable only against that staged workspace, which is the coupling `docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command.
-The contract itself states this reasoning in `testData.setup`, because `SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the witness.
+Both its legs stage the clean set, because AD-10 reads every other leg of an operation as a clean leg, and they are runnable only against that staged workspace, which is the coupling `test/docs/eval-quality-command-adapter.md` records for every artifact-writing command.
+The contract itself states this reasoning in `testData.setup`, because `SensitivityWitness` is a strict object with no prose field of its own.
 The section "A plan cannot declare that two steps must receive different inputs" below records what those literals cost and what they bought.
 
 `nfr.contract.json` is the same shape and reaches for a different value.
@@ -338,7 +338,6 @@ Run all three checks: generation, compilation, and oracle evaluation.
 The generator check is the one that runs unconditionally; the compile check and the oracle check need `eval-quality` on disk.
 
 The compile check calls `compile` in process, so the code and the issue locations it records are read off the thrown `RuntimeFault` or `StructuralFailure` and the Zod error a schema failure carries as its `cause`.
-Nothing is scraped back out of printed lines.
 Every contract here compiles, which would leave that blocked path unexercised, so the check also seeds five faults into every contract and holds each one against the code and the locations it must report.
 A compiler that omits the failing field fails that check.
 

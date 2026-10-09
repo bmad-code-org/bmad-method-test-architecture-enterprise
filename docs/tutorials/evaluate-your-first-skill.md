@@ -63,11 +63,11 @@ The evaluation checks that boundary.
 ## Step 1: Read the Intake
 
 The fixture contains the results of an intake conversation with the Evaluate skill.
-Read the confirmed requirements below before running it.
-You need no coding agent for that.
+Read the confirmed requirements below.
+This step needs no coding agent.
 To hold the conversation yourself, see [Optional: Run the Intake Yourself](#optional-run-the-intake-yourself) at the end of this page.
 
-In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TeA's `tea-skill-runner`.
+In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TEA's `tea-skill-runner`.
 Then it asked six questions, one for each family of facts that inspection cannot settle.
 The answers that went into the fixture follow.
 

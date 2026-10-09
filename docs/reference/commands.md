@@ -372,14 +372,19 @@ Coverage traceability + quality gate decision
 ### Phase 2: Gate Decision
 
 - PASS/CONCERNS/FAIL decision, with filed human waivers validated and reported separately
-- Evidence-based (coverage %, quality scores, NFRs)
+- Coverage thresholds, oracle confidence, and recorded live verification determine the decision
 - Outputs: `{test_artifacts}/trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI), and `{test_artifacts}/trace/gate-decision-{run_key}.json` when `allow_gate` is true and collection is gate-eligible
 
 **Gate Rules:**
 
 - P0 coverage: 100% required
-- P1 coverage: ≥90% for PASS, 80-89% for CONCERNS, <80% FAIL
+- P1 coverage: ≥90% for PASS, ≥80% and <90% for CONCERNS, <80% FAIL
 - Overall coverage: ≥80% required
+- With no P1 requirements, P1 coverage counts as 100% for the gate
+- An inferred oracle with less than high confidence caps a passing decision at CONCERNS; with no active test cases, high confidence becomes medium
+- Requirements covered only by recorded live verification cap a passing decision at CONCERNS
+
+The decision runs only when `allow_gate` is true and collection status is COLLECTED.
 
 **How-To Guide:** [Run Trace](/docs/how-to/workflows/run-trace.md)
 
@@ -401,12 +406,6 @@ It is not a standalone workflow and produces no artifact of its own.
 The agent asks which evidence is available and invokes each needed workflow in sequence.
 
 Use `GATE` as a starting point when preparing a release.
-
----
-
-## Summary Table
-
-Use the [Quick Index](#quick-index) to find each workflow's phase, inputs, and outputs above.
 
 ---
 

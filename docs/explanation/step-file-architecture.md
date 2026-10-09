@@ -19,7 +19,6 @@ Step files break the workflow into self-contained units that each do one thing:
 - **Context injection.** Each step restates what it needs, assuming nothing about what the model still remembers.
 - **Strict boundaries.** Each step lists what it must not do, so the scope is explicit.
 - **Just-in-time loading.** The agent reads one step file, executes it, then loads the next.
-  It never loads them all at once.
 
 These boundaries let independent workers produce outputs the aggregation step can validate.
 

@@ -9,7 +9,6 @@ All eleven TEA skills have covering suites.
 This roadmap records the implementation sequence, the first live measurements, and the remaining runner work.
 [Adopting eval-quality, One Skill at a Time](./eval-quality-adoption-guide.md) turns those examples into a procedure for another module.
 
-Every one of TEA's eleven skills now has a covering suite.
 `npm run eval:all` runs the ten behavioral suites; the eleventh, `bmad-testarch-evaluate`, carries the suite Evaluate wrote for itself, which `tea-evaluate` runs and `eval:all` records as skipped.
 A machine-checked gate over the manifest proves `eval:all` finds no undeclared skill.
 
@@ -45,7 +44,11 @@ The default total is 117 calls.
 The focused harnesses remain available for debugging.
 
 Underneath the ten full behavioral suites above, TEA now exercises `eval-quality`'s command-line adapter (`createCommandLineAdapter`, every harness's own runner), its local corpus adapter, its file-system adapter, and its clock port, each certified against the package's own published conformance suite before any call site adopted it.
-The package publishes six conformance arms in total; TEA runs five (`command-probe`, `corpus`, `clock`, `file-system`, and `environment-probe`, the HTTP `api` arm, over the HTTP port template the Evaluate skill ships, since the package ships no HTTP adapter; `npm run test:evaluate-api` runs the template's own conformance file) and records why the sixth has no TEA wrapper to certify: `mcp-probe`, because TEA's own contracts measure no tool server and `tea-evaluate` hands an adopter's server to the package's `createMcpAdapter` with nothing wrapped around its execution, so the arm would certify the package's own adapter, whose use `npm run test:evaluate-mcp` holds end to end.
+The package publishes six conformance arms in total; TEA runs five: `command-probe`, `corpus`, `clock`, `file-system`, and `environment-probe`.
+`environment-probe` is the HTTP `api` arm.
+Its subject is the HTTP port template the Evaluate skill ships, which `npm run test:evaluate-api` runs against a loopback stub.
+TEA has not verified the remaining `mcp-probe` conformance arm.
+`tea-evaluate` uses the package's `createMcpAdapter` directly, so the package owns its conformance certification; `npm run test:evaluate-mcp` checks TEA's use end to end.
 `npm run test:port-totality` holds that ledger, in both directions, against the package's own published count.
 TEA also uses the package's scoring pipeline (`runPreflight`, `runScore`, `seal`) to compile and score every Behavioral Evaluation Contract under `test/contracts/` (`test/contracts/README.md` carries the current count), and its `compareDominance` rule to compare the strength of two stored results.
 
@@ -130,7 +133,6 @@ Use this order so the first additions have strong oracles and create reusable in
 5. `bmad-tea` and `bmad-teach-me-testing`: transcript-based, multi-turn behavior with more semantic scoring.
 6. `test-review`: expand the existing corpus continuously as real misses and false positives are qualified.
 
-Do not add a case only because the failure looks plausible.
 A case qualifies when the seeded defect or expected behavior is observable from the exact evidence given to the agent, the ground truth was written independently of the generated output, and the oracle can distinguish a real catch from a fluent guess.
 
 ### 4. Complete Runner Portability
@@ -197,7 +199,8 @@ The original nine-item implementation slice is complete:
 1. Added `test/evals/suite-manifest.json` and `test/schema/eval-result.js`.
 2. Registered fragment selection and review with unchanged thresholds and manifest-to-harness checks.
 3. Added deterministic replay and oracle checks.
-   `test:eval-replay` scores 158 stored cases: 3 fragment selections, 13 ATDD reports, 10 review verdicts, 14 test-design documents, 15 trace pairs, 20 routing replies, 29 NFR reports, and 54 CI runs.
+   `test:eval-replay` replays a corpus containing 158 cases: 3 fragment selections, 13 ATDD reports, 10 review verdicts, 14 test-design documents, 15 trace pairs, 20 routing replies, 29 NFR reports, and 54 CI runs.
+   Some cases assert refusal or missing-artifact behavior and receive no numeric quality score.
    Of the 158 stored outputs, 6 are real captures, 12 are captured reports, and 140 are constructed.
    Expected results come from hand-authored ground truth; parser or scorer changes require an intentional scorer-version change.
 4. Generated and compiled the contracts in `test/contracts/`.
@@ -213,7 +216,7 @@ The original nine-item implementation slice is complete:
    Automate and framework execute fixtures without dedicated agent runners.
 8. Adopted `runPreflight`, `runScore`, and `seal`.
    The corpus has 59 probes across fifteen corpora, with stored-evidence scoring, schema checks, and published conformance coverage.
-   The [adapter guide](./eval-quality-command-adapter.md#how-much-of-eval-quality-tea-actually-uses) records the remaining contract and vocabulary gaps.
+   The [adapter guide](./eval-quality-command-adapter.md#how-much-of-eval-quality-tea-uses) records the remaining contract and vocabulary gaps.
 9. Added suites for framework and teaching, then Evaluate's own authored suite.
    The manifest's `deferred` array is empty.
 
