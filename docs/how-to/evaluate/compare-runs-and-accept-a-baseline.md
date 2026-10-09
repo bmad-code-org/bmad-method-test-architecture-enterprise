@@ -127,7 +127,6 @@ Another `run` over an uncommitted `baseline/` records `"dirty": true` in its `ru
 
 Open a pull request that carries `baseline/` together with the change that moved the target, the corpus, the contract, the policy or the engine.
 The reviewer reads the baseline diff next to the cause of every difference.
-A baseline that enters through a reviewed pull request can only change when a person decides it should.
 
 ### 4. Know When an Accept Is Refused
 

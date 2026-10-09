@@ -8,7 +8,7 @@ description: Evaluate a web application, an AI feature or an HTTP tool server th
 Use the Evaluate skill to prove that an HTTP service answers what you require.
 Evaluate starts the service in a disposable copy of your project, sends it requests through an HTTP port that eval-quality governs, plants known defects in the service's rules or configuration, and records whether the evaluation catches them.
 A web application and an AI feature behind an HTTP endpoint are evaluated this way.
-A tool server reached over HTTP is too.
+
 A stdio tool server follows [How to Evaluate an MCP Tool Server with TEA](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md).
 
 ## When to Use This
@@ -149,9 +149,8 @@ RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-http
 SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-http-service --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
 
-`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
-The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
-If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
+`RUN` and `SCORE` capture the IDs printed by these commands; later examples use them to read your result.
+If either is empty, read the command's output and resolve the failure before continuing.
 
 ```text
 tea-evaluate preflight: probes/P-002.probe.json: qualified; the restored digest matched and the baseline passed again

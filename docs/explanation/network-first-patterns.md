@@ -5,7 +5,8 @@ description: Understanding how TEA eliminates test flakiness by waiting for actu
 
 # Network-First Patterns Explained
 
-Network-first patterns are TEA's answer to flakiness. The UI changes because an API responded, so wait for the API response rather than guessing at a timeout.
+Register the response wait before the action that starts the request.
+Then assert the returned data and the UI state it produces.
 
 ```typescript
 // ❌ Traditional: hope 3 seconds is enough
@@ -27,21 +28,26 @@ A fixed timeout is wrong in both directions at once:
 - **Fast network:** wastes the difference on every run, multiplied by every test.
 - **Slow network, CI, or load:** the API takes longer than the guess and the test fails.
 
-The usual repair makes it worse. A test fails at 2000 ms, so it goes to 5000, still fails sometimes, so it goes to 10000 and finally passes. Now every run of that test costs 10 seconds, the suite that took 5 minutes takes 30, and it is still not deterministic. It is slower and equally flaky.
+The usual repair makes it worse.
+A test fails at 2000 ms, so it goes to 5000, still fails sometimes, so it goes to 10000 and finally passes.
+Now every run of that test costs 10 seconds, the suite that took 5 minutes takes 30, and it is still not deterministic.
+It is slower and equally flaky.
 
-Navigation has the same problem in a sharper form:
+A UI assertion checks the rendered result.
+Add response assertions when the test also needs to verify the data returned by the backend:
 
 ```typescript
-// ❌ Navigate-then-assert race condition
+// UI-only assertion
 test('should load dashboard data', async ({ page }) => {
-  await page.goto('/dashboard'); // navigation starts
-  // Page loads HTML, JavaScript requests /api/dashboard, and this assertion
-  // runs before the response arrives. It fails intermittently.
+  await page.goto('/dashboard');
+  // Playwright retries this assertion until the table is visible or it times out.
+  // This test does not check which data the API returned.
   await expect(page.locator('.data-table')).toBeVisible();
 });
 ```
 
-The counter-argument that tests are fast enough locally does not survive contact with a different environment, an API under load, network variability, or a suite growing from 100 tests to 1000. Network-first prevents all four before they appear, and the investment is roughly thirty minutes to learn against the hundreds of hours a flaky suite costs in debugging and lost trust.
+Response waits adapt to API timing in local and CI runs.
+They also give failures a useful boundary: did the request return the expected data, and did the UI render it?
 
 ## Intercept, Act, Await
 
@@ -87,7 +93,7 @@ sequenceDiagram
     end
 ```
 
-Applied to the racing dashboard test above:
+Adding response checks to the dashboard test:
 
 ```typescript
 // ✅ Vanilla Playwright
@@ -131,20 +137,29 @@ test('should load dashboard data', async ({ page, interceptNetworkCall }) => {
 });
 ```
 
-Both forms wait exactly as long as needed, whether that is 100 ms or 5 seconds, and behave the same locally, in CI, and against staging.
+Both forms wait for the matching response, then use retrying assertions to check the UI.
 
 ## What Playwright Utils Adds
 
-`@seontechnologies/playwright-utils` is optional as a choice, and binding once chosen. `tea_use_playwright_utils` defaults to `true`, and while it is `true` **and the package is installed** the second form above is what TEA generates and what `test-review` expects. Both halves are required: a flag with no install generates the vanilla form and produces one setup recommendation rather than findings. `page.route` on an application endpoint becomes a finding unless the code says why. It stays correct for what it is genuinely for: blocking analytics, fonts, and third-party scripts, and that needs no justification. Where the utility genuinely does not cover a case, the vanilla call ships with a `// playwright-utils deviation: <reason>` comment on the line and an entry in the workflow's summary, which is what separates a decision from an oversight. The full rule is the `playwright-utils-mandate` knowledge fragment.
+`tea_use_playwright_utils` defaults to `true`.
+When the flag is enabled and the package is installed, TEA generates the utility form and `test-review` checks for bypasses.
+An enabled flag with no package produces one setup recommendation.
+Use `page.route` directly for analytics, fonts, and third-party scripts.
+For an application endpoint the utility cannot handle, add `// playwright-utils deviation: <reason>` on the call and record the reason in the workflow summary.
+The `playwright-utils-mandate` fragment defines the rule.
 
 Seven things the utility changes:
 
 1. **Automatic JSON parsing.** No `await response.json()` anywhere.
-2. **Different result shapes for different utilities**, and the distinction matters. `interceptNetworkCall` resolves to `{ status, responseJson, requestJson }` because it observes a browser round trip and can see both directions. `apiRequest` resolves to `{ status, body }` because it issues the request itself.
-3. **Glob matching.** `url: '**/api/users'` instead of a `resp.url().includes(...)` predicate or a regex.
-4. **One declarative call.** Setup and wait are the same expression, and the fixture injects `page`, so you never pass it.
-5. **Automatic retry.** `apiRequest` retries 5xx with exponential backoff; 4xx fails immediately. Disable with `retryConfig: { maxRetries: 0 }` when the error itself is what you are testing.
-6. **Schema validation.** `validateSchema` as a parameter, or `.validateSchema(Schema)` chained. Accepts JSON Schema, Zod, YAML files, and OpenAPI specs, and throws with detailed errors on mismatch.
+2. **Different result shapes for different utilities**, and the distinction matters.
+   `interceptNetworkCall` resolves to `{ status, responseJson, requestJson }` because it observes a browser round trip and can see both directions.
+   `apiRequest` resolves to `{ status, body }` because it issues the request itself.
+3. **Glob matching.** Use `url: '**/api/users'`.
+4. **One declarative call.** Setup and wait are the same expression, and the fixture injects `page`.
+5. **Automatic retry.** `apiRequest` retries 5xx with exponential backoff; 4xx fails immediately.
+   Disable with `retryConfig: { maxRetries: 0 }` when the error itself is what you are testing.
+6. **Schema validation.** `validateSchema` as a parameter, or `.validateSchema(Schema)` chained.
+   Accepts JSON Schema, Zod, YAML files, and OpenAPI specs, and throws with detailed errors on mismatch.
 7. **Managed HAR recording.** `networkRecorder` handles HAR naming and paths, detects CRUD operations for stateful mocking, and switches between record and playback from an environment variable.
 
 Setup: [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#intercept-network-call).
@@ -162,7 +177,7 @@ const anyCall = interceptNetworkCall({ url: '**' });
 // Specific endpoint
 const userCall = interceptNetworkCall({ url: '**/api/users/123' });
 
-// Method plus endpoint; assert the status you expect rather than filtering on it
+// Method plus endpoint; assert the expected status
 const createCall = interceptNetworkCall({ method: 'POST', url: '**/api/users' });
 const { status, responseJson } = await createCall;
 expect(status).toBe(201);
@@ -206,7 +221,8 @@ const users = await usersResp.json();
 const posts = await postsResp.json();
 ```
 
-Validating the response before asserting on the UI is the point of all of these. It separates "the backend returned the wrong thing" from "the frontend rendered the right thing wrongly", which a UI-only assertion cannot do:
+Validating the response before asserting on the UI is the point of all of these.
+It separates "the backend returned the wrong thing" from "the frontend rendered the right thing wrongly", which a UI-only assertion cannot do:
 
 ```typescript
 test('validate response data', async ({ page, interceptNetworkCall }) => {
@@ -261,9 +277,10 @@ test('should handle API error', async ({ page }) => {
     });
   });
 
+  const responsePromise = page.waitForResponse('**/api/users');
   await page.goto('/users');
 
-  const response = await page.waitForResponse('**/api/users');
+  const response = await responsePromise;
   const error = await response.json();
 
   expect(error.error).toContain('Internal server');
@@ -276,9 +293,6 @@ test('should handle API error', async ({ page }) => {
 ```typescript
 import { test } from '@seontechnologies/playwright-utils/network-recorder/fixtures';
 
-// Record mode
-process.env.PW_NET_MODE = 'record';
-
 test('should work offline', async ({ page, context, networkRecorder }) => {
   await networkRecorder.setup(context); // HAR naming and paths handled for you
 
@@ -288,6 +302,9 @@ test('should work offline', async ({ page, context, networkRecorder }) => {
 ```
 
 ```bash
+# Capture responses with the backend running
+PW_NET_MODE=record npx playwright test
+
 # Play the recording back with no backend running
 PW_NET_MODE=playback npx playwright test
 ```
@@ -308,35 +325,39 @@ test('offline testing - PLAYBACK', async ({ page, context }) => {
 ## "I Already Use waitForSelector"
 
 ```typescript
-// Still a guess, just a differently shaped one
+// Wait for the success element
 await page.click('button');
 await page.waitForSelector('.success', { timeout: 5000 });
 ```
 
-It waits on the DOM, which is the effect, and gives up after an arbitrary ceiling. Wait on the cause first, then check the effect:
+A DOM wait is valid when visibility is the behavior under test.
+When the test needs to verify the network response, register that wait before the click:
 
 ```typescript
-await page.waitForResponse(matcher);
-await page.waitForSelector('.success');
+const responsePromise = page.waitForResponse(matcher);
+await page.click('button');
+await responsePromise;
+await expect(page.locator('.success')).toBeVisible();
 ```
 
 ## How TEA Applies This
 
-`atdd` and `automate` generate network-first tests by default, in whichever form the project is configured for. `test-review` flags every `waitForTimeout` as a Critical determinism violation with the network-first replacement attached:
+`atdd` and `automate` generate network-first tests by default, in whichever form the project is configured for.
+`test-review` flags hard waits under registry row H1 at HIGH severity:
 
 ```markdown
-## Critical Issue: Hard Wait Detected
+## High Issue: Hard Wait Detected
 
 **File:** tests/e2e/submit.spec.ts:45
 **Issue:** Using `page.waitForTimeout(3000)`
-**Severity:** Critical (causes flakiness)
+**Severity:** HIGH (registry row H1)
 **Fix:** Replace with `page.waitForResponse(matcher)` set up before the action
 ```
 
 ## Related
 
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the scoring rubric this rule is worth 15 points in
-- [Fixture Architecture](/docs/explanation/fixture-architecture.md) - how network utilities become fixtures
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - installation and configuration
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - finding hard waits in an existing suite
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - the network-first and intercept-network-call fragments
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): the current criteria and deduction ledger
+- [Fixture Architecture](/docs/explanation/fixture-architecture.md): how network utilities become fixtures
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): installation and configuration
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): finding hard waits in an existing suite
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): the network-first and intercept-network-call fragments

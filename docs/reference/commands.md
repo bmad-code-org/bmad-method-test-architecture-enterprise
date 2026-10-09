@@ -1,6 +1,6 @@
 ---
 title: 'TEA Command Reference'
-description: Quick reference for all 10 TEA workflows - inputs, outputs, and links to detailed guides
+description: Inputs, outputs, and invocation rules for the ten TEA workflows
 ---
 
 # TEA Command Reference
@@ -9,7 +9,7 @@ description: Quick reference for all 10 TEA workflows - inputs, outputs, and lin
 
 Everything below assumes TEA is installed with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` and set up with `bmad setup tea`.
 
-Three surfaces reach the same workflow. The skill name is identical on every platform; only the sigil differs.
+The same workflow skill can be invoked in three ways:
 
 | Surface                         | Form                           | Example                   |
 | ------------------------------- | ------------------------------ | ------------------------- |
@@ -17,9 +17,11 @@ Three surfaces reach the same workflow. The skill name is identical on every pla
 | Codex                           | `$bmad-testarch-<workflow>`    | `$bmad-testarch-automate` |
 | Inside a `bmad-tea` chat        | the workflow's two-letter code | `TA`                      |
 
-Load the TEA agent itself with `/bmad-tea` or `$bmad-tea`. That is optional: every workflow runs standalone, and loading the agent first only buys you the two-letter menu and the `GATE` router.
+Load the TEA agent with `/bmad-tea` or `$bmad-tea` to use its menu codes and `GATE` router.
+Each workflow also runs directly.
 
-This page uses short workflow names. Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
+This page uses short workflow names.
+Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
 
 | Workflow name      | Command                                                     | Menu code |
 | ------------------ | ----------------------------------------------------------- | --------- |
@@ -34,29 +36,31 @@ This page uses short workflow names. Two do not map to a command by adding a pre
 | `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
 | `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
 
-Each workflow writes into its own folder under `{test_artifacts}`, and a file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`. The folders, the run key rules, and what happens to files from earlier TEA versions are in [Output Layout](/docs/reference/configuration.md#output-layout).
+Each workflow writes into its own folder under `{test_artifacts}`, and a file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`.
+The folders, the run key rules, and what happens to files from earlier TEA versions are in [Output Layout](/docs/reference/configuration.md#output-layout).
 
-To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
+To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization.
+See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Quick Index
 
-- [`teach-me-testing`](#teach-me-testing) - Learn testing (TEA Academy)
-- [`test-design`](#test-design) - Risk-based test planning
-- [`framework`](#framework) - Scaffold test framework
-- [`ci`](#ci) - Setup CI/CD pipeline
-- [`atdd`](#atdd) - Acceptance TDD
-- [`automate`](#automate) - Test automation
-- [`evaluate`](#evaluate) - Scored behavioral evaluation
-- [`test-review`](#test-review) - Quality audit
-- [`nfr-assess`](#nfr-assess) - NFR Evidence Audit
-- [`trace`](#trace) - Coverage traceability
-- [`GATE`](#gate-agent-menu-shortcut) - Release gate routing helper (agent menu only)
+- [`teach-me-testing`](#teach-me-testing): Learn testing (TEA Academy)
+- [`test-design`](#test-design): Risk-based test planning
+- [`framework`](#framework): Scaffold test framework
+- [`ci`](#ci): Setup CI/CD pipeline
+- [`atdd`](#atdd): Acceptance TDD
+- [`automate`](#automate): Test automation
+- [`evaluate`](#evaluate): Scored behavioral evaluation
+- [`test-review`](#test-review): Quality audit
+- [`nfr-assess`](#nfr-assess): NFR Evidence Audit
+- [`trace`](#trace): Coverage traceability
+- [`GATE`](#gate-agent-menu-shortcut): Release gate routing helper (agent menu only)
 
 ---
 
 ## teach-me-testing
 
-**Purpose:** Interactive learning companion. Teaches testing fundamentals through advanced practices
+Learn testing through seven sessions with quizzes and saved progress.
 
 **Phase:** Learning / Onboarding (before all other phases)
 
@@ -76,13 +80,13 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 **7 Sessions:**
 
-1. Quick Start (30 min) - TEA Lite intro, engagement models
-2. Core Concepts (45 min) - Risk-based testing, P0-P3, DoD
-3. Architecture (60 min) - Fixtures, network-first, data factories
-4. Test Design (60 min) - Risk assessment, coverage planning
-5. ATDD & Automate (60 min) - TDD red-green, test generation
-6. Quality & Trace (45 min) - Test review, traceability, metrics
-7. Advanced Patterns (ongoing) - 59 knowledge fragments exploration
+1. Quick Start (30 min): TEA Lite intro, engagement models
+2. Core Concepts (45 min): Risk-based testing, P0-P3, DoD
+3. Architecture (60 min): Fixtures, network-first, data factories
+4. Test Design (60 min): Risk assessment, coverage planning
+5. ATDD & Automate (60 min): TDD red-green, test generation
+6. Quality & Trace (45 min): Test review, traceability, metrics
+7. Advanced Patterns (ongoing): 59 knowledge fragments exploration
 
 **Features:**
 
@@ -100,7 +104,8 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 ## framework
 
-**Purpose:** Scaffold production-ready test framework (Playwright or Cypress)
+Scaffold a test framework for the detected stack and selected runner.
+See [Execution Targets](/docs/reference/execution-targets.md) for supported frameworks.
 
 **Phase:** Phase 3 (Solutioning)
 
@@ -124,7 +129,7 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 ## ci
 
-**Purpose:** Setup CI/CD pipeline with selective testing and burn-in
+Setup CI/CD pipeline with selective testing and burn-in
 
 **Phase:** Phase 3 (Solutioning)
 
@@ -150,7 +155,7 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 ## test-design
 
-**Purpose:** Risk-based test planning with coverage strategy and NFR planning
+Risk-based test planning with coverage strategy and NFR planning
 
 **Phase:** Phase 3 (system-level), Phase 4 (epic-level)
 
@@ -170,18 +175,19 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 **System-Level (TWO Documents plus a handoff):**
 
-- `{test_artifacts}/test-design/test-design-architecture.md` - For Architecture/Dev teams
+- `{test_artifacts}/test-design/test-design-architecture.md`: For Architecture/Dev teams
   - Quick Guide (🚨 BLOCKERS / ⚠️ HIGH PRIORITY / 📋 INFO ONLY)
   - Risk assessment with scoring
   - Testability concerns and gaps
   - NFR thresholds, unknowns, and planned evidence
   - Mitigation plans
-- `{test_artifacts}/test-design/test-design-qa.md` - For QA team
+- `{test_artifacts}/test-design/test-design-qa.md`: For QA team
   - Test execution recipe
   - Coverage plan (P0/P1/P2/P3 with checkboxes)
   - Sprint 0 setup requirements
   - NFR test coverage and evidence plan
-- `{test_artifacts}/test-design/{project_name}-handoff.md` - System-level only. Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
+- `{test_artifacts}/test-design/{project_name}-handoff.md`: System-level only.
+  Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
 
 **Epic-Level (ONE Document):**
 
@@ -202,7 +208,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## atdd
 
-**Purpose:** Generate red-phase acceptance test scaffolds BEFORE implementation (TDD red phase)
+Generate red-phase acceptance test scaffolds BEFORE implementation (TDD red phase)
 
 **Phase:** Phase 4 (Implementation)
 
@@ -226,7 +232,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## automate
 
-**Purpose:** Expand test coverage after implementation
+Expand test coverage after implementation
 
 **Phase:** Phase 4 (Implementation)
 
@@ -238,7 +244,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 **Key Outputs:**
 
-- Comprehensive test suite (`tests/e2e/`, `tests/api/`)
+- Tests for the selected scenarios (`tests/e2e/`, `tests/api/`, or the stack-appropriate folders)
 - Updated fixtures, README
 - `{test_artifacts}/automate/automation-summary-{run_key}.md` (declared `default_output_file`, carries the Definition of Done checklist)
 
@@ -250,7 +256,8 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## evaluate
 
-**Purpose:** Build a scored, evidence-backed evaluation of a skill, agent, workflow, tool-use system, AI feature, or test-review mechanism, name the gaps it exposes, and finish with the CI plan that enforces it
+Build and score an evaluation of a skill, agent, workflow, tool-use system, AI feature, or test-review mechanism.
+Identify gaps and produce a CI plan.
 
 **Phase:** Phase 4 (Implementation), after `automate` and before `ci`
 
@@ -278,7 +285,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## test-review
 
-**Purpose:** Audit test quality with 0-100 scoring
+Audit test quality with 0-100 scoring
 
 **Phase:** Phase 4 (optional per story), Release Gate
 
@@ -295,15 +302,22 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 - A `## Quality Criteria Assessment` table with the criteria that apply to the repository, each `PASS` / `WARN` / `FAIL`, and Test Duration as `Not measured`
 - Coverage guidance is informational only; coverage scoring and gates are handled by `trace`
 
-**Scoring:** one deduction ledger, never a weighted average. Four parallel subagents (determinism, isolation, maintainability, performance) each report violations; every violation carries the `criteria-registry.md` row that produced it, which pins its severity. Violations are deduplicated by `file:line:row`, then:
+The review uses a deduction ledger.
+Four review workers cover determinism, isolation, maintainability, and performance; `tea_execution_mode` controls their dispatch.
+Each violation cites a `criteria-registry.md` row that fixes its severity.
+After deduplication by `file:line:row`:
 
 ```text
-score = 100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + bonus
+raw score = 100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + bonus
 ```
 
-clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` with no partial credit: Comprehensive Fixtures, Data Factories, Network-First, Perfect Isolation, All Test IDs. Award `5` only when the criterion holds across every reviewed file.
+The raw score is clamped to 0-100.
+The effective score is the lower of the raw score and the cap for the highest finding severity: CRITICAL 69, HIGH 79, MEDIUM 89, or LOW 99.
+With no findings, the effective score equals the raw score.
+Five bonus categories each award `0` or `5`: Comprehensive Fixtures, Data Factories, Network-First, Perfect Isolation, and All Test IDs.
+A bonus requires the criterion to hold across every reviewed file.
 
-**Recommendation is computed from the counts, not chosen:** `Block` when Critical > 0, `Request Changes` when High > 0 or score < 70, `Approve with Comments` when any Medium or Low remain, otherwise `Approve`.
+The recommendation follows these rules: `Block` when Critical > 0, `Request Changes` when High > 0 or score < 70, `Approve with Comments` when any Medium or Low remain, otherwise `Approve`.
 
 **How-To Guide:** [Run Test Review](/docs/how-to/workflows/run-test-review.md)
 
@@ -311,7 +325,7 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 
 ## nfr-assess
 
-**Purpose:** Audit implemented NFR evidence against defined thresholds
+Audit implemented NFR evidence against defined thresholds
 
 **Phase:** Release Gate; optional earlier evidence audit when implementation evidence exists
 
@@ -331,7 +345,8 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 - Mitigation plans
 - Gate decision inputs
 
-**Boundary:** Use `test-design` to plan NFR thresholds and evidence before implementation. Use `nfr-assess` after evidence exists to audit the evidence.
+**Boundary:** Use `test-design` to plan NFR thresholds and evidence before implementation.
+Use `nfr-assess` after evidence exists to audit the evidence.
 
 **How-To Guide:** [Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md)
 
@@ -339,7 +354,7 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 
 ## trace
 
-**Purpose:** Coverage traceability + quality gate decision
+Coverage traceability + quality gate decision
 
 **Phase:** Phase 2/4 (traceability), Release Gate (decision)
 
@@ -356,7 +371,7 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 
 ### Phase 2: Gate Decision
 
-- PASS/CONCERNS/FAIL/WAIVED decision
+- PASS/CONCERNS/FAIL decision, with filed human waivers validated and reported separately
 - Evidence-based (coverage %, quality scores, NFRs)
 - Outputs: `{test_artifacts}/trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI), and `{test_artifacts}/trace/gate-decision-{run_key}.json` when `allow_gate` is true and collection is gate-eligible
 
@@ -372,7 +387,8 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 
 ## GATE (Agent Menu Shortcut)
 
-**Purpose:** Release gate routing helper. It is not a standalone workflow and produces no artifact of its own.
+Release gate routing helper.
+It is not a standalone workflow and produces no artifact of its own.
 
 **Trigger:** Type `GATE` in chat after loading the TEA agent (`bmad-tea`).
 
@@ -380,28 +396,17 @@ clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` w
 
 1. (Optional) `test-review` for a final test quality audit
 2. (Optional) `nfr-assess` for an NFR Evidence Audit
-3. `trace` Phase 2 for the PASS/CONCERNS/FAIL/WAIVED gate decision
+3. `trace` Phase 2 for the derived PASS/CONCERNS/FAIL gate decision
 
-The agent asks which evidence is available and routes to the right workflow. It does not merge these workflows; each workflow is invoked separately in sequence.
+The agent asks which evidence is available and invokes each needed workflow in sequence.
 
-**When to use:** When you are approaching a release and want a single starting point that covers all release gate checks without needing to know which workflow to invoke first.
+Use `GATE` as a starting point when preparing a release.
 
 ---
 
 ## Summary Table
 
-| Command            | Phase      | Frequency                 | Primary Output              |
-| ------------------ | ---------- | ------------------------- | --------------------------- |
-| `teach-me-testing` | Learning   | Once per learner          | Progress + notes + summary  |
-| `test-design`      | 3, 4       | System + per epic         | Test design + NFR plan      |
-| `framework`        | 3          | Once                      | Test infrastructure         |
-| `ci`               | 3          | Once                      | CI/CD pipeline              |
-| `atdd`             | 4          | Per story (optional)      | Failing tests               |
-| `automate`         | 4          | Per story                 | Passing tests               |
-| `evaluate`         | 4          | Per evaluated target      | Scored evaluation + CI plan |
-| `test-review`      | 4, Gate    | Per epic/release          | Quality report              |
-| `nfr-assess`       | Gate       | Per release               | NFR evidence audit          |
-| `trace`            | 2, 4, Gate | Baseline + refresh + gate | Coverage matrix + decision  |
+Use the [Quick Index](#quick-index) to find each workflow's phase, inputs, and outputs above.
 
 ---
 
@@ -421,7 +426,7 @@ The agent asks which evidence is available and routes to the right workflow. It 
 
 **Evaluate:**
 
-- [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) - tutorial
+- [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md): tutorial
 - [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md)
 - [Evaluate an MCP Tool Server](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md)
 - [Evaluate an HTTP API](/docs/how-to/evaluate/evaluate-an-http-api.md)
@@ -430,16 +435,16 @@ The agent asks which evidence is available and routes to the right workflow. It 
 - [Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md)
 - [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md)
 - [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md)
-- [How Evaluate Works](/docs/explanation/how-evaluate-works.md) - explanation
-- [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md) - explanation
+- [How Evaluate Works](/docs/explanation/how-evaluate-works.md): explanation
+- [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md): explanation
 
 **Explanation:**
 
-- [TEA Overview](/docs/explanation/tea-overview.md) - Complete TEA lifecycle
-- [Engagement Models](/docs/explanation/engagement-models.md) - When to use which workflows
+- [TEA Overview](/docs/explanation/tea-overview.md): Complete TEA lifecycle
+- [Engagement Models](/docs/explanation/engagement-models.md): When to use which workflows
 
 **Reference:**
 
-- [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md) - Evaluate runtime
-- [TEA Configuration](/docs/reference/configuration.md) - Config options
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - Pattern fragments
+- [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md): Evaluate runtime
+- [TEA Configuration](/docs/reference/configuration.md): Config options
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): Pattern fragments

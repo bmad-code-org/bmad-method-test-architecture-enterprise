@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page and removed duplicate site headings.
+
+### Fixed
+
+- Evaluation call-count checks now include the two teaching turns in `eval:all`: 117 calls per runner and 351 across the three built-in runners.
+
 ## [2.0.0] - 2026-10-09
 
 ### Added

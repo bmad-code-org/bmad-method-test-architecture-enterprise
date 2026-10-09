@@ -5,26 +5,25 @@ description: Generate red-phase acceptance test scaffolds before implementation 
 
 # How to Run ATDD with TEA
 
-Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds BEFORE implementation. TEA currently emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
+Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds before implementation.
+TEA currently emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
 
 ## When to Use This
 
-- You're about to implement a NEW feature (feature doesn't exist yet)
+- You are about to implement a feature
 - You want to follow TDD workflow (red → green → refactor)
 - You want tests to guide your implementation
 - You're practicing acceptance test-driven development
 
-**Don't use this if:**
-
-- Feature already exists (use `automate` instead)
-- You want tests that pass immediately
+For tests of implemented features, use [Automate](/docs/how-to/workflows/run-automate.md).
 
 ## Prerequisites
 
 - Test framework setup complete (run `framework` if needed)
 - Story or feature defined with acceptance criteria
 
-**Note:** This guide uses Playwright examples. If using Cypress, commands and syntax will differ (e.g., `cy.get()` instead of `page.locator()`).
+The examples use Playwright.
+Adapt the commands and selectors for Cypress.
 
 ## Steps
 
@@ -72,9 +71,17 @@ Then I see an error message
 And changes are not saved
 ```
 
-TEA builds a criterion registry before it generates tests. Existing `AC-<n>` ids remain unchanged. For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id. Every executable test title carries exactly one id from that registry.
+TEA builds a criterion registry before it generates tests.
+Existing `AC-<n>` ids remain unchanged.
+For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id.
+Every executable test title carries exactly one id from that registry.
 
-TEA emits exactly one red-phase leaf scaffold per declared criterion. Secondary branches and journeys remain implementation-checklist work until green-phase automation. Each scaffold puts one direct criterion assertion first. That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks. API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs. E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
+TEA emits exactly one red-phase leaf scaffold per declared criterion.
+Secondary branches and journeys remain implementation-checklist work until green-phase automation.
+Each scaffold puts one direct criterion assertion first.
+That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks.
+API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs.
+E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
 
 **Reference Documents** (optional):
 
@@ -217,13 +224,8 @@ test.describe('Profile API', () => {
 });
 ```
 
-**Key Benefits:**
-
-- Returns `{ status, body }` (cleaner than `response.status()` + `await response.json()`)
-- Automatic schema validation with Zod
-- Type-safe response bodies
-- Automatic retry for 5xx errors
-- Less boilerplate
+`apiRequest` returns `{ status, body }` and supports chained Zod validation.
+Disable retries with `retryConfig: { maxRetries: 0 }` for tests that assert a 5xx response.
 
 #### E2E Tests (`tests/e2e/profile.spec.ts`):
 
@@ -283,7 +285,8 @@ TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/a
 
 ### 5. Verify Red-Phase Scaffolds
 
-This is the TDD red phase, but TEA keeps generated tests in `test.skip()` until you're ready to work on a task. Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
+This is the TDD red phase, but TEA keeps generated tests in `test.skip()` until you're ready to work on a task.
+Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
 
 **For Playwright:**
 
@@ -310,11 +313,8 @@ Running 4 tests using 1 worker
   4 skipped
 ```
 
-After you remove `test.skip()` from the task you are implementing, that activated test should fail first. This confirms:
-
-- Feature doesn't exist yet
-- Tests will guide implementation
-- You have clear success criteria
+After you remove `test.skip()`, confirm the test fails at the assertion for the promised behavior.
+A setup failure needs repair before implementation starts.
 
 ### 6. Implement the Feature
 
@@ -397,7 +397,8 @@ If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"`
 - **MCP mode:** Full browser automation for complex UI interactions
 - **Auto mode:** Uses CLI for simple verification, MCP for complex flows
 
-**Note:** ATDD is for features that don't exist yet, so browser verification only applies if you have skeleton/mockup UI already implemented. For typical ATDD (no UI yet), TEA infers selectors from best practices.
+ATDD is for features that don't exist yet, so browser verification only applies if you have skeleton/mockup UI already implemented.
+For typical ATDD (no UI yet), TEA infers selectors from best practices.
 
 See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
 
@@ -422,8 +423,6 @@ Recommended order:
 3. Generate E2E tests with `atdd` (or `automate`)
 4. Implement frontend (make E2E tests pass)
 
-This "outside-in" approach is faster and more reliable.
-
 ### Keep Tests Deterministic
 
 TEA generates deterministic tests by default:
@@ -432,22 +431,22 @@ TEA generates deterministic tests by default:
 - Network-first patterns (wait for responses)
 - Explicit assertions (no conditionals)
 
-Don't modify these patterns; they prevent flakiness.
+Preserve response waits and explicit assertions when editing the generated tests.
 
 ## Related Guides
 
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Plan before generating
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Tests for existing features
-- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md) - Initial setup
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Plan before generating
+- [How to Run Automate](/docs/how-to/workflows/run-automate.md): Tests for existing features
+- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Initial setup
 
 ## Understanding the Concepts
 
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - **Why TEA generates quality tests** (foundational)
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Why P0 vs P3 matters
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - What makes tests good
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Avoiding flakiness
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): **Why TEA generates quality tests** (foundational)
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why P0 vs P3 matters
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): Avoiding flakiness
 
 ## Reference
 
-- [Command: atdd](/docs/reference/commands.md#atdd) - Full command reference
-- [TEA Configuration](/docs/reference/configuration.md) - MCP and Playwright Utils options
+- [Command: atdd](/docs/reference/commands.md#atdd): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): MCP and Playwright Utils options

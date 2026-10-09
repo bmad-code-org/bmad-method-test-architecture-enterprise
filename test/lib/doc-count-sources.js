@@ -90,6 +90,10 @@ exports.CI_CALLS = caseCountOf('ci') * repetitionsOf('ci');
  */
 exports.ATDD_CALLS = caseCountOf('atdd') * repetitionsOf('atdd');
 
+/** The teaching suite makes one agent call per turn for every repetition. */
+exports.TEACH_ME_TESTING_CALLS =
+  caseCountOf('teach-me-testing') * repetitionsOf('teach-me-testing') * require('../eval-teach-me-testing').TURN_COUNT;
+
 /** One `eval:all` run's total model calls, for one runner, across every suite. */
 exports.TOTAL_CALLS =
   exports.FRAGMENT_SELECTION_CALLS +
@@ -99,7 +103,8 @@ exports.TOTAL_CALLS =
   exports.NFR_CALLS +
   exports.TRACE_CALLS +
   exports.CI_CALLS +
-  exports.ATDD_CALLS;
+  exports.ATDD_CALLS +
+  exports.TEACH_ME_TESTING_CALLS;
 
 /** All three built-in runners (`claude`, `codex`, `agy`) making one `eval:all` run each. */
 exports.TOTAL_CALLS_THREE_RUNNERS = exports.TOTAL_CALLS * 3;

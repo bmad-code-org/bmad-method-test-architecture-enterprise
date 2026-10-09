@@ -5,7 +5,7 @@ description: Configure automated test execution with selective testing and burn-
 
 # How to Set Up CI Pipeline with TEA
 
-Use TEA's `ci` workflow to scaffold production-ready CI/CD configuration for automated test execution with selective testing, parallel sharding, and flakiness detection.
+Use TEA's `ci` workflow to configure test jobs, sharding, burn-in runs, and result artifacts.
 
 ## When to Use This
 
@@ -62,9 +62,9 @@ TEA will ask about your test execution strategy.
 
 **Options:**
 
-- **Single app** - One application in root
-- **Monorepo** - Multiple apps/packages
-- **Monorepo with affected detection** - Only test changed packages
+- **Single app**: One application in root
+- **Monorepo**: Multiple apps/packages
+- **Monorepo with affected detection**: Only test changed packages
 
 **Example:**
 
@@ -79,9 +79,9 @@ Need selective testing for changed packages only
 
 **Options:**
 
-- **No sharding** - Run tests sequentially
-- **Shard by workers** - Split across N workers; 4 workers take a 20-minute suite to 5 minutes
-- **Shard by file** - Each file runs in parallel
+- **No sharding**: Run tests sequentially
+- **Sharding**: Split the suite across CI jobs. Runtime depends on the slowest shard and job setup.
+- **Shard by file**: Each file runs in parallel
 
 **Example:**
 
@@ -95,9 +95,9 @@ Yes, shard across 4 workers for faster execution
 
 **Options:**
 
-- **No burn-in** - Run tests once
-- **PR burn-in** - Run tests multiple times on PRs; catches flaky tests before they merge
-- **Nightly burn-in** - Dedicated flakiness detection job
+- **No burn-in**: Run tests once
+- **PR burn-in**: Run tests multiple times on PRs; catches flaky tests before they merge
+- **Nightly burn-in**: Dedicated flakiness detection job
 
 **Example:**
 
@@ -364,7 +364,8 @@ export default config;
 | Type change    | Runs all tests                     | Skips (no runtime impact)           |
 | Setup          | Zero config                        | Requires config file                |
 
-**Recommendation:** Start with classic (simple), upgrade to smart (faster) when suite grows.
+Use classic burn-in for the full suite.
+Use smart selection when you have checked that its dependency analysis covers your project.
 
 ### 5. Configure Secrets
 
@@ -453,7 +454,10 @@ git push -u origin test-ci-setup
 
 ## Evaluation Plans
 
-If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded. Evaluate writes the plan and this workflow writes every pipeline file. The last stage of `bmad-testarch-evaluate` invokes this workflow in edit mode on the pipeline file once the plan is written, or in create mode when the repository has no pipeline file.
+If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file.
+A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded.
+Evaluate writes the plan and this workflow writes every pipeline file.
+The last stage of `bmad-testarch-evaluate` invokes this workflow in edit mode on the pipeline file once the plan is written, or in create mode when the repository has no pipeline file.
 
 For each tier the plan places a check on, the pipeline gets one job, `evaluation-pr` for the `pr` tier:
 
@@ -476,38 +480,38 @@ For each tier the plan places a check on, the pipeline gets one job, `evaluation
 - **The plan is validated first.** The workflow runs `tea-evaluate check` and refuses a plan only for findings about `ci/evaluation-ci-plan.json`.
 - **Credentials stay yours.** The plan carries none, so the summary lists what the live tiers need.
 
-The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run, in create or edit mode, rewrites each of them under the id the current plan gives, renames one whose id differs and leaves every job without the marker as it was, apart from the event guard a new event puts on it. Edit mode never writes the create run's checkpoint. See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
+The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run, in create or edit mode, rewrites each of them under the id the current plan gives, renames one whose id differs and leaves every job without the marker as it was, apart from the event guard a new event puts on it.
+Edit mode never writes the create run's checkpoint.
+See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
 
 ## What You Get
 
 ### Automated Test Execution
 
-- **On every PR** - Catch issues before merge
-- **On every push to main** - Protect production
-- **Nightly** - Comprehensive regression testing
+- **On every PR**: Catch issues before merge
+- **On every push to main**: Protect production
+- **Nightly**: regression testing
 
 ### Parallel Execution
 
-- **4x faster feedback** - Shard across multiple workers
-- **Efficient resource usage** - Maximize CI runner utilization
+- Split the suite across multiple CI jobs
 
 ### Selective Testing
 
-- **Run only affected tests** - Git diff-based selection
-- **Faster PR feedback** - Don't run entire suite every time
+- **Run only affected tests**: Git diff-based selection
+- **Faster PR feedback**: Don't run entire suite every time
 
 ### Flakiness Detection
 
-- **Burn-in loops** - Run tests multiple times
-- **Early detection** - Catch flaky tests in PRs
-- **Confidence building** - Know tests are reliable
+- **Burn-in loops**: Run tests multiple times
+- **Early detection**: Catch flaky tests in PRs
 
 ### Artifact Collection
 
-- **Test results** - Saved for 7 days
-- **Screenshots** - On test failures
-- **Videos** - Full test recordings
-- **Traces** - Playwright trace files for debugging
+- **Test results**: Saved for 7 days
+- **Screenshots**: On test failures
+- **Videos**: Full test recordings
+- **Traces**: Playwright trace files for debugging
 
 ## Tips
 
@@ -547,8 +551,8 @@ The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a late
 
 **Strategies:**
 
-- Shard tests across workers (4 workers = 4x faster)
-- Use selective testing (run 20% of tests, not 100%)
+- Balance shards so one slow job does not hold up the suite
+- Run affected tests on pull requests and the full suite on the agreed schedule
 - Cache dependencies (`actions/cache`, `cache: 'npm'`)
 - Run smoke tests first, full suite after
 
@@ -635,7 +639,7 @@ When burn-in detects flakiness:
 4. **Verify fix:**
 
    ```bash
-   npm run test:burn-in -- tests/flaky.spec.ts --repeat 20
+   npx playwright test tests/flaky.spec.ts --repeat-each=20 --retries=0
    ```
 
 ### Secure Secrets
@@ -663,7 +667,7 @@ When burn-in detects flakiness:
 Speed up CI with caching:
 
 ```yaml
-# Cache node_modules
+# Cache npm downloads
 - uses: actions/setup-node@v4
   with:
     cache: 'npm'
@@ -693,8 +697,6 @@ Speed up CI with caching:
 - Timezone differences
 - Race conditions (CI slower)
 
-**Solutions:**
-
 ```yaml
 # Pin Node version
 - uses: actions/setup-node@v4
@@ -705,7 +707,7 @@ Speed up CI with caching:
 # takes no version suffix: `chromium@1.40.0` fails with "Invalid installation targets".
 - run: npx playwright install --with-deps chromium
 
-# Set the timezone on the step that runs the tests, not on the browser-install step.
+# Set the test process timezone.
 - run: npx playwright test
   env:
     TZ: 'America/New_York'
@@ -713,11 +715,9 @@ Speed up CI with caching:
 
 ### CI Takes Too Long
 
-**Problem:** CI takes 30+ minutes, developers wait too long.
+CI takes 30+ minutes, developers wait too long.
 
-**Solutions:**
-
-1. **Shard tests:** 4 workers = 4x faster
+1. **Shard tests:** distribute the suite across CI jobs
 2. **Selective testing:** Only run affected tests on PR
 3. **Smoke tests first:** Run critical path (2 min), full suite after
 4. **Cache dependencies:** `npm ci` with cache
@@ -725,11 +725,7 @@ Speed up CI with caching:
 
 ### Burn-In Always Fails
 
-**Problem:** Burn-in job fails every time.
-
-**Cause:** Test suite is flaky.
-
-**Solution:**
+Find the failing tests in the burn-in report and check whether failures repeat consistently or intermittently:
 
 1. Identify flaky tests (check which iteration fails)
 2. Fix flaky tests using `test-review`
@@ -741,9 +737,7 @@ npm run test:burn-in tests/flaky.spec.ts
 
 ### Out of CI Minutes
 
-**Problem:** Using too many CI minutes, hitting plan limit.
-
-**Solutions:**
+Using too many CI minutes, hitting plan limit.
 
 1. Run full suite only on main branch
 2. Use selective testing on PRs
@@ -752,16 +746,16 @@ npm run test:burn-in tests/flaky.spec.ts
 
 ## Related Guides
 
-- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md) - Run first
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Audit CI tests
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - Burn-in utility
+- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Run first
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Audit CI tests
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): Burn-in utility
 
 ## Understanding the Concepts
 
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Why determinism matters
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Avoid CI flakiness
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): Why determinism matters
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): Avoid CI flakiness
 
 ## Reference
 
-- [Command: ci](/docs/reference/commands.md#ci) - Full command reference
-- [TEA Configuration](/docs/reference/configuration.md) - CI-related config options
+- [Command: ci](/docs/reference/commands.md#ci): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): CI-related config options

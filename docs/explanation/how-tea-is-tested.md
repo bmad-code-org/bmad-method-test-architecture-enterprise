@@ -5,8 +5,8 @@ description: How TEA proves its own behavior through deterministic repository ch
 
 # How TEA Is Tested
 
-Testing an agentic test architect requires proving that the agent makes sound engineering judgments.
-TEA proves its behavior through deterministic repository checks, behavioral evaluations, clean and seeded fixture controls, gameability defenses, repeated live runs, and recorded results.
+TEA checks its own behavior with repository gates, behavioral suites, and recorded live runs.
+Each suite defines its fixtures, thresholds, and stability requirements in the suite manifest.
 
 ```mermaid
 flowchart TD
@@ -43,7 +43,7 @@ flowchart TD
 These include structural validation, scorer replays, and deterministic execution against local fixtures.
 Some checks require local services or declared external dependencies.
 
-These checks guard against structural rot:
+The checks include:
 
 - **Guidance and rule alignment:** Validates that every review rule, NFR guidance directive, and ATDD standard matches its corresponding knowledge fragments and enforcement hooks.
 - **Contract oracles and schemas:** Verifies that all probe and evaluation contracts conform to their schemas and that contract oracles match the harness scorers.
@@ -59,7 +59,7 @@ The `automate` and `framework` suites execute committed test or scaffold fixture
 
 Each suite evaluates a specific skill against concrete artifacts:
 
-- `bmad-tea-routing`: Validates that user intent routes to the correct workflow, declines unsupported requests, and asks clarifying questions when requests are genuinely ambiguous.
+- `bmad-tea-routing`: Validates that user intent routes to the correct workflow, declines unsupported requests, and asks clarifying questions when requests are ambiguous.
 - `bmad-testarch-atdd`: Measures whether generated acceptance tests fail red for declared business criteria.
 - `bmad-testarch-test-design`: Checks that identified risks map to valid test levels and stay within fixture risk ceilings.
 - `bmad-testarch-test-review`: Verifies recall of planted anti-patterns without raising false alarms on clean code.
@@ -131,7 +131,8 @@ Historical baselines are preserved as immutable records.
 Recorded `eval:all` runs are compared for changes in measurements, failure classes, and suite membership.
 The comparison refuses incompatible configurations.
 Separate strength-result comparisons use `eval-quality`'s `compareDominance` when both records carry the required comparable-result data.
-A reader should consult the recorded result in `latest.json` to verify actual measurements, since an attempt can record infrastructure or transport failures alongside successful deterministic checks.
+Read `latest.json` for the measured results and failure classes.
+A recorded run can include infrastructure failures.
 
 ## The Boundary: TEA vs. `eval-quality`
 

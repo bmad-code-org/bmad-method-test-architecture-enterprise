@@ -1,22 +1,26 @@
 ---
 title: 'Live Verification Results'
-description: The JSON contract trace reads when a requirement was verified by running the system rather than by adding a test file
+description: The JSON contract trace reads for recorded live verification
 ---
 
 # Live Verification Results
 
-This file records verification performed by running the system rather than by adding a test file. `trace` reads it under the `live` coverage level and counts a record as coverage alongside static tests.
+Record the results of live system checks in `live-verification-results.json`.
+`trace` reads it at the `live` coverage level and can count a passing record alongside static tests.
 
 Two limits apply, and both are enforced:
 
-- **A record must be recorded against the commit under trace.** A `source_sha` that does not match makes the record `stale`, and stale contributes no coverage.
-- **Live-only evidence can never produce a PASS gate.** A requirement whose only evidence is a live record caps the gate at CONCERNS.
+- The record's `source_sha` must match the commit under trace.
+  A mismatch is `stale` and contributes no coverage.
+- A requirement covered only by a live record caps the gate at CONCERNS.
 
 ## What this contract is for
 
-`trace` reads this file. It never writes it, and it never runs anything to produce it.
+Produce the file before running `trace`.
 
-Any producer can emit it. An agent that drove the app, a shell script wrapping a smoke run, a CI job posting results from a device farm, or a person recording an outcome by hand all satisfy the contract equally. `trace` has no dependency on which one you used, matching how TEA records every other kind of evidence independently of the tool that produced it. See [Verification Architecture](/docs/explanation/verification-architecture.md).
+An agent, script, CI job, or person can record the results.
+Each uses the same schema.
+See [Verification Architecture](/docs/explanation/verification-architecture.md).
 
 ## Where trace looks
 
@@ -24,7 +28,9 @@ Any producer can emit it. An agent that drove the app, a shell script wrapping a
 live_results_input: '{test_artifacts}/live-verification-results.json'
 ```
 
-The file sits at the root of `{test_artifacts}`, outside the `trace/` folder where `trace` writes its own outputs, because other tools and people produce it. Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere. When the file is absent, `trace` uses static test discovery only.
+The file sits at the root of `{test_artifacts}`, outside the `trace/` folder where `trace` writes its own outputs, because other tools and people produce it.
+Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere.
+When the file is absent, `trace` uses static test discovery only.
 
 ## File schema
 
@@ -48,7 +54,8 @@ The file sits at the root of `{test_artifacts}`, outside the `trace/` folder whe
 
 A longer example covering a passing record, a blocked one, and one recorded against an older commit ships with the workflow at `skills/bmad-testarch-trace/resources/live-verification-results.example.json`.
 
-The tables below distinguish **Enforced** fields, whose absence stops a record or the whole file from counting, from **Recorded** fields, which are carried into the report but never rejected. Getting an enforced field wrong changes your coverage; getting a recorded field wrong only makes the report less useful.
+**Enforced** fields determine whether a record or the whole file counts.
+**Recorded** fields add context to the report.
 
 ### Top-level fields
 
@@ -78,7 +85,9 @@ The tables below distinguish **Enforced** fields, whose absence stops a record o
 {target}-LIVE-{NNN}
 ```
 
-`{target}` is the story, epic, or release identifier already used for the run. `{NNN}` is a zero-padded sequence. This matches the existing `1.3-E2E-001` convention, with `LIVE` as the level segment, so live results sort and read alongside static test IDs in the matrix.
+`{target}` is the story, epic, or release identifier already used for the run.
+`{NNN}` is a zero-padded sequence.
+This matches the existing `1.3-E2E-001` convention, with `LIVE` as the level segment, so live results sort and read alongside static test IDs in the matrix.
 
 Examples: `1.3-LIVE-001`, `2.7-LIVE-014`, `v1.4.0-LIVE-003`.
 
@@ -106,23 +115,27 @@ Everything else is recorded as a blocker in the traceability matrix and contribu
 
 An unreadable file (bad JSON, no `results` array, or an unsupported `schema_version`) produces one file-level blocker with the id `live-results-unreadable` at high severity.
 
-A non-`pass` status is reported as itself regardless of freshness. A `fail` cannot count at any commit, so calling it stale would send you to re-record a run that already told you the requirement is broken.
+A non-`pass` status is reported as itself regardless of freshness.
+A `fail` cannot count at any commit, so calling it stale would send you to re-record a run that already told you the requirement is broken.
 
-**Replace records, do not append them.** If you re-verify a requirement that previously failed, overwrite the old record. A file containing both a `fail` and a `pass` for the same `requirement_id` sets the passing record aside as `contradicted` and credits no coverage, because the alternative is letting an appended retry quietly overwrite a recorded failure.
+When re-verifying a failed requirement, replace its old record.
+A file with both `fail` and `pass` for the same `requirement_id` marks the pass `contradicted` and credits no coverage.
 
-Two consequences worth planning around:
+If a P0 requirement's only evidence is stale, it is uncovered and the gate fails.
+Re-record against the current commit or add a re-runnable test.
 
-**A stale live result is not a soft warning.** If a P0 requirement's only evidence is a live result recorded against an older commit, that requirement is uncovered, P0 coverage drops below 100%, and the gate fails. This is deliberate. A live pass is an observation of code that existed at one moment; carrying it forward would let a green gate describe software nobody ran. Re-record against the current commit or add a re-runnable test.
-
-**Short shas are fine.** Freshness compares case-insensitively and accepts an abbreviated sha of 7 characters or more as a prefix match, the same way `git` resolves them.
+Freshness compares SHAs case-insensitively and accepts prefix matches of at least seven characters.
 
 ## Why live-only coverage cannot reach PASS
 
-A requirement whose only evidence is a live record caps the gate at CONCERNS, never PASS. Live evidence leaves nothing anyone can re-run: it does not re-execute on the next commit, in CI, or for the next reviewer. That is the same treatment `trace` already gives requirements traced against an inferred oracle, and for the same reason. It is good enough to count, not good enough to sign off unconditionally.
+A live record describes one observation at one commit.
+It cannot re-execute in CI or on the next commit, so a live-only requirement caps a passing gate at CONCERNS.
 
-The cap only ever lowers a PASS to CONCERNS. It never lifts a FAIL, and it never fires when every counted requirement also has static test coverage.
+The cap lowers PASS to CONCERNS.
+A FAIL remains FAIL; requirements with static test coverage avoid the live-only cap.
 
-To reach PASS, add a re-runnable test at any level for the requirements the matrix reports as live-only. `trace` names them in its recommendations.
+To reach PASS, add a re-runnable test at any level for the requirements the matrix reports as live-only.
+`trace` names them in its recommendations.
 
 ## Turning the level off
 
@@ -134,15 +147,19 @@ coverage_levels: 'e2e,api,component,unit'
 
 `trace` then ignores the results file entirely, including a stale one.
 
-The one exception is `collection_mode: runtime_manifest`. That mode names the results file as the run's only evidence source, so it implies the `live` level and reads the file whether or not `coverage_levels` lists it. Removing `live` does not turn live evidence off under that mode. To turn it off, change the collection mode as well.
+The one exception is `collection_mode: runtime_manifest`.
+That mode names the results file as the run's only evidence source, so it implies the `live` level and reads the file whether or not `coverage_levels` lists it.
+Removing `live` does not turn live evidence off under that mode.
+To turn it off, change the collection mode as well.
 
 ## Runs with no static suite
 
-Set `collection_mode: runtime_manifest` when recorded live verification is the run's only evidence source. `trace` skips static test discovery and reads the results file alone.
+Set `collection_mode: runtime_manifest` when recorded live verification is the run's only evidence source.
+`trace` skips static test discovery and reads the results file alone.
 
-Under that mode a missing or unreadable results file resolves `collection_status` to `INACCESSIBLE`, and no gate is emitted. The alternative would be reporting 0% coverage, which reads as "nothing is verified" when the truth is "the evidence could not be read".
+A missing or unreadable file sets `collection_status` to `INACCESSIBLE` and suppresses the gate.
 
-Because static discovery never runs, the `auth_negative_path_status` and `error_path_status` heuristics report `unknown` rather than `present`. Nothing examined those paths, so nothing can vouch for them.
+With no static discovery, `auth_negative_path_status` and `error_path_status` are `unknown`.
 
 ## What you get back
 
@@ -182,12 +199,15 @@ The run's summary, `trace/e2e-trace-summary-{run_key}.json` under `{test_artifac
 | `unreadable`   | The file exists but could not be parsed or failed its schema check          |
 | `not_present`  | No results file                                                             |
 
-`freshness` reports currency, not success. `fresh` means every record was checkable against the commit under trace; a fresh file can still be full of `fail` and `blocked` records. To gate on "current **and** successful", require `freshness === 'fresh'` and every non-counted counter at zero. `mixed` exists so that one counted record among twenty stale ones cannot report as current.
+`freshness` describes whether records match the commit under trace.
+A `fresh` file can contain failed or blocked results.
+To require current and successful evidence, check `freshness === 'fresh'` and that every non-counted counter is zero.
+`mixed` reports a combination of counted and stale or unverifiable records.
 
 Counted results also appear under `coverage.by_level.live`, so a dashboard can show how much of a release rests on evidence with no re-runnable artifact behind it.
 
 ## Related
 
-- [How to Run Trace with TEA](/docs/how-to/workflows/run-trace.md) - the workflow that reads this file
-- [Verification Architecture](/docs/explanation/verification-architecture.md) - why evidence is recorded independently of the tool that produced it
-- [TEA Configuration](/docs/reference/configuration.md) - where TEA artifacts are written
+- [How to Run Trace with TEA](/docs/how-to/workflows/run-trace.md): the workflow that reads this file
+- [Verification Architecture](/docs/explanation/verification-architecture.md): why evidence is recorded independently of the tool that produced it
+- [TEA Configuration](/docs/reference/configuration.md): where TEA artifacts are written

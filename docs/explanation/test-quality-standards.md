@@ -5,21 +5,23 @@ description: Understanding TEA's Definition of Done for deterministic, isolated,
 
 # Test Quality Standards Explained
 
-Test quality standards define what makes a test "good" in TEA. They are the Definition of Done that keeps tests from rotting in review.
+Test quality standards define what makes a test "good" in TEA.
+They are the Definition of Done that keeps tests from rotting in review.
 
 ## Overview
 
 **TEA's quality principles:**
 
-- **Deterministic** - same result every run
-- **Isolated** - no dependencies on other tests
-- **Explicit** - assertions visible in the test body
-- **Focused** - single responsibility, appropriate size
-- **Fast** - executes in reasonable time
+- **Deterministic**: same result every run
+- **Isolated**: no dependencies on other tests
+- **Explicit**: assertions visible in the test body
+- **Focused**: single responsibility, appropriate size
+- **Fast**: executes in reasonable time
 
-Tests that violate these create maintenance burden, slow development, and lose team trust. The failure mode is predictable: PR review says "this test is flaky, please fix", the test never merges, the test is deleted, the coverage is gone. AI generation makes this worse at scale, because a model with no standards produces fifty variations of the same flaky test. [Testing as Engineering](/docs/explanation/testing-as-engineering.md) covers why, and this page is the standard that answers it.
+A test needs to fail when its intended behavior breaks and pass when that behavior holds.
+These standards make the result repeatable and the failure readable.
 
-Everything below is one test, showing every violation at once:
+This example combines several violations:
 
 ```typescript
 // ❌ The anti-pattern: this test will rot
@@ -46,11 +48,11 @@ test('user can do stuff', async ({ page }) => {
 
 ### 1. Determinism (no flakiness)
 
-**Rule:** the test produces the same result every run.
+The result must follow the supplied inputs and system behavior.
 
 - ❌ No hard waits (`waitForTimeout`)
-- ❌ No conditionals for flow control (`if/else`)
-- ❌ No try-catch for flow control
+- ❌ No branches that skip assertions or accept whichever result the system returned
+- ❌ No catch blocks that swallow failures
 - ✅ Wait for the network event that causes the UI change
 - ✅ Use explicit waits (`waitForSelector`, `waitForResponse`)
 
@@ -78,9 +80,9 @@ test('deterministic test', async ({ page }) => {
   const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/submit') && resp.ok());
 
   await page.click('button');
-  await responsePromise; // waits for the actual event, not a guess
+  await responsePromise; // waits for the matching response
 
-  // Make the modal deterministic instead of testing whether it appeared
+  // Set up a known state in which the modal appears
   await expect(page.locator('.modal')).toBeVisible();
   await page.click('.dismiss');
 
@@ -88,7 +90,7 @@ test('deterministic test', async ({ page }) => {
 });
 ```
 
-[Network-First Patterns](/docs/explanation/network-first-patterns.md) owns this argument in full: why hard waits escalate, why `waitForSelector` alone is still a guess, the intercept-before-navigate ordering, and the `interceptNetworkCall` form of the same test.
+[Network-First Patterns](/docs/explanation/network-first-patterns.md) owns this argument in full: why hard waits escalate, when to add network evidence to a UI assertion, the intercept-before-navigate ordering, and the `interceptNetworkCall` form of the same test.
 
 ### 2. Isolation (no dependencies)
 
@@ -131,7 +133,7 @@ import { expect } from '@playwright/test';
 import { faker } from '@faker-js/faker';
 
 test('should update user profile', async ({ apiRequest }) => {
-  const testEmail = faker.internet.email(); // dynamic, never collides
+  const testEmail = faker.internet.email(); // generated data reduces collisions
 
   const { status: createStatus, body: user } = await apiRequest({
     method: 'POST',
@@ -141,27 +143,30 @@ test('should update user profile', async ({ apiRequest }) => {
 
   expect(createStatus).toBe(201);
 
-  const { status, body: updated } = await apiRequest({
-    method: 'PATCH',
-    path: `/api/users/${user.id}`,
-    body: { name: 'Updated Name' },
-  });
+  try {
+    const { status, body: updated } = await apiRequest({
+      method: 'PATCH',
+      path: `/api/users/${user.id}`,
+      body: { name: 'Updated Name' },
+    });
 
-  expect(status).toBe(200);
-  expect(updated.name).toBe('Updated Name');
-
-  await apiRequest({ method: 'DELETE', path: `/api/users/${user.id}` }); // cleanup
+    expect(status).toBe(200);
+    expect(updated.name).toBe('Updated Name');
+  } finally {
+    await apiRequest({ method: 'DELETE', path: `/api/users/${user.id}` });
+  }
 });
 ```
 
-Vanilla Playwright reaches the same place with `request.post`, `request.patch`, and `request.delete` plus a manual `await resp.json()` on each. See [what Playwright Utils adds](/docs/explanation/network-first-patterns.md#what-playwright-utils-adds) for the full list, including the `{ status, body }` versus `{ status, responseJson }` distinction.
+Vanilla Playwright reaches the same place with `request.post`, `request.patch`, and `request.delete` plus a manual `await resp.json()` on each.
+See [what Playwright Utils adds](/docs/explanation/network-first-patterns.md#what-playwright-utils-adds) for the full list, including the `{ status, body }` versus `{ status, responseJson }` distinction.
 
 ### 3. Explicit assertions (no hidden validation)
 
-**Rule:** assertions live in the test body, not behind a helper.
+Keep behavior assertions visible in the test body.
 
 - ✅ Assertions in the test itself
-- ✅ Specific assertions, not generic `toBeTruthy`
+- ✅ Assert the expected values
 - ✅ Meaningful expectations that test actual behavior
 
 ```typescript
@@ -193,10 +198,10 @@ test('should display profile with correct data', async ({ page }) => {
 The other way to hide validation is to make it optional or vacuous:
 
 ```typescript
-// ❌ An assertion that cannot fail, inside a branch that may not run
+// ❌ A shape-only assertion skipped when the request fails
 if (response.ok()) {
   const user = await response.json();
-  expect(user).toBeTruthy(); // true for any non-null value; skipped entirely on a failed request
+  expect(user).toBeTruthy(); // accepts any truthy value; skipped on a failed request
 }
 
 // ✅ Assert the status, then assert the specific fields
@@ -206,13 +211,15 @@ expect(body.id).toBeDefined();
 expect(body.email).toBe(newUser.email);
 ```
 
-**Exception:** helpers are fine for setup and cleanup. Only assertions must stay visible.
+**Exception:** helpers are fine for setup and cleanup.
+Only assertions must stay visible.
 
 ### 4. Focused tests (appropriate size)
 
-**Rule:** one responsibility per test, reasonable size.
+Keep each test focused on one behavior.
+The review registry flags test files over 1000 lines.
 
-- ✅ Test size ≤ 1000 lines
+- ✅ Reviewed test file ≤ 1000 lines
 - ✅ Single responsibility
 - ✅ Clear describe and test names
 - ✅ Appropriate scope: neither too granular nor too broad
@@ -279,114 +286,62 @@ test('fast test', async ({ page }) => {
 
 ## TEA's Quality Scoring
 
-`test-review` scores tests against these standards out of 100. Each item is awarded whole or not at all.
+All 35 registry rows are mapped to knowledge fragments.
+`npm run test:criteria-fragments` checks that traceability against the registry and the fragment index.
 
-### Determinism (35 points)
+`test-review` starts at 100 and applies a severity deduction ledger.
+The criteria registry fixes the severity of each finding and the conditions under which it applies.
 
-- No hard waits: 10
-- No conditionals for flow control: 10
-- No try-catch for flow control: 10
-- Network-first: 5. The test waits on an actual network event rather than a timeout. A pure API test that awaits its own request satisfies this by construction.
+| Severity | Deduction per finding | Effective score cap |
+| -------- | --------------------- | ------------------- |
+| CRITICAL | 10                    | 69                  |
+| HIGH     | 5                     | 79                  |
+| MEDIUM   | 2                     | 89                  |
+| LOW      | 1                     | 99                  |
 
-### Isolation (25 points)
+Five bonus categories each award 0 or 5: fixture setup, data factories, network-first ordering, isolation, and stable test IDs.
+A bonus applies only when its criterion holds across every reviewed file.
 
-- Self-cleaning: 15
-- No global state: 5
-- Parallel-safe: 5
+```text
+raw score = clamp(100 - deductions + bonuses, 0, 100)
+effective score = min(raw score, highest-severity cap)
+```
 
-### Assertions (20 points)
+The highest finding severity also determines the recommendation:
 
-- Explicit in the test body: 10
-- Specific and meaningful: 10
+| Findings                                      | Recommendation        |
+| --------------------------------------------- | --------------------- |
+| Any CRITICAL                                  | Block                 |
+| Any HIGH, or effective score below 70         | Request Changes       |
+| MEDIUM or LOW findings with score at least 70 | Approve with Comments |
+| No findings                                   | Approve               |
 
-### Structure (10 points)
-
-- Test size ≤ 1000 lines: 10
-
-### Performance (10 points)
-
-- Execution time < 1.5 min: 10
-
-| Score      | Interpretation | Action                                 |
-| ---------- | -------------- | -------------------------------------- |
-| **90-100** | Excellent      | Production-ready, minimal changes      |
-| **80-89**  | Good           | Minor improvements recommended         |
-| **70-79**  | Acceptable     | Address recommendations before release |
-| **60-69**  | Needs Work     | Fix critical issues                    |
-| **< 60**   | Critical       | Significant refactoring needed         |
+Grades are A at 90+, B at 80+, C at 70+, D at 60+, and F below 60.
+The report shows the deductions, bonuses, and cap so a reviewer can check the arithmetic.
 
 ### Worked example: user login
 
-```typescript
-// Score: 30/100
-test('login test', async ({ page }) => {
-  await page.goto('/login');
-  await page.waitForTimeout(3000); // hard wait: -10, and network-first: -5
+A review with one HIGH hard wait and two LOW selector findings deducts 5 + 1 + 1 = 7 points.
+With no bonuses, the raw score is 93.
+The HIGH cap makes the effective score 79, grade C, and the recommendation is Request Changes.
 
-  await page.fill('[name="email"]', 'test@example.com');
-  await page.fill('[name="password"]', 'password');
-
-  if (await page.locator('.remember-me').isVisible()) {
-    await page.click('.remember-me'); // conditional: -10
-  }
-
-  await page.click('button');
-
-  try {
-    await page.waitForURL('/dashboard', { timeout: 5000 });
-  } catch (e) {
-    // try-catch as flow control: -10
-  }
-
-  // No assertions: -20. No cleanup: -15.
-});
-```
-
-| Category    | Awarded | Why                                                           |
-| ----------- | ------- | ------------------------------------------------------------- |
-| Determinism | 0/35    | Hard wait, conditional, try-catch flow, no network-first wait |
-| Isolation   | 10/25   | No cleanup (0/15); no globals (5/5); parallel-safe (5/5)      |
-| Assertions  | 0/20    | The test asserts nothing, so it cannot fail                   |
-| Structure   | 10/10   | Size is fine                                                  |
-| Performance | 10/10   | Runs in seconds despite the waste                             |
-| **Total**   | **30**  | Critical: significant refactoring needed                      |
-
-```typescript
-// Score: 100/100
-test('should login with valid credentials and redirect to dashboard', async ({ page, authSession }) => {
-  const loginPromise = page.waitForResponse((resp) => resp.url().includes('/api/auth/login') && resp.ok());
-
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('test@example.com');
-  await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-
-  const response = await loginPromise; // network-first, no timeout
-  const { token } = await response.json();
-
-  expect(token).toBeDefined();
-  await expect(page).toHaveURL('/dashboard');
-  await expect(page.getByText('Welcome back')).toBeVisible();
-
-  // authSession fixture handles cleanup, so the test is self-cleaning without a teardown block
-});
-```
-
-Determinism 35/35, Isolation 25/25, Assertions 20/20, Structure 10/10, Performance 10/10.
+Fix the findings, then re-run the review.
+A numeric score alone does not establish that the test exercises the right behavior.
 
 ## How TEA Enforces Standards
 
-`atdd` and `automate` generate tests that already meet the standard: network-first waits instead of hard waits, accessible selectors, explicit assertions, and a size and runtime inside budget.
+`atdd` and `automate` generate tests that already meet the standard: response waits registered before actions, accessible selectors, explicit assertions, and a size and runtime inside budget.
 
 `test-review` audits existing tests and reports violations with the deduction attached:
 
 ```markdown
-## Critical Issues
+## High Issues
 
 ### Conditional Flow Control (tests/profile.spec.ts:45)
 
 **Issue:** `if (await page.locator('.banner').isVisible())`
-**Score Impact:** -10 (Determinism)
+**Severity:** HIGH
+**Score Impact:** -5, with the HIGH score cap of 79
 **Fix:** Make banner presence deterministic
 
 ## Recommendations
@@ -394,7 +349,7 @@ Determinism 35/35, Isolation 25/25, Assertions 20/20, Structure 10/10, Performan
 ### Extract Fixture (tests/auth.spec.ts)
 
 **Issue:** Login code repeated 5 times
-**Score Impact:** -3 (Structure)
+**Score Impact:** Determined by the matching registry row
 **Fix:** Extract to authSession fixture
 ```
 
@@ -403,13 +358,13 @@ Determinism 35/35, Isolation 25/25, Assertions 20/20, Structure 10/10, Performan
 **Test quality:**
 
 - [ ] No hard waits (`waitForTimeout`)
-- [ ] No conditionals for flow control
-- [ ] No try-catch for flow control
+- [ ] No branches that hide a failure
+- [ ] No swallowed assertion failures
 - [ ] Network-first patterns used
 - [ ] Assertions explicit in test body
-- [ ] Test size ≤ 1000 lines
-- [ ] Self-cleaning (cleanup in afterEach or in the test)
-- [ ] Unique test data (no hard-coded values)
+- [ ] Reviewed test file ≤ 1000 lines
+- [ ] Cleanup runs after success and failure (fixture teardown, afterEach, or finally)
+- [ ] Unique identifiers for records created by each test
 - [ ] Execution time < 1.5 minutes
 - [ ] Can run in parallel
 - [ ] Can run in any order
@@ -453,21 +408,27 @@ try {
 // ✅ Option 1: if the button should exist, let the click fail loudly
 await page.click('#optional-button');
 
-// ✅ Option 2: if it genuinely may not exist, test that as the behavior under test
-test('should work with optional button', async ({ page }) => {
-  const hasButton = (await page.locator('#optional-button').count()) > 0;
-  if (hasButton) {
-    await page.click('#optional-button');
-  }
-  // The optionality is now the declared subject of the test, not a hidden branch
+// ✅ Option 2: give each state a separate test with a fixed precondition
+test('optional button is available to an eligible user', async ({ page }) => {
+  // Fixture setup supplies an eligible user.
+  await page.goto('/profile');
+  await expect(page.locator('#optional-button')).toBeVisible();
+  await page.locator('#optional-button').click();
+  await expect(page.locator('.result')).toHaveText('Complete');
+});
+
+test('optional button is absent for an ineligible user', async ({ page }) => {
+  // Fixture setup supplies an ineligible user.
+  await page.goto('/profile');
+  await expect(page.locator('#optional-button')).toHaveCount(0);
 });
 ```
 
 ## Related
 
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - the determinism rule in full
-- [Fixture Architecture](/docs/explanation/fixture-architecture.md) - isolation through fixtures
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - how much quality a feature warrants
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - why standards exist
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - audit against this rubric
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - the test-quality and test-levels fragments
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): the determinism rule in full
+- [Fixture Architecture](/docs/explanation/fixture-architecture.md): isolation through fixtures
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): how much quality a feature warrants
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): why standards exist
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): audit against this rubric
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): the test-quality and test-levels fragments

@@ -5,9 +5,10 @@ description: Audit non-functional requirement evidence for security, performance
 
 # How to Run NFR Evidence Audit with TEA
 
-Use TEA's `nfr-assess` workflow to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability. The command remains `nfr-assess` for compatibility; the workflow role is an evidence audit.
+Use TEA's `nfr-assess` workflow to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability.
 
-Use `test-design` before implementation to define NFR thresholds, planned validation, and expected evidence. Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL.
+Use `test-design` before implementation to define NFR thresholds, planned validation, and expected evidence.
+Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL.
 
 ## When to Use This
 
@@ -15,22 +16,14 @@ Use `test-design` before implementation to define NFR thresholds, planned valida
 - Projects with strict NFR thresholds
 - Before production release
 - After tests, scans, metrics, logs, monitoring data, or CI reports exist
-- When NFRs are critical to project success
-- Security or performance is mission-critical
-
-**Best for:**
-
-- Enterprise track projects
-- Compliance-heavy industries (finance, healthcare, government)
-- High-traffic applications
-- Security-critical systems
 
 ## Prerequisites
 
 - NFRs defined in PRD, requirements doc, architecture, or `test-design`
 - Evidence sources available or explicitly missing (test results, security scans, performance metrics, logs, dashboards, CI reports)
 
-**Note:** You can run the audit without complete evidence. TEA will mark categories as CONCERNS where evidence is missing and document what's needed.
+You can run the audit without complete evidence.
+TEA will mark categories as CONCERNS where evidence is missing and document what's needed.
 
 ## Steps
 
@@ -70,7 +63,7 @@ Skip maintainability for now
 
 TEA will use specific thresholds for each category, preferably from PRD, architecture, or `test-design`.
 
-**Critical Principle: Never guess thresholds.**
+Use agreed thresholds for every judgment.
 
 If you don't know the exact requirement, tell TEA to mark it as UNKNOWN/CONCERNS and request clarification from stakeholders.
 
@@ -160,319 +153,76 @@ Don't have:
 
 ### 5. Review NFR Evidence Audit Report
 
-TEA generates a comprehensive evidence audit report and writes it to `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`. The `run_key` is `epic-{epic_num}` or `story-{story_key}` for the epic or story you audited, and `system` for a project-wide audit, so an audit of one epic never overwrites another's.
+TEA writes the evidence audit report to `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`.
+The `run_key` is `epic-{epic_num}` or `story-{story_key}` for the epic or story you audited, and `system` for a project-wide audit, so an audit of one epic never overwrites another's.
 
 #### Evidence Audit Report (`nfr/nfr-assessment-{run_key}.md`):
 
-````markdown
+```markdown
 # NFR Evidence Audit
 
 **Date:** 2026-01-13
-**Epic:** User Profile Management
-**Release:** v1.2.0
-**Overall Decision:** CONCERNS ⚠️
+**Scope:** User Profile Management
+**Overall decision:** CONCERNS
 
-## Executive Summary
-
-| Category        | Status      | Critical Issues |
-| --------------- | ----------- | --------------- |
-| Security        | PASS ✅     | 0               |
-| Performance     | CONCERNS ⚠️ | 2               |
-| Reliability     | PASS ✅     | 0               |
-| Maintainability | PASS ✅     | 0               |
-
-**Decision Rationale:**
-Performance metrics below target (P99 latency, throughput). Mitigation plan in place. Security and reliability meet all requirements.
-
----
+| Category        | Status   | Evidence                                             |
+| --------------- | -------- | ---------------------------------------------------- |
+| Security        | PASS     | Dependency scan, auth tests, penetration-test report |
+| Performance     | CONCERNS | k6 results and database query timings                |
+| Reliability     | PASS     | Recovery test and staging error-rate report          |
+| Maintainability | PASS     | Coverage and code-quality reports                    |
 
 ## Security Assessment
 
-**Status:** PASS ✅
-
-### Requirements Met
-
-| Requirement              | Target         | Actual              | Status |
-| ------------------------ | -------------- | ------------------- | ------ |
-| Authentication required  | All endpoints  | 100% enforced       | ✅     |
-| Data encryption at rest  | PostgreSQL TDE | Enabled             | ✅     |
-| Critical vulnerabilities | 0              | 0                   | ✅     |
-| Input validation         | All endpoints  | Zod schemas on 100% | ✅     |
-| Security headers         | Configured     | helmet.js enabled   | ✅     |
-
-### Evidence
-
-**Security Scan:**
-
-```bash
-$ npm audit
-found 0 vulnerabilities
-```
-
-**Authentication Tests:**
-
-- 15/15 auth tests passing
-- Tested unauthorized access (401 responses)
-- Token validation working
-
-**Penetration Testing:**
-
-- Report: `/reports/pentest-2026-01.pdf`
-- Findings: 0 critical, 2 low (addressed)
-
-**Conclusion:** All security requirements met. No blockers.
-
----
+Auth tests: 15/15 pass, including unauthorized access and token validation.
+The security scan reports zero critical vulnerabilities.
+The penetration-test report is `reports/pentest-2026-01.pdf`; its two low findings are resolved.
 
 ## Performance Assessment
 
-**Status:** CONCERNS ⚠️
+| Metric        | Target    | Actual  | Status         |
+| ------------- | --------- | ------- | -------------- |
+| API P99       | <200ms    | 350ms   | Exceeds target |
+| API P95       | <150ms    | 180ms   | Exceeds target |
+| Throughput    | >1000 rps | 850 rps | Below target   |
+| Frontend load | <2s       | 1.8s    | Met            |
+| DB query P99  | <50ms     | 85ms    | Exceeds target |
 
-### Requirements Status
-
-| Metric           | Target     | Actual  | Status     |
-| ---------------- | ---------- | ------- | ---------- |
-| API response P99 | < 200ms    | 350ms   | ❌ Exceeds |
-| API response P95 | < 150ms    | 180ms   | ⚠️ Exceeds |
-| Throughput       | > 1000 rps | 850 rps | ⚠️ Below   |
-| Frontend load    | < 2s       | 1.8s    | ✅ Met     |
-| DB query P99     | < 50ms     | 85ms    | ❌ Exceeds |
-
-### Issues Identified
-
-#### Issue 1: P99 Latency Exceeds Target
-
-**Measured:** 350ms P99 (target: <200ms)
-**Root Cause:** Database queries not optimized
-
-- Missing indexes on profile queries
-- N+1 query problem in profile endpoint
-
-**Impact:** User experience degraded for 1% of requests
-
-**Mitigation Plan:**
-
-- Add composite index on `(user_id, profile_id)` - backend team, 2 days
-- Refactor profile endpoint to use joins instead of multiple queries - backend team, 3 days
-- Re-run load tests after optimization - QA team, 1 day
-
-**Owner:** Backend team lead
-**Deadline:** Before release (January 20, 2026)
-
-#### Issue 2: Throughput Below Target
-
-**Measured:** 850 rps (target: >1000 rps)
-**Root Cause:** Connection pool size too small
-
-- PostgreSQL max_connections = 100 (too low)
-- No connection pooling in application
-
-**Impact:** System cannot handle expected traffic
-
-**Mitigation Plan:**
-
-- Increase PostgreSQL max_connections to 500 - DevOps, 1 day
-- Implement connection pooling with pg-pool - backend team, 2 days
-- Re-run load tests - QA team, 1 day
-
-**Owner:** DevOps + Backend team
-**Deadline:** Before release (January 20, 2026)
-
-### Evidence
-
-**Load Testing:**
-
-```
-Tool: k6
-Duration: 10 minutes
-Virtual Users: 500 concurrent
-Report: /reports/k6-load-test.json
-```
-
-**Results:**
-
-```
-scenarios: (100.00%) 1 scenario, 500 max VUs, 10m30s max duration
-     ✓ http_req_duration..............: avg=250ms min=45ms med=180ms max=2.1s p(90)=280ms p(95)=350ms
-     http_reqs......................: 85000 (850/s)
-     http_req_failed................: 0.1%
-```
-
-**APM Data:**
-
-- Tool: Datadog
-- Dashboard: <https://app.datadoghq.com/dashboard/abc123>
-
-**Conclusion:** Performance issues identified with mitigation plan. Re-assess after optimization.
-
----
+The query trace shows missing indexes and an N+1 query in the profile endpoint.
+The backend lead owns the fix: add the index and batch the queries by January 20.
+QA will rerun the same load test before the next audit.
+The release record must name the approved mitigation while the result remains CONCERNS.
 
 ## Reliability Assessment
 
-**Status:** PASS ✅
-
-### Requirements Met
-
-| Requirement    | Target            | Actual           | Status |
-| -------------- | ----------------- | ---------------- | ------ |
-| Error handling | Structured errors | 100% endpoints   | ✅     |
-| Availability   | 99.9% uptime      | 99.95% (staging) | ✅     |
-| Recovery time  | < 5 min (RTO)     | 3 min (tested)   | ✅     |
-| Data backup    | Daily             | Automated daily  | ✅     |
-| Failover       | < 30s downtime    | 15s (tested)     | ✅     |
-
-### Evidence
-
-**Error Handling Tests:**
-
-- All endpoints return structured JSON errors
-- Error codes standardized (400, 401, 403, 404, 500)
-- Error messages user-friendly (no stack traces)
-
-**Chaos Engineering:**
-
-- Tested database failover: 15s downtime ✅
-- Tested service crash recovery: 3 min ✅
-- Tested network partition: Graceful degradation ✅
-
-**Monitoring:**
-
-- Staging uptime (30 days): 99.95%
-- Error rate: 0.01% (target: <0.1%)
-- P50 availability: 100%
-
-**Conclusion:** All reliability requirements exceeded. No issues.
-
----
+Recovery test: 4 minutes against a 5-minute RTO.
+Staging error rate: 0.01% during the recorded load test.
+Link the recovery report and measurement window in the evidence record.
 
 ## Maintainability Assessment
 
-**Status:** PASS ✅
+Coverage: 85% against the project's 80% threshold.
+Code quality: SonarQube grade A.
+Link both reports at the revision being audited.
 
-### Requirements Met
+## Monitoring Plan
 
-| Requirement           | Target     | Actual          | Status |
-| --------------------- | ---------- | --------------- | ------ |
-| Test coverage         | > 80%      | 85%             | ✅     |
-| Code quality          | Grade A    | Grade A         | ✅     |
-| Documentation         | All APIs   | 100% documented | ✅     |
-| Outdated dependencies | < 6 months | 3 months avg    | ✅     |
-| Technical debt        | < 10%      | 7%              | ✅     |
-
-### Evidence
-
-**Test Coverage:**
-
+Alert on P99 above 400ms, throughput below 700 rps, or error rate above 1%.
+The backend lead checks dashboards daily until the next load test and NFR audit.
 ```
-Statements   : 85.2% ( 1205/1414 )
-Branches     : 82.1% ( 412/502 )
-Functions    : 88.5% ( 201/227 )
-Lines        : 85.2% ( 1205/1414 )
-```
-
-**Code Quality:**
-
-- SonarQube: Grade A
-- Maintainability rating: A
-- Technical debt ratio: 7%
-- Code smells: 12 (all minor)
-
-**Documentation:**
-
-- API docs: 100% coverage (OpenAPI spec)
-- README: Complete and up-to-date
-- Architecture docs: ADRs for all major decisions
-
-**Conclusion:** All maintainability requirements met. Codebase is healthy.
-
----
-
-## Overall Gate Decision
-
-### Decision: CONCERNS ⚠️
-
-**Rationale:**
-
-- **Blockers:** None
-- **Concerns:** Performance metrics below target (P99 latency, throughput)
-- **Mitigation:** Plan in place with clear owners and deadlines (5 days total)
-- **Passing:** Security, reliability, maintainability all green
-
-### Actions Required Before Release
-
-1. **Optimize database queries** (backend team, 3 days)
-   - Add indexes
-   - Fix N+1 queries
-   - Implement connection pooling
-
-2. **Re-run performance tests** (QA team, 1 day)
-   - Validate P99 < 200ms
-   - Validate throughput > 1000 rps
-
-3. **Update this audit** (TEA, 1 hour)
-   - Re-run `nfr-assess` with new evidence
-   - Confirm PASS status
-
-### Waiver Option (If Business Approves)
-
-If business decides to deploy with current performance:
-
-**Waiver Justification:**
-
-```markdown
-## Performance Waiver
-
-**Waived By:** VP Engineering, Product Manager
-**Date:** 2026-01-15
-**Reason:** Business priority to launch by Q1
-**Conditions:**
-
-- Set monitoring alerts for P99 > 300ms
-- Plan optimization for v1.3 (February release)
-- Document known performance limitations in release notes
-
-**Accepted Risk:**
-
-- 1% of users experience slower response (350ms vs 200ms)
-- System can handle current traffic (850 rps sufficient for launch)
-- Optimization planned for next release
-```
-
-### Approvals
-
-- [ ] Product Manager - Review business impact
-- [ ] Tech Lead - Review mitigation plan
-- [ ] QA Lead - Validate test evidence
-- [ ] DevOps - Confirm infrastructure ready
-
----
-
-## Monitoring Plan Post-Release
-
-**Performance Alerts:**
-
-- P99 latency > 400ms (critical)
-- Throughput < 700 rps (warning)
-- Error rate > 1% (critical)
-
-**Review Cadence:**
-
-- Daily: Check performance dashboards
-- Weekly: Review alert trends
-- Monthly: Re-audit NFR evidence
-````
 
 ## What You Get
 
 ### NFR Evidence Audit Report
 
 - Category-by-category analysis (Security, Performance, Reliability, Maintainability)
-- Requirements status (target vs actual)
+- Requirements with targets and measured results
 - Evidence for each requirement
 - Issues identified with root cause analysis
 - A Gate YAML snippet carrying the overall status, the eight ADR checklist categories, and an `audited_domains` block with one status per domain
 
-The `audited_domains` block is what a pipeline reads. It carries the same status the domain's `## <Domain> Assessment` section states, because the two are one judgment written twice: one for a machine, one for a person.
+The `audited_domains` block is what a pipeline reads.
+It carries the same status the domain's `## <Domain> Assessment` section states, because the two are one judgment written twice: one for a machine, one for a person.
 
 ```yaml
 nfr_assessment:
@@ -488,10 +238,10 @@ A domain is PASS, CONCERNS or FAIL, and N/A only when nothing in it carried a ju
 
 ### Gate Decision
 
-- **PASS** ✅ - All NFRs met, ready to release
-- **CONCERNS** ⚠️ - Some NFRs not met, mitigation plan exists
-- **FAIL** ❌ - Critical NFRs not met, blocks release
-- **WAIVED** ⏭️ - Business-approved waiver with documented risk
+- **PASS** ✅: All NFRs met, ready to release
+- **CONCERNS** ⚠️: Some NFRs not met, mitigation plan exists
+- **FAIL** ❌: Critical NFRs not met, blocks release
+  A business-approved waiver belongs in the release record with its accepted risk and conditions.
 
 ### Mitigation Plans
 
@@ -525,24 +275,13 @@ Run `nfr-assess` before release to audit the evidence.
 
 ### Never Guess Thresholds
 
-If you don't know the NFR target:
-
-**Don't:**
-
-```text
-API response time should probably be under 500ms
-```
-
-**Do:**
-
-```text
-Mark as CONCERNS - Request threshold from stakeholders
-"What is the acceptable API response time?"
-```
+When a threshold is unknown, record UNKNOWN/CONCERNS and ask the responsible stakeholder for the target.
+For example, ask for the API's acceptable P99 response time.
 
 ### Collect Evidence Beforehand
 
-Gather evidence before you run `nfr-assess`. TEA's `framework` workflow generates no security, load, or coverage scripts, so the list below describes evidence shapes to locate rather than commands to paste.
+Gather evidence before you run `nfr-assess`.
+Use your project's scanners, load tests, and coverage tools to produce the reports below.
 
 Two commands need no setup in an npm project:
 
@@ -564,26 +303,12 @@ Everything else depends on your stack:
 | Maintainability | Coverage report                     | Your test runner's coverage flag                      |
 | Maintainability | Lint or code-quality report         | Your linter, or SonarQube                             |
 
-Give TEA the path to each artifact. For anything you cannot produce, say so: TEA marks that category CONCERNS and records what is missing rather than guessing a value.
+Give TEA the path to each artifact.
+TEA records missing evidence as CONCERNS and names what is needed.
 
 ### Use Real Data, Not Assumptions
 
-**Don't:**
-
-```text
-System is probably fast enough
-Security seems fine
-```
-
-**Do:**
-
-```text
-Load test results show P99 = 350ms
-npm audit shows 0 vulnerabilities
-Test coverage report shows 85%
-```
-
-Evidence-based decisions prevent surprises in production.
+Name the measurement and its source: "k6 report: P99 350ms" or "dependency scan: zero critical findings." Record the test environment and measurement period so reviewers can assess what the evidence proves.
 
 ### Document Waivers Thoroughly
 
@@ -653,9 +378,7 @@ Don't deploy with CONCERNS without mitigation or waiver.
 
 ### No Evidence Available
 
-**Problem:** Don't have performance data, security scans, etc.
-
-**Solution:**
+Don't have performance data, security scans, etc.
 
 ```text
 Mark as CONCERNS for categories without evidence
@@ -663,34 +386,19 @@ Document what evidence is needed
 Set up tests/scans before re-audit
 ```
 
-**Don't block on missing evidence** - document what's needed and proceed.
+Complete the audit with missing evidence recorded as CONCERNS.
+Resolve the gap or obtain approval under your release policy before shipping.
 
 ### Thresholds Too Strict
 
-**Problem:** Can't meet unrealistic thresholds.
-
-**Symptoms:**
-
-- P99 < 50ms (impossible for complex queries)
-- 100% test coverage (impractical)
-- Zero technical debt (unrealistic)
-
-**Solution:**
-
-```text
-Negotiate thresholds with stakeholders:
-- "P99 < 50ms is unrealistic for our DB queries"
-- "Propose P99 < 200ms based on industry standards"
-- "Show evidence from load tests"
-```
-
-Use data to negotiate realistic requirements.
+Bring measured results to the stakeholder who owns the requirement.
+Agree on any revised target and document why it changed before rerunning the audit.
 
 ### Audit Takes Too Long
 
-**Problem:** Gathering evidence for all categories is time-consuming.
+Gathering evidence for all categories is time-consuming.
 
-**Solution:** Focus on critical categories first:
+Focus on critical categories first:
 
 **For most projects:**
 
@@ -701,38 +409,27 @@ Priority 3: Reliability (if uptime critical)
 Priority 4: Maintainability (nice to have)
 ```
 
-Assess categories incrementally, not all at once.
+Audit the highest-risk categories first, then complete the remaining evidence.
 
-### CONCERNS vs FAIL - When to Block?
+### CONCERNS vs FAIL: When to Block?
 
-**CONCERNS** ⚠️:
-
-- Issues exist but not critical
-- Mitigation plan in place
-- Business accepts risk (with waiver)
-- Can deploy with monitoring
-
-**FAIL** ❌:
-
-- Critical security vulnerability (CVE critical)
-- System unusable (error rate >10%)
-- Data loss risk (no backups)
-- Zero mitigation possible
-
-**Rule of thumb:** If you can mitigate or monitor, use CONCERNS. Reserve FAIL for absolute blockers.
+Use the requirement's agreed threshold and criticality to decide the status.
+Missing evidence or a non-critical shortfall is CONCERNS.
+A critical unmet requirement is FAIL.
+Record mitigations and approval separately; monitoring alone does not satisfy an unmet critical requirement.
 
 ## Related Guides
 
-- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Gate decision complements NFR
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Quality complements NFR
-- [Run TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md) - Enterprise workflow
+- [How to Run Trace](/docs/how-to/workflows/run-trace.md): Gate decision complements NFR
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Quality complements NFR
+- [Run TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md): Enterprise workflow
 
 ## Understanding the Concepts
 
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Risk assessment principles
-- [TEA Overview](/docs/explanation/tea-overview.md) - NFR in release gates
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Risk assessment principles
+- [TEA Overview](/docs/explanation/tea-overview.md): NFR in release gates
 
 ## Reference
 
-- [Command: nfr-assess](/docs/reference/commands.md#nfr-assess) - Full command reference
-- [TEA Configuration](/docs/reference/configuration.md) - Enterprise config options
+- [Command: nfr-assess](/docs/reference/commands.md#nfr-assess): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): Enterprise config options

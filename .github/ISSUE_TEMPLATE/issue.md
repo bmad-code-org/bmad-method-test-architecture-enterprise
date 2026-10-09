@@ -1,61 +1,42 @@
 ---
 name: Bug Report
-about: Report a problem or something that's not working with TEA
+about: Report a problem with TEA
 title: ''
 labels: 'bug'
 assignees: ''
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## Problem
 
-**Steps to reproduce**
+What happened, and what did you expect?
 
-1. What TEA workflow were you running? (e.g., `test-design`, `automate`, `atdd`)
-2. What steps can recreate the issue?
-3. What was the exact command or trigger used?
+## Steps to reproduce
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+1. Which workflow or CLI command did you run?
+2. What prompt, input files, or configuration did you use?
+3. What steps reproduce the problem?
 
-**Environment**
+Include the exact command and relevant error output.
+Attach the smallest generated file, report, or screenshot that shows the issue.
+Remove credentials and private project data.
 
-- **TEA Version**: [e.g., 1.0.0]
-- **BMAD Method Version**: [e.g., 7.0.0]
-- **Node Version**: [output of `node --version`]
-- **Operating System**: [e.g., macOS 14.0, Ubuntu 22.04, Windows 11]
-- **Agentic IDE**: [e.g., Claude Code, Windsurf, Cursor]
-- **Model Used**: [e.g., Claude Sonnet 4.5, GPT-4]
+## Environment
 
-**Workflow Details (if applicable)**
+- TEA version or Git commit:
+- BMad Method version, if used:
+- Operating system:
+- Agent, model, and version:
+- Node version for CLI issues (`node --version`):
+- Test framework and enabled integrations:
 
-- **Workflow**: [e.g., test-design, automate, atdd, test-review, trace, nfr-assess, ci, framework]
-- **Test Framework**: [e.g., Playwright, Cypress]
-- **Playwright Utils Enabled**: [yes/no]
-- **MCP Enhancements Enabled**: [yes/no]
+## Checks
 
-**Screenshots or output**
-If applicable, add:
+- [ ] I checked [existing issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues).
+- [ ] I read the [troubleshooting guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/troubleshooting/).
+- [ ] I used the documented chat command (`/bmad-testarch-*` or `$bmad-testarch-*`) or CLI invocation.
 
-- Screenshots of the issue
-- Console output or error messages
-- Generated test files or reports
+## Additional context
 
-**Additional context**
-Add any other context about the problem:
-
-- Project type (greenfield/brownfield)
-- Codebase size
-- Any custom TEA configuration
-- Related workflows or knowledge fragments
-
-**Troubleshooting Checklist**
-Before submitting, please check:
-
-- [ ] I've read the [Troubleshooting Guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/troubleshooting/)
-- [ ] I've verified TEA is installed: `ls .claude/skills/bmod-tea` (or your assistant's skills folder) and `bmad setup tea` reports no pending questions
-- [ ] I'm using the current invocation: `/bmad-testarch-*` (Claude Code, Cursor, Windsurf) or `$bmad-testarch-*` (Codex)
-- [ ] I've checked for existing issues on GitHub
-
-**Contribution**
-If you'd like to contribute a fix, please indicate you're working on it or link to your PR. See [CONTRIBUTING.md](../../CONTRIBUTING.md) — contributions are always welcome!
+Include relevant custom settings and related workflows.
+If you are working on a fix, link your branch or PR.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md).

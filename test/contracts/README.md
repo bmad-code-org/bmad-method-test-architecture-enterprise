@@ -1,77 +1,59 @@
 # Behavioral Evaluation Contracts
 
-An eval contract states what a TEA skill has to do, in a form a machine can check, and it does it in
-a vocabulary that lives outside this repository. The format, the compiler, and the scorer belong to
-[`eval-quality`](https://www.npmjs.com/package/eval-quality). TEA owns the fixtures, the seeded
-defects, the ground truth, and the runners. That split is the one
-`docs/explanation/eval-quality-roadmap.md` records, and these files are the first contracts written
-against it.
+A Behavioral Evaluation Contract states the behavior and evidence an evaluation checks.
+[`eval-quality`](https://www.npmjs.com/package/eval-quality) owns the format, compiler, and scorer.
+TEA owns fixtures, ground truth, domain expectations, and runners.
 
-| Contract                                      | Suite                                                    | Cases                                               |
-| --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
-| `atdd.contract.json`                          | The full behavioral eval for `bmad-testarch-atdd`        | 1 story, 5 acceptance criteria                      |
-| `ci.contract.json`                            | The full behavioral eval for `bmad-testarch-ci`          | 1 full request, 1 minimal request                   |
-| `nfr.contract.json`                           | The full behavioral eval for `bmad-testarch-nfr`         | 1 bundle with known gaps, 1 clean control           |
-| `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
-| `test-design.contract.json`                   | The full behavioral eval for `bmad-testarch-test-design` | 1 seeded set of 5 material risks, 1 clean control   |
-| `trace.contract.json`                         | The full behavioral eval for `bmad-testarch-trace`       | 1 seeded set of 10 criteria, 1 clean set of 5       |
-| `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
+| Contract                                      | Suite                                                    | Cases                                                    |
+| --------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| `atdd.contract.json`                          | The full behavioral eval for `bmad-testarch-atdd`        | 1 story, 5 acceptance criteria                           |
+| `ci.contract.json`                            | The full behavioral eval for `bmad-testarch-ci`          | 1 full request, 1 minimal request, 4 evaluation projects |
+| `nfr.contract.json`                           | The full behavioral eval for `bmad-testarch-nfr`         | 1 bundle with known gaps, 1 clean control                |
+| `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control      |
+| `test-design.contract.json`                   | The full behavioral eval for `bmad-testarch-test-design` | 1 seeded set of 5 material risks, 1 clean control        |
+| `trace.contract.json`                         | The full behavioral eval for `bmad-testarch-trace`       | 1 seeded set of 10 criteria, 1 clean set of 5            |
+| `tea-routing-*.contract.json`                 | Routing intents and controls                             | 19 intents                                               |
+| `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                                 |
 
-**Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-sixteen from their sources: `atdd.contract.json` from `test/fixtures/atdd-eval/ground-truth.json`, the request shape
-`cli/atdd-runner.js` declares, and the prompt `test/eval-atdd.js` assembles; `test-review.contract.json` from
-`test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
-from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
-the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
-`nfr.contract.json` from `test/fixtures/nfr-eval/ground-truth.json`, the request shape
-`cli/nfr-runner.js` declares, and the prompt `test/eval-nfr.js` assembles;
-`ci.contract.json` from `test/fixtures/ci-eval/ground-truth.json`, the request shape
-`cli/ci-runner.js` declares, and the prompt `test/eval-ci.js` assembles;
-`test-design.contract.json` from `test/fixtures/test-design-eval/ground-truth.json`, the request shape
-`cli/test-design-runner.js` declares, the prompt `test/eval-test-design.js` assembles, and a digest
-over the test-design workflow's step-03, step-04, step-05 and `test-design-template.md`; and
-each fragment-selection contract from that workflow's `test/evals/<workflow>/evals.json`, its deciding
-step file, and the shared `{tea-knowledge}/tea-index.csv`. Regenerate with `node tools/generate-contracts.js`; an
-edit made here by hand is overwritten by the next run and fails the gate in the meantime.
+The sixteen JSON contracts are generated by `tools/generate-contracts.js`.
+Edit the owning source, then regenerate:
 
-`test-review.contract.json` addresses `verdict.findings`, which is a field the `tea-test-review` CLI
-did not carry until the change that added these contracts. Before it, the only way to learn which
-defects a review reported was to re-parse the markdown report with two regular expressions, which is
-what `findingsFromReport` in `test/eval-test-review.js` did. The report was the contract; now the
-verdict is, and `scoreVerdict` reads the same array this contract asserts against.
+```bash
+node tools/generate-contracts.js
+```
 
-That second parser had already answered differently in both directions, on fixtures this repository
-keeps. It read raw lines and never stripped fenced blocks, so the Critical finding quoted inside the
-fenced example in `fixtures/test-review-cli/reports/fenced-fake-finding.md` counted as real: two
-findings against the CLI's one. And it dropped the finding in
-`fixtures/test-review-cli/reports/finding-without-location.md` whose location line is missing, which
-tripped its own declared-versus-attributed guard and scored the whole run unmeasurable: one finding
-against the CLI's two. It is gone. `scoreVerdict` returns null only for a verdict carrying no
-findings array at all, and `test/replay/test-review/verdict-without-findings/` covers that branch.
+The generator reads ground truth, runner request shapes, harness prompts, the review registry, trace summary declarations, workflow source digests, and fragment-selection cases.
+`--check` regenerates in memory and fails when committed bytes differ.
+
+`test-review.contract.json` addresses `verdict.findings`, which is a field the `tea-test-review` CLI did not carry until the change that added these contracts.
+Before it, the only way to learn which defects a review reported was to re-parse the markdown report with two regular expressions, which is what `findingsFromReport` in `test/eval-test-review.js` did.
+The report was the contract; now the verdict is, and `scoreVerdict` reads the same array this contract asserts against.
+
+That second parser had already answered differently in both directions, on fixtures this repository keeps.
+It read raw lines and never stripped fenced blocks, so the Critical finding quoted inside the fenced example in `fixtures/test-review-cli/reports/fenced-fake-finding.md` counted as real: two findings against the CLI's one.
+And it dropped the finding in `fixtures/test-review-cli/reports/finding-without-location.md` whose location line is missing, which tripped its own declared-versus-attributed guard and scored the whole run unmeasurable: one finding against the CLI's two.
+It is gone.
+`scoreVerdict` returns null only for a verdict carrying no findings array at all, and `test/replay/test-review/verdict-without-findings/` covers that branch.
 
 ## They did not compile against 0.2.0, and that was the finding
 
-Everything in this section is measured against the published `eval-quality` release, so a check run
-against a `dist/` built locally from a newer revision can disagree with every count below.
+Everything in this section is measured against the published `eval-quality` release, so a check run against a `dist/` built locally from a newer revision can disagree with every count below.
 
-`eval-quality`'s own release plan records an entry criterion for its next version, in section 12 of
-`TEST-PLAN-NEXT-STEPS.md`:
+`eval-quality`'s own release plan records an entry criterion for its next version, in section 12 of `TEST-PLAN-NEXT-STEPS.md`:
 
 > The first `eval-contract` written for `bmad-tea` is the first time anyone authors one against the
 > published schema without this repository's fixtures at hand. [...] A change needed here is the
 > finding, and it names which part of the schema or which failure code did not carry enough
 > information to author against.
 
-These are those contracts and this is that finding. Reproduce it with the published package, which
-is now a declared devDependency so `npm run test:contracts` runs in CI rather than skipping:
+The command below compiles the review contract.
+The 58-issue finding that follows was measured against published 0.2.0; later releases compile it:
 
 ```bash
 npx eval-quality compile --in test/contracts/test-review.contract.json
 ```
 
-`test-review.contract.json` produces 58 parse issues, and every one of them has the same cause: the
-contract language can describe a system under test that speaks HTTP, and a TEA skill runs behind a
-command.
+`test-review.contract.json` produces 58 parse issues, and every one of them has the same cause: the contract language can describe a system under test that speaks HTTP, and a TEA skill runs behind a command.
 
 | Issues | Where                                                             | What an author cannot write                                                                                                                                                                                                                                             |
 | -----: | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,146 +72,114 @@ unsupported-interface-kind: EvalContract.permittedInterfaces[logicalId=…].kind
   "cli" is not supported in v0; only "api" is (AD-10)
 ```
 
-`kind: "cli"` parses. It contributes none of the 58, because it is a compile-stage rejection and the
-parse fails first. It is the last gate rather than the first one.
+`kind: "cli"` parses.
+It contributes none of the 58, because it is a compile-stage rejection and the parse fails first.
+It is checked after parsing.
 
-The evidence side is already command-aware and the declaration side is not. `EVIDENCE_CHANNELS` in
-`eval-quality`'s `src/core/schemas/pointer.ts` already carries `stdout`, `stderr`, and `exit-code`,
-and `SealedRunRecord`'s observation already records all three. Only `Interface` and `Operation` are
-HTTP-only, which is what makes the gap closeable rather than structural.
+The evidence side is already command-aware and the declaration side is not.
+`EVIDENCE_CHANNELS` in `eval-quality`'s `src/core/schemas/pointer.ts` already carries `stdout`, `stderr`, and `exit-code`, and `SealedRunRecord`'s observation already records all three.
+Only `Interface` and `Operation` are HTTP-only in that release.
 
-`0.2.0` prints the failure code and the artifact and stops there, so a run against it shows the code
-without the located issue list the table below breaks down. The list comes from a later revision of
-the renderer. The issues themselves are the same either way; only whether the tool prints them
-differs.
+`0.2.0` prints the failure code and the artifact and stops there, so a run against it shows the code without the located issue list the table below breaks down.
+The list comes from a later revision of the renderer.
+The issues themselves are the same either way; only whether the tool prints them differs.
 
 ## Sixteen of sixteen compile
 
-`package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
-parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
-`0.2.0` findings, and `0.3.0` closed the gap they describe. Every contract compiles now, including the
-two `tea-routing-*` contracts added since the table was written. `npm run
-test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it
-with `--write` whenever the compiler version changes.
+`package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08.
+All 58 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are `0.2.0` findings, and `0.3.0` closed the gap they describe.
+Every contract compiles now, including the two `tea-routing-*` contracts added since the table was written.
+`npm run test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it with `--write` whenever the compiler version changes.
 
-**`bmad-testarch-automate`'s full behavioral suite has no contract here on purpose.** The skill itself
-already has one, `fragment-selection/bmad-testarch-automate.contract.json`, for its routing eval; this is
-about the `automate` behavioral suite specifically. `test/evals/suite-manifest.json`'s `automate` suite
-entry declares `contracts: []`, which the manifest's own schema allows for a suite with no contract yet.
-Every contract in this directory addresses a real command's real request shape, and `test/test-probe-targets.js`
-refuses one that names a CLI interface `test/lib/probe-targets.js`'s registry does not carry a real,
-shipped executable for -- the exact mistake that check exists to catch, once made for months by eight
-contracts naming a fragment-selection runner that did not exist yet. Story 6.7 builds no live-agent mode
-for `bmad-testarch-automate` at all (`test/eval-automate.js`'s own header explains why), so there is no
-real command for the behavioral suite's own contract to address, the same reason `atdd.contract.json`'s
-own oracles below already stop short of `cli/atdd-red-check.js`'s deterministic half. A future story that
-adds a real generation command for this skill is what would give the behavioral suite a contract to write.
+**`bmad-testarch-automate`'s full behavioral suite has no contract here on purpose.** The skill itself already has one, `fragment-selection/bmad-testarch-automate.contract.json`, for its routing eval; this is about the `automate` behavioral suite specifically.
+`test/evals/suite-manifest.json`'s `automate` suite entry declares `contracts: []`, which the manifest's own schema allows for a suite with no contract yet.
+Every contract in this directory addresses a real command's real request shape, and `test/test-probe-targets.js` refuses one that names a CLI interface `test/lib/probe-targets.js`'s registry does not carry a real, shipped executable for.
+Eight early contracts named a fragment-selection runner before it shipped; the registry check prevents that mismatch.
+Story 6.7 builds no live-agent mode for `bmad-testarch-automate` at all (`test/eval-automate.js`'s own header explains why), so there is no real command for the behavioral suite's own contract to address, the same reason `atdd.contract.json`'s own oracles below already stop short of `cli/atdd-red-check.js`'s deterministic half.
+A future story that adds a real generation command for this skill is what would give the behavioral suite a contract to write.
 
 `fragment-selection/bmad-testarch-trace.contract.json` needed one more change to get there.
-Its selection operation declares request keys, the prompt, the stack, and the TEA config, and AD-10
-requires a witness on any operation that does, but trace's own eval deliberately keeps both cases'
-`mustLoad` sets identical: traceability is a mapping problem, not a framework problem, and the
-workflow's step file states no stack branch. A differential witness, the kind the other eight
-contracts declare, asserts two cases produce different selections, which is false here by design, so
-`buildSelectionWitness` in `tools/generate-contracts.js` used to return no witness at all for an
-operation like this, which was legal under `0.2.0`. `0.3.0` requires one anyway and names the path:
-an operation insensitive to its declared inputs by design declares a witness whose relation says so,
-a true and checkable claim, and gets the weaker guarantee that follows from it rather than the one a
-differential establishes. `buildSelectionWitness` now authors that invariance witness whenever a
-workflow's cases all mandate one fragment set, the same equality expression a differential uses,
-un-negated. It is a decision recorded here rather than a defect fixed: trace's selection is
-input-insensitive by design, and the contract now states that as its own claim instead of stating
-nothing.
+Its selection operation declares request keys, the prompt, the stack, and the TEA config, and AD-10 requires a witness on any operation that does, but trace's own eval deliberately keeps both cases' `mustLoad` sets identical: the workflow performs a coverage mapping, and the workflow's step file states no stack branch.
+A differential witness, the kind the other eight contracts declare, asserts two cases produce different selections, which is false here by design, so `buildSelectionWitness` in `tools/generate-contracts.js` used to return no witness at all for an operation like this, which was legal under `0.2.0`.
+`0.3.0` requires one anyway and names the path: an operation insensitive to its declared inputs by design declares a witness whose relation says so, a true and checkable claim, and gets an invariance guarantee.
+`buildSelectionWitness` now authors that invariance witness whenever a workflow's cases all mandate one fragment set, the same equality expression a differential uses, un-negated.
+Trace selection is input-insensitive by design, and the contract records that claim.
 
-`trace.contract.json` states its witness over standard input on one prompt value,
-`allow_gate`. Its two plan steps send two prompts, each written against its own fixture set's project
-root, and each step binds that prompt as its `stdin.prompt` literal. The summaries the two sets
-produce differ because of the files staged under those roots, so a differential across the two sets
-would attribute to the prompt a difference the staged workspace produced, and an invariance claim over
-them would be false. `allow_gate` is the one prompt value the ground truth establishes an effect for,
-through `skillRuleCitations.gateEligibility`: step-05 evaluates a gate only when it is true and writes
-`gate_basis` as `none` otherwise, so two prompts differing in that value, over one staged fixture set,
-produce two `gate_basis` values. That is a true and checkable claim that the command reads its
-standard input, and it is the claim the witness makes. Both its legs stage the clean set, because AD-10
-reads every other leg of an operation as a clean leg, and they are runnable only against that staged
-workspace, which is the coupling `docs/explanation/eval-quality-command-adapter.md` records for every
-artifact-writing command. The contract itself states this reasoning in `testData.setup`, because
-`SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the
-witness. The section "A plan cannot declare that two steps must receive different inputs" below
-records what those literals cost and what they bought.
+`trace.contract.json` states its witness over standard input on one prompt value, `allow_gate`.
+Its two plan steps send two prompts, each written against its own fixture set's project root, and each step binds that prompt as its `stdin.prompt` literal.
+The summaries the two sets produce differ because of the files staged under those roots, so a differential across the two sets would attribute to the prompt a difference the staged workspace produced, and an invariance claim over them would be false.
+`allow_gate` is the one prompt value the ground truth establishes an effect for, through `skillRuleCitations.gateEligibility`: step-05 evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts differing in that value, over one staged fixture set, produce two `gate_basis` values.
+That is a true and checkable claim that the command reads its standard input, and it is the claim the witness makes.
+Both its legs stage the clean set, because AD-10 reads every other leg of an operation as a clean leg, and they are runnable only against that staged workspace, which is the coupling `docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command.
+The contract itself states this reasoning in `testData.setup`, because `SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the witness.
+The section "A plan cannot declare that two steps must receive different inputs" below records what those literals cost and what they bought.
 
-`nfr.contract.json` is the same shape and reaches for a different value. Its two plan
-steps send two prompts, one per evidence bundle, each binding its own `stdin.prompt` literal, and its
-witness differs its legs on `custom_nfr_categories` while both stage the clean bundle. The reasoning is
-trace's: the two bundles' reports differ because of the staged evidence, so a differential between them
-would attribute to the prompt a difference the evidence produced. `custom_nfr_categories` is a value
-step-02 adds to the categories it elicits and the report template carries a section for, so a run given
-one names it and a run given none does not, which is a true and checkable claim that the command reads
-its standard input.
+`nfr.contract.json` is the same shape and reaches for a different value.
+Its two plan steps send two prompts, one per evidence bundle, each binding its own `stdin.prompt` literal, and its witness differs its legs on `custom_nfr_categories` while both stage the clean bundle.
+The reasoning is trace's: the two bundles' reports differ because of the staged evidence, so a differential between them would attribute to the prompt a difference the evidence produced.
+`custom_nfr_categories` is a value step-02 adds to the categories it elicits and the report template carries a section for, so a run given one names it and a run given none does not, which is a true and checkable claim that the command reads its standard input.
 
-`atdd.contract.json` addresses a deliverable neither nfr's nor trace's shape covers: a scaffold file
-with no fixed name in general, since the workflow's own step-04 dispatches an API worker and an E2E
-worker into files they name themselves. Its one plan step's prompt therefore asks generation to write
-into exactly one path, which is what makes the deliverable addressable at all before the run. Its
-oracles are the narrowest of any contract here: `containment` can say whether the scaffold uses the
-workflow's own `test.skip()` call and whether it names each criterion, and nothing more. It cannot say
-whether an activated scaffold fails, or fails for the right reason, or leaves production code alone,
-because those are properties of running the scaffold, which `cli/atdd-red-check.js` and
-`test/eval-atdd.js`'s `scoreRun` do and no oracle over an unexecuted file can. Its witness differs its
-two legs on `{story_file}`, the corpus's own story naming AC-1 through AC-5 against a witness-only
-story under `test/fixtures/atdd-eval/witness/` naming AC-9 alone, so a scaffold generated against one
-names a criterion id the other's does not: a true and checkable claim that the command reads its
-standard input, the same reasoning nfr's and trace's own witnesses record for their differing values.
+`atdd.contract.json` addresses a deliverable neither nfr's nor trace's shape covers: a scaffold file with no fixed name in general, since the workflow's own step-04 dispatches an API worker and an E2E worker into files they name themselves.
+Its one plan step's prompt therefore asks generation to write into exactly one path, which is what makes the deliverable addressable at all before the run.
+Its oracles are the narrowest of any contract here: `containment` can say whether the scaffold uses the workflow's own `test.skip()` call and whether it names each criterion, and nothing more.
+It cannot say whether an activated scaffold fails, or fails for the right reason, or leaves production code alone, because those are properties of running the scaffold, which `cli/atdd-red-check.js` and `test/eval-atdd.js`'s `scoreRun` do and no oracle over an unexecuted file can.
+Its witness differs its two legs on `{story_file}`, the corpus's own story naming AC-1 through AC-5 against a witness-only story under `test/fixtures/atdd-eval/witness/` naming AC-9 alone, so a scaffold generated against one names a criterion id the other's does not: a true and checkable claim that the command reads its standard input, the same reasoning nfr's and trace's own witnesses record for their differing values.
 
 ## The routing suite is two contracts, and the bound is why
 
-`tea-routing-intents.contract.json` and `tea-routing-controls.contract.json` express one suite between
-them, which is what the suite manifest's `contracts` array is an array for.
+`tea-routing-intents.contract.json` and `tea-routing-controls.contract.json` express one suite between them, which is what the suite manifest's `contracts` array is an array for.
 
-The reason is a published bound rather than a preference. `eval-quality`'s AD-39 scripting bound caps
-an interaction plan at sixteen steps, in `core/compile/scripting-bound.js`, and it is exclusive: a
-plan of exactly sixteen is legal and seventeen is `plan-exceeds-scripting-bound`. The routing corpus
-is nineteen intents and each one is its own agent call with its own oracles, so one plan step per
-intent is the only binding under which a case's oracles read that case's answer. Nineteen steps is
-past the ceiling.
+The split follows AD-39's published bound.
+`eval-quality`'s AD-39 scripting bound caps an interaction plan at sixteen steps, in `core/compile/scripting-bound.js`, and it is exclusive: a plan of exactly sixteen is legal and seventeen is `plan-exceeds-scripting-bound`.
+The routing corpus is nineteen intents and each one is its own agent call with its own oracles, so one plan step per intent is the only binding under which a case's oracles read that case's answer.
+Nineteen steps is past the ceiling.
 
-The split falls on the corpus's own line rather than at sixteen. One contract carries the eleven intents
-with a right answer and asks whether the right answer came back; the other carries the eight controls,
-the four where asking is correct and the four nothing on the menu serves, and asks whether the skill
-declined to guess. The sensitivity witness each one needs differs with it: the intents contract
-differs its two legs on the menu code, because both of its legs route, and the controls contract on
-the action.
+The split follows the corpus's intent and control groups.
+One contract carries the eleven intents with a right answer and asks whether the right answer came back; the other carries the eight controls, the four where asking is correct and the four nothing on the menu serves, and asks whether the skill declined to guess.
+The sensitivity witness each one needs differs with it: the intents contract differs its two legs on the menu code, because both of its legs route, and the controls contract on the action.
 
-Both contracts bind standard input as a literal prompt on every step, which is what the trace contract
-does and for the same reason recorded there. Every step declares the same operation, so under a
-`{ matcher: 'any' }` binding one observation is selected by all of them at once and each case's oracles
-quantify over evidence that is not theirs. The literal is what tells eighteen steps apart, and it is
-also what the two contracts cost: each step carries the whole assembled prompt, which is the skill and
-its menu read off disk, so the pair is about 420 kilobytes of mostly repeated bytes. That is the price
-of the binding being correct, and it is paid by a generated file rather than by a reader.
+Both contracts bind standard input as a literal prompt on every step, which is what the trace contract does and for the same reason recorded there.
+Every step declares the same operation, so under a `{ matcher: 'any' }` binding one observation is selected by all of them at once and each case's oracles quantify over evidence that is not theirs.
+The literal is what tells nineteen intents apart, and it is also what the two contracts cost: each step carries the whole assembled prompt, which is the skill and its menu read off disk, so the pair is about 420 kilobytes of mostly repeated bytes.
+That is the price of the binding being correct, and the generator supplies those bytes.
 
 ## `test-design.contract.json` reads vocabulary at its declared scope
 
 `bmad-testarch-test-design` declares one epic-level deliverable: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`.
-The runner emits a JSON projection on stdout after the agent finishes. It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count. `markdown-it` identifies Markdown tables and headings, including tables in lists, while excluding fenced and indented code examples. The parser maps score and description columns by header. The workflow produces one Markdown file.
+The runner emits a JSON projection on stdout after the agent finishes.
+It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count.
+`markdown-it` identifies Markdown tables and headings, including tables in lists, while excluding fenced and indented code examples.
+The parser maps score and description columns by header.
+The workflow produces one Markdown file.
 
-The scored register is the risk tables a design states as its own. A table the document labels a reference example is outside it, and so are its rows in the risk count, the unsupported-risk reading, risk precision and the coverage map.
-Two labels exist. An enclosing heading labels its tables when its last word is `Example(s)`, `Illustration(s)` or `Reference(s)` (`## Appendix: Scoring Reference`, `### Worked Example`, `## Appendix: References`, and a heading that is the single word `## Reference`), or when its first word is `Example(s)` or `Illustration(s)` (after an optional `Worked`) and a colon or a spaced dash follows, optionally after one number or one letter, or the word `Register` or `Table` follows, optionally after `Risk` (`## Example: a checkout register`, `## Example 1: checkout`, `## Example A - checkout`, `## Example Register`, `## Example Risk Register`). Leading numbering such as `3.` is skipped.
+The scored register is the risk tables a design states as its own.
+A table the document labels a reference example is outside it, and so are its rows in the risk count, the unsupported-risk reading, risk precision and the coverage map.
+Two labels exist.
+An enclosing heading labels its tables when its last word is `Example(s)`, `Illustration(s)` or `Reference(s)` (`## Appendix: Scoring Reference`, `### Worked Example`, `## Appendix: References`, and a heading that is the single word `## Reference`), or when its first word is `Example(s)` or `Illustration(s)` (after an optional `Worked`) and a colon or a spaced dash follows, optionally after one number or one letter, or the word `Register` or `Table` follows, optionally after `Risk` (`## Example: a checkout register`, `## Example 1: checkout`, `## Example A - checkout`, `## Example Register`, `## Example Risk Register`).
+Leading numbering such as `3.` is skipped.
 A paragraph that opens `Example:`, `Worked example:` or `Illustration:` (bold or plain) labels every table after it up to the next heading, or up to the end of the list item that holds it, whatever sits between them: a coverage table, a second risk table, a sentence or an HTML comment.
 Any enclosing label counts, so a labeled section whose own headings copy the register's band headings stays a reference.
-The document's first heading is its title at any level and labels nothing. A first-word `Reference` before other words, a `Reference:` or `References:` citation line (a `## References` heading labels its tables, a `References:` line labels nothing), `For example:` and the words Sample and Illustrative label nothing, because `Reference Data Risks`, `References: PRD section 4.2` and `Sample Intake Risks` are domain names and citations.
-A heading counts only by its first or last word, so `### Story 7.1: Distinguish reference risk tables` labels nothing. A heading that ends with the word for another reason (`### Story 7.2: Upload an example`) reads as a label, because position alone cannot tell it from `Worked Example`. The rows under it leave every count with no refusal, so the harness prints the excluded tables (each label and row count) for each run and records the same sentence as summary evidence on the run's diagnostics; the repair is a rename or a different heading for the register.
+The document's first heading is its title at any level and labels nothing.
+A first-word `Reference` before other words, a `Reference:` or `References:` citation line (a `## References` heading labels its tables, a `References:` line labels nothing), `For example:` and the words Sample and Illustrative label nothing, because `Reference Data Risks`, `References: PRD section 4.2` and `Sample Intake Risks` are domain names and citations.
+A heading counts only by its first or last word, so `### Story 7.1: Distinguish reference risk tables` labels nothing.
+A heading that ends with the word for another reason (`### Story 7.2: Upload an example`) reads as a label, because position alone cannot tell it from `Worked Example`.
+The rows under it leave every count with no refusal, so the harness prints the excluded tables (each label and row count) for each run and records the same sentence as summary evidence on the run's diagnostics; the repair is a rename or a different heading for the register.
 The shipped worked example `skills/bmad-testarch-test-design/resources/test-design-epic-3.example.md` shows the register this rule keeps: seven rows in the three band tables under `## Risk Assessment`, none labeled.
-`test/test-contract-oracles.js` reads that document, appends a labeled copy of its register and requires the same seven rows and the same projection. Its constructed pairs put one ruled-out category in a reference table with and without a scored register row above the guard band, one pair per label branch, beside the titles, domains, citations and story headings that must stay registers.
+`test/test-contract-oracles.js` reads that document, appends a labeled copy of its register and requires the same seven rows and the same projection.
+Its constructed pairs put one ruled-out category in a reference table with and without a scored register row above the guard band, one pair per label branch, beside the titles, domains, citations and story headings that must stay registers.
 `test/test-probe-targets.js` drives a reference-table design through the real runner and harness and refuses a projection that counts the reference rows.
 
-Material-risk vocabulary is read from the original document text, so the words of a reference table still count toward it. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while missing stdout yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
+Material-risk vocabulary is read from the original document text, so the words of a reference table still count toward it.
+Unsupported-risk vocabulary is read from one parsed scored-risk description at a time.
+The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while missing stdout yields insufficient evidence.
+`test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
 
-What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.
-It says the contract and the harness agree about material vocabulary in the document and unsupported vocabulary in scored risk rows. The 1-3 scale, score arithmetic, band placement, coverage levels and pairwise priority ordering remain harness checks.
+`test-contract-oracles.js` checks that the contract and the harness agree about material vocabulary in the document and unsupported vocabulary in scored risk rows.
+The 1-3 scale, score arithmetic, band placement, coverage levels and pairwise priority ordering remain harness checks.
 
 Seventeen oracles, in four kinds.
-One `run-measured` per fixture set asserts that the shared parser found at least one risk-register row. A document with none is refused before it is scored.
+One `run-measured` per fixture set asserts that the shared parser found at least one risk-register row.
+A document with none is refused before it is scored.
 One `material-vocabulary` per material risk, five on the seeded set and none on the clean one, asserts the document reaches the deciding vocabulary of a risk the epic supports in as many words.
 One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts that no risk row scored above 3 describes a risk the epic rules out.
 One `projection-coherence` per fixture set, numbered after every oracle above so `O-001` to `O-015` keep their numbers, reads the whole projection: all four keys, in the direction and in the check.
@@ -239,8 +189,10 @@ The two `run-measured` behaviors and the two `projection-coherence` behaviors gr
 
 eval-quality's `whole-body` coverage rule (its AD-20 rule 2 and AD-31) is satisfied when, for every operation that declares more than one required response key, one oracle's direction and check both address every one of those keys at one step.
 The test-design operation declares four, `design`, `riskRowCount`, `scoredRiskDescriptions` and `scoredRiskCount`, and the rule holds a parent pointer such as `.../stdout` not to address a key.
-Every oracle above read a subset, so the rule reported a gap although the material oracles read the complete Markdown. The engine's reading is the intended one: oracles that each read a different key are not a whole-body reading of the response.
-The `projection-coherence` oracle reads every key and fails only for a defect in the runner's projection. The workflow's Markdown is still judged by the material oracles.
+Every oracle above read a subset, so the rule reported a gap although the material oracles read the complete Markdown.
+The engine's reading is the intended one: whole-body coverage requires one oracle to read all required keys.
+The `projection-coherence` oracle reads every key and fails only for a defect in the runner's projection.
+The workflow's Markdown is still judged by the material oracles.
 Its direction names the four key pointers and the design artifact, and its check is the conjunction of five claims.
 The projection is exactly the four declared keys, each of its declared type, which a missing key would otherwise slip past: under `not(equality(...))` an absent number reads as not zero.
 `design` equals the design artifact the run wrote, which is the complete original Markdown, and has a non-blank character.
@@ -250,8 +202,10 @@ The projection is exactly the four declared keys, each of its declared type, whi
 That was judged too large, so the oracle states the zero agreement and the implication, and a count that names two rows beside one description passes it.
 `test/test-contract-oracles.js` asserts the two relations directly on every stored projection instead, together with the equality of `design` and the artifact, so a runner that miscounts or truncates the document fails that suite without going through the oracle.
 `projectionIsCoherent` in `tools/generate-contracts.js` is the same predicate in JavaScript and the harness-side scorer of these oracles.
-The projection is derived from the document by one function, so the stored runs hold the oracle and the direct assertions. The suite plants incoherent projections, one per claim, and evaluates the oracle and its twin on each, and the three planted cases the oracle passes are recorded limits.
-It also scores the zero-action probe against the real contract and against versions of it in which the oracle reads only the scored descriptions, reads exactly the three keys other than one, or names every key but one in its direction, and requires eval-quality's coverage result to be satisfied for the real contract and unsatisfied for the others. Removing the oracle leaves `whole-body` unsatisfied, and widening the reduced oracle to every key satisfies it again.
+The projection is derived from the document by one function, so the stored runs hold the oracle and the direct assertions.
+The suite plants incoherent projections, one per claim, and evaluates the oracle and its twin on each, and the three planted cases the oracle passes are recorded limits.
+It also scores the zero-action probe against the real contract and against versions of it in which the oracle reads only the scored descriptions, reads exactly the three keys other than one, or names every key but one in its direction, and requires eval-quality's coverage result to be satisfied for the real contract and unsatisfied for the others.
+Removing the oracle leaves `whole-body` unsatisfied, and widening the reduced oracle to every key satisfies it again.
 Neither oracle has a defect probe, for the reason `test/probes/README.md` records.
 The gameability probe's signature leaves the seeded set's oracle out of its conjunction, because the oracle reads the design artifact and a defect signature cannot address a file a command wrote.
 Each token group becomes one anchored, case-insensitive regex whose spaces are `\s+`, and a matcher's groups are conjoined with `all`: `matchesGroups` lowercases and collapses whitespace before it searches, and without the `\s+` a token like "feature flag" would miss wherever the document wrapped the line between the two words, and the oracle would disagree with its own scorer.
@@ -271,7 +225,8 @@ eval-quality's `whole-body` rule is satisfied when, for every operation that dec
 The strength baseline listed it for four contracts after the test-design repair above, because each of their oracles reads a few keys of a response that declares more.
 Story 1.100 adds one oracle per plan step to each of them, after every oracle the contract already stated, so the existing ids and their behavior ids hold.
 The routing contracts gain `O-051` to `O-061` (intents) and `O-028` to `O-035` (controls), the test-review contract `O-014`, and the trace contract `O-027` and `O-028`.
-Each has a behavior of its own, graded `material`, because a behavior discharged by two oracles resolves no designated oracle. It carries the oracle's number, except test-review's `B-013`, since its verdict behavior `B-012` already groups two oracles.
+Each has a behavior of its own, graded `material`, because a behavior discharged by two oracles resolves no designated oracle.
+It carries the oracle's number, except test-review's `B-013`, since its verdict behavior `B-012` already groups two oracles.
 
 | Contract                             | Operation and response                      | Required keys | Narrowed | Evidence that every required key is always emitted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------ | ------------------------------------------- | ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -284,7 +239,8 @@ No key is narrowed, because each required key is one the runner or workflow alwa
 The routing `reason` is the instructive case.
 The parser normalizes a reply that names an action and forgets to say why to a null `reason`, so the key is always printed and its value can still be null.
 The declaration keeps `reason` required and typed `string`, and the new oracle is the one that reads that null as the defect it is.
-`test:contract-oracles` holds the declarations to their sources and to the stored runs the harness scores: every scored stored verdict and every stored correct trace summary carries every required key, and each stored routing reply named as the correct answer parses to the object the runner prints. The parser fills every key it lacks, so a stored routing reply says nothing about which keys the runner prints, and that comes from the parser's code alone.
+`test:contract-oracles` holds the declarations to their sources and to the stored runs the harness scores: every scored stored verdict and every stored correct trace summary carries every required key, and each stored routing reply named as the correct answer parses to the object the runner prints.
+The parser fills every key it lacks, so a stored routing reply says nothing about which keys the runner prints, and that comes from the parser's code alone.
 That is the evidence available for trace and routing, since every stored run of those two suites is constructed (each case's `storedOutput.origin` says so), and every stored verdict of test-review is constructed except two (`approved-with-no-findings` and `unattributed-violations` carry `origin: "real-capture"`, verdicts rebuilt from captured reports).
 The real runs are the four CLI runs above and the parser's own output, and `test:cli` also holds each of those four verdicts to the whole-verdict twin, which reads the type of each key as well as its presence.
 `assertDeclaredKeys` tests each key with `Object.hasOwn`, which accepts a key whose value is `undefined`, so the four serialized runs in `test:cli` are the real guard that the CLI writes every key of a verdict.
@@ -294,7 +250,8 @@ A key is not required merely because every real run carries it: `conventionBasel
 
 Each oracle's direction names every required key pointer and its check reads each of them, and no other pointer apart from the root a `shape` operator reads:
 
-- **`tea-routing-*`**: `all` of a `shape` over the answer (the declared keys, `action` and `reason` typed `string`), `set-membership` of `action` in `route`, `clarify` and `decline` (the actions `cli/lib/parse-routing.js` accepts, which the suite reads from the parser), and a non-blank `reason`. The set-membership and the regex are what put the two key pointers in the check, so routing carries no per-key `existence`.
+- **`tea-routing-*`**: `all` of a `shape` over the answer (the declared keys, `action` and `reason` typed `string`), `set-membership` of `action` in `route`, `clarify` and `decline` (the actions `cli/lib/parse-routing.js` accepts, which the suite reads from the parser), and a non-blank `reason`.
+  The set-membership and the regex are what put the two key pointers in the check, so routing carries no per-key `existence`.
 - **`test-review`**: `all` of a `shape` over the verdict (the 24 required keys, the nine conditional ones permitted, every key of its declared type) and one `existence` per required key.
 - **`trace`**: the same two parts over the summary, with the three conditional keys permitted.
 
@@ -302,7 +259,8 @@ For test-review and trace the per-key `existence` conjuncts are what put each ke
 The three scorer twins, `routingAnswerIsWhole`, `verdictIsWhole` and `traceSummaryIsWhole` in `tools/generate-contracts.js`, say the same thing in JavaScript and are what the probe records and `test:contract-oracles` compare the oracles with.
 Each check fails for a real defect: a null or blank routing reason, a verdict or summary missing a key the CLI or step-05 always writes (the stored `seeded-rejected-evidence-omitted` summary is one), a key the contract types holding another type (routing types only `action` and `reason`, and 11 of the 22 summary keys are untyped, so a null `repo` is whole), or a key nobody declared.
 A `reason` of only a zero-width space (U+200B) is a non-blank string to the engine and to the twin, an accepted limit: the check states that a reason is present, and `test:contract-oracles` plants it as whole.
-The vocabulary has no operator that states a count against another key, so none of the three checks says anything about what the values mean. The existing oracles keep that.
+The vocabulary has no operator that states a count against another key, so none of the three checks says anything about what the values mean.
+The existing oracles keep that.
 
 `test:contract-oracles` scores the zero-action probe of each suite through eval-quality against the real contract and against versions of it, as the test-design repair does, and requires the engine's coverage result to follow:
 
@@ -321,72 +279,36 @@ The routing contracts' `success-indicator-separation` gap closed as a side effec
 
 Five limits surfaced while writing the oracles, and none of them is about transport.
 
-**A fractional pass over a set of oracles has no spelling.** `all` and `for-all` are total, `any` and
-`for-any` are existential, and nothing sits between. The `test-review` eval's own recall threshold is
-0.7, so it tolerates missing two of nine planted defects; the contract can only demand all nine or at
-least one. This is the largest divergence between the contract and the eval it describes, and it is
-why the contract's behaviors read as absolute demands.
+**A fractional pass over a set of oracles has no spelling.** `all` and `for-all` are total, `any` and `for-any` are existential, and nothing sits between.
+The `test-review` eval's own recall threshold is 0.7, so it tolerates missing two of nine planted defects; the contract can only demand all nine or at least one.
+This is the largest divergence between the contract and the eval it describes, and it is why the contract's behaviors read as absolute demands.
 
-**A plan cannot declare that two steps must receive different inputs.** The 24 fragment-selection
-cases differ only in the prompt sent to the runner, and that is the property that makes the suite
-mean anything. `sensitivityWitness` expresses a two-leg version of this inside one operation and
-nothing expresses it across plan steps.
+**A plan cannot declare that two steps must receive different inputs.** The 24 fragment-selection cases differ only in the prompt sent to the runner, and that is the property that makes the suite mean anything.
+`sensitivityWitness` expresses a two-leg version of this inside one operation and nothing expresses it across plan steps.
 
-Answered for `trace`, at a price the eight fragment-selection contracts cannot pay. Binding each
-step's `stdin.prompt` as a literal of that step's own prompt is what tells the two steps apart: the
-seeded step selects the seeded run, the clean step selects the clean one, and `trace`'s clean control
-moved from FAIL at exit 2 with five oracles abstaining to CONCERNS at exit 0 with all twenty-six
-resolving `passed-clean-control`. It costs 3.6 kilobytes on `trace.contract.json` and 42 to 143
-kilobytes on a fragment-selection contract, which roughly doubles each of those eight files, so they
-keep the matcher. A literal is compared with `deepEquals`, so both sides of one have to come from a
-single function: `tools/generate-contracts.js` and `test/lib/probe-scoring.js` both call `buildPrompt`
-from `test/eval-trace.js`, and the record builder throws when the contract on disk carries any other
-bytes. A prompt restated in either place would select nothing and every oracle would resolve
-`unreached`, which reads as a clean run at exit 0.
+Answered for `trace`, at a price the eight fragment-selection contracts cannot pay.
+Binding each step's `stdin.prompt` as a literal of that step's own prompt is what tells the two steps apart: the seeded step selects the seeded run, the clean step selects the clean one, and `trace`'s clean control moved from FAIL at exit 2 with five oracles abstaining to CONCERNS at exit 0 with all twenty-six resolving `passed-clean-control`.
+It costs 3.6 kilobytes on `trace.contract.json` and 42 to 143 kilobytes on a fragment-selection contract, which roughly doubles each of those eight files, so they keep the matcher.
+A literal is compared with `deepEquals`, so both sides of one have to come from a single function: `tools/generate-contracts.js` and `test/lib/probe-scoring.js` both call `buildPrompt` from `test/eval-trace.js`, and the record builder throws when the contract on disk carries any other bytes.
+A prompt restated in either place would select nothing and every oracle would resolve `unreached`, which reads as a clean run at exit 0.
 
-**An empty collection is no evidence.** AD-4 resolves a quantifier over an
-empty collection to `insufficient-evidence` with an `empty-collection` introduction condition. The
-`test-review` harness reads a verdict whose findings array is empty as a reviewer that named nothing,
-which is a measured miss of every plant; the contract abstains on the same verdict. Both readings
-are stated, and `test/test-contract-oracles.js` accepts the abstention exactly when the resolution
-tree records that condition, and nowhere else.
+**An empty collection is no evidence.** AD-4 resolves a quantifier over an empty collection to `insufficient-evidence` with an `empty-collection` introduction condition.
+The `test-review` harness reads a verdict whose findings array is empty as a reviewer that named nothing, which is a measured miss of every plant; the contract abstains on the same verdict.
+Both readings are stated, and `test/test-contract-oracles.js` accepts the abstention exactly when the resolution tree records that condition, and nowhere else.
 
-**A markdown deliverable is one string.** The trace matrix carries the per-criterion coverage
-statuses, the judgment the corpus exists to measure, and the vocabulary addresses a text artifact only
-as a whole document, through `regex`. A pattern that finds one section and reads its status inside a
-multi-kilobyte document runs against the evaluator's step budget, so `trace.contract.json` states the
-statuses through their deterministic consequences in the summary: the counts, the percentages, the
-gate, the gap buckets. The harness reads the matrix and the contract does not, and a stored run whose
-matrix declares no criterion section is refused by the harness and unseen by the contract, which
-`test/test-contract-oracles.js` prints as a skip rather than counting as agreement.
+**A markdown deliverable is one string.** The trace matrix carries the per-criterion coverage statuses, the judgment the corpus exists to measure, and the vocabulary addresses a text artifact only as a whole document, through `regex`.
+A pattern that finds one section and reads its status inside a multi-kilobyte document runs against the evaluator's step budget, so `trace.contract.json` states the statuses through their deterministic consequences in the summary: the counts, the percentages, the gate, the gap buckets.
+The harness reads the matrix and the contract does not, and a stored run whose matrix declares no criterion section is refused by the harness and unseen by the contract, which `test/test-contract-oracles.js` prints as a skip.
 
-`nfr.contract.json` is the case where that limit binds hardest, because the NFR workflow declares one
-deliverable and it is markdown. There is no summary to state a consequence in, so the contract's ten
-oracles say the five things a substring test can reach about a whole document: the four
-`## <Domain> Assessment` sections exist, the Gate YAML publishes the `audited_domains` block the four
-domain statuses are declared in, it publishes the expected `overall_status`, a
-threshold no source states is recorded as `UNKNOWN` and one every source states is not, and the run
-wrote a report and exited 0. `containment` rather than `regex` throughout, because `regex`'s step
-estimate is `(1 + quantifiers) * length` and a "contains X anywhere" pattern costs three times the
-document's length against a budget an ordinary report exceeds. Which status sits on which line of that block, the per-domain
-thresholds and every evidence citation are the harness's to read, because `containment` cannot bind a
-value to the key above it and `security` is a key in the ADR `categories` block as well.
+`nfr.contract.json` is the case where that limit binds hardest, because the NFR workflow declares one deliverable and it is markdown.
+There is no summary to state a consequence in, so the contract's ten oracles say the five things a substring test can reach about a whole document: the four `## <Domain> Assessment` sections exist, the Gate YAML publishes the `audited_domains` block the four domain statuses are declared in, it publishes the expected `overall_status`, a threshold no source states is recorded as `UNKNOWN` and one every source states is not, and the run wrote a report and exited 0.
+`containment` is used because `regex`'s step estimate is `(1 + quantifiers) * length` and a "contains X anywhere" pattern costs three times the document's length against a budget an ordinary report exceeds.
+Which status sits on which line of that block, the per-domain thresholds and every evidence citation are the harness's to read, because `containment` cannot bind a value to the key above it and `security` is a key in the ADR `categories` block as well.
 
-`ci.contract.json` hits the same limit from the other side: its one deliverable, the platform's own
-pipeline file, is machine-parseable YAML and the harness reads it structurally, but the contract's
-vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain
-substring claims (three state a regex, below), and the per-element check stays the harness's.
-Each is paired with
-`workflowHoldsToken`, `test/eval-ci.js`'s own document-global predicate (`workflowMentions` over the
-element's `contractToken`, or `workflowMatches` over its `contractPattern`), the same idiom `test-design`'s
-material-risk oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would
-make the two agree by coincidence on whatever the replay corpus happens to hold, and pairing it with
-the same document-global function the oracle itself restates makes the agreement true by construction.
-Whether a shard count is four, whether a `needs:` chain actually reaches the lint job, and everything
-`actionlint` reports are the harness's alone; the contract can only say whether a token requested or
-forbidden by the project's own request appears in the document at all.
-Two elements of the evaluation-plan project, `command-evaluation-install` and `command-evaluation-ci-pr`, state a
-`contractPattern` beside the token, because a real run quotes its folder names for the shell and may fold a command over several lines.
+`ci.contract.json` hits the same limit from the other side: its one deliverable, the platform's own pipeline file, is machine-parseable YAML and the harness reads it structurally, but the contract's vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain substring claims (three state a regex, below), and the per-element check stays the harness's.
+Each is paired with `workflowHoldsToken`, `test/eval-ci.js`'s own document-global predicate (`workflowMentions` over the element's `contractToken`, or `workflowMatches` over its `contractPattern`), the same idiom `test-design`'s material-risk oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would make the two agree by coincidence on whatever the replay corpus happens to hold, and pairing it with the same document-global function the oracle itself restates makes the agreement true by construction.
+Whether a shard count is four, whether a `needs:` chain actually reaches the lint job, and everything `actionlint` reports are the harness's alone; the contract can only say whether a token requested or forbidden by the project's own request appears in the document at all.
+Two elements of the evaluation-plan project, `command-evaluation-install` and `command-evaluation-ci-pr`, state a `contractPattern` beside the token, because a real run quotes its folder names for the shell and may fold a command over several lines.
 The contract renders it with the `regex` operator, which accepts only a pattern that begins with `^` and ends with `$`.
 Each is therefore written as `^[\s\S]*(?:...)[\s\S]*$`.
 The paired scorer tests the same source with `new RegExp(source)` and no flags.
@@ -395,22 +317,14 @@ Its token is the job id the skill's template writes, `burn-in:`, and its pattern
 A comment line, a trailing comment, a `run:` line, a run-block line that is no key and the value of another key leave it unsatisfied, and a run-block line that starts with a key carrying the word holds, as an `env` key does.
 `test:contract-oracles` scores 232 forms of the burn-in job through eval-quality and through the scorer, among them each spelling of the word with one character dropped, doubled or replaced, in a job id and in a job name, which must agree with `isBurnInJob`.
 
-**A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
-refuses a quantifier nested inside a quantified group before matching anything, as a
-catastrophic-backtracking risk, and reports it as a `budget-exhausted` fault. Every regex oracle in
-`test-review.contract.json` carried that shape, an optional group around a dot-star and a slash, so
-eleven of its thirteen oracles could never resolve. The compiler requires only the `^` and `$`
-anchors, which both shapes have, and every contract compiled clean throughout. The generator now
-spells the directory prefix as an alternation with an empty branch, and the oracle suite below is
-what would catch the next such pattern.
+**A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator refuses a quantifier nested inside a quantified group before matching anything, as a catastrophic-backtracking risk, and reports it as a `budget-exhausted` fault.
+Every regex oracle in `test-review.contract.json` carried that shape, an optional group around a dot-star and a slash, so eleven of its thirteen oracles could never resolve.
+The compiler requires only the `^` and `$` anchors, which both shapes have, and every contract compiled clean throughout.
+The generator now spells the directory prefix as an alternation with an empty branch, and the oracle suite below is what would catch the next such pattern.
 
-Two more limits are worth recording as answered rather than open. "None of these appear in this
-collection" over plain strings IS expressible, as
-`not(for-any(collection, set-membership({pointer: "@/"}, {literal: [...]})))`: the bare `@/` spelling
-addresses the bound element itself, which is what a collection of strings needs. `set-membership`'s
-set position still takes only a reference set or a literal array, never a pointer. And no statistic
-across repetitions is expressible at all: score variance and verdict stability are computed over N
-runs, and every oracle here is a predicate over one interaction's evidence.
+Two more limits are answered. "None of these appear in this collection" over plain strings IS expressible, as `not(for-any(collection, set-membership({pointer: "@/"}, {literal: [...]})))`: the bare `@/` spelling addresses the bound element itself, which is what a collection of strings needs.
+`set-membership`'s set position still takes only a reference set or a literal array.
+And no statistic across repetitions is expressible at all: score variance and verdict stability are computed over N runs, and every oracle here is a predicate over one interaction's evidence.
 
 ## Validating them here
 
@@ -420,165 +334,86 @@ npm run test:contracts                     # does the compiler still say what th
 npm run test:contract-oracles              # does every oracle resolve, and agree with the harness scorer?
 ```
 
-The three answer different questions and none substitutes for another. The generator check is the
-one that runs unconditionally; the compile check and the oracle check need `eval-quality` on disk.
+Run all three checks: generation, compilation, and oracle evaluation.
+The generator check is the one that runs unconditionally; the compile check and the oracle check need `eval-quality` on disk.
 
-The compile check calls `compile` in this process rather than spawning the binary, so the code and
-the issue locations it records are read off the thrown `RuntimeFault` or `StructuralFailure` and the
-Zod error a schema failure carries as its `cause`. Nothing is scraped back out of printed lines.
-Every contract here compiles, which would leave that blocked path unexercised, so the check also
-seeds five faults into every contract and holds each one against the code and the locations it must
-report. A compiler that stopped naming the failing field fails there rather than reading as thirteen
-passes.
+The compile check calls `compile` in process, so the code and the issue locations it records are read off the thrown `RuntimeFault` or `StructuralFailure` and the Zod error a schema failure carries as its `cause`.
+Nothing is scraped back out of printed lines.
+Every contract here compiles, which would leave that blocked path unexercised, so the check also seeds five faults into every contract and holds each one against the code and the locations it must report.
+A compiler that omits the failing field fails that check.
 
-The oracle check is the one that reads the oracles. It evaluates every oracle in every contract with
-`eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
-already holds: each stored verdict under `test/replay/test-review/` as one observation of the
-`review-corpus` step, each fragment-selection case over three constructed selections and the stored
-captures, each stored test design under `test/replay/test-design/` as one observation of its fixture
-set's plan step with a Markdown artifact and parsed JSON stdout, each stored trace run under
-`test/replay/trace/` as one observation of its
-fixture set's plan step, and each stored NFR run under `test/replay/nfr/` as one observation of its
-evidence bundle's plan step, the last three evaluated under both of their suite's sets so that every
-test-design, trace and nfr oracle is also seen failing. Each answer is compared with the harness
-scorer's on the same evidence: a plant oracle holds exactly when `scoreVerdict` counts the plant as a
-hit, the scope oracle exactly when it counts no finding as out of
-scope, a containment oracle exactly when `scoreCase` misses nothing, each test-design oracle exactly
-when `documentMentions` says its declared document or scored-row scope carries that risk's vocabulary, and each trace oracle exactly
-when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js`
-writes beside the oracle. Two trace exceptions are stated in that check's header: the waiver oracles
-are compared only where the harness scored them, because it skips the waiver block when the gate did
-not match so that one wrong gate is not scored three times, and a summary the harness refuses for its
-schema version is one the contract's run-shape oracle has to refuse too, with its other oracles left
-uncompared because there is no measurement to compare with. Test-design splits the same way on a
-document the harness refuses for carrying no risk table: the contract's `run-measured` oracle has to
-refuse it too, and its other oracles are left uncompared. An oracle that faults, or that
-contradicts the scorer, fails `npm test`. Nothing read an oracle before it, and the section above
-records what its first run found.
+The oracle check is the one that reads the oracles.
+It evaluates every oracle in every contract with `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository already holds: each stored verdict under `test/replay/test-review/` as one observation of the `review-corpus` step, each fragment-selection case over three constructed selections and the stored captures, each stored test design under `test/replay/test-design/` as one observation of its fixture set's plan step with a Markdown artifact and parsed JSON stdout, each stored trace run under `test/replay/trace/` as one observation of its fixture set's plan step, and each stored NFR run under `test/replay/nfr/` as one observation of its evidence bundle's plan step, the last three evaluated under both of their suite's sets so that every test-design, trace and nfr oracle is also seen failing.
+Each answer is compared with the harness scorer's on the same evidence: a plant oracle holds exactly when `scoreVerdict` counts the plant as a hit, the scope oracle exactly when it counts no finding as out of scope, a containment oracle exactly when `scoreCase` misses nothing, each test-design oracle exactly when `documentMentions` says its declared document or scored-row scope carries that risk's vocabulary, and each trace oracle exactly when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js` writes beside the oracle.
+Two trace exceptions are stated in that check's header: the waiver oracles are compared only where the harness scored them, because it skips the waiver block when the gate did not match so that one wrong gate is not scored three times, and a summary the harness refuses for its schema version is one the contract's run-shape oracle has to refuse too, with its other oracles left uncompared because there is no measurement to compare with.
+Test-design splits the same way on a document the harness refuses for carrying no risk table: the contract's `run-measured` oracle has to refuse it too, and its other oracles are left uncompared.
+An oracle that faults, or that contradicts the scorer, fails `npm test`.
+Nothing read an oracle before it, and the section above records what its first run found.
 
-The compile check resolves `eval-quality` from `node_modules` and fails closed when it cannot, so the
-deterministic gate stays credential-free and runs with no network. It used to skip: an unresolvable
-package printed a yellow "skipped" and exited 0, which is a green check over fifteen contracts
-nobody looked at, and it was the only check in this repository that answered an absent package with
-a pass. An unresolvable package now exits 2 and says how many contracts went unchecked, and so does
-a tree resolving an `eval-quality` other than the version `package.json` pins, since sixteen
-contracts compiled against the wrong release are sixteen results about a package this repository
-does not declare. To run this against an unreleased build, `npm link` it (or install its packed
-tarball) so `node_modules/eval-quality` resolves to it, then run the check with no flags: there is no
-path-override flag here, since an arbitrary path cannot be the literal `import()` specifier
-`dependency-direction` requires.
+The compile check resolves the installed `eval-quality` package and exits `2` when it is unavailable.
+This check requires no credentials or network calls.
+It used to skip: an unresolvable package printed a yellow "skipped" and exited 0, which is a green check over fifteen contracts nobody looked at, and it was the only check in this repository that answered an absent package with a pass.
+An unresolvable package now exits 2 and says how many contracts went unchecked, and so does a tree resolving an `eval-quality` version outside the package declaration, since sixteen contracts compiled against the wrong release are sixteen results about a package this repository does not declare.
+To run this against an unreleased build, `npm link` it (or install its packed tarball) so `node_modules/eval-quality` resolves to it, then run the check with no flags: there is no path-override flag here, since an arbitrary path cannot be the literal `import()` specifier `dependency-direction` requires.
 
-Every contract here records `compiles`, so `expected-status.json` carries no failure code to check:
-the comparison short-circuits on that status and never reaches a `code` field. The check that holds
-every code against `eval-quality`'s `RUNTIME_FAULT_CODES` and `FAILURE_CODES` therefore applies to
-codes recovered at runtime, which is what the six seeded faults produce on every run, and it would
-apply to a recorded entry the day one of these contracts stops compiling. What it replaces is a
-`?? 'unknown'` fallback: a code the package stopped publishing was recorded as the string `unknown`,
-matched `unknown` on the next run, and the check stayed green over a compiler that had stopped
-saying what it refused.
+Every contract here records `compiles`, so `expected-status.json` carries no failure code to check: the comparison short-circuits on that status and never reaches a `code` field.
+The check that holds every code against `eval-quality`'s `RUNTIME_FAULT_CODES` and `FAILURE_CODES` therefore applies to codes recovered at runtime, which is what the six seeded faults produce on every run, and it would apply to a recorded entry the day one of these contracts stops compiling.
+What it replaces is a `?? 'unknown'` fallback: a code the package stopped publishing was recorded as the string `unknown`, matched `unknown` on the next run, and the check stayed green over a compiler that had stopped saying what it refused.
 
-When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All sixteen contracts `compile` today. A baseline is what keeps a
-known failure from reading as a passing check, and what makes the day a contract's status moves
-visible instead of silent, so any movement in either direction fails the check until the baseline is
-updated to say so. Regenerate it with `--write` once you have read why something moved.
+When the compiler is available, the check compares each contract against the status `expected-status.json` records for it.
+All sixteen contracts `compile` today.
+A baseline is what keeps a known failure from reading as a passing check, and what makes the day a contract's status moves visible, so any movement in either direction fails the check until the baseline is updated to say so.
+Regenerate it with `--write` once you have read why something moved.
 
-`eval-quality` is a declared devDependency with the `latest` spec. The lockfile records the
-installed release. `0.3.0` closed the gap the table above describes, and later releases have
-left the compile status unchanged.
+`eval-quality` is a declared devDependency with the `latest` spec.
+The lockfile records the installed release.
+`0.3.0` closed the gap the table above describes, and later releases have left the compile status unchanged.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all sixteen in memory and fails when the bytes on
-disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
-edit that leaves a contract stale fails the deterministic gate.
+`node tools/generate-contracts.js --check` regenerates all sixteen in memory and fails when the bytes on disk differ, naming the contract and the first line that moved.
+It runs in `npm test`, so a fixture edit that leaves a contract stale fails the deterministic gate.
 
 What that covers:
 
 - every planted row, its file, and its admitted-line set, read from `ground-truth.json`;
-- which behavior a planted row belongs to, read from the row's severity in `criteria-registry.md`,
-  so a plant that changes row cannot leave a behavior linked to a row nobody plants, and how hard that
-  behavior grades, derived from the same severity: a group whose rows carry their own gate is
-  `critical`, a group that feeds the pooled recall gate is `material`, and nothing grades below
-  `material`, because missing a planted defect must not rank under one out-of-scope finding;
-- every required and forbidden fragment list, the case ids, the plan steps, the witness legs, and the
-  per-case counts in the oracle scopes, read from each `evals.json`;
-- both `sourceSpecDigest` values, recomputed from the files they pin, through the one digest helper
-  in `test/lib/eval-record.js`, which length-prefixes each file so a byte moved from the tail of one
-  step file to the head of the next changes the answer;
-- every key a sensitivity-witness leg supplies, read from the operation's own `requestShape`, so a
-  leg is always a request the port could issue. The test-review legs restated that list and supplied
-  only `files` against a shape requiring `files`, `json` and `agent`, which parses and then fails
-  compilation under `undeclared-mandatory-input`;
+- which behavior a planted row belongs to, read from the row's severity in `criteria-registry.md`, so a plant that changes row cannot leave a behavior linked to a row nobody plants, and how hard that behavior grades, derived from the same severity: a group whose rows carry their own gate is `critical`, a group that feeds the pooled recall gate is `material`, and nothing grades below `material`, because missing a planted defect must not rank under one out-of-scope finding;
+- every required and forbidden fragment list, the case ids, the plan steps, the witness legs, and the per-case counts in the oracle scopes, read from each `evals.json`;
+- both `sourceSpecDigest` values, recomputed from the files they pin, through the one digest helper in `test/lib/eval-record.js`, which length-prefixes each file so a byte moved from the tail of one step file to the head of the next changes the answer;
+- every key a sensitivity-witness leg supplies, read from the operation's own `requestShape`, so a leg is always a request the port could issue.
+  The test-review legs restated that list and supplied only `files` against a shape requiring `files`, `json` and `agent`, which parses and then fails compilation under `undeclared-mandatory-input`;
 - the selection cardinality bound, counted from each workflow's `tea-index.csv`;
-- every value a trace oracle asserts, read from `test/fixtures/trace-eval/ground-truth.json`: the gate
-  and its ten criteria fields, the inventory, the priority rows, the risk counts, the per-level
-  criteria counts, the live dispositions and each blocker's severity, the rejected span at the
-  corpus's own line tolerance, and each waiver's verdict; the trace summary's key set, read from the
-  object literal in step-05 rather than transcribed; and the two witness prompts, built by the harness
-  function that builds the live one;
-- every value a test-design oracle asserts, read from `test/fixtures/test-design-eval/ground-truth.json`:
-  each declared risk's token groups, compiled into the anchored regexes the oracles carry, the grounding
-  sentence a material oracle quotes and the exclusion sentence an unsupported one quotes; and the two
-  witness prompts and both plan-step prompt literals, built by the harness function that builds the live
-  one. The generator also refuses a corpus that does not declare exactly one seeded set and one clean
-  control, and a specification digest naming a step file that does not exist;
+- every value a trace oracle asserts, read from `test/fixtures/trace-eval/ground-truth.json`: the gate and its ten criteria fields, the inventory, the priority rows, the risk counts, the per-level criteria counts, the live dispositions and each blocker's severity, the rejected span at the corpus's own line tolerance, and each waiver's verdict; the trace summary's key set, read from the object literal in step-05; and the two witness prompts, built by the harness function that builds the live one;
+- every value a test-design oracle asserts, read from `test/fixtures/test-design-eval/ground-truth.json`: each declared risk's token groups, compiled into the anchored regexes the oracles carry, the grounding sentence a material oracle quotes and the exclusion sentence an unsupported one quotes; and the two witness prompts and both plan-step prompt literals, built by the harness function that builds the live one.
+  The generator also refuses a corpus that does not declare exactly one seeded set and one clean control, and a specification digest naming a step file that does not exist;
 - the budgets and the probe-step bound, scaled from the case count; and
-- the verdict response descriptor's `requiredKeys`, `permittedKeys` and `types`, read from
-  `VERDICT_KEYS` in `cli/test-review.js`, which composes `PARSED_VERDICT_KEYS` from
-  `cli/lib/parse-report.js` with the wrapper's own fields and the waiver's three.
+- the verdict response descriptor's `requiredKeys`, `permittedKeys` and `types`, read from `VERDICT_KEYS` in `cli/test-review.js`, which composes `PARSED_VERDICT_KEYS` from `cli/lib/parse-report.js` with the wrapper's own fields and the waiver's three.
 
-The prose that is genuinely authored (an oracle's `commentary`, the sentence a behavior's
-`description` opens with, the risk ids) lives in `tools/generate-contracts.js`, which is the one
-place it is written.
+The prose that is authored (an oracle's `commentary`, the sentence a behavior's `description` opens with, the risk ids) lives in `tools/generate-contracts.js`, which is the one place it is written.
 
 ## The verdict descriptor is read from the CLI
 
-It was not, and it had drifted. `test-review.contract.json` declared the key set and types of the
-verdict `tea-test-review` writes, nothing compared that declaration to the CLI, and by the time
-anyone measured it the CLI could emit twenty-two keys against a `permittedKeys` list of fifteen. The
-seven it forbade were `reportedQualityScore`, `reportedRecommendation`, `unscorableTestArtifacts`,
-`gateFailures`, `waived`, `waiveReason` and `waiveUntil`. Two of those are ordinary: the CLI derives
-the score and the recommendation from the ledger and publishes the agent's own values beside them
-whenever the two disagree, which is what most real reviews do.
+The original descriptor allowed fifteen keys while the CLI could emit twenty-two.
+The seven missing keys were `reportedQualityScore`, `reportedRecommendation`, `unscorableTestArtifacts`, `gateFailures`, `waived`, `waiveReason`, and `waiveUntil`.
 
-`parseReport` now builds its return value by projecting through `PARSED_VERDICT_KEYS`, so a field it
-computes and does not declare throws. `cli/test-review.js` composes that into
-`VERDICT_KEYS` and asserts every published payload against it. The generator reads `VERDICT_KEYS` for
-the descriptor's three key and type fields, so `--check` fails the moment the CLI gains a field. This
-is the idiom `tools/validate-eval-schemas.js` already uses to check a manifest's declared thresholds
-against the `THRESHOLDS` its harness applies.
+`parseReport` now projects through `PARSED_VERDICT_KEYS` and throws on an undeclared computed field.
+The CLI composes `VERDICT_KEYS`, validates published payloads, and exports the declaration the generator reads.
+Generator `--check` catches changes to the key set or types.
 
-Admitting seven more keys weakens the closed set the descriptor asserts. `requiredKeys` moves the
-other way in the same change, from a hand-picked seven to all fourteen keys every verdict carries,
-which is a stronger claim than the list it replaces and one the CLI now enforces on every payload it
-publishes.
+The initial fix expanded permitted keys and raised required keys from seven to fourteen.
+Later whole-body changes use the current `VERDICT_KEYS.always` declaration described above.
+`successIndicator`, `channelRoles`, and finding cardinality remain authored interpretations of that payload.
 
-`successIndicator`, `channelRoles` and the findings cardinality bound stay authored in the generator.
-Each is a reading of the payload: which key decides pass from fail, which one is the collection, how
-many findings a review may plausibly report. The CLI states none of that about itself.
-
-The skip payload is out of the descriptor's scope on purpose. It is a different shape: no agent ran,
-so it carries a null recommendation and score and none of the fields a review produces. One
-descriptor covering both could only declare their union, and a union whose recommendation and score
-are sometimes null asserts nothing about the verdict this contract exists to check. `SKIP_KEYS`
-declares that shape in `cli/test-review.js` and `test/test-test-review-cli.js` asserts a real skip
-payload against it, so the exclusion stays a tracked decision. The `--agent none` prompt-only payload
-is a third shape and is likewise outside the descriptor.
+Skip and prompt-only outputs have separate shapes.
+`SKIP_KEYS` and CLI tests validate skips; the review contract describes completed review verdicts.
 
 ## What is still not enforced
 
-Two things. A third, whether an oracle can be evaluated at all and whether it agrees with the harness
-scorer, is enforced by `npm run test:contract-oracles` and is described under Validating them here.
+Two checks still require judgment:
 
-**A behavior's success criterion is authored prose that names a set in words.** "names all seven
-mandated fragments" is written in the generator, because the eight workflows name their required
-sets in eight different ways, and nothing counts it back from `evals.json`. The generator checks what it can: every
-fragment the sentence names by filename must be one the case requires or forbids, and a sentence of
-the plain `names all N ... fragments` shape must agree with how many the case mandates. A lead that
-carries its count inside a longer phrase is checked only on the filenames.
+- Review each authored success criterion against the behavior it describes.
+  The generator checks named fragment files and simple `names all N ... fragments` counts, but a longer prose phrase can carry an unchecked count.
+- Periodically verify that each case still exercises a useful behavior.
+  The generator rejects empty required or forbidden sets and invalid witnesses; it cannot establish the case's continuing value.
 
-**Nothing checks that a case is still worth running.** The generator refuses a case that requires or
-forbids nothing, because either would make an oracle vacuous, and it refuses a sensitivity witness
-whose two legs mandate the same fragment set. Past that, whether the corpus still exercises the
-behavior it claims to is a question no check here asks.
+`test:contract-oracles` separately checks that each oracle runs and agrees with its paired scorer.

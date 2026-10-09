@@ -83,7 +83,12 @@ check("test-review's call count is repetitions alone, since its harness reviews 
   );
 });
 
-check('TOTAL_CALLS is the sum of all eight per-suite call counts', () => {
+check('teaching call count includes every transcript turn per repetition', () => {
+  const turns = Object.keys(require('./eval-teach-me-testing').TRANSCRIPT_FILES).length;
+  assert.strictEqual(source.TEACH_ME_TESTING_CALLS, suite('teach-me-testing').caseCount * suite('teach-me-testing').repetitions * turns);
+});
+
+check('TOTAL_CALLS is the sum of all nine per-suite call counts', () => {
   assert.strictEqual(
     source.TOTAL_CALLS,
     source.FRAGMENT_SELECTION_CALLS +
@@ -93,7 +98,8 @@ check('TOTAL_CALLS is the sum of all eight per-suite call counts', () => {
       source.NFR_CALLS +
       source.TRACE_CALLS +
       source.CI_CALLS +
-      source.ATDD_CALLS,
+      source.ATDD_CALLS +
+      source.TEACH_ME_TESTING_CALLS,
   );
 });
 
@@ -269,9 +275,10 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'ciCalls',
     'traceCalls',
     'atddCalls',
+    'teachMeTestingCalls',
   ]);
 
-  const readmeTotals = entries.find((entry) => entry.file === 'README.md' && entry.counts.includes('totalCallsThreeRunners'));
+  const readmeTotals = entries.find((entry) => entry.file === 'test/README.md' && entry.counts.includes('totalCallsThreeRunners'));
   assert.deepStrictEqual(readmeTotals.counts, [
     'totalCalls',
     'fragmentSelectionCalls',
@@ -282,6 +289,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'testDesignCalls',
     'traceCalls',
     'atddCalls',
+    'teachMeTestingCalls',
     'totalCallsThreeRunners',
   ]);
 });
