@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-002",
   "expectedClean": false,
-  "rationale": "[representative] Seeded defect: M-001 marks every changed line unchanged, so every finding of the pull request is pre-existing and the introduced hard waits pass the gate.",
+  "rationale": "[representative] Seeded defect: M-001 records no changed lines for the modified test file, so every finding of the pull request is pre-existing, drops out of the pull-request verdict, and the introduced hard waits pass the gate.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-002",
-      "summary": "M-001 marks every changed line unchanged, so every finding of the pull request is pre-existing and the introduced hard waits pass the gate.",
+      "summary": "M-001 records no changed lines for the modified test file, so every finding of the pull request is pre-existing, drops out of the pull-request verdict, and the introduced hard waits pass the gate.",
       "severity": "critical",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -35,6 +35,17 @@
               "op": "equality",
               "operands": [
                 {
+                  "pointer": "/interactions/manifest-p-003/exit-code"
+                },
+                {
+                  "literal": 0
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
                   "pointer": "/interactions/manifest-p-003/stdout/recommendation"
                 },
                 {
@@ -43,61 +54,15 @@
               ]
             },
             {
-              "op": "for-any",
-              "collection": {
-                "pointer": "/interactions/manifest-p-003/stdout/findings"
-              },
-              "predicate": {
-                "op": "all",
-                "operands": [
-                  {
-                    "op": "equality",
-                    "operands": [
-                      {
-                        "pointer": "@/row"
-                      },
-                      {
-                        "literal": "H1"
-                      }
-                    ]
-                  },
-                  {
-                    "op": "set-membership",
-                    "operands": [
-                      {
-                        "pointer": "@/line"
-                      },
-                      {
-                        "literal": [
-                          15,
-                          16,
-                          17,
-                          18,
-                          19,
-                          20,
-                          23,
-                          24,
-                          25,
-                          26,
-                          27,
-                          28
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "op": "equality",
-                    "operands": [
-                      {
-                        "pointer": "@/provenance"
-                      },
-                      {
-                        "literal": "pre_existing"
-                      }
-                    ]
-                  }
-                ]
-              }
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-003/stdout/reviewedFiles/0"
+                },
+                {
+                  "literal": "tests/test_checkout.py"
+                }
+              ]
             }
           ]
         }
