@@ -5959,7 +5959,7 @@
   },
   "fragment-selection/bmad-testarch-test-review": {
     "contractId": "tea-fragment-selection-test-review",
-    "corpusDigest": "sha256:e415057b09c7b6274dd49de56bc88280eecb5dc10fe4d67783bf9f98bbca78e8",
+    "corpusDigest": "sha256:05043f9bce6970a5897ac8bb0dbbed32e547b5ff68cab4045cb7479d08524627",
     "probeCount": 2,
     "strength": {
       "defect": null,

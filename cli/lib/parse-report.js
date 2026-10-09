@@ -2,8 +2,9 @@
  * Parse the test-review.md report into a machine-readable verdict, fail closed.
  *
  * Strict, section-aware schema (every element is mandatory):
- * - YAML frontmatter declaring workflowType: testarch-test-review and a
- *   non-empty stepsCompleted list.
+ * - YAML frontmatter declaring workflowType: testarch-test-review. A
+ *   stepsCompleted list is interactive resume state; a report that declares one
+ *   must give it entries.
  * - A "Recommendation:" line, with or without Markdown bolding, in BOTH the
  *   "## Executive Summary" and the "## Decision" section; the two must agree
  *   (case-insensitively) and the value must be one of the legal enum, to which
@@ -454,14 +455,16 @@ function recommendationFromSection(text, heading) {
 function parseFrontmatter(text) {
   const match = text.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
   if (!match) {
-    unparseable("Report is missing YAML frontmatter declaring workflowType: 'testarch-test-review' and stepsCompleted");
+    unparseable("Report is missing YAML frontmatter declaring workflowType: 'testarch-test-review'");
   }
   const frontmatter = match[1];
   if (!/^workflowType\s*:\s*['"]?testarch-test-review['"]?[ \t]*$/m.test(frontmatter)) {
     unparseable("Report frontmatter must declare workflowType: 'testarch-test-review'");
   }
-  if (!hasNonEmptyStepsCompleted(frontmatter)) {
-    unparseable('Report frontmatter must declare a non-empty stepsCompleted list');
+  // stepsCompleted is interactive resume state a CI report does not carry. A report that declares it still has to
+  // declare it with entries, so an interrupted run cannot pass as a finished one.
+  if (/^stepsCompleted[ \t]*:/m.test(frontmatter) && !hasNonEmptyStepsCompleted(frontmatter)) {
+    unparseable('Report frontmatter declares stepsCompleted without any completed step');
   }
   return frontmatter;
 }

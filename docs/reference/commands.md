@@ -292,7 +292,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 - `{test_artifacts}/test-review/test-review-{run_key}.md` with quality score (0-100) and grade (A-F)
 - Critical issues with fixes, and recommendations
-- A `## Quality Criteria Assessment` table: 14 criteria, each `PASS` / `PASS (n/a)` / `WARN` / `FAIL`
+- A `## Quality Criteria Assessment` table with the criteria that apply to the repository, each `PASS` / `WARN` / `FAIL`, and Test Duration as `Not measured`
 - Coverage guidance is informational only; coverage scoring and gates are handled by `trace`
 
 **Scoring:** one deduction ledger, never a weighted average. Four parallel subagents (determinism, isolation, maintainability, performance) each report violations; every violation carries the `criteria-registry.md` row that produced it, which pins its severity. Violations are deduplicated by `file:line:row`, then:

@@ -54,9 +54,9 @@ function conventionBaselinePromptLines(conventionBaseline) {
     return [
       "step-02-discover-tests.md §2b's convention baseline has already been computed for this run and could NOT be",
       `measured: ${conventionBaseline.reason}. Do not sample, glob, or guess a baseline yourself; do not invent an`,
-      'adoption count or a "form" for any convention key. Every Convention-gated criterion (and any other row whose',
-      'Basis would otherwise cite a convention) must score "✅ PASS (n/a)" and its Notes must say the baseline could',
-      'not be measured, with the reason above. The "**Convention Baseline**:" line must read exactly:',
+      'adoption count or a "form" for any convention key. Leave every Convention-gated criterion (and any other row whose',
+      'Basis would otherwise cite a convention) out of the criteria table.',
+      'The "**Convention Baseline**:" line must read exactly:',
       `unavailable: ${conventionBaseline.reason}`,
       'No finding, Basis column, or Note anywhere in the report may cite a "Convention: <key> (<adopted> of <sampled>',
       'sampled)" fraction for any key: there is no corpus to cite one against, and the CLI rejects a report that does.',
@@ -130,7 +130,7 @@ function reviewModePromptLines(reviewMode, changedLines) {
     'only what the pull request owns:',
     '- A defect on a changed line, or one the pull request made worse, is yours to report.',
     '- A defect on an unchanged line of code the pull request did not affect belongs to the base. Give it no finding, no',
-    '  violation count, no deduction, no Key Weaknesses bullet and no sentence of explanation. Do not describe old code as',
+    '  violation count, no deduction and no sentence of explanation. Do not describe old code as',
     '  needing a fix. Every quality worker skips it.',
     '- A changed line can break an unchanged one: new setup, a changed fixture or helper, or a changed value can leave an',
     '  untouched assertion unable to fail (an expected value that now comes from the code under test, an assertion whose',
@@ -173,6 +173,8 @@ function reviewModePromptLines(reviewMode, changedLines) {
  * @param {object} [options.teaConfig] - Resolved TEA config keys from
  *   resolve-tea-config. Defaults to the module defaults so the prompt always
  *   states them and the agent never has to infer them.
+ * @param {Record<string, number>} [options.fileStats] - Exact line count of each review file, counted by
+ *   the CLI so the report states no count it only estimated.
  * @param {string[]} [options.contextFiles] - Read-only context set from the diff.
  * @param {string} [options.contextBasis] - Derived context_basis the report must
  *   publish (none|pr_diff|pr_diff_truncated).
@@ -222,6 +224,7 @@ function buildPrompt({
   unscorableTestArtifacts = [],
   forcedUnscorableCandidates = [],
   conventionBaseline,
+  fileStats = {},
   runId = '',
 }) {
   const absoluteSkillRoot = path.resolve(skillRoot);
@@ -300,7 +303,7 @@ function buildPrompt({
     'playwright-utils-mandate.md and score registry rows M9 and L9. pactjsUtilsActive = tea_use_pactjs_utils AND',
     'pactjs_utils_installed; when true, load pactjs-utils-mandate.md and score registry row M10.',
     'A false precondition means those rows DO NOT EXIST for this run (criteria-registry.md § RUN-LEVEL PRECONDITIONS):',
-    'emit no violations and no per-file PASS (n/a) for them, and state the reason once, naming which half was missing.',
+    'emit no violations and no criteria-table row for them, and write nothing about why they are absent.',
     'library-integration-mandate.md carries the general contract behind both rows.',
     '',
     ...reviewModePromptLines(reviewMode, changedLines),
@@ -310,6 +313,12 @@ function buildPrompt({
     '---BEGIN FILES---',
     JSON.stringify(files, null, 2),
     '---END FILES---',
+    '',
+    'FILE STATS: the exact line count of each review file, counted by the CLI. Use these numbers for the Test Length row',
+    'and for any row that depends on file size; do not recount or estimate them.',
+    '---BEGIN FILE STATS---',
+    JSON.stringify(fileStats, null, 2),
+    '---END FILE STATS---',
     '',
     ...conventionBaselinePromptLines(conventionBaseline),
     'The context set below is the rest of this pull request: the story, requirements, test design, or changed source',
@@ -385,8 +394,18 @@ function buildPrompt({
     '',
     'Report contract (the orchestrating CLI parses the report; every line below is mandatory):',
     '- **Recommendation** must be exactly one of: Approve | Approve with Comments | Request Changes | Block',
-    '- A "## Decision" section is required, spelled exactly that, and its **Recommendation** must match the',
-    "  Executive Summary's. Do not rename the heading after the sentence that describes it.",
+    '- A "## Decision" section is required, spelled exactly that, and it holds the **Recommendation** line alone, matching',
+    "  the Executive Summary's. Write no rationale under it. Do not rename the heading after the sentence that describes it.",
+    '- Each finding appears once, under "## Critical Issues (Must Fix)" or "## Recommendations (Should Fix)": one',
+    '  location, one explanation of the failure, one concrete fix, and a code snippet only when it clarifies the evidence.',
+    '  Write no Key Weaknesses list, Best Practices Found, Test File Analysis, Knowledge Base References, Next Steps,',
+    '  appendix of violations, Decision rationale, Review Metadata or feedback section: each restates a finding or pads the',
+    '  report. Do not write stepsCompleted, lastStep, lastSaved, workflowStatus or inputDocuments in the frontmatter.',
+    '- Leave a criteria-table row out when it does not apply to this repository; never write "PASS (n/a)". Write nothing',
+    '  about how the rubric decided (which row fired, a registry gap, a closed gate).',
+    '- Say only what the run established. Test Duration is "➖ Not measured": a static read cannot time a run. Test',
+    '  Length uses the exact line counts in the FILE STATS block. State no test count, assertion count or duration unless',
+    '  the run supplied it, and label an estimate "(estimate)".',
     '- **Quality Score**: N/100 is required and must be an integer from 0 to 100. It is the effective score used by',
     '  the grade and gate. The CLI treats this agent-written number as provisional and replaces it before gating.',
     '- The **Total Violations**: line is required, with Critical, High, Medium, and Low counts.',
@@ -412,12 +431,9 @@ function buildPrompt({
     '  Severity is read from that row, so a finding with no row has no severity and belongs in prose instead.',
     '  The CLI checks this: a cited row must be a real criteria-registry.md row, and its registry severity must match',
     '  the finding\'s own "**Severity**:" line exactly. "## Critical Issues (Must Fix)" is Critical-only by contract.',
-    '- "### Key Weaknesses" is optional and may contain ONLY scored findings from those two finding sections.',
-    '  Prefix every weakness with its registry row as "❌ [<row>] <summary>". The CLI publishes only weakness',
-    '  bullets whose row matches a scored finding. Omit the subsection when there are no scored findings.',
     '- Put useful unscored ideas under the optional "### Advisory Observations" subsection as',
     '  "ℹ️ <suggestion>". Coverage work that belongs to trace, optional library adoption, and convention or',
-    '  applicability checks whose gate is closed are advisory at most; they are never Key Weaknesses.',
+    '  applicability checks whose gate is closed are advisory at most.',
     '- Never render empty bullets or literal n/a items in either summary subsection.',
     '- The number of findings actually documented under "## Critical Issues (Must Fix)" must equal the Critical count',
     '  in "**Total Violations**:" exactly, and the number of P1 (High) findings documented under',

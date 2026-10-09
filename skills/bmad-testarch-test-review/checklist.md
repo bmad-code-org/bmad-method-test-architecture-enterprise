@@ -150,7 +150,7 @@ Coverage criteria are intentionally excluded from this checklist.
 
 #### Playwright Utils Adoption (if `tea_use_playwright_utils` is true and the package is installed)
 
-Rows M9 and L9. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seontechnologies/playwright-utils` is not a project dependency, or when the file is not a JS/TS Playwright spec.
+Rows M9 and L9. Gate closes and the row is left out of the report when the flag is false, when `@seontechnologies/playwright-utils` is not a project dependency, or when the file is not a JS/TS Playwright spec.
 
 - [ ] `playwright_utils_installed` recorded from `package.json` and carried in `subagentContext`
 - [ ] `playwrightUtils` convention measured in the step-02 baseline, with adoption ratio and observed form
@@ -164,7 +164,7 @@ Rows M9 and L9. Gate closes and reports `PASS (n/a)` when the flag is false, whe
 
 #### Pact.js Utils Adoption (if `tea_use_pactjs_utils` is true and the package is installed)
 
-Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seontechnologies/pactjs-utils` is not a project dependency, or when the file is not a JS/TS Pact artifact.
+Row M10. Gate closes and the row is left out of the report when the flag is false, when `@seontechnologies/pactjs-utils` is not a project dependency, or when the file is not a JS/TS Pact artifact.
 
 - [ ] `pactjs_utils_installed` recorded from `package.json` and carried in `subagentContext`
 - [ ] M10 evaluated per file against the REQUIRED substitutions in `pactjs-utils-mandate.md`
@@ -189,12 +189,10 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] Status assigned (PASS/WARN/FAIL)
 - [ ] Splitting recommendations generated (if >1000 lines)
 
-#### Test Duration (if `check_test_duration: true`)
+#### Test Duration
 
-- [ ] Test complexity analyzed (as proxy for duration if no execution data)
-- [ ] Threshold comparison (≤1.5 min target)
-- [ ] Status assigned (PASS/WARN/FAIL)
-- [ ] Optimization recommendations generated
+- [ ] The criteria row reads `➖ Not measured`: a static read cannot time a run
+- [ ] Any fixed sleep or unbounded loop is reported on its own row (H1, M1), never as a duration claim
 
 #### Flakiness Patterns (if `check_flakiness_patterns: true`)
 
@@ -252,44 +250,40 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] **Header Section**:
   - [ ] Test file(s) reviewed listed
   - [ ] Review date recorded
-  - [ ] Review scope noted (single/directory/suite)
+  - [ ] Review mode noted (`pr` or `full-file`)
+  - [ ] Reviewer stated once (the CLI states the agent and model)
   - [ ] Quality score and grade displayed
 
 - [ ] **Executive Summary**:
   - [ ] Overall assessment (Excellent/Good/Needs Improvement/Critical)
-  - [ ] Key strengths listed (3-5 bullet points)
-  - [ ] Every Key Weakness is a scored finding and includes its `[row]`; omit the subsection when there are none
+  - [ ] Key strengths listed (at most three bullet points; omit the subsection when there is nothing specific)
+  - [ ] No Key Weaknesses list: each finding appears once, in the findings sections
   - [ ] Unscored suggestions appear only under Advisory Observations
-  - [ ] Key Weaknesses and Advisory Observations contain no empty or literal `n/a` items
+  - [ ] Key Strengths and Advisory Observations contain no empty or literal `n/a` items
   - [ ] Recommendation stated (Approve/Approve with comments/Request changes/Block)
 
 - [ ] **Quality Criteria Assessment**:
-  - [ ] Table with all criteria evaluated
+  - [ ] Table with every criterion that applies to this repository; a row that does not apply is left out
   - [ ] Status for each criterion (PASS/WARN/FAIL)
   - [ ] Violation count per criterion
+  - [ ] Test Duration is "Not measured": a static read cannot time a run
+  - [ ] No test count, assertion count or duration unless the run supplied it or it is labelled `(estimate)`
+  - [ ] No sentence about how the rubric decided (which row fired, a registry gap, a closed gate)
 
 - [ ] **Critical Issues (Must Fix)**:
   - [ ] P0/P1 violations listed
   - [ ] Code location provided for each (file:line)
-  - [ ] Issue explanation clear
-  - [ ] Recommended fix provided with code example
-  - [ ] Knowledge base reference provided
+  - [ ] Issue explanation clear, once
+  - [ ] Recommended fix provided, with a code snippet only when it clarifies the evidence
 
 - [ ] **Recommendations (Should Fix)**:
   - [ ] P2/P3 violations listed
   - [ ] Code location provided for each (file:line)
-  - [ ] Issue explanation clear
-  - [ ] Recommended improvement provided with code example
-  - [ ] Knowledge base reference provided
+  - [ ] Issue explanation clear, once
+  - [ ] Recommended improvement provided, with a code snippet only when it clarifies the evidence
 
-- [ ] **Best Practices Examples** (if good patterns found):
-  - [ ] Good patterns highlighted from tests
-  - [ ] Knowledge base fragments referenced
-  - [ ] Examples provided for others to follow
-
-- [ ] **Knowledge Base References**:
-  - [ ] All fragments consulted listed
-  - [ ] Links to detailed guidance provided
+- [ ] **Decision**:
+  - [ ] The recommendation alone, matching the Executive Summary; no rationale, Next Steps or appendix
 
 ---
 
@@ -347,7 +341,6 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] No placeholder text or TODOs in report
 - [ ] All code locations are accurate (file:line)
 - [ ] All code examples are valid and demonstrate fix
-- [ ] All knowledge base references are correct
 
 ### Review Report Accuracy
 
@@ -368,7 +361,7 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] Recommendation matches what `step-03f` §3b **computes** from the violation counts, and was not chosen by judgment
 - [ ] Every violation carries its `criteria-registry.md` row, and every severity matches that row
 - [ ] Each Convention criterion states its adoption count, and an `absent` or `unknown` convention deducted nothing
-- [ ] Every `✅ PASS (n/a)` row says why its gate was closed
+- [ ] No `✅ PASS (n/a)` row appears: a row whose gate was closed is left out
 - [ ] Any changed test artifact excluded from the review set appears under `## Excluded From Review Set`
 
 ---
@@ -477,7 +470,6 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] Violations are correct (no false positives)
 - [ ] Critical issues not missed (no false negatives)
 - [ ] Code locations are correct
-- [ ] Knowledge base references are accurate
 
 ### Review Usefulness
 

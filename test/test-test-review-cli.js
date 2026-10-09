@@ -1198,7 +1198,7 @@ async function runTests() {
           '$1No critical issues detected. ✅$2',
         )
         .replace(
-          /(## Recommendations \(Should Fix\)\n\n)[\s\S]*?(\n\n---\n\n## Best Practices Found)/,
+          /(## Recommendations \(Should Fix\)\n\n)[\s\S]*?(\n\n---\n\n## Decision)/,
           '$1No additional recommendations. Test quality is excellent. ✅$2',
         )
         .replaceAll('**Context Basis**: {none | pr_diff | pr_diff_truncated}', '**Context Basis**: pr_diff')

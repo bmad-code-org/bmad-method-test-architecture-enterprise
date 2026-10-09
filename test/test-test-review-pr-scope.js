@@ -1586,7 +1586,7 @@ function main() {
         'a Key Weaknesses bullet goes with its last finding, and an emptied heading goes with it',
       );
 
-      const example = fs.readFileSync(path.join(skillRoot, 'resources', 'test-review.example.md'), 'utf8');
+      const example = fs.readFileSync(path.join(fixturesRoot, 'reports', 'legacy-template-report.md'), 'utf8');
       const exampleParsed = parseReport(example, { registryRowSeverities });
       const exampleCut = cut(
         example,
