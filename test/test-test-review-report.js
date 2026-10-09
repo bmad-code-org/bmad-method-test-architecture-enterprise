@@ -258,6 +258,24 @@ function main() {
       assert(presentCriteriaRows('no table here') === 'no table here', 'a report with no criteria section is unchanged');
       const fenced = lines('## Quality Criteria Assessment', '', '```', '| Fixture Patterns | ✅ PASS (n/a) | 0 | a | b |', '```');
       assert(presentCriteriaRows(fenced) === fenced, 'a table quoted in a fence is not touched');
+      const noPipes = lines(
+        '## Quality Criteria Assessment',
+        '',
+        'Criterion | Status | Violations | Basis | Notes',
+        '--- | --- | ---: | --- | ---',
+        'Fixture Patterns | ✅ PASS (n/a) | 0 | Applicability | gate closed',
+        'Test Duration (≤1.5 min) | ✅ PASS | 0 | Absolute | Fast tests',
+        'Hard Waits | ❌ FAIL | 1 | Absolute | line 3',
+      );
+      const noPipesOut = presentCriteriaRows(noPipes);
+      assert(
+        !noPipesOut.includes('Fixture Patterns') &&
+          !noPipesOut.includes('Fast tests') &&
+          noPipesOut.includes('| Test Duration (≤1.5 min) | ➖ Not measured | - | Not measured | A static read cannot time a run |') &&
+          noPipesOut.includes('Hard Waits | ❌ FAIL | 1 | Absolute | line 3'),
+        'a table written without leading pipes is read the same way',
+        noPipesOut,
+      );
       const noteMentions = lines(
         '## Quality Criteria Assessment',
         '',

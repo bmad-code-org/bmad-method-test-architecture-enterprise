@@ -39,7 +39,17 @@ const RUBRIC_MECHANICS = [
 // A count the agent states about tests or assertions, which nothing in a static review measured.
 const UNMEASURED_COUNT = /\b(\d[\d,]*)\s+(test functions?|test cases?|tests|assertions?)\b(?!\s*\(estimate\))/gi;
 const FIELD_LINE = /^\s*(?:[-*+]\s+)?\*\*[^*]+?(?::\*\*|\*\*\s*:)/;
-const SEPARATOR_ROW = /^\s*\|[\s:|-]+\|\s*\r?$/;
+/** A GitHub table row, with or without leading and trailing pipes. */
+function isTableLine(line) {
+  return line.includes('|') && !/^\s*(?:>|#)/.test(line);
+}
+
+/** The `---|---` row under a table header. */
+function isSeparatorRow(line) {
+  if (!isTableLine(line)) return false;
+  const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+  return cells.length > 0 && cells.every((cell) => /^\s*:?-+:?\s*$/.test(cell));
+}
 
 function splitCells(line) {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
@@ -110,7 +120,7 @@ function criteriaTable(lines, depths) {
   const rows = [];
   for (let index = heading + 1; index < lines.length; index += 1) {
     if (depths[index] === 0 && lines[index].startsWith('## ')) break;
-    if (depths[index] === 0 && /^\s*\|/.test(lines[index]) && !SEPARATOR_ROW.test(lines[index])) {
+    if (depths[index] === 0 && isTableLine(lines[index]) && !isSeparatorRow(lines[index])) {
       rows.push([index, splitCells(lines[index])]);
     }
   }
@@ -198,8 +208,8 @@ function tidyProseSections(report) {
       out.push(line);
       continue;
     }
-    if (/^\s*\|/.test(line)) {
-      if (SEPARATOR_ROW.test(line)) {
+    if (isTableLine(line)) {
+      if (isSeparatorRow(line)) {
         out.push(line);
         continue;
       }
