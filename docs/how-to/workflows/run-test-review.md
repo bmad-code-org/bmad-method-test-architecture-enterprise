@@ -281,29 +281,6 @@ expect(data.success).toBe(true);
 await expect(page.locator('.success')).toBeVisible();
 ```
 
----
-
-### 3. Improve Test Names
-
-**File:** `tests/e2e/checkout.spec.ts`
-**Issue:** Vague test names
-**Severity:** Low
-**Impact:** Hard to understand test purpose
-
-**Current:**
-
-```typescript
-test('should work', async ({ page }) => {});
-test('test checkout', async ({ page }) => {});
-```
-
-**Better:**
-
-```typescript
-test('should complete checkout with valid credit card', async ({ page }) => {});
-test('should show validation error for expired card', async ({ page }) => {});
-```
-
 ## Quality Scores by Category
 
 | Category            | Score | Target | Status               |
@@ -328,7 +305,7 @@ test('should show validation error for expired card', async ({ page }) => {});
 **Maintainability (25% weight):**
 
 - Overly large files and copy-paste patterns penalized
-- Naming clarity and structure rewarded
+- Structure and appropriate size rewarded
 
 **Performance (15% weight):**
 
@@ -356,7 +333,6 @@ test('should show validation error for expired card', async ({ page }) => {});
 
 1. Extract login fixture from `profile.spec.ts`
 2. Add network assertions to `api-calls.spec.ts`
-3. Improve test names in `checkout.spec.ts`
 
 ### Long-term (Continuous Improvement)
 
@@ -403,7 +379,6 @@ TEA reviewed against these patterns:
 
 - Readable and maintainable
 - Appropriate size
-- Clear naming
 
 **Performance (15%):**
 

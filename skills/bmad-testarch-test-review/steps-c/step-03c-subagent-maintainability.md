@@ -47,7 +47,6 @@ pinned severity, and its gate.
 | H5  | Oversize test file (>1000 lines)     |     HIGH | Absolute                      |
 | L1  | Fragile selector                     |      LOW | Applicability                 |
 | L3  | Missing stable test id               |      LOW | Convention: `testIds`         |
-| L5  | Implementation-shaped name           |      LOW | Convention: `bddNaming`       |
 | L6  | Magic value                          |      LOW | Absolute                      |
 | L7  | Inconsistent assertion style         |      LOW | Convention: `assertionStyle`  |
 | L9  | Spec bypasses merged fixtures        |      LOW | Convention: `playwrightUtils` |
@@ -103,10 +102,10 @@ Three rules this dimension used to get wrong, now fixed by the registry:
 - **The 1000-line threshold is the only length rule.** The old list deducted HIGH
   for "tests >100 lines", which contradicted both the published criteria table
   (`Test Length (≤1000 lines)`) and the template. One threshold, one row: H5.
-- **Naming and test ids are Convention rows.** A repo with no behavioral-naming
-  convention and no test-id convention takes no deduction for either, and the
-  report leaves the row out of the criteria table. A role- or label-based locator
-  satisfies L1 outright; it is not a missing test id.
+- **Test names are not scored.** No row deducts for how a test is named. Test ids
+  are a Convention row: a repo with no test-id convention takes no deduction, and
+  the report leaves the row out of the criteria table. A role- or label-based
+  locator satisfies L1 outright and is no missing test id.
 - **"Could benefit from helper functions" and "minor code style issues" are gone.**
   Neither was falsifiable, so neither could be scored the same way twice. A real
   defect that matches no row goes in prose with no severity and no deduction.

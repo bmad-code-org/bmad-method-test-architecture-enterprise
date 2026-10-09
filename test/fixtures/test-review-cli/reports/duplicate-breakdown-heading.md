@@ -40,7 +40,7 @@ High Violations:         -0 × 5 = -0
 Medium Violations:       -0 × 2 = -0
 Low Violations:          -0 × 1 = -0
 
-Total Bonus:             +30
+Total Bonus:             +25
 
 Final Score:             100/100
 Grade:                   A

@@ -301,7 +301,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 score = 100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + bonus
 ```
 
-clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` with no partial credit: Excellent BDD, Comprehensive Fixtures, Data Factories, Network-First, Perfect Isolation, All Test IDs. Award `5` only when the criterion holds across every reviewed file.
+clamped to 0-100. The bonus has exactly five categories, each worth `0` or `5` with no partial credit: Comprehensive Fixtures, Data Factories, Network-First, Perfect Isolation, All Test IDs. Award `5` only when the criterion holds across every reviewed file.
 
 **Recommendation is computed from the counts, not chosen:** `Block` when Critical > 0, `Request Changes` when High > 0 or score < 70, `Approve with Comments` when any Medium or Low remain, otherwise `Approve`.
 

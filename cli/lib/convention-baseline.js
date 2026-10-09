@@ -36,12 +36,11 @@
  *   That scan reads up to 40 files, wider than the 8 the agent is asked to read,
  *   because this module opens them itself and pays no agent turn for any of them.
  *   The floor is only as strong as the corpus it observed nothing in.
- *   The two keys with no literal recognized form (bddNaming — a naming *style*, not
- *   a token; assertionStyle — dialect consistency) get no mechanical signal and stay
- *   fully agent-judged; only their sampled/corpusSize grounding applies. This is an
- *   honest limitation, not an oversight: a regex loose enough to catch every BDD-ish
- *   test name would also be loose enough to approve almost anything, which defeats
- *   the point of a floor check.
+ *   The one key with no literal recognized form (assertionStyle: dialect
+ *   consistency) gets no mechanical signal and stays fully agent-judged; only its
+ *   sampled/corpusSize grounding applies. A regex loose enough to catch every
+ *   dialect choice would also be loose enough to approve almost anything, which
+ *   defeats the point of a floor check.
  */
 
 const fs = require('node:fs');
@@ -52,17 +51,8 @@ const { isTestFile } = require('./changed-tests');
 
 // Same order as step-02-discover-tests.md §2b's "Conventions to measure" table and
 // criteria-registry.md's mapping table. Every consumer of this list (build-prompt,
-// parse-report, the tests) shares this one array so the eight keys cannot drift.
-const CONVENTION_KEYS = [
-  'priorityMarkers',
-  'testIds',
-  'bddNaming',
-  'networkFirst',
-  'dataFactories',
-  'fixtures',
-  'assertionStyle',
-  'playwrightUtils',
-];
+// parse-report, the tests) shares this one array so the seven keys cannot drift.
+const CONVENTION_KEYS = ['priorityMarkers', 'testIds', 'networkFirst', 'dataFactories', 'fixtures', 'assertionStyle', 'playwrightUtils'];
 
 // The sample is the review's single largest input, and it is paid on every run
 // regardless of how small the pull request is. The agent has no shell (see
@@ -157,8 +147,8 @@ function isConventionCorpusFile(filePath) {
 }
 
 const MECHANICAL_CONVENTION_KEYS = Object.keys(MECHANICAL_DETECTORS);
-// bddNaming and assertionStyle: no literal token distinguishes "adopted" from "not",
-// so no mechanical signal is offered for them. Grounded on sampled/corpusSize only.
+// assertionStyle: no literal token distinguishes "adopted" from "not", so no
+// mechanical signal is offered for it. Grounded on sampled/corpusSize only.
 const JUDGMENT_ONLY_CONVENTION_KEYS = CONVENTION_KEYS.filter((key) => !MECHANICAL_CONVENTION_KEYS.includes(key));
 
 /**

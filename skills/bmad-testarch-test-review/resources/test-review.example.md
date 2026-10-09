@@ -47,12 +47,11 @@ The three tests are small, readable and mostly deterministic. One timing depende
 
 | Criterion                            | Status          | Violations | Basis                                                                   | Notes                                                 |
 | ------------------------------------ | --------------- | ---------: | ----------------------------------------------------------------------- | ----------------------------------------------------- |
-| BDD Format (Given-When-Then)         | ✅ PASS         |          0 | Convention: bddNaming (6 of 8 sampled)                                  | All names state user-visible behavior                 |
 | Test IDs                             | ✅ PASS         |          0 | Convention: testIds (7 of 8 sampled)                                    | All DOM lookups use stable test IDs                   |
 | Priority Markers (P0/P1/P2/P3)       | ⚠️ WARN         |          1 | Convention: priorityMarkers (7 of 8 sampled)                            | See finding 3                                         |
 | Disabled or Focused Tests            | ✅ PASS         |          0 | Absolute                                                                | No skip, fixme, only, or focus marker                 |
 | Hard Waits (sleep, waitForTimeout)   | ❌ FAIL         |          1 | Absolute                                                                | See finding 1                                         |
-| Determinism (no conditionals)        | ✅ PASS         |          0 | Absolute                                                                | No branching, catches, or wall-clock fixtures         |
+| Determinism (assertions always run)  | ✅ PASS         |          0 | Absolute                                                                | No branching, catches, or wall-clock fixtures         |
 | Isolation (cleanup, no shared state) | ✅ PASS         |          0 | Absolute                                                                | Fixtures create and remove each preference record     |
 | Fixture Patterns                     | ✅ PASS         |          0 | Applicability: the file needs authenticated setup                       | Existing merged fixtures are reused                   |
 | Network-First Pattern                | ❌ FAIL         |          1 | Applicability: the file navigates and then reads data-dependent content | See finding 2                                         |
@@ -76,12 +75,11 @@ Medium Violations:       -1 × 2 = -2
 Low Violations:          -1 × 1 = -1
 
 Bonus Points:
-  Excellent BDD:         +5
   Comprehensive Fixtures: +0
   Data Factories:        +0
   Network-First:         +0
   Perfect Isolation:     +0
-  All Test IDs:          +0
+  All Test IDs:          +5
                          --------
 Total Bonus:             +5
 

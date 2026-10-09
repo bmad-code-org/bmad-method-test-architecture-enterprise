@@ -652,9 +652,18 @@ async function runTests() {
         ['missing-violations.md', 'no Total Violations line'],
         ['missing-frontmatter.md', 'no YAML frontmatter'],
         ['empty-steps-flow.md', 'wrapped stepsCompleted flow sequence with no entries'],
-        ['bonus-not-multiple.md', 'bonus total is not a multiple of the 5-point category value'],
+        ['bonus-not-multiple.md', 'bonus total is not a multiple of the 5-point category value', /not a multiple of 5 within 0-25/],
         ['missing-breakdown.md', 'no Quality Score Breakdown, so the score cannot be recomputed'],
-        ['duplicate-breakdown-heading.md', 'two Quality Score Breakdown headings, so neither can be trusted as the real ledger'],
+        [
+          'duplicate-breakdown-heading.md',
+          'two Quality Score Breakdown headings, so neither can be trusted as the real ledger',
+          /has 2 "## Quality Score Breakdown" headings/,
+        ],
+        [
+          'legacy-rubric-4-report.md',
+          'a rubric 4.0 report, frozen as the previous release wrote it, cites the retired bddNaming convention',
+          /unrecognized Convention key "bddNaming"/,
+        ],
         ['missing-reviewed-files.md', 'no Reviewed Files section'],
         ['bad-value.md', 'Recommendation value "LGTM" outside the enum'],
         ['missing-context-basis.md', 'no Context Basis line, so an Approve cannot be read as covering requirements or not'],
@@ -662,12 +671,16 @@ async function runTests() {
         ['context-none-with-manifest.md', 'claims no context while listing artifacts it read'],
         ['context-overlaps-reviewed.md', 'a path in both manifests: scored and merely read cannot both be true'],
       ];
-      for (const [fixture, description] of unparseableFixtures) {
+      for (const [fixture, description, messagePattern] of unparseableFixtures) {
         try {
           parseReport(readFixture('reports', fixture));
           assert(false, `${fixture} (${description}) throws`);
         } catch (error) {
-          assert(error.code === 'REPORT_UNPARSEABLE', `${fixture} (${description}) throws REPORT_UNPARSEABLE`, error.message);
+          assert(
+            error.code === 'REPORT_UNPARSEABLE' && (messagePattern === undefined || messagePattern.test(error.message)),
+            `${fixture} (${description}) throws REPORT_UNPARSEABLE`,
+            error.message,
+          );
         }
       }
 
@@ -2124,7 +2137,7 @@ async function runTests() {
         prompt.includes('100 - (Critical×10 + High×5 + Medium×2 + Low×1) + Total Bonus'),
         'prompt states the deduction ledger the CLI computes',
       );
-      assert(prompt.includes('multiple of 5 from 0 to 30'), 'prompt bounds the bonus total to legal category values');
+      assert(prompt.includes('multiple of 5 from 0 to 25'), 'prompt bounds the bonus total to legal category values');
       // A format the parser reads and the prompt never states is a nondeterministic
       // format: run 31048018105 spent a whole review on a reflowed ledger.
       assert(
@@ -2267,7 +2280,6 @@ async function runTests() {
           conventions: {
             priorityMarkers: { mechanical: true, adopted: 0, mechanicalSignal: false },
             testIds: { mechanical: true, adopted: 6, mechanicalSignal: true },
-            bddNaming: { mechanical: false },
             networkFirst: { mechanical: true, adopted: 0, mechanicalSignal: false },
             dataFactories: { mechanical: true, adopted: 3, mechanicalSignal: true },
             fixtures: { mechanical: true, adopted: 0, mechanicalSignal: false },
@@ -2319,9 +2331,10 @@ async function runTests() {
         'the prompt never states a mechanical adoption count: the detectors over-match by design, and a stated number is one the parser cannot check in the direction it would move',
       );
       assert(
-        /bddNaming: not mechanically pre-scanned; read the sampled files yourself/.test(measuredConventionPrompt),
+        /assertionStyle: not mechanically pre-scanned; read the sampled files yourself/.test(measuredConventionPrompt),
         'a judgment-only key (no literal recognized form) is honestly disclosed as not mechanically pre-scanned',
       );
+      assert(!measuredConventionPrompt.includes('bddNaming'), 'test names are not a convention the baseline measures');
       assert(
         /assertionStyle: not mechanically pre-scanned/.test(measuredConventionPrompt),
         'the second judgment-only key is also disclosed the same way',
@@ -4133,6 +4146,44 @@ async function runTests() {
         `status=${badSkillRoot.status} stderr=${badSkillRoot.stderr}`,
       );
 
+      // ---- a skill from another rubric is refused before any agent call ----
+
+      const oldSkillRoot = path.join(tmpRoot, 'old-rubric', 'bmad-testarch-test-review');
+      fs.mkdirSync(path.join(oldSkillRoot, 'steps-c'), { recursive: true });
+      fs.mkdirSync(path.join(oldSkillRoot, '..', 'bmod-tea', 'knowledge'), { recursive: true });
+      fs.copyFileSync(
+        path.join(repoRoot, 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv'),
+        path.join(oldSkillRoot, '..', 'bmod-tea', 'knowledge', 'tea-index.csv'),
+      );
+      fs.copyFileSync(path.join(explicitSkillRoot, 'SKILL.md'), path.join(oldSkillRoot, 'SKILL.md'));
+      fs.copyFileSync(
+        path.join(repoRoot, 'skills', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md'),
+        path.join(oldSkillRoot, 'steps-c', 'criteria-registry.md'),
+      );
+      const agentMarker = path.join(tmpRoot, 'old-rubric-agent-ran');
+      const markerAgent = path.join(tmpRoot, 'marker-agent.js');
+      fs.writeFileSync(markerAgent, `require('node:fs').writeFileSync(${JSON.stringify(agentMarker)}, 'ran');\n`);
+      for (const [label, workflow] of [
+        ['rubric 4.0', 'rubric_version: "4.0"\n'],
+        ['no rubric version', 'name: bmad-testarch-test-review\n'],
+      ]) {
+        fs.writeFileSync(path.join(oldSkillRoot, 'workflow.yaml'), workflow);
+        for (const agentArgs of [
+          ['--agent', 'none'],
+          ['--agent-cmd', markerAgent, '--no-isolate'],
+        ]) {
+          const oldRubric = runCli([...agentArgs, '--files', 'x.spec.ts', '--project-root', fixtureProject, '--skill-root', oldSkillRoot]);
+          assert(
+            oldRubric.status === 2 &&
+              oldRubric.stderr.includes('this CLI scores rubric 5.0') &&
+              oldRubric.stderr.includes(oldSkillRoot) &&
+              !fs.existsSync(agentMarker),
+            `a skill with ${label} exits 2 naming both versions and starts no agent (${agentArgs[0]})`,
+            `status=${oldRubric.status} stderr=${oldRubric.stderr} ran=${fs.existsSync(agentMarker)}`,
+          );
+        }
+      }
+
       // ---- --waive / --waive-until validation ----
 
       const waiveArgs = ['--agent', 'none', '--files', 'x.spec.ts', '--project-root', fixtureProject];
@@ -4450,6 +4501,7 @@ async function runTests() {
         path.join(repoRoot, 'skills', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md'),
         path.join(gitSkillDir, 'steps-c', 'criteria-registry.md'),
       );
+      fs.copyFileSync(path.join(repoRoot, 'skills', 'bmad-testarch-test-review', 'workflow.yaml'), path.join(gitSkillDir, 'workflow.yaml'));
       // The knowledge base the skill reads sits beside it, as `npx skills add` installs bmod-tea.
       const gitKnowledgeDir = path.join(gitSkillDir, '..', 'bmod-tea', 'knowledge');
       fs.mkdirSync(gitKnowledgeDir, { recursive: true });
@@ -5767,20 +5819,11 @@ async function runTests() {
       assert(
         JSON.stringify([...CONVENTION_KEYS].sort()) ===
           JSON.stringify(
-            [
-              'assertionStyle',
-              'bddNaming',
-              'dataFactories',
-              'fixtures',
-              'networkFirst',
-              'playwrightUtils',
-              'priorityMarkers',
-              'testIds',
-            ].sort(),
+            ['assertionStyle', 'dataFactories', 'fixtures', 'networkFirst', 'playwrightUtils', 'priorityMarkers', 'testIds'].sort(),
           ) &&
           JSON.stringify([...MECHANICAL_CONVENTION_KEYS].sort()) ===
             JSON.stringify(['dataFactories', 'fixtures', 'networkFirst', 'playwrightUtils', 'priorityMarkers', 'testIds'].sort()) &&
-          JSON.stringify([...JUDGMENT_ONLY_CONVENTION_KEYS].sort()) === JSON.stringify(['assertionStyle', 'bddNaming'].sort()),
+          JSON.stringify([...JUDGMENT_ONLY_CONVENTION_KEYS].sort()) === JSON.stringify(['assertionStyle']),
         'the step-02 §2b convention keys are exactly the expected set, split into the expected mechanical and judgment-only halves',
         JSON.stringify({ CONVENTION_KEYS, MECHANICAL_CONVENTION_KEYS, JUDGMENT_ONLY_CONVENTION_KEYS }),
       );
@@ -5903,13 +5946,13 @@ async function runTests() {
         JSON.stringify(rankedBaseline.conventions.testIds),
       );
       assert(
-        rankedBaseline.conventions.bddNaming.mechanical === false && rankedBaseline.conventions.assertionStyle.mechanical === false,
-        'the two judgment-only keys carry no adopted count or mechanicalSignal at all — never a guessed one',
-        JSON.stringify({ bddNaming: rankedBaseline.conventions.bddNaming, assertionStyle: rankedBaseline.conventions.assertionStyle }),
+        rankedBaseline.conventions.assertionStyle.mechanical === false && !('bddNaming' in rankedBaseline.conventions),
+        'the judgment-only key carries no adopted count or mechanicalSignal at all, and test naming is not measured',
+        JSON.stringify({ assertionStyle: rankedBaseline.conventions.assertionStyle }),
       );
       assert(
         CONVENTION_KEYS.every((key) => Object.prototype.hasOwnProperty.call(rankedBaseline.conventions, key)),
-        'every one of the eight keys is present in the returned conventions object, mechanical or not',
+        'every one of the seven keys is present in the returned conventions object, mechanical or not',
         JSON.stringify(Object.keys(rankedBaseline.conventions)),
       );
 
@@ -5942,13 +5985,13 @@ async function runTests() {
       // registry-rows.js + verifyFindingSeverityCounts fix that; these tests prove it.
       assert(
         registryRowSeverities !== null &&
-          Object.keys(registryRowSeverities).length === 36 &&
+          Object.keys(registryRowSeverities).length === 35 &&
           ['M9', 'M10', 'L9', 'H10'].every((row) => registryRowSeverities[row] !== undefined) &&
           registryRowSeverities.M9 === 'Medium' &&
           registryRowSeverities.M10 === 'Medium' &&
           registryRowSeverities.L9 === 'Low' &&
           registryRowSeverities.H10 === 'High',
-        'loadRegistryRowSeverities reads all 36 real rows from criteria-registry.md, including the mandate rows M9/M10 at Medium, L9 at Low, and H10 at High',
+        'loadRegistryRowSeverities reads all 35 real rows from criteria-registry.md, including the mandate rows M9/M10 at Medium, L9 at Low, and H10 at High',
         JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
       );
       assert(

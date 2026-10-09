@@ -417,7 +417,7 @@ function buildPrompt({
     '- State the exact computed "**Verdict Rule**" beside the Recommendation. In particular, Block must say',
     '  "Critical > 0 => Block (N Critical)." and severity-driven Request Changes must say',
     '  "Critical = 0 and High > 0 => Request Changes (N High)."',
-    '- Each of the six bonus categories is worth 0 or 5, so "Total Bonus" is a multiple of 5 from 0 to 30.',
+    '- Each of the five bonus categories is worth 0 or 5, so "Total Bonus" is a multiple of 5 from 0 to 25.',
     '- Reproduce the "## Quality Score Breakdown" ledger in the exact line form test-review-template.md prints, inside',
     '  its fenced block, with the bonus carrying a leading plus: "Total Bonus:             +0" for a zero bonus.',
     '  The CLI reads that line, so report-formatting polish never applies to this block: reflowing the ledger into a',

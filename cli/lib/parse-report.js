@@ -107,7 +107,7 @@ const CONVENTION_BASELINE_UNAVAILABLE_PATTERN = /^unavailable:\s*(.+)$/i;
 const CONVENTION_CITATION_PATTERN = /Convention:\s*([A-Za-z]+)\s*\(\s*(\d+)\s*of\s*(\d+)\s*sampled\s*\)/gi;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const SEVERITY_SCORE_CAPS = { critical: 69, high: 79, medium: 89, low: 99 };
-const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
+const MAX_BONUS = 25; // five bonus categories, worth 0 or 5 each
 // Both renderings of the two normalized ledger fields, line form first. Held as
 // lists so normalization latches on the replacement that landed rather than on
 // the label it recognized.
@@ -1390,7 +1390,7 @@ function deriveQualityScore(rawText, violations) {
   const bonus = Number.parseInt(bonusMatch[1], 10);
   if (bonus > MAX_BONUS || bonus % 5 !== 0) {
     unparseable(
-      `Report Total Bonus +${bonus} is not a multiple of 5 within 0-${MAX_BONUS}; each of the six bonus categories is worth 0 or 5`,
+      `Report Total Bonus +${bonus} is not a multiple of 5 within 0-${MAX_BONUS}; each of the five bonus categories is worth 0 or 5`,
     );
   }
   return Math.max(0, Math.min(100, 100 - deductionsFor(violations) + bonus));

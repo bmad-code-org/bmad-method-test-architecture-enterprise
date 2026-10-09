@@ -14,6 +14,7 @@ The skill is the source of truth for all review logic (checklist, scoring, repor
 - Node.js 20+, with the `tea-test-review` bin (`npm install --global bmad-method-test-architecture-enterprise`, or via `npx`).
 - The review skill ships inside the CLI package. `tea-test-review` reviews with the `bmad-testarch-test-review` skill and `bmod-tea` knowledge base from its own install, so the skill and the CLI are always one version and the reviewed repo needs no BMAD files and no TEA module. When the CLI is installed outside the checkout (a global install, or a pinned install step in CI), that copy is out of reach of the pull request under review, so it cannot edit the reviewer that judges it. A CLI installed as a project dependency lives in the checkout's `node_modules`; pin its version in CI. Two flags change the source:
   - **`--project-skill`** reviews with the copy the project vendored instead, probed at `.claude/skills/bmad-testarch-test-review`, `.agents/skills/bmad-testarch-test-review`, `skills/bmad-testarch-test-review`, and last the classic installer's `_bmad/tea/workflows/testarch/bmad-testarch-test-review`, which a project upgraded from v6 can still hold. The control-plane guard applies to it: a PR diff that edits the vendored skill or its `bmod-tea` knowledge base exits 2.
+    A vendored copy must declare the rubric the CLI scores (`rubric_version: "5.0"` in its `workflow.yaml`). A copy from an older release declares another version or none, and the CLI exits 2 before any agent call naming the path and both versions. Upgrade the vendored skill, or drop `--project-skill` to use the packaged one. The same check applies to `--skill-root`.
   - **`--skill-root <path>`** names an exact skill directory, for example one unpacked from a tarball you vetted. Copy `bmod-tea` beside it: the skill reads its knowledge base from the folder beside it, and the CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is missing.
 - The agent CLI is the caller's to install and log in. When the selected CLI is missing, or its login status command (asked only when the CLI's own help lists it, and not when a credential variable the CLI reads itself is set) reports a logged-out session, the run exits 2 with the install or login command before any agent call, and `--retries` never repeats it. A custom `--agent-cmd` is not the vendor CLI, so only its presence is checked.
 - For `--agent claude` (default): the `claude` CLI on `PATH`, authenticated via subscription/keychain login or `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` in the environment.
@@ -395,7 +396,7 @@ A review verdict (also written to `--json <file>` when given):
   ],
   "reviewProvenance": {
     "teaCliVersion": "1.24.0",
-    "skillRubricVersion": "4.0",
+    "skillRubricVersion": "5.0",
     "modelIdentifier": "claude-sonnet-5-5",
     "baseSha": "0123456789abcdef0123456789abcdef01234567",
     "headSha": "89abcdef0123456789abcdef0123456789abcdef",
@@ -404,7 +405,7 @@ A review verdict (also written to `--json <file>` when given):
     "gateMode": "introduced",
     "sources": {
       "teaCliVersion": "package.json",
-      "skillRubricVersion": "test-review-template.md Workflow metadata"
+      "skillRubricVersion": "workflow.yaml rubric_version"
     }
   },
   "reviewedFiles": ["tests/checkout.spec.ts"],
@@ -424,7 +425,7 @@ A review verdict (also written to `--json <file>` when given):
     "conventions": {
       "priorityMarkers": { "mechanical": true, "adopted": 0, "mechanicalSignal": false },
       "testIds": { "mechanical": true, "adopted": 6, "mechanicalSignal": true },
-      "bddNaming": { "mechanical": false }
+      "assertionStyle": { "mechanical": false }
     }
   }
 }
@@ -466,7 +467,7 @@ A skipped review (no changed test files):
   "gateOn": "all",
   "reviewProvenance": {
     "teaCliVersion": "1.24.0",
-    "skillRubricVersion": "4.0",
+    "skillRubricVersion": "5.0",
     "modelIdentifier": "sonnet",
     "baseSha": null,
     "headSha": null,

@@ -150,14 +150,13 @@ formula, and never adjust the result by judgment after computing it.
 const deductions = violationSummary.CRITICAL * 10 + violationSummary.HIGH * 5 + violationSummary.MEDIUM * 2 + violationSummary.LOW * 1;
 ```
 
-**Bonus points.** Exactly six categories, each worth `0` or `5` and nothing in
+**Bonus points.** Exactly five categories, each worth `0` or `5` and nothing in
 between: no partial credit, no invented categories, no category counted twice.
 Award `5` only when the criterion holds across every reviewed file; otherwise
 award `0`.
 
 ```javascript
 const bonuses = {
-  excellentBdd: 0, // 5: every test name states behavior, not implementation
   comprehensiveFixtures: 0, // 5: setup goes through fixtures, no inline duplication
   dataFactories: 0, // 5: test data comes from factories, not hardcoded literals
   networkFirst: 0, // 5: network interception is declared before the action that triggers it

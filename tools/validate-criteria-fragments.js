@@ -96,6 +96,7 @@ const MANIFEST = {
     teaches: [
       { fragment: 'test-quality.md', anchor: 'every wrong id of the right type passes' },
       { fragment: 'test-quality.md', anchor: 'the same shape wearing different names' },
+      { fragment: 'test-quality.md', anchor: "Read the project's CI and type-check configuration" },
     ],
   },
   H2: {
@@ -127,10 +128,6 @@ const MANIFEST = {
   M7: {
     severity: 'MEDIUM',
     teaches: [{ fragment: 'test-quality.md', anchor: 'nesting at three levels or fewer' }],
-  },
-  L5: {
-    severity: 'LOW',
-    teaches: [{ fragment: 'test-quality.md', anchor: 'Name the behavior, not the method, the selector' }],
   },
   L6: {
     severity: 'LOW',
@@ -164,7 +161,10 @@ const MANIFEST = {
   },
   H3: {
     severity: 'HIGH',
-    teaches: [{ fragment: 'test-quality.md', anchor: 'No Conditionals' }],
+    teaches: [
+      { fragment: 'test-quality.md', anchor: 'No Conditionals' },
+      { fragment: 'test-quality.md', anchor: 'A branch in a test is a defect only when it can hide a wrong result' },
+    ],
   },
   H4: {
     severity: 'HIGH',

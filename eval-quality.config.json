@@ -2077,10 +2077,10 @@
         },
         {
           "file": "README.md",
-          "key": "All 36 rows are currently mapped",
+          "key": "All 35 rows are currently mapped",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "THIRTY_SIX_ROWS_MAPPED"
+            "export": "THIRTY_FIVE_ROWS_MAPPED"
           },
           "reason": "tools/validate-criteria-fragments.js's own row count and MANIFEST size"
         },

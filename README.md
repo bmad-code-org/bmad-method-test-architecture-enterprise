@@ -9,7 +9,7 @@ TEA is a standalone BMAD module that delivers risk-based test strategy, test aut
 
 - one expert agent, Murat, Master Test Architect and Quality Advisor
 - ten workflows spanning Teach Me Testing (TEA Academy), test design, framework setup, CI guidance, ATDD, automation, test review, NFR Evidence Audit, traceability, and Evaluate ([evaluate your first skill](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/))
-- a 36-row criteria registry that fixes the severity of every reviewable violation, so a score is a lookup rather than a judgment call
+- a 35-row criteria registry that fixes the severity of every reviewable violation, so a score is a lookup rather than a judgment call
 - `tea-test-review`, a headless CLI that runs the review workflow as a CI gate with real exit codes
 - a write-time enforcement hook that blocks the mechanically decidable violations before they reach disk
 
@@ -103,7 +103,7 @@ Critical Violations:     -{count} × 10
 High Violations:         -{count} × 5
 Medium Violations:       -{count} × 2
 Low Violations:          -{count} × 1
-Bonus (6 categories, each 0 or 5, max +30)
+Bonus (5 categories, each 0 or 5, max +25)
 Final Score:             clamped to 0-100     Grade: A ≥90, B ≥80, C ≥70, D ≥60, else F
 ```
 
@@ -405,9 +405,9 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains 162 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 162 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
+`npm test` chains 163 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 163 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
 
-- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
+- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 51 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, the fragment-selection case count, the replay totals that the test README and the header of the replay suite state, the story count, epic count and appended-story count in the overview of the Evaluate plan, and the lane count in its parallel-lanes section.
   The plan's source module also refuses a plan whose five lane lists differ between the plan's epics file and its sprint status file, so the gate fails on a story moved, dropped, duplicated or reordered in one file only.
   A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.
