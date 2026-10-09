@@ -235,7 +235,7 @@ function checkScript() {
 function checkWorkflows() {
   const tries = 3;
   const worstCaseMinutes = (tries * (180 + 10)) / 60;
-  for (const file of ['quality.yaml', 'publish.yaml', 'failing-pack-loop.yaml']) {
+  for (const file of ['quality.yaml', 'failing-pack-loop.yaml']) {
     const text = fs.readFileSync(path.join(WORKFLOWS, file), 'utf8');
     const cache = /^ {6}- name: Restore the bubblewrap and strace packages\n((?: {8}[^\n]*\n)+)/m.exec(text);
     check(

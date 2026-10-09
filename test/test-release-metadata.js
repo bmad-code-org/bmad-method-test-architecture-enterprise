@@ -6,6 +6,8 @@
  * - the package is not marked private
  * - publishConfig.access remains public
  * - the active stable-release step transports large changelog notes outside argv
+ * - the release job that mints the GitHub App token and runs `git push` runs no tests, mints the token before checkout,
+ *   and waits on the reused quality workflow (an installation token expires after an hour; the chain runs longer)
  * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 8.0.0)
  *   are declared, and package-lock.json's root entry carries the same
  *
@@ -56,6 +58,48 @@ function releaseStepFrom(workflowSource) {
     console.error(error.message);
     process.exit(1);
   }
+}
+
+/**
+ * Why a workflow's release job can let its push token expire, or an empty list when it cannot.
+ *
+ * An installation token from `actions/create-github-app-token` lives one hour, and checkout persists it for the later `git push`.
+ * The full test chain runs longer than that, so any job that mints the token or pushes must run no test itself: the tests belong in a
+ * job it `needs`, and it mints the token in its first steps, before checkout.
+ * The one test script allowed there is `test:release-metadata`, a few seconds long.
+ */
+function releaseTokenProblems(workflow) {
+  const jobs = workflow?.jobs ?? {};
+  const problems = [];
+  const isMint = (step) => typeof step?.uses === 'string' && step.uses.startsWith('actions/create-github-app-token@');
+  const isPush = (step) => typeof step?.run === 'string' && /\bgit push\b/.test(step.run);
+  const isTest = (step) => {
+    const run = typeof step?.run === 'string' ? step.run : '';
+    if (/\bnpm\s+(?:run\s+)?test\b(?!:)/.test(run) || /\btools\/test-shards\.js\b/.test(run)) return true;
+    return [...run.matchAll(/\bnpm\s+run\s+(test:[\w:-]+)/g)].some((match) => match[1] !== 'test:release-metadata');
+  };
+  const releaseJobs = Object.entries(jobs).filter(([, job]) => (job?.steps ?? []).some((step) => isMint(step) || isPush(step)));
+  if (releaseJobs.length === 0) problems.push('no job mints the GitHub App token or runs git push, so the release cannot be checked');
+  for (const [name, job] of releaseJobs) {
+    const steps = job.steps ?? [];
+    for (const step of steps.filter(isTest)) {
+      problems.push(
+        `job "${name}" mints the release token or pushes, and also runs the test step ${JSON.stringify(step.name ?? step.run)}; a long test run expires the token before the push, so run tests in a job it needs`,
+      );
+    }
+    const mint = steps.findIndex(isMint);
+    const checkout = steps.findIndex((step) => typeof step?.uses === 'string' && step.uses.startsWith('actions/checkout@'));
+    if (mint === -1 || checkout === -1 || mint > checkout) {
+      problems.push(
+        `job "${name}" does not mint the GitHub App token before its checkout, so checkout would persist a stale or missing token`,
+      );
+    }
+    const needs = [job.needs ?? []].flat();
+    const reusesQuality = needs.some((need) => jobs[need]?.uses === './.github/workflows/quality.yaml');
+    if (!reusesQuality)
+      problems.push(`job "${name}" does not need a job that reuses ./.github/workflows/quality.yaml, so nothing tests the release`);
+  }
+  return problems;
 }
 
 const packageJson = readJson(packageJsonPath, 'package.json');
@@ -155,6 +199,30 @@ if (typeof lockedEngine !== 'string' || !semver.valid(lockedEngine) || semver.lt
   errors.push(
     `package-lock.json node_modules/${ENGINE_PACKAGE} resolves ${JSON.stringify(lockedEngine ?? null)}; it must resolve ${ENGINE_FLOOR} or later.`,
   );
+}
+
+// The release job's push token must be fresh: no test step beside it, minted before checkout, behind the reused quality workflow.
+{
+  const workflow = parseYaml(publishWorkflow);
+  for (const problem of releaseTokenProblems(workflow)) errors.push(`publish.yaml: ${problem}.`);
+
+  // The check must be able to fail. Each mutation puts one old shape back: the chain in the pushing job, a test script beside the push,
+  // the token minted after checkout, and the quality workflow no longer needed.
+  const mutate = (edit) => {
+    const copy = structuredClone(workflow);
+    edit(copy.jobs.publish);
+    return copy;
+  };
+  const mutations = {
+    'an npm test step in the pushing job': (job) => job.steps.splice(5, 0, { name: 'Run tests', run: 'npm test' }),
+    'a chained test script in the pushing job': (job) => job.steps.push({ name: 'Run a suite', run: 'npm run test:cli' }),
+    'the test shards in the pushing job': (job) => job.steps.push({ name: 'Run a shard', run: 'node tools/test-shards.js --shard 1/21' }),
+    'the token minted after checkout': (job) => job.steps.push(job.steps.shift()),
+    'no need on the quality workflow': (job) => delete job.needs,
+  };
+  for (const [name, edit] of Object.entries(mutations)) {
+    if (releaseTokenProblems(mutate(edit)).length === 0) errors.push(`the release token check passed a publish workflow with ${name}.`);
+  }
 }
 
 if (releaseStep?.run) {

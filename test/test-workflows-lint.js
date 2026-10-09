@@ -12,7 +12,7 @@
  * for the eval-ci suite.
  *
  * With no actionlint on PATH the check fails and names `tools/install-actionlint.sh`; it never skips. Each chain shard of quality.yaml
- * and the job of publish.yaml install actionlint before they run the chain.
+ * installs actionlint before it runs the chain; publish.yaml runs that workflow before its release job.
  *
  * It then proves that it can fail, so a linter that quietly stopped checking cannot leave it green:
  *  - a copy of `tea-test-review.yaml` lints clean,

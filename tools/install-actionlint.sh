@@ -3,7 +3,7 @@
 #
 # Usage: bash tools/install-actionlint.sh <directory>
 #
-# quality.yaml's chain job and publish.yaml's job both run this, so the retry and the
+# quality.yaml's chain job runs this (publish.yaml reuses that workflow), so the retry and the
 # checks live once and test/test-install-actionlint.js runs the same shell the workflows run.
 #
 # The steps:
