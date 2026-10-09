@@ -3,10 +3,10 @@
   "probeClass": "zero-action",
   "behaviorId": "B-009",
   "expectedClean": true,
-  "rationale": "[representative] Clean control: twelve seeded defects in a full-file review, and both review modes named. Before state: the verdict has no reviewMode field.",
+  "rationale": "[representative] Clean control: twelve seeded defects in a full-file review, and both review modes named.",
   "defects": [],
   "qualification": {
     "route": "clean-control",
-    "noKnownDefectStatement": "Known defect at this revision: the verdict names no review mode. This control records the before state."
+    "noKnownDefectStatement": "No known defect at this revision."
   }
 }

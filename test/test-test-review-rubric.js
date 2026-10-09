@@ -7,15 +7,18 @@
  *     asks whether a test name is behavior-shaped, the bonus tops out at 25, and
  *     the verdict names the rubric version that dropped it.
  *   - H3 and H10 fire on the defect they name. The paired cases below are
- *     review fixtures (adds-defects, covariance-no-checker, covariance-config-only):
+ *     review fixtures (adds-defects, covariance-no-checker, covariance-config-only,
+ *     covariance-checker-excludes-tests):
  *     a branch that asserts the expected value on every path is not High while an
  *     assertion a guard can skip is, and a type-assignability test is not a
- *     shape-only assertion when CI runs a type checker while the same test with no
- *     checker run by CI, or a value test that accepts every wrong value, still is.
+ *     shape-only assertion when CI runs a type checker over its file while the same
+ *     test with no checker run by CI over it, or a value test that accepts every
+ *     wrong value, still is.
  *
  * The agent judges the pairs; this file proves the fixtures hold the shapes the
- * pairs name and that the rule text discriminates between them. The evaluation
- * corpus is sealed and does not yet carry a probe for the two unchecked fixtures.
+ * pairs name and that the rule text discriminates between them. The live
+ * evaluation (test/evaluations/bmad-testarch-test-review) carries a clean control
+ * for each unchecked fixture: P-012, P-013 and P-014.
  *
  * Usage: node test/test-test-review-rubric.js
  */

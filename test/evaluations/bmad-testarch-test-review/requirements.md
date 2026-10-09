@@ -38,6 +38,8 @@ No SEON code, report text or repository name appears in any fixture.
 Each probe's fixture is one or two short test files, so a defect's location is unambiguous.
 The B-001 fixture puts the old defects a few lines away from the added clean lines, close enough to share a diff hunk's context.
 The B-006 and B-007 pairs differ only in the property under test: the branch checks the expected value or not; the type checker runs in CI or not.
+For B-007, a type checker counts only when CI runs it over the test's own file.
+Three more fixtures add the same covariance test where no checker exists, where mypy is configured but CI runs only pytest, and where CI runs mypy over the source package alone; in each the test is a High value-assertion finding.
 The B-003 pair differs only in the commit reviewed: head or merge.
 One full-file probe carries 12 seeded defects across rows and severities, mirroring the #857 shape.
 

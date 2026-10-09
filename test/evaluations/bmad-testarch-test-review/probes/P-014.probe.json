@@ -1,9 +1,9 @@
 {
-  "probeId": "P-001",
+  "probeId": "P-014",
   "probeClass": "zero-action",
-  "behaviorId": "B-001",
+  "behaviorId": "B-012",
   "expectedClean": true,
-  "rationale": "[representative] Clean control: one clean test added beside three old defects.",
+  "rationale": "[boundary] Clean control: the covariance test added in a repository whose CI runs mypy over shop alone is a High H10 finding.",
   "defects": [],
   "qualification": {
     "route": "clean-control",

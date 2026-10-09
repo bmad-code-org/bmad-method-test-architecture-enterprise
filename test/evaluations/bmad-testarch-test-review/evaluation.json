@@ -3,7 +3,7 @@
   "evaluationId": "bmad-testarch-test-review",
   "requirements": {
     "path": "requirements.md",
-    "digest": "sha256:8825c6cabb08dde577bf13670b7119b06ddbb26513eb7b11428c1cc6eece010f"
+    "digest": "sha256:82bfda1d08b9697510df4cd70a21da1469172b24c58984bb1df163525f439041"
   },
   "targetKind": "test-review-mechanism",
   "interface": "cli",
