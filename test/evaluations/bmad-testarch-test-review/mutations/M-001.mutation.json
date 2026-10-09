@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "mutationId": "M-001",
-  "mutationSource": "cli/lib/diff-evidence.js: classifyFinding treats no reported line as changed",
+  "mutationSource": "cli/lib/diff-evidence.js: getDiffEvidence records no changed ranges for a modified file",
   "targetArtifact": "cli/lib/diff-evidence.js",
   "operator": {
     "kind": "replace-exact",
-    "find": "  const changed = changedRange !== undefined;",
-    "replace": "  const changed = false;",
+    "find": "      changedRanges: changedRanges(patch),",
+    "replace": "      changedRanges: [],",
     "occurrences": 1
   },
   "expectedObservableFailure": "The adds-defects review classifies its introduced findings pre_existing, gates on none, and recommends Approve on stdout."

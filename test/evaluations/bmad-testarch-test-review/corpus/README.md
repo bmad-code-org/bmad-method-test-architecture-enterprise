@@ -23,7 +23,7 @@ Every fixture is a small Python and pytest repository; none holds adopter code, 
 | ----- | ------------------ | -------- | ----------- | ------------------- | ------------------------------------------------------------------------------------- |
 | P-001 | `[representative]` | B-001    | zero-action | clean-control       | Nothing                                                                               |
 | P-002 | `[representative]` | B-002    | zero-action | clean-control       | Nothing                                                                               |
-| P-003 | `[representative]` | B-002    | defect      | controlled-mutation | M-001: `classifyFinding` treats no reported line as changed                           |
+| P-003 | `[representative]` | B-002    | defect      | controlled-mutation | M-001: `getDiffEvidence` records no changed ranges                                    |
 | P-004 | `[boundary]`       | B-003    | zero-action | clean-control       | Nothing                                                                               |
 | P-005 | `[negative]`       | B-004    | zero-action | clean-control       | Nothing                                                                               |
 | P-006 | `[representative]` | B-005    | zero-action | clean-control       | Nothing                                                                               |
