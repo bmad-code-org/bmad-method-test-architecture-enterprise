@@ -200,7 +200,7 @@
     ]
   },
   "doc-invocations": {
-    "pages": ["README.md", "docs/explanation/eval-quality-adoption-guide.md", "test/README.md"],
+    "pages": ["test/docs/eval-quality-adoption-guide.md", "test/README.md"],
     "binary": {
       "entry": "test/lib/doc-invocation-entry.js",
       "spellings": [
@@ -522,11 +522,18 @@
           "module": "test/lib/planning-doc-sources.js",
           "export": "LANE_COUNT"
         }
+      },
+      "teachMeTestingCalls": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TEACH_ME_TESTING_CALLS"
+        }
       }
     },
     "entries": [
       {
-        "file": "docs/explanation/eval-quality-roadmap.md",
+        "file": "test/docs/eval-quality-roadmap.md",
         "claim": "the per-suite call counts one eval:all run makes",
         "pattern": {
           "match": "It runs (\\d+) fragment selections, (\\d+) routing intents, (\\d+) complete test designs, (\\d+) complete reviews, (\\d+) complete audits, (\\d+) complete pipelines, (\\d+) complete traces, and (\\d+) generations for one runner\\."
@@ -544,45 +551,46 @@
         "rendering": "digits"
       },
       {
-        "file": "README.md",
+        "file": "test/README.md",
         "claim": "the fragment-selection case count",
         "pattern": {
-          "match": "`test:eval-data` checks that all (\\d+) fragment-selection cases are structurally usable"
+          "match": "The fragment-selection corpus contains (\\d+) cases\\."
         },
         "counts": ["fragmentSelectionCases"],
         "rendering": "digits"
       },
       {
-        "file": "README.md",
+        "file": "test/README.md",
         "claim": "how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe",
         "pattern": {
-          "match": "for ([a-z-]+) of the ([a-z-]+) suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential\\."
+          "match": "A preflight run checks (\\d+) suites, including (\\d+) that probe the selected agent executable, version, and credentials\\."
         },
-        "counts": ["agentPreflightedSuiteCount", "totalSuiteCount"]
-      },
-      {
-        "file": "README.md",
-        "claim": "the npm test chain length",
-        "pattern": {
-          "match": "`npm test` chains (\\d+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Twelve of the (\\d+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:"
-        },
-        "counts": ["npmTestChainLength", "npmTestChainLength"],
+        "counts": ["totalSuiteCount", "agentPreflightedSuiteCount"],
         "rendering": "digits"
       },
       {
-        "file": "README.md",
+        "file": "test/README.md",
+        "claim": "the npm test chain length",
+        "pattern": {
+          "match": "`npm test` chains (\\d+) checks;"
+        },
+        "counts": ["npmTestChainLength"],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/reference/knowledge-base.md",
         "claim": "the knowledge-fragment tier breakdown",
         "pattern": {
-          "match": "`tea-index.csv` classifies all (\\d+) fragments into three tiers: \\*\\*core\\*\\* \\((\\d+), always loaded\\), \\*\\*extended\\*\\* \\((\\d+), loaded when deeper analysis is called for\\), and \\*\\*specialized\\*\\* \\((\\d+), loaded only when the case matches, such as contract testing on a real consumer-provider boundary\\)\\."
+          "match": "The index contains (\\d+) fragments: (\\d+) core, (\\d+) extended, and (\\d+) specialized\\."
         },
         "counts": ["knowledgeFragmentTotal", "knowledgeFragmentCore", "knowledgeFragmentExtended", "knowledgeFragmentSpecialized"],
         "rendering": "digits"
       },
       {
-        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "file": "test/docs/eval-quality-adoption-guide.md",
         "claim": "one eval:all run's total model calls and their per-suite breakdown",
         "pattern": {
-          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
+          "match": "One default `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(six ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), (\\d+) complete atdd generations \\(one story at two repetitions\\), and (\\d+) teaching turns \\(one case at one repetition\\)\\."
         },
         "counts": [
           "totalCalls",
@@ -593,15 +601,16 @@
           "nfrCalls",
           "ciCalls",
           "traceCalls",
-          "atddCalls"
+          "atddCalls",
+          "teachMeTestingCalls"
         ],
         "rendering": "digits"
       },
       {
-        "file": "README.md",
+        "file": "test/README.md",
         "claim": "one eval:all run's total agent calls and all three built-in runners' total",
         "pattern": {
-          "match": "`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, and (\\d+) ATDD generations\\. All three built-in runners make (\\d+) calls\\."
+          "match": "One `eval:all` run makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, (\\d+) ATDD generations, and (\\d+) teaching turns\\.\\nRunning all three built-in runners makes (\\d+) calls\\."
         },
         "counts": [
           "totalCalls",
@@ -613,6 +622,7 @@
           "testDesignCalls",
           "traceCalls",
           "atddCalls",
+          "teachMeTestingCalls",
           "totalCallsThreeRunners"
         ],
         "rendering": "digits"
@@ -626,10 +636,10 @@
         "counts": ["advisoryObservationsMaxItems"]
       },
       {
-        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "file": "test/docs/eval-quality-adoption-guide.md",
         "claim": "the replay corpus row: the stored output total and its per-suite breakdown",
         "pattern": {
-          "match": "(\\d+) stored outputs scored with no model call: (\\d+) selections, (\\d+) atdd reports, (\\d+) verdicts, (\\d+) trace pairs, (\\d+) nfr reports, (\\d+) ci runs, (\\d+) test-design documents, (\\d+) replies"
+          "match": "(\\d+) cases replayed with no model call: (\\d+) selections, (\\d+) atdd reports, (\\d+) verdicts, (\\d+) trace pairs, (\\d+) nfr reports, (\\d+) ci runs, (\\d+) test-design documents, (\\d+) replies"
         },
         "counts": [
           "replayTotal",
@@ -645,16 +655,16 @@
         "rendering": "digits"
       },
       {
-        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "file": "test/docs/eval-quality-adoption-guide.md",
         "claim": "the replay section's stored output total",
         "pattern": {
-          "match": "`test/replay/` holds (\\d+) stored outputs"
+          "match": "`test/replay/` holds (\\d+) cases"
         },
         "counts": ["replayTotal"],
         "rendering": "digits"
       },
       {
-        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "file": "test/docs/eval-quality-adoption-guide.md",
         "claim": "how many stored outputs are real captures, captured and constructed",
         "pattern": {
           "match": "(\\d+) of the (\\d+) stored outputs are real captures, (\\d+) are captured reports and the other (\\d+) are constructed\\."
@@ -663,10 +673,10 @@
         "rendering": "digits"
       },
       {
-        "file": "docs/explanation/eval-quality-roadmap.md",
+        "file": "test/docs/eval-quality-roadmap.md",
         "claim": "the replay corpus size and its per-suite breakdown",
         "pattern": {
-          "match": "score (\\d+) stored cases with no model call and no network: (\\d+) fragment-selection outputs, (\\d+) `atdd` reports, (\\d+) `test-review` verdicts, (\\d+) `test-design` documents, (\\d+) `trace` artifact pairs, (\\d+) `bmad-tea-routing` replies, (\\d+) `nfr` reports, and (\\d+) `ci` runs under `test/replay/`"
+          "match": "`test:eval-replay` replays a corpus containing (\\d+) cases: (\\d+) fragment selections, (\\d+) ATDD reports, (\\d+) review verdicts, (\\d+) test-design documents, (\\d+) trace pairs, (\\d+) routing replies, (\\d+) NFR reports, and (\\d+) CI runs\\."
         },
         "counts": [
           "replayTotal",
@@ -682,19 +692,19 @@
         "rendering": "digits"
       },
       {
-        "file": "docs/explanation/eval-quality-roadmap.md",
+        "file": "test/docs/eval-quality-roadmap.md",
         "claim": "how many stored outputs are real captures, captured and constructed",
         "pattern": {
-          "match": "(\\d+) of the (\\d+) stored outputs are real captures, (\\d+) are captured reports and (\\d+) are constructed\\."
+          "match": "Of the (\\d+) stored outputs, (\\d+) are real captures, (\\d+) are captured reports, and (\\d+) are constructed\\."
         },
-        "counts": ["replayRealCaptures", "replayTotal", "replayCaptured", "replayConstructed"],
+        "counts": ["replayTotal", "replayRealCaptures", "replayCaptured", "replayConstructed"],
         "rendering": "digits"
       },
       {
         "file": "test/README.md",
         "claim": "the replay corpus size, the cases that produce a number and the constructed ones among them",
         "pattern": {
-          "match": "Of the (\\d+) cases, (\\d+) produce a number and (\\d+) of those are constructed\\."
+          "match": "Of (\\d+) cases, (\\d+) produce a number and (\\d+) of those are constructed\\."
         },
         "counts": ["replayTotal", "replayScored", "replayScoredConstructed"],
         "rendering": "digits"
@@ -703,17 +713,16 @@
         "file": "test/README.md",
         "claim": "the cases that carry captured bytes and where they come from",
         "pattern": {
-          "match": "(\\d+) cases carry captured bytes: (\\d+) from the ATDD fixture corpus, (\\d+) from `fixtures/test-review-cli/` and (\\d+) from live `eval:ci` runs"
+          "match": "([A-Za-z-]+) carry captured bytes: ([a-z-]+) ATDD corpus reports, ([a-z-]+) CLI fixtures, and ([a-z-]+) live CI runs"
         },
         "wrap": true,
-        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"],
-        "rendering": "digits"
+        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"]
       },
       {
         "file": "test/README.md",
         "claim": "the test-review captures that score zero recall",
         "pattern": {
-          "match": "The ([A-Za-z-]+) test-review captures score zero recall"
+          "match": "The ([a-z-]+) review captures score zero recall"
         },
         "counts": ["replayTestReviewCapturedBytes"]
       },
@@ -721,7 +730,7 @@
         "file": "test/README.md",
         "claim": "the trace replay cases",
         "pattern": {
-          "match": "([A-Za-z-]+) trace cases cover both sets:"
+          "match": "The \\d+ cases include ([a-z-]+) trace pairs"
         },
         "counts": ["replayTrace"]
       },
@@ -729,7 +738,7 @@
         "file": "test/README.md",
         "claim": "the nfr replay cases",
         "pattern": {
-          "match": "([A-Za-z-]+) `nfr` cases cover both bundles,"
+          "match": "The \\d+ cases include [a-z-]+ trace pairs, ([a-z-]+) NFR reports"
         },
         "wrap": true,
         "counts": ["replayNfr"]
@@ -738,10 +747,11 @@
         "file": "test/README.md",
         "claim": "the ci replay cases over the full and minimal projects",
         "pattern": {
-          "match": "([A-Za-z-]+) `ci` cases cover the `full` and `minimal` projects:"
+          "match": "(\\d+) CI replays cover the full and minimal projects\\."
         },
         "wrap": true,
-        "counts": ["replayCiFullAndMinimal"]
+        "counts": ["replayCiFullAndMinimal"],
+        "rendering": "digits"
       },
       {
         "file": "test/test-eval-replay.js",
@@ -794,6 +804,23 @@
           "match": "run in ([A-Za-z-]+) parallel lanes"
         },
         "counts": ["laneCount"]
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the total replay cases in the suite breakdown",
+        "pattern": {
+          "match": "The (\\d+) cases include"
+        },
+        "counts": ["replayTotal"],
+        "rendering": "digits"
+      },
+      {
+        "file": "test/README.md",
+        "claim": "the ci replay cases across every project",
+        "pattern": {
+          "match": "The \\d+ cases include [a-z-]+ trace pairs, [a-z-]+ NFR reports, and ([a-z-]+) CI runs"
+        },
+        "counts": ["replayCi"]
       }
     ]
   },
@@ -945,9 +972,9 @@
     ],
     "purity": {
       "layers": ["evaluate-engine"],
-      "awaitRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; docs/explanation/eval-quality-command-adapter.md documents the invariant and an await here would break it",
-      "asyncFunctionRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; docs/explanation/eval-quality-command-adapter.md documents the invariant and an async function here would break it",
-      "newDateRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; docs/explanation/eval-quality-command-adapter.md documents the invariant and new Date here would break it"
+      "awaitRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; test/docs/eval-quality-command-adapter.md documents the invariant and an await here would break it",
+      "asyncFunctionRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; test/docs/eval-quality-command-adapter.md documents the invariant and an async function here would break it",
+      "newDateRule": "cli/lib/evaluate/engine.js holds the one synchronous reading of eval-quality's schema-version constants, which record builders called from synchronous code stamp from, and returns its loaders' promises without awaiting them; test/docs/eval-quality-command-adapter.md documents the invariant and new Date here would break it"
     },
     "commonjs": "check",
     "reportOnly": false
@@ -1060,7 +1087,7 @@
     "transcriptions": "Deliberately unadopted. Every STRONG candidate found is either a bare number (doc-counts territory, already adopted) or a fenced bash-invocation block (doc-invocations territory, Story 4.3), not a byte-for-byte literal string block TEA's own code emits."
   },
   "doc-claims": {
-    "pages": ["docs", "README.md", "CONTRIBUTING.md", "AGENTS.md"],
+    "pages": ["docs", "README.md", "CONTRIBUTING.md", "AGENTS.md", "test/docs"],
     "sources": [
       {
         "path": "cli",
@@ -1163,10 +1190,6 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
-          "token": "EnvironmentProbePort",
-          "reason": "an eval-quality package export, not a TEA declaration"
-        },
-        {
           "token": "ProbeObservation",
           "reason": "an eval-quality published schema type, not a TEA declaration"
         },
@@ -1248,22 +1271,6 @@
         },
         {
           "token": "qualifyProbe",
-          "reason": "an eval-quality package export, not a TEA declaration"
-        },
-        {
-          "token": "planPreflight",
-          "reason": "an eval-quality package export, not a TEA declaration"
-        },
-        {
-          "token": "selectControl",
-          "reason": "an eval-quality package export, not a TEA declaration"
-        },
-        {
-          "token": "verdictBasis",
-          "reason": "an eval-quality package export, not a TEA declaration"
-        },
-        {
-          "token": "deepEquals",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
@@ -1479,10 +1486,6 @@
           "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
         },
         {
-          "token": "executeTest",
-          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
-        },
-        {
           "token": "baseUrl",
           "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
         },
@@ -1492,35 +1495,27 @@
         },
         {
           "token": "waitForTimeout",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByRole",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByLabel",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
-        },
-        {
-          "token": "getByTestId",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForSelector",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForResponse",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
-        },
-        {
-          "token": "toBeTruthy",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "toJSON",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "PATH",
@@ -1563,10 +1558,6 @@
           "reason": "a platform environment variable, not a TEA declaration"
         },
         {
-          "token": "PW_NET_MODE",
-          "reason": "a platform environment variable, not a TEA declaration"
-        },
-        {
           "token": "TEST_USER_EMAIL",
           "reason": "a platform environment variable, not a TEA declaration"
         },
@@ -1595,10 +1586,6 @@
           "reason": "a platform environment variable, not a TEA declaration"
         },
         {
-          "token": "NPM_TOKEN",
-          "reason": "a platform environment variable, not a TEA declaration"
-        },
-        {
           "token": "RELEASE_APP_ID",
           "reason": "a platform environment variable, not a TEA declaration"
         },
@@ -1617,10 +1604,6 @@
         {
           "token": "authToken",
           "reason": "a @seontechnologies/playwright-utils auth-session fixture parameter, not a TEA declaration"
-        },
-        {
-          "token": "spawnSync",
-          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
           "token": "existsSync",
@@ -1687,10 +1670,6 @@
           "reason": "git's name for the checked-out commit, not a TEA declaration"
         },
         {
-          "token": "TypeError",
-          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
-        },
-        {
           "token": "Date",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
@@ -1735,26 +1714,6 @@
           "reason": "a Keep a Changelog section heading, not a TEA declaration"
         },
         {
-          "token": "outputFile",
-          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
-        },
-        {
-          "token": "nextStepFile",
-          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
-        },
-        {
-          "token": "resumeStepFile",
-          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
-        },
-        {
-          "token": "lastStep",
-          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
-        },
-        {
-          "token": "lastSaved",
-          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
-        },
-        {
           "token": "stepsCompleted",
           "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
         },
@@ -1783,14 +1742,6 @@
           "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
         },
         {
-          "token": "LICENSE",
-          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
-        },
-        {
-          "token": "STUB_FRAGMENTS",
-          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
-        },
-        {
           "token": "GATE",
           "reason": "a chat menu keyword or a table/status label, not a JS identifier"
         },
@@ -1804,10 +1755,6 @@
         },
         {
           "token": "WARN",
-          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
-        },
-        {
-          "token": "None",
           "reason": "a chat menu keyword or a table/status label, not a JS identifier"
         },
         {
@@ -1828,27 +1775,27 @@
         },
         {
           "token": "isDiscriminatingCase",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "nonDeterministicReportedValues",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "expectedTestInventory",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "negativeControls",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "rejectedCases",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "mechanicalSignal",
-          "reason": "cli/lib/convention-baseline.js’s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
+          "reason": "cli/lib/convention-baseline.js\u2019s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
         },
         {
           "token": "SEALED_RUN_RECORD_SCHEMA_VERSION",
@@ -1861,18 +1808,6 @@
         {
           "token": "makeResolveOperand",
           "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
-        },
-        {
-          "token": "makePointerDenotesCollection",
-          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
-        },
-        {
-          "token": "referenceSetKeysOf",
-          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
-        },
-        {
-          "token": "ABSENT",
-          "reason": "an eval-quality package export (its sentinel), reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
         },
         {
           "token": "floorDecisions",
@@ -1901,6 +1836,10 @@
         {
           "token": "judgeCalibration",
           "reason": "the `evaluation.json` field the runtime schema `cli/lib/evaluate/schemas/evaluation.schema.json` declares; the code reads it as a property"
+        },
+        {
+          "token": "navigationTimeout",
+          "reason": "Playwright Test use option; declared by the installed @playwright/test types, outside TEA source roots"
         }
       ]
     },
@@ -1923,7 +1862,7 @@
         "file": "docs/reference/execution-targets.md",
         "claim": "the mobile-specific criteria-registry row ids",
         "pattern": {
-          "match": "Four are mobile-specific \\(([^)]+)\\)"
+          "match": "four mobile-specific rows \\(([^)]+)\\)"
         },
         "tokenShape": {
           "match": "^[A-Z]\\d+$"
@@ -1937,7 +1876,7 @@
         "file": "docs/reference/execution-targets.md",
         "claim": "the playwright-utils-adoption criteria-registry row ids",
         "pattern": {
-          "match": "two are playwright-utils adoption rows gated on `tea_use_playwright_utils` plus the package being installed \\(([^)]+)\\)"
+          "match": "two Playwright Utils rows \\(([^)]+)\\)"
         },
         "tokenShape": {
           "match": "^[A-Z]\\d+$"
@@ -1986,9 +1925,6 @@
     "dated": {
       "triggers": [
         {
-          "match": "still listed as deferred"
-        },
-        {
           "match": "deferred` array is empty"
         },
         {
@@ -2012,6 +1948,9 @@
           "flags": "i"
         },
         {
+          "match": "emits these scaffolds with"
+        },
+        {
           "match": "\\bas of\\b",
           "flags": "i"
         },
@@ -2020,20 +1959,40 @@
           "flags": "i"
         },
         {
-          "match": "the lockfile records the resolved eval-quality release",
-          "flags": "i"
-        },
-        {
           "match": "\\bsince \\d+\\.\\d+\\.\\d+\\b"
         },
         {
           "match": "Outputs land in one folder per workflow"
+        },
+        {
+          "match": "All\\ eight\\ skills\\ covered\\ by\\ fragment\\ selection\\ now\\ have\\ behavioral\\ suites\\ of\\ their\\ own"
+        },
+        {
+          "match": "All\\ eleven\\ TEA\\ skills\\ have\\ covering\\ suites"
+        },
+        {
+          "match": "records\\ 34\\ expected\\ CONCERNS\\ outcomes"
+        },
+        {
+          "match": "All\\ 35\\ registry\\ rows\\ are\\ mapped\\ to\\ knowledge\\ fragments"
+        },
+        {
+          "match": "Every\\ module\\ setup\\ key\\ is\\ read\\ by\\ a\\ workflow"
+        },
+        {
+          "match": "The\\ lockfile\\ records\\ the\\ installed\\ version"
+        },
+        {
+          "match": "supported\\ since\\ `eval\\-quality`\\ 1\\.2\\.0"
+        },
+        {
+          "match": "required\\ from\\ `eval\\-quality`\\ 3\\.0\\.0"
         }
       ],
       "claims": [
         {
-          "file": "docs/explanation/eval-quality-adoption-guide.md",
-          "key": "still listed as deferred",
+          "file": "test/docs/eval-quality-adoption-guide.md",
+          "key": "All eight skills covered by fragment selection now have behavioral suites of their own",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "NO_FRAGMENT_SELECTION_SKILL_DEFERRED"
@@ -2041,8 +2000,8 @@
           "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
         },
         {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "`test/evals/suite-manifest.json`'s `deferred` array is empty",
+          "file": "test/docs/eval-quality-roadmap.md",
+          "key": "All eleven TEA skills have covering suites",
           "settles": "read",
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
@@ -2051,8 +2010,8 @@
           }
         },
         {
-          "file": "docs/explanation/eval-quality-adoption-guide.md",
-          "key": "the 34 CONCERNS the stored corpus scores",
+          "file": "test/docs/eval-quality-adoption-guide.md",
+          "key": "records 34 expected CONCERNS outcomes",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "THIRTY_FOUR_CONCERNS"
@@ -2060,26 +2019,8 @@
           "reason": "a count of verdict: \"CONCERNS\" entries in test/probes/expected-strength.json"
         },
         {
-          "file": "docs/explanation/eval-quality-command-adapter.md",
-          "key": "has a spelling, as of 1.4.0",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
-          },
-          "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.4.0"
-        },
-        {
-          "file": "docs/explanation/eval-quality-command-adapter.md",
-          "key": "names its reason, as of 1.4.0",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
-          },
-          "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.4.0"
-        },
-        {
-          "file": "README.md",
-          "key": "All 35 rows are currently mapped",
+          "file": "docs/explanation/test-quality-standards.md",
+          "key": "All 35 registry rows are mapped to knowledge fragments",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "THIRTY_FIVE_ROWS_MAPPED"
@@ -2088,7 +2029,7 @@
         },
         {
           "file": "docs/how-to/workflows/run-atdd.md",
-          "key": "currently emits these scaffolds with `test.skip()`",
+          "key": "emits these scaffolds with `test.skip()`",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "ATDD_EMITS_TEST_SKIP"
@@ -2102,8 +2043,8 @@
           "reason": "a claim about the absence of a feature; nothing in the tree can decide whether an extension surface was deliberately never built"
         },
         {
-          "file": "README.md",
-          "key": "Every one is read by a workflow today",
+          "file": "docs/reference/configuration.md",
+          "key": "Every module setup key is read by a workflow",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVERY_SETUP_KEY_WIRED"
@@ -2111,7 +2052,7 @@
           "reason": "skills/bmod-tea/bmod.toml's setup keys, and a grep of the workflow skills and knowledge base finding every one of them read"
         },
         {
-          "file": "docs/explanation/eval-quality-adoption-guide.md",
+          "file": "test/docs/eval-quality-adoption-guide.md",
           "key": "TEA's state today, as `test/evals/suite-manifest.json` registers it:",
           "settles": "read",
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
@@ -2121,20 +2062,14 @@
           }
         },
         {
-          "file": "docs/explanation/eval-quality-command-adapter.md",
-          "key": "of the 59 cannot pre-flight today",
-          "settles": "read",
-          "reason": "a snapshot of how many of the 59 probes could not pre-flight when the rule was written (up from 55/eight pre-#186); a historical measurement, not a live-rechecked invariant"
-        },
-        {
-          "file": "docs/explanation/eval-quality-roadmap.md",
+          "file": "test/docs/eval-quality-roadmap.md",
           "key": "TEA currently has three layers of self-validation",
           "settles": "read",
           "reason": "the row count of the table that follows; no single source enumerates the layers TEA has decided to keep as three"
         },
         {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The lockfile records the resolved eval-quality release",
+          "file": "test/docs/eval-quality-command-adapter.md",
+          "key": "The lockfile records the installed version",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE"
@@ -2142,8 +2077,8 @@
           "reason": "package-lock.json's resolved eval-quality entry contains a plain major.minor.patch version"
         },
         {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "as of `eval-quality` 1.2.0",
+          "file": "test/docs/eval-quality-command-adapter.md",
+          "key": "supported since `eval-quality` 1.2.0",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_1_2_0"
@@ -2151,8 +2086,8 @@
           "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.2.0"
         },
         {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "may carry since 3.0.0",
+          "file": "test/docs/eval-quality-command-adapter.md",
+          "key": "required from `eval-quality` 3.0.0",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_3_0_0"
@@ -2166,24 +2101,6 @@
           "reason": "frontmatter boilerplate, not itself a decidable fact"
         },
         {
-          "file": "docs/explanation/verification-architecture.md",
-          "key": "deepest coverage happens to sit today",
-          "settles": "read",
-          "reason": "a subjective judgment about where TEA's coverage is deepest, not derivable from a single artifact"
-        },
-        {
-          "file": "docs/explanation/verification-architecture.md",
-          "key": "The execution guidance behind it is not yet equivalent",
-          "settles": "read",
-          "reason": "a subjective depth-parity judgment across execution targets, not derivable from a single artifact"
-        },
-        {
-          "file": "docs/explanation/verification-architecture.md",
-          "key": "TEA's reasoning transfers to any stack today",
-          "settles": "read",
-          "reason": "a subjective judgment the page itself states is a judgment call, not derivable from a single artifact"
-        },
-        {
           "file": "docs/reference/configuration.md",
           "key": "Outputs land in one folder per workflow",
           "settles": {
@@ -2193,10 +2110,24 @@
           "reason": "every {test_artifacts}/ output path each bmad-testarch-* workflow except evaluate declares, in its workflow.yaml and in its step files' frontmatter, sits under {test_artifacts}/<workflow>/; _input keys and legacy* resume keys are inputs and are left out"
         },
         {
-          "file": "docs/explanation/eval-quality-command-adapter.md",
-          "key": "score today where its own gameability probe",
+          "file": "test/docs/eval-quality-roadmap.md",
+          "key": "The manifest's `deferred` array is empty",
           "settles": "read",
-          "reason": "a claim about the test-review defect probes' current exit-code discrimination capability, added by #200; nothing in the tree derives this automatically today, matching the disposition already used for the neighboring pre-flight-capability claim on the same page"
+          "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
+          "asOf": {
+            "subject": "test/evals/suite-manifest.json",
+            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
+          }
+        },
+        {
+          "file": "test/docs/eval-quality-command-adapter.md",
+          "key": "Trace currently leaves",
+          "settles": "read",
+          "reason": "Trace probe strength records retain three uncovered whole-body falsifiers; reviewed against the stored expected-strength artifact.",
+          "asOf": {
+            "subject": "test/probes/expected-strength.json",
+            "hash": "d2505d0c0278f7bdb1b5e5c71163de3aa39bc589f3045e344b099f1f5f59aa35"
+          }
         }
       ]
     }

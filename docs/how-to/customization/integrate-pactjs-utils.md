@@ -5,13 +5,15 @@ description: What TEA generates for consumer-driven contract testing when tea_us
 
 # Integrate Pact.js Utils with TEA
 
-`@seontechnologies/pactjs-utils` wraps `@pact-foundation/pact` with type-safe helpers for provider states, PactV4 builders, verifier configuration, and request filters. TEA integrates with it through the `tea_use_pactjs_utils` config flag, which is **on by default**.
+`@seontechnologies/pactjs-utils` wraps `@pact-foundation/pact` with type-safe helpers for provider states, PactV4 builders, verifier configuration, and request filters.
+TEA integrates with it through the `tea_use_pactjs_utils` config flag, which is **on by default**.
 
 ## What the Flag Actually Does
 
-`tea_use_pactjs_utils: true` does not mean "the library is available if you ask for it", and it does not mean "add contract tests to this project". It means: **whenever TEA writes a Pact artifact, it writes it with these utilities.**
+When the flag is enabled and the package is installed, TEA uses Pact.js Utils for the Pact artifacts it writes.
 
-The rule lives in the `pactjs-utils-mandate` knowledge fragment, which every generating and reviewing workflow loads first. It instantiates the same general contract as the Playwright Utils mandate, documented in `library-integration-mandate`.
+The rule lives in the `pactjs-utils-mandate` knowledge fragment, which every generating and reviewing workflow loads first.
+The shared integration rules are documented in `library-integration-mandate`.
 
 ### Two gates
 
@@ -20,11 +22,13 @@ The mandate binds only when both hold:
 1. `tea_use_pactjs_utils` is `true`.
 2. `@seontechnologies/pactjs-utils` is a dependency in your `package.json`.
 
-A flag with no install is an intention, not a capability. TEA will not scaffold imports against a package you do not have, and `test-review` will not deduct for not using one.
+Install the package before enabling the mandate.
+Without the dependency, TEA skips utility imports and the utility-bypass review rule.
 
 ### The relevance gate
 
-Separately from the two gates above, TEA decides whether a Pact suite belongs in your project at all. It scaffolds one only with evidence of a real consumer-provider boundary:
+Separately from the two gates above, TEA decides whether a Pact suite belongs in your project at all.
+It scaffolds one only with evidence of a real consumer-provider boundary:
 
 **Any one of these settles it:**
 
@@ -34,13 +38,15 @@ Separately from the two gates above, TEA decides whether a Pact suite belongs in
 - A microservices layout: two or more independently deployable services in the repo that call each other
 - You asked for contract testing
 
-**These are weak on their own** and need corroboration: an outbound HTTP call, a generated API client, a service URL in `.env.example`. Most frontends have all three and call a backend that ships in the same deploy. They count only when the called service has no source in this repo and is not started by this repo's compose file, dev script, or CI — **and** a second signal is present.
+**These are weak on their own** and need corroboration: an outbound HTTP call, a generated API client, a service URL in `.env.example`.
+Most frontends have all three and call a backend that ships in the same deploy.
+They count only when the called service has no source in this repo and is not started by this repo's compose file, dev script, or CI, and a second signal is present.
 
-With none of that, TEA creates no Pact artifacts and says why in the summary. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite, so the default-on flag never turns into unwanted scaffolding.
+When no boundary is established, TEA skips Pact scaffolding and records why.
 
 ## Substitutions
 
-**REQUIRED** — drop-in. Generating the raw-Pact equivalent instead is a defect:
+Use these helpers whenever the package supports the operation:
 
 | You need                                    | TEA emits                                                    | Not                                                      |
 | ------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- |
@@ -54,21 +60,22 @@ With none of that, TEA creates no Pact artifacts and says why in the summary. A 
 | Auth injection during provider verification | `createRequestFilter({ tokenGenerator })`                    | Bespoke Express middleware, with its `Bearer Bearer` bug |
 | A provider that needs no auth               | `noOpRequestFilter`                                          | An empty inline function                                 |
 
-**RECOMMENDED** — needs something the project may not have, so TEA proposes it and names what is missing rather than silently hand-rolling the alternative:
+TEA proposes these helpers and identifies their setup requirements:
 
-- `zodToPactMatchers(schema)` where a Zod schema already exists, instead of a parallel hand-written matcher tree
-- The `pact-consumer-di` injection, so `executeTest` calls your real client with `mockServer.url` instead of raw `fetch`. It needs an optional `baseUrl` on your API context type: two lines of production code
+- `zodToPactMatchers(schema)` when a Zod schema already exists
+- The `pact-consumer-di` pattern to point your real client at `mockServer.url`. Add an optional `baseUrl` to your API context type.
 
-**Real exceptions still ship.** `MatchersV3` used directly for something `zodToPactMatchers` cannot express is correct and is not a deviation. Where a genuine gap exists, generated code carries `// pactjs-utils deviation: <reason>` and the workflow summary lists it.
+Direct `MatchersV3` usage is valid for shapes `zodToPactMatchers` cannot express.
+For other package gaps, TEA adds `// pactjs-utils deviation: <reason>` and lists the reason in its summary.
 
 ## What Never Relaxes
 
-The mandate does not soften the correctness rules from the per-utility fragments. They apply with or without the utilities:
+The correctness rules from the per-utility fragments apply with or without the utilities:
 
 - **One `pact.addInteraction()` per `it()` block.** PactV4's Rust FFI drops interactions non-deterministically otherwise. Use `it.each` for parameterized cases.
 - **Consumer Vitest config** carries `fileParallelism: false` AND `pool: 'forks'` AND `poolOptions.forks.singleFork: true`.
 - **Provider Vitest config** carries the `pool: 'forks'` + `singleFork` pair.
-- **Provider scrutiny before matchers.** Response matchers come from provider source, an OpenAPI spec, or broker data, never from consumer-side types alone.
+- Derive response matchers from provider source, an OpenAPI spec, or broker data.
 - **Postel's Law.** Matchers in `willRespondWith` only; request bodies in `withRequest` use exact values.
 - **A `// Provider endpoint:` comment** on every interaction.
 
@@ -103,7 +110,7 @@ describe('Movie API Contract', () => {
 });
 ```
 
-One `addInteraction()` per `it()`. A second scenario is a second `it()`, or `it.each` — never a second chain in the same block.
+Put each additional scenario in a separate `it()` or an `it.each` case.
 
 Where a Zod schema for the response already exists, `zodToPactMatchers(MovieSchema)` replaces the inline `MatchersV3` tree so the schema stays the single source of the shape.
 
@@ -132,17 +139,14 @@ await new Verifier(
 ).verifyProvider();
 ```
 
-State handler names and their `params` must match the consumer's `createProviderState` exactly. That pairing is the contract's own contract.
+State handler names and their `params` must match the consumer's `createProviderState` exactly.
 
 ## Coordinate Different PR Branch Names
 
-`matchingBranch: true` covers teams that use the same branch name in consumer
-and provider repositories. Pact.js Utils 1.2.0 also covers short-lived branches
-with different names.
+`matchingBranch: true` covers teams that use the same branch name in consumer and provider repositories.
+Pact.js Utils 1.2.0 also covers short-lived branches with different names.
 
-On the provider side, `buildVerifierOptions` and
-`buildMessageVerifierOptions` accept `consumerBranch`, defaulting to
-`PACT_CONSUMER_BRANCH`:
+On the provider side, `buildVerifierOptions` and `buildMessageVerifierOptions` accept `consumerBranch`, defaulting to `PACT_CONSUMER_BRANCH`:
 
 ```typescript
 buildVerifierOptions({
@@ -154,51 +158,48 @@ buildVerifierOptions({
 });
 ```
 
-The explicit selector is scoped to `consumer`; the builders throw when a
-consumer branch is supplied without one. It stays alongside the matching,
-main, and deployed selectors.
+The explicit selector is scoped to `consumer`; the builders throw when a consumer branch is supplied without one.
+It stays alongside the matching, main, and deployed selectors.
 
-On the consumer side, copy the package's `detect-provider-branch` composite
-action and add `Pact provider branch: <name>` to the PR template. During the PR,
-`can-i-deploy.sh`:
+On the consumer side, copy the package's `detect-provider-branch` composite action and add `Pact provider branch: <name>` to the PR template.
+During the PR, `can-i-deploy.sh`:
 
 1. checks the target environment while ignoring only that named provider;
 2. checks the same consumer version against the provider branch tip.
 
-Both calls are required. A branch check proves less than an environment check,
-so the override is read on pull requests only and disappears on push to main.
+Both calls are required.
+A branch check proves less than an environment check, so the override is read on pull requests only and disappears on push to main.
 
-The provider has a mirror `detect-consumer-branch` action for manual
-coordination. Keep that PR flow separate from PactFlow's
-`contract_requiring_verification_published` webhook. The webhook identifies an
-exact provider version that needs a result. Check out its
-`providerVersionNumber`, verify that commit belongs to
-`providerVersionBranch`, and publish against those values.
+The provider has a mirror `detect-consumer-branch` action for manual coordination.
+Keep that PR flow separate from PactFlow's `contract_requiring_verification_published` webhook.
+The webhook identifies an exact provider version that needs a result.
+Check out its `providerVersionNumber`, verify that commit belongs to `providerVersionBranch`, and publish against those values.
 
-Provider suites with an explicit breaking-change tolerance policy should use
-`isBreakingChangeTolerantBranch`. It recognizes only `main`, `master`, and
-`release/**`. Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH`
-before applying that tolerance, so a typo cannot turn an unexecuted
-cross-branch verification green.
+Provider suites with an explicit breaking-change tolerance policy should use `isBreakingChangeTolerantBranch`.
+It recognizes only `main`, `master`, and `release/**`.
+Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH` before applying that tolerance, so a typo cannot turn an unexecuted cross-branch verification green.
 
 ## Which Workflows Change
 
-| Workflow      | What the flag changes                                                                                                                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `framework`   | Installs `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`, then scaffolds directories, Vitest configs, scripts, CI workflow, and mandated samples — only when the relevance gate opens |
-| `atdd`        | Red-phase contract scaffolds generated in the mandated style. A scaffold is the file the developer un-skips and keeps                                                                              |
-| `automate`    | The API worker emits contract artifacts in the mandated style and reports deviations                                                                                                               |
-| `test-design` | Pact code examples in design documents match what `automate` will generate                                                                                                                         |
-| `test-review` | Scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on flag plus install                                                                    |
-| `ci`          | Adds the contract-test stage and quality gates                                                                                                                                                     |
+| Workflow      | What the flag changes                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `framework`   | Installs `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`, then scaffolds directories, Vitest configs, scripts, CI workflow, and samples when the relevance gate opens |
+| `atdd`        | Red-phase contract scaffolds generated in the mandated style. A scaffold is the file the developer un-skips and keeps                                                              |
+| `automate`    | The API worker emits contract artifacts in the mandated style and reports deviations                                                                                               |
+| `test-design` | Pact code examples in design documents match what `automate` will generate                                                                                                         |
+| `test-review` | Scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on flag plus install                                                    |
+| `ci`          | Adds the contract-test stage and quality gates                                                                                                                                     |
 
 ## Pact MCP (`tea_pact_mcp`)
 
-Also on by default, and safe without a broker. It gates a runtime capability rather than a dependency, so its second gate is "are the SmartBear MCP tools reachable in this session".
+`tea_pact_mcp` is enabled by default.
+TEA uses the broker only when the SmartBear MCP tools are reachable.
 
-When they are, TEA prefers real broker data for provider states, the verification matrix, and `can-i-deploy`. When they are not, it degrades: falls back to provider source or an OpenAPI spec, states in the output that the broker was unreachable, and continues. No workflow blocks on it, nothing retries in a loop, and inferred provider states are never presented as broker data.
+When the tools are reachable, TEA uses broker data for provider states, the verification matrix, and `can-i-deploy`.
+Otherwise it continues using provider source or an OpenAPI spec and records the unavailable broker.
+It labels inferred provider states with their source.
 
-Set `tea_pact_mcp: 'none'` to stop TEA attempting a broker call at all.
+Set `tea_pact_mcp = "none"` under `[modules.tea]` to skip broker calls.
 
 ## Turning It Off
 
@@ -209,7 +210,8 @@ tea_use_pactjs_utils = "false" # TEA writes raw @pact-foundation/pact instead
 tea_pact_mcp = "none"          # TEA never attempts a broker call
 ```
 
-Turning `tea_use_pactjs_utils` off does not disable contract testing. It changes which API the generated tests are written against; the determinism rules and provider scrutiny still apply.
+With `tea_use_pactjs_utils` off, TEA writes contract tests against raw `@pact-foundation/pact`.
+The determinism rules and provider scrutiny still apply.
 
 ## Installation
 
@@ -218,13 +220,14 @@ npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
 # peer dependency: @pact-foundation/pact >= 16.2.0, Node.js >= 18
 ```
 
-For the remote broker flow, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (set it explicitly: `${{ github.head_ref || github.ref_name }}`). The local monorepo flow needs no broker.
+For the remote broker flow, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (set it explicitly: `${{ github.head_ref || github.ref_name }}`).
+The local monorepo flow needs no broker.
 
 ## Related Guides
 
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) — the same mandate shape for browser and API suites
-- [TEA Configuration Reference](/docs/reference/configuration.md) — every key and its default
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) — the contract-testing fragments
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): the same mandate shape for browser and API suites
+- [TEA Configuration Reference](/docs/reference/configuration.md): every key and its default
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): the contract-testing fragments
 
 ## Reference
 

@@ -5,11 +5,13 @@ description: Set up Playwright CLI and MCP for browser automation in TEA workflo
 
 # Configure Browser Automation
 
-TEA can interact with live browsers during test generation: verify selectors, explore UIs, capture evidence, and debug failures. Two tools do this, and `auto` mode combines them.
+TEA can interact with live browsers during test generation: verify selectors, explore UIs, capture evidence, and debug failures.
+Two tools do this, and `auto` mode combines them.
 
 ## The Four Modes
 
-TEA's browser automation is controlled by `tea_browser_automation` under `[modules.tea]` in `_bmad/config.toml`. `bmad setup tea` asks for it; run it again to change the answer, or edit the file:
+TEA's browser automation is controlled by `tea_browser_automation` under `[modules.tea]` in `_bmad/config.toml`.
+`bmad setup tea` asks for it; run it again to change the answer, or edit the file:
 
 ```toml
 tea_browser_automation = "auto" # auto | cli | mcp | none
@@ -28,10 +30,16 @@ tea_browser_automation = "auto" # auto | cli | mcp | none
 
 ```bash
 npm install -g @playwright/cli@latest    # Install globally (Node.js 18+)
-playwright-cli install --skills          # Register as an agent skill
+playwright-cli install --skills          # Claude Code: .claude/skills/playwright-cli
+# For Codex, use this skills layout:
+playwright-cli install --skills=agents   # .agents/skills/playwright-cli
 ```
 
-The global npm install is one-time. The skills install (`playwright-cli install --skills`) should be run from your project root; it registers skills in your active tool's project skills directory (for example, Claude Code uses `.claude/skills/` and Codex uses `.agents/skills/`). Agents without skills support can still use the CLI directly via `playwright-cli --help`.
+The global npm install is one-time.
+Run the skills install from your project root.
+`playwright-cli install --skills` uses the Claude Code layout; Codex uses `playwright-cli install --skills=agents`.
+See the [Playwright CLI skills documentation](https://github.com/microsoft/playwright.dev/blob/main/agent-cli/skills.mdx) for global installation options.
+Agents without skills support can still use the CLI directly via `playwright-cli --help`.
 
 ### For MCP (`mcp` or `auto` mode)
 
@@ -63,7 +71,9 @@ Add these MCP server entries to your tool's configuration file:
 }
 ```
 
-The `smartbear` server is optional. Add it only if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing workflows. See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact--contract-testing-integration) for details.
+The `smartbear` server is optional.
+Add it only if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing workflows.
+See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact--contract-testing-integration) for details.
 
 #### Where to put the config
 
@@ -76,14 +86,16 @@ The `smartbear` server is optional. Add it only if you use the [Pact MCP integra
 | Windsurf          | `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers`)    |
 | VS Code (Copilot) | `.vscode/mcp.json`                    | JSON (`servers`)       |
 
-> **Claude Code tip**: Prefer the `claude mcp add` CLI over manual JSON editing; it sets the correct `type` field and validates the config. Use `-s user` for global (all projects) or omit for per-project (default).
+Use `claude mcp add` to register servers in Claude Code.
+Use `-s user` for all projects or `-s project` for a shared project configuration in `.mcp.json`.
+Omitting `-s` uses `local` scope, private to you in the current project.
 
 #### CLI shortcuts
 
 Claude Code and Codex support adding MCP servers from the command line:
 
 ```bash
-# Claude Code: Playwright (use -s user for global, omit for per-project)
+# Claude Code: Playwright (user scope; use -s project to share with the project)
 claude mcp add -s user --transport stdio playwright -- npx -y @playwright/mcp@latest
 claude mcp add -s user --transport stdio playwright-test -- npx playwright run-test-mcp-server
 
@@ -101,7 +113,7 @@ codex mcp add smartbear -- npx -y @smartbear/mcp@latest
 
 #### Codex TOML format
 
-Codex uses TOML instead of JSON. If editing the config file manually:
+Use these TOML entries when editing Codex configuration manually:
 
 ```toml
 [mcp_servers.playwright]
@@ -121,11 +133,13 @@ PACT_BROKER_BASE_URL = "https://{tenant}.pactflow.io"
 PACT_BROKER_TOKEN = "<your-api-token>"
 ```
 
-Note the key is `mcp_servers` (underscored), not `mcpServers`.
+Use the `mcp_servers` table name in Codex.
 
 ## How Auto Mode Works
 
-An explicit request in your prompt wins ("use the CLI to explore this page"). Otherwise TEA takes the CLI for stateless work (snapshots, locator verification, evidence capture) and MCP for stateful flows (multi-tab, file uploads, repeated edits, self-healing). If only one tool is installed it uses that one; with neither it behaves as `none`.
+An explicit request in your prompt wins ("use the CLI to explore this page").
+Otherwise TEA takes the CLI for stateless work (snapshots, locator verification, evidence capture) and MCP for stateful flows (multi-tab, file uploads, repeated edits, self-healing).
+If only one tool is installed it uses that one; with neither it behaves as `none`.
 
 Full selection rules: [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp).
 
@@ -148,8 +162,6 @@ Even in `auto` mode, you can override per-request:
 "Open MCP browser and walk through the checkout wizard"
 ```
 
-TEA will honor your explicit request.
-
 ## Migrating from tea_use_mcp_enhancements
 
 The old boolean flag `tea_use_mcp_enhancements` has been replaced:
@@ -159,7 +171,8 @@ The old boolean flag `tea_use_mcp_enhancements` has been replaced:
 | `tea_use_mcp_enhancements: true`  | `tea_browser_automation: "auto"` |
 | `tea_use_mcp_enhancements: false` | `tea_browser_automation: "none"` |
 
-Nothing migrates the old flag automatically. Answer the browser automation question in `bmad setup tea` with the equivalent value.
+Nothing migrates the old flag automatically.
+Answer the browser automation question in `bmad setup tea` with the equivalent value.
 
 ## Troubleshooting
 
@@ -210,6 +223,6 @@ playwright-cli close-all
 
 ## Related
 
-- [TEA Overview -- Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp)
+- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp)
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md)
 - [TEA Configuration Reference](/docs/reference/configuration.md)

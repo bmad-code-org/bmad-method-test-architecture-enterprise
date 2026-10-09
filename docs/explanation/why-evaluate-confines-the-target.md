@@ -5,15 +5,12 @@ description: Why Evaluate runs the target of an evaluation under file-system con
 
 # Why Evaluate Confines the Target
 
-An evaluation runs code you want to measure: a skill, an agent, a tool server, an HTTP service.
-That code is the system under test, and the runtime trusts none of it.
-It can read files, write files, start processes and open connections, and an evaluation is only worth having when what it did is recorded honestly.
-A disposable workspace alone leaves the rest of the machine open to the process that runs in it.
-So Evaluate runs every process of a target under file-system confinement, and audits through the same mechanism what the target opens.
+Evaluate runs target code in a confined disposable workspace and audits access outside its grants.
+This keeps the target from reading the evaluation or rewriting its evidence.
+A disposable directory alone leaves the rest of the host accessible.
 
 What you configure (the host requirements, the opt-out, the `egress` and `systemPaths` fields of a registry entry, the private home and the login of an agent) is in the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-cli.md#file-system-confinement).
 How the parts of Evaluate fit together is in [How Evaluate Works](/docs/explanation/how-evaluate-works.md).
-This page explains why the confinement exists and how the runtime builds it.
 
 ## What confinement keeps apart
 
@@ -109,7 +106,8 @@ The limits sit below the first measured losses, and a host's own traffic is a fe
 The summary line of `run` names every `lossy` trial with the canaries lost out of the canaries sent, and a `lossy` trial's observed mounts may be missing a read.
 `complete` means the log delivered every canary the audit sent and the host never handed the log reports faster than it keeps them.
 The canaries sample the log every 50 ms, so on a saturated host a single report of the target can still drop between two canaries, and a trial of a few seconds sends too few canaries to catch every loss at the measured rates; the rate counter is what marks such a trial `lossy`.
-The counter does not cover every loss: on a quiet host the log has also been seen to drop a single read of a Node process in a window of a second or two, with no flood, no loss event and every canary delivered. `complete` makes a missing read unlikely and does not rule it out.
+The counter does not cover every loss: on a quiet host the log has also been seen to drop a single read of a Node process in a window of a second or two, with no flood, no loss event and every canary delivered.
+`complete` makes a missing read unlikely and does not rule it out.
 Every Linux trial records `complete` with no canary sent, since `strace` reports every traced syscall of the call.
 A trial that launched nothing (a gameability arm), every trial of a run that opted out and the evaluator qualification attempts of a sealed-brief agent have no entry, and a `records` run has no trials to list.
 A run whose observer fails (the log stream ended, or a read the runtime made did not come back through it, or the log reported lost events and the trial listed no read, or the trace of a call holds no start of its target) leaves the trial with no record and exits 12.
@@ -143,9 +141,9 @@ A layer process on macOS that serves a Unix socket outside the bridge's director
 ## The bridge's admission token
 
 A sealed-brief agent acts on the target through a bridge the runtime runs, and the bridge admits one connection.
-The token that admits it has to stay out of the target's reach, and the reason it does is the confinement.
+Confinement keeps the admission token outside the target's grants.
 
-The bridge admits one connection, presenting a token its relay process reads from a file.
+The relay reads the admission token from a private file.
 The token exists in that file alone: the relay's environment and argument list carry the file's path, since another process of your user can read a process's environment.
 The token file, the configuration file that names it and the bridge's socket are private files and sit with the other private directories of the evaluation layer: the working directories of a sealed-brief agent, a `command` evaluator and the rubric judge, and the staging directories of the engine, the qualification and `score`.
 A run makes one private parent directory when it starts, before any target runs, and makes each of those beneath it.
@@ -183,7 +181,6 @@ Before the preflight verdict, and for `run` again after the trials and before `r
 `score` and the sealed-brief agent's qualification run `eval-quality score` as a child process, and the result decides a verdict.
 Two protections keep that result honest.
 The runtime writes only into directories it made and holds, and it re-reads every input a score depends on and refuses a result that the held bytes do not reproduce.
-The user reference lists when `score` exits 12; these are the checks.
 
 ### Score output integrity
 
@@ -223,7 +220,7 @@ It then aggregates the held bytes in process with eval-quality's `aggregateStren
 A policy rewritten for the aggregate's read and put back is caught here, because the engine refuses an evidence set whose recorded policy digest it does not name; an aggregate substituted for the staged one is caught by the byte comparison; a call that leaves no aggregate where the held bytes give one is caught by the exit.
 The aggregate's diagnostic text is the CLI's own rendering of an error and is not compared.
 
-Neither check supplies a verdict, an exit code or an artifact: the re-score compares and refuses, and the eval-quality CLI still decides every enforced verdict.
+The in-process re-score compares and refuses mismatches; the eval-quality CLI still decides every enforced verdict and exit.
 The comparison covers the artifact, the exit and the `eval-quality:` stderr lines, the three things `score` copies or classifies from; the call's stdout and its other stderr text are recorded as they came and are not compared.
 A refused call copies no evidence; its reason is on the probe's entry in the invocation's `score.json`, the other probes still run, and `score` exits 12.
 The recorded argv names the run directory's own files, so rerunning `eval-quality score` by hand on it with a fresh `--out` reproduces the persisted evidence byte for byte on a run no process changed.
@@ -234,13 +231,13 @@ The writer hands back only the bytes the runtime wrote, held to the digest it to
 After the call, `run` reads every input again through the writer and compares the call with the in-process score of the held bytes, with the comparison `score` makes: the first input that changed is named, the staged artifact must equal the serialized result byte for byte, the call's exit must be the one the held bytes give, and its `eval-quality:` lines must be the ones the result would print.
 A rewrite that stays, a rewrite put back before the check, a well-formed artifact with altered votes, the same artifact in other bytes, an artifact removed or staged afresh, and an exit or reason that does not follow from the held bytes exit 12 with no vote recorded for the call, no `evidence-artifact.json` under the attempt's directory and no `evaluator-qualification.json`.
 The staged bytes the comparison accepted are the bytes copied into the run directory and read for the vote.
-The comparison supplies no vote, exit or artifact, and the recorded argv of each attempt, run by hand with a fresh `--out`, reproduces the attempt's evidence byte for byte.
+Rerunning an accepted attempt's recorded argv with a fresh `--out` reproduces its evidence bytes.
 
 ## How the skill runner supervises its agent
 
 `tea-skill-runner` runs one headless agent turn and has to report how it ended, whatever the agent does.
 It cannot trust the agent to end its own children, to answer a signal or to stay in one process.
-These are the rules its supervision follows, and the reserves a registry entry's `maxElapsedMs` has to leave for them.
+A registry entry's `maxElapsedMs` must leave room for the startup and shutdown reserves below.
 
 On POSIX, the agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.

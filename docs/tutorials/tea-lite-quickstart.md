@@ -1,198 +1,147 @@
 ---
 title: 'Getting Started with Test Architect'
-description: Learn Test Architect fundamentals by generating and running tests for an existing demo app in 30 minutes
+description: Generate and run Playwright tests for an existing demo app with TEA
 ---
 
-**Test Architect (TEA) Lite** is the smallest useful slice of TEA: one workflow, `automate`, generating tests for features that already exist.
+**Test Architect (TEA) Lite** uses `automate` to test features that already exist.
+This tutorial adds framework setup and a short test plan so you can start with an empty project.
+Allow about 30 minutes after installing the prerequisites.
 
 ## What You'll Build
 
-By the end of this 30-minute tutorial, you'll have:
-
-- A working Playwright test framework
-- Your first risk-based test plan
-- Passing tests for an existing demo app feature
+- A Playwright test framework
+- A risk-based test plan
+- Tests for TodoMVC's create, complete, and filter actions
 
 ## Prerequisites
 
-- Node.js installed (v20 or later)
-- 30 minutes of focused time
-- We'll use TodoMVC (<https://todomvc.com/examples/react/dist/>) as our demo app
+- Node.js 22.20 or later
+- [uv](https://docs.astral.sh/uv/) for BMad setup
+- An AI coding assistant that supports skills
+- A project folder open in that assistant
+
+The demo is [TodoMVC React](https://todomvc.com/examples/react/dist/).
+It runs in the browser and keeps todos in React state.
 
 :::tip[Quick Path]
-Load TEA (`/bmad-tea` or `$bmad-tea`) → scaffold framework (`/bmad-testarch-framework`) → create test plan (`/bmad-testarch-test-design`) → generate tests (`/bmad-testarch-automate`) → run with `npx playwright test`.
+Set up TEA → scaffold with `framework` → plan with `test-design` → generate with `automate` → run `npx playwright test`.
+Use `/bmad-testarch-<workflow>` in Claude Code, Cursor, or Windsurf, and `$bmad-testarch-<workflow>` in Codex.
 :::
 
 ## TEA Approaches Explained
 
-There are three ways to use TEA:
-
-- **TEA Lite** (this tutorial): just the `automate` workflow, to test existing features
-- **TEA Solo**: TEA standalone, without full BMad Method integration
-- **TEA Integrated**: full BMad Method with all TEA workflows across phases
+TEA Lite covers existing features.
+TEA Solo lets you choose individual workflows with your own requirements.
+TEA Integrated follows the BMad development phases.
+See [Engagement Models](/docs/explanation/engagement-models.md) for all five models.
 
 ## Step 0: Setup (2 minutes)
 
-We'll test TodoMVC, a standard demo app used across testing documentation.
+Open [TodoMVC](https://todomvc.com/examples/react/dist/):
 
-**Demo App:** <https://todomvc.com/examples/react/dist/>
-
-TodoMVC runs in your browser with no installation. Open the link above and:
-
-1. Add a few todos (type and press Enter)
-2. Mark some as complete (click checkbox)
-3. Try the "All", "Active", "Completed" filters
-
-Those are the features you'll test.
+1. Add two todos by typing and pressing Enter.
+2. Complete one using its checkbox.
+3. Switch between the All, Active, and Completed filters.
 
 ## Step 1: Install BMad and Scaffold Framework (10 minutes)
 
 ### Install BMad Method and TEA
+
+In your project folder:
 
 ```bash
 npx skills add bmad-code-org/BMAD-METHOD
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-The first command adds BMad Method, including the `bmad` skill that runs setup. The second adds the TEA skills and `bmod-tea`. Then, in your assistant chat, run:
+The first command adds BMad core, including the `bmad` setup skill.
+The second adds TEA.
+In your assistant chat, run:
 
 ```text
-bmad setup
+bmad setup tea
 ```
 
-When it asks:
-
-- **Test artifacts folder:** Keep default
-- **Playwright Utils:** Answer `false` for now (we'll explore this later)
-- **Browser automation:** Answer `none` for now (we'll explore this later)
-- **Everything else:** Keep defaults
-
-You'll see a `_bmad/` folder in your project.
+Keep the defaults except `tea_use_playwright_utils: false` and `tea_browser_automation: none` for this plain Playwright example.
+Setup creates `_bmad/config.toml` with your answers.
 
 ### Load TEA Agent
 
-Start a new chat with your AI assistant and load the agent:
+Load the agent to use its workflow menu:
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-tea`
-- **Codex:** `$bmad-tea`
+- Claude Code / Cursor / Windsurf: `/bmad-tea`
+- Codex: `$bmad-tea`
 
-This loads the Test Architect agent and displays TEA's menu with available workflows.
+You can also invoke each workflow directly.
 
 ### Scaffold Test Framework
 
-Run the framework setup workflow:
+- Claude Code / Cursor / Windsurf: `/bmad-testarch-framework`
+- Codex: `$bmad-testarch-framework`
+- Inside a TEA chat: `TF`
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-framework`
-- **Codex:** `$bmad-testarch-framework`
-- **Inside a `/bmad-tea` chat:** `TF`
+Tell TEA:
 
-TEA will ask you questions:
+```text
+We're testing the React TodoMVC app at https://todomvc.com/examples/react/dist/.
+Use Playwright with TypeScript for browser E2E tests.
+Use GitHub Actions for CI.
+```
 
-**Q: What's your tech stack?**
-A: "We're testing a React web application (TodoMVC)"
-
-**Q: Which test framework?**
-A: "Playwright"
-
-**Q: Testing scope?**
-A: "End-to-end (E2E) testing for a web application"
-
-**Q: Continuous integration/continuous deployment (CI/CD) platform?**
-A: "GitHub Actions" (or your preference)
-
-TEA will generate:
-
-- `tests/` directory with Playwright config
-- `playwright.config.ts` with base configuration
-- Sample test structure
-- `.env.example` for environment variables
-- `.nvmrc` for Node version
-
-**Verify the setup:**
+Review the generated `tests/` structure, `playwright.config.ts`, environment example, and Node version file.
+Install the dependencies and browsers:
 
 ```bash
 npm install
 npx playwright install
 ```
 
-You now have a production-ready test framework.
-
 ## Step 2: Your First Test Design (5 minutes)
-
-Test design is risk-based planning before any test is written.
 
 ### Run Test Design
 
-Run the test design workflow:
+- Claude Code / Cursor / Windsurf: `/bmad-testarch-test-design`
+- Codex: `$bmad-testarch-test-design`
+- Inside a TEA chat: `TD`
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design`
-- **Codex:** `$bmad-testarch-test-design`
-- **Inside a `/bmad-tea` chat:** `TD`
+Ask for an epic-level plan for epic 1:
 
-**Q: System-level or epic-level?**
-A: "Epic-level - I want to test TodoMVC's basic functionality"
+```text
+Plan browser tests for TodoMVC's create, complete, delete, and filter actions.
+Focus on creating todos and the All, Active, and Completed filters.
+```
 
-**Q: What feature are you testing?**
-A: "TodoMVC's core operations - creating, completing, and deleting todos"
-
-**Q: Any specific risks or concerns?**
-A: "We want to ensure the filter buttons (All, Active, Completed) work correctly"
-
-TEA will analyze and create `test-design/test-design-epic-1.md` under your test artifacts folder with:
-
-1. **Risk Assessment**
-   - Probability × Impact scoring
-   - Risk categories (TECH, SEC, PERF, DATA, BUS, OPS)
-   - High-risk areas identified
-
-2. **Test Priorities**
-   - P0: Critical path (creating and displaying todos)
-   - P1: High value (completing todos, filters)
-   - P2: Medium value (deleting todos)
-   - P3: Low value (edge cases)
-
-3. **Coverage Strategy**
-   - E2E tests for user workflows
-   - Which scenarios need testing
-   - Suggested test structure
-
-**Review the test design file.** It records what needs testing and why, before any code is generated.
+Review `test-design/test-design-epic-1.md` under your configured `test_artifacts` folder.
+It should identify risks, assign P0-P3 priorities, and name the scenarios to test.
+Use those priorities to choose what to generate first.
 
 ## Step 3: Generate Tests for Existing Features (5 minutes)
 
-TEA now generates tests based on your test design.
-
 ### Run Automate
 
-Run the automation workflow:
+- Claude Code / Cursor / Windsurf: `/bmad-testarch-automate`
+- Codex: `$bmad-testarch-automate`
+- Inside a TEA chat: `TA`
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate`
-- **Codex:** `$bmad-testarch-automate`
-- **Inside a `/bmad-tea` chat:** `TA`
+Give TEA the app URL and the plan's path:
 
-**Q: What are you testing?**
-A: "TodoMVC React app at <https://todomvc.com/examples/react/dist/> - focus on the test design we just created"
+```text
+Generate Playwright tests for https://todomvc.com/examples/react/dist/.
+Use the epic 1 test plan under my test artifacts folder.
+Cover its P0 and P1 scenarios.
+```
 
-**Q: Reference existing docs?**
-A: "Yes, use test-design/test-design-epic-1.md"
-
-**Q: Any specific test scenarios?**
-A: "Cover the P0 and P1 scenarios from the test design"
-
-TEA will generate:
-
-**`tests/e2e/todomvc.spec.ts`** with tests like:
+A `tests/e2e/todomvc.spec.ts` suite can look like this:
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
-test.describe('TodoMVC - Core Functionality', () => {
+test.describe('TodoMVC: core functionality', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('https://todomvc.com/examples/react/dist/');
   });
 
-  test('should create a new todo', async ({ page }) => {
-    // TodoMVC ships data-testid on every interactive element.
+  test('creates a new todo', async ({ page }) => {
     const todoInput = page.getByTestId('text-input');
     await todoInput.fill('Buy groceries');
     await todoInput.press('Enter');
@@ -200,20 +149,18 @@ test.describe('TodoMVC - Core Functionality', () => {
     await expect(page.getByTestId('todo-item')).toHaveText('Buy groceries');
   });
 
-  test('should mark todo as complete', async ({ page }) => {
+  test('marks a todo as complete', async ({ page }) => {
     const todoInput = page.getByTestId('text-input');
     await todoInput.fill('Complete tutorial');
     await todoInput.press('Enter');
 
-    // todo-item-toggle is the checkbox. Assert its checked state, never a CSS class:
-    // a class name is styling, and styling changes without the behavior changing.
     const toggle = page.getByTestId('todo-item-toggle');
     await toggle.check();
 
     await expect(toggle).toBeChecked();
   });
 
-  test('should filter todos by status', async ({ page }) => {
+  test('filters todos by status', async ({ page }) => {
     const todoInput = page.getByTestId('text-input');
     await todoInput.fill('Buy groceries');
     await todoInput.press('Enter');
@@ -222,7 +169,6 @@ test.describe('TodoMVC - Core Functionality', () => {
 
     await page.getByTestId('todo-item-toggle').first().check();
 
-    // The filters are real links, so getByRole survives markup changes.
     await page.getByRole('link', { name: 'Active' }).click();
     await expect(page.getByTestId('todo-item')).toHaveText(['Write tests']);
 
@@ -232,62 +178,13 @@ test.describe('TodoMVC - Core Functionality', () => {
 });
 ```
 
-TEA also creates:
-
-- **`tests/README.md`** - How to run tests, project conventions
-- **Definition of Done summary** - What makes a test "good"
+TEA also writes test-running instructions and an automation summary with its Definition of Done checklist.
 
 ### With Playwright Utils (Optional Enhancement)
 
-If you have `tea_use_playwright_utils: true` in your config, TEA generates tests using production-ready utilities:
-
-**Vanilla Playwright:**
-
-```typescript
-test('should mark todo as complete', async ({ page, request }) => {
-  // Manual API call
-  const response = await request.post('/api/todos', {
-    data: { title: 'Complete tutorial' },
-  });
-  const todo = await response.json();
-
-  await page.goto('/');
-  const toggle = page.getByTestId('todo-item').filter({ hasText: todo.title }).getByTestId('todo-item-toggle');
-  await toggle.check();
-  await expect(toggle).toBeChecked();
-});
-```
-
-**With Playwright Utils:**
-
-```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
-
-test('should mark todo as complete', async ({ page, apiRequest }) => {
-  // Typed API call with cleaner syntax
-  const { status, body: todo } = await apiRequest({
-    method: 'POST',
-    path: '/api/todos',
-    body: { title: 'Complete tutorial' },
-  });
-
-  expect(status).toBe(201);
-  await page.goto('/');
-  const toggle = page.getByTestId('todo-item').filter({ hasText: todo.title }).getByTestId('todo-item-toggle');
-  await toggle.check();
-  await expect(toggle).toBeChecked();
-});
-```
-
-**Benefits:**
-
-- Type-safe API responses (`{ status, body }`)
-- Automatic retry for 5xx errors
-- Built-in schema validation
-- Cleaner, more maintainable code
-
-See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) to enable this.
+To use Playwright Utils on your own project, follow [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md).
+With the flag enabled and the package installed, TEA uses its helpers for the capabilities they cover.
+TodoMVC keeps its data in browser state, so this example creates todos through the UI.
 
 ## Step 4: Run and Validate (5 minutes)
 
@@ -297,19 +194,9 @@ See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright
 npx playwright test
 ```
 
-You should see:
-
-```text
-Running 3 tests using 1 worker
-
-  ✓  1 [chromium] › tests/e2e/todomvc.spec.ts:8:7 › TodoMVC - Core Functionality › should create a new todo (648ms)
-  ✓  2 [chromium] › tests/e2e/todomvc.spec.ts:17:7 › TodoMVC - Core Functionality › should mark todo as complete (295ms)
-  ✓  3 [chromium] › tests/e2e/todomvc.spec.ts:30:7 › TodoMVC - Core Functionality › should filter todos by status (377ms)
-
-  3 passed (1.9s)
-```
-
-The tests pass against the live TodoMVC app.
+For a Chromium-only configuration, the example suite should report three passing tests.
+A configuration with several browser projects runs the suite once per project.
+Read any failure before continuing; the public demo can change.
 
 ### View Test Report
 
@@ -317,146 +204,80 @@ The tests pass against the live TodoMVC app.
 npx playwright show-report
 ```
 
-The HTML report shows:
-
-- Test execution timeline
-- Screenshots (if any failures)
-- Trace viewer for debugging
+The HTML reporter must be enabled in your Playwright configuration.
+Use the report's screenshots and traces to investigate failures when those artifacts are configured.
 
 ### What Just Happened?
 
-You used **TEA Lite** to:
-
-1. Scaffold a production-ready test framework (`/bmad-testarch-framework`)
-2. Create a risk-based test plan (`/bmad-testarch-test-design`)
-3. Generate comprehensive tests (`/bmad-testarch-automate`)
-4. Run tests against an existing application
+You used `framework`, `test-design`, and `automate` to build and run tests for an existing app.
 
 ## What You Learned
 
 ### Quick Reference
 
-| Action / Workflow         | Claude Code / Cursor / Windsurf | Codex                        | Inside a `/bmad-tea` chat |
-| ------------------------- | ------------------------------- | ---------------------------- | ------------------------- |
-| Load TEA Agent            | `/bmad-tea`                     | `$bmad-tea`                  | n/a                       |
-| Scaffold Framework        | `/bmad-testarch-framework`      | `$bmad-testarch-framework`   | `TF`                      |
-| Test Design               | `/bmad-testarch-test-design`    | `$bmad-testarch-test-design` | `TD`                      |
-| Automate (Generate Tests) | `/bmad-testarch-automate`       | `$bmad-testarch-automate`    | `TA`                      |
+| Action             | Claude Code / Cursor / Windsurf | Codex                        | TEA menu |
+| ------------------ | ------------------------------- | ---------------------------- | -------- |
+| Load agent         | `/bmad-tea`                     | `$bmad-tea`                  | n/a      |
+| Scaffold framework | `/bmad-testarch-framework`      | `$bmad-testarch-framework`   | `TF`     |
+| Test design        | `/bmad-testarch-test-design`    | `$bmad-testarch-test-design` | `TD`     |
+| Generate tests     | `/bmad-testarch-automate`       | `$bmad-testarch-automate`    | `TA`     |
 
 ### TEA Principles
 
-- **Risk-based testing**: depth scales with impact (P0 vs P3)
-- **Test design first**: plan before generating
-- **Network-first patterns**: tests wait for actual responses, with no hard waits
-- **Production-ready from day one**: real patterns, not toy examples
-
-:::tip[Key Takeaway]
-TEA Lite (just `automate`) is perfect for beginners learning TEA fundamentals, testing existing applications, quick test coverage expansion, and teams wanting fast results.
-:::
+Use risk to prioritize scenarios, review the plan before generation, and assert the result of each user action.
 
 ## Understanding ATDD vs Automate
 
-This tutorial used the `automate` workflow to generate tests for **existing features** (tests pass immediately).
-
-**When to use `automate`:**
-
-- Feature already exists
-- Want to add test coverage
-- Tests should pass on first run
-
-**When to use `atdd` (Acceptance Test-Driven Development):**
-
-- Feature doesn't exist yet (Test-Driven Development workflow)
-- Want failing tests BEFORE implementation
-- Following red → green → refactor cycle
-
-See [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) for the test-drive development (TDD) approach.
+Use `automate` when the feature already exists.
+Use `atdd` to create acceptance test scaffolds before implementation, then complete the red → green → refactor cycle.
+See [Run ATDD](/docs/how-to/workflows/run-atdd.md).
 
 ## Next Steps
 
 ### Level Up Your TEA Skills
 
-**How-To Guides** (task-oriented):
-
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Deep dive into risk assessment
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) - Generate failing tests first (TDD)
-- [How to Set Up CI Pipeline](/docs/how-to/workflows/setup-ci.md) - Automate test execution
-- [How to Review Test Quality](/docs/how-to/workflows/run-test-review.md) - Audit test quality
-
-**Explanation** (understanding-oriented):
-
-- [TEA Overview](/docs/explanation/tea-overview.md) - Complete TEA capabilities
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - **Why TEA exists** (problem + solution)
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - How risk scoring works
-
-**Reference** (quick lookup):
-
-- [TEA Command Reference](/docs/reference/commands.md) - All 9 TEA workflows
-- [TEA Configuration](/docs/reference/configuration.md) - Config options
-- [Glossary](/docs/glossary/index.md) - TEA terminology
+- [Set Up CI Pipeline](/docs/how-to/workflows/setup-ci.md) to run tests on pull requests
+- [Review Test Quality](/docs/how-to/workflows/run-test-review.md) to audit the generated suite
+- [TEA Configuration](/docs/reference/configuration.md) for setup options
+- [TEA Command Reference](/docs/reference/commands.md) for all ten workflows
 
 ### Try TEA Solo
 
-Ready for standalone usage without full BMad Method? Use TEA Solo:
-
-- Run any TEA workflow independently
-- Bring your own requirements
-- Use on non-BMad projects
-
-See [TEA Overview](/docs/explanation/tea-overview.md) for engagement models.
+Bring your own requirements and run the workflows you need on any project.
+See [TEA Solo](/docs/explanation/engagement-models.md#model-2-tea-solo).
 
 ### Go Full TEA Integrated
 
-Want the complete quality operating model? Try TEA Integrated with BMad Method:
-
-- Phase 2: Planning with non-functional requirements (NFR) assessment
-- Phase 3: Architecture testability review
-- Phase 4: Per-epic test design → `atdd` → `automate`
-- Release Gate: Coverage traceability and gate decisions
-
-See [BMad Method Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/) for the full workflow.
+Follow [TEA Integrated](/docs/explanation/engagement-models.md#model-4-tea-integrated-greenfield) for testing alongside BMad planning, architecture, and implementation.
 
 ## Common Questions
 
-- [Why can't my tests find elements?](#why-cant-my-tests-find-elements)
-- [How do I fix network timeouts?](#how-do-i-fix-network-timeouts)
-
 ### Why can't my tests find elements?
 
-Most likely you reached for a CSS class. TodoMVC ships a `data-testid` on every interactive element, and `test-review` scores CSS-class selectors down for exactly this reason: a class is styling, and styling changes without behavior changing.
-
-The full set TodoMVC exposes:
-
-```typescript
-page.getByTestId('header'); // Header region
-page.getByTestId('text-input'); // New-todo input, and the edit input
-page.getByTestId('main'); // Main region
-page.getByTestId('toggle-all'); // Complete-all checkbox
-page.getByTestId('todo-list'); // The list
-page.getByTestId('todo-item'); // One todo row
-page.getByTestId('todo-item-toggle'); // Its complete checkbox
-page.getByTestId('todo-item-label'); // Its text label
-page.getByTestId('todo-item-button'); // Its delete button
-page.getByTestId('footer'); // Footer region
-page.getByTestId('footer-navigation'); // All / Active / Completed links
-```
-
-Where an element has a real accessible role, prefer that. The three filters are links, so `page.getByRole('link', { name: 'Active' })` reads better than drilling into `footer-navigation`.
-
-For your own app, the same order applies: `getByRole` and `getByLabel` first, `getByTestId` when there is no meaningful role, CSS classes never.
+Check the failing locator against the page's current markup.
+The example uses `text-input`, `todo-item`, and `todo-item-toggle` test IDs, and accessible link names for filters.
+Scope a locator to one todo row when several elements match.
+See [Troubleshooting](/docs/reference/troubleshooting.md).
 
 ### How do I fix network timeouts?
 
-Increase timeout in `playwright.config.ts`:
+Check that the demo loads in your browser and read the error to identify which timeout fired.
+If navigation needs more time, set `navigationTimeout` under `use` and allow a longer test timeout:
 
 ```typescript
-use: {
-  timeout: 30000, // 30 seconds
-}
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  timeout: 60_000,
+  use: {
+    navigationTimeout: 45_000,
+  },
+});
 ```
+
+Playwright documents each setting in [Timeouts](https://playwright.dev/docs/test-timeouts).
 
 ## Getting Help
 
-- **Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
-- **GitHub Issues:** <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues>
-- **Discord:** Join the BMAD community
+- [TEA documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/)
+- [GitHub Issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues)

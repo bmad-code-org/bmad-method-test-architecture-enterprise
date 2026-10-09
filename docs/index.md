@@ -1,70 +1,67 @@
 ---
-title: Welcome
-description: Test Architect (TEA) - Risk-based testing workflows, automation guidance, and release gates for BMad Method
+title: Test Engineering Architect (TEA)
+description: Test Engineering Architect (TEA) workflows for risk-based testing, automation, evaluation, and release gates
 ---
 
-# Test Architect (TEA)
+# Test Engineering Architect (TEA)
 
-## What is TEA?
+TEA is a BMad module for test strategy and automation.
+Its ten workflows cover learning, test design, setup, automation, evaluation, review, and release decisions.
+You can use it on its own or alongside BMad Method.
 
-TEA (Test Engineering Architect) is a BMAD module for testing strategy and automation. It provides ten workflows covering learning, setup, design, automation, evaluation, review, and release gates.
+Risk assessment, NFR planning, traceability, and release gates apply across stacks.
+Generation and execution support vary by target.
+See the [execution-target matrix](/reference/execution-targets) for the supported stacks and their limits.
 
-- **Workflow‑Driven**: Multiple workflows covering day-to-day activities of a test architect.
-- **Consistent Outputs**: Knowledge-base guidance keeps standards consistent, no matter the agent being used.
-- **Risk‑Based**: P0–P3 prioritization from probability × impact.
-- **Release Gates**: Evidence‑backed go/no‑go decisions with traceability.
-- **Two Layers**: Stack-neutral verification reasoning, plus swappable execution targets. See [Verification Architecture](/explanation/verification-architecture).
-
-## What TEA Works On
-
-Risk assessment, test design, NFR planning, traceability, and release gates apply to any stack. Execution depth varies: browsers, HTTP services, and contracts are covered end to end; Python, Java, Go, .NET, and Ruby backends get detection, scaffolding, and generation; performance and security are planned and audited rather than executed. [Execution Targets](/reference/execution-targets) publishes the full matrix, including the gaps.
-
-## Quick Install
+## Install
 
 ```bash
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-Then type `bmad setup tea` in your assistant chat to answer TEA's setup questions. Setup runs through [uv](https://docs.astral.sh/uv/) and needs the `bmad` skill from BMad Method core; install uv and add the skill with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools` if you do not have them.
+Setup needs [uv](https://docs.astral.sh/uv/) and BMad Method's `bmad` and `bmod-core-tools` skills.
+If those skills are missing, install them:
 
-Then run a workflow. Each one has a command you can type in a fresh session:
+```bash
+npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools
+```
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design`
-- **Codex:** `$bmad-testarch-test-design`
-- **Agent menu:** load `/bmad-tea` (or `$bmad-tea`) first, then type the two-letter code `TD`
+Then type `bmad setup tea` in your assistant chat to answer TEA's setup questions.
+See [Configuration](/reference/configuration) for the settings and output folders.
 
-## Getting Started
+Run `/bmad-testarch-test-design` in Claude Code, Cursor, or Windsurf, or `$bmad-testarch-test-design` in Codex.
+For the agent menu, load `/bmad-tea` or `$bmad-tea` and type `TD`.
+Each workflow also works directly in a fresh session.
 
-The sidebar follows Diátaxis: tutorials teach, how-to guides solve one task, explanation covers concepts and architecture, reference is for lookup, and the glossary defines terms.
+## Choose a starting point
 
-Pick a path:
+- [TEA Lite](/tutorials/tea-lite-quickstart) adds coverage to an existing project.
+- [TEA Academy](/tutorials/learn-testing-tea-academy) teaches testing through seven sessions.
+- [TEA Overview](/explanation/tea-overview) shows the workflow order and BMad lifecycle.
+- [Evaluate Your First Skill](/tutorials/evaluate-your-first-skill) runs an evaluation from requirements to an accepted baseline.
+- [Enterprise projects](/how-to/brownfield/use-tea-for-enterprise) and [existing test suites](/how-to/brownfield/use-tea-with-existing-tests) have their own guides.
+- [Custom workflows](/how-to/customization/extend-tea-with-custom-workflows) explains how to extend the agent menu.
 
-- **New to Testing?** Start with [TEA Academy](/tutorials/learn-testing-tea-academy) - Learn testing from fundamentals to advanced practices (7 sessions, 1-2 weeks)
-- **TEA Lite**: Start with [Getting Started with Test Architect](/tutorials/tea-lite-quickstart) (30 minutes)
-- **Full TEA**: Start with the [TEA Overview](/explanation/tea-overview) for the complete workflow map
-- **Evaluating a skill, an agent or an AI feature**: Start with [Evaluate Your First Skill](/tutorials/evaluate-your-first-skill) to score one skill from requirements to an accepted baseline
-- **Enterprise**: Choose [Greenfield](/how-to/brownfield/use-tea-for-enterprise) or [Brownfield](/how-to/brownfield/use-tea-with-existing-tests)
-- **Custom Extensions**: See [Extend TEA with Custom Workflows](/how-to/customization/extend-tea-with-custom-workflows)
+## Workflows
 
-## Core Workflows
+Use the command in chat.
+On Codex, replace the leading `/` with `$`.
+Menu codes work after loading `bmad-tea`.
 
-The Command column works in a fresh session. The Menu code works only after `/bmad-tea` is loaded. On Codex, swap the leading `/` for `$`.
+See [Commands](/reference/commands) for every invocation and menu code.
 
-| Workflow                                                  | Command                      | Menu code | Purpose                                |
-| --------------------------------------------------------- | ---------------------------- | --------- | -------------------------------------- |
-| [Teach Me Testing](/how-to/workflows/teach-me-testing)    | `/bmad-teach-me-testing`     | `TMT`     | Learn testing (7 sessions, 1-2 weeks)  |
-| [Test Design](/how-to/workflows/run-test-design)          | `/bmad-testarch-test-design` | `TD`      | Risk-based planning + NFR planning     |
-| [Framework Setup](/how-to/workflows/setup-test-framework) | `/bmad-testarch-framework`   | `TF`      | Scaffold test framework                |
-| [CI/CD Integration](/how-to/workflows/setup-ci)           | `/bmad-testarch-ci`          | `CI`      | Set up quality pipeline                |
-| [ATDD](/how-to/workflows/run-atdd)                        | `/bmad-testarch-atdd`        | `AT`      | Failing acceptance tests (TDD)         |
-| [Test Automation](/how-to/workflows/run-automate)         | `/bmad-testarch-automate`    | `TA`      | Expand automation coverage             |
-| [Test Review](/how-to/workflows/run-test-review)          | `/bmad-testarch-test-review` | `RV`      | Quality audit with scoring             |
-| [NFR Evidence Audit](/how-to/workflows/run-nfr-assess)    | `/bmad-testarch-nfr`         | `NR`      | Non-functional evidence evaluation     |
-| [Evaluate](/tutorials/evaluate-your-first-skill)          | `/bmad-testarch-evaluate`    | `EV`      | Scored behavioral evaluation + CI plan |
-| [Requirements Tracing](/how-to/workflows/run-trace)       | `/bmad-testarch-trace`       | `TR`      | Coverage mapping + gate decision       |
+- [Teach Me Testing](/how-to/workflows/teach-me-testing) teaches testing through seven sessions.
+- [Test Design](/how-to/workflows/run-test-design) plans risks, coverage, and NFR evidence.
+- [Framework Setup](/how-to/workflows/setup-test-framework) scaffolds a test framework.
+- [CI Setup](/how-to/workflows/setup-ci) connects tests and quality checks to CI.
+- [ATDD](/how-to/workflows/run-atdd) writes acceptance scaffolds before implementation.
+- [Automate](/how-to/workflows/run-automate) adds coverage to implemented features.
+- [Test Review](/how-to/workflows/run-test-review) audits test quality and scores findings.
+- [NFR Evidence Audit](/how-to/workflows/run-nfr-assess) assesses performance, security, and reliability evidence.
+- [Evaluate](/tutorials/evaluate-your-first-skill) builds and runs a behavioral evaluation.
+- [Trace](/how-to/workflows/run-trace) maps requirements to tests and decides a release gate.
 
-> **Agent menu shortcut:** The TEA agent menu also provides a `GATE` intent, typed in chat after loading `bmad-tea`. It has no command of its own because it is a routing helper rather than a workflow: it walks you through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate decision) and produces no artifact.
+The agent menu's `GATE` intent routes you through test review, NFR evidence audit, and trace Phase 2.
+It produces no artifact of its own.
 
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues)
+Report problems through [GitHub Issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues).

@@ -5,7 +5,8 @@ description: Map requirements, specs, or inferred journeys to tests and make qua
 
 # How to Run Trace with TEA
 
-Use TEA's `trace` workflow for coverage traceability and quality gate decisions. This is a two-phase workflow: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
+Use TEA's `trace` workflow for coverage traceability and quality gate decisions.
+This is a two-phase workflow: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
 
 The workflow resolves the best available coverage oracle automatically: formal requirements first, contract/spec artifacts second, resolvable external pointers third, and synthetic journeys inferred from source as the brownfield fallback.
 
@@ -53,7 +54,7 @@ TEA will ask which phase you're running.
 
 #### Phase 2: Quality Gate Decision
 
-- Make PASS/CONCERNS/FAIL/WAIVED decision
+- Derive PASS, CONCERNS, or FAIL from the evidence
 - Requires Phase 1 complete
 
 **Typical flow:** Run Phase 1 first, review gaps, then run Phase 2 for gate decision.
@@ -76,7 +77,7 @@ TEA will first look for the best available coverage oracle.
 | **Spec**        | `openapi.yaml`                      | API/contract coverage                                            |
 | **Pointer**     | `requirements.md -> tracker/doc`    | External system of record (for example Jira, Linear, Confluence) |
 | **Synthetic**   | inferred from `src/`                | Brownfield UI fallback                                           |
-| **Multiple**    | All of the above                    | Comprehensive analysis                                           |
+| **Multiple**    | All of the above                    | Combined coverage analysis                                       |
 
 **Example Response:**
 
@@ -104,11 +105,14 @@ Include:
 
 #### Requirements Verified by Running the System
 
-Some requirements get verified by driving the app rather than by adding a test file. That evidence leaves nothing in `tests/`, so it used to read as uncovered, and a P0 among them failed the gate.
+You can record requirements verified by driving the application in `{test_artifacts}/live-verification-results.json`.
 
-Record those runs in `{test_artifacts}/live-verification-results.json` and trace counts them at a `live` coverage level. Two limits apply: a result stops counting once the commit it was recorded against is no longer the one under trace, and a requirement covered only by live evidence caps the gate at CONCERNS rather than PASS.
+Trace counts current-commit results at the `live` coverage level.
+Results for other commits are excluded.
+A requirement covered only by live evidence caps the gate at CONCERNS.
 
-The file format and the test-case ID format are published in [Live Verification Results](/docs/reference/live-verification-results.md). Any producer can emit it: an agent, a script, a CI job, or a person recording an outcome by hand.
+The file format and the test-case ID format are published in [Live Verification Results](/docs/reference/live-verification-results.md).
+Any producer can emit it: an agent, a script, a CI job, or a person recording an outcome by hand.
 
 ### 5. Specify Focus Areas (Optional)
 
@@ -123,166 +127,47 @@ Focus on:
 
 ### 6. Review Coverage Matrix
 
-TEA generates a comprehensive traceability matrix.
+TEA generates a traceability matrix.
 
-Every trace output lands in `{test_artifacts}/trace/` and carries the run's scope in its name: `epic-1` for this epic 1 run, `story-{story_key}` for one story, `release-{slug}` or `hotfix-{slug}` for a release or hotfix gate, and `system` for the whole project. A run for epic 2 writes its own files and never opens epic 1's. Re-running the same scope replaces that scope's files. See [Output Layout](/docs/reference/configuration.md#output-layout) for the full rules.
+Every trace output lands in `{test_artifacts}/trace/` and carries the run's scope in its name: `epic-1` for this epic 1 run, `story-{story_key}` for one story, `release-{slug}` or `hotfix-{slug}` for a release or hotfix gate, and `system` for the whole project.
+A run for epic 2 writes its own files and never opens epic 1's.
+Re-running the same scope replaces that scope's files.
+See [Output Layout](/docs/reference/configuration.md#output-layout) for the full rules.
 
 #### Traceability Matrix (`trace/traceability-matrix-epic-1.md`):
 
-````markdown
+```markdown
 # Requirements Traceability Matrix
 
 **Date:** 2026-01-13
-**Scope:** Epic 1 - User Profile Management
-**Phase:** Phase 1 (Traceability Analysis)
+**Scope:** Epic 1: User Profile Management
 
 ## Coverage Summary
 
-| Metric                 | Count | Percentage |
-| ---------------------- | ----- | ---------- |
-| **Total Requirements** | 15    | 100%       |
-| **Full Coverage**      | 11    | 73%        |
-| **Partial Coverage**   | 3     | 20%        |
-| **No Coverage**        | 1     | 7%         |
+| Priority | Fully covered | Total | Coverage |
+| -------- | ------------- | ----- | -------- |
+| P0       | 4             | 5     | 80%      |
+| P1       | 5             | 6     | 83%      |
+| P2       | 2             | 3     | 67%      |
+| P3       | 0             | 1     | 0%       |
 
-### By Priority
+Overall full coverage: 11/15 (73%).
+Three requirements have partial coverage; one has none.
 
-| Priority | Total | Covered | Percentage         |
-| -------- | ----- | ------- | ------------------ |
-| **P0**   | 5     | 5       | 100% ✅            |
-| **P1**   | 6     | 5       | 83% ⚠️             |
-| **P2**   | 3     | 1       | 33% ⚠️             |
-| **P3**   | 1     | 0       | 0% ✅ (acceptable) |
+## Requirement 2: Edit profile (P0)
 
----
+Coverage: PARTIAL.
+`tests/e2e/profile-edit.spec.ts` covers name, email, persistence, and the success message.
+`tests/api/profile.spec.ts` covers name and email updates.
+Bio changes and avatar uploads need API and E2E tests before this P0 requirement is fully covered.
 
-## Detailed Traceability
+## Requirement 15: Export profile as PDF (P2)
 
-### ✅ Requirement 1: User can view their profile (P0)
+Coverage: NONE.
+Record an owner and target release for the missing test.
+```
 
-**Acceptance Criteria:**
-
-- User navigates to /profile
-- Profile displays name, email, avatar
-- Data is current (not cached)
-
-**Test Coverage:** FULL ✅
-
-**Tests:**
-
-- `tests/e2e/profile-view.spec.ts:15` - "should display profile page with current data"
-  - ✅ Navigates to /profile
-  - ✅ Verifies name, email visible
-  - ✅ Verifies avatar displayed
-  - ✅ Validates data freshness via API assertion
-
-- `tests/api/profile.spec.ts:8` - "should fetch user profile via API"
-  - ✅ Calls GET /api/profile
-  - ✅ Validates response schema
-  - ✅ Confirms all fields present
-
----
-
-### ⚠️ Requirement 2: User can edit profile (P0)
-
-**Acceptance Criteria:**
-
-- User clicks "Edit Profile"
-- Can modify name, email, bio
-- Can upload avatar
-- Changes are persisted
-- Success message shown
-
-**Test Coverage:** PARTIAL ⚠️
-
-**Tests:**
-
-- `tests/e2e/profile-edit.spec.ts:22` - "should edit and save profile"
-  - ✅ Clicks edit button
-  - ✅ Modifies name and email
-  - ⚠️ **Does NOT test bio field**
-  - ❌ **Does NOT test avatar upload**
-  - ✅ Verifies persistence
-  - ✅ Verifies success message
-
-- `tests/api/profile.spec.ts:25` - "should update profile via PATCH"
-  - ✅ Calls PATCH /api/profile
-  - ✅ Validates update response
-  - ⚠️ **Only tests name/email, not bio/avatar**
-
-**Missing Coverage:**
-
-- Bio field not tested in E2E or API
-- Avatar upload not tested
-
-**Gap Severity:** HIGH (P0 requirement, critical path)
-
----
-
-### ✅ Requirement 3: Invalid email shows validation error (P1)
-
-**Acceptance Criteria:**
-
-- Enter invalid email format
-- See error message
-- Cannot save changes
-
-**Test Coverage:** FULL ✅
-
-**Tests:**
-
-- `tests/e2e/profile-edit.spec.ts:45` - "should show validation error for invalid email"
-- `tests/api/profile.spec.ts:50` - "should return 400 for invalid email"
-
----
-
-### ❌ Requirement 15: Profile export as PDF (P2)
-
-**Acceptance Criteria:**
-
-- User clicks "Export Profile"
-- PDF downloads with profile data
-
-**Test Coverage:** NONE ❌
-
-**Gap Analysis:**
-
-- **Priority:** P2 (medium)
-- **Risk:** Low (non-critical feature)
-- **Recommendation:** Add in next iteration (not blocking for release)
-
----
-
-## Gap Prioritization
-
-### Critical Gaps (Must Fix Before Release)
-
-| Gap | Requirement              | Priority | Risk | Recommendation      |
-| --- | ------------------------ | -------- | ---- | ------------------- |
-| 1   | Bio field not tested     | P0       | High | Add E2E + API tests |
-| 2   | Avatar upload not tested | P0       | High | Add E2E + API tests |
-
-**Estimated Effort:** 3 hours
-**Owner:** QA team
-**Deadline:** Before release
-
-### Non-Critical Gaps (Can Defer)
-
-| Gap | Requirement               | Priority | Risk | Recommendation      |
-| --- | ------------------------- | -------- | ---- | ------------------- |
-| 3   | Profile export not tested | P2       | Low  | Add in v1.3 release |
-
-**Estimated Effort:** 2 hours
-**Owner:** QA team
-**Deadline:** Next release (February)
-
----
-
-## Recommendations
-
-### 1. Add Bio Field Tests
-
-**Tests Needed (Vanilla Playwright):**
+Add a test for each missing behavior:
 
 ```typescript
 // tests/e2e/profile-edit.spec.ts
@@ -304,7 +189,6 @@ test('should update bio via API', async ({ request }) => {
   expect(bio).toBe('Updated bio');
 });
 ```
-````
 
 **With Playwright Utils:**
 
@@ -343,9 +227,10 @@ test('should update bio via API', async ({ apiRequest, authToken }) => {
 });
 ```
 
-**Note:** `authToken` requires auth-session fixture setup. See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
+`authToken` requires auth-session fixture setup.
+See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
 
-### 2. Add Avatar Upload Tests
+Add avatar upload tests the same way:
 
 **Tests Needed:**
 
@@ -387,9 +272,9 @@ test('should accept valid image upload', async ({ request }) => {
 
 After reviewing traceability:
 
-1. **Fix critical gaps** - Add tests for P0/P1 requirements
-2. **Run `test-review`** - Ensure new tests meet quality standards
-3. **Run Phase 2** - Make gate decision after gaps addressed
+1. **Fix critical gaps**: Add tests for P0/P1 requirements
+2. **Run `test-review`**: Check new tests meet quality standards
+3. **Run Phase 2**: Make gate decision after gaps addressed
 
 ---
 
@@ -400,9 +285,11 @@ After Phase 1 coverage analysis is complete, run Phase 2 for the gate decision.
 **Prerequisites:**
 
 - Phase 1 traceability matrix complete
-- Test execution results available (must have test results)
+- Collection eligible for a gate decision
 
-**Note:** Phase 2 will skip if test execution results aren't provided. The workflow requires actual test run results to make gate decisions.
+A collection is gate-eligible when `allow_gate` is true and `collection_status` is COLLECTED.
+Statuses `waived`, `restricted`, `inaccessible`, and `deferred_shared` leave the gate unevaluated.
+TEA still writes the trace summary for these runs, with no `gate_status` or `gate-decision-{run_key}.json` artifact.
 
 ### 7. Run Phase 2
 
@@ -425,21 +312,19 @@ TEA will ask for:
 - Release gate (production deployment)
 - Hotfix gate (emergency fix)
 
-**Decision Mode:**
-
-- **Deterministic** - Rule-based (coverage thresholds)
-- **Manual** - Team decision with TEA guidance
+TEA derives the decision from coverage thresholds, oracle confidence, and live-evidence overlays.
+It validates any filed waiver and reports its validity alongside the derived decision.
 
 **Example:**
 
 ```text
 Gate type: Epic gate
-Decision mode: Deterministic
 ```
 
 ### 9. Provide Supporting Evidence
 
-TEA loads these inputs itself when they exist. Name a different file when yours lives elsewhere.
+TEA loads these inputs itself when they exist.
+Name a different file when yours lives elsewhere.
 
 **Phase 1 Results:**
 
@@ -468,166 +353,94 @@ TEA takes the first NFR audit it finds, in this order:
 3. `nfr/nfr-assessment-system.md`.
 4. `nfr-assessment.md` at the root of `{test_artifacts}`, written by TEA versions before the `nfr/` folder.
 
-Test-review reports are a separate quality record, and trace does not read them.
+The NFR audit and test design provide context; their results do not determine the trace gate.
+Test-review reports and test execution results are separate release evidence.
+Trace does not use them to derive its decision.
 
 ### 10. Review Gate Decision
 
-TEA makes an evidence-based gate decision and writes it into the Phase 2 section of the same report, `trace/traceability-matrix-epic-1.md`. When the collection is gate-eligible, it also writes the machine-readable gate signal to `trace/gate-decision-epic-1.json` for CI, next to the full summary in `trace/e2e-trace-summary-epic-1.json`.
+TEA makes an evidence-based gate decision and writes it into the Phase 2 section of the same report, `trace/traceability-matrix-epic-1.md`.
+When the collection is gate-eligible, it also writes the machine-readable gate signal to `trace/gate-decision-epic-1.json` for CI, next to the full summary in `trace/e2e-trace-summary-epic-1.json`.
 
 #### Gate Decision (Phase 2 section of `trace/traceability-matrix-epic-1.md`):
 
 ```markdown
----
-
 # Phase 2: Quality Gate Decision
 
-**Gate Type:** Epic Gate
-**Decision:** PASS ✅
+**Scope:** Epic 1
+**Decision:** PASS
 **Date:** 2026-01-13
-**Approvers:** Product Manager, Tech Lead, QA Lead
 
-## Decision Summary
+| Priority | Covered | Total | Coverage |
+| -------- | ------- | ----- | -------- |
+| P0       | 5       | 5     | 100%     |
+| P1       | 6       | 6     | 100%     |
+| P2       | 2       | 3     | 67%      |
+| P3       | 0       | 1     | 0%       |
 
-**Verdict:** Ready to release
-
-**Evidence:**
-
-- P0 coverage: 100% (5/5 requirements)
-- P1 coverage: 100% (6/6 requirements)
-- P2 coverage: 33% (1/3 requirements) - acceptable
-- NFR evidence audit: PASS
-
-## Coverage Analysis
-
-| Priority | Required Coverage | Actual Coverage | Status                 |
-| -------- | ----------------- | --------------- | ---------------------- |
-| **P0**   | 100%              | 100%            | ✅ PASS                |
-| **P1**   | 90%               | 100%            | ✅ PASS                |
-| **P2**   | 50%               | 33%             | ⚠️ Below (acceptable)  |
-| **P3**   | 20%               | 0%              | ✅ PASS (low priority) |
-
-**Rationale:**
-
-- All critical path (P0) requirements fully tested
-- All high-value (P1) requirements fully tested
-- P2 gap (profile export) is low risk and deferred to next release
-
-## Quality Metrics
-
-| Metric         | Threshold        | Actual      | Status |
-| -------------- | ---------------- | ----------- | ------ |
-| P0/P1 Coverage | P0=100%, P1>=90% | 100% / 100% | ✅     |
-| NFR Status     | PASS             | PASS        | ✅     |
-
-## Risks and Mitigations
-
-### Accepted Risks
-
-**Risk 1: Profile export not tested (P2)**
-
-- **Impact:** Medium (users can't export profile)
-- **Mitigation:** Feature flag disabled by default
-- **Plan:** Add tests in v1.3 release (February)
-- **Monitoring:** Track feature flag usage
-
-## Approvals
-
-- [x] **Product Manager** - Business requirements met (Approved: 2026-01-13)
-- [x] **Tech Lead** - Technical quality acceptable (Approved: 2026-01-13)
-- [x] **QA Lead** - Test coverage sufficient (Approved: 2026-01-13)
-
-## Next Steps
-
-### Deployment
-
-1. Merge to main branch
-2. Deploy to staging
-3. Run smoke tests in staging
-4. Deploy to production
-5. Monitor for 24 hours
-
-### Monitoring
-
-- Set alerts for profile endpoint (P99 > 200ms)
-- Track error rates (target: <0.1%)
-- Monitor profile export feature flag usage
-
-### Future Work
-
-- Add profile export tests (v1.3)
-- Expand P2 coverage to 50%
+Overall coverage: 13/15 (87%).
+Coverage meets the P0, P1, and overall thresholds.
+The requirements come from a confirmed oracle, and none relies solely on recorded live verification.
+The profile-export gap is P2 and scheduled for v1.3.
 ```
 
 ### Gate Decision Rules
 
-TEA uses deterministic rules when decision_mode = "deterministic":
+For a gate-eligible collection, TEA applies these coverage thresholds:
 
-| P0 Coverage | P1 Coverage | Overall Coverage | Decision                      |
-| ----------- | ----------- | ---------------- | ----------------------------- |
-| 100%        | ≥90%        | ≥80%             | **PASS** ✅                   |
-| 100%        | 80-89%      | ≥80%             | **CONCERNS** ⚠️               |
-| <100%       | Any         | Any              | **FAIL** ❌                   |
-| Any         | <80%        | Any              | **FAIL** ❌                   |
-| Any         | Any         | <80%             | **FAIL** ❌                   |
-| Any         | Any         | Any              | **WAIVED** ⏭️ (with approval) |
+| P0 Coverage | P1 Coverage | Overall Coverage | Decision        |
+| ----------- | ----------- | ---------------- | --------------- |
+| 100%        | ≥90%        | ≥80%             | **PASS** ✅     |
+| 100%        | 80-89%      | ≥80%             | **CONCERNS** ⚠️ |
+| <100%       | Any         | Any              | **FAIL** ❌     |
+| Any         | <80%        | Any              | **FAIL** ❌     |
+| Any         | Any         | <80%             | **FAIL** ❌     |
 
 **Detailed Rules:**
 
 - **PASS:** P0=100%, P1≥90%, Overall≥80%
-- **CONCERNS:** P0=100%, P1 80-89%, Overall≥80% (below threshold but not critical)
+- **CONCERNS:** P0=100%, P1 80-89%, Overall≥80%
 - **FAIL:** P0<100% OR P1<80% OR Overall<80% (critical gaps)
 
-**PASS** ✅: All criteria met, ready to release
+**PASS** ✅: Coverage thresholds and evidence overlays met
 
-**CONCERNS** ⚠️: Some criteria not met, but:
+For a CONCERNS decision, document:
 
 - Mitigation plan exists
 - Risk is acceptable
 - Team approves proceeding
 - Monitoring in place
 
-**FAIL** ❌: Critical criteria not met:
+**FAIL** ❌: P0 coverage below 100%, P1 coverage below 80%, or overall coverage below 80%.
 
-- P0 requirements not tested
-- Critical security vulnerabilities
-- System is broken
-- Cannot deploy
+Release approval also considers test execution, NFR audits, and test quality under the team's policy.
 
-**WAIVED** ⏭️: Business approves proceeding despite concerns:
-
-- Documented business justification
-- Accepted risks quantified
-- Approver signatures
-- Future plans documented
+A human can approve a waiver of FAIL under the team's release policy.
+Trace checks the filed waiver and records its validity; the reported coverage and derived decision remain unchanged.
 
 ### Example CONCERNS Decision
 
 ```markdown
 ## Decision Summary
 
-**Verdict:** CONCERNS ⚠️ - Proceed with monitoring
+**Verdict:** CONCERNS: release approval requires the documented mitigation
 
 **Evidence:**
 
 - P0 coverage: 100%
 - P1 coverage: 85% (below 90% target)
-- Test quality: 78/100 (below 80 target)
+- Overall coverage: 85%
 
 **Gaps:**
 
 - 1 P1 requirement not tested (avatar upload)
-- Test quality score slightly below threshold
+- P1 coverage is below the 90% PASS threshold
 
 **Mitigation:**
 
 - Avatar upload not critical for v1.2 launch
-- Test quality issues are minor (no flakiness)
+- The avatar-upload gap has an owner and target release
 - Monitoring alerts configured
-
-**Approvals:**
-
-- Product Manager: APPROVED (business priority to launch)
-- Tech Lead: APPROVED (technical risk acceptable)
 ```
 
 ### Example FAIL Decision
@@ -635,13 +448,12 @@ TEA uses deterministic rules when decision_mode = "deterministic":
 ```markdown
 ## Decision Summary
 
-**Verdict:** FAIL ❌ - Cannot release
+**Verdict:** FAIL: release is blocked
 
 **Evidence:**
 
 - P0 coverage: 60% (below required 100%)
-- Critical security vulnerability (CVE-2024-12345)
-- Test quality: 55/100
+- Overall coverage: 65%
 
 **Blockers:**
 
@@ -649,16 +461,11 @@ TEA uses deterministic rules when decision_mode = "deterministic":
    - Critical path completely untested
    - Must add E2E and API tests
 
-2. **SQL injection vulnerability**
-   - Critical security issue
-   - Must fix before deployment
-
 **Actions Required:**
 
 1. Add login tests (QA team, 2 days)
-2. Fix SQL injection (backend team, 1 day)
-3. Re-run security scan (DevOps, 1 hour)
-4. Re-run trace after fixes
+2. Cover the remaining requirements to reach 80% overall coverage
+3. Re-run trace after fixes
 
 **Cannot proceed until all blockers resolved.**
 ```
@@ -674,9 +481,9 @@ TEA uses deterministic rules when decision_mode = "deterministic":
 
 ### Phase 2: Gate Decision
 
-- Go/no-go verdict (PASS/CONCERNS/FAIL/WAIVED)
+- Derived gate decision (PASS, CONCERNS, or FAIL)
 - Evidence summary
-- Approval signatures
+- Waiver validity when a register is filed
 - Next steps and monitoring plan
 
 ## Usage Patterns
@@ -707,8 +514,8 @@ After each epic/story:
 Before deployment:
 1. Run trace Phase 1 (final coverage check)
 2. Run trace Phase 2 (make gate decision)
-3. Get approvals
-4. Deploy (if PASS or WAIVED)
+3. Record release approval under the team's policy, including any approved waiver
+4. Deploy for PASS, or for FAIL with a valid waiver approved under the team's release policy
 ```
 
 ### Brownfield Projects
@@ -738,7 +545,7 @@ Before deployment:
 1. Run trace Phase 1 (final check)
 2. Run trace Phase 2 (gate decision)
 3. Compare to baseline
-4. Deploy if coverage maintained or improved
+4. Record release approval under the team's policy before deployment
 ```
 
 ## Tips
@@ -753,8 +560,6 @@ After Story 2: trace Phase 1 (refresh)
 After Story 3: trace Phase 1 (refresh)
 Before Release: trace Phase 1 + Phase 2 (final gate)
 ```
-
-**Benefit:** Catch gaps early when they're cheap to fix.
 
 ### Use Coverage Trends
 
@@ -811,94 +616,77 @@ Don't aim for 100% across all priorities:
 
 Use traceability in CI:
 
-```yaml
-# .github/workflows/gate-check.yml
-- name: Check coverage
-  run: |
-    # Run trace Phase 1
-    # Parse coverage percentages
-    if [ $P0_COVERAGE -lt 100 ]; then
-      echo "P0 coverage below required 100%"
-      exit 1
-    fi
-    if [ $P1_COVERAGE -lt 80 ]; then
-      echo "P1 coverage below minimum 80%"
-      exit 1
-    fi
-    if [ $OVERALL_COVERAGE -lt 80 ]; then
-      echo "Overall coverage below minimum 80%"
-      exit 1
-    fi
+Run trace with a gate-eligible collection, then read its scoped gate artifact.
+For an epic 1 run:
+
+```bash
+node -e "const gate = require('./_bmad-output/test-artifacts/trace/gate-decision-epic-1.json'); console.log(gate.gate_status); process.exit(gate.gate_status === 'PASS' ? 0 : 1)"
 ```
 
-### Document Waivers Clearly
+Adjust the artifact path to your `test_artifacts` configuration and scope.
+This example blocks every decision except PASS.
+Define how your pipeline handles CONCERNS and human-approved waivers before using it.
 
-If proceeding with WAIVED:
+### Document Waivers
 
-**Required:**
+File the approved waiver in `{test_artifacts}/gate-waivers.md`.
+Use a `## {ID}: {title}` heading for each entry.
+Include the covered gap, priority, FAIL decision, business justification, approver name and role, approval date, expiry, monitoring plan, and remediation plan with a fix target, due date, owner, and verification.
+The approver must have VP, CTO, or product-owner authority.
+Security vulnerabilities and authentication or authorization gaps cannot be waived.
+Trace reports which validation checks each entry passes or fails and preserves the derived decision.
 
 ```markdown
-## Waiver Documentation
+# Gate Waivers
 
-**Waived By:** VP Engineering, Product Lead
-**Date:** 2026-01-15
-**Gate Type:** Release Gate v1.2
+## W-001: Deferred profile-export coverage
 
-**Justification:**
-Business critical to launch by Q1 for investor demo.
-Performance concerns acceptable for initial user base.
+**Covers:** REQ-EXPORT-01: User can export their profile
+**Priority:** P1
+**Scope:** Release v1.2 only
+**Derived decision:** FAIL
+**Reason for failure:** P1 coverage is 3/4 (75%). P0 is 5/5 (100%) and overall is 9/10 (90%).
 
-**Conditions:**
+**Waiver reason:** The investor-demo launch needs to proceed on January 16.
+Manual export is available for the initial customer group while automated coverage is completed.
+**Approver:** Alex Chen, VP Engineering
+**Approval date:** 2026-01-15
+**Expiry:** 2026-01-31
 
-- Set monitoring alerts for P99 > 300ms
-- Plan optimization for v1.3 (due February 28)
-- Monitor user feedback closely
+**Monitoring plan:** The support lead checks export requests daily and escalates any failed manual export to the backend lead.
 
-**Accepted Risks:**
+**Remediation plan:**
 
-- 1% of users may experience 350ms latency
-- Avatar upload feature incomplete
-- Profile export deferred to next release
-
-**Quantified Impact:**
-
-- Affects <100 users at current scale
-- Workaround exists (manual export)
-- Monitoring will catch issues early
-
-**Approvals:**
-
-- VP Engineering: [Signature] Date: 2026-01-15
-- Product Lead: [Signature] Date: 2026-01-15
-- QA Lead: [Signature] Date: 2026-01-15
+- Fix target: Add automated profile-export coverage for v1.3
+- Due date: 2026-01-29
+- Owner: Jamie Rivera, QA Lead
+- Verification: Run the profile-export E2E tests and rerun trace to confirm P1 coverage meets the 90% PASS threshold
 ```
 
 ## Common Issues
 
 ### Too Many Gaps to Fix
 
-**Problem:** Phase 1 shows 50 uncovered requirements.
+Phase 1 shows 50 uncovered requirements.
 
-**Solution:** Prioritize ruthlessly:
+Prioritize the gaps:
 
 1. Fix all P0 gaps (critical path)
 2. Fix high-risk P1 gaps
 3. Accept low-risk P1 gaps with mitigation
 4. Defer all P2/P3 gaps
 
-**Don't try to fix everything** - focus on what matters for release.
-
 ### Can't Find Test Coverage
 
-**Problem:** Tests exist but TEA can't map them to requirements.
+Tests exist but TEA can't map them to requirements.
 
-**Cause:** Tests don't reference requirements.
+Tests don't reference requirements.
 
-**Solution:** Add traceability comments:
+Add traceability comments:
 
 ```typescript
 test('should display profile', async ({ page }) => {
-  // Covers: Requirement 1 - User can view profile
+  // Covers: Requirement 1. User can view profile.
   // Acceptance criteria: Navigate to /profile, see name/email
   await page.goto('/profile');
   await expect(page.getByText('Test User')).toBeVisible();
@@ -941,45 +729,22 @@ Result: PARTIAL coverage (3/4 criteria)
 
 ### Gate Decision Unclear
 
-**Problem:** Not sure if PASS or CONCERNS is appropriate.
-
-**Guideline:**
-
-**Use PASS** ✅ if:
-
-- All P0 requirements 100% covered
-- P1 requirements >90% covered
-- No critical issues
-- NFRs met
-
-**Use CONCERNS** ⚠️ if:
-
-- P1 coverage 80-89% (below PASS target, above minimum)
-- Minor quality issues (score 70-79)
-- NFRs have mitigation plans
-- Team agrees risk is acceptable
-
-**Use FAIL** ❌ if:
-
-- P0 coverage <100% (critical path gaps)
-- P1 coverage <80%
-- Critical security/performance issues
-- No mitigation possible
-
-**When in doubt, use CONCERNS** and document the risk.
+Use the [gate decision rules](#gate-decision-rules) and the report's evidence.
+Check P0, P1, and overall coverage, then review oracle confidence and live-only coverage.
+An ineligible collection leaves the gate unevaluated; resolve the collection restrictions before making a gate decision.
 
 ## Related Guides
 
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Provides requirements for traceability
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Test quality audit, a separate record from the gate
-- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md) - NFR status feeds gate
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Provides requirements for traceability
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Test quality audit, a separate record from the gate
+- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md): Separate NFR evidence for release approval
 
 ## Understanding the Concepts
 
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Why P0 vs P3 matters
-- [TEA Overview](/docs/explanation/tea-overview.md) - Gate decisions in context
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why P0 vs P3 matters
+- [TEA Overview](/docs/explanation/tea-overview.md): Gate decisions in context
 
 ## Reference
 
-- [Command: trace](/docs/reference/commands.md#trace) - Full command reference
-- [TEA Configuration](/docs/reference/configuration.md) - Config options
+- [Command: trace](/docs/reference/commands.md#trace): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): Config options

@@ -5,7 +5,7 @@ description: Add your own workflows to bmad-tea without patching TEA core
 
 # Extend TEA with Custom Workflows
 
-TEA is a standalone module now. That means custom workflows are still supported, but they are not automatically folded into TEA core during updates.
+Install custom workflows as separate skills and add them to the TEA menu through agent customization.
 
 ## The Supported Model
 
@@ -13,13 +13,12 @@ TEA is a standalone module now. That means custom workflows are still supported,
 2. Install it into the project with `npx skills add`.
 3. Add a menu entry to `bmad-tea` through agent customization.
 
-This keeps your TEA extensions compatible with upstream updates.
-
 ## Recommended Approach
 
 ### 1. Create the workflow as a skill
 
-Build a skill that lives outside TEA. BMad Builder is the recommended path for creating reusable custom agents and workflows, and a workflow used across projects can ship as its own module.
+Build a skill that lives outside TEA.
+BMad Builder is the recommended path for creating reusable custom agents and workflows, and a workflow used across projects can ship as its own module.
 
 See:
 
@@ -36,7 +35,8 @@ npx skills add <your-repo-or-path>
 
 ### 3. Attach the workflow to `bmad-tea`
 
-Add a menu item in `_bmad/custom/bmad-tea.toml` (team) or `_bmad/custom/bmad-tea.user.toml` (personal). Entries are keyed by `code`: a new code is appended to Murat's menu, and an existing code replaces that item.
+Add a menu item in `_bmad/custom/bmad-tea.toml` (team) or `_bmad/custom/bmad-tea.user.toml` (personal).
+Entries are keyed by `code`: a new code is appended to Murat's menu, and an existing code replaces that item.
 
 ```toml
 [[agent.menu]]
@@ -45,7 +45,8 @@ description = "My custom TEA extension workflow"
 skill = "my-custom-workflow"
 ```
 
-The `bmad-customize` skill can write this file for you. Start a fresh chat so `bmad-tea` picks up the new menu.
+The `bmad-customize` skill can write this file for you.
+Start a fresh chat so `bmad-tea` picks up the new menu.
 
 ## What Not to Do
 
@@ -55,7 +56,8 @@ The `bmad-customize` skill can write this file for you. Start a fresh chat so `b
 
 ## Path-Safe Authoring for GitHub Copilot and Other Workspace-Root Runtimes
 
-Some IDE skill runners, including GitHub Copilot slash commands in VS Code, execute commands from the **workspace root**, not from the folder that contains the installed `SKILL.md`.
+Some IDE skill runners, including GitHub Copilot slash commands in VS Code, execute commands from the workspace root.
+Anchor package paths explicitly.
 
 Author custom TEA skills and workflows with that constraint in mind:
 

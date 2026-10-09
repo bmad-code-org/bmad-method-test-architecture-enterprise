@@ -1,6 +1,6 @@
 ---
 title: 'Evaluate Your First Skill'
-description: 'Take one small skill from a confirmed requirements statement to a scored evaluation, an accepted baseline and a passing pull request check, with no credential and no model'
+description: 'Score a small skill, accept a baseline, and run its pull request check using a local stub agent'
 ---
 
 **Evaluate** (`bmad-testarch-evaluate`) scores how an AI skill, agent or feature behaves against requirements you confirm.
@@ -10,15 +10,15 @@ This tutorial evaluates one small skill, `refund-check`, from its confirmed requ
 
 By the end of this 15-minute tutorial, you'll have:
 
-- A reading of the confirmed requirements statement the evaluation is held to
+- Requirements that define the expected behavior
 - A scored run in which a seeded defect in the skill is caught and two clean controls pass
 - An accepted baseline that later runs are compared with
-- A passing `tea-evaluate ci --tier pr`, the check a pull request runs
+- A passing `tea-evaluate ci --tier pr` check
 
 ## Prerequisites
 
 - Node.js 22.20 or later
-- A checkout of the TeA repository with its dependencies installed:
+- A checkout of the TEA repository with dependencies installed:
 
 ```shell
 git clone https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise.git
@@ -56,18 +56,18 @@ Decline a refund when its amount is above the limit.
 When the request gives no amount and limit, reply `{"status": "refused"}`.
 ```
 
-The rule that matters is the inclusive limit: a refund of 100 against a limit of 100 is approved.
+The limit is inclusive: a refund of 100 against a limit of 100 is approved.
 A careless edit of that one line, from "at or below" to "below", would decline it.
-The evaluation you run proves that Evaluate notices such an edit.
+The evaluation checks that boundary.
 
 ## Step 1: Read the Intake
 
-Evaluate starts from a conversation between you and the Evaluate skill, and the evaluation is held to what you confirm in it.
-The fixture already holds the finished result of one such conversation, so this step narrates it and you run nothing yet.
-You need no coding agent for that.
+The fixture contains the results of an intake conversation with the Evaluate skill.
+Read the confirmed requirements below.
+This step needs no coding agent.
 To hold the conversation yourself, see [Optional: Run the Intake Yourself](#optional-run-the-intake-yourself) at the end of this page.
 
-In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TeA's `tea-skill-runner`.
+In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TEA's `tea-skill-runner`.
 Then it asked six questions, one for each family of facts that inspection cannot settle.
 The answers that went into the fixture follow.
 
@@ -95,8 +95,7 @@ A: "A 30 second ceiling per command, a disposable copy of the project, no secret
 **Q: Which failures have happened or would hurt most?**
 A: "Someone rewords the approval rule and the limit turns exclusive."
 
-The skill wrote the answers into a requirements statement, read it back and stopped until the adopter confirmed it.
-After the confirmation, the exact bytes went into the evaluation folder as `requirements.md`, the file the fixture holds:
+The skill recorded the answers in `requirements.md` after the adopter confirmed them:
 
 ```markdown
 # Requirements statement: refund check
@@ -128,14 +127,13 @@ An edit to the skill's wording can turn the inclusive limit into an exclusive on
 Confirmed by: tutorial reader, 2026-10-07.
 ```
 
-The skill then went on to the corpus, the contract, the oracles and the adapters, which are stages 3 to 6 of its twelve.
-The fixture `test/fixtures/evaluate-tutorial/` holds the finished result of that work, so the rest of this tutorial runs the evaluation.
+The fixture `test/fixtures/evaluate-tutorial/` also contains the corpus, contract, oracles, and adapter configuration.
+The remaining steps run that evaluation.
 
 ## Step 2: Set Up the Project
 
-Copy the fixture to a scratch directory, so the commands write no file into your checkout.
-The fixture ships with the baseline of its last accepted run, and a run directory if one was made.
-Remove both, since your own run becomes the first baseline.
+Copy the fixture to a scratch directory and remove its saved baseline and runs.
+Your first run will create a new baseline there.
 
 ```bash
 export PROJECT="$(mktemp -d)/refund-project"
@@ -143,8 +141,8 @@ cp -R test/fixtures/evaluate-tutorial "$PROJECT"
 rm -rf "$PROJECT/evaluation/baseline" "$PROJECT/evaluation/runs"
 ```
 
-An evaluation runs the skill through `tea-skill-runner` inside a disposable copy of the project, and a confined run grants the trial that copy.
-The fixture's registry entry in `evaluation.json` therefore names the runner as a path inside the project:
+Each trial runs `tea-skill-runner` inside a disposable project copy.
+The registry names the runner by its path inside that project:
 
 ```json
 {
@@ -160,10 +158,10 @@ The fixture's registry entry in `evaluation.json` therefore names the runner as 
 ```
 
 A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and `preflight` refuses it with exit 3 and `isolation manifest violation: mount outside allowlist` before any trial.
-Two setups avoid that: a `target` that is a path inside `launch.root`, as here, or the bare name with the install directories the audit names, and the `node_modules/.bin` directory that holds the runner's link, declared in `systemPaths` on the entry.
+Use a `target` path inside `launch.root`, as this fixture does, or declare the external install and bin directories in `systemPaths`.
 The reference section [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the how-to section on [exit 3 with `mount outside allowlist`](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md#if-preflight-exits-3-with-mount-outside-allowlist) cover both.
 In your own project, `npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality` puts the runner in `evals/node_modules`.
-Here the next commands place the same files under `node_modules` from your checkout, so the tutorial needs no registry access.
+The commands below copy the installed runner from your checkout.
 
 ```bash
 mkdir -p "$PROJECT/node_modules/.bin" "$PROJECT/node_modules/bmad-method-test-architecture-enterprise"
@@ -268,7 +266,7 @@ tea-evaluate preflight: probes/P-002.probe.json: qualified; the restored digest 
 tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/…
 ```
 
-The verdict comes from eval-quality's own `preflight`, which `tea-evaluate` calls and whose exit it passes through.
+`tea-evaluate` calls eval-quality's `preflight` and passes through its exit.
 A probe whose mutation does not make the defect show stops `preflight` with exit 11 and names the probe.
 A failed eval-quality preflight exits 3 and leaves its verdict under `runs/`.
 See [`preflight`](/docs/reference/tea-evaluate-cli.md#preflight).
@@ -332,9 +330,9 @@ You should see:
 "defect":{"basis":"rate-meets-floor","decision":"meets","floor":1}
 ```
 
-The first line reads: the evaluation exercised the one defect class probe, `P-002`, and caught it, a rate of 1.
-The second line reads: that rate meets the floor of 1 that `evaluation.json` declares.
-The oracle that reads the refund at the limit passed on every clean trial and failed on every mutated trial, which is exactly what a working evaluation shows.
+The evaluation exercised and caught `P-002`, the one defect-class probe.
+Its catch rate of 1 meets the declared floor of 1.
+The boundary oracle passed on every clean trial and failed on every mutated trial.
 See [`score`](/docs/reference/tea-evaluate-cli.md#score).
 
 ## Step 8: Compare and Accept a Baseline
@@ -395,25 +393,20 @@ Each line is one check:
 - `check` validates the folder again.
 - `compile` and `seal` run eval-quality over the contract.
 - `oracle-agreement` reads the baseline evidence for an oracle whose judgment disagrees with the evidence.
-- `replay` replays the baseline through eval-quality's `preflight` and `score` and compares the result with the baseline byte for byte, so a baseline that no longer holds fails here.
+- `replay` replays the baseline through eval-quality's `preflight` and `score` and compares the result with the baseline byte for byte, so a baseline that fails to reproduce is rejected here.
 
-The final exit is the most severe blocking result of the tier, and 0 means no check blocks the pull request.
+Exit 0 means no check blocks the pull request.
 In a pipeline, `bmad-testarch-ci` renders one `tea-evaluate ci` step per tier from this plan.
 See [`ci`](/docs/reference/tea-evaluate-cli.md#ci).
 
 ## What You Learned
 
-You took a skill from a confirmed requirements statement to a scored evaluation:
-
-- Intake turns the adopter's answers into a requirements statement that the evaluation is held to.
-- `check` and `digest` keep the folder consistent, and `preflight` proves the seeded defect shows and rolls back.
-- `run` and `score` measure the clean arm and the mutated arm, and the strength aggregate says whether the defect was caught.
-- `compare --accept` records the baseline, and `ci --tier pr` replays it on every pull request.
+The seeded edit turned the inclusive refund limit into an exclusive one.
+The evaluation caught it, preserved an accepted run, and replayed that evidence through the PR tier.
 
 ## Optional: Run the Intake Yourself
 
-The steps above need none of this.
-To hold the intake conversation for your own skill, you need:
+To run an intake conversation for your own skill, you need:
 
 - TEA installed in your project (`npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`) and set up with `bmad setup tea`
 - A coding agent that runs BMad workflows, such as Claude Code, Cursor, Windsurf or Codex

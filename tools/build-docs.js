@@ -48,17 +48,7 @@ const LLM_WARN_CHARS = LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS;
 const LLM_EXCLUDE_PATTERNS = [
   // The site's not-found page, which is navigation chrome and carries no content.
   '404.md',
-  // Maintainer handoff documents. They record what this repository still owes
-  // itself, how its own evaluation surface is built, and how another BMAD module
-  // would build one, which is of no use to an agent consuming TEA to do testing
-  // work, and together they cost roughly 69k of a 600k budget that had four
-  // characters left. The adoption guide alone is 44k: with it in, the bundle
-  // measures 615,953 characters and the build fails on the cap.
-  'explanation/eval-quality-roadmap',
-  'explanation/eval-quality-command-adapter',
-  'explanation/eval-quality-adoption-guide',
-  // How TEA's own test suite and evals prove TEA's behavior: the same maintainer
-  // audience as the three above, about 12k characters.
+  // TEA's test and evaluation design serves contributors.
   'explanation/how-tea-is-tested',
   // The command-line references: every flag, rule and exit code of one command,
   // which an agent looks up one command at a time when it runs that command, so

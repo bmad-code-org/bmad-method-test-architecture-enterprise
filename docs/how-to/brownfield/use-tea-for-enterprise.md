@@ -5,7 +5,8 @@ description: Use TEA with compliance, security, and regulatory requirements in e
 
 # Running TEA for Enterprise Projects
 
-Use TEA on enterprise projects with compliance, security, audit, and regulatory requirements. This guide covers NFR planning, NFR Evidence Audit, audit trails, and evidence collection.
+Use TEA on enterprise projects with compliance, security, audit, and regulatory requirements.
+This guide covers NFR planning, NFR Evidence Audit, audit trails, and evidence collection.
 
 ## When to Use This
 
@@ -21,15 +22,18 @@ Use TEA on enterprise projects with compliance, security, audit, and regulatory 
 - Compliance requirements documented
 - Stakeholders identified (who approves gates)
 
-Every command below is a TEA workflow. On Codex, swap the leading `/` for `$`. Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Every command below is a TEA workflow.
+On Codex, swap the leading `/` for `$`.
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
 ## Enterprise-Specific TEA Workflows
 
 ### NFR Evidence Audit (`/bmad-testarch-nfr`)
 
-**Purpose:** Audit implemented non-functional requirement evidence against defined thresholds. Compliance mandates the thresholds, certification needs the audit trail, and performance SLAs are contractual, so this workflow carries more weight on enterprise projects than elsewhere.
+Audit implementation evidence against your security, performance, and compliance thresholds.
 
-**When:** Release Gate, or earlier only when implementation evidence already exists. Use `test-design` in Phase 3 to plan NFR thresholds and evidence.
+**When:** Release Gate, or earlier only when implementation evidence already exists.
+Use `test-design` in Phase 3 to plan NFR thresholds and evidence.
 
 **What you give it:**
 
@@ -37,9 +41,9 @@ Every command below is a TEA workflow. On Codex, swap the leading `/` for `$`. F
 Categories: Security, Performance, Reliability, Maintainability
 
 Security thresholds:
-- Zero critical vulnerabilities (required by SOC 2)
+- Zero critical vulnerabilities (project release policy)
 - All endpoints require authentication
-- Data encrypted at rest (FIPS 140-2)
+- Data encrypted at rest (approved encryption configuration)
 - Audit logging on all data access
 
 Evidence:
@@ -52,7 +56,8 @@ Evidence:
 
 ### Trace with Audit Evidence (`/bmad-testarch-trace`)
 
-**Purpose:** Requirements traceability with an audit trail. Auditors, certification bodies, and regulators all ask for requirements-to-test mapping in a form they can read.
+**Purpose:** Requirements traceability with an audit trail.
+Auditors, certification bodies, and regulators all ask for requirements-to-test mapping in a form they can read.
 
 **When:** Phase 2 (baseline), Phase 4 (refresh), Release Gate
 
@@ -63,13 +68,16 @@ Requirements: PRD.md (with compliance requirements)
 Test location: tests/
 ```
 
-Phase 1 produces `trace/traceability-matrix-{run_key}.md` under `{test_artifacts}`, with the requirement-to-test mapping, compliance requirement coverage, gap prioritization, and recommendations. The `run_key` names the scope, such as `epic-4` or `release-v1-2-0`, so each audit period keeps its own matrix.
+Phase 1 produces `trace/traceability-matrix-{run_key}.md` under `{test_artifacts}`, with the requirement-to-test mapping, compliance requirement coverage, gap prioritization, and recommendations.
+The `run_key` names the scope, such as `epic-4` or `release-v1-2-0`, so each audit period keeps its own matrix.
 
-Phase 2 adds the gate decision to the same report: an evidence summary, the decision criteria, the rationale, and a sign-off section for approvers. When the collection is gate-eligible, it also writes the machine-readable decision to `trace/gate-decision-{run_key}.json` for CI.
+Phase 2 adds the gate decision to the same report: an evidence summary, the decision criteria, the rationale, and a sign-off section for approvers.
+When the collection is gate-eligible, it also writes the machine-readable decision to `trace/gate-decision-{run_key}.json` for CI.
 
 ### Test Design with Compliance Focus (`/bmad-testarch-test-design`)
 
-**Purpose:** Risk assessment with compliance and security focus. Security architecture has to line up, compliance requirements have to be testable, and performance requirements are contractual.
+**Purpose:** Risk assessment with compliance and security focus.
+Security architecture has to line up, compliance requirements have to be testable, and performance requirements are contractual.
 
 **When:** Phase 3 (system-level), Phase 4 (epic-level)
 
@@ -88,7 +96,8 @@ System-level mode produces two documents in `test-design/`: `test-design-archite
 
 ## Enterprise TEA Lifecycle
 
-`research`, `prd`, and `architecture` are BMM workflows that ship with the BMad Method module, not with TEA. The `/bmad-testarch-*` commands are TEA.
+The BMad Method module provides `research`, `prd`, and `architecture`.
+The `/bmad-testarch-*` commands are TEA skills.
 
 ### Phase 1: Discovery (Optional but Recommended)
 
@@ -96,19 +105,28 @@ Run the BMM `research` workflow on industry compliance (SOC 2, HIPAA, GDPR), sec
 
 ### Phase 2: Planning (Required)
 
-**1. Define NFRs early.** Run the BMM `prd` workflow and include security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
+**1.
+Define NFRs early.** Run the BMM `prd` workflow and include security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
 
-**2. Plan NFR evidence.** Run `/bmad-testarch-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence. It produces `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
+**2.
+Plan NFR evidence.** Run `/bmad-testarch-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence.
+It produces `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
 
-**3. Baseline (brownfield only).** Run `/bmad-testarch-trace` Phase 1 to establish baseline coverage before new work.
+**3.
+Baseline (brownfield only).** Run `/bmad-testarch-trace` Phase 1 to establish baseline coverage before new work.
 
 ### Phase 3: Solutioning (Required)
 
-**1. Architecture with testability review.** Run the BMM `architecture` workflow, then `/bmad-testarch-test-design` at system-level scope, focused on security architecture testability, performance testing strategy, and compliance requirement mapping.
+**1.
+Architecture with testability review.** Run the BMM `architecture` workflow, then `/bmad-testarch-test-design` at system-level scope, focused on security architecture testability, performance testing strategy, and compliance requirement mapping.
 
-**2. Test infrastructure.** Run `/bmad-testarch-framework`. Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
+**2.
+Test infrastructure.** Run `/bmad-testarch-framework`.
+Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
 
-**3. CI/CD with compliance.** Run `/bmad-testarch-ci`. Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
+**3.
+CI/CD with compliance.** Run `/bmad-testarch-ci`.
+Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
 
 ### Phase 4: Implementation (Required)
 
@@ -123,13 +141,23 @@ Per epic:
 
 ### Release Gate (Required)
 
-**1. Final NFR evidence audit.** Run `/bmad-testarch-nfr` across all categories that have evidence, using the latest performance tests and security scans.
+**1.
+Final NFR evidence audit.** Run `/bmad-testarch-nfr` across all categories that have evidence, using the latest performance tests and security scans.
 
-**2. Final quality audit.** Run `/bmad-testarch-test-review` over the full suite, answering `tests/` for scope. Enterprise quality target: above 85.
+**2.
+Final quality audit.** Run `/bmad-testarch-test-review` over the full suite, answering `tests/` for scope.
+Enterprise quality target: above 85.
 
-**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It reads the Phase 1 matrix from `trace/`, the test-design documents from `test-design/`, the NFR evidence audit from `nfr/`, and actual test execution results. The quality audit from step 2 goes into the release record beside the gate decision; trace does not read it. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
+**3.
+Gate decision.** Run `/bmad-testarch-trace` Phase 2.
+It reads the Phase 1 matrix from `trace/`, the test-design documents from `test-design/`, the NFR evidence audit from `nfr/`, and actual test execution results.
+The quality audit from step 2 goes into the release record beside the gate decision; trace does not read it.
+Without execution results, Phase 2 is skipped.
+The derived decision is PASS, CONCERNS, or FAIL.
+Trace validates any filed waiver and reports it alongside the unchanged decision.
 
-**4. Archive for audit.** Keep all test results, coverage reports, NFR evidence audits, gate decisions, and approver signatures for as long as your compliance regime requires (7 years for HIPAA).
+**4.
+Archive for audit.** Keep test results, coverage reports, NFR audits, gate decisions, and approver signatures according to the retention policy your compliance team approves.
 
 ## Enterprise-Specific Requirements
 
@@ -164,7 +192,7 @@ compliance/
 │   │   └── approvals.pdf
 ```
 
-**Retention:** 7 years (HIPAA), 3 years (SOC 2), per your compliance needs
+Confirm retention periods with your compliance team for each artifact type.
 
 ### Approver Workflows
 
@@ -175,27 +203,27 @@ compliance/
 
 ### Technical Approval
 
-- [ ] QA Lead - Test coverage adequate
-- [ ] Tech Lead - Technical quality acceptable
-- [ ] Security Lead - Security requirements met
+- [ ] QA Lead: Test coverage adequate
+- [ ] Tech Lead: Technical quality acceptable
+- [ ] Security Lead: Security requirements met
 
 ### Business Approval
 
-- [ ] Product Manager - Business requirements met
-- [ ] Compliance Officer - Regulatory requirements met
+- [ ] Product Manager: Business requirements met
+- [ ] Compliance Officer: Regulatory requirements met
 
 ### Executive Approval (for major releases)
 
-- [ ] VP Engineering - Overall quality acceptable
-- [ ] CTO - Architecture approved for production
+- [ ] VP Engineering: Overall quality acceptable
+- [ ] CTO: Architecture approved for production
 ```
 
 ### Compliance Checklists
 
-**SOC 2 Example:**
+**Example controls to discuss with your SOC 2 auditor:**
 
 ```markdown
-## SOC 2 Compliance Checklist
+## Example Security Evidence Checklist
 
 ### Access Controls
 
@@ -217,20 +245,20 @@ compliance/
 
 ### Testing Evidence
 
-- [ ] Test coverage >80% (verified)
+- [ ] Test coverage meets the project threshold
 - [ ] Security tests passing (100%)
 - [ ] Traceability matrix complete
 ```
 
-**HIPAA Example:**
+**Example controls for a system that handles PHI:**
 
 ```markdown
-## HIPAA Compliance Checklist
+## Example PHI Protection Checklist
 
 ### PHI Protection
 
-- [ ] PHI encrypted at rest (AES-256)
-- [ ] PHI encrypted in transit (TLS 1.3)
+- [ ] PHI encrypted at rest under the approved security policy
+- [ ] PHI encrypted in transit under the approved security policy
 - [ ] PHI access logged (audit trail)
 
 ### Access Controls
@@ -315,7 +343,8 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 });
 ```
 
-**Note:** Auth-session requires provider setup in global-setup.ts. See [auth-session configuration](https://seontechnologies.github.io/playwright-utils/auth-session.html).
+Auth-session requires provider setup in global-setup.ts.
+See [auth-session configuration](https://seontechnologies.github.io/playwright-utils/auth-session.html).
 
 **Playwright Utils Benefits for Compliance:**
 
@@ -333,7 +362,7 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 - P0 coverage: 100% (non-negotiable)
 - P1 coverage: >95% (vs 90% for non-enterprise)
 
-**Rationale:** Enterprise systems affect more users, higher stakes.
+Set targets from the risks and contracts that apply to your project.
 
 ### Document Everything
 
@@ -344,16 +373,12 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 - When (timestamps)
 - What evidence (test results, scan reports)
 
-**Use TEA's structured outputs:**
-
-- Reports have timestamps
-- Decisions have rationale
-- Evidence is referenced
-- Audit trail is automatic
+Keep TEA reports with their referenced evidence and record approvals in your release process.
 
 ### Schedule Compliance Testing Early
 
-Penetration testing, security audits, and certification all have lead times measured in months (3 or more for SOC 2). Book them at the start of the project, not at the release gate.
+Book penetration tests and independent audits during planning.
+Confirm lead times with the provider.
 
 ### Use External Validators
 
@@ -364,35 +389,35 @@ Penetration testing, security audits, and certification all have lead times meas
 - Compliance: Certification body
 - Performance: Load testing service
 
-**TEA's role:** Prepare for external validation, don't replace it.
+TEA organizes test evidence for independent review.
 
 ## Related Guides
 
 **Workflow Guides:**
 
-- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md) - Deep dive on evidence auditing
-- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Gate decisions with evidence
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Quality audits
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Compliance-focused planning
+- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md): Deep dive on evidence auditing
+- [How to Run Trace](/docs/how-to/workflows/run-trace.md): Gate decisions with evidence
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Quality audits
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Compliance-focused planning
 
 **Use-Case Guides:**
 
-- [Using TEA with Existing Tests](/docs/how-to/brownfield/use-tea-with-existing-tests.md) - Brownfield patterns
+- [Using TEA with Existing Tests](/docs/how-to/brownfield/use-tea-with-existing-tests.md): Brownfield patterns
 
 **Customization:**
 
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - Production-ready utilities
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): utilities
 
 ## Understanding the Concepts
 
-- [Engagement Models](/docs/explanation/engagement-models.md) - Enterprise model explained
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Probability × impact scoring
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Enterprise quality thresholds
-- [TEA Overview](/docs/explanation/tea-overview.md) - Complete TEA lifecycle
+- [Engagement Models](/docs/explanation/engagement-models.md): Enterprise model explained
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Probability × impact scoring
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): Enterprise quality thresholds
+- [TEA Overview](/docs/explanation/tea-overview.md): Complete TEA lifecycle
 
 ## Reference
 
-- [TEA Command Reference](/docs/reference/commands.md) - All 9 workflows
-- [TEA Configuration](/docs/reference/configuration.md) - Enterprise config options
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - Testing patterns
-- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - TEA terminology
+- [TEA Command Reference](/docs/reference/commands.md): Workflow commands
+- [TEA Configuration](/docs/reference/configuration.md): Enterprise config options
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): Testing patterns
+- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts): TEA terminology
