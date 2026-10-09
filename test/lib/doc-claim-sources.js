@@ -275,8 +275,8 @@ exports.ELEVEN_WIRED_ONE_FUTURE = SETUP_KEYS.length - FUTURE_KEYS.length === 11 
  * `<workflow>` is the skill directory name without its `bmad-testarch-` prefix.
  *
  * A workflow's declared output paths are every `{test_artifacts}/...` string in
- * its `workflow.yaml` (any depth, so `outputs[].path` and trace's named
- * `*_output` keys count) and every `{test_artifacts}/...` value in the YAML
+ * its root or nested phase `workflow.yaml` files (any depth, so
+ * `outputs[].path` and trace's named `*_output` keys count) and every `{test_artifacts}/...` value in the YAML
  * frontmatter of its `steps-c/`, `steps-e/` and `steps-v/` files. Two kinds of
  * value are inputs rather than outputs and are left out on purpose: a
  * `workflow.yaml` key ending in `_input` (trace's `live-verification-results.json`
@@ -362,13 +362,14 @@ function collectTestArtifactPaths(value, key, found) {
 
 function declaredOutputPaths(skillDir) {
   const found = [];
-  const workflowYamlPath = path.join(skillDir, 'workflow.yaml');
-  if (fs.existsSync(workflowYamlPath)) {
+  const workflowYamlFiles = fs.readdirSync(skillDir, { recursive: true }).filter((name) => path.basename(name) === 'workflow.yaml');
+  for (const relativePath of workflowYamlFiles) {
+    const workflowYamlPath = path.join(skillDir, relativePath);
     const fromYaml = [];
     collectTestArtifactPaths(yaml.parse(fs.readFileSync(workflowYamlPath, 'utf8')), null, fromYaml);
     for (const entry of fromYaml) {
       if (entry.key !== null && entry.key.endsWith('_input')) continue;
-      found.push({ source: 'workflow.yaml', ...entry });
+      found.push({ source: relativePath.split(path.sep).join('/'), ...entry });
     }
   }
   for (const stepsDir of [

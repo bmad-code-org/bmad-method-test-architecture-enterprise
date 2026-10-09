@@ -17,7 +17,7 @@ const { spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { parse: parseToml } = require('smol-toml');
 const yaml = require('yaml');
-const { readEvidence, extract } = require('./lib/generation-evidence');
+const { readGenerationEvidence, extract } = require('./lib/generation-evidence');
 const { resolvePlaywrightCli } = require('../cli/atdd-red-check');
 
 const ROOT = path.join(__dirname, '..');
@@ -40,7 +40,7 @@ function read(file) {
 }
 
 function captureBytes(file) {
-  return readEvidence(path.relative(LIVE_CAPTURE, file).split(path.sep).join('/'));
+  return readGenerationEvidence(path.relative(LIVE_CAPTURE, file).split(path.sep).join('/'));
 }
 
 function captureText(file) {
@@ -268,20 +268,21 @@ function replayLiveCaptures() {
   }
   for (const [name, capture] of Object.entries(provenance.captures)) {
     const entry = ['red', 'default-red'].includes(name) ? 'bmad-testarch-atdd' : 'bmad-testarch-automate';
+    const [node, runner, ...argumentsAfterRunner] = capture.invocation.argv;
     check(
-      JSON.stringify(capture.invocation.argv) ===
-        JSON.stringify([
-          'node',
-          '/Users/murat/opensource/_wt/codex-merge-atdd-automate/cli/skill-runner.js',
-          '--skill-root',
-          `.skills/${entry}`,
-          '--agent',
-          'claude',
-          '--capability',
-          'command-execution',
-          '--timeout-ms',
-          '600000',
-        ]) &&
+      node === 'node' &&
+        /(?:^|\/)cli\/skill-runner\.js$/.test(runner.replaceAll('\\', '/')) &&
+        JSON.stringify(argumentsAfterRunner) ===
+          JSON.stringify([
+            '--skill-root',
+            `.skills/${entry}`,
+            '--agent',
+            'claude',
+            '--capability',
+            'command-execution',
+            '--timeout-ms',
+            '600000',
+          ]) &&
         capture.invocation.cwd.endsWith(`/${name}`) &&
         capture.invocation.stdin === 'prompt.txt' &&
         capture.invocation.stdout === 'capture.txt' &&
@@ -565,6 +566,48 @@ function replayResumeAndSettings() {
   }
 }
 
+/** Genuine legacy checkpoint reaches its first terminal loop without a saved budget. */
+function replayLegacyTerminal() {
+  const root = path.join(LIVE_CAPTURE, 'runtime', 'legacy-terminal', 'expand');
+  const data = (name) => captureText(path.join(root, name));
+  const manifest = JSON.parse(data('manifest.json'));
+  for (const record of manifest.files) {
+    check(
+      createHash('sha256')
+        .update(captureBytes(path.join(root, record.archivePath)))
+        .digest('hex') === record.sha256,
+      `legacy terminal capture preserves ${record.archivePath} bytes`,
+    );
+  }
+  const before = JSON.parse(data('before-terminal.json'));
+  const provenance = JSON.parse(data('terminal-provenance.json'));
+  check(
+    !before.checkpointText.includes('healing_rounds_used') && provenance.exitStatus === 0 && provenance.protectedUnchanged,
+    'genuine legacy terminal starts without a repair counter and preserves every protected artifact',
+  );
+  assert.deepEqual(provenance.before, provenance.after);
+  const checkpoint = data(before.checkpoint);
+  check(
+    checkpoint.includes("workflowStatus: 'completed'") &&
+      checkpoint.includes("runKey: 'target-src-orders-js'") &&
+      checkpoint.includes('`healing_rounds_used`: 0') &&
+      checkpoint.includes('initialized now: legacy checkpoint'),
+    'legacy Resume initializes zero repair rounds and completes the supplied external checkpoint',
+  );
+  const report = JSON.parse(data('runner-report.json'));
+  check(
+    report.errors.length === 0 &&
+      leaves(report).length === 6 &&
+      leaves(report).every((test) => test.status === 'passed') &&
+      report.stats.skipped === 0,
+    'legacy terminal executes all six generated tests through the real project runner',
+  );
+  check(
+    data('hooks.log') === 'BEFORE-TERMINAL\nAUTOMATE-PREPEND\nGREET-TERMINAL\nAUTOMATE-APPEND\nAUTOMATE-COMPLETE\n',
+    'legacy terminal retains selected activation order and calls completion once',
+  );
+}
+
 /** Actual browser execution captured through the skill-only native fallback. */
 function replayNativeBrowser() {
   const root = path.join(LIVE_CAPTURE, 'runtime', 'native-browser');
@@ -617,13 +660,36 @@ function replayNativeBrowser() {
 }
 
 try {
+  const interrupted = path.join(scratch, 'interrupted-evidence');
+  const faultPreload = path.join(scratch, 'extraction-fault.cjs');
+  fs.writeFileSync(
+    faultPreload,
+    `const fs = require('node:fs');
+const originalWrite = fs.writeFileSync;
+let writes = 0;
+fs.writeFileSync = (...args) => {
+  if (++writes === 2) throw new Error('controlled filesystem write failure');
+  return originalWrite(...args);
+};
+`,
+  );
+  const failedExtraction = spawnSync(
+    process.execPath,
+    ['--require', faultPreload, path.join(__dirname, 'lib/generation-evidence.js'), '--extract', interrupted],
+    { encoding: 'utf8', timeout: 15_000 },
+  );
+  check(
+    failedExtraction.status === 1 && failedExtraction.stderr.includes('controlled filesystem write failure') && !fs.existsSync(interrupted),
+    'actual extraction CLI cleans partial output after a filesystem write failure',
+  );
+  check(extract(interrupted) > 0, 'extraction can retry the cleaned destination successfully');
   const extracted = path.join(scratch, 'evidence');
   check(
     extract(extracted) === JSON.parse(read(path.join(LIVE_CAPTURE, 'index.json'))).fileCount,
     'immutable capture bundle extracts every archived file for independent review',
   );
   check(
-    fs.readFileSync(path.join(extracted, 'provenance.json')).equals(readEvidence('provenance.json')),
+    fs.readFileSync(path.join(extracted, 'provenance.json')).equals(readGenerationEvidence('provenance.json')),
     'evidence extraction preserves exact original bytes',
   );
   assert.throws(() => extract(extracted), /destination must be new/);
@@ -632,6 +698,7 @@ try {
   executionWitnesses();
   replayLiveCaptures();
   replayNativeBrowser();
+  replayLegacyTerminal();
   replayResumeAndSettings();
   console.log(`\n${checks} generated-test healing checks passed.`);
 } finally {

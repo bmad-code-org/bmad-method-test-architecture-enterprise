@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Legacy automation checkpoints initialize the repair budget on their first validation pass and retain saved rounds after interruption. Documentation output checks cover nested mode workflows; evidence extraction cleans its own partial output after write failures.
 - CodeRabbit reviews source generators and verification tests while generated contracts, probes and captured results stay covered by deterministic CI checks.
 
 - Setup archives preserve each run's Create checkpoints and verify them before Resume restores saved positions. CI alias replay captures retain runner errors and termination signals for diagnosis.

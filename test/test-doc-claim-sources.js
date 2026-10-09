@@ -280,6 +280,36 @@ check('combined automation retains mode output folders and checks nested red wri
   }
 });
 
+check('nested phase workflow declarations reveal misplaced outputs without any step frontmatter', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-nested-workflows-'));
+  try {
+    for (const [skill, phase, owner] of [
+      ['bmad-testarch-automate', 'red', 'atdd'],
+      ['bmad-testarch-framework', 'ci', 'ci'],
+    ]) {
+      const skillDir = path.join(scratch, skill);
+      const phaseDir = path.join(skillDir, phase);
+      fs.mkdirSync(phaseDir, { recursive: true });
+      const workflowFile = path.join(phaseDir, 'workflow.yaml');
+      const ownedOutput = `{test_artifacts}/${owner}/report-{run_key}.md`;
+      const misplacedOutput = `{test_artifacts}/trace/${phase}-report.md`;
+      fs.writeFileSync(
+        workflowFile,
+        `variables:\n  evidence_input: "{test_artifacts}/existing-evidence.json"\noutputs:\n  - id: report\n    path: "${ownedOutput}"\n`,
+      );
+      assert.deepStrictEqual(source.declaredOutputPaths(skillDir), [{ source: `${phase}/workflow.yaml`, key: 'path', value: ownedOutput }]);
+      assert.deepStrictEqual(source.misplacedOutputs(skillDir), []);
+      fs.appendFileSync(workflowFile, `  - id: misplaced\n    path: "${misplacedOutput}"\n`);
+      assert.deepStrictEqual(source.misplacedOutputs(skillDir), [
+        { source: `${phase}/workflow.yaml`, key: 'path', value: misplacedOutput },
+      ]);
+      assert.ok(!fs.existsSync(path.join(phaseDir, 'steps-c')), 'workflow declarations are checked without any matching step metadata');
+    }
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 check('misplacedOutputs flags a flat write target in a step body and leaves legacy lines and trace root inputs alone', () => {
   // A staged fixture skill whose declared outputs all sit in its own folder, so
   // the one misplacement is the screenshot a step body writes flat at the root.

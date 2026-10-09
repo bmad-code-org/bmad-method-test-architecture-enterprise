@@ -22,7 +22,7 @@ function load() {
   return files;
 }
 
-function readEvidence(relative) {
+function readGenerationEvidence(relative) {
   const stored = load()[relative];
   assert.equal(typeof stored, 'string', `missing generation evidence: ${relative}`);
   return Buffer.from(stored, 'base64');
@@ -41,14 +41,21 @@ function extract(destination) {
     );
     return { relative, target };
   });
-  for (const { relative, target } of entries) {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, readEvidence(relative), { flag: 'wx' });
+  // Atomic creation establishes ownership before any cleanup can remove it.
+  fs.mkdirSync(root);
+  try {
+    for (const { relative, target } of entries) {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, readGenerationEvidence(relative), { flag: 'wx' });
+    }
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true });
+    throw error;
   }
   return entries.length;
 }
 
-module.exports = { readEvidence, extract };
+module.exports = { readGenerationEvidence, extract };
 
 if (require.main === module) {
   try {

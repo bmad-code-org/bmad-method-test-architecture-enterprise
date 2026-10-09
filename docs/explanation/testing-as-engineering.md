@@ -43,18 +43,18 @@ TEA combines shared utilities, testing workflows, and live verification tools.
 
 Eight workflows cover learning, planning, test generation, evaluation, and release gates.
 
-| Workflow                   | Purpose                                        |
-| -------------------------- | ---------------------------------------------- |
-| `teach-me-testing`         | Guided testing education                       |
-| `test-design`              | Risk-based planning plus NFR planning          |
-| `framework`                | Scaffold production-ready test infrastructure  |
-| `ci`                       | CI pipeline with selective testing             |
-| `evaluate`                 | Scored, evidence-backed evaluation of a target |
-| `automate` red mode (ATDD) | Acceptance test-driven development             |
-| `automate` expand mode     | Prioritized test automation                    |
-| `test-review`              | Test quality audits (0-100 score)              |
-| `nfr-assess`               | NFR Evidence Audit                             |
-| `trace`                    | Coverage traceability and gate decisions       |
+| Workflow           | Purpose                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| `teach-me-testing` | Guided testing education                                                           |
+| `test-design`      | Risk-based planning plus NFR planning                                              |
+| `framework`        | Scaffold test infrastructure and configure CI                                      |
+| `evaluate`         | Scored, evidence-backed evaluation of a target                                     |
+| `automate`         | Red acceptance tests before implementation and expanded coverage for existing code |
+| `test-review`      | Test quality audits (0-100 score)                                                  |
+| `nfr-assess`       | NFR Evidence Audit                                                                 |
+| `trace`            | Coverage traceability and gate decisions                                           |
+
+All ten command entries remain available across these eight workflows, including `ci` for CI setup and `atdd` for automation red mode. See the [Command Reference](/docs/reference/commands.md) for commands and menu codes.
 
 ### 3. Automation Interfaces: Playwright CLI + MCPs
 
