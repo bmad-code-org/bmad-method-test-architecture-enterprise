@@ -8136,6 +8136,127 @@ async function runTests() {
           );
         }
 
+        // A refused line is read the way the parser reads it: a flag's VALUE is never a flag. A
+        // requester-controlled --focus must not steer the broken gate onto another pull request.
+        resetMock();
+        const steered = await runCliAsync(ghArgs('steered', ['--focus', '--pr=99', '--no-such-flag']), ghEnv('steered'));
+        assert(
+          steered.status === 2 &&
+            mock.comments.length === 1 &&
+            !mock.requests.some((r) => r.url.includes('99')) &&
+            mock.checkRuns[0]?.head_sha === 'abc1234',
+          'a --focus value that looks like --pr=99 cannot redirect the broken gate of a refused line',
+          `status=${steered.status} ${mock.requests.map((r) => r.url)}`,
+        );
+        resetMock();
+        const focusSwitch = await runCliAsync(
+          ghArgs('focusgh', ['--focus', '--github', '--no-such-flag'], { github: false }),
+          ghEnv('focusgh'),
+        );
+        assert(
+          focusSwitch.status === 2 && mock.requests.length === 0,
+          'a --focus value that looks like --github does not turn publishing on for a refused line',
+          `status=${focusSwitch.status} requests=${mock.requests.length}`,
+        );
+        resetMock();
+        const afterDashes = await runCliAsync([...ghArgs('dashes', ['--no-such-flag'], { github: false }), '--', '--github'], {
+          ...ghEnv('dashes'),
+          GITHUB_REF: 'refs/pull/7/merge',
+        });
+        assert(afterDashes.status === 2 && mock.requests.length === 0, 'nothing after -- is a flag, --github included');
+
+        // A refused line keeps its run link and its --publish-as for the comment file.
+        resetMock();
+        const refusedRunUrl = await runCliAsync(ghArgs('refusedurl', ['--run-url', 'https://jenkins.example/job/1', '--no-such-flag']), {
+          ...ghEnv('refusedurl'),
+          GITHUB_RUN_ID: '',
+        });
+        assert(
+          refusedRunUrl.status === 2 &&
+            mock.checkRuns[0]?.details_url === 'https://jenkins.example/job/1' &&
+            mock.comments[0]?.body.includes('https://jenkins.example/job/1'),
+          'a refused line still links the run it was given',
+          `${refusedRunUrl.status} ${JSON.stringify(mock.checkRuns[0])}`,
+        );
+        const refusedFile = path.join(tmpRoot, 'b2-refusedpub', 'comment.md');
+        const refusedTag = await runCliAsync(
+          ['--project-root', b2Repo, '--publish-as', 'vendor', '--comment-out', refusedFile, '--no-such-flag'],
+          ghEnv('refusedpub'),
+        );
+        assert(
+          refusedTag.status === 2 && fs.readFileSync(refusedFile, 'utf8').startsWith('<!-- tea-test-review:vendor -->'),
+          'the comment file of a refused line carries --publish-as',
+          `${refusedTag.status} ${refusedTag.stderr}`,
+        );
+
+        // An unusable identity never becomes claude: claude's real comment and live check run stay put.
+        for (const [label, extra, tag] of [
+          ['a typo in --agent', ['--agent', 'codx', '--check-name', 'TEA Test Review'], 'unknown'],
+          ['--agent none', ['--agent', 'none', '--check-name', 'TEA Test Review'], 'none'],
+          ['a --publish-as the marker cannot carry', ['--publish-as', 'my vendor', '--check-name', 'TEA Test Review'], 'unknown'],
+          ['a --publish-as given without a value', ['--publish-as'], 'unknown'],
+        ]) {
+          resetMock();
+          mock.comments.push({
+            id: 1,
+            body: '<!-- tea-test-review:claude -->\n## TeA test quality: Pass for the changed tests',
+            user: { login: 'github-actions[bot]', type: 'Bot' },
+          });
+          mock.checkRuns.push({
+            id: 2,
+            name: 'TEA Test Review',
+            status: 'in_progress',
+            output: { title: 'Review in progress', summary: 'The TEA test review is running on claude.' },
+          });
+          const impostor = await runCliAsync(ghArgs('impostor', extra), ghEnv('impostor'));
+          assert(
+            impostor.status === 2 &&
+              mock.comments[0].body.includes('Pass for the changed tests') &&
+              mock.checkRuns[0].status === 'in_progress' &&
+              mock.comments.length === 2 &&
+              mock.comments[1].body.startsWith(`<!-- tea-test-review:${tag} -->`),
+            `${label} publishes as ${tag}, never claude, and leaves claude's comment and live check run alone`,
+            `status=${impostor.status} ${mock.comments.map((c) => c.body.split('\n')[0])} ${mock.checkRuns[0]?.status}`,
+          );
+        }
+
+        // A stated --pr that is unusable never falls back to the pull request the event names.
+        resetMock();
+        const badPr = await runCliAsync([...ghArgs('badpr', ['--pr', '7abc'], { github: false }), '--github'], {
+          ...ghEnv('badpr'),
+          GITHUB_REF: 'refs/pull/7/merge',
+        });
+        assert(
+          badPr.status === 2 && mock.comments.length === 0 && mock.checkRuns.length === 0,
+          'a stated --pr that is not a number publishes nowhere instead of to the pull request the event names',
+          `status=${badPr.status} ${mock.requests.map((r) => r.url)}`,
+        );
+        resetMock();
+        const zeroPr = await runCliAsync([...ghArgs('zeropr', ['--pr', '07'], { github: false }), '--github', '--head-sha', 'abc1234'], {
+          ...ghEnv('zeropr'),
+          GITHUB_REF: 'refs/pull/12/merge',
+        });
+        assert(
+          zeroPr.status === 2 && mock.comments.length === 1 && mock.requests.every((r) => !r.url.includes('/12')),
+          'a --pr with a leading zero publishes to that pull request, not to the one the event names',
+          `status=${zeroPr.status} ${mock.requests.map((r) => r.url)}`,
+        );
+
+        // A blank --check-name adopts nothing: it opens no check run and leaves a live one alone.
+        resetMock();
+        mock.checkRuns.push({
+          id: 2,
+          name: 'TEA Test Review',
+          status: 'in_progress',
+          output: { title: 'Review in progress', summary: 'The TEA test review is running on claude.' },
+        });
+        const blankName = await runCliAsync(ghArgs('blankname', ['--check-name', ' ']), ghEnv('blankname'));
+        assert(
+          blankName.status === 2 && mock.checkRuns.length === 1 && mock.checkRuns[0].status === 'in_progress' && mock.comments.length === 1,
+          'a blank --check-name opens no check run and leaves a live one alone',
+          `status=${blankName.status} ${JSON.stringify(mock.checkRuns)}`,
+        );
+
         // Without --github a refused flag makes no GitHub request.
         resetMock();
         const earlyNoGithub = await runCliAsync(ghArgs('earlyoff', ['--min-score', '80%'], { github: false }), ghEnv('earlyoff'));
@@ -8781,6 +8902,21 @@ async function runTests() {
             mock.checkRuns[0].status === 'in_progress' &&
             mock.checkRuns[1].conclusion === 'success',
           'a check run another agent has open under the same name is left alone and this agent opens its own',
+          urls().join(' | '),
+        );
+
+        // A tag that merely starts with this agent's name is another reviewer: claude does not own `claude.v2`.
+        resetMock();
+        mock.checkRuns.push({
+          id: 62,
+          name: 'TEA Test Review',
+          status: 'in_progress',
+          output: { summary: 'The TEA test review is running on claude.v2. [Live log](x)' },
+        });
+        const ghDotted = await runCliAsync(ghArgs('dotted'), ghEnv('dotted'));
+        assert(
+          ghDotted.status === 0 && mock.checkRuns.length === 2 && mock.checkRuns[0].status === 'in_progress',
+          'a check run open under a dotted tag (claude.v2) is not adopted by claude',
           urls().join(' | '),
         );
 

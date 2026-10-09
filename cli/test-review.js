@@ -443,44 +443,90 @@ function foldPath(file) {
   return process.platform === 'linux' ? file : file.toLowerCase();
 }
 
-/** The value after `name` (or in `name=value`) in raw argv, or null. */
-function argvValue(argv, name) {
-  // The last occurrence wins, as it does when the parser accepts the line.
-  let found = null;
+/**
+ * What a command line states, read the way the parser reads it, for a line the parser refused.
+ * An option that takes a value consumes the next token as that value, whatever it looks like, so
+ * `--focus --pr=99` states a focus and no pull request; reading the line with a plain token scan
+ * would let a value steer the broken gate onto another pull request. Nothing after `--` is a flag.
+ * The last occurrence wins, as it does when the parser accepts the line.
+ *
+ * @param {string[]} argv
+ * @param {import('commander').Command} program - Declares which options take a value.
+ * @returns {Map<string, string|true|null>} Long name to its value; true for a switch, null for a
+ *   value-taking option given without one.
+ */
+function statedFlags(argv, program) {
+  const declared = new Map(program.options.filter((option) => option.long).map((option) => [option.long, option]));
+  const stated = new Map();
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] === name) {
-      found = argv[index + 1] !== undefined && !argv[index + 1].startsWith('--') ? argv[index + 1] : null;
-    } else if (argv[index].startsWith(`${name}=`)) {
-      found = argv[index].slice(name.length + 1);
+    const token = argv[index];
+    if (token === '--') {
+      break;
+    }
+    if (!token.startsWith('--')) {
+      continue;
+    }
+    const equals = token.indexOf('=');
+    const name = equals === -1 ? token : token.slice(0, equals);
+    const option = declared.get(name);
+    if (!option) {
+      continue;
+    }
+    if (!option.required && !option.optional) {
+      stated.set(name, true);
+    } else if (equals === -1) {
+      stated.set(name, argv[index + 1] ?? null);
+      index += 1;
+    } else {
+      stated.set(name, token.slice(equals + 1));
     }
   }
-  return found;
+  return stated;
 }
 
 /** A value of `--publish-as` the comment marker can carry as it is: it keeps to the marker's alphabet. */
 const PUBLISH_TAG = /^[A-Za-z0-9][\w.-]*$/;
 
 /**
+ * The identity a run publishes under: the tag on its comment marker and in its "running on" text.
+ * An unusable stated identity (a typo'd --agent, a --publish-as the marker cannot carry, or one
+ * given without a value) is `unknown`, never `claude`: publishing as another reviewer would
+ * overwrite that reviewer's real comment, and adopt its live check run.
+ */
+function reviewerTag(agent, publishAs) {
+  if (publishAs !== undefined) {
+    return typeof publishAs === 'string' && PUBLISH_TAG.test(publishAs.trim()) ? publishAs.trim() : 'unknown';
+  }
+  if (agent === undefined) {
+    return DEFAULT_AGENT;
+  }
+  return AGENTS.has(agent) ? agent : 'unknown';
+}
+
+/**
  * Open the GitHub publisher from whatever the command line states, before anything is validated.
  * A bad flag, an absent agent or an unreadable skill is exactly a failure the pull request should
  * show as a broken gate, so the publisher must exist for those exits too. It reads each value
  * leniently: one it cannot use falls back to its default here, and the validation that follows
- * still refuses it with exit 2. Publishing never changes an exit code.
+ * still refuses it with exit 2. A stated but unusable --pr or --check-name never falls back to
+ * another pull request's or another job's check run. Publishing never changes an exit code.
  *
  * @param {object} session - Receives the publisher on its surface.
- * @param {object} raw - The flags as written: github, repo, pr, checkName, checkRun, prComment,
- *   headSha, agent, publishAs, artifactName.
+ * @param {object} raw - The flags as written, undefined when not stated: github, repo, pr,
+ *   checkName, checkRun, prComment, headSha, agent, publishAs.
  */
 async function openPublisher(session, raw) {
   if (!raw.github) {
     return;
   }
   const trimmed = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined);
-  const prNumber = /^[1-9]\d*$/.test(String(raw.pr ?? '').trim()) ? Number.parseInt(raw.pr, 10) : undefined;
+  const usablePr = /^0*[1-9]\d*$/.test(String(raw.pr ?? '').trim());
+  // undefined lets the event name the pull request; null says the flag was stated and is no pull request.
+  const prNumber = raw.pr === undefined ? undefined : usablePr ? Number.parseInt(raw.pr, 10) : null;
   const headSha = /^[0-9a-f]{7,64}$/i.test(String(raw.headSha ?? '').trim()) ? raw.headSha.trim() : undefined;
-  const publishAs = PUBLISH_TAG.test(String(raw.publishAs ?? '').trim()) ? raw.publishAs.trim() : undefined;
-  // A typo'd --agent must not mint a comment of its own, so only a real adapter names the reviewer.
-  const agent = publishAs ?? (AGENTS.has(raw.agent) && raw.agent !== 'none' ? raw.agent : DEFAULT_AGENT);
+  // A blank --check-name would publish under the default name and adopt a live run of another job.
+  const blankCheckName = raw.checkName !== undefined && trimmed(raw.checkName) === undefined;
+  const agent = reviewerTag(raw.agent, raw.publishAs);
   session.surface.agent = agent;
   session.prCache = new Map();
   try {
@@ -489,7 +535,7 @@ async function openPublisher(session, raw) {
       agent,
       checkName: trimmed(raw.checkName) ?? DEFAULT_CHECK_NAME,
       comment: raw.prComment,
-      checkRun: raw.checkRun,
+      checkRun: raw.checkRun && !blankCheckName,
       headSha,
       artifactName: session.surface.artifactName,
       cache: session.prCache,
@@ -675,30 +721,31 @@ async function runReview(session) {
       return EXIT.PASS;
     }
     // A flag commander refused still owes the surfaces: the comment file and, with --github, the
-    // broken gate on the pull request. Read the flags that name them straight from argv.
-    const argv = normalizedArgv.argv;
-    const commentOut = argvValue(argv, '--comment-out');
-    session.options = { projectRoot: argvValue(argv, '--project-root') ?? process.cwd() };
+    // broken gate on the pull request. Read the flags that name them the way the parser reads them.
+    const stated = statedFlags(normalizedArgv.argv, program);
+    const text = (name) => (typeof stated.get(name) === 'string' ? stated.get(name) : undefined);
+    const statedRunUrl = text('--run-url')?.trim();
+    session.options = { projectRoot: text('--project-root') ?? process.cwd() };
     session.surface = {
-      agent: argvValue(argv, '--agent') ?? undefined,
-      artifactName: argvValue(argv, '--artifact-name')?.trim() || undefined,
-      runUrl: workflowRunUrl() || undefined,
-      commentOut: safeCommentOut(session.options, commentOut ?? undefined, [
-        argvValue(argv, '--output') ?? 'test-review.md',
-        argvValue(argv, '--json'),
-      ]),
+      agent: reviewerTag(
+        text('--agent') ?? (stated.has('--agent') ? null : undefined),
+        stated.has('--publish-as') ? (text('--publish-as') ?? null) : undefined,
+      ),
+      artifactName: text('--artifact-name')?.trim() || undefined,
+      runUrl: statedRunUrl && /^https?:\/\/\S+$/.test(statedRunUrl) ? statedRunUrl : workflowRunUrl() || undefined,
+      commentOut: safeCommentOut(session.options, text('--comment-out'), [text('--output') ?? 'test-review.md', text('--json')]),
       publisher: null,
     };
     await openPublisher(session, {
-      github: argv.includes('--github'),
-      repo: argvValue(argv, '--repo'),
-      pr: argvValue(argv, '--pr'),
-      checkName: argvValue(argv, '--check-name'),
-      checkRun: !argv.includes('--no-check-run'),
-      prComment: !argv.includes('--no-pr-comment'),
-      headSha: argvValue(argv, '--head-sha'),
-      agent: argvValue(argv, '--agent'),
-      publishAs: argvValue(argv, '--publish-as'),
+      github: stated.get('--github') === true,
+      repo: text('--repo'),
+      pr: stated.has('--pr') ? (text('--pr') ?? null) : undefined,
+      checkName: stated.has('--check-name') ? (text('--check-name') ?? '') : undefined,
+      checkRun: stated.get('--no-check-run') !== true,
+      prComment: stated.get('--no-pr-comment') !== true,
+      headSha: text('--head-sha'),
+      agent: text('--agent') ?? (stated.has('--agent') ? null : undefined),
+      publishAs: stated.has('--publish-as') ? (text('--publish-as') ?? null) : undefined,
     });
     fail(EXIT.ENV_ERROR, error.message);
   }
@@ -712,7 +759,7 @@ async function runReview(session) {
   const acceptedHeadSha =
     typeof options.headSha === 'string' && /^[0-9a-f]{7,64}$/i.test(options.headSha.trim()) ? options.headSha.trim() : undefined;
   session.surface = {
-    agent: typeof options.agent === 'string' ? options.agent : undefined,
+    agent: reviewerTag(options.agent, options.publishAs),
     focus: options.focus,
     runUrl: acceptedRunUrl ?? (options.runUrl === undefined ? workflowRunUrl() || undefined : undefined),
     artifactName: options.artifactName?.trim() || undefined,
@@ -721,10 +768,6 @@ async function runReview(session) {
     reportPath: options.output,
     publisher: null,
   };
-  // --publish-as names the reviewer on every surface, the comment file included.
-  if (PUBLISH_TAG.test(String(options.publishAs ?? '').trim())) {
-    session.surface.agent = options.publishAs.trim();
-  }
   // Opened before the first validation, so every exit 2 below reaches the pull request as a broken gate.
   await openPublisher(session, {
     github: options.github,
