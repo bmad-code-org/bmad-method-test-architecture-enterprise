@@ -1,16 +1,16 @@
 ---
 title: 'How to Set Up a Test Framework with TEA'
-description: How to set up a production-ready test framework using TEA
+description: How to set up a test framework using TEA
 ---
 
 # How to Set Up a Test Framework with TEA
 
-Use TEA's `framework` workflow to scaffold a production-ready test framework for your project.
+Use TEA's `framework` workflow to scaffold test directories, fixtures, configuration, and runner commands.
 
 ## When to Use This
 
 - No existing test framework in your project
-- Current test setup isn't production-ready
+- Current setup needs shared fixtures or runner configuration
 - Starting a new project that needs testing infrastructure
 - Phase 3 (Solutioning) after architecture is complete
 
@@ -85,7 +85,8 @@ tests/
 
 ## Playwright Utils Integration (on by default)
 
-**Applies to JavaScript/TypeScript projects on the Playwright runner only.** A Cypress project, a Maestro mobile suite, or a backend suite in pytest, JUnit, Go test, xUnit, or RSpec is scaffolded from its own conventions and this section does not apply, whatever the flag says.
+This integration applies to JavaScript and TypeScript suites using the Playwright runner.
+TEA uses the selected framework's conventions for other stacks.
 
 `tea_use_playwright_utils` defaults to `true`, so unless you turned it off in `bmad setup tea` this workflow asks to install `@seontechnologies/playwright-utils` and then scaffolds against it:
 
@@ -95,16 +96,40 @@ npm install -D @seontechnologies/playwright-utils
 
 What gets created on the enabled branch:
 
-- `{test_dir}/support/merged-fixtures.ts` — the single entry point every spec imports `test` from, composed with `mergeTests`
-- `{test_dir}/support/auth-fixture.ts` — `setAuthProvider` plus `createAuthFixtures()`. When the project's auth endpoint is unknown, `getToken` ships as a marked `TODO` and the summary names it, rather than a form-driven login fixture standing in
+- `{test_dir}/support/merged-fixtures.ts`: the single entry point every spec imports `test` from, composed with `mergeTests`
+- `{test_dir}/support/auth-fixture.ts`: `setAuthProvider` and `createAuthFixtures()`. If the auth endpoint is unknown, `getToken` contains a `TODO` listed in the summary.
 - `global-setup.ts` wiring for `authStorageInit()` and `configureAuthSession()`, with the token storage directory gitignored
 - Sample tests written in the same style, since every later workflow reads them as the reference
 
-Declining the install falls the whole scaffold through to the vanilla branch. A half-scaffold that imports a package the project does not have is worse than either.
+If you decline the install, TEA scaffolds plain Playwright fixtures.
 
 **Utilities available:** api-request, network-recorder, auth-session, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor
 
-Set `tea_use_playwright_utils: false` in config to scaffold plain Playwright fixtures instead.
+Set `tea_use_playwright_utils = "false"` under `[modules.tea]` for plain Playwright fixtures.
+
+## Write-Time Quality Checks
+
+The framework workflow's Create mode installs the hook on Claude Code; Resume installs it when continuing through that setup step.
+TEA copies `.claude/hooks/tea-enforce.cjs` and registers pre-write, post-write, and stop hooks in the project's `.claude/settings.json`, preserving existing settings.
+The hooks run in ordinary coding sessions in that project.
+Rules apply to the test and Pact config paths in `.tea/enforce-config.json`.
+
+Seven rules block supported violations:
+
+- Focused tests such as `.only`
+- Tautological assertions such as `expect(value).toBe(value)`
+- Hard waits such as `waitForTimeout`
+- Test files above the configured line limit, which defaults to 1,000
+- Maestro flows with no assertion or destination-state wait that can fail
+- Pact config without `fileParallelism: false`
+- Pact settings that defeat serialization, such as concurrent execution, multiple workers, or disabled isolation
+
+Undocumented disabled tests produce a warning.
+Post-write and stop checks catch violations that bypassed the pre-write hook.
+If the hook itself errors, it fails open and allows the write.
+
+The workflow skips hook installation on platforms without this interception point and records that in its summary.
+Run `test-review` to audit test quality on those platforms.
 
 ## Optional: MCP Enhancements
 

@@ -31,7 +31,7 @@
  *   and each violated rule; this is what turns the one synchronous reading of
  *   the schema-version constants (since Story 1.5, `cli/lib/evaluate/engine.js`)
  *   staying synchronous from prose in
- *   `docs/explanation/eval-quality-command-adapter.md` into a check.
+ *   `test/docs/eval-quality-command-adapter.md` into a check.
  * - `dependency-direction` stays quiet on a fixture whose only construct is a
  *   `require(name) {` method shorthand inside an object literal: this is the
  *   exact shape eval-quality's own scanner used to misread as a `require()`

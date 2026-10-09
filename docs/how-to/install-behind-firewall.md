@@ -5,7 +5,8 @@ description: Install the TEA skills from a local clone or internal mirror when G
 
 # Install TEA Behind a Corporate Firewall
 
-`npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` fetches TEA from GitHub. If your network blocks GitHub, install from a local clone or an internal Git mirror instead.
+`npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` fetches TEA from GitHub.
+If your network blocks GitHub, use a local clone or internal Git mirror.
 
 1. Clone TEA locally, or use your internal Git mirror:
 
@@ -29,7 +30,8 @@ description: Install the TEA skills from a local clone or internal mirror when G
    npx skills add /path/to/local/BMAD-METHOD --skill bmad bmod-core-tools
    ```
 
-   `bmad setup` runs through [uv](https://docs.astral.sh/uv/) with Python 3.11 or later. Install uv from an internal mirror, and make a Python 3.11 interpreter available to it, because uv downloads Python from the internet when none is installed.
+   `bmad setup` runs through [uv](https://docs.astral.sh/uv/) with Python 3.11 or later.
+   Install uv from an internal mirror, and make a Python 3.11 interpreter available to it, because uv downloads Python from the internet when none is installed.
 
 4. In your assistant chat, run:
 
@@ -37,6 +39,8 @@ description: Install the TEA skills from a local clone or internal mirror when G
    bmad setup tea
    ```
 
-Setup and every TEA workflow run locally once the skills are installed. Updates are the exception: `bmad setup` updates through `npx skills update`, which looks for new versions on GitHub. To update behind the firewall, pull the new version into your clone or mirror and run step 2 again.
+Setup and every TEA workflow run locally once the skills are installed.
+Updates are the exception: `bmad setup` updates through `npx skills update`, which looks for new versions on GitHub.
+To update behind the firewall, pull the new version into your clone or mirror and run step 2 again.
 
 If your environment also blocks npm, use an internal npm proxy so `npx` can fetch the `skills` CLI.

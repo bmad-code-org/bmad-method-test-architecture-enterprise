@@ -6,10 +6,10 @@ labels: 'rule-quality'
 assignees: ''
 ---
 
-TEA ships rules. This report is about a rule that failed to steer an agent, not about TEA crashing. One report per rule, please.
+Report one rule that an agent misread, ignored, or followed into an incorrect result.
 
 **Agent and model**
-Which agent ran, and which model: e.g. Claude Code / Claude Opus 4.6, Cursor / GPT-5.1, Windsurf, Codex.
+Name the agent, model, and versions.
 
 **Which rule**
 The file and the section inside it. Examples:
@@ -19,7 +19,7 @@ The file and the section inside it. Examples:
 - a step file such as `steps-c/step-03-generate-tests.md`
 
 **Which workflow was running**
-e.g. `test-design`, `automate`, `atdd`, `test-review`, `trace`, `nfr-assess`, `ci`, `framework`, `teach-me-testing`.
+Name the workflow and its invocation.
 
 **The prompt you gave**
 
@@ -28,14 +28,14 @@ e.g. `test-design`, `automate`, `atdd`, `test-review`, `trace`, `nfr-assess`, `c
 ```
 
 **What it produced**
-The non-compliant part only. Trim to the smallest excerpt that still shows the violation.
+Include the smallest excerpt that shows the violation.
 
 ```text
 
 ```
 
 **What it should have done**
-State the behavior the rule was supposed to produce, and why you read the rule as requiring it.
+Describe the expected behavior and the wording that requires it.
 
 **Your read of the cause** (optional)
 

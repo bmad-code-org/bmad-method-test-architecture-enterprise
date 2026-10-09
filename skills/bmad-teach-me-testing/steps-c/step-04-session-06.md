@@ -50,7 +50,7 @@ To teach test quality auditing and requirements traceability using Test Review a
 **What you'll learn:**
 
 - Test Review workflow (quality scoring)
-- 5 dimensions of test quality
+- Registry criteria, severity deductions, bonuses, and score caps
 - Trace workflow (requirements traceability)
 - Release gate decisions
 
@@ -66,39 +66,23 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 **Purpose:** Audit test quality with 0-100 scoring
 
-**5 Dimensions of Quality:**
+#### Rubric 5.0: criteria and severity scoring
 
-#### 1. Determinism (0-100)
+The review applies the 35 rows in the test-review criteria registry. Each finding names its row, evidence, and fixed severity.
+Start at 100 and deduct for every finding:
 
-- Tests pass/fail consistently
-- No flakiness, no randomness
-- Proper async handling
+| Severity | Deduction | Score cap when present |
+| -------- | --------- | ---------------------- |
+| CRITICAL | 10        | 69                     |
+| HIGH     | 5         | 79                     |
+| MEDIUM   | 2         | 89                     |
+| LOW      | 1         | 99                     |
 
-#### 2. Isolation (0-100)
+Five bonus categories can each add 5 points: fixture setup, data factories, network-first ordering, isolation, and stable test IDs. Each bonus must hold across every reviewed file, for a maximum of 25 points.
+Clamp the raw score to 0–100, then apply the cap for the highest finding severity.
+A CRITICAL finding recommends Block; a HIGH finding or score below 70 recommends Request Changes. MEDIUM or LOW findings at 70 or above recommend Approve with Comments. A review with no findings recommends Approve.
 
-- Tests run independently
-- No shared state
-- Parallelizable
-
-#### 3. Assertions (0-100)
-
-- Correct checks for expected behavior
-- Meaningful assertions (not just presence)
-- Fails for the right reasons
-
-#### 4. Structure (0-100)
-
-- Readable test code
-- Clear organization and naming
-- Minimal duplication
-
-#### 5. Performance (0-100)
-
-- Test execution speed
-- Resource usage
-- Parallel efficiency
-
-**Overall Score = Average of 5 dimensions.**
+Example: one HIGH finding deducts 5 points. The raw score is 95, and the HIGH cap makes the effective score 79.
 
 {Role-adapted example}
 
@@ -151,11 +135,11 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 ### 6. Quiz (3 questions)
 
-**Q1:** "What are the 5 dimensions in Test Review workflow?
-A) Speed, cost, coverage, bugs, time
-B) Determinism, Isolation, Assertions, Structure, Performance
-C) Unit, integration, E2E, manual, exploratory
-D) P0, P1, P2, P3, P4"
+**Q1:** "How does rubric 5.0 calculate the test-review score?
+A) Average five dimension scores
+B) Start at 100, apply severity deductions and up to 25 bonus points, then apply the highest-severity cap
+C) Count the number of tests
+D) Use line coverage alone"
 
 Correct: B
 
@@ -204,4 +188,4 @@ Return to {nextStepFile}.
 
 ## 🚨 SUCCESS METRICS
 
-✅ Test Review and Trace taught, quality dimensions explained, quiz passed, notes generated, returned to hub.
+✅ Test Review and Trace taught, severity scoring explained, quiz passed, notes generated, returned to hub.

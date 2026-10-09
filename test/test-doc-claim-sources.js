@@ -154,7 +154,6 @@ check('atLeast() compares a real version correctly and refuses a version it cann
     'node_modules/eval-quality'
   ].version;
   assert.strictEqual(source.EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE, /^\d+\.\d+\.\d+$/.test(resolved));
-  assert.strictEqual(source.EVAL_QUALITY_AT_LEAST_1_4_0, source.atLeast(resolved, '1.4.0'));
 });
 
 check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {

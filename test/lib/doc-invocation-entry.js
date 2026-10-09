@@ -49,13 +49,13 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
  * comment the documentation carries beside each one. A script reached from
  * more than one page carries more than one entry here, one per page's own
  * phrasing -- `test/README.md` comments its own copy of seven of these
- * scripts differently than `README.md` and the adoption guide do.
+ * scripts differently than the adoption guide does.
  * `ALLOWLISTED_SCRIPTS`, derived from the values, is the one hardcoded
  * allowlist both dispatch paths below check against: a matched-but-unlisted
  * line can never reach real `npm`, whichever path it arrives by.
  */
 const ALLOWLIST_BY_COMMENT = new Map([
-  // README.md and docs/explanation/eval-quality-adoption-guide.md
+  // test/docs/eval-quality-adoption-guide.md
   ['fragment-selection corpus, static', 'test:eval-data'],
   ['trace corpus, static', 'test:eval-trace-data'],
   ['manifest against harness constants, and the preflight argv', 'test:eval-schemas'],

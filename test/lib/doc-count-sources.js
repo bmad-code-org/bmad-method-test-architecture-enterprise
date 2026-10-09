@@ -52,7 +52,7 @@ function repetitionsOf(suiteId) {
 }
 
 /**
- * The roadmap sentence's six numbers (docs/explanation/eval-quality-roadmap.md:30).
+ * The roadmap sentence's six numbers (test/docs/eval-quality-roadmap.md:30).
  *
  * The repetition count is the manifest's `repetitions` field, not a harness's own
  * internal default: `test/eval-all.js`'s `repetitionsFor()` always passes
@@ -76,7 +76,7 @@ exports.NFR_CALLS = caseCountOf('nfr') * repetitionsOf('nfr');
 exports.TRACE_CALLS = caseCountOf('trace') * repetitionsOf('trace');
 
 /**
- * The `ci` suite's call count (README.md:424). Added after the roadmap and
+ * The `ci` suite's call count (test/README.md). Added after the roadmap and
  * adoption-guide sentences were written, so it is held only where a sentence
  * actually names it; the six-suite sentences above describe exactly the six
  * suites they name and are not thereby incomplete.
@@ -84,11 +84,15 @@ exports.TRACE_CALLS = caseCountOf('trace') * repetitionsOf('trace');
 exports.CI_CALLS = caseCountOf('ci') * repetitionsOf('ci');
 
 /**
- * The `atdd` suite's call count (README.md:424 and the roadmap sentence).
+ * The `atdd` suite's call count (test/README.md and the roadmap sentence).
  * Added after the roadmap, adoption-guide and `ci` sentences were written, for
  * the same reason `CI_CALLS` is: held only where a sentence actually names it.
  */
 exports.ATDD_CALLS = caseCountOf('atdd') * repetitionsOf('atdd');
+
+/** The teaching suite makes one agent call per turn for every repetition. */
+exports.TEACH_ME_TESTING_CALLS =
+  caseCountOf('teach-me-testing') * repetitionsOf('teach-me-testing') * require('../eval-teach-me-testing').TURN_COUNT;
 
 /** One `eval:all` run's total model calls, for one runner, across every suite. */
 exports.TOTAL_CALLS =
@@ -99,19 +103,20 @@ exports.TOTAL_CALLS =
   exports.NFR_CALLS +
   exports.TRACE_CALLS +
   exports.CI_CALLS +
-  exports.ATDD_CALLS;
+  exports.ATDD_CALLS +
+  exports.TEACH_ME_TESTING_CALLS;
 
 /** All three built-in runners (`claude`, `codex`, `agy`) making one `eval:all` run each. */
 exports.TOTAL_CALLS_THREE_RUNNERS = exports.TOTAL_CALLS * 3;
 
-/** The fragment-selection case count, held in README.md. */
+/** The fragment-selection case count, held in test/README.md. */
 exports.FRAGMENT_SELECTION_CASES = caseCountOf('fragment-selection');
 
 /**
  * How many suites `eval:all --preflight-only` preflights, and how many of those
  * get a real agent-preflight check (an executable on `PATH`, `--version`, a
  * credential) rather than the corpus-and-tooling check `automate` gets,
- * because it invokes no agent at all (README.md's preflight-output sentence).
+ * because it invokes no agent at all (test/README.md's preflight-output sentence).
  * An `evaluate-authored` suite is left out: `eval:all` skips it, since
  * `tea-evaluate` runs it, and it declares no harness or runner capabilities.
  * The split is read off `runnerCapabilities` rather than the suite's name, so
@@ -144,7 +149,7 @@ exports.NPM_TEST_CHAIN_LENGTH = chainedScripts(packageJson).length;
 exports.ADVISORY_OBSERVATIONS_MAX_ITEMS = require('../../cli/lib/parse-report.js').ADVISORY_OBSERVATIONS_MAX_ITEMS;
 
 /**
- * The knowledge-fragment tier breakdown (README.md:215), read off the one
+ * The knowledge-fragment tier breakdown (docs/reference/knowledge-base.md), read off the one
  * `tea-index.csv` every workflow loads as `{tea-knowledge}/tea-index.csv`.
  *
  * The path has an environment-variable override so
@@ -196,8 +201,8 @@ if (duplicateIds.length > 0) {
 }
 
 /**
- * The replay corpus's own counts (docs/explanation/eval-quality-adoption-guide.md, the
- * Replay corpus row and the replay section, and docs/explanation/eval-quality-roadmap.md),
+ * The replay corpus's own counts (test/docs/eval-quality-adoption-guide.md, the
+ * Replay corpus row and the replay section, and test/docs/eval-quality-roadmap.md),
  * read from `test/replay/<suite>/<case>/expected.json` so that a new stored case cannot
  * leave a sentence stale.
  *

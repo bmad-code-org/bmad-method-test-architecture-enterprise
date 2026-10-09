@@ -271,7 +271,8 @@ P-013 defect caught=true 3/3
 
 A row with `caught=false` means the evaluation misses a class of defect.
 Ask the skill for a new development probe of that class, repair it there, and run the held-out partition again.
-A row that prints `outcome withheld` has a `null` outcome. It hides its cause on purpose, so reproduce the class failure in development.
+A row that prints `outcome withheld` has a `null` outcome.
+It hides its cause on purpose, so reproduce the class failure in development.
 
 ## How You Know It Worked
 

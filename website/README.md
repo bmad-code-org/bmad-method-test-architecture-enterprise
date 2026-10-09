@@ -1,135 +1,60 @@
-# TEA Documentation Website
+# TEA documentation website
 
-This directory contains the Astro + Starlight website for Test Architect (TEA) documentation.
+The site uses Astro and Starlight.
+Edit documentation in `../docs/`; `src/content/docs` points to that directory.
 
-## Setup
+## Develop
 
-Install dependencies:
+From the repository root:
 
 ```bash
+npm ci
 cd website
 npm install
-```
-
-## Development
-
-Run the development server:
-
-```bash
 npm run dev
 ```
 
-Visit <http://localhost:4321> to view the site.
+Open <http://localhost:4321>.
+Custom styles live in `src/styles/custom.css`, components in `src/components/`, and navigation in `astro.config.mjs`.
 
-## Build
+## Build and preview
 
-Build the production site:
-
-```bash
-npm run build
-```
-
-Output is generated to `../build/site/` (configured in `astro.config.mjs`).
-
-## Preview
-
-Preview the production build locally:
+For the full documentation build, run this from the repository root:
 
 ```bash
-npm run preview
-```
-
-## Structure
-
-```text
-website/
-├── astro.config.mjs      # Astro configuration
-├── package.json          # Dependencies
-├── tsconfig.json         # TypeScript configuration
-├── public/               # Static assets
-│   ├── favicon.ico
-│   ├── robots.txt
-│   └── img/              # Images and logos
-├── src/
-│   ├── components/       # Astro components
-│   │   ├── Banner.astro
-│   │   ├── Header.astro
-│   │   └── MobileMenuFooter.astro
-│   ├── content/          # Content collections
-│   │   └── config.ts
-│   ├── lib/              # Utility libraries
-│   │   └── site-url.js
-│   ├── pages/            # Page templates
-│   │   └── 404.astro
-│   ├── styles/           # Custom CSS
-│   │   └── custom.css
-│   ├── rehype-markdown-links.js  # Rehype plugin for markdown links
-│   └── rehype-base-paths.js      # Rehype plugin for base paths
-```
-
-## Configuration
-
-The site URL is configured via environment variable or defaults:
-
-```bash
-# Without SITE_URL, GitHub Actions builds for https://<owner>.github.io/<repo>
-# and a local build for http://localhost:3000. Override it for a custom domain:
-SITE_URL=https://example.com/docs npm run build
-```
-
-## Deployment
-
-The site is built and deployed via the documentation build pipeline:
-
-```bash
-# From project root
 npm run docs:build
 ```
 
-This generates:
+The build validates links, generates LLM files and download bundles in `build/artifacts/`, and builds the site in `build/site/`.
+Generated files are copied into the site for deployment.
 
-- `/build/artifacts/` - LLM files, download bundles
-- `/build/site/` - Deployable website
+To build or preview the site alone, run these from `website/`:
 
-## Documentation Structure
+```bash
+npm run build
+npm run preview
+```
 
-Documentation follows the [Diataxis](https://diataxis.fr/) framework:
+Site-only builds omit the artifact-generation step.
+The docs deployment workflow runs the full build.
 
-- **Tutorials**: Learning-oriented, step-by-step guides
-- **How-To Guides**: Task-oriented, goal-focused instructions
-- **Explanation**: Understanding-oriented, conceptual content
-- **Reference**: Information-oriented, technical specifications
-- **Glossary**: Terminology and definitions
+## Site URL
 
-## Starlight Features
+`SITE_URL` overrides the base URL.
+Without it, `GITHUB_REPOSITORY` supplies the GitHub Pages URL; local builds use `http://localhost:3000` as their URL metadata.
+The development server runs on port 4321.
+For a custom domain:
 
-- **Search**: Built-in full-text search
-- **Navigation**: Automatic sidebar from file structure
-- **Dark Mode**: Automatic light/dark theme switching
-- **Mobile-Friendly**: Responsive design
-- **LLM Discovery**: Meta tags for AI agent consumption
-- **Sitemap**: Automatic sitemap generation
-- **Last Updated**: Git-based timestamps
+```bash
+SITE_URL=https://example.com/docs npm run build
+```
 
-## Customization
+## Documentation layout
 
-### Components
+- `tutorials/` contains guided walkthroughs.
+- `how-to/` contains task instructions.
+- `explanation/` covers concepts and architecture.
+- `reference/` contains commands, configuration, and contracts.
+- `glossary/` defines terms.
 
-Custom components override Starlight defaults:
-
-- `Header.astro` - Site header
-- `MobileMenuFooter.astro` - Mobile menu footer
-
-### Styles
-
-Custom CSS in `src/styles/custom.css` extends Starlight's default theme.
-
-### Sidebar
-
-Sidebar configuration in `astro.config.mjs` controls navigation structure.
-
-## Links
-
-- Documentation: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
-- Repository: <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise>
-- BMAD Method: <https://bmad-method.org>
+The published site is at [TEA Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/).

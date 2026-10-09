@@ -1,287 +1,170 @@
-# Contributing to BMad
+# Contributing to TEA
 
-Thank you for considering contributing to the BMad project! We believe in **Human Amplification, Not Replacement** - bringing out the best thinking in both humans and AI through guided collaboration.
+TEA's skills and knowledge base live in `skills/`, public documentation in `docs/`, and command-line tools in `cli/`.
+The docs site in `website/` builds from `docs/`.
 
-💬 **Discord Community**: Join our [Discord server](https://discord.gg/gk8jAdXWmj) for real-time discussions:
+## Report a problem or propose a change
 
-- **#bmad-development** - Technical discussions and development questions
-- **#suggestions-feedback** - Feature ideas and suggestions
-- **#report-bugs-and-issues** - Bug reports and issue discussions
+Check [existing issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) first.
+Use the [bug report](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=issue.md), [feature request](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=feature_request.md), or [rule quality report](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=rule_quality_report.md) template.
+For a large change, open an issue before implementation so maintainers can agree on scope.
+Feature proposals can also be discussed in [Discord](https://discord.gg/gk8jAdXWmj).
 
-## Our Philosophy
+Bug reports should include the workflow or command, steps to reproduce, expected and actual results, and the agent, model, and TEA version.
+For rule problems, include the rule's file and section, your prompt, and the smallest output excerpt that shows the problem.
+See [SECURITY.md](./SECURITY.md) for private vulnerability reports.
 
-### BMad Core™: Universal Foundation
+## Local setup and checks
 
-BMad Core empowers humans and AI agents working together in true partnership across any domain through our **C.O.R.E. Framework** (Collaboration Optimized Reflection Engine):
+Use Node.js 22.20.0 or later.
+From your checkout:
 
-- **Collaboration**: Human-AI partnership where both contribute unique strengths
-- **Optimized**: The collaborative process refined for maximum effectiveness
-- **Reflection**: Guided thinking that helps discover better solutions and insights
-- **Engine**: The powerful framework that orchestrates specialized agents and workflows
-
-### BMad Method™: Agile AI-Driven Development
-
-The BMad Method is the flagship bmad module for agile AI-driven software development. It emphasizes thorough planning and solid architectural foundations to provide detailed context for developer agents, mirroring real-world agile best practices.
-
-### Core Principles
-
-**Partnership Over Automation** - AI agents act as expert coaches, mentors, and collaborators who amplify human capability rather than replace it.
-
-**Bidirectional Guidance** - Agents guide users through structured workflows while users push agents with advanced prompting. Both sides actively work to extract better information from each other.
-
-**Systems of Workflows** - BMad Core builds comprehensive systems of guided workflows with specialized agent teams for any domain.
-
-**Tool-Agnostic Foundation** - BMad Core remains tool-agnostic, providing stable, extensible groundwork that adapts to any domain.
-
-## What Makes a Good Contribution?
-
-Every contribution should strengthen human-AI collaboration. Ask yourself: **"Does this make humans and AI better together?"**
-
-**✅ Contributions that align:**
-
-- Enhance universal collaboration patterns
-- Improve agent personas and workflows
-- Strengthen planning and context continuity
-- Increase cross-domain accessibility
-- Add domain-specific modules leveraging BMad Core
-
-**❌ What detracts from our mission:**
-
-- Purely automated solutions that sideline humans
-- Tools that don't improve the partnership
-- Complexity that creates barriers to adoption
-- Features that fragment BMad Core's foundation
-
-## Before You Contribute
-
-### Reporting Bugs
-
-1. **Check existing issues** first to avoid duplicates
-2. **Consider discussing in Discord** (#report-bugs-and-issues channel) for quick help
-3. **Use the bug report template** when creating a new issue - it guides you through providing:
-   - Clear bug description
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Model/IDE/BMad version details
-   - Screenshots or links if applicable
-4. **Indicate if you're working on a fix** to avoid duplicate efforts
-
-### Suggesting Features or New Modules
-
-1. **Discuss first in Discord** (#suggestions-feedback channel) - the feature request template asks if you've done this
-2. **Check existing issues** to avoid duplicates
-3. **Use the feature request template** when creating an issue
-4. **Be specific** about why this feature would benefit the BMad community and strengthen human-AI collaboration
-
-### Before Starting Work
-
-⚠️ **Required before submitting PRs:**
-
-1. **For bugs**: Check if an issue exists (create one using the bug template if not)
-2. **For features**: Discuss in Discord (#suggestions-feedback) AND create a feature request issue
-3. **For large changes**: Always open an issue first to discuss alignment
-
-Please propose small, granular changes! For large or significant changes, discuss in Discord and open an issue first. This prevents wasted effort on PRs that may not align with planned changes.
-
-## How TEA Differs From Other BMad Modules
-
-Most BMad modules are skills only: they install with `npx skills add` and are not published to npm.
-TEA's skills install the same way.
-
-TEA also ships command-line tools that run in CI, where no skill installer is involved: `tea-test-review` gates pull requests on test quality, and `tea-evaluate` runs behavioral evaluations.
-So TEA keeps publishing its npm package, `bmad-method-test-architecture-enterprise`, as the delivery channel for those tools.
-The package carries the skills beside the tools on purpose.
-In an adopter's CI, `tea-test-review` runs from the installed package and reviews with the skill packaged next to it, so a pull request cannot edit the reviewer that judges it, and the tool and its skill always come from one version.
-TEA's own `.github/workflows/tea-test-review.yaml` is the exception: it runs the CLI from the checkout to try the code under development, so it is not a gate a pull request could not influence.
-
-Releases run through the publish workflow (`npm run release:patch`, `release:minor`, `release:major`, or `release:next` for a prerelease).
-It bumps the version, stamps `CHANGELOG.md`, and publishes to npm.
-A change to a tool's flags, exit codes or verdict format is a change to a published interface, so give it a changelog entry and the matching semver bump.
-
-## Pull Request Guidelines
-
-### Which Branch?
-
-**Submit PR's to `main` branch** (critical only):
-
-- 🚨 Critical bug fixes that break basic functionality
-- 🔒 Security patches
-- 📚 Fixing dangerously incorrect documentation
-- 🐛 Bugs preventing installation or basic usage
-
-### PR Size Guidelines
-
-- **Ideal PR size**: 200-400 lines of code changes
-- **Maximum PR size**: 800 lines (excluding generated files)
-- **One feature/fix per PR**: Each PR should address a single issue or add one feature
-- **If your change is larger**: Break it into multiple smaller PRs that can be reviewed independently
-- **Related changes**: Even related changes should be separate PRs if they deliver independent value
-
-### Breaking Down Large PRs
-
-If your change exceeds 800 lines, use this checklist to split it:
-
-- [ ] Can I separate the refactoring from the feature implementation?
-- [ ] Can I introduce the new API/interface in one PR and implementation in another?
-- [ ] Can I split by file or module?
-- [ ] Can I create a base PR with shared utilities first?
-- [ ] Can I separate test additions from implementation?
-- [ ] Even if changes are related, can they deliver value independently?
-- [ ] Can these changes be merged in any order without breaking things?
-
-Example breakdown:
-
-1. PR #1: Add utility functions and types (100 lines)
-2. PR #2: Refactor existing code to use utilities (200 lines)
-3. PR #3: Implement new feature using refactored code (300 lines)
-4. PR #4: Add comprehensive tests (200 lines)
-
-**Note**: PRs #1 and #4 could be submitted simultaneously since they deliver independent value.
-
-### Pull Request Process
-
-#### New to Pull Requests?
-
-If you're new to GitHub or pull requests, here's a quick guide:
-
-1. **Fork the repository** - Click the "Fork" button on GitHub to create your own copy
-2. **Clone your fork** - `git clone https://github.com/YOUR-USERNAME/bmad-method-test-architecture-enterprise.git`
-3. **Create a new branch** - Never work on `main` directly!
-
-   ```bash
-   git checkout -b fix/description
-   # or
-   git checkout -b feature/description
-   ```
-
-4. **Make your changes** - Edit files, keeping changes small and focused
-5. **Commit your changes** - Use clear, descriptive commit messages
-
-   ```bash
-   git add .
-   git commit -m "fix: correct typo in README"
-   ```
-
-6. **Push to your fork** - `git push origin fix/description`
-7. **Create the Pull Request** - Go to your fork on GitHub and click "Compare & pull request"
-
-### PR Description Template
-
-Keep your PR description concise and focused. Use this template:
-
-```markdown
-## What
-
-[1-2 sentences describing WHAT changed]
-
-## Why
-
-[1-2 sentences explaining WHY this change is needed]
-Fixes #[issue number] (if applicable)
-
-## How
-
-## [2-3 bullets listing HOW you implemented it]
-
--
--
-
-## Testing
-
-[1-2 sentences on how you tested this]
+```bash
+npm ci
+npm test
 ```
 
-**Maximum PR description length: 200 words** (excluding code examples if needed)
+`npm test` runs the full quality gate.
+Some suites execute tools or install dependencies; see [the test suite guide](./test/README.md) for platform prerequisites and individual suites.
+Live agent evaluations use separate `eval:*` commands and require the selected runner's setup.
 
-### Good vs Bad PR Descriptions
+`test:workflows-lint` needs `actionlint` on `PATH`. Install it with:
 
-❌ **Bad Example:**
+```bash
+bash tools/install-actionlint.sh /tmp/tea-actionlint-bin
+export PATH="/tmp/tea-actionlint-bin:$PATH"
+```
 
-> This revolutionary PR introduces a paradigm-shifting enhancement to the system's architecture by implementing a state-of-the-art solution that leverages cutting-edge methodologies to optimize performance metrics...
+The quality gate also checks:
 
-✅ **Good Example:**
+- `test:docs-build-names`: public docs contain no story IDs, PR numbers, or planning paths.
+- `test:doc-counts` and `test:doc-claims`: documented counts, identifiers, and registered claims agree with their sources.
+- `test:enforce-hook`: the write-time hook blocks its declared test defects.
+- `test:criteria-fragments`: each review criterion resolves to its knowledge fragment.
 
-> **What:** Added validation for agent dependency resolution
-> **Why:** Build was failing silently when agents had circular dependencies
-> **How:**
->
-> - Added cycle detection in dependency-resolver.js
-> - Throws clear error with dependency chain
->   **Testing:** Tested with circular deps between 3 agents
+Live evaluation commands and runner requirements are in [the test suite guide](./test/README.md#live-evaluations).
 
-### Commit Message Convention
+For documentation changes, run at least:
 
-Use conventional commits format:
+```bash
+npm run docs:validate-links
+npm run lint:md
+npm run format:check
+```
 
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation only
-- `refactor:` Code change that neither fixes a bug nor adds a feature
-- `test:` Adding missing tests
-- `chore:` Changes to build process or auxiliary tools
+Run `npm run docs:build` when changing site content or navigation, and inspect the affected pages.
+For workflow or release changes, also run `npm run lint` and `npm run test:release-metadata`.
+Use `npm run validate:schemas` after changing schema-backed definitions.
 
-Keep commit messages under 72 characters.
+## Pull requests
 
-### Atomic Commits
+Fork the repository, create a branch, and submit the pull request to `main`.
+Keep each PR focused on one change.
+Aim for 200–400 changed lines; split changes above 800 lines into independent PRs when the pieces can be reviewed separately.
+Leave generated files to their owning tools.
 
-Each commit should represent one logical change:
+The description should explain the problem and resulting behavior, name any related issue, and list validation commands you actually ran.
+Keep it under 200 words when possible.
+A useful template:
 
-- **Do:** One bug fix per commit
-- **Do:** One feature addition per commit
-- **Don't:** Mix refactoring with bug fixes
-- **Don't:** Combine unrelated changes
+```markdown
+## Change
 
-## What Makes a Good Pull Request?
+[Problem and resulting behavior, in one or two sentences.]
 
-✅ **Good PRs:**
+## Validation
 
-- Change one thing at a time
-- Have clear, descriptive titles
-- Explain what and why in the description
-- Include only the files that need to change
-- Reference related issue numbers
+[Commands run and their results.]
+```
 
-❌ **Avoid:**
+Use [Conventional Commits](https://www.conventionalcommits.org/) with a title under 72 characters:
 
-- Changing formatting of entire files
-- Multiple unrelated changes in one PR
-- Copying your entire project/repo into the PR
-- Changes without explanation
-- Working directly on `main` branch
+- `feat:` adds a feature.
+- `fix:` repairs a bug.
+- `docs:` changes documentation.
+- `refactor:` changes code structure.
+- `test:` adds or repairs tests.
+- `chore:` changes tooling or maintenance.
 
-## Common Mistakes to Avoid
+Each commit should contain one logical change.
 
-1. **Don't reformat entire files** - only change what's necessary
-2. **Don't include unrelated changes** - stick to one fix/feature per PR
-3. **Don't paste code in issues** - create a proper PR instead
-4. **Don't submit your whole project** - contribute specific improvements
+## Changelog and release metadata
 
-## Prompt & Agent Guidelines
+Add user-facing, documentation, CI, release, and bug-fix entries under `## [Unreleased]` in [CHANGELOG.md](./CHANGELOG.md).
+Use Keep a Changelog headings such as `Added`, `Changed`, or `Fixed`.
+Keep the Unreleased heading present.
+The stable release workflow stamps the dated version section.
 
-- Keep dev agents lean - they need context for coding, not documentation
-- Web/planning agents can be larger with more complex tasks
-- Everything is natural language (markdown) - no code in core framework
-- Use bmad modules for domain-specific features
-- Validate YAML schemas with `npm run validate:schemas` before committing
+Release versions must agree across `package.json`, `package-lock.json`, `.claude-plugin/marketplace.json`, and `skills/bmod-tea/bmod.toml`.
+The publish workflow synchronizes them during a release.
 
-## Code of Conduct
+## Why TEA publishes to npm
 
-By participating in this project, you agree to abide by our Code of Conduct. We foster a collaborative, respectful environment focused on building better human-AI partnerships.
+TEA's skills install through `npx skills add`.
+Its command-line tools also need a delivery channel for CI, so TEA publishes `bmad-method-test-architecture-enterprise` to npm with the skills included.
+An installed `tea-test-review` uses the review skill packaged alongside it, keeping the tool and skill on one version.
+Installing that reviewer outside the checkout keeps a pull request from editing the reviewer that judges it.
+TEA's own development review workflow runs the CLI from the checkout to exercise the code under development.
 
-## Need Help?
+Changes to a tool's flags, exit codes, or verdict format affect a published interface.
+Include a changelog entry and account for compatibility when choosing the release version.
 
-- 💬 Join our [Discord Community](https://discord.gg/gk8jAdXWmj):
-  - **#bmad-development** - Technical questions and discussions
-  - **#suggestions-feedback** - Feature ideas and suggestions
-  - **#report-bugs-and-issues** - Get help with bugs before filing issues
-- 🐛 Report bugs using the [bug report template](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=issue.md)
-- 💡 Suggest features using the [feature request template](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=feature_request.md)
-- 📖 Browse [open and closed issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues)
+## Publishing
 
----
+The [Publish workflow](./.github/workflows/publish.yaml) runs the quality gate before publishing.
+Pushes to `main` affecting skills or package metadata publish a `next` prerelease.
+Stable `latest` releases are triggered manually from `main`.
 
-**Remember**: We're here to help! Don't be afraid to ask questions. Every expert was once a beginner. Together, we're building a future where humans and AI work better together.
+Maintainers can dispatch it with:
 
-## License
+```bash
+npm run release:next
+npm run release:patch
+npm run release:minor
+npm run release:major
+```
 
-By contributing to this project, you agree that your contributions will be licensed under the same license as the project.
+These scripts dispatch GitHub Actions; they require an authenticated `gh` CLI with repository access.
+The Actions UI also exposes the channel and version-bump inputs.
+
+Publishing requires npm Trusted Publishing configured for this repository's `.github/workflows/publish.yaml`.
+The publisher must name the canonical repository and workflow in npm, and the workflow needs `id-token: write`. A fork does not match that trusted publisher. See [npm's trusted publishing setup](https://docs.npmjs.com/trusted-publishers/).
+Stable releases also need `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`, with the GitHub App allowed to push the release commit and tag.
+The workflow requests an OIDC token for npm, synchronizes metadata, and publishes with provenance.
+For a stable release, it also stamps the changelog, pushes the version commit and tag, and creates a GitHub Release.
+
+After publishing, check the version and dist-tags:
+
+```bash
+npm view bmad-method-test-architecture-enterprise version
+npm view bmad-method-test-architecture-enterprise dist-tags
+```
+
+Verify the tagged skill install and the npm tools before announcing the release.
+
+### Release sequence
+
+Use `next` to validate merged changes, then cut a stable `latest` release. Choose `patch` for compatible fixes, `minor` for compatible features, and `major` for breaking changes.
+
+Before dispatching, verify `npm test`, current docs, an Unreleased changelog entry, synchronized metadata, and a clean `main` checkout. Confirm the npm publisher and release GitHub App credentials are configured.
+
+After dispatching, verify the npm version and dist-tags, the GitHub Release and tag, a tagged skill install, `bmad setup tea`, and the installed CLI commands.
+
+### Recover a bad release
+
+Publish a fixed version and deprecate the affected version with a message naming the replacement. Maintainers can unpublish a recent version when [npm's unpublish policy](https://docs.npmjs.com/policies/unpublish/) permits it. The first 72 hours have fewer restrictions; older packages must satisfy additional conditions. A removed version cannot be republished.
+
+```bash
+# Replace VERSION and FIXED_VERSION with the affected and replacement versions.
+npm deprecate bmad-method-test-architecture-enterprise@VERSION "Upgrade to FIXED_VERSION"
+# Use only when the release meets npm's unpublish policy.
+npm unpublish bmad-method-test-architecture-enterprise@VERSION
+```
+
+For a trusted-publishing failure, check the npm repository/workflow mapping and `id-token: write`. For a version-commit or tag push failure, check `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, the App's contents-write access, and the branch protection rule allowing that App to push.
+If publishing fails, inspect the workflow log and check the trusted publisher, App permissions, and release metadata.
+
+## Community and license
+
+Use [Discord](https://discord.gg/gk8jAdXWmj) for development questions and [GitHub Issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) for tracked work.
+By contributing, you agree to the [Code of Conduct](./.github/CODE_OF_CONDUCT.md) and license your contribution under the project's [MIT license](./LICENSE).

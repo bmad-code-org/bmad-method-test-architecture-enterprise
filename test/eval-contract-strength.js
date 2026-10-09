@@ -213,7 +213,7 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * an empty directory until Story 1.7's live run found every one of them
  * reporting that its skill and project were missing.
  *
- * A test-review leg is the coupling `docs/explanation/eval-quality-command-adapter.md`
+ * A test-review leg is the coupling `test/docs/eval-quality-command-adapter.md`
  * records: its `--files` are repository-relative, its `--json` is a bare
  * `verdict.json`, and both resolve against the policy's `cwd`, which is also
  * where the artifact map reads the verdict back. So the run directory is given
@@ -499,7 +499,7 @@ function preflightOutcome(verdict) {
  *
  * The alternative was to exit 2 whenever any probe's pre-flight failed, which is
  * true of this corpus every time it runs: fourteen of its 55 probes cannot be
- * pre-flighted, for reasons `docs/explanation/eval-quality-command-adapter.md`
+ * pre-flighted, for reasons `test/docs/eval-quality-command-adapter.md`
  * records and no leg TEA can author repairs. A script that is red on every run
  * stops being read within a week, and then the day it means something is the day
  * nobody looks. That is the same defect as a declaration nothing enforces,

@@ -20,7 +20,7 @@ Use TEA on brownfield projects (existing codebases with legacy tests) to establi
 - Existing codebase with tests (even if incomplete or low quality)
 - Tests run successfully (or at least can be executed)
 
-**Note:** If your codebase is completely undocumented, run `document-project` first to create baseline documentation. It is a BMM workflow that ships with the BMad Method module, not with TEA.
+For an undocumented codebase, the BMad Method `document-project` workflow can create baseline documentation.
 
 ## Brownfield Strategy
 
@@ -66,8 +66,6 @@ Run the trace workflow and select Phase 1 (Requirements Traceability):
 - P2: 20% coverage (2/10) ✅ Acceptable
 ```
 
-This baseline becomes your improvement target.
-
 #### Step 2: Quality Audit with `test-review`
 
 Run the test review workflow and answer `tests/` when it asks for scope:
@@ -103,8 +101,6 @@ Run the test review workflow and answer `tests/` when it asks for scope:
 - Add network assertions
 ```
 
-This shows where to focus improvement efforts.
-
 ### Phase 2: Prioritize Improvements
 
 Don't try to fix everything at once.
@@ -125,7 +121,7 @@ Don't try to fix everything at once.
 
 **Example Modernization:**
 
-**Before (Flaky - Hard Waits):**
+**Before (Flaky: Hard Waits):**
 
 ```typescript
 test('checkout completes', async ({ page }) => {
@@ -135,7 +131,7 @@ test('checkout completes', async ({ page }) => {
 });
 ```
 
-**After (Network-First - Vanilla):**
+**After (Network-First: Vanilla):**
 
 ```typescript
 test('checkout completes', async ({ page }) => {
@@ -146,7 +142,7 @@ test('checkout completes', async ({ page }) => {
 });
 ```
 
-**After (With Playwright Utils - Cleaner API):**
+**After (With Playwright Utils: Cleaner API):**
 
 ```typescript
 import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
@@ -173,15 +169,10 @@ test('checkout completes', async ({ page, interceptNetworkCall }) => {
 });
 ```
 
-**Playwright Utils Benefits:**
+`interceptNetworkCall` waits for the matching response and parses it as `responseJson`.
 
-- `interceptNetworkCall` for cleaner network interception
-- Automatic JSON parsing (`responseJson` ready to use)
-- No manual `await response.json()`
-- Glob pattern matching (`**/api/checkout`)
-- Cleaner, more maintainable code
-
-**For automatic error detection,** use `network-error-monitor` fixture separately. See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#network-error-monitor).
+**For automatic error detection,** use `network-error-monitor` fixture separately.
+See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#network-error-monitor).
 
 **Priority 3: P1 Requirements.** Goal: P1 coverage at 80% or above.
 
@@ -232,12 +223,6 @@ Apply TEA workflows to new work while improving legacy tests.
 4. `/bmad-testarch-automate` to expand coverage
 5. `/bmad-testarch-test-review` to check quality
 
-**Benefits:**
-
-- New code has high-quality tests from day one
-- Gradually raises overall quality
-- Team learns good patterns
-
 #### For Bug Fixes (Regression Prevention)
 
 **Add regression tests:**
@@ -273,9 +258,7 @@ Track improvement over time.
 
 ### Don't Rewrite Everything
 
-**Common mistake:** "Our tests are bad, let's delete them all and start over."
-
-**Better approach:** a rewrite risks losing coverage you already have. Instead:
+Keep existing coverage while improving the suite:
 
 1. Keep tests that work, even imperfect ones
 2. Fix critical quality issues incrementally
@@ -348,13 +331,6 @@ Take one directory per week (`tests/auth/`, then `tests/api/`, then `tests/e2e/`
 3. Re-review
 4. Mark the directory as "modernized"
 
-**Benefits:**
-
-- Focused improvement
-- Visible progress
-- Team learns patterns
-- Lower risk
-
 ### Document Migration Status
 
 **Track which tests are modernized:**
@@ -380,9 +356,7 @@ Take one directory per week (`tests/auth/`, then `tests/api/`, then `tests/e2e/`
 
 ### "We Don't Know What Tests Cover"
 
-**Problem:** No documentation, unclear what tests do.
-
-**Solution:**
+No documentation, unclear what tests do.
 
 1. Run `/bmad-testarch-trace`; TEA analyzes the tests and maps them to requirements
 2. Review the traceability matrix
@@ -393,9 +367,9 @@ TEA reverse-engineers test coverage even without documentation.
 
 ### "Tests Are Too Brittle to Touch"
 
-**Problem:** Afraid to modify tests (might break them).
+Afraid to modify tests (might break them).
 
-**Solution:** small changes carry small risk.
+Make one change at a time and verify it:
 
 1. Run the tests and capture current behavior as the baseline
 2. Make one small improvement, such as removing a single hard wait
@@ -404,21 +378,20 @@ TEA reverse-engineers test coverage even without documentation.
 
 ### "No One Knows How to Run Tests"
 
-**Problem:** Test documentation is outdated or missing.
-
-**Solution:**
+Test documentation is outdated or missing.
 
 1. Document manually, or ask TEA to analyze the test structure for you
 2. Create `tests/README.md` covering how to install dependencies, how to run the tests (`npx playwright test`, `npm test`, or whatever your runner is), what each test directory contains, and common troubleshooting
 3. Commit it for the team
 
-**Note:** `framework` scaffolds a new test setup. For brownfield, document what you already have instead.
+Document the existing setup before deciding whether it needs new scaffolding.
 
 ### "Tests Take Hours to Run"
 
-**Problem:** Full test suite takes 4+ hours.
+Full test suite takes 4+ hours.
 
-**Solution:** sharding plus selective testing takes a 4-hour sequential suite to about 15 minutes.
+Sharding and selective testing can reduce runtime.
+Measure the result with your suite and runner capacity.
 
 1. Configure parallel execution (shard tests across workers)
 2. Add selective testing so PRs run only affected tests
@@ -430,7 +403,7 @@ TEA reverse-engineers test coverage even without documentation.
 - Scaffolds CI configuration with parallel sharding examples
 - Provides selective testing script templates
 - Documents burn-in and optimization strategies
-- But YOU configure workers, test selection, and optimization
+- Configure workers and test selection for your repository
 
 **With Playwright Utils burn-in:**
 
@@ -440,12 +413,10 @@ TEA reverse-engineers test coverage even without documentation.
 
 ### "We Have Tests But They Always Fail"
 
-**Problem:** Tests are so flaky they're ignored.
-
-**Solution:**
+Tests are so flaky they're ignored.
 
 1. Run `/bmad-testarch-test-review` to identify the flakiness patterns
-2. Fix the top 5 flaky tests, which carry most of the impact
+2. Fix the tests with the highest failure rate
 3. Quarantine the rest
 4. Re-enable them as you fix them
 
@@ -453,7 +424,9 @@ TEA reverse-engineers test coverage even without documentation.
 
 ### Recommended Sequence
 
-`document-project`, `prd`, and `architecture` are BMM workflows that ship with the BMad Method module, not with TEA. Every `/bmad-testarch-*` command below is TEA. On Codex, swap the leading `/` for `$`.
+The BMad Method module provides `document-project`, `prd`, and `architecture`.
+The `/bmad-testarch-*` commands are TEA skills.
+On Codex, use `$` for the skill prefix.
 
 | Stage                        | Command                                    | Purpose                                           |
 | ---------------------------- | ------------------------------------------ | ------------------------------------------------- |
@@ -475,25 +448,25 @@ TEA reverse-engineers test coverage even without documentation.
 
 **Workflow Guides:**
 
-- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Baseline coverage analysis
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Quality audit
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Fill coverage gaps
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Risk assessment
+- [How to Run Trace](/docs/how-to/workflows/run-trace.md): Baseline coverage analysis
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Quality audit
+- [How to Run Automate](/docs/how-to/workflows/run-automate.md): Fill coverage gaps
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Risk assessment
 
 **Customization:**
 
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - Modernize tests with utilities
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): Modernize tests with utilities
 
 ## Understanding the Concepts
 
-- [Engagement Models](/docs/explanation/engagement-models.md) - Brownfield model explained
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - What makes tests good
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Fix flakiness
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Prioritize improvements
+- [Engagement Models](/docs/explanation/engagement-models.md): Brownfield model explained
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): Fix flakiness
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Prioritize improvements
 
 ## Reference
 
-- [TEA Command Reference](/docs/reference/commands.md) - All 9 workflows
-- [TEA Configuration](/docs/reference/configuration.md) - Config options
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - Testing patterns
-- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - TEA terminology
+- [TEA Command Reference](/docs/reference/commands.md): Workflow commands
+- [TEA Configuration](/docs/reference/configuration.md): Config options
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): Testing patterns
+- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts): TEA terminology

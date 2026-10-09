@@ -1,11 +1,11 @@
 ---
 title: 'How to Run Test Design with TEA'
-description: How to create comprehensive test plans using TEA's test-design workflow
+description: How to create test plans using TEA's test-design workflow
 ---
 
 # How to Run Test Design with TEA
 
-Use TEA's `test-design` workflow to create comprehensive test plans with risk assessment, NFR planning, and coverage strategies.
+Use TEA's `test-design` workflow to plan tests, rank risks, and define NFR evidence requirements.
 
 ## When to Use This
 
@@ -72,40 +72,37 @@ Each run saves its progress to its own checkpoint under `{test_artifacts}/test-d
 | System-level | `test-design-progress-system.md`   |
 | Epic-level   | `test-design-progress-epic-{N}.md` |
 
-The workflow resolves that name in its first step, from the mode and the epic you named. Interrupting a run for one epic and then running test design for another epic leaves the first epic's checkpoint untouched, so you can come back to it.
+The workflow resolves that name in its first step, from the mode and the epic you named.
+Interrupting a run for one epic and then running test design for another epic leaves the first epic's checkpoint untouched, so you can come back to it.
 
-Pick **[R] Resume** to continue. Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks. TEA refuses to resume a checkpoint that belongs to a different run.
+Pick **[R] Resume** to continue.
+Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks.
+TEA refuses to resume a checkpoint that belongs to a different run.
 
-Checkpoints written by earlier TEA versions sit at the root of `{test_artifacts}`, under the old fixed name `test-design-progress.md` or a scoped `test-design-progress-{run_key}.md`. Resume picks those up too while they are still in progress; a completed one stays where it is. It asks you to confirm which run a fixed-name checkpoint belongs to and migrates it to its scoped name in `test-design/`, and it moves a scoped checkpoint into `test-design/` unchanged. It never writes over a checkpoint that `test-design/` already holds for the same run.
+Checkpoints written by earlier TEA versions sit at the root of `{test_artifacts}`, under the old fixed name `test-design-progress.md` or a scoped `test-design-progress-{run_key}.md`.
+Resume picks those up too while they are still in progress; a completed one stays where it is.
+It asks you to confirm which run a fixed-name checkpoint belongs to and migrates it to its scoped name in `test-design/`, and it moves a scoped checkpoint into `test-design/` unchanged.
+It never writes over a checkpoint that `test-design/` already holds for the same run.
 
-A headless run never asks. It starts an interrupted run of the same scope over, and an epic-level run whose epic it cannot resolve halts with a message naming the candidate epics.
+A headless run never asks.
+It starts an interrupted run of the same scope over, and an epic-level run whose epic it cannot resolve halts with a message naming the candidate epics.
 
 ## What You Get
 
-Every test design document lands in `{test_artifacts}/test-design/`. The system-level documents and the handoff exist once per project; each epic gets its own document. See [Output Layout](/docs/reference/configuration.md#output-layout) for how every TEA workflow names and places its files.
+Every test design document lands in `{test_artifacts}/test-design/`.
+The system-level documents and the handoff exist once per project; each epic gets its own document.
+See [Output Layout](/docs/reference/configuration.md#output-layout) for how every TEA workflow names and places its files.
 
-**System-Level Output (TWO Documents):**
+**System-level outputs:**
 
-TEA produces two focused documents for system-level mode:
+System-level mode produces two documents:
 
-1. **`test-design-architecture.md`** (for Architecture/Dev teams)
-   - Purpose: Architectural concerns, testability gaps, NFR requirements
-   - Quick Guide with 🚨 BLOCKERS / ⚠️ HIGH PRIORITY / 📋 INFO ONLY
-   - Risk assessment (high/medium/low-priority with scoring)
-   - NFR testability requirements: thresholds, unknowns, architecture gaps, planned evidence
-   - Testability concerns and architectural gaps
-   - Risk mitigation plans for high-priority risks (≥6)
-   - Assumptions and dependencies
+- `test-design-architecture.md`: blockers, scored risks, testability gaps, NFR thresholds, and mitigation plans for architecture and development teams.
+- `test-design-qa.md`: P0-P3 scenarios, planned NFR validation, evidence artifacts, and Sprint 0 setup for QA.
 
-2. **`test-design-qa.md`** (for QA team)
-   - Purpose: Test execution recipe, coverage plan, Sprint 0 setup
-   - Test coverage plan (P0/P1/P2/P3 with detailed scenarios + checkboxes)
-   - NFR test coverage plan with planned validation tools and evidence artifacts
-   - Sprint 0 setup requirements (blockers, infrastructure, environments)
+`test-design` defines the thresholds and evidence that `nfr-assess` audits after implementation.
 
-`test-design` does **not** make final NFR PASS/CONCERNS/FAIL decisions. It defines the thresholds and evidence that `nfr-assess` audits later.
-
-**Epic-Level Output (ONE Document):**
+**Epic-level output:**
 
 **`test-design-epic-N.md`** (combined risk assessment + test plan)
 
@@ -129,14 +126,14 @@ TEA produces two focused documents for system-level mode:
 
 **System-Level (Two Documents):**
 
-- `cluster-search/cluster-search-test-design-architecture.md` - Architecture doc with Quick Guide
-- `cluster-search/cluster-search-test-design-qa.md` - QA doc with test scenarios
+- `cluster-search/cluster-search-test-design-architecture.md`: Architecture doc with Quick Guide
+- `cluster-search/cluster-search-test-design-qa.md`: QA doc with test scenarios
 
-**Key Pattern:**
+Cross-reference shared requirements:
 
 - Architecture doc: "ASR-1: OAuth 2.1 required (see QA doc for 12 test scenarios)"
 - QA doc: "OAuth tests: 12 P0 scenarios (see Architecture doc R-001 for risk details)"
-- No duplication, just cross-references
+- Keep risk details in the architecture document and test scenarios in the QA document
 
 ## Tips
 

@@ -5,11 +5,14 @@ description: Understanding TEA's pure function → fixture → composition patte
 
 # Fixture Architecture Explained
 
-Fixture architecture is TEA's pattern for building reusable, testable, and composable test utilities. The core principle: build pure functions first, wrap in framework fixtures second.
+Keep utility logic separate from fixture lifecycle code.
+Pass dependencies into helpers, wrap them in fixtures, then compose the fixtures tests need.
+TEA calls this its pure-function → fixture → composition pattern.
+A helper that sends an HTTP request still has side effects; dependency injection makes it testable outside the fixture lifecycle.
 
 ## Overview
 
-1. Write the utility as a pure function, so it is unit-testable.
+1. Write a helper with explicit dependencies so it can be unit-tested.
 2. Wrap it in a framework fixture (Playwright, Cypress), which is where portability is lost.
 3. Compose fixtures with `mergeTests`.
 4. Package for reuse across projects.
@@ -61,7 +64,8 @@ export const test = base.extend({
 });
 ```
 
-The logic is now sealed inside a Playwright context, so it cannot be unit tested or mocked, cannot be reused outside Playwright, and cannot be composed cleanly with other fixtures.
+Testing this helper in isolation requires setting up the fixture lifecycle.
+Extract the request logic so a unit test can supply a mock client.
 
 ### Copy-Paste Utilities
 
@@ -83,9 +87,28 @@ Duplication with drift: error handling diverges between copies, and changing the
 ```typescript
 // helpers/api-request.ts
 
+export type ApiRequestParams = {
+  request: {
+    fetch: (
+      url: string,
+      options: { method: string; data?: unknown; headers: Record<string, string> },
+    ) => Promise<{
+      ok: () => boolean;
+      status: () => number;
+      json: () => Promise<Record<string, unknown>>;
+    }>;
+  };
+  method: string;
+  url: string;
+  data?: unknown;
+  headers?: Record<string, string>;
+};
+
+export type ApiResponse = { status: number; body: Record<string, unknown> };
+
 /**
  * Make API request with automatic error handling
- * Pure function: no framework dependencies
+ * Dependencies are supplied by the caller
  */
 export async function apiRequest({
   request, // Passed in (dependency injection)
@@ -128,7 +151,9 @@ describe('apiRequest', () => {
 });
 ```
 
-Because it takes `request` as a parameter instead of reaching for it, the same function works with any HTTP client and runs anywhere: a Node script, a CLI tool, a Vitest unit test.
+The helper accepts a client with the `fetch`, `ok`, `status`, and `json` methods used above.
+A unit test can supply a mock with that interface.
+Using a different HTTP client requires an adapter with the same methods.
 
 ### Step 2: Fixture Wrapper
 
@@ -136,11 +161,14 @@ Because it takes `request` as a parameter instead of reaching for it, the same f
 // fixtures/api-request.ts
 import { test as base } from '@playwright/test';
 import { apiRequest as apiRequestFn } from '../helpers/api-request';
+import type { ApiRequestParams, ApiResponse } from '../helpers/api-request';
 
 /**
  * Playwright fixture wrapping the pure function
  */
-export const test = base.extend<{ apiRequest: typeof apiRequestFn }>({
+type ApiRequestFixture = (params: Omit<ApiRequestParams, 'request'>) => Promise<ApiResponse>;
+
+export const test = base.extend<{ apiRequest: ApiRequestFixture }>({
   apiRequest: async ({ request }, use) => {
     // Inject framework dependency (request)
     await use((params) => apiRequestFn({ request, ...params }));
@@ -150,7 +178,8 @@ export const test = base.extend<{ apiRequest: typeof apiRequestFn }>({
 export { expect } from '@playwright/test';
 ```
 
-The wrapper's only job is injecting the framework dependency. Moving to Cypress or another runner means rewriting this file and nothing else.
+The wrapper injects the client and manages fixture access.
+A different runner needs its own lifecycle wrapper and a compatible client adapter.
 
 ### Step 3: Composition with mergeTests
 
@@ -193,31 +222,37 @@ test('should update profile', async ({ apiRequest, authToken, log }) => {
 });
 ```
 
-**Note:** This example uses the vanilla pure function signature (`url`, `data`). Playwright Utils uses different parameter names (`path`, `body`). See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) for the utilities API.
+**Note:** This example uses the vanilla pure function signature (`url`, `data`).
+Playwright Utils uses different parameter names (`path`, `body`).
+See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) for the utilities API.
 
-**Note:** `authToken` requires auth-session fixture setup with provider configuration. See [auth-session documentation](https://seontechnologies.github.io/playwright-utils/auth-session.html).
+**Note:** `authToken` requires auth-session fixture setup with provider configuration.
+See [auth-session documentation](https://seontechnologies.github.io/playwright-utils/auth-session.html).
 
 One import, every fixture, and TypeScript knows the type of each one.
 
 ## How It Works in TEA
 
-`framework` with `tea_use_playwright_utils: true` scaffolds the layout directly:
+`framework` scaffolds project fixtures under `{test_dir}/support/`.
+The layout below uses `tests/` as the configured test directory.
+With Playwright Utils enabled, tests import the composed fixtures from `support/merged-fixtures.ts`:
 
 ```text
 tests/
 ├── support/
-│   ├── helpers/           # Pure functions
-│   │   ├── api-request.ts
-│   │   └── auth-session.ts
-│   └── fixtures/          # Framework wrappers
-│       ├── api-request.ts
-│       ├── auth-session.ts
-│       └── index.ts       # Composition
+│   ├── auth-fixture.ts    # Project auth provider and auth fixtures
+│   ├── merged-fixtures.ts # Composition
+│   ├── fixtures/        # Project fixture extensions
+│   └── helpers/         # Project data factories, setup, and cleanup
 └── e2e/
     └── example.spec.ts    # Uses composed fixtures
 ```
 
-`test-review` checks the same four properties: utilities are pure functions, fixtures are minimal wrappers, composition is used, and the utilities can be unit tested.
+`merged-fixtures.ts` imports `api-request` and the other enabled utility fixtures from `@seontechnologies/playwright-utils`.
+It imports the project auth fixture from `./auth-fixture`.
+
+`test-review` checks the applicable fixture, isolation, and configured-utility criteria.
+Its criteria registry determines which findings affect the score.
 
 ## Making Fixtures Reusable Across Projects
 
@@ -236,13 +271,15 @@ const authFixtureTest = base.extend(createAuthFixtures());
 export const test = mergeTests(apiRequestFixture, authFixtureTest);
 ```
 
-Auth-session requires provider configuration. See the [auth-session setup guide](https://seontechnologies.github.io/playwright-utils/auth-session.html).
+Auth-session requires provider configuration.
+See the [auth-session setup guide](https://seontechnologies.github.io/playwright-utils/auth-session.html).
 
-Playwright Utils 4.4.0 exports ten utility modules: `api-request`, `intercept-network-call`, `auth-session`, `network-recorder`, `network-error-monitor`, `recurse`, `burn-in`, `file-utils`, `log`, and `webhook`.
+Playwright Utils includes `api-request`, `intercept-network-call`, `auth-session`, `network-recorder`, `network-error-monitor`, `recurse`, `burn-in`, `file-utils`, `log`, and `webhook`.
 
 ### Option 2: Build your own
 
-Build your own when you need company-specific patterns, a custom authentication system, or something the utilities do not cover. Export one subpath per fixture so consumers compose only what they need:
+Build your own when you need company-specific patterns, a custom authentication system, or something the utilities do not cover.
+Export one subpath per fixture so consumers compose only what they need:
 
 ```json
 // package.json
@@ -283,7 +320,8 @@ export const test = base.extend({
 });
 ```
 
-Nothing here can be tested, reused, or composed on its own. It is all-or-nothing, in one file that will pass a thousand lines.
+The single fixture couples unrelated helpers to the same dependencies and lifecycle.
+Split it by concern so tests can compose the parts they need.
 
 ```typescript
 // ✅ One concern per fixture
@@ -302,7 +340,7 @@ import { mergeTests } from '@playwright/test';
 export const test = mergeTests(apiRequestTest, authSessionTest, logTest);
 ```
 
-Each fixture stays unit-testable, reusable on its own, and small enough to maintain, and a test composes only what it needs.
+Unit-test the extracted helpers and compose fixtures by concern.
 
 ## When to Use This Pattern
 
@@ -344,9 +382,9 @@ function createTestUser(name: string) {
 
 ## Related
 
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the isolation rule fixtures exist to satisfy
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - `interceptNetworkCall` as a fixture
-- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md) - TEA scaffolds this layout
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - the packaged fixtures
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md) - fixture composition in generated tests
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - the fixture-architecture and fixtures-composition fragments
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): the isolation rule fixtures exist to satisfy
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): `interceptNetworkCall` as a fixture
+- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): TEA scaffolds this layout
+- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): the packaged fixtures
+- [How to Run Automate](/docs/how-to/workflows/run-automate.md): fixture composition in generated tests
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): the fixture-architecture and fixtures-composition fragments

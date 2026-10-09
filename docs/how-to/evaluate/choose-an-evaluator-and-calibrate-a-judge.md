@@ -7,7 +7,7 @@ description: Pick the evaluation layer that reads your target's output and prove
 
 Use this guide to pick the layer that turns a target's output into judgments, and to calibrate the judge whenever the contract scores a rubric.
 The evaluator reads what the target produced.
-eval-quality alone turns those judgments into a verdict.
+eval-quality turns those judgments into a verdict.
 
 ## When to Use This
 
@@ -201,7 +201,6 @@ tea-evaluate run: judge calibration agreement fell below 0.9; see judge-calibrat
 
 This report came from a stand-in judge that answers the highest level every time.
 Two of four items match, so agreement is 0.5.
-A judge that cannot tell the levels apart looks like this.
 
 Read the items that disagree.
 Each one has a cause you can repair:

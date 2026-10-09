@@ -5,7 +5,8 @@ description: Multi-session learning companion that teaches testing fundamentals 
 
 # How to Learn Testing with TEA Academy
 
-Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressively through 7 structured sessions. Designed for self-paced learning over 1-2 weeks with automatic progress tracking.
+Learn testing through seven self-paced TEA Academy sessions.
+The workflow saves your progress so you can pause and resume.
 
 ## When to Use This
 
@@ -15,32 +16,22 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 - **VPs/Managers:** Grasp testing strategy and quality metrics
 - **Anyone:** Who wants to learn testing without requiring an instructor
 
-**Perfect for:**
-
-- Company onboarding (new QAs complete in 1-2 weeks)
-- Self-paced learning (pause and resume anytime)
-- Non-linear exploration (jump to any session based on experience)
-- Building testing knowledge that scales
-
 ## What You'll Learn
 
 ### 7 Progressive Sessions
 
-1. **Quick Start (30 min)** - TEA Lite intro, understand engagement models
-2. **Core Concepts (45 min)** - Risk-based testing (P0-P3), Definition of Done
-3. **Architecture & Patterns (60 min)** - Fixtures, network-first patterns, data factories
-4. **Test Design (60 min)** - Risk assessment and coverage planning workflow
-5. **ATDD & Automate (60 min)** - TDD red-green approach, test generation
-6. **Quality & Trace (45 min)** - Test review (5 dimensions), coverage traceability
-7. **Advanced Patterns (ongoing)** - Explore 59 knowledge fragments on-demand
+1. **Quick Start (30 min)**: TEA Lite intro, understand engagement models
+2. **Core Concepts (45 min)**: Risk-based testing (P0-P3), Definition of Done
+3. **Architecture & Patterns (60 min)**: Fixtures, network-first patterns, data factories
+4. **Test Design (60 min)**: Risk assessment and coverage planning workflow
+5. **ATDD & Automate (60 min)**: TDD red-green approach, test generation
+6. **Quality & Trace (45 min)**: Test review (rubric 5.0 criteria and severity scoring), coverage traceability
+7. **Advanced Patterns (ongoing)**: Explore 59 knowledge fragments on-demand
 
 ### What You'll Gain
 
-- ✅ Testing fundamentals (risk-based, test pyramid, types)
-- ✅ TEA methodology (9 workflows, architecture patterns)
-- ✅ Practical skills (write your first good test)
-- ✅ Knowledge artifacts (session notes, completion summary)
-- ✅ Confidence to apply TEA to your project
+Each session produces notes you can use on your project.
+The completion summary records your scores and the topics covered.
 
 ## Prerequisites
 
@@ -75,17 +66,17 @@ After assessment, you'll see a menu of all 7 sessions with:
 - Completion percentage
 - Recommended next session
 
-**Jump to any session.** The path is not linear.
+Choose any session from the menu.
 
 ### Session Flow
 
 Each session follows this pattern:
 
-1. **Teaching** - Concepts presented with role-adapted examples
-2. **Quiz** - 3 questions to validate understanding (≥70% to pass)
-3. **Session Notes** - Artifact generated with key takeaways
-4. **Progress Update** - Automatic save (can pause anytime)
-5. **Return to Menu** - Choose next session or exit
+1. **Teaching**: Concepts presented with role-adapted examples
+2. **Quiz**: 3 questions to validate understanding (≥70% to pass)
+3. **Session Notes**: Artifact generated with key takeaways
+4. **Progress Update**: Automatic save (can pause anytime)
+5. **Return to Menu**: Choose next session or exit
 
 ### Progress Tracking
 
@@ -97,7 +88,7 @@ Your progress is automatically saved:
 
 ### Resuming Later
 
-Simply run the workflow again - it automatically detects your progress and shows where you left off.
+Run the workflow again to resume from your saved progress.
 
 ## Learning Paths by Experience
 
@@ -105,7 +96,8 @@ Simply run the workflow again - it automatically detects your progress and shows
 
 **Recommended path:** Sessions 1 → 2 → 3 → 4 → 5 → 6 → 7
 
-Start at Session 1 and work through sequentially. Each session builds on previous concepts.
+Start at Session 1 and work through sequentially.
+Each session builds on previous concepts.
 
 **Time commitment:** 1-2 weeks (30-90 min per session)
 
@@ -151,8 +143,7 @@ Skip fundamentals, focus on:
 - Probability × Impact scoring
 - Definition of Done (7 quality principles)
 
-**Resources:** Testing as Engineering, Risk-Based Testing, Test Quality Standards docs
-**Knowledge Fragments:** test-quality.md, probability-impact.md
+**Resources:** Testing as Engineering, Risk-Based Testing, Test Quality Standards docs **Knowledge Fragments:** test-quality.md, probability-impact.md
 
 ### Session 3: Architecture & Patterns (60 min)
 
@@ -161,10 +152,9 @@ Skip fundamentals, focus on:
 - Fixture composition patterns
 - Network-first patterns (prevent race conditions)
 - Data factories
-- Step-file architecture (the pattern this workflow uses!)
+- Step-file architecture
 
-**Resources:** Fixture Architecture, Network-First Patterns, Step-File Architecture docs
-**Knowledge Fragments:** fixture-architecture.md, network-first.md, data-factories.md
+**Resources:** Fixture Architecture, Network-First Patterns, Step-File Architecture docs **Knowledge Fragments:** fixture-architecture.md, network-first.md, data-factories.md
 
 ### Session 4: Test Design (60 min)
 
@@ -175,8 +165,7 @@ Skip fundamentals, focus on:
 - Coverage planning (unit/integration/E2E)
 - Test priorities matrix (P0-P3 coverage targets)
 
-**Resources:** Test Design workflow docs
-**Knowledge Fragments:** test-levels-framework.md, test-priorities-matrix.md
+**Resources:** Test Design workflow docs **Knowledge Fragments:** test-levels-framework.md, test-priorities-matrix.md
 
 ### Session 5: ATDD & Automate (60 min)
 
@@ -187,14 +176,13 @@ Skip fundamentals, focus on:
 - Automate workflow (coverage expansion)
 - API testing patterns
 
-**Resources:** ATDD, Automate workflow docs
-**Knowledge Fragments:** component-tdd.md, api-testing-patterns.md, api-request.md
+**Resources:** ATDD, Automate workflow docs **Knowledge Fragments:** component-tdd.md, api-testing-patterns.md, api-request.md
 
 ### Session 6: Quality & Trace (45 min)
 
 **Topics:**
 
-- Test Review workflow (5 dimensions: determinism, isolation, maintainability, coverage, performance)
+- Test Review workflow: rubric 5.0 criteria, deductions, severity caps (69/79/89/99), and a bonus cap of 25
 - Trace workflow (coverage traceability)
 - Quality metrics that matter (P0/P1 coverage vs vanity metrics)
 - Release gate decisions
@@ -210,8 +198,7 @@ Skip fundamentals, focus on:
 - Deep-dive into specific patterns as needed
 - GitHub links for browsing source
 
-**Resources:** All 59 knowledge fragments
-**GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
+**Resources:** All 59 knowledge fragments **GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
 
 ## Completion Summary
 
@@ -225,21 +212,14 @@ Complete all 7 sessions to receive your TEA Academy completion summary with:
 
 ## Tips for Success
 
-1. **Set aside dedicated time** - Each session requires focus (30-90 min)
-2. **Take your own notes** - Session notes are generated, but add personal insights
-3. **Apply immediately** - Practice concepts on your current project
-4. **Explore fragments** - Session 7 has 59 fragments for deep-dive topics
-5. **Share with team** - Help others learn by sharing your experience
-6. **Don't rush** - Learning takes time, pause and resume as needed
+Practice each topic on your project before moving on.
+Pause whenever needed; the workflow saves progress after each quiz.
 
 ## Role-Based Customization
 
 The workflow adapts examples based on your role:
 
-**QA Engineers:** Practical testing focus, workflow usage, coverage expansion
-**Developers:** Integration perspective, TDD approach, API testing
-**Tech Leads:** Architecture decisions, team patterns, code review standards
-**VPs/Managers:** Strategy, ROI, quality metrics, team scaling
+**QA Engineers:** Practical testing focus, workflow usage, coverage expansion **Developers:** Integration perspective, TDD approach, API testing **Tech Leads:** Architecture decisions, team patterns, code review standards **VPs/Managers:** Strategy, ROI, quality metrics, team scaling
 
 ## Troubleshooting
 
@@ -259,7 +239,9 @@ If scoring <70% on quizzes:
 
 ### Want to restart from scratch
 
-Delete your progress file. `{test_artifacts}` is the `test_artifacts` value under `[modules.tea]` in `_bmad/config.toml` (default `{project-root}/_bmad-output/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment. With those defaults and the name `alex`:
+Delete your progress file.
+`{test_artifacts}` is the `test_artifacts` value under `[modules.tea]` in `_bmad/config.toml` (default `{project-root}/_bmad-output/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment.
+With those defaults and the name `alex`:
 
 ```bash
 rm _bmad-output/test-artifacts/teaching-progress/alex-tea-progress.yaml
@@ -267,14 +249,14 @@ rm _bmad-output/test-artifacts/teaching-progress/alex-tea-progress.yaml
 
 ## Related Workflows
 
-After completing TEA Academy, you're ready to use:
+Use these workflows to practice:
 
-- [Framework](/docs/how-to/workflows/setup-test-framework.md) - Set up test framework
-- [Test Design](/docs/how-to/workflows/run-test-design.md) - Plan test coverage
-- [ATDD](/docs/how-to/workflows/run-atdd.md) - Generate failing tests first
-- [Automate](/docs/how-to/workflows/run-automate.md) - Expand test coverage
-- [Test Review](/docs/how-to/workflows/run-test-review.md) - Audit test quality
-- [Trace](/docs/how-to/workflows/run-trace.md) - Requirements traceability
+- [Framework](/docs/how-to/workflows/setup-test-framework.md): Set up test framework
+- [Test Design](/docs/how-to/workflows/run-test-design.md): Plan test coverage
+- [ATDD](/docs/how-to/workflows/run-atdd.md): Generate failing tests first
+- [Automate](/docs/how-to/workflows/run-automate.md): Expand test coverage
+- [Test Review](/docs/how-to/workflows/run-test-review.md): Audit test quality
+- [Trace](/docs/how-to/workflows/run-trace.md): Requirements traceability
 
 ## Additional Resources
 
@@ -284,4 +266,5 @@ After completing TEA Academy, you're ready to use:
 
 ## Support
 
-Questions or issues? See [Troubleshooting](/reference/troubleshooting/) or file an issue on the GitHub repository.
+Questions or issues?
+See [Troubleshooting](/reference/troubleshooting/) or file an issue on the GitHub repository.

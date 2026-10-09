@@ -85,7 +85,7 @@
    ============================================ */
 
 /* Space Grotesk for all headings - match Ghost blog */
-.sl-markdown-content h1,
+#how-a-skill-becomes-a-cli,
 .sl-markdown-content h2,
 .sl-markdown-content h3,
 .sl-markdown-content h4,
@@ -97,8 +97,14 @@ starlight-toc h2 {
   letter-spacing: -0.02em;
 }
 
-.sl-markdown-content h1 {
+#how-a-skill-becomes-a-cli {
   margin-bottom: 1.5rem;
+}
+
+/* Hide duplicate body titles; retain the distinct CLI architecture heading. */
+.sl-markdown-content > h1:first-child:not(#how-a-skill-becomes-a-cli),
+.sl-markdown-content > .sl-heading-wrapper.level-h1:first-child:not(:has(#how-a-skill-becomes-a-cli)) {
+  display: none;
 }
 
 .sl-markdown-content h2 {
