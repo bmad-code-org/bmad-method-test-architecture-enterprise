@@ -4162,7 +4162,9 @@ async function runTests() {
       );
       const agentMarker = path.join(tmpRoot, 'old-rubric-agent-ran');
       const markerAgent = path.join(tmpRoot, 'marker-agent.js');
-      fs.writeFileSync(markerAgent, `require('node:fs').writeFileSync(${JSON.stringify(agentMarker)}, 'ran');\n`);
+      fs.writeFileSync(markerAgent, `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(agentMarker)}, 'ran');\n`, {
+        mode: 0o755,
+      });
       for (const [label, workflow] of [
         ['rubric 4.0', 'rubric_version: "4.0"\n'],
         ['no rubric version', 'name: bmad-testarch-test-review\n'],
@@ -4183,6 +4185,25 @@ async function runTests() {
           );
         }
       }
+
+      // Positive control: the same agent runs under a skill that declares rubric 5.0, so the
+      // markers above prove the preflight stopped it and not that the agent could never start.
+      fs.copyFileSync(
+        path.join(repoRoot, 'skills', 'bmad-testarch-test-review', 'workflow.yaml'),
+        path.join(oldSkillRoot, 'workflow.yaml'),
+      );
+      runCli([
+        '--agent-cmd',
+        markerAgent,
+        '--no-isolate',
+        '--files',
+        'x.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--skill-root',
+        oldSkillRoot,
+      ]);
+      assert(fs.existsSync(agentMarker), 'the marker agent does run under a skill that declares the rubric the CLI scores');
 
       // ---- --waive / --waive-until validation ----
 
@@ -5744,6 +5765,12 @@ async function runTests() {
       assert(
         defaultConfigPrompt.includes('playwright_utils_installed=false') && defaultConfigPrompt.includes('pactjs_utils_installed=false'),
         'build-prompt states both install gates, defaulting to false when none are passed',
+      );
+      assert(
+        defaultConfigPrompt.includes('when H10 turns on whether a static type checker') &&
+          defaultConfigPrompt.includes('read the CI workflow files (.github/workflows)') &&
+          defaultConfigPrompt.includes('not open package.json for them'),
+        "build-prompt lets the agent read the CI workflow for H10 while the install gates stay the CLI's to state",
       );
       const installedPrompt = buildPrompt({
         skillRoot,

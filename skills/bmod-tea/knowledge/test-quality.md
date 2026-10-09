@@ -2,7 +2,7 @@
 
 ## Principle
 
-Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain 1000 lines or fewer, avoid hard waits and conditionals, keep assertions visible in test bodies, and clean up after itself for parallel execution.
+Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain 1000 lines or fewer, avoid hard waits and branches that skip a step or an assertion, keep assertions visible in test bodies, and clean up after itself for parallel execution.
 
 ## Rationale
 
@@ -12,7 +12,7 @@ Quality tests provide reliable signal about application health. Flaky tests erod
 
 ### Example 1: Deterministic Test Pattern
 
-**Context**: When writing tests, eliminate all sources of non-determinism: hard waits, conditionals controlling flow, try-catch for flow control, and random data without seeds.
+**Context**: When writing tests, eliminate all sources of non-determinism: hard waits, branches that skip a step or an assertion, try-catch for flow control, and random data without seeds.
 
 **Implementation**:
 
@@ -92,7 +92,7 @@ describe('Dashboard', () => {
 **Key Points**:
 
 - Replace `waitForTimeout()` with `waitForResponse()` or element state checks
-- Never use if/else to control test flow - tests should be deterministic
+- Never branch on which actions run, and never let a branch leave an assertion unrun: tests should be deterministic
 - Avoid try-catch for flow control - let failures bubble up clearly
 - Use factory functions with controlled data, not `Math.random()`
 - Network-first pattern prevents race conditions
@@ -761,7 +761,7 @@ assert total == Decimal("42.00")
 - An assertion after an unconditional `return`, or inside a `catch` the happy path never enters, or inside a callback the test never awaits, does not run
 - Prefer `rejects`/`raises` forms over `try`/`catch` around the thing you expect to throw: they fail when nothing throws
 
-**A branch in a test is a defect only when it can hide a wrong result.** An `if` that leaves a path with no assertion skips the check, whatever decides the branch: a guard on the system's own output skips it exactly when the system is wrong, and a parameter guard with no `else` skips it for every other case. An expected value picked by a branch on the system's output makes the test agree with whatever the system did.
+**A branch in a test is a defect only when it can hide a wrong result.** An `if` that leaves a path with no assertion skips the check, whatever decides the branch: a guard on the system's own output skips it exactly when the system is wrong, and a parameter guard with no `else` skips it for every other case. An expected value picked by a branch on the system's output makes the test agree with whatever the system did, and so does a branch the system's output decides when each path asserts a literal: `if response.ok: assert body == order` with `else: assert response.status_code == 404` passes a regression that answers 404 for a valid order.
 
 ```python
 # ❌ BAD: the assertion runs only when the system already returned a lower total
@@ -772,7 +772,7 @@ if total < cart.total():
 # ✅ GOOD: always asserted
 assert apply_discount(cart, "SAVE10") == 18.0
 
-# ✅ ACCEPTABLE, a readability note at most: every path asserts the expected value
+# ✅ ACCEPTABLE, a readability note at most: a test input decides the branch and every path asserts the expected value
 @pytest.mark.parametrize(("code", "expected"), [("SAVE10", 0.10), ("NOPE", None)])
 def test_lookup(code, expected):
     rate = lookup_discount(code)
@@ -811,7 +811,7 @@ result: Result[Receipt] = wrap(receipt)
 widened: Result[object] = result  # fails the static check if covariance breaks
 ```
 
-Read the project's CI and type-check configuration before judging such a test. With a static type check that CI runs (mypy, pyright or `tsc` invoked by the workflow or a script it calls), the check is what fails when assignability breaks, and the runtime line beside it is incidental. A checker that is only configured (`[tool.mypy]`, a `tsconfig.json`) and never run does not count: the same test asserts nothing about the type and the shape-only finding stands. Three more cases are not violations: a value assertion standing beside the type check, a value the system generates that the test genuinely cannot predict such as a server-assigned id or a timestamp, where the line should say why the type is all there is to assert, and a presence assertion about a UI element such as `toBeVisible`, where being on the screen is the behavior under test.
+Read the project's CI and type-check configuration before judging such a test. With a static type check that CI runs over the test file (mypy, pyright or `tsc` invoked by the workflow or a script it calls, with the file inside its file list or `include` and no `exclude` or `ignore_errors` for it), the check is what fails when assignability breaks, and the runtime line beside it is incidental. A checker that is only configured (`[tool.mypy]`, a `tsconfig.json`) and never run does not count: the same test asserts nothing about the type and the shape-only finding stands. Three more cases are not violations: a value assertion standing beside the type check, a value the system generates that the test genuinely cannot predict such as a server-assigned id or a timestamp, where the line should say why the type is all there is to assert, and a presence assertion about a UI element such as `toBeVisible`, where being on the screen is the behavior under test.
 
 ### Example 8: Suite Structure and One Dialect
 

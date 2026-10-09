@@ -1124,7 +1124,11 @@ async function runReview(session) {
     if (declared !== RUBRIC_VERSION) {
       fail(
         EXIT.ENV_ERROR,
-        `The skill at ${skillRoot} declares rubric ${declared ?? 'none'}; this CLI scores rubric ${RUBRIC_VERSION}. Upgrade the vendored skill or drop --project-skill.`,
+        `The skill at ${skillRoot} declares rubric ${declared ?? 'none'}; this CLI scores rubric ${RUBRIC_VERSION}. ${
+          skillSource === 'packaged'
+            ? 'Reinstall the CLI so the packaged skill matches it.'
+            : 'Upgrade that skill copy, or drop --project-skill and --skill-root to use the packaged one.'
+        }`,
       );
     }
   }

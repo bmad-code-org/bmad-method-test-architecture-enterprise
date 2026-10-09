@@ -21,6 +21,7 @@
  */
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -132,7 +133,27 @@ section('test names are not scored', () => {
   );
 });
 
+// Reports from different rubrics are not comparable, so a change to what the
+// rubric scores must move the version. This digest covers the registry's row table
+// and the template's bonus ledger; the failure message says what to bump.
+const RUBRIC_DIGEST = '409f946c7a256346';
+const rubricDigest = () => {
+  const rows = registry
+    .split('\n')
+    .filter((line) => /^\| [A-Z]\d+ /.test(line))
+    .join('\n')
+    .replaceAll(/\s+/g, ' ');
+  const template = read(skillRoot, 'test-review-template.md');
+  const ledger = template.slice(template.indexOf('Bonus Points:'), template.indexOf('Total Bonus:'));
+  return crypto.createHash('sha256').update(rows).update(ledger.replaceAll(/\s+/g, ' ')).digest('hex').slice(0, 16);
+};
+
 section('the rubric version', () => {
+  assert(
+    rubricDigest() === RUBRIC_DIGEST,
+    `the registry rows and bonus ledger still match the rubric ${RUBRIC_VERSION} digest`,
+    `digest is ${rubricDigest()}: if the rubric changed, bump rubric_version in workflow.yaml and RUBRIC_VERSION in cli/lib/review-provenance.js, then update RUBRIC_DIGEST`,
+  );
   assert(skillRubricVersion(skillRoot) === '5.0', 'the skill declares rubric 5.0 in workflow.yaml', skillRubricVersion(skillRoot));
   const provenance = buildReviewProvenance({
     projectRoot: repoRoot,
@@ -193,8 +214,12 @@ section('H3: a branch that cannot hide a wrong result', () => {
     'H3 fires on a guard that leaves a path with no assertion, whatever decides the branch',
   );
   assert(
-    /Does not fire: a branch where every path asserts the expected value/.test(h3),
-    'H3 excludes a branch that asserts the expected value on every path',
+    /Does not fire: a branch whose condition reads only test inputs[\s\S]*?where every path asserts the expected value/.test(h3),
+    'H3 excludes a test-input branch that asserts the expected value on every path',
+  );
+  assert(
+    /A branch decided by the system's own output still fires when every path asserts/.test(h3),
+    'H3 still fires on a branch the system output decides when every path asserts a literal',
   );
   assert(
     /Advisory Observation[\s\S]*no severity and no deduction/.test(h3),
@@ -205,15 +230,19 @@ section('H3: a branch that cannot hide a wrong result', () => {
   assert(
     /H3 asks whether the assertion can be skipped, swallowed or picked by the system's own output/.test(worker) &&
       /a parameter guard with no `else`[\s\S]*?skips the check for every other case/.test(worker) &&
-      /A branch where every path asserts the expected value[\s\S]*?cannot hide a wrong result: do not emit H3 for it/.test(worker),
-    'the determinism worker fires H3 on a parameter guard with no else and stands down when every path asserts',
+      /A branch whose condition reads only test inputs[\s\S]*?cannot hide a wrong result: do not emit H3 for it/.test(worker) &&
+      /A branch decided by the system's own output fires even when every path asserts \(`if response\.ok: assert body == order`/.test(
+        worker,
+      ),
+    'the determinism worker fires H3 on a parameter guard with no else, stands down on a test-input branch that asserts on every path, and fires when the system output decides',
   );
   const fragment = read(repoRoot, 'skills', 'bmod-tea', 'knowledge', 'test-quality.md');
   assert(
     /A branch in a test is a defect only when it can hide a wrong result/.test(fragment) &&
       /a parameter guard with no `else` skips it for every other case/.test(fragment) &&
-      /Drop the `else` and the cases that miss the `if` assert nothing, which is H3/.test(fragment),
-    'the knowledge fragment teaches the same line, including the parameter guard with no else',
+      /Drop the `else` and the cases that miss the `if` assert nothing, which is H3/.test(fragment) &&
+      /passes a regression that answers 404 for a valid order/.test(fragment),
+    'the knowledge fragment teaches the same line, including the parameter guard with no else and the output-decided branch',
   );
 });
 
@@ -233,15 +262,29 @@ section('H10: a type-assignability test and a value test', () => {
   assert(/\[tool\.mypy\]/.test(checked) && /run: mypy/.test(checked), 'the checked repository configures and runs mypy');
   assert(!/mypy|pyright/.test(unchecked) && /run: pytest/.test(unchecked), 'the unchecked repository runs pytest and no type checker');
   const configuredOnly = `${read(reposRoot, 'covariance-config-only', 'base', 'pyproject.toml')}\n${read(reposRoot, 'covariance-config-only', 'base', '.github', 'workflows', 'ci.yml')}`;
+  const ciRuns = (repo) =>
+    [...read(reposRoot, repo, 'base', '.github', 'workflows', 'ci.yml').matchAll(/^\s+- run: (.+)$/gm)].map((match) => match[1]);
   assert(
-    /\[tool\.mypy\]/.test(configuredOnly) && /run: pytest/.test(configuredOnly) && !/run: mypy|pip install[^\n]*mypy/.test(configuredOnly),
-    'the configured-only repository declares mypy in pyproject and CI never runs it',
+    /\[tool\.mypy\]/.test(configuredOnly) && ciRuns('covariance-config-only').join('|') === 'pip install pytest|pytest',
+    'the configured-only repository declares mypy in pyproject and CI only installs and runs pytest',
+  );
+  const excludes = `${read(reposRoot, 'covariance-checker-excludes-tests', 'base', 'pyproject.toml')}`;
+  assert(
+    covariance.test(read(reposRoot, 'covariance-checker-excludes-tests', 'pr', 'tests', 'test_checkout.py')) &&
+      ciRuns('covariance-checker-excludes-tests').join('|') === 'pip install pytest mypy|mypy|pytest' &&
+      /\[tool\.mypy\][\s\S]*files = \["shop"\]/.test(excludes) &&
+      !/tests/.test(excludes.slice(excludes.indexOf('[tool.mypy]'))),
+    'the checker-excludes-tests repository runs mypy in CI over shop only, so the test file is never type-checked',
   );
   const h10 = row('H10');
   assert(
     /Four cases do not fire it/.test(h10) && /static type assignability/.test(h10),
     'H10 excludes a static type assignability test',
     h10.slice(0, 200),
+  );
+  assert(
+    /on the test's file \(the checker's file list or `include` covers the test, with no `exclude` or `ignore_errors` for it\)/.test(h10),
+    "H10 exempts the test only where the checker covers the test's file",
   );
   assert(
     /mypy, pyright, `tsc`/.test(h10) && /runs a static type checker[^.]*directly or through a script the CI runs/.test(h10),
@@ -262,7 +305,8 @@ section('H10: a type-assignability test and a value test', () => {
   assert(
     /H10 asks whether any wrong value of the right shape passes/.test(worker) &&
       /read the project's CI workflow and the scripts it calls[\s\S]*?for a step that invokes the checker/.test(worker) &&
-      /Configuration alone[\s\S]*?does not count[\s\S]*?H10 fires/.test(worker),
+      /Configuration alone[\s\S]*?does not count[\s\S]*?H10 fires/.test(worker) &&
+      /`mypy shop\/` or a `tsconfig` that excludes `\*\*\/\*\.spec\.ts` never checks the test/.test(worker),
     'the determinism worker looks for a step that runs the checker, and configuration alone does not exempt',
   );
   const fragment = read(repoRoot, 'skills', 'bmod-tea', 'knowledge', 'test-quality.md');
@@ -277,7 +321,7 @@ section('H10: a type-assignability test and a value test', () => {
 section('genuine broken assertions stay severe', () => {
   const full = read(reposRoot, 'full-file', 'base', 'tests', 'test_ledger.py');
   assert(
-    /except AssertionError/.test(full) && /for .* in .*:\n(?:.*\n)*?\s+assert/.test(full),
+    /except AssertionError:\n\s+pass/.test(full) && /for [^\n]* in [^\n]*:\n\s+assert/.test(full),
     'the full-file fixture keeps a swallowed assertion and a loop that may never run',
   );
   assert(

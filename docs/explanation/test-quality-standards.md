@@ -49,7 +49,7 @@ test('user can do stuff', async ({ page }) => {
 **Rule:** the test produces the same result every run.
 
 - ❌ No hard waits (`waitForTimeout`)
-- ❌ No branch that can leave an assertion unrun (`if` with no `else`, `try/catch` that swallows)
+- ❌ No conditionals for flow control (`if/else`)
 - ❌ No try-catch for flow control
 - ✅ Wait for the network event that causes the UI change
 - ✅ Use explicit waits (`waitForSelector`, `waitForResponse`)
@@ -284,7 +284,7 @@ test('fast test', async ({ page }) => {
 ### Determinism (35 points)
 
 - No hard waits: 10
-- Assertions always run (no `if` that can skip one, no swallowing `try/catch`): 10
+- No conditionals for flow control: 10
 - No try-catch for flow control: 10
 - Network-first: 5. The test waits on an actual network event rather than a timeout. A pure API test that awaits its own request satisfies this by construction.
 
@@ -403,7 +403,7 @@ Determinism 35/35, Isolation 25/25, Assertions 20/20, Structure 10/10, Performan
 **Test quality:**
 
 - [ ] No hard waits (`waitForTimeout`)
-- [ ] Assertions always run (no conditional that can skip one)
+- [ ] No conditionals for flow control
 - [ ] No try-catch for flow control
 - [ ] Network-first patterns used
 - [ ] Assertions explicit in test body
