@@ -8,17 +8,17 @@
   "systemId": "refund-check",
   "implementationDigest": "sha256:4baeb74e1eb99e6edade003e62e02799e83b74b821d7293425aae9c6be68cea0",
   "artifactDigest": "sha256:4baeb74e1eb99e6edade003e62e02799e83b74b821d7293425aae9c6be68cea0",
-  "commitDigest": "sha256:76c39e5b0d97335d7d48b5e8f689a51d74a1f1cb173054dd4418e00176a21bff",
+  "commitDigest": "sha256:564cec8f17008ff0249ef26417e0d40ee0edde218edad5f556c7d9f24fc9da4f",
   "rationale": "[malformed] Clean control: a request that is not text is refused.",
   "qualification": {
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261007T091245668Z-181adf58/qualification/P-003/baseline-pass.json",
+      "path": "runs/20261009T005856077Z-6de24e2c/qualification/P-003/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:322935b9d49bc1c47afea806e9da9ab1bf799ce5f62101b928c006cd93132cd9"
     },
-    "revisionCommitDigest": "sha256:76c39e5b0d97335d7d48b5e8f689a51d74a1f1cb173054dd4418e00176a21bff",
+    "revisionCommitDigest": "sha256:564cec8f17008ff0249ef26417e0d40ee0edde218edad5f556c7d9f24fc9da4f",
     "noKnownDefectStatement": "The skill has no known defect at this revision."
   },
   "expectedClean": true,
