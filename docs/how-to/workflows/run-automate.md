@@ -273,7 +273,7 @@ test('should edit profile', async ({ page }) => {
   // Edit profile
   await page.goto('/profile');
   await page.getByRole('button', { name: 'Edit Profile' }).click();
-  await page.getByLabel('Name').fill('New Name');
+  await page.getByLabel('Name').fill('Updated Name');
   await page.getByRole('button', { name: 'Save' }).click();
 
   // Verify success
@@ -838,14 +838,23 @@ TEA generates **red-phase test scaffolds** in appropriate directories:
 
 ##### API Tests (`tests/api/profile.spec.ts`):
 
+Both API variants use the project's existing `tests/support/fixtures.ts`, which exports `test` with an `authToken` fixture for the seeded `test@example.com` user.
+The fixture must supply a valid Bearer token through the working authentication flow before profile scaffolds are activated.
+Verify authentication independently and report fixture setup failures as prerequisite failures; criterion red evidence comes from the profile response's first status assertion.
+For Playwright Utils, configure that auth fixture with a registered provider and `createAuthFixtures()` from [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
+The examples reuse that fixture and send its token on every profile request.
+
 **Vanilla Playwright:**
 
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test } from '../support/fixtures';
+import { expect } from '@playwright/test';
 
 test.describe('Profile API', () => {
-  test.skip('[P0] AC-1 should fetch user profile', async ({ request }) => {
-    const response = await request.get('/api/profile');
+  test.skip('[P0] AC-1 should fetch user profile', async ({ request, authToken }) => {
+    const response = await request.get('/api/profile', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
 
     expect(response.status()).toBe(200);
     const profile = await response.json();
@@ -854,8 +863,9 @@ test.describe('Profile API', () => {
     expect(profile).toHaveProperty('avatarUrl');
   });
 
-  test.skip('[P0] AC-2 should update user profile', async ({ request }) => {
+  test.skip('[P0] AC-2 should update user profile', async ({ request, authToken }) => {
     const response = await request.patch('/api/profile', {
+      headers: { Authorization: `Bearer ${authToken}` },
       data: {
         name: 'Updated Name',
         email: 'updated@example.com',
@@ -868,8 +878,9 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
-  test.skip('[P1] AC-4 should validate email format', async ({ request }) => {
+  test.skip('[P1] AC-4 should validate email format', async ({ request, authToken }) => {
     const response = await request.patch('/api/profile', {
+      headers: { Authorization: `Bearer ${authToken}` },
       data: {
         email: 'invalid-email',
       },
@@ -885,9 +896,12 @@ test.describe('Profile API', () => {
 **With Playwright Utils:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
+import { test as authTest } from '../support/fixtures';
+import { test as apiRequestTest } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect, mergeTests } from '@playwright/test';
 import { z } from 'zod';
+
+const test = mergeTests(authTest, apiRequestTest);
 
 const ProfileSchema = z.object({
   name: z.string(),
@@ -896,10 +910,11 @@ const ProfileSchema = z.object({
 });
 
 test.describe('Profile API', () => {
-  test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest }) => {
+  test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'GET',
       path: '/api/profile',
+      headers: { Authorization: `Bearer ${authToken}` },
     });
 
     expect(status).toBe(200);
@@ -908,10 +923,11 @@ test.describe('Profile API', () => {
     expect(profile.email).toContain('@');
   });
 
-  test.skip('[P0] AC-2 should update user profile', async ({ apiRequest }) => {
+  test.skip('[P0] AC-2 should update user profile', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
+      headers: { Authorization: `Bearer ${authToken}` },
       body: {
         name: 'Updated Name',
         email: 'updated@example.com',
@@ -924,10 +940,11 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
-  test.skip('[P1] AC-4 should validate email format', async ({ apiRequest }) => {
+  test.skip('[P1] AC-4 should validate email format', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
+      headers: { Authorization: `Bearer ${authToken}` },
       body: { email: 'invalid-email' },
     });
 

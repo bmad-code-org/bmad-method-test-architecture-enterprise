@@ -474,7 +474,7 @@ jobs:
 
 ```yaml
 variables:
-  NODE_VERSION: '18'
+  NODE_VERSION: '22.20.0'
 
 stages:
   - test
