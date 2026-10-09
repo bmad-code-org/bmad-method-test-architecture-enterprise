@@ -23,15 +23,15 @@
     "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T212426336Z-f08c776f/qualification/P-008/baseline-pass.json",
+      "path": "runs/20261009T010109929Z-0b7fb5b6/qualification/P-008/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:014b583b2bb2883181e82bbbcbd204e25c12cb79d8712896c465e981fe8c8b62"
+      "digest": "sha256:d021d6fd21105ed5dc235f4b044decdad95f80425c23785c55c37c541c78c878"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261006T212426336Z-f08c776f/qualification/P-008/mutated-fail.json",
+      "path": "runs/20261009T010109929Z-0b7fb5b6/qualification/P-008/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:702a9a5514d198474d3f0231b55888d33f301a44c419512a498e795afc40f63a"
+      "digest": "sha256:54613bab6abd9463946f73f5caf35b71d7d542d4e2ec9985b792c485014df5b0"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261006T212426336Z-f08c776f/qualification/P-008/mutated-fail.json",
+          "path": "runs/20261009T010109929Z-0b7fb5b6/qualification/P-008/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:702a9a5514d198474d3f0231b55888d33f301a44c419512a498e795afc40f63a"
+          "digest": "sha256:54613bab6abd9463946f73f5caf35b71d7d542d4e2ec9985b792c485014df5b0"
         }
       ],
       "source": "controlled-mutation",
