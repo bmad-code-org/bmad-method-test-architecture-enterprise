@@ -327,13 +327,37 @@ Why the model is pinned rather than left to the vendor CLI: [Test Review CLI Arc
 
 ## TEA config resolution
 
-Four config keys pick which knowledge fragments load, and two more decide how step-03 orchestrates its quality workers. The CLI states all six in the prompt, because a key it leaves unstated is one the agent decides for itself.
+The CLI resolves the fragment-selection keys, `test_stack_type`, and the orchestration pair `tea_execution_mode` and `tea_capability_probe` before the agent runs.
+`tea_browser_automation=none` is fixed by the headless contract.
+The resolved `[core]` and complete `[modules.tea]` table are supplied in the prompt; the agent uses those values throughout activation and the workflow.
 
-One of the four is fixed by the headless contract: `tea_browser_automation=none`. The other five, the three fragment keys plus the orchestration pair `tea_execution_mode` and `tea_capability_probe`, resolve by precedence, highest first:
+For a git-diff review, configuration comes from the selected base ref, including the default `origin/main` or the base resolved through `--pr`.
+The CLI pins that ref to a commit and reads `_bmad/config.toml`, `_bmad/config.user.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml` from its Git tree with `git show`.
+Layers follow BMad structural merge rules: tables merge recursively, ordinary arrays append, keyed table arrays replace matching `code` or `id` entries, and later scalars win.
+Legacy `_bmad/tea/config.yaml` is read only when the base tree lacks `_bmad/config.toml`.
+A PR that edits, adds, removes, or breaks those files therefore keeps the review settings from its base.
+Config changes take effect in later reviews after they reach the base branch.
 
-1. Explicit flag (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`, `--execution-mode sequential`, `--no-capability-probe`)
-2. The project's `[modules.tea]` table, merged from `_bmad/config.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml`, later files winning (written by `bmad setup tea`). Only when `_bmad/config.toml` does not exist does the CLI read a legacy `_bmad/tea/config.yaml` instead, so CI set up for an older TEA keeps working
-3. Module default from `skills/bmod-tea/bmod.toml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: mcp`, `tea_execution_mode: auto`, `tea_capability_probe: true`
+An explicit `--files` run without `--base` uses the working-tree config and requires no Git repository.
+Passing `--base` with `--files` selects base-tree config while keeping full-file review scope. Its `reviewProvenance.baseSha` records the configuration commit; the source labels it as a config snapshot.
+Git-diff reviews use the same pinned commit for configuration, comparison, and provenance.
+The Action's `base-ref` input maps to the CLI's `--base` flag.
+
+Precedence, highest first:
+
+1. Explicit CLI flags (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`, `--execution-mode sequential`, `--no-capability-probe`).
+2. The selected configuration's merged `[modules.tea]` table, or legacy YAML mapping.
+3. Module defaults from `skills/bmod-tea/bmod.toml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: mcp`, `tea_execution_mode: auto`, `tea_capability_probe: true`, `test_stack_type: auto`.
+
+`test_stack_type` accepts `auto`, `frontend`, `backend`, `fullstack`, or `mobile`.
+The CLI prints the configuration source on stderr, including the pinned commit and repository-relative path for a base-tree review.
+Missing base config uses module defaults.
+An invalid or unavailable base ref, an unreadable blob, a config path that is a directory or symbolic link, or malformed base config exits 2; a base-tree read never falls back to the working tree.
+The prompt overrides the skill's `resolve_config.py` activation call and subsequent config reads, so the agent uses the supplied values.
+Workflow customization also uses the pinned base versions of `_bmad/custom/bmad-testarch-test-review.toml` and its `.user.toml` layer, merged with trusted skill defaults. The prompt replaces `resolve_customization.py` and checkout customization reads.
+Persistent-fact `file:` paths and globs are expanded from that base tree in lexical order and supplied as fact contents. Missing matches, paths outside the project, and symlinked policy paths fail closed.
+The snapshot includes the `test_artifacts` and `test_framework` module defaults when configuration omits them.
+Dependency-presence checks continue to read the reviewed checkout's `package.json`.
 
 `step-03-quality-evaluation.md` reads the orchestration pair, probes the runtime, dispatches its four quality workers in parallel when it can launch them, and resolves to `sequential` when it cannot. Both keys are stated in the prompt because `auto` with the probe off resolves to `sequential` on every run, which would leave the parallel path unreachable. The report's `**Execution Mode**:` line records which one it resolved to.
 

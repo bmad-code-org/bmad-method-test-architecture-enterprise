@@ -1011,22 +1011,6 @@ async function runReview(session) {
     );
   }
 
-  // Every config key step-01 branches on is resolved here (flag, then the
-  // project's [modules.tea] config, then the module default) and stated in the prompt.
-  // An unstated key is one the agent decides per run.
-  let teaConfig;
-  let installedPackages;
-  try {
-    const resolvedTeaConfig = resolveTeaConfig({ projectRoot, flags: options });
-    teaConfig = resolvedTeaConfig.values;
-    installedPackages = resolvedTeaConfig.installed;
-  } catch (error) {
-    if (error.code === 'TEA_CONFIG_INVALID') {
-      fail(EXIT.ENV_ERROR, error.message);
-    }
-    throw error;
-  }
-
   /** Evaluate every verdict gate against the selected finding set; returns failure reasons (empty = pass). */
   function evaluateGates(parsed) {
     const failures = [];
@@ -1106,6 +1090,34 @@ async function runReview(session) {
     }
     console.error(`tea-test-review: base ref for #${prNumber}: ${baseRef}`);
   }
+  // Resolve config after base lookup so every PR-governing value comes from
+  // the selected base tree. An explicit --files run needs no Git unless it
+  // also names a base. CLI flags retain precedence.
+  let teaConfig;
+  let installedPackages;
+  let configSnapshot;
+  let workflowCustomization;
+  let configCommit;
+  try {
+    const resolvedTeaConfig = resolveTeaConfig({
+      projectRoot,
+      flags: options,
+      skillRoot,
+      baseRef: filesProvided && program.getOptionValueSource('base') !== 'cli' ? undefined : baseRef,
+    });
+    teaConfig = resolvedTeaConfig.values;
+    installedPackages = resolvedTeaConfig.installed;
+    configSnapshot = resolvedTeaConfig.configSnapshot;
+    workflowCustomization = resolvedTeaConfig.workflowCustomization;
+    configCommit = resolvedTeaConfig.configCommit;
+    console.error(`tea-test-review: config ${resolvedTeaConfig.configPath}`);
+  } catch (error) {
+    if (error.code === 'TEA_CONFIG_INVALID') {
+      fail(EXIT.ENV_ERROR, error.message);
+    }
+    throw error;
+  }
+
   let allChangedFiles = null;
   let changedTestFiles;
   let contextFiles = [];
@@ -1120,9 +1132,14 @@ async function runReview(session) {
     if (filesProvided) {
       changedTestFiles = getChangedTestFiles({ files: options.files, projectRoot });
     } else {
-      allChangedFiles = getChangedFiles({ base: baseRef, projectRoot });
+      allChangedFiles = getChangedFiles({ base: configCommit ?? baseRef, projectRoot });
       changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
-      diffEvidence = getDiffEvidence({ base: baseRef, projectRoot, files: changedTestFiles, contextFiles: allChangedFiles });
+      diffEvidence = getDiffEvidence({
+        base: configCommit ?? baseRef,
+        projectRoot,
+        files: changedTestFiles,
+        contextFiles: allChangedFiles,
+      });
       ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
       unscorableTestArtifacts = getUnscorableTestArtifacts(allChangedFiles);
     }
@@ -1137,6 +1154,7 @@ async function runReview(session) {
     projectRoot,
     skillRoot,
     baseRef,
+    baseCommit: configCommit,
     filesProvided,
     modelIdentifier: resolvedModel,
     gateMode: gateOn,
@@ -1167,7 +1185,7 @@ async function runReview(session) {
     let deletedTestFiles = [];
     if (!filesProvided) {
       try {
-        deletedTestFiles = getDeletedTestFiles({ base: baseRef, projectRoot });
+        deletedTestFiles = getDeletedTestFiles({ base: configCommit ?? baseRef, projectRoot });
       } catch (error) {
         if (error.code === 'GIT_DIFF_FAILED' || error.code === 'BASE_UNRESOLVABLE') {
           fail(EXIT.ENV_ERROR, error.message);
@@ -1266,6 +1284,8 @@ async function runReview(session) {
       fileStats: fileStatsFor(projectRoot, changedTestFiles),
       testDir: options.testDir,
       teaConfig,
+      configSnapshot,
+      workflowCustomization,
       installedPackages,
       contextFiles,
       contextBasis,
@@ -1442,6 +1462,8 @@ async function runReview(session) {
       fileStats: fileStatsFor(projectRoot, changedTestFiles),
       testDir: options.testDir,
       teaConfig,
+      configSnapshot,
+      workflowCustomization,
       installedPackages,
       contextFiles,
       contextBasis,

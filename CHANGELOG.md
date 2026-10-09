@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-test-review` reads review configuration from the pinned base Git tree, including all TOML layers or legacy YAML, so a PR cannot change its own review settings. CLI flags retain precedence, `test_stack_type` is resolved with the other review keys, and the prompt supplies the complete resolved config throughout activation. Workflow customizations and persistent-fact policy files also come from the base tree. Full-file `--files` runs without an explicit base keep working-tree config.
 - A stable release whose notes exceed GitHub's 125,000 character limit now posts the first part, cut at a whole entry, with a link to the full CHANGELOG section, instead of failing after the npm publish. `tools/release-notes.js` does the cutting and `test:release-notes` covers it.
 
 ## [2.0.0] - 2026-10-09

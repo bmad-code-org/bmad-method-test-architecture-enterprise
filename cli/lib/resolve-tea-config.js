@@ -2,10 +2,14 @@
  * Resolve the TEA module config keys that change which knowledge fragments the
  * review loads, so a headless run never leaves them to the agent's discretion.
  *
+ * A baseRef reads every layer from that pinned Git tree. Without it, layers
+ * come from the working tree. Missing base files use defaults; Git failures
+ * and malformed base config fail closed.
+ *
  * Precedence, highest first:
  *   1. An explicit CLI flag (--use-playwright-utils / --no-use-pactjs-utils / ...)
  *   2. The consuming project's `[modules.tea]` table, merged from
- *      _bmad/config.toml, _bmad/custom/config.toml and
+ *      _bmad/config.toml, _bmad/config.user.toml, _bmad/custom/config.toml and
  *      _bmad/custom/config.user.toml (later files win), as `bmad setup tea`
  *      writes it. Only when _bmad/config.toml does not exist is a v6
  *      _bmad/tea/config.yaml read instead, so older installs keep working in CI.
@@ -22,12 +26,15 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
+const { minimatch } = require('minimatch');
 
 /** The central config layers, lowest precedence first. Only the first is required. */
 const CONFIG_LAYER_RELATIVE_PATHS = [
   path.join('_bmad', 'config.toml'),
+  path.join('_bmad', 'config.user.toml'),
   path.join('_bmad', 'custom', 'config.toml'),
   path.join('_bmad', 'custom', 'config.user.toml'),
 ];
@@ -40,7 +47,18 @@ const MODULE_DEFAULTS = {
   tea_pact_mcp: 'mcp',
   tea_execution_mode: 'auto',
   tea_capability_probe: true,
+  test_stack_type: 'auto',
 };
+
+const SNAPSHOT_DEFAULTS = {
+  test_artifacts: '{project-root}/_bmad-output/test-artifacts',
+  test_framework: 'auto',
+};
+
+const WORKFLOW_CUSTOM_PATHS = [
+  path.join('_bmad', 'custom', 'bmad-testarch-test-review.toml'),
+  path.join('_bmad', 'custom', 'bmad-testarch-test-review.user.toml'),
+];
 
 const PACT_MCP_VALUES = ['mcp', 'none'];
 // step-03-quality-evaluation.md's requestable modes. `auto` asks the capability
@@ -60,6 +78,94 @@ function configError(message) {
   const error = new Error(message);
   error.code = 'TEA_CONFIG_INVALID';
   return error;
+}
+
+/** Read configuration from one pinned base commit, or from the working tree. */
+function configSource(projectRoot, baseRef) {
+  if (baseRef === undefined || baseRef === null) {
+    return {
+      label: (relativePath) => path.join(projectRoot, relativePath),
+      read(relativePath) {
+        try {
+          return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+        } catch (error) {
+          if (error.code === 'ENOENT') return null;
+          throw configError(`Failed to read ${path.join(projectRoot, relativePath)}: ${error.message}`);
+        }
+      },
+    };
+  }
+  if (typeof baseRef !== 'string' || baseRef.trim() === '' || baseRef.startsWith('-') || baseRef.includes('\0')) {
+    throw configError(`Invalid git base ref for config ${JSON.stringify(baseRef)}`);
+  }
+  const git = (args, cwd = projectRoot) => {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+    if (result.error || result.status !== 0) {
+      throw configError(`Cannot read config from base ref ${JSON.stringify(baseRef)}: ${result.error?.message ?? result.stderr.trim()}`);
+    }
+    return result.stdout.replace(/\r?\n$/, '');
+  };
+  const commit = git(['rev-parse', '--verify', '--end-of-options', `${baseRef}^{commit}`]);
+  const repositoryRoot = git(['rev-parse', '--show-toplevel']);
+  const prefix = git(['rev-parse', '--show-prefix']);
+  const treePath = (relativePath) => prefix + relativePath.split(path.sep).join('/');
+  const cache = new Map();
+  const entries = new Map();
+  const entryAt = (file) => {
+    if (!entries.has(file)) {
+      entries.set(file, git(['--literal-pathspecs', 'ls-tree', '-z', '--full-tree', commit, '--', file], repositoryRoot));
+    }
+    return entries.get(file);
+  };
+  let listedPaths;
+  return {
+    commit,
+    list() {
+      if (!listedPaths) {
+        const args = ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', '--full-tree', commit];
+        if (prefix) args.push('--', prefix);
+        listedPaths = git(args, repositoryRoot)
+          .split('\0')
+          .filter(Boolean)
+          .map((file) => file.slice(prefix.length));
+      }
+      return listedPaths;
+    },
+    label: (relativePath) => `${commit}:${treePath(relativePath)}`,
+    read(relativePath) {
+      if (cache.has(relativePath)) return cache.get(relativePath);
+      const file = treePath(relativePath);
+      const segments = file.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        const parent = segments.slice(0, i).join('/');
+        const ancestor = entryAt(parent);
+        if (ancestor === '') break;
+        if (!/^040000 tree [a-f0-9]+\t/.test(ancestor)) {
+          throw configError(`Config parent at ${commit}:${parent} must be a directory tree`);
+        }
+      }
+      const entry = entryAt(file);
+      if (entry === '') {
+        cache.set(relativePath, null);
+        return null;
+      }
+      if (!/^100(?:644|755) blob [a-f0-9]+\t/.test(entry)) {
+        throw configError(`Config at ${commit}:${treePath(relativePath)} must be a regular file`);
+      }
+      // Keep the blob's trailing newline intact for YAML block scalars.
+      const blob = spawnSync('git', ['show', `${commit}:${treePath(relativePath)}`], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        timeout: 30_000,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      if (blob.error || blob.status !== 0) {
+        throw configError(`Failed to read ${commit}:${treePath(relativePath)}: ${blob.error?.message ?? blob.stderr.trim()}`);
+      }
+      cache.set(relativePath, blob.stdout);
+      return blob.stdout;
+    },
+  };
 }
 
 /**
@@ -124,13 +230,89 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
 }
 
-/** Merge tables recursively; any other value from the later layer replaces the earlier one. */
+/** Match BMad structural merging: recursive tables, keyed table arrays, and appended arrays. */
 function mergeTables(base, override) {
-  const result = { ...base };
-  for (const [key, value] of Object.entries(override)) {
-    result[key] = isPlainObject(result[key]) && isPlainObject(value) ? mergeTables(result[key], value) : value;
+  if (isPlainObject(base) && isPlainObject(override)) {
+    const result = { ...base };
+    for (const [key, value] of Object.entries(override)) {
+      result[key] = Object.hasOwn(result, key) ? mergeTables(result[key], value) : value;
+    }
+    return result;
   }
-  return result;
+  if (Array.isArray(base) && Array.isArray(override)) {
+    const items = [...base, ...override];
+    const keyedField =
+      items.length > 0 && items.every(isPlainObject)
+        ? ['code', 'id'].find((field) => items.every((item) => Object.hasOwn(item, field)))
+        : undefined;
+    if (!keyedField) return items;
+    for (const item of items) {
+      if (typeof item[keyedField] !== 'string' || item[keyedField] === '') {
+        throw configError(`Keyed array identifier ${keyedField} must be a nonempty string`);
+      }
+    }
+    const result = [...base];
+    const indices = new Map(base.map((item, index) => [item[keyedField], index]));
+    for (const item of override) {
+      const key = item[keyedField];
+      if (indices.has(key)) result[indices.get(key)] = item;
+      else {
+        indices.set(key, result.length);
+        result.push(item);
+      }
+    }
+    return result;
+  }
+  return override;
+}
+
+/** Parse a TOML layer with a consistent fail-closed diagnostic. */
+function parseToml(content, label) {
+  try {
+    return TOML.parse(content);
+  } catch (error) {
+    throw configError(`Failed to parse ${label}: ${error.message}`);
+  }
+}
+
+/** Resolve trusted skill defaults and project workflow overrides from the same configuration source. */
+function readWorkflowCustomization(source, skillRoot, projectRoot) {
+  if (!skillRoot) return {};
+  const defaultsPath = path.join(skillRoot, 'customize.toml');
+  let merged = {};
+  try {
+    merged = parseToml(fs.readFileSync(defaultsPath, 'utf8'), defaultsPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw configError(`Failed to load ${defaultsPath}: ${error.message}`);
+  }
+  for (const relativePath of WORKFLOW_CUSTOM_PATHS) {
+    const content = source.read(relativePath);
+    if (content !== null) merged = mergeTables(merged, parseToml(content, source.label(relativePath)));
+  }
+  if (merged.workflow !== undefined && !isPlainObject(merged.workflow)) {
+    throw configError('Workflow customization must contain a [workflow] table');
+  }
+  const workflow = merged.workflow || {};
+  if (source.commit && workflow.persistent_facts !== undefined) {
+    if (!Array.isArray(workflow.persistent_facts) || !workflow.persistent_facts.every((fact) => typeof fact === 'string')) {
+      throw configError('Workflow persistent_facts must be an array of strings');
+    }
+    workflow.persistent_facts = workflow.persistent_facts.flatMap((fact) => {
+      if (!fact.startsWith('file:')) return [fact];
+      const rawPath = fact.slice('file:'.length).replaceAll('{project-root}', projectRoot);
+      const pattern = path.relative(projectRoot, path.resolve(projectRoot, rawPath)).split(path.sep).join('/');
+      if (pattern === '' || pattern === '..' || pattern.startsWith('../') || path.isAbsolute(pattern)) {
+        throw configError(`Persistent fact must refer to a file inside the project: ${fact}`);
+      }
+      const matching = source
+        .list()
+        .filter((file) => minimatch(file, pattern, { dot: true, nonegate: true, nocomment: true }))
+        .sort();
+      if (matching.length === 0) throw configError(`Persistent fact has no files in the base tree: ${fact}`);
+      return matching.map((file) => `Base policy ${source.label(file)}:\n${source.read(file)}`);
+    });
+  }
+  return workflow;
 }
 
 /** Coerce the keys this CLI cares about out of a raw TEA config table. */
@@ -151,50 +333,51 @@ function pickTeaValues(table, source) {
   if ('tea_capability_probe' in table) {
     values.tea_capability_probe = coerceBoolean(table.tea_capability_probe, 'tea_capability_probe', source);
   }
+  if ('test_stack_type' in table) {
+    const stack = typeof table.test_stack_type === 'string' ? table.test_stack_type.trim().toLowerCase() : '';
+    if (!['auto', 'frontend', 'backend', 'fullstack', 'mobile'].includes(stack)) {
+      throw configError(`test_stack_type in ${source} must be auto, frontend, backend, fullstack or mobile`);
+    }
+    values.test_stack_type = stack;
+  }
   return values;
 }
 
 /**
- * Merge the central TOML layers and return the `[modules.tea]` table.
+ * Merge the central TOML layers and return their core and TEA tables.
  *
- * @param {string} projectRoot
- * @returns {object}
+ * @param {object} source - Working-tree or pinned-base configuration reader.
+ * @returns {{core: object, tea: object}}
  */
-function readCentralTeaTable(projectRoot) {
+function readCentralConfig(source) {
   let merged = {};
   for (const relativePath of CONFIG_LAYER_RELATIVE_PATHS) {
-    const layerPath = path.join(projectRoot, relativePath);
-    if (!fs.existsSync(layerPath)) {
-      continue;
-    }
-    let parsed;
-    try {
-      parsed = TOML.parse(fs.readFileSync(layerPath, 'utf8'));
-    } catch (error) {
-      throw configError(`Failed to parse ${layerPath}: ${error.message}`);
-    }
+    const content = source.read(relativePath);
+    if (content === null) continue;
+    const parsed = parseToml(content, source.label(relativePath));
     merged = mergeTables(merged, parsed);
   }
   const modules = merged.modules;
-  if (modules === undefined) {
-    return {};
+  if (modules !== undefined && (!isPlainObject(modules) || (modules.tea !== undefined && !isPlainObject(modules.tea)))) {
+    throw configError(`[modules.tea] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
   }
-  if (!isPlainObject(modules) || (modules.tea !== undefined && !isPlainObject(modules.tea))) {
-    throw configError(`[modules.tea] in ${path.join(projectRoot, CONFIG_RELATIVE_PATH)} must be a table of config keys`);
+  if (merged.core !== undefined && !isPlainObject(merged.core)) {
+    throw configError(`[core] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
   }
-  return modules.tea || {};
+  return { core: merged.core || {}, tea: modules?.tea || {} };
 }
 
 /**
  * Read a v6 _bmad/tea/config.yaml, used only when _bmad/config.toml is absent.
  *
  * @param {string} configPath
+ * @param {string} content
  * @returns {object}
  */
-function readLegacyTeaTable(configPath) {
+function readLegacyTeaTable(configPath, content) {
   let parsed;
   try {
-    parsed = yaml.load(fs.readFileSync(configPath, 'utf8'));
+    parsed = yaml.load(content);
   } catch (error) {
     throw configError(`Failed to parse ${configPath}: ${error.message}`);
   }
@@ -213,30 +396,34 @@ function readLegacyTeaTable(configPath) {
  * unreadable or unparseable content is a configuration error.
  *
  * @param {string} projectRoot - Consuming project root.
+ * @param {string} [baseRef] - Base commit or ref; omitted for working-tree config.
  * @returns {{present: boolean, path: string, format: 'toml'|'yaml'|null, values: object}}
  */
-function readTeaConfigFile(projectRoot) {
-  const centralPath = path.join(projectRoot, CONFIG_RELATIVE_PATH);
-  if (fs.existsSync(centralPath)) {
+function readTeaConfigFile(projectRoot, baseRef, source = configSource(projectRoot, baseRef)) {
+  const centralPath = source.label(CONFIG_RELATIVE_PATH);
+  if (source.read(CONFIG_RELATIVE_PATH) !== null) {
+    const config = readCentralConfig(source);
     return {
       present: true,
       path: centralPath,
       format: 'toml',
-      values: pickTeaValues(readCentralTeaTable(projectRoot), CONFIG_RELATIVE_PATH),
+      values: pickTeaValues(config.tea, centralPath),
+      core: config.core,
+      tea: config.tea,
     };
   }
-
-  const legacyPath = path.join(projectRoot, LEGACY_CONFIG_RELATIVE_PATH);
-  if (fs.existsSync(legacyPath)) {
-    return {
-      present: true,
-      path: legacyPath,
-      format: 'yaml',
-      values: pickTeaValues(readLegacyTeaTable(legacyPath), LEGACY_CONFIG_RELATIVE_PATH),
-    };
+  const legacyPath = source.label(LEGACY_CONFIG_RELATIVE_PATH);
+  const legacy = source.read(LEGACY_CONFIG_RELATIVE_PATH);
+  if (legacy !== null) {
+    const table = readLegacyTeaTable(legacyPath, legacy);
+    const core = Object.fromEntries(
+      ['user_name', 'communication_language', 'document_output_language', 'output_folder']
+        .filter((key) => key in table)
+        .map((key) => [key, table[key]]),
+    );
+    return { present: true, path: legacyPath, format: 'yaml', values: pickTeaValues(table, legacyPath), core, tea: table };
   }
-
-  return { present: false, path: centralPath, format: null, values: {} };
+  return { present: false, path: centralPath, format: null, values: {}, core: {}, tea: {} };
 }
 
 /**
@@ -292,15 +479,19 @@ const KEY_TO_INSTALLED_FIELD = {
  *
  * @param {object} options
  * @param {string} options.projectRoot - Consuming project root.
+ * @param {string} [options.baseRef] - Configuration source ref, pinned before any file read.
+ * @param {string} [options.skillRoot] - Trusted skill defaults for workflow customization.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
- * @returns {{values: object, sources: object, installed: object, configPath: string, configPresent: boolean, configFormat: string|null}}
+ * @returns {{values: object, sources: object, installed: object, configSnapshot: object, workflowCustomization: object, configCommit: string|null, configPath: string, configPresent: boolean, configFormat: string|null}}
  *   `installed` carries one boolean per library gate, read from the project
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
-function resolveTeaConfig({ projectRoot, flags = {} }) {
-  const file = readTeaConfigFile(projectRoot);
+function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot }) {
+  const source = configSource(projectRoot, baseRef);
+  const file = readTeaConfigFile(projectRoot, baseRef, source);
+  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot);
 
   const values = {};
   const sources = {};
@@ -327,12 +518,29 @@ function resolveTeaConfig({ projectRoot, flags = {} }) {
     sources[key] = 'default';
   }
 
+  values.test_stack_type = file.values.test_stack_type ?? MODULE_DEFAULTS.test_stack_type;
+  sources.test_stack_type = 'test_stack_type' in file.values ? 'config' : 'default';
+
   const installed = {};
   for (const [key, packageName] of Object.entries(KEY_TO_PACKAGE)) {
     installed[KEY_TO_INSTALLED_FIELD[key]] = isPackageInstalled(projectRoot, packageName);
   }
 
-  return { values, sources, installed, configPath: file.path, configPresent: file.present, configFormat: file.format };
+  const configSnapshot = {
+    core: { user_name: 'User', communication_language: 'English', document_output_language: 'English', ...file.core },
+    modules: { tea: { ...SNAPSHOT_DEFAULTS, ...file.tea, ...values, tea_browser_automation: 'none' } },
+  };
+  return {
+    values,
+    sources,
+    installed,
+    configSnapshot,
+    workflowCustomization,
+    configCommit: source.commit ?? null,
+    configPath: file.path,
+    configPresent: file.present,
+    configFormat: file.format,
+  };
 }
 
 module.exports = {
@@ -342,6 +550,7 @@ module.exports = {
   KEY_TO_PACKAGE,
   KEY_TO_INSTALLED_FIELD,
   MODULE_DEFAULTS,
+  SNAPSHOT_DEFAULTS,
   EXECUTION_MODE_VALUES,
   PACT_MCP_VALUES,
   CONFIG_RELATIVE_PATH,
