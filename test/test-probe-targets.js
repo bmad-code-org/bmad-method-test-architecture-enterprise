@@ -128,7 +128,12 @@ const {
 } = require('../cli/ci-runner');
 const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT, THRESHOLDS: CI_THRESHOLDS } = require('./eval-ci');
 const { RUNNER_CAPABILITIES: ATDD_RUNNER_DECLARED_CAPABILITIES } = require('../cli/atdd-runner');
-const { RUNNER_CAPABILITIES: ATDD_HARNESS_DECLARED_CAPABILITIES } = require('./eval-atdd');
+const {
+  RUNNER_CAPABILITIES: ATDD_HARNESS_DECLARED_CAPABILITIES,
+  loadGroundTruth: loadAtddGroundTruth,
+  stageWorkspace: stageAtddWorkspace,
+  buildPrompt: buildAtddPrompt,
+} = require('./eval-atdd');
 const {
   EXIT_CODES: TRANSCRIPT_EXIT_CODES,
   RUNNER_CAPABILITIES: TRANSCRIPT_RUNNER_DECLARED_CAPABILITIES,
@@ -1939,12 +1944,12 @@ function runAtddHarness(runDir, stubMode, extraArgs) {
  * the adapter, then a real execution of the generated scaffold under the real
  * isolation backend. No stored report stands in for either half.
  *
- * This is the one place `cli/atdd-red-check.js` and `cli/atdd-runner.js` are
- * actually run in the pull-request gate. Every other atdd check either replays
- * a report someone captured once by hand (`test/test-eval-replay.js`), scores
- * static scaffold text (`test/test-contract-oracles.js`), or exercises the
- * sandbox primitives directly with no scaffold in play at all
- * (`test/test-atdd-isolation.js`). A regression in activation, in
+ * This check drives `cli/atdd-red-check.js` and `cli/atdd-runner.js` together
+ * through the behavioral harness in the pull-request gate. The generation
+ * stub opens the actual staged red instruction files before copying its fixed
+ * scaffolds; it checks staging, while test-generation-healing.js also replays
+ * real agent behavior and executes the verifier against its healing fixture.
+ * A regression in scaffold activation, in
  * `runOneSpecFile`'s status/message extraction, or in either phase's
  * before/after digest would ship undetected without this: the corpus's
  * `--validate-only` mode returns before `runCase`, and `STUB_MODE=mutate`
@@ -1953,6 +1958,38 @@ function runAtddHarness(runDir, stubMode, extraArgs) {
  */
 async function checkAtddHarnessSmoke(runDir) {
   console.log('\nthe atdd harness end to end against the stub');
+
+  const groundTruth = loadAtddGroundTruth();
+  const staged = stageAtddWorkspace(groundTruth);
+  const aliasOnly = stageAtddWorkspace(groundTruth);
+  try {
+    const generate = (directory) =>
+      spawnSync(process.execPath, [ATDD_STUB_AGENT], {
+        cwd: directory,
+        input: buildAtddPrompt(groundTruth),
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH ?? '', STUB_MODE: 'correct-run' },
+        timeout: 10_000,
+      });
+    const full = generate(staged.dir);
+    assert(full.status === 0, 'ATDD stub opens the actual staged canonical red steps and shared resources before generation', full.stderr);
+    fs.renameSync(path.join(aliasOnly.dir, 'skill'), path.join(aliasOnly.dir, 'canonical-skill'));
+    fs.mkdirSync(path.join(aliasOnly.dir, 'skill'));
+    fs.copyFileSync(path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'SKILL.md'), path.join(aliasOnly.dir, 'skill', 'SKILL.md'));
+    const missing = generate(aliasOnly.dir);
+    assert(
+      missing.status === 4 && missing.stderr.includes('staged canonical red workflow unavailable'),
+      'ATDD stub refuses an alias-only staged install with no canonical red workflow',
+      missing.stderr,
+    );
+    assert(
+      fs.readdirSync(path.join(aliasOnly.projectDir, groundTruth.testDir)).length === 0,
+      'missing canonical red instructions fail before the stub writes a scaffold',
+    );
+  } finally {
+    fs.rmSync(staged.dir, { recursive: true, force: true });
+    fs.rmSync(aliasOnly.dir, { recursive: true, force: true });
+  }
 
   // The fixture's default port held by a listener that answers nothing, the
   // state another run on the host leaves it in. The red-check serves the

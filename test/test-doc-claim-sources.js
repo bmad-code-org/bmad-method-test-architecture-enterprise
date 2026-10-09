@@ -46,7 +46,7 @@ function check(name, fn) {
 // file, guarded by SIGINT/SIGTERM handlers so an interrupted run doesn't
 // leave the probe file behind in the skill folder -- the same lifecycle
 // test/test-clock-port.js uses around its own probe skill.
-const stagingRoot = path.join(__dirname, '..', 'skills', 'bmad-testarch-atdd');
+const stagingRoot = path.join(__dirname, '..', 'skills', 'bmad-testarch-automate');
 const stagingFile = path.join(stagingRoot, `doc-claim-sources-test-${process.pid}.md`);
 const probeKey = `probe_key_${process.pid}`;
 fs.writeFileSync(stagingFile, `if ${probeKey} is set, do the thing\n`);
@@ -251,6 +251,35 @@ check('combined setup retains phase output folders and checks nested CI write ta
   }
 });
 
+check('combined automation retains mode output folders and checks nested red write targets', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-automation-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-automate');
+    const redSteps = path.join(skillDir, 'red', 'steps-c');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.mkdirSync(redSteps, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'expand.md'),
+      "---\noutputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'\n---\n",
+    );
+    fs.writeFileSync(path.join(redSteps, 'red.md'), "---\noutputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'\n---\n");
+    assert.strictEqual(source.declaredOutputPaths(skillDir).length, 2);
+    assert.deepStrictEqual(source.misplacedOutputs(skillDir), []);
+    fs.appendFileSync(path.join(redSteps, 'red.md'), '\nWrite `{test_artifacts}/red-summary.json`.\n');
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/red-summary.json'],
+    );
+    fs.writeFileSync(path.join(redSteps, 'red.md'), "---\noutputFile: '{test_artifacts}/trace/red-summary.md'\n---\n");
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/trace/red-summary.md'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 check('misplacedOutputs flags a flat write target in a step body and leaves legacy lines and trace root inputs alone', () => {
   // A staged fixture skill whose declared outputs all sit in its own folder, so
   // the one misplacement is the screenshot a step body writes flat at the root.
@@ -315,6 +344,10 @@ check('every setup key in a literal list is wired, so no FUTURE key remains and 
     'tea_capability_probe',
     'test_stack_type',
     'test_framework',
+    'auto_validate',
+    'auto_heal_failures',
+    'max_healing_iterations',
+    'use_mcp_healing',
   ];
   assert.deepStrictEqual(source.SETUP_KEYS, SETUP);
   for (const key of SETUP) assert.strictEqual(source.keyIsUnread(key), false, `${key} is wired, so some workflow file reads it`);

@@ -60,13 +60,13 @@ The `automate` and `framework` suites execute committed test or scaffold fixture
 Each suite evaluates a specific skill against concrete artifacts:
 
 - `bmad-tea-routing`: Validates that user intent routes to the correct workflow, declines unsupported requests, and asks clarifying questions when requests are ambiguous.
-- `bmad-testarch-atdd`: Measures whether generated acceptance tests fail red for declared business criteria.
+- `bmad-testarch-automate` red mode, through the ATDD command: Measures whether generated acceptance tests fail red for declared business criteria.
 - `bmad-testarch-test-design`: Checks that identified risks map to valid test levels and stay within fixture risk ceilings.
 - `bmad-testarch-test-review`: Verifies recall of planted anti-patterns without raising false alarms on clean code.
 - `bmad-testarch-nfr`: Evaluates whether NFR assessments ground their verdicts in supplied evidence files.
 - `bmad-testarch-trace`: Checks that requirements-to-evidence matrices resolve full provenance, identify gaps, and maintain stable metadata.
 - `bmad-testarch-ci`: Exercises the framework skill's CI phase instructions and validates that generated CI configurations parse and wire real test commands.
-- `bmad-testarch-automate`: Tests regression detection against running services using four hand-authored spec sets without model calls.
+- `bmad-testarch-automate` expand mode: Tests regression detection against running services using four hand-authored spec sets without model calls. Mode routing and run-and-heal also have deterministic checks for repaired test errors, retained product defects, and intended red failures.
 - `bmad-testarch-framework`: Tests template-produced scaffolds in capability-restricted sandboxes with explicitly permitted registry and loopback access.
 - `bmad-teach-me-testing`: Tests multi-turn teaching sessions and persistent learner progress.
 
@@ -149,7 +149,7 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 
 ## Evaluate
 
-The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is TEA's tenth workflow.
+The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is one of TEA's eight workflows.
 It takes a described target (a skill, an agent, a workflow, a tool-use system, an AI feature) through a scored development and held-out evaluation built on `eval-quality`, names the gaps the scores expose, helps repair them, and finishes with the CI plan that enforces the evaluation.
 Its runtime, `tea-evaluate`, validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
 `bmad-testarch-framework`'s CI setup renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).

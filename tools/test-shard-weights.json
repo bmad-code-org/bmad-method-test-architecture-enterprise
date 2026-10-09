@@ -123,6 +123,7 @@
   "test:evaluate-workflow": 74.3,
   "test:file-system-conformance": 0.4,
   "test:file-system-port": 36.7,
+  "test:generation-healing": 2.0,
   "test:framework-scaffold": 0.2,
   "test:framework-scaffold-install-isolation": 1.3,
   "test:groups": 1.9,

@@ -43,7 +43,7 @@ The workflow automatically detects existing progress and resumes where you left 
 2. **Core Concepts (45 min)** - Risk-based testing, DoD, philosophy
 3. **Architecture (60 min)** - Fixtures, network patterns, framework
 4. **Test Design (60 min)** - Risk assessment workflow
-5. **ATDD & Automate (60 min)** - ATDD + Automate workflows
+5. **ATDD & Automate (60 min)** - Automation red/expand modes
 6. **Quality & Trace (45 min)** - Test review + Trace workflows
 7. **Advanced Patterns (ongoing)** - Menu-driven knowledge fragment exploration
 

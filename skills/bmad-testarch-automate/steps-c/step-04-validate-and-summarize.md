@@ -35,6 +35,15 @@ Validate generated outputs and produce a concise automation summary.
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+## 0. Run and Heal Generated Tests
+
+Set `test_operation = create` and preserve the selected `test_mode`.
+Read `{skill-root}/resources/run-and-heal.md` completely and execute it before validation and completion.
+Use the aggregated generated-file list and this run's existing `{outputFile}` for results.
+For a 2.0.0 Resume, recover that list from the checkpoint body and its generated files before execution; preserve original scope and acceptance criteria.
+Record execution status and any defaulted mode in the completion summary.
+A product defect or unavailable environment is reported honestly; a completed generation workflow does not imply all tests pass.
+
 ## 1. Validate
 
 Use `checklist.md` to validate:
@@ -46,7 +55,8 @@ Use `checklist.md` to validate:
 - [ ] CLI sessions cleaned up (no orphaned browsers)
 - [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
 
-Fix gaps before proceeding.
+Correct documentation or structural gaps before proceeding.
+Execution failures follow the shared bounded loop; retain its product defects, unresolved failures and blockers in the summary without further repair.
 
 ---
 
@@ -119,8 +129,13 @@ Name in the same section any RECOMMENDED utility the run wanted but could not wi
 
 ## On Complete
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
+When `workflow_customization_manual = true`, execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally.
+Otherwise resolve the same selected customization surface below; never run the other mode's hook.
+
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow.on_complete`
 
 If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
 
-If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
+If the resolver fails or returns no output, use the selected `workflow.on_complete` block already resolved during activation (or resolve the selected defaults/team/user files with the same structural merge rules).
+Execute its non-empty value as the final terminal instruction.
+An explicitly resolved empty value means no completion hook; exit normally.

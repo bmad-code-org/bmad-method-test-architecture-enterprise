@@ -37,6 +37,8 @@ Resume an interrupted workflow by selecting the automation summary that belongs 
 
 ### 1. Select the Run to Resume
 
+If `resume_checkpoint_path` is set, select that exact readable file before building a candidate list. Do not list, substitute, or ask to choose another checkpoint. Proceed directly to section 2 and apply its identity and legacy migration checks. A supplied checkpoint path is not a named target scope; only a separately supplied story, epic, feature, target or system request triggers the scope identity comparison.
+
 Each run writes its own summary at `{outputFile}`, where `run_key` is `story-{story_key}`, `epic-{epic_num}`, `target-{slug}`, or `system`. Build the candidate list:
 
 1. List every file matching `{progressGlob}`.
@@ -65,7 +67,7 @@ Read the selected summary and parse YAML frontmatter for:
 - `lastStep` — last completed step name
 - `lastSaved` — timestamp of last save
 
-**Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "⚠️ **Summary belongs to a different run** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the summary's own `runScope` and `runKey` as this run's identity.
+**Run identity check.** Check only identity fields first, before reading progress or rendering the dashboard. A mismatch response names the conflicting identities only and omits all saved status/step details. When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "⚠️ **Summary belongs to a different run** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the summary's own `runScope` and `runKey` as this run's identity.
 
 **Legacy summary migration.** If the selected summary is `{legacyOutputFile}` and carries no `runKey`, it predates run identity and cannot be proven to belong to any scope, so the run identity check above does not apply to it. Migrate it before continuing:
 
@@ -73,6 +75,8 @@ Read the selected summary and parse YAML frontmatter for:
 2. If `{outputFile}` already exists for that key, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder summary deletes `{legacyOutputFile}` and continues from `{outputFile}`; keeping the legacy summary continues with item 3. A headless run keeps the folder summary, leaves `{legacyOutputFile}` untouched, and says so.
 3. Create the `{test_artifacts}/automate/` folder if it does not exist and write the summary's content to `{outputFile}` with `runScope` and `runKey` added.
 4. Only after that write succeeds, delete `{legacyOutputFile}`. Continue from the migrated file.
+
+Bind `outputFile` to the selected summary's exact path after any migration. Preserve this path for all subsequent progress saves, even when it is outside `{test_artifacts}`.
 
 If `workflowStatus` is missing (legacy summary), infer it from `lastStep`: `'step-04-validate-and-summarize'` means `completed`; any other known step means `in-progress`.
 

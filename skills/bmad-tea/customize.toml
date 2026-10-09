@@ -79,12 +79,12 @@ skill = "bmad-testarch-ci"
 
 [[agent.menu]]
 code = "AT"
-description = "ATDD — generate failing acceptance tests plus an implementation checklist before development"
+description = "ATDD: generate and verify failing acceptance tests in red mode before development"
 skill = "bmad-testarch-atdd"
 
 [[agent.menu]]
 code = "TA"
-description = "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature"
+description = "Test Automation: generate prioritized tests in expand mode, run and heal test defects, and report product defects"
 skill = "bmad-testarch-automate"
 
 [[agent.menu]]

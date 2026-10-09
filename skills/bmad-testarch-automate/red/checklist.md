@@ -182,7 +182,7 @@ Before starting this workflow, verify:
 - [ ] Output file created at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
 - [ ] Frontmatter carries `runScope: story` and `runKey: story-{story_key}`, matching the story this run covers
 - [ ] No checklist for another story was read or written, and no earlier run's content was merged into this checklist
-- [ ] Document follows template structure from `atdd-checklist-template.md`
+- [ ] Document follows template structure from `{skill-root}/red/atdd-checklist-template.md`
 - [ ] Document includes all required sections:
   - [ ] Story summary
   - [ ] Acceptance criteria breakdown
@@ -419,3 +419,17 @@ All of the following must be true before marking this workflow as complete:
 - **Auto-cleanup is non-negotiable:** Every fixture must clean up data in teardown
 - **Use knowledge base:** Load relevant fragments (fixture-architecture, data-factories, network-first, component-tdd, test-quality) for guidance
 - **Share with DEV agent:** ATDD checklist provides implementation roadmap from red to green
+
+## Create Terminal: Red Execution and Healing
+
+- [ ] Run-and-heal settings resolved with execution and healing enabled by default
+- [ ] All generated scaffolds executed in a disposable copy; permanent skip scaffolds preserved
+- [ ] Each criterion fails for its intended missing behavior with no load/setup error
+- [ ] Wrong-reason test failures diagnosed and repaired within at most three rounds
+- [ ] Passing, skipped, unmapped or unavailable executions reported honestly
+- [ ] Criteria, assertion intent and production source preserved
+- [ ] Correct red failures preserved without repair
+- [ ] Commands, rounds, healed files, evidence and remaining failures recorded in this story's checklist
+
+Validate inspects these results without repair or requiring a passing suite.
+Edit checks only the requested changes and never invokes run-and-heal.

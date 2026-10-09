@@ -1,6 +1,6 @@
 <!-- Powered by BMAD-CORE™ -->
 
-# Test Automation Expansion
+# Test Generation: Expand Mode
 
 **Version**: 5.0 (Step-File Architecture)
 
@@ -28,6 +28,11 @@ This workflow uses **step-file architecture** for disciplined execution:
 ---
 
 ## INITIALIZATION SEQUENCE
+
+This instruction file owns expand mode after canonical activation.
+Set `test_mode = expand` when a direct runner loads this file without the shared router; use the canonical `{skill-root}`.
+Resolve the selected workflow customization from `{skill-root}/customize.toml` and its legacy automate overrides when the runner has not activated it.
+Red mode uses `{skill-root}/red/instructions.md`; entry activation and operation routing remain in `SKILL.md`.
 
 ### 1. Configuration Loading
 

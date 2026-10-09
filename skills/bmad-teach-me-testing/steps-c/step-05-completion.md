@@ -170,7 +170,7 @@ average_score: { average_score }
 {user_name} has demonstrated proficiency in:
 
 - ✅ **Testing Fundamentals:** Risk-based testing, test pyramid, test types, P0-P3 prioritization
-- ✅ **TEA Methodology:** 10 workflows (Teach Me Testing, Framework, Test Design, ATDD, Automate, Test Review, Trace, NFR, CI, Evaluate)
+- ✅ **TEA Methodology:** 8 workflows (Teach Me Testing, Framework and CI Setup, Test Design, Automation, Test Review, Trace, NFR, Evaluate)
 - ✅ **Architecture Patterns:** Fixture composition, network-first patterns, data factories, step-file architecture
 - ✅ **Test Design:** Risk assessment (Probability × Impact), coverage planning, test levels framework
 - ✅ **Test Development:** ATDD red-green TDD approach, test automation, API testing patterns

@@ -21,7 +21,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd');
+const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate', 'red');
 const FILES = {
   preflight: path.join(WORKFLOW_ROOT, 'steps-c', 'step-01-preflight-and-context.md'),
   strategy: path.join(WORKFLOW_ROOT, 'steps-c', 'step-03-test-strategy.md'),
@@ -192,12 +192,22 @@ function main() {
     sha256(path.join(PROJECT_ROOT, baseline.path)) === baseline.sha256,
     'pre-change diagnostics bind to the protected baseline digest',
   );
+  const archiveRoot = path.join(path.dirname(PRE_CHANGE_DIAGNOSTICS), 'protected-inputs');
+  const archiveProvenance = JSON.parse(fs.readFileSync(path.join(archiveRoot, 'provenance.json'), 'utf8'));
   assert(
-    diagnostics.provenance.protectedInputs.every(
-      ({ path: inputPath, sha256: digest }) => sha256(path.join(PROJECT_ROOT, inputPath)) === digest,
-    ),
-    'pre-change diagnostics bind every protected scoring input by digest',
+    /^[0-9a-f]{40}$/.test(archiveProvenance.sourceRepositoryCommit) &&
+      JSON.stringify(archiveProvenance.protectedInputs) === JSON.stringify(diagnostics.provenance.protectedInputs),
+    'archived scoring inputs record a full source revision and the original protected paths and digests',
   );
+  for (const { path: inputPath, sha256: digest } of diagnostics.provenance.protectedInputs) {
+    const archived = fs.readFileSync(path.join(archiveRoot, path.basename(inputPath)));
+    assert(
+      createHash('sha256').update(archived).digest('hex') === digest,
+      `${inputPath} archive binds to its original protected scoring digest`,
+    );
+    const tampered = Buffer.concat([archived, Buffer.from('\n')]);
+    assert(createHash('sha256').update(tampered).digest('hex') !== digest, `${inputPath} archive digest rejects a changed protected input`);
+  }
   assert(
     diagnostics.provenance.diagnosticWitnesses.every(
       ({ path: witnessPath, sha256: digest }) => sha256(path.join(PROJECT_ROOT, witnessPath)) === digest,

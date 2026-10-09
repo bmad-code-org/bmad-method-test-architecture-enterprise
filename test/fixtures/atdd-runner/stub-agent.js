@@ -74,6 +74,35 @@ const testDirMatch = /^- `\{test_dir\}`: `([^`]+)`$/m.exec(prompt);
 const projectRoot = projectRootMatch ? path.join(process.cwd(), projectRootMatch[1]) : process.cwd();
 const testDirAbsolute = testDirMatch ? path.join(process.cwd(), testDirMatch[1]) : path.join(projectRoot, 'tests');
 
+// Read the actual staged instruction surface before producing any scaffold.
+// A thin compatibility entry cannot supply the red workflow on its own.
+const skillRootMatch = /^- `\{skill-root\}`: `([^`]+)`$/m.exec(prompt);
+const skillRoot = skillRootMatch ? path.join(process.cwd(), skillRootMatch[1]) : path.join(process.cwd(), 'skill');
+const requiredSkillFiles = [
+  'SKILL.md',
+  'resources/test-generation-routing.md',
+  'resources/run-and-heal.md',
+  'red/instructions.md',
+  'red/checklist.md',
+  'red/atdd-checklist-template.md',
+  'red/steps-c/step-01-preflight-and-context.md',
+  'red/steps-c/step-02-generation-mode.md',
+  'red/steps-c/step-03-test-strategy.md',
+  'red/steps-c/step-04-generate-tests.md',
+  'red/steps-c/step-04a-subagent-api-failing.md',
+  'red/steps-c/step-04b-subagent-e2e-failing.md',
+  'red/steps-c/step-04c-aggregate.md',
+  'red/steps-c/step-05-validate-and-complete.md',
+];
+for (const relative of requiredSkillFiles) {
+  try {
+    if (!fs.readFileSync(path.join(skillRoot, relative), 'utf8').trim()) throw new Error('empty instruction file');
+  } catch (error) {
+    process.stderr.write(`stub-agent: staged canonical red workflow unavailable: ${relative}: ${error.message}\n`);
+    process.exit(4);
+  }
+}
+
 const caseId = mode === 'mutate' ? 'correct-run' : mode;
 const sourceRoot = path.join(__dirname, '..', 'atdd-eval', 'cases', caseId, 'tests');
 if (!fs.existsSync(sourceRoot)) {

@@ -13,7 +13,7 @@ Before starting this workflow, verify:
 **Halt only if:** Framework scaffolding is completely missing (run `framework` workflow first)
 
 **Note:** BMad artifacts (story, tech-spec, PRD) are OPTIONAL - workflow can run without them
-**Note:** `automate` generates tests; it does not run `/bmad-testarch-atdd` or `/bmad-testarch-test-review`. If ATDD outputs exist, use them as input and avoid duplicate coverage.
+**Note:** Expand mode generates tests for implemented code. If red-mode outputs exist, use them as input and avoid duplicate coverage. Test review remains a separate workflow.
 
 ---
 
@@ -295,13 +295,15 @@ Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seon
 
 ---
 
-## Step 5: Test Validation and Healing (NEW - Phase 2.5)
+## Create Terminal: Test Validation and Healing
+
+Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects execution evidence and Edit checks requested changes; neither repairs nor requires a passing full suite.
 
 ### Healing Configuration
 
 - [ ] Healing configuration checked:
   - [ ] `{auto_validate}` setting noted (default: true)
-  - [ ] `{auto_heal_failures}` setting noted (default: false)
+  - [ ] `{auto_heal_failures}` setting noted (default: true)
   - [ ] `{max_healing_iterations}` setting noted (default: 3)
   - [ ] `{use_mcp_healing}` setting noted (default: true)
 
@@ -329,20 +331,17 @@ Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seon
     - [ ] Stale selector → Replaced with data-testid or ARIA role
     - [ ] Race condition → Added network-first interception or state waits
     - [ ] Dynamic data → Replaced hardcoded values with regex/dynamic generation
-    - [ ] Network error → Added route mocking
+    - [ ] Network error → Correct the known service/URL or existing declared external double
     - [ ] Hard wait → Replaced with event-based wait
   - [ ] Healed test re-run to validate fix
   - [ ] Iteration count tracked (max 3 attempts)
 
-### Unfixable Tests Handling
+### Remaining Failures
 
-- [ ] Tests that couldn't be healed after 3 iterations marked with `test.fixme()` (if `{mark_unhealable_as_fixme}` true)
-- [ ] Detailed comment added to test.fixme() tests:
-  - [ ] What failure occurred
-  - [ ] What healing was attempted (3 iterations)
-  - [ ] Why healing failed
-  - [ ] Manual investigation steps needed
-- [ ] Original test logic preserved in comments
+- [ ] Confirmed product defects recorded with unchanged failing assertions and reproduction evidence
+- [ ] Unresolved generated test failures remain active with the repair attempts and next action documented
+- [ ] No added skip, fixme, relaxed assertion, larger timeout or SUT mock hides a failure
+- [ ] Unknown or unavailable environment recorded honestly
 
 ### Healing Report Generated
 
@@ -526,7 +525,7 @@ All of the following must be true before marking this workflow as complete:
 - [ ] **Tests validated** (if auto_validate enabled)
 - [ ] **Failures healed** (if auto_heal_failures enabled and tests failed)
 - [ ] **Healing report generated** (if healing attempted)
-- [ ] **Unfixable tests marked** with test.fixme() and detailed comments (if any)
+- [ ] **Remaining failures reported** with unchanged assertions and reproduction evidence
 - [ ] **Automation summary created** and saved to correct location
 - [ ] **Output file formatted correctly**
 - [ ] **Knowledge base references applied** and documented (including healing fragments if used)
@@ -643,6 +642,6 @@ All of the following must be true before marking this workflow as complete:
 - **No page objects:** Keep tests simple, direct, and maintainable
 - **Use knowledge base:** Load relevant fragments (test-levels, test-priorities, fixture-architecture, data-factories, healing patterns) for guidance
 - **Deterministic tests only:** No hard waits, no conditional flow, no flaky patterns allowed
-- **Optional healing:** auto_heal_failures disabled by default (opt-in for automatic test healing)
+- **Default healing:** Create executes generated tests and heals confirmed test defects for up to three rounds
 - **Graceful degradation:** Healing works without Playwright MCP (pattern-based fallback)
-- **Unfixable tests handled:** Mark with test.fixme() and detailed comments (not silently broken)
+- **Remaining failures:** Keep assertions and report product defects, environment blockers and unresolved test defects

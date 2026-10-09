@@ -47,6 +47,10 @@ tea_execution_mode = "auto"         # capability-aware orchestration
 tea_capability_probe = "true"       # fall back safely when a mode is unsupported
 test_stack_type = "auto"
 test_framework = "auto"
+auto_validate = "true"
+auto_heal_failures = "true"
+max_healing_iterations = "3"
+use_mcp_healing = "true"
 ```
 
 ```bash
@@ -260,8 +264,7 @@ Controls how TEA interacts with live browsers during test generation.
 **Affects workflows:**
 
 - `test-design` exploratory mode (CLI snapshots for page discovery)
-- `atdd` recording mode (CLI for selector verification, MCP for complex interactions)
-- `automate` healing mode (MCP for debugging) plus recording mode (CLI for snapshots)
+- Automation red and expand modes: recording for selector verification, plus browser evidence for test repairs when enabled
 - `nfr-assess` browser-based evidence collection when the mode is `cli` or `auto`
 - `test-review` evidence collection (CLI for traces and screenshots)
 
@@ -315,16 +318,16 @@ Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `
 
 **Per-workflow effect:**
 
-| Workflow      | Orchestrated unit                              | What the mode changes |
-| ------------- | ---------------------------------------------- | --------------------- |
-| `automate`    | API + E2E/backend generation workers           | Dispatch style only   |
-| `atdd`        | failing API + failing E2E workers              | Dispatch style only   |
-| `test-review` | quality-dimension workers                      | Dispatch style only   |
-| `nfr-assess`  | domain assessment workers                      | Dispatch style only   |
-| `framework`   | scaffold work units                            | Dispatch style only   |
-| `ci`          | orchestration-capable pipeline generation step | Orchestration policy  |
-| `test-design` | orchestration-capable output generation step   | Orchestration policy  |
-| `trace`       | phase/work-unit separation with dependencies   | Orchestration policy  |
+| Workflow                   | Orchestrated unit                              | What the mode changes |
+| -------------------------- | ---------------------------------------------- | --------------------- |
+| `automate` expand mode     | API + E2E/backend/mobile generation workers    | Dispatch style only   |
+| `automate` red mode (ATDD) | failing API + failing E2E workers              | Dispatch style only   |
+| `test-review`              | quality-dimension workers                      | Dispatch style only   |
+| `nfr-assess`               | domain assessment workers                      | Dispatch style only   |
+| `framework`                | scaffold work units                            | Dispatch style only   |
+| `ci`                       | orchestration-capable pipeline generation step | Orchestration policy  |
+| `test-design`              | orchestration-capable output generation step   | Orchestration policy  |
+| `trace`                    | phase/work-unit separation with dependencies   | Orchestration policy  |
 
 In `agent-team` and `subagent` modes, the runtime decides scheduling and concurrency.
 Output contracts are the same across modes.
@@ -463,6 +466,34 @@ ci_platform = "github-actions"
 ```
 
 ---
+
+## Automation Run and Heal
+
+`bmad-testarch-automate` supports `red` and `expand` modes selected by your prompt. The existing ATDD command and `AT` menu code default to red; automate and `TA` default to expand. Unattended runs use the invoked command's default when mode is unclear and state it in the summary. Resume continues interrupted ATDD or automate progress. A new unattended run starts over by default.
+
+Each mode keeps its existing customization file: `_bmad/custom/bmad-testarch-atdd.toml` for red and `_bmad/custom/bmad-testarch-automate.toml` for expand, including their `.user.toml` layers. Only the selected mode's activation hooks, persistent facts, and completion hook run. No customization migration is required.
+
+Create runs execute generated tests, classify failures, fix test issues, and rerun. Red verifies the intended missing behavior in a disposable activated copy. It uses `tea-atdd-red-check` when available for compatible browserless loopback tests; browser tests or projects needing their own environment and services use the installed project runner with original configuration and environment. The summary records the execution route and any fallback reason. Expand aims for passing coverage and reports real product defects with their assertions intact. Validate reports findings and Edit checks requested changes. These operations never repair tests or require the full suite to pass.
+
+These are setup answers under `[modules.tea]`. An explicit instruction for a run overrides the setup default:
+
+| Setting                  | Default | Effect                                                                                                                  |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `auto_validate`          | `true`  | Execute generated tests during Create.                                                                                  |
+| `auto_heal_failures`     | `true`  | Repair test issues after execution. Requires validation.                                                                |
+| `max_healing_iterations` | `3`     | Maximum repair and rerun rounds, from 0 to 3.                                                                           |
+| `use_mcp_healing`        | `true`  | Use available browser MCP evidence when browser automation allows it. Test execution and repairs also work without MCP. |
+
+```toml
+# _bmad/custom/config.toml
+[modules.tea]
+auto_validate = "true"
+auto_heal_failures = "true"
+max_healing_iterations = "3"
+use_mcp_healing = "true"
+```
+
+The summary lists what was repaired, the execution results, and remaining test or product failures.
 
 ## Core Configuration (Read by TEA)
 
@@ -711,14 +742,13 @@ Rebinding it can hide trace's live results and waivers, test-design documents, A
 ### Validation Report History
 
 Validate mode preserves every report as a separate artifact.
-The eight artifact-producing workflows write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` into their own folder under `{test_artifacts}`, next to the outputs they validate.
+The artifact-producing workflows and their named modes write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` into their own folder under `{test_artifacts}`, next to the outputs they validate.
 The workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`; `nfr-assess` reports land in `nfr/`.
 
 `validation_scope` identifies what was checked, such as `story-1-2`, `epic-9`, `system`, or `pull-request-123`.
 `run_timestamp` is the UTC start time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format.
 Each report also records the exact project-relative paths of its validated artifacts.
-Validate mode atomically reserves the resolved path with exclusive creation.
-A collision produces a fresh timestamp and retry, so two concurrent runs cannot claim the same report.
+Concurrent validation runs save separate reports without overwriting earlier results.
 
 The `teach-me-testing` workflow validates its workflow definition.
 Its reports use `workflow-validation/teach-me-testing-validation-{run_timestamp}.md` under `{test_artifacts}` and follow the same no-overwrite rule.

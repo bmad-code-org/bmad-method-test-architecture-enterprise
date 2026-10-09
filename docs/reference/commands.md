@@ -1,6 +1,6 @@
 ---
 title: 'TEA Command Reference'
-description: Inputs, outputs, and invocation rules for the ten TEA workflows
+description: Inputs, outputs, and invocation rules for the eight TEA workflows
 ---
 
 # TEA Command Reference
@@ -22,6 +22,8 @@ Each workflow also runs directly.
 
 Framework and CI setup share one implementation in `bmad-testarch-framework`.
 Both `bmad-testarch-framework` and `bmad-testarch-ci` commands remain available, along with the `TF` and `CI` menu codes. The CI command starts CI setup with your existing customizations.
+
+Automation also shares one skill, `bmad-testarch-automate`, with `red` and `expand` modes. Your prompt selects the mode. `/bmad-testarch-atdd`, `$bmad-testarch-atdd`, and `AT` default to red; `/bmad-testarch-automate`, `$bmad-testarch-automate`, and `TA` default to expand. An unattended request with unclear mode uses its command default and states it in the summary.
 
 This page uses short workflow names.
 Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
@@ -222,7 +224,9 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## atdd
 
-Generate red-phase acceptance test scaffolds BEFORE implementation (TDD red phase)
+Start the automation skill in red mode to generate acceptance test scaffolds before implementation. The existing ATDD command and `AT` menu code select this default mode. Your prompt can explicitly select either mode.
+
+Create executes an isolated, un-skipped copy with `tea-atdd-red-check`, confirms failures match the missing acceptance behavior, and repairs test setup or generation errors for up to three rounds. The saved red scaffolds retain their deliberate skips for the implementation handoff. Validate reports findings; Edit checks its changes. Neither operation runs repair.
 
 **Phase:** Phase 4 (Implementation)
 
@@ -246,7 +250,9 @@ Generate red-phase acceptance test scaffolds BEFORE implementation (TDD red phas
 
 ## automate
 
-Expand test coverage after implementation
+Generate tests through the automation skill. `expand` mode adds coverage after implementation; `red` mode writes acceptance scaffolds before implementation. `/bmad-testarch-automate` and `TA` default to expand.
+
+Create executes the generated tests and repairs selector, timing, data, network, hard-wait, or setup issues for up to three rounds. Expand aims for passing tests. Real product defects remain findings with their assertions intact. Red verifies that each test fails for its intended missing behavior. The summary lists repairs and remaining failures. Validate reports findings and Edit checks the requested changes; these operations never repair tests.
 
 **Phase:** Phase 4 (Implementation)
 

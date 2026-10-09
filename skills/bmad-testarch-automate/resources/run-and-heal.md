@@ -1,0 +1,93 @@
+# Run and Heal Generated Tests
+
+Read this resource completely when the Create terminal step loads it. Finish generation and aggregation first, so a worker cannot repair another worker's unfinished output. **Validate and Edit never execute this loop or repair tests.** Validate records unavailable execution as a criterion result; Edit checks only the outputs it changed.
+
+## 1. Freeze the Scope and Resolve Settings
+
+Resolve each setting from an explicit instruction in this run, then `modules.tea` configuration, then these defaults:
+
+| Setting                  | Default | Meaning                                                                         |
+| ------------------------ | ------- | ------------------------------------------------------------------------------- |
+| `auto_validate`          | `true`  | Execute this run's generated tests                                              |
+| `auto_heal_failures`     | `true`  | Repair confirmed defects in generated tests and their generated support files   |
+| `max_healing_iterations` | `3`     | Maximum repair rounds after the initial execution, capped at three              |
+| `use_mcp_healing`        | `true`  | Use available browser evidence tools for diagnosis when browser tests need them |
+
+Parse boolean strings (`false`, `0`, `off`, `no`; `true`, `1`, `on`, `yes`) explicitly. Treat missing values as the defaults. Accept a whole-number iteration limit from 0 through 3; clamp larger values to 3 and report the clamp. Invalid values use 3 and are reported. `auto_validate = false` disables both execution and healing and the summary says execution was disabled. `auto_heal_failures = false` runs and reports the initial results without repairs. Zero repair rounds has the same execution behavior. These settings never create a new question in a headless run.
+
+Before writing settings or progress on Resume, load the retained `healing_rounds_used` and resolved settings from the existing run. Initialize `healing_rounds_used = 0` only for a new Create run. An interrupted terminal continues with its saved count; never write the new-run default over recovered progress. Then save in the existing mode's progress output before execution:
+
+- `test_mode` (`red` or `expand`), `test_operation` (`create`), resolved settings, and `healing_rounds_used` (0 for a new Create run; retained on Resume);
+- exact generated test and support paths, runner command, required services and selected test names;
+- each test's acceptance criterion, scenario, assertion intent and expected result;
+- for red, the concrete missing behavior and intended failure signature per criterion;
+- baseline contents of generated files that may be repaired and source files that must remain untouched.
+
+If `test_operation` is `validate` or `edit`, return to the caller without executing or healing. Retain this record on Resume. Continue from the saved round count and latest results; a restart cannot grant three more rounds to the same unfinished run. Preserve existing tests, unrelated generated artifacts, other scopes' reports and production source. An existing test can provide context; repair only files generated or explicitly updated in this run. Keep assertion operators, expected business values, coverage, priorities and acceptance criteria intact. A setup value may be corrected from authoritative fixture evidence while preserving the exact behavioral expectation.
+
+## 2. Execute and Capture Fresh Evidence
+
+Determine the project runner from its configuration and scripts. Run every generated test in its intended environment, scoped to this run's files or names. Include generated fixtures/imports. Use the project's existing service startup instructions. Do not run the adopter's entire suite as a completion requirement. Use fresh per-round reports so a previous run cannot supply results; capture command, exit status, test names, counts, error messages, stack traces, and trace/network evidence when available. A nonzero exit alone cannot classify a test defect. If dependencies, services, credentials or tools are unavailable, record execution as **could not measure**, list the blocker, and continue to the summary with no speculative repair.
+
+For **expand**, execute the active tests with the selected runner. Passing generated tests satisfy execution. Skipped tests, missing results and zero executed tests require investigation and cannot count as green.
+
+### Red Verification: Select a Compatible Runner
+
+For **red**, permanent acceptance scaffolds retain the existing `test.skip('title', ...)` convention. Verify a disposable copy of the project. Preserve the original scaffolds byte for byte during verification, including every skip call and business assertion. Copy the project configuration, support files and relative import layout; keep its installed dependencies available. Scope execution to this run's generated files/names and exclude unrelated specs from discovery in the copy. Start and stop only processes owned by this invocation; never kill by name or pattern.
+
+**Prefer `tea-atdd-red-check` when it is available and compatible.** Resolve the installed executable or the host package's `cli/atdd-red-check.js`; a skill-only installation may contain no CLI. Do not assume the repository's CLI path exists inside the installed skill. Check the scaffold format (`*.spec.ts` with the supported leaf `test.skip(...)` calls), project runner, imports/fixtures, required services and environment before selection. The verifier supports Playwright and discovers every `*.spec.ts` under its `--test-dir`. It runs workers with a minimal environment, permits loopback networking only and refuses child processes from workers, including a browser launch. A browser/page/context test, a non-loopback endpoint, a required environment value outside its supported environment, or incompatible config/fixture/service wiring selects the native fallback below. Retry-enabled runs, `repeatEach` above one, or multiple selected Playwright projects also select the native fallback: the verifier's normalized report retains only the last attempt and omits project identity. If these execution settings cannot be established, use native results that retain every attempt and selected project. Availability and compatibility are execution choices; they never grant permission to change a test's intended environment or behavior.
+
+For a compatible browserless loopback project, execute the verifier against the disposable copy with a fresh report path. Derive its `--per-file-timeout-ms` from the project's existing execution budget: tests selected in that file, configured per-test and hook timeouts, retries and relevant service/global deadlines. Allow the runner to complete those existing budgets plus startup/report overhead. Record the chosen wall-clock bound and its source. The verifier's default 15 seconds must not truncate a project whose declared budget exceeds it. This sets a process execution bound; keep every test/assertion timeout and retry policy unchanged. Supply `--server-command` only when its minimal environment and supported health/base-URL wiring fit the project; otherwise use the native fallback. Read the resulting JSON: verifier exit code 0 means a report was written, regardless of whether the tests passed or failed.
+
+**Use the project-native runner when the verifier is unavailable or incompatible**, including Playwright browser E2E, required project environment or services, unsupported scaffold extensions, and other test frameworks. Record the selected runner and precise fallback reason before executing. Activate only this run's generated leaf scaffolds in the disposable copy using the runner's normal skip mechanism. For Playwright, replace only the generated leaf `test.skip('title', ...)` wrapper with `test('title', ...)` in the copy. Retain all other skip calls, test bodies, assertions, fixtures and production/config files. Do not globally remove skips or activate unrelated tests. Compare each activated file against its baseline to confirm the activation wrapper is the only change. If a scaffold uses an unsupported skip shape or cannot be activated without changing semantics, report the limitation and do not invent a different test.
+
+Run the project's installed runner from the copy with its **original config and environment**, selected project/browser matrix, service startup and existing timeout/retry settings. Preserve needed environment values without printing credentials or copying secrets into a report. Use a supported reporter option or reporter environment setting to write fresh machine-readable results, preferably JSON, and retain the exact command. For Playwright, use the actual project config with its JSON reporter for the selected files; do not inject the verifier's fixture isolation preload or minimal environment into native execution. The evaluation CLI's isolation remains unchanged. Native fallback stays within the caller's existing authorized execution boundary; an evaluation sandbox that blocks a required capability remains a reported blocker and cannot be escaped through this fallback. If the runner cannot safely emit per-test execution/load results with existing tooling, report **could not measure** and the missing capability.
+
+Isolate each generated file's execution when a syntax/import error would otherwise prevent sibling files from running. A Playwright load error aborts an invocation before per-test results exist, so run the selected files individually, retaining their original project config and fresh report paths, then aggregate all results. Honor the project's declared execution budgets and service lifecycle in these invocations. Use actual attempt outcomes from each runner, including each selected project/browser result; retries must not conceal a wrong-reason failure as verified red. Every generated leaf must be accounted for. Missing, interrupted, timed-out or skipped results are reported explicitly. Preserve original sources, and compare the disposable copy's production/config files against their pre-execution content and permission baseline to detect additions, removals or modifications. Keep run outputs/cache directories outside that source comparison. Never repair production or config mutations to manufacture a red verdict.
+
+### Judge the Recorded Red Results
+
+Normalize both execution routes into the same evidence: generated file/title/project, load/setup errors, actual attempt statuses, full assertion error messages, and production/config changes. For verifier reports, inspect `loadError`, each test's actual `status` and full `message`, and `productionFilesTouched`; additionally check configuration integrity in the disposable copy. For native JSON, read load errors and every selected project/attempt rather than the reporter's expectation-relative summary. Playwright's `expected`/`unexpected` summary alone cannot prove a failed assertion. Capture the actual `results[].status` and full error message for each attempt.
+
+Match **every** generated test to its saved criterion. A correct red result executes the criterion assertion and fails for the saved missing behavior, with no load/setup error and no production/config changes. Confirm assertion provenance from the test and runner error together; a hand-thrown message matching the expected text cannot establish verified red. A skipped, passed, unmapped, empty or wrong-reason result fails the red validation requirement. A correctly failing acceptance test is complete and receives no repair. A passing red test may expose behavior that already exists: report it and reassess scope from the criterion without inventing a failing assertion or undoing product behavior.
+
+## 3. Classify Before Any Repair
+
+Load `{tea-knowledge}/test-healing-patterns.md`, `{tea-knowledge}/selector-resilience.md` and `{tea-knowledge}/timing-debugging.md` completely before diagnosing a failed run. Respect Playwright Utils and Pact.js Utils mandates already selected for this stack. `use_mcp_healing` only permits available tools: honor `tea_browser_automation`, capability checks and the resolved execution mode. Fall back to source, runner reports, DOM snapshots and traces when a browser tool is unavailable. Do not stall on tool setup.
+
+Classify each failure using the test, criterion, source and runtime evidence together:
+
+| Class                     | Required evidence and allowed repair                                                                                                                                                   |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Selector                  | The intended element exists and the generated locator addresses a different or nonexistent element. Use its observed test ID, role/name or scoped locator; retain the same target.     |
+| Timing                    | The effect completes correctly and the test races it. Await the actual operation or register a response/event wait before its trigger; retain the original assertion.                  |
+| Data                      | Setup uses an invalid/stale fixture value. Derive input or identity from the authoritative factory/setup response; retain exact expected business outcomes.                            |
+| Network                   | Prove incorrect test URL, missing declared service, or an existing test double wired incorrectly. Correct that setup. A failing real SUT endpoint remains a product/environment issue. |
+| Hard wait                 | A generated sleep races a demonstrated state transition. Replace it with the matching observable event/state wait registered before the trigger.                                       |
+| Syntax/import/setup       | Parse failure, unresolved import or invalid generated fixture/runner wiring prevents the criterion from executing. Repair the generated code from the project's actual conventions.    |
+| Real product defect       | The test reaches the intended behavior with valid setup and the application violates the criterion. Record reproduction and evidence; leave test and application source unchanged.     |
+| Intended missing behavior | Red only: the assertion fails for the saved criterion's absent behavior. Keep the test unchanged and count it as verified red.                                                         |
+| Unknown/environment       | Evidence is insufficient or a required environment is unavailable. Record the blocker or investigation needed and leave the test unchanged.                                            |
+
+A timeout or HTTP 500 is a symptom. Confirm whether it belongs to the test, the environment or the product before editing. A missing UI feature in red can appear as a locator timeout: keep it red when the intended element is absent because the criterion is unimplemented. Classify a selector defect only after observing the correct element. For red, repair wrong-reason failures until the saved intended failure is reached.
+
+## 4. Repair, Re-run, Stop
+
+For each confirmed test defect, record file:line, evidence, failure class, exact proposed change and the unchanged criterion/assertion. Apply the smallest evidence-backed repair in the owned generated files. Never introduce `test.fixme()`, additional `skip`, expected-failure annotations, conditional assertions, catch-and-ignore logic, deleted assertions, relaxed matchers, changed business expectations, arbitrary sleeps or larger timeouts to make the result pass. Never replace the real SUT with a mock to hide its defect. An already specified external test double may be repaired within its declared boundary, with the rationale recorded.
+
+One round means classify the current failures, apply confirmed repairs, and execute again. Persist the incremented round count before edits, so an interruption consumes that round. Re-run the repaired tests and all generated tests sharing changed support files; finish with a fresh execution of the complete generated scope. Reclassify each observed result. Expand stops when all generated tests pass; red stops when all generated tests execute and fail for their intended missing behavior. Stop sooner when only product defects, correct red failures or blocked/unknown failures remain. Stop after the configured maximum, which is at most three repair rounds. Leave unresolved tests active in expand and preserve red scaffolds' existing skip convention. Capture unresolved failures for the owner; the completion summary may finish with a failing or blocked execution status and must not claim green.
+
+## 5. Report in the Mode's Existing Summary
+
+Keep the established red or expand summary path and customization completion order. Include:
+
+- mode, execution status (`passed`, `verified red`, `failed`, `could not measure`, or `disabled`), commands and generated scope;
+- red execution route (compatible verifier or project-native runner), availability/compatibility evidence, fallback reason when used, and process budget with its project source;
+- initial and final executed/passed/failed/skipped counts, red intended-failure count, and report/trace paths;
+- resolved settings, rounds used, and diagnosis tools actually available;
+- every healed test/support file with file:line, class, evidence and change;
+- each preserved red failure with its criterion and matching failure signature;
+- every remaining test failure, real product defect and environment blocker with reproduction and next action;
+- confirmation that acceptance criteria/assertion intent and production source were preserved.
+
+Then return to the calling Create terminal step. This resource retains the owning checkpoint's `workflowStatus`, `lastStep` and `stepsCompleted`; the caller records terminal completion. This resource never executes customization completion hooks. The caller owns the active mode's original `on_complete` and executes it exactly once at its established terminal after outputs are saved.

@@ -229,6 +229,20 @@
   },
   "doc-counts": {
     "sources": {
+      "canonicalWorkflowCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "CANONICAL_WORKFLOW_COUNT"
+        }
+      },
+      "workflowCommandCount": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "WORKFLOW_COMMAND_COUNT"
+        }
+      },
       "totalCalls": {
         "kind": "module",
         "from": {
@@ -821,6 +835,30 @@
           "match": "The \\d+ cases include [a-z-]+ trace pairs, [a-z-]+ NFR reports, and ([a-z-]+) CI runs"
         },
         "counts": ["replayCi"]
+      },
+      {
+        "file": "README.md",
+        "claim": "the canonical TEA workflow count",
+        "pattern": {
+          "match": "Its agent, Murat, uses ([a-z-]+) workflows"
+        },
+        "counts": ["canonicalWorkflowCount"]
+      },
+      {
+        "file": "README.md",
+        "claim": "the preserved command entries and their canonical workflows",
+        "pattern": {
+          "match": "The table preserves all ([a-z-]+) command entries across the ([a-z-]+) workflows"
+        },
+        "counts": ["workflowCommandCount", "canonicalWorkflowCount"]
+      },
+      {
+        "file": "docs/index.md",
+        "claim": "the canonical TEA workflow count",
+        "pattern": {
+          "match": "Its ([a-z-]+) workflows cover"
+        },
+        "counts": ["canonicalWorkflowCount"]
       }
     ]
   },
@@ -2006,7 +2044,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
+            "hash": "350f0f8cce8f4f0628c9bf62ccf072b475c10b6486d5cffabbc59904ee763d57"
           }
         },
         {
@@ -2034,7 +2072,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "ATDD_EMITS_TEST_SKIP"
           },
-          "reason": "a grep of the atdd workflow's own step files for test.skip("
+          "reason": "a grep of the canonical automate skill's red-mode step files for test.skip("
         },
         {
           "file": "docs/explanation/verification-architecture.md",
@@ -2058,7 +2096,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
+            "hash": "350f0f8cce8f4f0628c9bf62ccf072b475c10b6486d5cffabbc59904ee763d57"
           }
         },
         {
@@ -2107,7 +2145,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "OUTPUTS_IN_WORKFLOW_FOLDERS"
           },
-          "reason": "every declared {test_artifacts}/ output of the canonical workflow skills sits in its owned folder; framework owns framework/ and ci/, including nested CI steps. The CI compatibility entry delegates outputs to framework. _input keys and legacy* resume keys are inputs and are left out"
+          "reason": "every declared {test_artifacts}/ output of the canonical workflow skills sits in its owned folder; framework owns framework/ and ci/, including nested CI steps. Automate owns automate/ and atdd/, including nested red steps. The CI and ATDD commands delegate their outputs to their canonical skills. _input keys and legacy* resume keys are inputs and are left out"
         },
         {
           "file": "test/docs/eval-quality-roadmap.md",
@@ -2116,7 +2154,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
+            "hash": "350f0f8cce8f4f0628c9bf62ccf072b475c10b6486d5cffabbc59904ee763d57"
           }
         },
         {

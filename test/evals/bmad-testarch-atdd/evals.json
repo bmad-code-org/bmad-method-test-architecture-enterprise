@@ -1,7 +1,7 @@
 {
   "workflow": "bmad-testarch-atdd",
-  "about": "Fragment selection for the atdd workflow. Ground truth is section 5 of step-01, whose branches are keyed on detected_stack rather than on framework, which is what makes the backend cases worth running.",
-  "contextFiles": ["steps-c/step-01-preflight-and-context.md"],
+  "about": "Fragment selection for the red mode of the combined test-generation workflow, exposed through the existing ATDD entry. Ground truth is section 5 of step-01, whose branches are keyed on detected_stack rather than on framework, which is what makes the backend cases worth running.",
+  "contextFiles": ["../bmad-testarch-automate/red/steps-c/step-01-preflight-and-context.md"],
   "cases": [
     {
       "id": "atdd-frontend-playwright",

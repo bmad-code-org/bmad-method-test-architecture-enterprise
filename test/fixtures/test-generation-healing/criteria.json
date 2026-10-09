@@ -1,0 +1,35 @@
+{
+  "criteria": [
+    {
+      "id": "AC-1",
+      "file": "tests/expand/total.spec.ts",
+      "expectation": "An order of two 2100-cent items totals exactly 4200 cents.",
+      "classification": "syntax/import/setup",
+      "repair": "The actual export lives in src/orders.js; correct the generated import only.",
+      "initialOutcome": "load-error",
+      "finalOutcome": "passed"
+    },
+    {
+      "id": "AC-2",
+      "file": "tests/expand/refund.spec.ts",
+      "expectation": "A full refund returns exactly 4200 cents.",
+      "classification": "real product defect",
+      "repair": null,
+      "initialOutcome": "failed",
+      "finalOutcome": "failed",
+      "expected": 4200,
+      "received": 4199
+    },
+    {
+      "id": "AC-3",
+      "file": "tests/red/confirm.spec.ts",
+      "expectation": "Confirming an order changes its status to confirmed.",
+      "classification": "intended missing behavior",
+      "repair": null,
+      "initialOutcome": "failed",
+      "finalOutcome": "failed",
+      "expected": "confirmed",
+      "received": "pending"
+    }
+  ]
+}

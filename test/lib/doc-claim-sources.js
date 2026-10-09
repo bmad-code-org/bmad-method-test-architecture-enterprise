@@ -179,7 +179,7 @@ const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fr
 exports.THIRTY_FIVE_ROWS_MAPPED = registryRows.length === 35 && Object.keys(fragmentManifest).length === registryRows.length;
 
 /** docs/how-to/workflows/run-atdd.md:8, "TEA currently emits these scaffolds with `test.skip()`." */
-const atddStepsRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'steps-c');
+const atddStepsRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate', 'red', 'steps-c');
 const atddStepFiles = fs.existsSync(atddStepsRoot) ? fs.readdirSync(atddStepsRoot).filter((name) => name.endsWith('.md')) : [];
 if (atddStepFiles.length === 0) refuse(`${atddStepsRoot} has no step files`);
 exports.ATDD_EMITS_TEST_SKIP = atddStepFiles.some((name) => fs.readFileSync(path.join(atddStepsRoot, name), 'utf8').includes('test.skip('));
@@ -319,7 +319,17 @@ const FLAT_TARGET = /\{test_artifacts\}\/([^/\s`'"()[\]]+\.[A-Za-z0-9]+)(?![^\s`
 
 function flatBodyTargets(skillDir) {
   const found = [];
-  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v', 'ci/steps-c', 'ci/steps-e', 'ci/steps-v']) {
+  for (const stepsDir of [
+    'steps-c',
+    'steps-e',
+    'steps-v',
+    'ci/steps-c',
+    'ci/steps-e',
+    'ci/steps-v',
+    'red/steps-c',
+    'red/steps-e',
+    'red/steps-v',
+  ]) {
     const root = path.join(skillDir, stepsDir);
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
@@ -361,7 +371,17 @@ function declaredOutputPaths(skillDir) {
       found.push({ source: 'workflow.yaml', ...entry });
     }
   }
-  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v', 'ci/steps-c', 'ci/steps-e', 'ci/steps-v']) {
+  for (const stepsDir of [
+    'steps-c',
+    'steps-e',
+    'steps-v',
+    'ci/steps-c',
+    'ci/steps-e',
+    'ci/steps-v',
+    'red/steps-c',
+    'red/steps-e',
+    'red/steps-v',
+  ]) {
     const root = path.join(skillDir, stepsDir);
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
@@ -384,7 +404,7 @@ function declaredOutputPaths(skillDir) {
 function misplacedOutputs(skillDir) {
   const folder = path.basename(skillDir).replace(/^bmad-testarch-/, '');
   // The framework skill owns both setup phases. Existing checkpoints keep their phase folders.
-  const outputFolders = folder === 'framework' ? ['framework', 'ci'] : [folder];
+  const outputFolders = folder === 'framework' ? ['framework', 'ci'] : folder === 'automate' ? ['automate', 'atdd'] : [folder];
   return [
     ...declaredOutputPaths(skillDir).filter(
       (entry) => !outputFolders.some((owner) => entry.value.startsWith(`{test_artifacts}/${owner}/`)),
@@ -403,7 +423,13 @@ exports.misplacedOutputs = misplacedOutputs;
 const testarchRoot = path.join(PROJECT_ROOT, 'skills');
 const layoutSkillDirs = fs
   .readdirSync(testarchRoot)
-  .filter((name) => name.startsWith('bmad-testarch-') && name !== 'bmad-testarch-evaluate' && name !== 'bmad-testarch-ci')
+  .filter(
+    (name) =>
+      name.startsWith('bmad-testarch-') &&
+      name !== 'bmad-testarch-evaluate' &&
+      name !== 'bmad-testarch-ci' &&
+      name !== 'bmad-testarch-atdd',
+  )
   .map((name) => path.join(testarchRoot, name));
 if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-testarch-* skill directories`);
 

@@ -30,7 +30,7 @@ The agent and every workflow find it as a sibling skill folder: step frontmatter
 If `bmod-tea` is not installed, the skill says so and offers to install it.
 
 A workflow reads the manifest, selects the fragments its task needs, and loads only those.
-Running `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and can skip unrelated fragments such as `contract-testing.md`, `feature-flags.md`, and `file-utils.md`.
+Running automation in red mode through `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and can skip unrelated fragments such as `contract-testing.md`, `feature-flags.md`, and `file-utils.md`.
 The selected fragments supply a shared reference across runs.
 Model outputs still need review and execution.
 
@@ -75,14 +75,14 @@ flowchart TD
     style Out fill:#4caf50,stroke:#1b5e20,stroke-width:3px,color:#fff
 ```
 
-| Workflow      | Fragments loaded                                              | Purpose                 |
-| ------------- | ------------------------------------------------------------- | ----------------------- |
-| `framework`   | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns |
-| `test-design` | test-quality, test-priorities-matrix, risk-governance         | Planning standards      |
-| `atdd`        | test-quality, component-tdd, network-first, data-factories    | TDD patterns            |
-| `automate`    | test-quality, test-levels-framework, selector-resilience      | Test generation         |
-| `test-review` | All quality, resilience, and debugging fragments              | Full audit patterns     |
-| `ci`          | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization      |
+| Workflow               | Fragments loaded                                              | Purpose                 |
+| ---------------------- | ------------------------------------------------------------- | ----------------------- |
+| `framework`            | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns |
+| `test-design`          | test-quality, test-priorities-matrix, risk-governance         | Planning standards      |
+| `automate` red mode    | test-quality, component-tdd, network-first, data-factories    | TDD patterns            |
+| `automate` expand mode | test-quality, test-levels-framework, selector-resilience      | Test generation         |
+| `test-review`          | All quality, resilience, and debugging fragments              | Full audit patterns     |
+| `ci`                   | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization      |
 
 ## Anatomy of a Fragment
 

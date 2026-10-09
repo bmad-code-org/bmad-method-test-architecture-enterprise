@@ -12,12 +12,12 @@ detect = """
 - `_bmad/tea/config.yaml` exists (the classic installer's TEA config).
 - `_bmad/tea/module-help.csv` exists.
 - `[modules.tea]` in `_bmad/config.toml`, `_bmad/custom/config.toml` or `_bmad/custom/config.user.toml` holds `ci_platform`, `tea_evaluations_folder`, `risk_threshold`, `test_design_output`, `test_review_output` or `trace_output`. The classic installer in bmad-method 6.12 already writes this table, so a project can have a `[modules.tea]` and still be on v6.
-A project with none of those signals, whose merged `[modules.tea]` holds only the nine keys `bmad setup tea` asks, is on v7; say so and stop.
+A project with none of those signals, whose merged `[modules.tea]` holds only supported keys `bmad setup tea` asks, is on v7; say so and stop. Existing v7 configs may omit the four healing options; test generation applies the shipped defaults without requiring migration.
 """
 
 # The state every rule below moves toward.
 target = """
-- `_bmad/config.toml` `[modules.tea]` holds exactly these keys: `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework`. Every value is a string; v6 booleans (`true`, `false`) become `"true"` and `"false"`.
+- `_bmad/config.toml` `[modules.tea]` uses these supported keys: `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`. Every stored value is a string; v6 booleans (`true`, `false`) become `"true"` and `"false"`. Omitted healing options keep their runtime defaults: `auto_validate = "true"`, `auto_heal_failures = "true"`, `max_healing_iterations = "3"`, and `use_mcp_healing = "true"`.
 - A v6 `ci_platform` other than `auto` lives in `_bmad/custom/bmad-testarch-ci.toml` as `ci_platform = "<value>"` under `[workflow]`.
 - A v6 `tea_evaluations_folder` other than `evals` lives in `_bmad/custom/bmad-testarch-evaluate.toml` as `evaluations_folder = "<folder>"` under `[workflow]`, relative to the project root.
 - `risk_threshold`, `test_design_output`, `test_review_output` and `trace_output` are gone; no skill reads them.
@@ -28,6 +28,7 @@ precautions = """
 - Read before writing. Show the user the plan (each key and where it goes) and wait for approval.
 - Edit only the `[modules.tea]` tables of `_bmad/config.toml`, `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, and the two customization files `_bmad/custom/bmad-testarch-ci.toml` and `_bmad/custom/bmad-testarch-evaluate.toml`. Keep every other table, key and comment in those files as it is, and merge into a customization file that already exists instead of replacing it.
 - Never delete a file outside version control. Removing the leftovers is a commit the user chooses; offer it and stop there.
+- Preserve `_bmad/custom/bmad-testarch-atdd.toml`, `_bmad/custom/bmad-testarch-atdd.user.toml`, `_bmad/custom/bmad-testarch-automate.toml` and `_bmad/custom/bmad-testarch-automate.user.toml` in place. The combined skill resolves the selected mode's original entry customizations.
 - Never run `bmad setup` from inside this migration; it owns the rest of `_bmad/`. When `[modules.tea]` is missing from every layer, stop and tell the user to run `bmad setup tea` first and to run this migration again afterwards.
 """
 
@@ -37,26 +38,26 @@ guide = """
 
    | v6 key | v7 destination |
    |---|---|
-   | `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework` | stays in `[modules.tea]` of the layer that holds it, written as strings |
+   | `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing` | stays in `[modules.tea]` of the layer that holds it, written as strings |
    | `ci_platform` | `_bmad/custom/bmad-testarch-ci.toml`, `[workflow]` `ci_platform`, only when the effective value is not `auto`; removed from every `[modules.tea]` layer |
    | `tea_evaluations_folder` | `_bmad/custom/bmad-testarch-evaluate.toml`, `[workflow]` `evaluations_folder`, only when the effective value is not `evals`; strip a leading `{project-root}/` when the value has one; removed from every `[modules.tea]` layer |
    | `risk_threshold`, `test_design_output`, `test_review_output`, `trace_output` | removed from every `[modules.tea]` layer |
    | any other key | ask the user; it is not a TEA setting v7 reads |
 
    Also list the classic-installer leftovers found under `_bmad/tea/` (`config.yaml`, `module-help.csv`, and any `agents/` or `workflows/` folder) as removal candidates.
-3. **Answers recorded only in `config.yaml`.** `bmad setup tea` writes the defaults it is given, so a project that had only a `_bmad/tea/config.yaml` can hold its v6 answers there while `[modules.tea]` holds defaults. For each of the nine kept keys where `config.yaml` differs from the effective `[modules.tea]` value and the effective value equals the default in `bmod.toml`, add a plan row that restores the `config.yaml` value in `_bmad/config.toml`. Show these rows apart from the rest and apply each only on approval; a value the user already changed from the default is never overwritten.
+3. **Answers recorded only in `config.yaml`.** `bmad setup tea` writes the defaults it is given, so a project that had only a `_bmad/tea/config.yaml` can hold its v6 answers there while `[modules.tea]` holds defaults. For each of the thirteen kept keys where `config.yaml` differs from the effective `[modules.tea]` value and the effective value equals the default in `bmod.toml`, add a plan row that restores the `config.yaml` value in `_bmad/config.toml`. Show these rows apart from the rest and apply each only on approval; a value the user already changed from the default is never overwritten.
 4. **Apply the approved plan.** Rewrite the `[modules.tea]` values that are not strings, remove the keys the plan moves or drops from every layer that holds them, and write the two customization files. Create `_bmad/custom/` entries only for values that differ from the defaults named above.
 5. **Leftovers.** Offer to remove the candidates from step 2 as one commit. A `config.yaml` left beside `_bmad/config.toml` is ignored by the skills and read only by `tea-test-review` when `_bmad/config.toml` does not exist, so it is harmless but misleading, and this migration is offered again while it exists. Say so. On a rerun, offer the removal again and show a step 3 row only while its two values still differ.
 6. **Report.** Give the user the final `[modules.tea]` table, the two customization files that were written, and the leftovers that remain.
 """
 
 checklist = [
-  "The merged `[modules.tea]` (`_bmad/config.toml` with the custom layers) holds exactly the nine v7 keys, each value a string.",
+  "The merged `[modules.tea]` (`_bmad/config.toml` with the custom layers) holds only the thirteen supported v7 keys, each stored value a string; omitted healing options use the shipped defaults.",
   "A non-default v6 `ci_platform` is `ci_platform` under `[workflow]` in `_bmad/custom/bmad-testarch-ci.toml`.",
   "A non-default v6 `tea_evaluations_folder` is `evaluations_folder` under `[workflow]` in `_bmad/custom/bmad-testarch-evaluate.toml`, without the `{project-root}/` prefix.",
   "`risk_threshold`, `test_design_output`, `test_review_output` and `trace_output` are in no `[modules.tea]` layer.",
   "`ci_platform` and `tea_evaluations_folder` are in no `[modules.tea]` layer.",
-  "`uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea` prints the nine keys and nothing else.",
+  "`uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea` prints only supported v7 keys; omitted healing options use the shipped defaults.",
   "`uv run _bmad/scripts/resolve_customization.py --skill <skill-root> --project-root . --key workflow` for `bmad-testarch-ci` and `bmad-testarch-evaluate` prints the migrated values.",
   "Every file the plan listed for removal is either removed in the commit the user chose or reported as still present.",
 ]

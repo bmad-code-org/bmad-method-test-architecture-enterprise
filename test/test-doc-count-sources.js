@@ -64,6 +64,16 @@ function suite(id) {
   return entry;
 }
 
+check('workflow counts distinguish eight owners from the ten preserved command entries', () => {
+  const registered = require('smol-toml').parse(fs.readFileSync(path.join(PROJECT_ROOT, 'skills', 'bmod-tea', 'bmod.toml'), 'utf8')).bmod
+    .skills;
+  const canonical = registered.filter((name) => !['bmad-tea', 'bmad-testarch-atdd', 'bmad-testarch-ci'].includes(name));
+  assert.strictEqual(canonical.length, 8);
+  assert.strictEqual(source.CANONICAL_WORKFLOW_COUNT, canonical.length);
+  assert.strictEqual(source.WORKFLOW_COMMAND_COUNT, registered.length - 1);
+  assert.strictEqual(source.WORKFLOW_COMMAND_COUNT, 10);
+});
+
 check('per-suite call counts are caseCount times repetitions, independently recomputed from the manifest', () => {
   assert.strictEqual(source.FRAGMENT_SELECTION_CALLS, suite('fragment-selection').caseCount * suite('fragment-selection').repetitions);
   assert.strictEqual(source.ROUTING_INTENT_CALLS, suite('bmad-tea-routing').caseCount * suite('bmad-tea-routing').repetitions);

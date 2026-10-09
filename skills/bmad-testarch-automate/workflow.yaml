@@ -1,7 +1,7 @@
 # Test Architect workflow: bmad-testarch-automate
 name: bmad-testarch-automate
 # prettier-ignore
-description: 'Expand test automation coverage for codebase. Use when the user says "lets expand test coverage" or "I want to automate tests"'
+description: 'Generate tests in red or expand mode and run-and-heal new tests. Use when the user says "lets expand test coverage", "I want to automate tests", "lets write acceptance tests", or "I want to do ATDD"'
 
 # Config (test_artifacts, user_name, languages) is resolved at activation in SKILL.md from modules.tea and core.
 date: system-generated

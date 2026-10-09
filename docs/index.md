@@ -6,7 +6,7 @@ description: Test Engineering Architect (TEA) workflows for risk-based testing, 
 # Test Engineering Architect (TEA)
 
 TEA is a BMad module for test strategy and automation.
-Its ten workflows cover learning, test design, setup, automation, evaluation, review, and release decisions.
+Its eight workflows cover learning, test design, setup, automation, evaluation, review, and release decisions.
 You can use it on its own or alongside BMad Method.
 
 Risk assessment, NFR planning, traceability, and release gates apply across stacks.
@@ -54,8 +54,7 @@ See [Commands](/reference/commands) for every invocation and menu code.
 - [Test Design](/how-to/workflows/run-test-design) plans risks, coverage, and NFR evidence.
 - [Framework Setup](/how-to/workflows/setup-test-framework) scaffolds a test framework.
 - [CI Setup](/how-to/workflows/setup-ci) connects tests and quality checks to CI.
-- [ATDD](/how-to/workflows/run-atdd) writes acceptance scaffolds before implementation.
-- [Automate](/how-to/workflows/run-automate) adds coverage to implemented features.
+- Automation has two modes: [red (ATDD)](/how-to/workflows/run-atdd) writes acceptance scaffolds before implementation; [expand](/how-to/workflows/run-automate) adds coverage to implemented features. Both commands and menu codes keep working.
 - [Test Review](/how-to/workflows/run-test-review) audits test quality and scores findings.
 - [NFR Evidence Audit](/how-to/workflows/run-nfr-assess) assesses performance, security, and reliability evidence.
 - [Evaluate](/tutorials/evaluate-your-first-skill) builds and runs a behavioral evaluation.

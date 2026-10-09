@@ -110,7 +110,7 @@ Display:
 {if in-progress: Started: {started_date}}
 
 **Session 5: ATDD & Automate (60 min)**
-{status_indicator} ATDD + Automate workflows, TDD approach
+{status_indicator} Automation red/expand modes, TDD approach
 {if completed: Score: {score}/100 | Completed: {completed_date}}
 {if in-progress: Started: {started_date}}
 

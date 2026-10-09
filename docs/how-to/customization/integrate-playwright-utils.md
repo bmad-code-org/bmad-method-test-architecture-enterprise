@@ -173,7 +173,7 @@ test('api test', async ({ apiRequest }) => {
 });
 ```
 
-### `atdd` and `automate` Workflows
+### Automation Red and Expand Modes
 
 **Without Playwright Utils:**
 

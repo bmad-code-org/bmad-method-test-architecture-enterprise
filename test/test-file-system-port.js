@@ -278,7 +278,7 @@ const STORED_NFR_REPORT = path.join(
 // eval-quality's own published schema, read once per kind and cached: scoring
 // any probe at all validates an isolation manifest against it.
 const ISOLATION_MANIFEST_SCHEMA = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'schemas', 'isolation-manifest.schema.json');
-const SELECTION_CONTEXT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd', 'steps-c', 'step-01-preflight-and-context.md');
+const SELECTION_CONTEXT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate', 'red', 'steps-c', 'step-01-preflight-and-context.md');
 const TEA_MENU = path.join(PROJECT_ROOT, 'skills', 'bmad-tea', 'customize.toml');
 
 /**

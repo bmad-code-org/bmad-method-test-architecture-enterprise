@@ -7,10 +7,10 @@ description: 'Generate red-phase acceptance test scaffolds using TDD cycle. Use 
 date: system-generated
 
 # Workflow components
-installed_path: "."
-instructions: "./instructions.md"
-validation: "./checklist.md"
-template: "./atdd-checklist-template.md"
+installed_path: "../bmad-testarch-automate/red"
+instructions: "../bmad-testarch-automate/red/instructions.md"
+validation: "../bmad-testarch-automate/red/checklist.md"
+template: "../bmad-testarch-automate/red/atdd-checklist-template.md"
 
 # Variables and inputs
 variables:

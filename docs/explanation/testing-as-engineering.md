@@ -41,20 +41,20 @@ TEA combines shared utilities, testing workflows, and live verification tools.
 
 ### 2. Process: TEA (Test Architect)
 
-Ten workflows cover learning, planning, test generation, evaluation, and release gates.
+Eight workflows cover learning, planning, test generation, evaluation, and release gates.
 
-| Workflow           | Purpose                                        |
-| ------------------ | ---------------------------------------------- |
-| `teach-me-testing` | Guided testing education                       |
-| `test-design`      | Risk-based planning plus NFR planning          |
-| `framework`        | Scaffold production-ready test infrastructure  |
-| `ci`               | CI pipeline with selective testing             |
-| `evaluate`         | Scored, evidence-backed evaluation of a target |
-| `atdd`             | Acceptance test-driven development             |
-| `automate`         | Prioritized test automation                    |
-| `test-review`      | Test quality audits (0-100 score)              |
-| `nfr-assess`       | NFR Evidence Audit                             |
-| `trace`            | Coverage traceability and gate decisions       |
+| Workflow                   | Purpose                                        |
+| -------------------------- | ---------------------------------------------- |
+| `teach-me-testing`         | Guided testing education                       |
+| `test-design`              | Risk-based planning plus NFR planning          |
+| `framework`                | Scaffold production-ready test infrastructure  |
+| `ci`                       | CI pipeline with selective testing             |
+| `evaluate`                 | Scored, evidence-backed evaluation of a target |
+| `automate` red mode (ATDD) | Acceptance test-driven development             |
+| `automate` expand mode     | Prioritized test automation                    |
+| `test-review`              | Test quality audits (0-100 score)              |
+| `nfr-assess`               | NFR Evidence Audit                             |
+| `trace`                    | Coverage traceability and gate decisions       |
 
 ### 3. Automation Interfaces: Playwright CLI + MCPs
 
@@ -109,5 +109,5 @@ See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how 
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md): the manifest that loads the standards
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md): the Definition of Done those standards encode
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md): the determinism rule in detail
-- [TEA Overview](/docs/explanation/tea-overview.md): the ten workflows in the lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md): the eight workflows in the lifecycle
 - [Engagement Models](/docs/explanation/engagement-models.md): the five ways to adopt TEA

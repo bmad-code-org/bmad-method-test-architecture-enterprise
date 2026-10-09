@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "archive": "evidence.json.gz",
+  "sha256": "1671327c811f74926ed375134aa0c14d7c5aec33ac4a32af9ef9895a4a3dee0c",
+  "fileCount": 688,
+  "uncompressedBytes": 5677258,
+  "captures": [
+    "heal",
+    "red",
+    "expand",
+    "validate",
+    "edit",
+    "default-red",
+    "default-expand",
+    "canonical-only-red",
+    "runtime/native-browser",
+    "runtime/resume-v200/red",
+    "runtime/resume-v200/expand",
+    "runtime/exact-resume/red-exact",
+    "runtime/exact-resume/expand-exact",
+    "runtime/exact-resume/red-conflict",
+    "runtime/exact-resume/expand-conflict",
+    "runtime/settings/validation-disabled",
+    "runtime/settings/healing-disabled",
+    "runtime/settings/repair-limit-zero",
+    "runtime/settings/spent-budget"
+  ],
+  "policy": "Each file is stored as the base64 encoding of its original bytes. Extracted provenance records pin raw output and staged source snapshots; they do not claim equality with current instructions. Seeded settings inputs are explicitly distinguished from genuine v2.0.0 checkpoints."
+}
