@@ -8115,7 +8115,7 @@ async function runTests() {
         // publisher opens before the first flag is validated.
         for (const [label, extra, cause] of [
           ['a malformed --min-score', ['--min-score', '80%'], /--min-score must be an integer/],
-          ['an expired --waive-until', ['--waive', 'legacy', '--waive-until', '2020-01-01'], /--waive-until/],
+          ['an expired --waive-until', ['--waive', 'legacy', '--waive-until', '2020-01-01'], /--waive-until must be a real calendar date/],
           ['--waive without --waive-until', ['--waive', 'legacy'], /--waive requires --waive-until/],
           ['an agent executable that is not installed', ['--agent-cmd', path.join(tmpRoot, 'no-such-agent')], /agent executable not found/],
           ['an unknown flag', ['--no-such-flag'], /unknown option/],
@@ -8257,27 +8257,6 @@ async function runTests() {
           `status=${blankName.status} ${JSON.stringify(mock.checkRuns)}`,
         );
 
-        // Without --github a refused flag makes no GitHub request.
-        resetMock();
-        const earlyNoGithub = await runCliAsync(ghArgs('earlyoff', ['--min-score', '80%'], { github: false }), ghEnv('earlyoff'));
-        assert(
-          earlyNoGithub.status === 2 && mock.requests.length === 0,
-          'a refused flag without --github makes no GitHub request',
-          `status=${earlyNoGithub.status} requests=${mock.requests.length}`,
-        );
-
-        // Publishing never changes the exit code: an unreachable API leaves the refusal as exit 2.
-        resetMock();
-        const earlyDown = await runCliAsync(ghArgs('earlydown', ['--min-score', '80%']), {
-          ...ghEnv('earlydown'),
-          GITHUB_API_URL: 'http://127.0.0.1:1',
-        });
-        assert(
-          earlyDown.status === 2 && /warning/i.test(earlyDown.stderr),
-          'an unreachable GitHub API turns a refused flag into a warning and leaves exit 2',
-          `status=${earlyDown.status} ${earlyDown.stderr}`,
-        );
-
         // --publish-as gives a custom vendor run as --agent claude its own comment and check text.
         resetMock();
         const asClaude = await runCliAsync(ghArgs('pubclaude'), ghEnv('pubclaude'));
@@ -8296,13 +8275,6 @@ async function runTests() {
           '--publish-as tags the comment marker and the "running on" text, so two vendors keep one comment each',
           `${asClaude.status} ${asGemini.status} ${mock.comments.map((c) => c.body.split('\n')[0])} ${createBodies}`,
         );
-        await runCliAsync(ghArgs('pubgemini2', ['--publish-as', 'gemini']), ghEnv('pubgemini2'));
-        assert(
-          mock.comments.length === 2,
-          'a second run under the same --publish-as updates its comment instead of adding one',
-          `${mock.comments.length}`,
-        );
-
         // The comment file carries the tag too.
         const pubFile = path.join(tmpRoot, 'b2-pubfile', 'comment.md');
         const asFile = await runCliAsync(
@@ -8330,6 +8302,248 @@ async function runTests() {
           asFile.status === 0 && fs.readFileSync(pubFile, 'utf8').startsWith('<!-- tea-test-review:gemini -->'),
           '--publish-as tags the --comment-out file too',
           `${asFile.status} ${asFile.stderr}`,
+        );
+
+        // ---- the publisher's identity, targets and failure modes, pinned by a mutation pass ----
+        const ghPosts = (suffix) => mock.requests.filter((r) => r.method === 'POST' && r.url === `/repos/o/r/${suffix}`);
+
+        // K01: without --github a stated --pr makes no GitHub request either (M10).
+        resetMock();
+        const k01 = await runCliAsync(ghArgs('k01', ['--pr', '7', '--min-score', '80%'], { github: false }), ghEnv('k01'));
+        assert(
+          k01.status === 2 && mock.requests.length === 0,
+          'K01 a refused flag with --pr and no --github makes no GitHub request',
+          `${k01.status} ${mock.requests.length}`,
+        );
+
+        // K02: a typo'd --agent never mints a comment of its own (M11).
+        resetMock();
+        const k02 = await runCliAsync(ghArgs('k02', ['--agent', 'claud']), ghEnv('k02'));
+        assert(
+          k02.status === 2 &&
+            mock.comments.length === 1 &&
+            !mock.comments[0].body.startsWith('<!-- tea-test-review:claud -->') &&
+            /--agent must be one of/.test(mock.comments[0].body),
+          "K02 a typo'd --agent publishes a broken gate under no tag of its own",
+          `${k02.status} ${mock.comments[0]?.body.split('\n')[0]}`,
+        );
+
+        // K03: the argv fallback honors --publish-as (M14).
+        resetMock();
+        const k03 = await runCliAsync(ghArgs('k03', ['--publish-as', 'gemini', '--no-such-flag']), ghEnv('k03'));
+        assert(
+          k03.status === 2 &&
+            mock.comments.length === 1 &&
+            mock.comments[0].body.startsWith('<!-- tea-test-review:gemini -->') &&
+            ghPosts('check-runs')[0]?.body.output.summary.includes('running on gemini.'),
+          'K03 a refused flag publishes under --publish-as, never over the default agent',
+          `${k03.status} ${mock.comments[0]?.body.split('\n')[0]}`,
+        );
+
+        // K04: the argv fallback honors --no-check-run and --no-pr-comment (M15, M16).
+        resetMock();
+        const k04a = await runCliAsync(ghArgs('k04a', ['--no-check-run', '--no-such-flag']), ghEnv('k04a'));
+        const k04aChecks = ghPosts('check-runs').length;
+        const k04aComments = mock.comments.length;
+        resetMock();
+        const k04b = await runCliAsync(ghArgs('k04b', ['--no-pr-comment', '--no-such-flag']), ghEnv('k04b'));
+        assert(
+          k04a.status === 2 &&
+            k04aChecks === 0 &&
+            k04aComments === 1 &&
+            k04b.status === 2 &&
+            ghPosts('check-runs').length === 1 &&
+            mock.checkRuns[0]?.status === 'completed' &&
+            mock.comments.length === 0,
+          'K04 a refused flag keeps --no-check-run and --no-pr-comment',
+          `${k04aChecks} ${k04aComments} ${ghPosts('check-runs').length} ${mock.comments.length}`,
+        );
+
+        // K05: the argv fallback attaches to --head-sha, --check-name, --repo, and links the run and artifact (M17-M19, M21, M22).
+        resetMock();
+        const k05 = await runCliAsync(
+          ghArgs('k05', ['--check-name', 'Gate X', '--repo', 'o/r', '--artifact-name', 'tea-report', '--no-such-flag']),
+          ghEnv('k05', { GITHUB_REPOSITORY: 'other/repo' }),
+        );
+        assert(
+          k05.status === 2 &&
+            mock.checkRuns.length === 1 &&
+            mock.checkRuns[0].head_sha === 'abc1234' &&
+            mock.checkRuns[0].name === 'Gate X' &&
+            mock.checkRuns[0].details_url === 'https://github.example/other/repo/actions/runs/55' &&
+            !mock.requests.some((r) => r.url === '/repos/o/r/pulls/7') &&
+            mock.comments.length === 1,
+          'K05 a refused flag publishes to the stated repo, head SHA and check name, with the run link and artifact',
+          `${JSON.stringify(mock.checkRuns[0])} ${mock.requests.map((r) => r.url)}`,
+        );
+
+        // K06: a malformed --head-sha is not where the broken gate lands (M24).
+        resetMock();
+        const k06 = await runCliAsync(
+          ghArgs('k06', []).map((a) => (a === 'abc1234' ? 'not-a-sha' : a)),
+          ghEnv('k06'),
+        );
+        assert(
+          k06.status === 2 &&
+            mock.checkRuns.length === 1 &&
+            mock.checkRuns[0].head_sha === 'cafebabe1234567' &&
+            mock.checkRuns[0].conclusion === 'failure' &&
+            /--head-sha must be a commit SHA/.test(mock.comments[0]?.body ?? ''),
+          'K06 a malformed --head-sha publishes its broken gate on the real head commit',
+          `${k06.status} ${JSON.stringify(mock.checkRuns[0])}`,
+        );
+
+        // K07: --github with --agent none reaches the pull request as a broken gate (M28).
+        resetMock();
+        const k07 = await runCliAsync(ghArgs('k07', ['--agent', 'none']), ghEnv('k07'));
+        assert(
+          k07.status === 2 &&
+            mock.checkRuns[0]?.conclusion === 'failure' &&
+            mock.comments.length === 1 &&
+            /--agent none runs none/.test(mock.comments[0].body),
+          'K07 --github with --agent none publishes a broken gate naming the cause',
+          `${k07.status} ${mock.comments[0]?.body}`,
+        );
+
+        // K08: publishing never changes the exit code of a passing run (M08, M08b), fast: a non-retryable 403.
+        resetMock();
+        mock.rules.push(
+          {
+            method: 'POST',
+            match: /\/check-runs$/,
+            status: 403,
+            body: { message: 'Resource not accessible by integration' },
+          },
+          { method: 'GET', match: /check-runs\?/, status: 403 },
+        );
+        const k08 = await runCliAsync(ghArgs('k08'), ghEnv('k08'));
+        assert(
+          k08.status === 0 && /Could not create the check run/.test(k08.stderr) && mock.comments.length === 1,
+          'K08 a check run the API refuses leaves a passing review at exit 0',
+          `${k08.status} ${k08.stderr}`,
+        );
+
+        // K09: a second run under the same --publish-as updates its own comment and leaves the other alone.
+        resetMock();
+        await runCliAsync(ghArgs('k09a'), ghEnv('k09a'));
+        await runCliAsync(ghArgs('k09b', ['--publish-as', 'gemini']), ghEnv('k09b'));
+        const [claudeComment, geminiComment] = mock.comments.map((c) => ({ ...c }));
+        mock.requests.length = 0;
+        const k09 = await runCliAsync(ghArgs('k09c', ['--publish-as', 'gemini']), ghEnv('k09c', { STUB_MODE: 'block' }));
+        const patched = mock.requests.filter((r) => r.method === 'PATCH' && /issues\/comments/.test(r.url)).map((r) => r.url);
+        assert(
+          k09.status === 1 &&
+            mock.comments.length === 2 &&
+            patched.length === 1 &&
+            patched[0] === `/repos/o/r/issues/comments/${geminiComment.id}` &&
+            mock.comments[0].body === claudeComment.body &&
+            mock.comments[1].body.startsWith('<!-- tea-test-review:gemini -->') &&
+            /Fail/.test(mock.comments[1].body),
+          'K09 a re-run under --publish-as gemini rewrites the gemini comment and never touches the claude one',
+          `${k09.status} ${patched}`,
+        );
+
+        // K11: an expired --waive-until names the expiry, not the missing-flag message.
+        resetMock();
+        const k11 = await runCliAsync(ghArgs('k11', ['--waive', 'legacy', '--waive-until', '2020-01-01']), ghEnv('k11'));
+        assert(
+          k11.status === 2 &&
+            /--waive-until must be a real calendar date/.test(mock.comments[0]?.body ?? '') &&
+            mock.checkRuns.length === 1,
+          'K11 an expired --waive-until publishes its own cause on exactly one check run',
+          mock.comments[0]?.body,
+        );
+
+        // K12 (real bug on HEAD): the refused-flag comment file carries --publish-as.
+        const k12File = path.join(tmpRoot, 'b2-k12', 'comment.md');
+        const k12 = await runCliAsync(
+          ['--project-root', b2Repo, '--files', 'x.spec.ts', '--publish-as', 'gemini', '--comment-out', k12File, '--no-such-flag'],
+          ghEnv('k12'),
+        );
+        assert(
+          k12.status === 2 && fs.readFileSync(k12File, 'utf8').startsWith('<!-- tea-test-review:gemini -->'),
+          'K12 a refused flag writes the comment file under --publish-as',
+          fs.existsSync(k12File) ? fs.readFileSync(k12File, 'utf8').split('\n')[0] : 'no file',
+        );
+
+        // K13 (real bug on HEAD): a dotted --publish-as never lends its live check run to the agent it starts with.
+        resetMock();
+        mock.checkRuns.push({
+          id: 4242,
+          name: 'TEA Test Review',
+          status: 'in_progress',
+          output: { summary: 'The TEA test review is running on claude.v2. [Live log](https://x)' },
+        });
+        const k13 = await runCliAsync(ghArgs('k13'), ghEnv('k13'));
+        assert(
+          k13.status === 0 && mock.checkRuns.find((r) => r.id === 4242).status === 'in_progress' && mock.checkRuns.length === 2,
+          'K13 claude never adopts the live check run of --publish-as claude.v2',
+          JSON.stringify(mock.checkRuns),
+        );
+        // K14: with --github, the refused-flag comment file carries the tag the publisher chose (M03).
+        resetMock();
+        const k14File = path.join(tmpRoot, 'b2-k14', 'comment.md');
+        const k14 = await runCliAsync(ghArgs('k14', ['--publish-as', 'gemini', '--comment-out', k14File, '--no-such-flag']), ghEnv('k14'));
+        assert(
+          k14.status === 2 && fs.readFileSync(k14File, 'utf8').startsWith('<!-- tea-test-review:gemini -->'),
+          'K14 with --github a refused flag writes the comment file under the published tag',
+          fs.existsSync(k14File) ? fs.readFileSync(k14File, 'utf8').split('\n')[0] : 'no file',
+        );
+        // K15: a --publish-as that does not start with a letter or digit is refused (M05b).
+        resetMock();
+        const k15 = await runCliAsync(ghArgs('k15', ['--publish-as', '.x']), ghEnv('k15'));
+        assert(
+          k15.status === 2 && k15.stderr.includes('--publish-as must be letters'),
+          'K15 a --publish-as starting with a dot exits 2',
+          k15.stderr,
+        );
+
+        // K16: the argv fallback keeps a real --agent as the tag, so codex never overwrites claude's comment (M23).
+        resetMock();
+        const k16 = await runCliAsync(ghArgs('k16', ['--agent', 'codex', '--no-such-flag']), ghEnv('k16'));
+        assert(
+          k16.status === 2 && mock.comments.length === 1 && mock.comments[0].body.startsWith('<!-- tea-test-review:codex -->'),
+          'K16 a refused flag with --agent codex publishes under codex',
+          mock.comments[0]?.body.split('\n')[0],
+        );
+
+        // K17: a --pr that is not a number never publishes to the number it starts with (M25).
+        resetMock();
+        const k17 = await runCliAsync(ghArgs('k17', ['--pr', '7x']), ghEnv('k17'));
+        assert(
+          k17.status === 2 && mock.requests.length === 0,
+          'K17 --pr 7x publishes to no pull request',
+          `${k17.status} ${mock.requests.map((r) => r.url)}`,
+        );
+
+        // K18: a --publish-as the marker cannot carry never mints a sanitized tag of its own (M26).
+        resetMock();
+        const k18 = await runCliAsync(ghArgs('k18', ['--publish-as', 'a b']), ghEnv('k18'));
+        assert(
+          k18.status === 2 && mock.comments.length === 1 && !mock.comments[0].body.startsWith('<!-- tea-test-review:a_b -->'),
+          'K18 an unusable --publish-as never publishes under a sanitized tag',
+          mock.comments[0]?.body.split('\n')[0],
+        );
+
+        // K19: a blank --check-name never opens a check run under a blank name (M27).
+        resetMock();
+        const k19 = await runCliAsync(ghArgs('k19', ['--check-name', ' ']), ghEnv('k19'));
+        assert(
+          k19.status === 2 && !mock.checkRuns.some((r) => String(r.name).trim() === ''),
+          'K19 a blank --check-name opens no blank-named check run',
+          JSON.stringify(mock.checkRuns.map((r) => r.name)),
+        );
+
+        // K20: the refused-flag comment file links the workflow run (M22).
+        const k20File = path.join(tmpRoot, 'b2-k20', 'comment.md');
+        const k20 = await runCliAsync(
+          ['--project-root', b2Repo, '--files', 'x.spec.ts', '--comment-out', k20File, '--no-such-flag'],
+          ghEnv('k20'),
+        );
+        assert(
+          k20.status === 2 && fs.readFileSync(k20File, 'utf8').includes('https://github.example/o/r/actions/runs/55'),
+          'K20 a refused flag writes a comment file that links the workflow run',
+          fs.existsSync(k20File) ? fs.readFileSync(k20File, 'utf8') : 'no file',
         );
 
         // A skip.
@@ -8788,7 +9002,12 @@ async function runTests() {
           ['a bad --run-url', ['--run-url', 'ftp://x'], '--run-url must be an http(s) URL'],
           ['an empty --artifact-name', ['--artifact-name', ' '], '--artifact-name must not be empty'],
         ]) {
-          const bad = runCli(['--files', 'x.spec.ts', '--project-root', emptyProjectForB2, ...extra]);
+          const bad = runCli(['--files', 'x.spec.ts', '--project-root', emptyProjectForB2, ...extra], {
+            GITHUB_TOKEN: '',
+            GITHUB_REPOSITORY: '',
+            GITHUB_EVENT_PATH: '',
+            GITHUB_REF: '',
+          });
           assert(bad.status === 2 && bad.stderr.includes(expected), `${label} exits 2`, `status=${bad.status} ${bad.stderr}`);
         }
 
