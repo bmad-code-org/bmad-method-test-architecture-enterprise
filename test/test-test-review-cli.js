@@ -5271,7 +5271,7 @@ async function runTests() {
       fs.writeFileSync(teamPath, '[modules.tea]\ntea_execution_mode = "sequential"\n');
       fs.rmSync(userPath);
       fs.writeFileSync(rootUserPath, '[modules.tea]\nreview_root_user_marker = "head-root-user"\n');
-      fs.writeFileSync(workflowPath, '[workflow]\npersistent_facts = ["head-team-fact"]\n');
+      fs.writeFileSync(workflowPath, '[workflow]\npersistent_facts = ["head-team-fact", "file:{project-root}/docs/policy/*.md"]\n');
       fs.rmSync(workflowUserPath);
       fs.writeFileSync(path.join(configRepo, 'docs', 'policy', 'a.md'), 'head-policy-a');
       fs.rmSync(path.join(configRepo, 'docs', 'policy', 'b.md'));
@@ -5343,6 +5343,14 @@ async function runTests() {
           workingConfig.stdout.includes('tea_execution_mode=sequential') &&
           workingConfig.stdout.includes('tea_use_playwright_utils=false'),
         'full-file mode without a base keeps working-tree config',
+      );
+      assert(
+        workingConfig.stdout.includes('head-policy-a') &&
+          workingConfig.stdout.includes('head-policy-c') &&
+          !workingConfig.stdout.includes('trusted-policy-b') &&
+          !workingConfig.stdout.includes('file:{project-root}/docs/policy/*.md'),
+        'full-file working-tree review supplies expanded local policy facts',
+        workingConfig.stdout,
       );
       const configJson = path.join(tmpRoot, 'explicit-file-base.json');
       const explicitFileBase = runCli([...configArgs, '--files', 'tests/config.spec.ts', '--base', 'main', '--json', configJson]);
@@ -5719,6 +5727,7 @@ async function runTests() {
       /** A v6 project with only _bmad/tea/config.yaml. */
       const legacyRoot = (name, body) => projectWith(name, { '_bmad/tea/config.yaml': body });
 
+      /** Commit a base configuration and leave differing head files in the fixture checkout. */
       function versionedConfig(name, baseFiles, headFiles, subdirectory = '') {
         const root = projectWith(name, baseFiles);
         if (Object.keys(baseFiles).length === 0) fs.writeFileSync(path.join(root, 'README.md'), 'fixture\n');

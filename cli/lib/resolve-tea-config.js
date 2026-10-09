@@ -30,6 +30,7 @@ const { spawnSync } = require('node:child_process');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 const { minimatch } = require('minimatch');
+const { globSync } = require('glob');
 
 /** The central config layers, lowest precedence first. Only the first is required. */
 const CONFIG_LAYER_RELATIVE_PATHS = [
@@ -74,6 +75,7 @@ const FLAG_TO_KEY = {
   capabilityProbe: 'tea_capability_probe',
 };
 
+/** Create a configuration error that the CLI publishes as an environment failure. */
 function configError(message) {
   const error = new Error(message);
   error.code = 'TEA_CONFIG_INVALID';
@@ -85,6 +87,13 @@ function configSource(projectRoot, baseRef) {
   if (baseRef === undefined || baseRef === null) {
     return {
       label: (relativePath) => path.join(projectRoot, relativePath),
+      list(pattern) {
+        try {
+          return globSync(pattern, { cwd: projectRoot, dot: true, nodir: true, follow: false });
+        } catch (error) {
+          throw configError(`Failed to list policy files in ${projectRoot}: ${error.message}`);
+        }
+      },
       read(relativePath) {
         try {
           return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
@@ -293,7 +302,7 @@ function readWorkflowCustomization(source, skillRoot, projectRoot) {
     throw configError('Workflow customization must contain a [workflow] table');
   }
   const workflow = merged.workflow || {};
-  if (source.commit && workflow.persistent_facts !== undefined) {
+  if (workflow.persistent_facts !== undefined) {
     if (!Array.isArray(workflow.persistent_facts) || !workflow.persistent_facts.every((fact) => typeof fact === 'string')) {
       throw configError('Workflow persistent_facts must be an array of strings');
     }
@@ -305,11 +314,11 @@ function readWorkflowCustomization(source, skillRoot, projectRoot) {
         throw configError(`Persistent fact must refer to a file inside the project: ${fact}`);
       }
       const matching = source
-        .list()
+        .list(pattern)
         .filter((file) => minimatch(file, pattern, { dot: true, nonegate: true, nocomment: true }))
         .sort();
-      if (matching.length === 0) throw configError(`Persistent fact has no files in the base tree: ${fact}`);
-      return matching.map((file) => `Base policy ${source.label(file)}:\n${source.read(file)}`);
+      if (matching.length === 0) throw configError(`Persistent fact has no files in the configuration source: ${fact}`);
+      return matching.map((file) => `Resolved policy ${source.label(file)}:\n${source.read(file)}`);
     });
   }
   return workflow;

@@ -338,7 +338,7 @@ Legacy `_bmad/tea/config.yaml` is read only when the base tree lacks `_bmad/conf
 A PR that edits, adds, removes, or breaks those files therefore keeps the review settings from its base.
 Config changes take effect in later reviews after they reach the base branch.
 
-An explicit `--files` run without `--base` uses the working-tree config and requires no Git repository.
+An explicit `--files` run without `--base` uses the working-tree config and requires no Git repository. Persistent-fact paths and globs are expanded from that working tree into the supplied prompt.
 Passing `--base` with `--files` selects base-tree config while keeping full-file review scope. Its `reviewProvenance.baseSha` records the configuration commit; the source labels it as a config snapshot.
 Git-diff reviews use the same pinned commit for configuration, comparison, and provenance.
 The Action's `base-ref` input maps to the CLI's `--base` flag.

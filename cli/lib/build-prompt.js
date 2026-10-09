@@ -245,7 +245,7 @@ function buildPrompt({
     'Perform the SKILL.md "On Activation" sequence silently: no greeting, no user interaction.',
     '- Use the CLI-resolved workflow customization supplied below. Do not load customization from the checkout',
     '  or invoke _bmad/scripts/resolve_customization.py. This replaces SKILL.md On Activation Step 1.',
-    '  Base policy file references have already been expanded into facts from the pinned tree. Use those supplied facts.',
+    '  Policy file references have already been expanded into facts from the selected configuration source. Use those supplied facts.',
     '  Additional project configuration or policy requested by custom activation steps must never be read from the checkout.',
     `Resolved workflow customization: ${JSON.stringify(workflowCustomization)}`,
     '- Load Config: use the CLI-resolved configuration supplied below for [core] and [modules.tea].',

@@ -844,8 +844,10 @@
           "modules": [
             "ajv/dist/2020",
             "commander",
+            "glob",
             "js-yaml",
             "markdown-it",
+            "minimatch",
             "node:child_process",
             "node:crypto",
             "node:dgram",
@@ -858,7 +860,7 @@
             "node:string_decoder",
             "smol-toml"
           ],
-          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (commander, js-yaml, smol-toml, ajv, markdown-it), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
+          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (ajv, commander, glob, js-yaml, markdown-it, minimatch, smol-toml), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
         }
       },
       {
