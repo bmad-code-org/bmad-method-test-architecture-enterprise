@@ -197,7 +197,7 @@ jobs:
   chain:
     name: chain (${{ matrix.shard }}/21)
     runs-on: ubuntu-latest
-    # Current weights project every shard at about ten minutes of scripts, plus setup.
+    # Refreshed weights project about eleven minutes of scripts, including mutation load headroom.
     # The cap allows loaded runners while bounding a stalled request or child.
     timeout-minutes: 20
     strategy:

@@ -63,7 +63,7 @@
  *   with `"confinement": false`, since they prove the runtime's own checks,
  *   which an opted-out run relies on; a confined run refuses those writes.
  *
- * Usage: node test/test-evaluate-mutation.js
+ * Usage: node test/test-evaluate-mutation.js [--group=qualification-basics|qualification-guards|recovery|journals]
  */
 
 'use strict';
@@ -100,6 +100,7 @@ const {
 } = require('../cli/lib/evaluate/workspace');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
+const { groupsOf, printGroupsWhenAsked, runs, selectGroup } = require('./lib/case-groups');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -123,7 +124,7 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = scratchDirectories('tea-evaluate-mutation');
+let scratch;
 
 function check(condition, message) {
   checks += 1;
@@ -2512,7 +2513,62 @@ function checkRound2() {
   check(fs.readdirSync(ignoredTemp).length === 0, 'the run left a workspace in the ignored temp directory');
 }
 
+/** Every original case runs once across the four chained groups. */
+const CASES = [
+  { name: 'checkCycle', group: 'qualification-basics', run: () => checkCycle() },
+  { name: 'checkUnits', group: 'qualification-basics', run: () => checkUnits() },
+  { name: 'checkGitTarget', group: 'qualification-guards', run: () => checkGitTarget() },
+  { name: 'checkUncommittedWork', group: 'qualification-basics', run: () => checkUncommittedWork() },
+  { name: 'checkCopyWorkspaces', group: 'qualification-basics', run: () => checkCopyWorkspaces() },
+  { name: 'checkFailures', group: 'qualification-basics', run: () => checkFailures() },
+  { name: 'checkAdopterTreeGuard', group: 'qualification-guards', run: () => checkAdopterTreeGuard() },
+  { name: 'checkHookEnvironment', group: 'qualification-guards', run: () => checkHookEnvironment() },
+  { name: 'checkRound2', group: 'qualification-guards', run: () => checkRound2() },
+  { name: 'checkSharedRepository', group: 'qualification-guards', run: () => checkSharedRepository() },
+  { name: 'checkLockedLeftovers', group: 'qualification-guards', run: () => checkLockedLeftovers() },
+  { name: 'checkRepositoryShape', group: 'qualification-guards', run: () => checkRepositoryShape() },
+  { name: 'checkInterrupted', group: 'recovery', run: () => checkInterrupted() },
+  { name: 'killed-git', group: 'recovery', run: () => checkKilledRun('killed-git', { liveOwner: true }) },
+  { name: 'killed-git-partial', group: 'recovery', run: () => checkKilledRun('killed-git-partial', { partialGit: true }) },
+  { name: 'killed-git-missing', group: 'recovery', run: () => checkKilledRun('killed-git-missing', { missingDirectory: true }) },
+  {
+    name: 'killed-git-unavailable-metadata',
+    group: 'recovery',
+    run: () => checkKilledRun('killed-git-unavailable-metadata', { missingDirectory: true, metadataUnavailable: true }),
+  },
+  { name: 'killed-copy', group: 'recovery', run: () => checkKilledRun('killed-copy', { isGit: false, uncertain: true }) },
+  { name: 'unmarked-copy', group: 'recovery', run: () => checkKilledRun('unmarked-copy', { isGit: false, unmarked: true }) },
+  {
+    name: 'partial-marker-copy',
+    group: 'recovery',
+    run: () => checkKilledRun('partial-marker-copy', { isGit: false, partialMarker: true }),
+  },
+  {
+    name: 'partial-teardown-copy',
+    group: 'recovery',
+    run: () => checkKilledRun('partial-teardown-copy', { isGit: false, partialTeardown: true }),
+  },
+  { name: 'checkKilledEngineStage', group: 'journals', run: () => checkKilledEngineStage() },
+  { name: 'checkAuxiliaryJournalEdges', group: 'journals', run: () => checkAuxiliaryJournalEdges() },
+  { name: 'checkWindowsChangedTempCli', group: 'journals', run: () => checkWindowsChangedTempCli() },
+  { name: 'checkMissingLaunchRoot', group: 'journals', run: () => checkMissingLaunchRoot() },
+  { name: 'checkKilledCheckout', group: 'journals', run: () => checkKilledCheckout() },
+  { name: 'checkJournalParentSwap', group: 'journals', run: () => checkJournalParentSwap() },
+  { name: 'checkRecoveryDocumentation', group: 'journals', run: () => checkRecoveryDocumentation() },
+];
+const selection = selectGroup(groupsOf(CASES));
+
 async function main() {
+  if (printGroupsWhenAsked(CASES)) return 0;
+  if (selection.error) {
+    console.error(selection.error);
+    return 2;
+  }
+  if (selection.group !== null && process.argv.some((arg) => arg === '--auxiliary-only' || arg === '--windows-auxiliary-only')) {
+    console.error('--group cannot be combined with an auxiliary-only flag');
+    return 2;
+  }
+  scratch = scratchDirectories('tea-evaluate-mutation');
   try {
     if (process.argv.includes('--windows-auxiliary-only')) {
       checkWindowsChangedTempCli();
@@ -2523,34 +2579,11 @@ async function main() {
       await checkInterrupted();
       checkRecoveryDocumentation();
     } else {
-      await checkCycle();
-      await checkUnits();
-      await checkGitTarget();
-      checkUncommittedWork();
-      checkCopyWorkspaces();
-      checkFailures();
-      checkAdopterTreeGuard();
-      checkHookEnvironment();
-      checkRound2();
-      checkSharedRepository();
-      checkLockedLeftovers();
-      checkRepositoryShape();
-      await checkInterrupted();
-      await checkKilledRun('killed-git', { liveOwner: true });
-      await checkKilledRun('killed-git-partial', { partialGit: true });
-      await checkKilledRun('killed-git-missing', { missingDirectory: true });
-      await checkKilledRun('killed-git-unavailable-metadata', { missingDirectory: true, metadataUnavailable: true });
-      await checkKilledRun('killed-copy', { isGit: false, uncertain: true });
-      await checkKilledRun('unmarked-copy', { isGit: false, unmarked: true });
-      await checkKilledRun('partial-marker-copy', { isGit: false, partialMarker: true });
-      await checkKilledRun('partial-teardown-copy', { isGit: false, partialTeardown: true });
-      await checkKilledEngineStage();
-      checkAuxiliaryJournalEdges();
-      checkWindowsChangedTempCli();
-      checkMissingLaunchRoot();
-      await checkKilledCheckout();
-      checkJournalParentSwap();
-      checkRecoveryDocumentation();
+      for (const entry of CASES) {
+        if (!runs(selection.group, entry.group)) continue;
+        console.log(`mutation case: ${entry.name}`);
+        await entry.run();
+      }
     }
   } finally {
     scratch.removeAll();

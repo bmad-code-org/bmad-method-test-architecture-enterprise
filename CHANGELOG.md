@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Quality CI splits the mutation suite across `test:evaluate-mutation:qualification-basics`, `:qualification-guards`, `:recovery` and `:journals`, preserving `test:evaluate-mutation` for local full-suite runs. Refreshed weights use four recent successful runs and the mutation timeout, with load headroom; `test:shards` now limits planned scripts to 60 percent of the job cap.
 - A stable release whose notes exceed GitHub's 125,000 character limit now posts the first part, cut at a whole entry, with a link to the full CHANGELOG section, instead of failing after the npm publish. `tools/release-notes.js` does the cutting and `test:release-notes` covers it.
 
 ## [2.0.0] - 2026-10-09
