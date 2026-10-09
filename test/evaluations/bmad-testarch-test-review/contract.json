@@ -1653,8 +1653,6 @@
           "stateResetPointers": [
             "/reviewMode",
             "/gateOn",
-            "/reviewedFiles",
-            "/contextBasis",
             "/conventionBaseline"
           ],
           "sensitivityWitness": {
