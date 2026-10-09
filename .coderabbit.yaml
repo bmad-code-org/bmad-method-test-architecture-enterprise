@@ -18,6 +18,16 @@ reviews:
       - main
   path_filters:
     - "!**/node_modules/**"
+    # Review source generators and their tests; CI checks these generated copies.
+    - "!test/contracts/atdd.contract.json"
+    - "!test/contracts/fragment-selection/**"
+    - "!test/contracts/tea-routing-controls.contract.json"
+    - "!test/contracts/tea-routing-intents.contract.json"
+    - "!test/probes/fragment-selection/**"
+    - "!test/probes/tea-routing-controls.probes.json"
+    - "!test/probes/tea-routing-intents.probes.json"
+    # Immutable captured outputs are checked by provenance and replay suites.
+    - "!test/results/**"
   path_instructions:
     - path: "**/*"
       instructions: |
