@@ -5,13 +5,13 @@
   "argv": [
     "aggregate-strength",
     "--evidence",
-    "runs/20261006T211359582Z-899e26cc/scores/<score-invocation>/P-001/evidence-artifact.json",
+    "runs/20261009T005332982Z-eef62f19/scores/<score-invocation>/P-001/evidence-artifact.json",
     "--evidence",
-    "runs/20261006T211359582Z-899e26cc/scores/<score-invocation>/P-002/evidence-artifact.json",
+    "runs/20261009T005332982Z-eef62f19/scores/<score-invocation>/P-002/evidence-artifact.json",
     "--floors",
-    "runs/20261006T211359582Z-899e26cc/scores/<score-invocation>/strength-floors.json",
+    "runs/20261009T005332982Z-eef62f19/scores/<score-invocation>/strength-floors.json",
     "--policy",
-    "runs/20261006T211359582Z-899e26cc/scoring-policy.json",
+    "runs/20261009T005332982Z-eef62f19/scoring-policy.json",
     "--out",
     "<staging>/strength-aggregate.json"
   ],
