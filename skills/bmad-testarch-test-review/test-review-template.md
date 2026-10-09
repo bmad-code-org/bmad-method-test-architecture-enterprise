@@ -1,12 +1,7 @@
 ---
-stepsCompleted: []
-lastStep: ''
-lastSaved: ''
 workflowType: 'testarch-test-review'
 runScope: ''
 runKey: ''
-workflowStatus: ''
-inputDocuments: []
 ---
 
 # Test Quality Review: {test_filename}
@@ -17,9 +12,11 @@ inputDocuments: []
 **Score Override Rule**: {score_override_rule}
 **Review Date**: {YYYY-MM-DD}
 **Review Mode**: {pr | full-file}
-**Reviewer**: {user_name or TEA Agent}
+**Reviewer**: {headless: the CLI fills this in; interactive: user_name}
 
 ---
+
+<!-- A headless run carries only the frontmatter above. In a headless run do not write `stepsCompleted`, `lastStep`, `lastSaved`, `workflowStatus` or `inputDocuments`: they are resume state for an interactive run and mean nothing in CI. -->
 
 Note: This review audits existing tests; it does not generate tests.
 Coverage mapping and coverage gates are out of scope here. Use `trace` for coverage decisions.
@@ -34,10 +31,8 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 <!-- COMPUTED, never chosen. steps-c/step-03f-aggregate-scores.md §3b derives this from the
      deduped violation counts: any CRITICAL => Block; any HIGH => Request Changes; score < 70 =>
      Request Changes; any remaining finding => Approve with Comments; otherwise Approve. Copy the
-     computed value into this line and into `## Decision` unchanged — the CLI rejects a report
-     whose two copies disagree, and a verdict picked by judgment beside a deterministic score is
-     how two reviewers reached 82 and 85 on the same files and still returned opposite outcomes.
-     A waiver changes the exit code, never this value. -->
+     computed value into this line and into `## Decision` unchanged: the CLI rejects a report
+     whose two copies disagree. A waiver changes the exit code, never this value. -->
 
 **Context Basis**: {none | pr_diff | pr_diff_truncated}
 
@@ -45,59 +40,46 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 **Execution Mode**: {agent-team | subagent | sequential}
 
-<!-- What this review was judged against, resolved in step 1. `none` means no story, test design, or source accompanied the tests: the verdict speaks to how the tests are built, not to whether they match a requirement. -->
-
 <!-- Context can add findings and clarify impact. It cannot waive a rubric violation, change severity, or alter the score. This machine-readable value must remain 0. -->
 
 ### Key Strengths
 
-✅ {strength_1}
-✅ {strength_2}
-✅ {strength_3}
+{Optional, at most three bullets. Omit the subsection when there is nothing specific to credit.}
 
-### Key Weaknesses
-
-{Include this subsection only when scored findings exist. Copy only findings from
-`all_violations`, one bullet per finding, with its registry row. Never put optional
-improvements, out-of-scope coverage ideas, closed convention/applicability checks,
-empty placeholders, or `n/a` here.}
-
-❌ [{registry_row_id}] {scored_finding_summary}
+✅ {strength}
 
 ### Advisory Observations
 
-{Include this subsection only when useful unscored suggestions exist. These ideas
-do not affect the score or recommendation. Omit the subsection when empty; never
-render an empty bullet or `n/a`.}
+{Optional. Useful unscored suggestions that do not affect the score or recommendation. Omit the subsection when empty; never render an empty bullet or `n/a`.}
 
 ℹ️ {unscored_optional_suggestion}
 
 ### Summary
 
-{1-2 paragraph summary of overall test quality, highlighting major findings and recommendation rationale}
+{One short paragraph: the verdict in plain words and what kind of problem drives it. Name no finding's location, quote no finding's text; the findings below carry them. A pull request review speaks only to what the pull request changed or broke.}
 
 ---
 
 ## Quality Criteria Assessment
 
-| Criterion                            | Status                                           | Violations | Basis    | Notes        |
-| ------------------------------------ | ------------------------------------------------ | ---------- | -------- | ------------ |
-| BDD Format (Given-When-Then)         | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Test IDs                             | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Priority Markers (P0/P1/P2/P3)       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Disabled or Focused Tests            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
-| Hard Waits (sleep, waitForTimeout)   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
-| Determinism (no conditionals)        | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Isolation (cleanup, no shared state) | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
-| Fixture Patterns                     | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Data Factories                       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Network-First Pattern                | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Playwright Utils Adoption            | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Pact.js Utils Adoption               | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
-| Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
-| Test Length (≤1000 lines)            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {lines}    | Absolute | {brief_note} |
-| Test Duration (≤1.5 min)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {duration} | Absolute | {brief_note} |
-| Flakiness Patterns                   | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Criterion                            | Status                          | Violations | Basis        | Notes                           |
+| ------------------------------------ | ------------------------------- | ---------- | ------------ | ------------------------------- |
+| BDD Format (Given-When-Then)         | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Test IDs                             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Priority Markers (P0/P1/P2/P3)       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Disabled or Focused Tests            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
+| Hard Waits (sleep, waitForTimeout)   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
+| Determinism (no conditionals)        | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Isolation (cleanup, no shared state) | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
+| Fixture Patterns                     | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Data Factories                       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Network-First Pattern                | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Playwright Utils Adoption            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Pact.js Utils Adoption               | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
+| Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {brief_note}                    |
+| Test Length (≤1000 lines)            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | Absolute     | {lines} lines                   |
+| Test Duration (≤1.5 min)             | ➖ Not measured                 | -          | Not measured | A static read cannot time a run |
+| Flakiness Patterns                   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}      | {brief_note}                    |
 
 <!-- {basis} states what decided the row, per steps-c/criteria-registry.md: `Absolute`,
      `Applicability: <what the file must do>`, or `Convention: <key> (<adopted> of <sampled> sampled)` —
@@ -106,11 +88,14 @@ render an empty bullet or `n/a`.}
      `convention_baseline` (see step-02-discover-tests.md §2b's CLI exception), `<sampled>` here MUST
      equal the corpus's `sampled` value exactly, and `<adopted>` MUST be 0 for any mechanically-checked
      key the run reports found zero real occurrences of — the CLI parses this line verbatim and rejects
-     a report that disagrees with what it actually measured. A `✅ PASS (n/a)` row MUST name why the
-     gate was closed and MUST deduct nothing — an absent convention or an inapplicable pattern is not a
-     finding. A bare WARN with no basis is the defect this column exists to prevent: it reads identically
-     in a repo that has the convention and one that has never used it, so the reader cannot tell drift
-     from the rubric's own preference. Never leave {basis} unfilled. -->
+     a report that disagrees with what it actually measured. A row that does not apply to this repository
+     (a closed convention or applicability gate, a utility the project does not use) is omitted from the table:
+     its absence is not something to report. A bare WARN with no basis is the defect this column exists to
+     prevent: it reads identically in a repo that has the convention and one that has never used it, so the
+     reader cannot tell drift from the rubric's own preference. Never leave {basis} unfilled.
+     Measured and unmeasured are different claims. Test Length uses the exact line counts the run supplies.
+     Test Duration is always `Not measured`: a static read cannot time a run. State no test count, assertion
+     count or duration unless the run supplied it or you label it `(estimate)`. -->
 
 **Total Violations**: {critical_count} Critical, {high_count} High, {medium_count} Medium, {low_count} Low
 
@@ -159,13 +144,11 @@ Grade:                   {grade}
 
 ---
 
-<!-- **Row** is the criteria-registry identity that produced the finding (C1, H2, M4, ...), the same value the subagent violation carried. It is what makes one reviewer's finding comparable to another's: prose descriptions of a defect differ between runs and vendors, row identities do not. A finding with no row has no severity either, so it belongs in Best Practices or Recommendations as prose, not here. -->
+<!-- **Row** is the criteria-registry identity that produced the finding (C1, H2, M4, ...). It is what makes one reviewer's finding comparable to another's. A finding with no row has no severity either, so it is not a finding. Each finding appears once, here: one location, one explanation of the failure, one concrete fix. Include code only when it clarifies the evidence. -->
 
 ## Critical Issues (Must Fix)
 
 {If no critical issues: "No critical issues detected. ✅"}
-
-{For each critical issue:}
 
 ### {issue_number}. {Issue Title}
 
@@ -173,43 +156,16 @@ Grade:                   {grade}
 **Location**: `{filename}:{line_number}`
 **Row**: {registry_row_id}
 **Provenance**: {introduced | modified | pre_existing; omit when changed-line evidence is unavailable}
-**Criterion**: {criterion_name}
-**Knowledge Base**: [{fragment_name}]({fragment_path})
 
-**Issue Description**:
-{Detailed explanation of what the problem is and why it's critical}
+**Issue**: {what is wrong and why it fails, in two or three sentences}
 
-**Current Code**:
-
-```typescript
-// ❌ Bad (current implementation)
-{
-  code_snippet_showing_problem;
-}
-```
-
-**Recommended Fix**:
-
-```typescript
-// ✅ Good (recommended approach)
-{
-  code_snippet_showing_solution;
-}
-```
-
-**Why This Matters**:
-{Explanation of impact - flakiness risk, maintainability, reliability}
-
-**Related Violations**:
-{If similar issue appears elsewhere, note line numbers}
+**Fix**: {the concrete change, with a short snippet only when it clarifies}
 
 ---
 
 ## Recommendations (Should Fix)
 
-{If no recommendations: "No additional recommendations. Test quality is excellent. ✅"}
-
-{For each recommendation:}
+{If no recommendations: "No additional recommendations. ✅"}
 
 ### {rec_number}. {Recommendation Title}
 
@@ -217,256 +173,16 @@ Grade:                   {grade}
 **Location**: `{filename}:{line_number}`
 **Row**: {registry_row_id}
 **Provenance**: {introduced | modified | pre_existing; omit when changed-line evidence is unavailable}
-**Criterion**: {criterion_name}
-**Knowledge Base**: [{fragment_name}]({fragment_path})
 
-**Issue Description**:
-{Detailed explanation of what could be improved and why}
+**Issue**: {what could be improved and why, in two or three sentences}
 
-**Current Code**:
-
-```typescript
-// ⚠️ Could be improved (current implementation)
-{
-  code_snippet_showing_current_approach;
-}
-```
-
-**Recommended Improvement**:
-
-```typescript
-// ✅ Better approach (recommended)
-{
-  code_snippet_showing_improvement;
-}
-```
-
-**Benefits**:
-{Explanation of benefits - maintainability, readability, reusability}
-
-**Priority**:
-{Why this is P1/P2/P3 - urgency and impact}
-
----
-
-## Best Practices Found
-
-{If good patterns found, highlight them}
-
-{For each best practice:}
-
-### {practice_number}. {Best Practice Title}
-
-**Location**: `{filename}:{line_number}`
-**Pattern**: {pattern_name}
-**Knowledge Base**: [{fragment_name}]({fragment_path})
-
-**Why This Is Good**:
-{Explanation of why this pattern is excellent}
-
-**Code Example**:
-
-```typescript
-// ✅ Excellent pattern demonstrated in this test
-{
-  code_snippet_showing_best_practice;
-}
-```
-
-**Use as Reference**:
-{Encourage using this pattern in other tests}
-
----
-
-## Test File Analysis
-
-### File Metadata
-
-- **File Path**: `{relative_path_from_project_root}`
-- **File Size**: {line_count} lines, {kb_size} KB
-- **Test Framework**: {Playwright | Jest | Cypress | Vitest | Other}
-- **Language**: {TypeScript | JavaScript}
-
-### Test Structure
-
-- **Describe Blocks**: {describe_count}
-- **Test Cases (it/test)**: {test_count}
-- **Average Test Length**: {avg_lines_per_test} lines per test
-- **Fixtures Used**: {fixture_count} ({fixture_names})
-- **Data Factories Used**: {factory_count} ({factory_names})
-
-### Test Scope
-
-- **Test IDs**: {test_id_list}
-- **Priority Distribution**:
-  - P0 (Critical): {p0_count} tests
-  - P1 (High): {p1_count} tests
-  - P2 (Medium): {p2_count} tests
-  - P3 (Low): {p3_count} tests
-  - Unknown: {unknown_count} tests
-
-### Assertions Analysis
-
-- **Total Assertions**: {assertion_count}
-- **Assertions per Test**: {avg_assertions_per_test} (avg)
-- **Assertion Types**: {assertion_types_used}
-
----
-
-## Context and Integration
-
-### What the Context Said
-
-{If `context_basis` is `none`: state that no context was supplied, so nothing here checked the tests against a requirement.}
-
-{Otherwise, what the context artifacts established and how it bore on the findings: acceptance criteria the tests do or do not exercise, changed code paths no assertion touches, a story claim contradicted by a test. Context raises findings; it never waives one.}
-
-### Related Artifacts
-
-{If story file supplied:}
-
-- **Story File**: [{story_filename}]({story_path})
-
-{If test-design supplied:}
-
-- **Test Design**: [{test_design_filename}]({test_design_path})
-- **Risk Assessment**: {risk_level}
-- **Priority Framework**: P0-P3 applied
-
----
-
-## Knowledge Base References
-
-This review consulted the following knowledge base fragments:
-
-- **[test-quality.md]({tea-knowledge}/test-quality.md)** - Definition of Done for tests (no hard waits, ≤1000 lines, <1.5 min, self-cleaning)
-- **[fixture-architecture.md]({tea-knowledge}/fixture-architecture.md)** - Pure function → Fixture → mergeTests pattern
-- **[network-first.md]({tea-knowledge}/network-first.md)** - Route intercept before navigate (race condition prevention)
-- **[data-factories.md]({tea-knowledge}/data-factories.md)** - Factory functions with overrides, API-first setup
-- **[test-levels-framework.md]({tea-knowledge}/test-levels-framework.md)** - E2E vs API vs Component vs Unit appropriateness
-- **[component-tdd.md]({tea-knowledge}/component-tdd.md)** - Red-Green-Refactor patterns
-- **[selective-testing.md]({tea-knowledge}/selective-testing.md)** - Duplicate coverage detection
-- **[ci-burn-in.md]({tea-knowledge}/ci-burn-in.md)** - Flakiness detection patterns (10-iteration loop)
-- **[test-priorities-matrix.md]({tea-knowledge}/test-priorities-matrix.md)** - P0/P1/P2/P3 classification framework
-
-For coverage mapping, consult `trace` workflow outputs.
-
-See [tea-index.csv]({tea-knowledge}/tea-index.csv) for complete knowledge base.
-
----
-
-## Next Steps
-
-### Immediate Actions (Before Merge)
-
-1. **{action_1}** - {description}
-   - Priority: {P0 | P1 | P2}
-   - Owner: {team_or_person}
-   - Estimated Effort: {time_estimate}
-
-2. **{action_2}** - {description}
-   - Priority: {P0 | P1 | P2}
-   - Owner: {team_or_person}
-   - Estimated Effort: {time_estimate}
-
-### Follow-up Actions (Future PRs)
-
-1. **{action_1}** - {description}
-   - Priority: {P2 | P3}
-   - Target: {next_milestone | backlog}
-
-2. **{action_2}** - {description}
-   - Priority: {P2 | P3}
-   - Target: {next_milestone | backlog}
-
-### Re-Review Needed?
-
-{✅ No re-review needed - approve as-is}
-{⚠️ Re-review after critical fixes - request changes, then re-review}
-{❌ Major refactor required - block merge, pair programming recommended}
+**Fix**: {the concrete change, with a short snippet only when it clarifies}
 
 ---
 
 ## Decision
 
 **Recommendation**: {Approve | Approve with Comments | Request Changes | Block}
-
-**Rationale**:
-{1-2 paragraph explanation of recommendation based on findings}
-
-**For Approve**:
-
-> Test quality is excellent/good with {score}/100 score. {Minor issues noted can be addressed in follow-up PRs.} Tests are production-ready and follow best practices.
-
-**For Approve with Comments**:
-
-> Test quality is acceptable with {score}/100 score. {High-priority recommendations should be addressed but don't block merge.} Critical issues resolved, but improvements would enhance maintainability.
-
-**For Request Changes**:
-
-> Test quality needs improvement with {score}/100 score. {Critical issues must be fixed before merge.} {X} critical violations detected that pose flakiness/maintainability risks.
-
-**For Block**:
-
-> Test quality is insufficient with {score}/100 score. {Multiple critical issues make tests unsuitable for production.} Recommend pairing session with QA engineer to apply patterns from knowledge base.
-
----
-
-## Appendix
-
-### Violation Summary by Location
-
-{Table of all violations sorted by line number:}
-
-| Line   | Severity      | Criterion   | Issue         | Fix         |
-| ------ | ------------- | ----------- | ------------- | ----------- |
-| {line} | {P0/P1/P2/P3} | {criterion} | {brief_issue} | {brief_fix} |
-| {line} | {P0/P1/P2/P3} | {criterion} | {brief_issue} | {brief_fix} |
-
-### Quality Trends
-
-{If reviewing same file multiple times, show trend:}
-
-| Review Date  | Score         | Grade     | Critical Issues | Trend       |
-| ------------ | ------------- | --------- | --------------- | ----------- |
-| {YYYY-MM-DD} | {score_1}/100 | {grade_1} | {count_1}       | ⬆️ Improved |
-| {YYYY-MM-DD} | {score_2}/100 | {grade_2} | {count_2}       | ⬇️ Declined |
-| {YYYY-MM-DD} | {score_3}/100 | {grade_3} | {count_3}       | ➡️ Stable   |
-
-### Related Reviews
-
-{If reviewing multiple files in directory/suite:}
-
-| File     | Score       | Grade   | Critical | Status             |
-| -------- | ----------- | ------- | -------- | ------------------ |
-| {file_1} | {score}/100 | {grade} | {count}  | {Approved/Blocked} |
-| {file_2} | {score}/100 | {grade} | {count}  | {Approved/Blocked} |
-| {file_3} | {score}/100 | {grade} | {count}  | {Approved/Blocked} |
-
-**Suite Average**: {avg_score}/100 ({avg_grade})
-
----
-
-## Review Metadata
-
-**Generated By**: BMad TEA Agent (Test Architect)
-**Workflow**: testarch-test-review v4.0
-**Review ID**: test-review-{run_key}-{YYYYMMDD}
-**Timestamp**: {YYYY-MM-DD HH:MM:SS}
-**Version**: 1.0
-
----
-
-## Feedback on This Review
-
-If you have questions or feedback on this review:
-
-1. Review patterns in knowledge base: `{tea-knowledge}/`
-2. Consult tea-index.csv for detailed guidance
-3. Request clarification on specific violations
-4. Pair with QA engineer to apply patterns
-
-This review applies the rubric consistently. Context can reveal additional findings and clarify impact; it cannot waive a violation, change severity, or alter the score. Formal risk acceptance belongs in trace or the release gate.
 
 ---
 

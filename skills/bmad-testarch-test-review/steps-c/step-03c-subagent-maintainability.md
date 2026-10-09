@@ -59,8 +59,8 @@ arrive in `subagentContext` as `use_playwright_utils` / `playwright_utils_instal
 and `use_pactjs_utils` / `pactjs_utils_installed`.
 
 When a precondition is false those rows **do not exist for this run**. Emit no
-violations for them and no per-file `PASS (n/a)`; the report states the reason once,
-naming which half was missing. Deducting for not using a library the repo does not
+violations for them and no per-file `PASS (n/a)`; the report says nothing about
+them. Deducting for not using a library the repo does not
 have produces findings nobody can act on file by file, and the one actionable
 finding is the single line about the missing install.
 
@@ -105,7 +105,7 @@ Three rules this dimension used to get wrong, now fixed by the registry:
   (`Test Length (≤1000 lines)`) and the template. One threshold, one row: H5.
 - **Naming and test ids are Convention rows.** A repo with no behavioral-naming
   convention and no test-id convention takes no deduction for either, and the
-  report says `PASS (n/a)` with the adoption count. A role- or label-based locator
+  report leaves the row out of the criteria table. A role- or label-based locator
   satisfies L1 outright; it is not a missing test id.
 - **"Could benefit from helper functions" and "minor code style issues" are gone.**
   Neither was falsifiable, so neither could be scored the same way twice. A real

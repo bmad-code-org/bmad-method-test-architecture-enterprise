@@ -257,6 +257,8 @@ After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or do
 
 **Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
+**Resume state is for interactive runs.** The resume keys below (`workflowStatus`, `stepsCompleted`, `lastStep`, `lastSaved`, `inputDocuments`) let `step-01b-resume.md` continue an interrupted run. A headless run writes only `workflowType`, `runScope` and `runKey`, and the CLI removes any resume key from the report it publishes.
+
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml

@@ -69,6 +69,14 @@ const {
 } = require('./lib/parse-report');
 const { getDiffEvidence, applyFindingProvenance, subtractCounts } = require('./lib/diff-evidence');
 const { scopeReportToPullRequest, restateVerdictLines } = require('./lib/pr-scope-report');
+const {
+  stripResumeState,
+  stampReviewer,
+  presentCriteriaRows,
+  tidyProseSections,
+  firstThatAgrees,
+  renderPullRequestGate,
+} = require('./lib/report-presentation');
 const { computeConventionBaseline } = require('./lib/convention-baseline');
 const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
@@ -368,30 +376,6 @@ function writeReportArtifact(artifactPath, temporaryPath, content) {
 }
 
 /**
- * The pull request gate, appended after provenance is known. `excluded` counts
- * the findings the report left out because they sit on lines the pull request did
- * not change; none of them is named, since the verdict carries none.
- */
-function appendPullRequestGate(report, recommendation, qualityScore, excluded) {
-  const eol = report.includes('\r\n') ? '\r\n' : '\n';
-  const lines = [
-    '',
-    '## PR Delta Gate',
-    '',
-    '**Gate Mode**: introduced',
-    `**Gate Recommendation**: ${recommendation}`,
-    `**Gate Quality Score**: ${qualityScore}/100`,
-  ];
-  if (excluded > 0) {
-    lines.push(
-      '',
-      `${excluded} finding${excluded === 1 ? '' : 's'} on lines this pull request did not change ${excluded === 1 ? 'was' : 'were'} left out of this report.`,
-    );
-  }
-  return `${report.trimEnd()}${eol}${lines.join(eol)}${eol}`;
-}
-
-/**
  * Put the review mode in the report, whatever the agent wrote. The mode is a fact
  * of the invocation, so the CLI states it: it replaces the template's old
  * "Review Scope" line, or an agent-written "Review Mode" line, and adds the line
@@ -426,6 +410,20 @@ function locationEnds(report, spans) {
     }
     return null;
   });
+}
+
+/** The exact line count of each review file, so the report states no count it only estimated. */
+function fileStatsFor(projectRoot, files) {
+  const stats = {};
+  for (const file of files) {
+    try {
+      const text = fs.readFileSync(path.join(projectRoot, file), 'utf8');
+      stats[file] = text === '' ? 0 : text.replace(/\r?\n$/, '').split(/\r?\n/).length;
+    } catch {
+      // A file the CLI cannot read has no count to state.
+    }
+  }
+  return stats;
 }
 
 /** The changed ranges of each review file as the prompt states them: "7" or "10-14". */
@@ -1126,6 +1124,7 @@ async function runReview(session) {
       scope: options.scope,
       reviewMode,
       changedLines: changedLinesForPrompt(diffEvidence),
+      fileStats: fileStatsFor(projectRoot, changedTestFiles),
       testDir: options.testDir,
       teaConfig,
       installedPackages,
@@ -1301,6 +1300,7 @@ async function runReview(session) {
       scope: options.scope,
       reviewMode,
       changedLines: changedLinesForPrompt(diffEvidence),
+      fileStats: fileStatsFor(projectRoot, changedTestFiles),
       testDir: options.testDir,
       teaConfig,
       installedPackages,
@@ -1475,8 +1475,65 @@ async function runReview(session) {
         }
       }
 
-      const normalizedReport = stampReviewMode(normalizeReportScore(rawReport, parsed), reviewMode);
-      writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
+      // Findings still outside the gate (--gate-on all never has any) change nothing
+      // below; in a pull request review none remain.
+      const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
+      const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
+      const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
+      const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
+
+      // The published report says only what the run established: the mode, the reviewer and the pull request
+      // decision are the CLI's to state, resume state and unmeasured or inapplicable claims are removed. The
+      // edits that remove text are parsed again, and the report is published with them only when it still
+      // reads as the verdict that was gated.
+      const base = stampReviewMode(normalizeReportScore(rawReport, parsed), reviewMode);
+      const present = (text, { tidy }) => {
+        let out = stampReviewer(stripResumeState(text), { agent: options.agent, model: resolvedModel });
+        if (tidy) out = tidyProseSections(presentCriteriaRows(out, fileStatsFor(projectRoot, changedTestFiles), parsed.findings));
+        if (reviewMode === 'pr') {
+          out = renderPullRequestGate(out, {
+            recommendation: parsed.recommendation,
+            qualityScore: gatingQualityScore,
+            excluded: excludedFindings,
+            headSha: reviewProvenance.headSha,
+          });
+        }
+        return out;
+      };
+      const readsAsGated = (text) => {
+        try {
+          const again = parseAgentReport(text);
+          const where = (list) => list.map((finding) => `${finding.row}|${finding.file}|${finding.line}`).join(',');
+          return (
+            again.recommendation === parsed.recommendation &&
+            again.qualityScore === parsed.qualityScore &&
+            JSON.stringify(again.violations) === JSON.stringify(parsed.violations) &&
+            where(again.findings) === where(parsed.findings)
+          );
+        } catch {
+          return false;
+        }
+      };
+      const {
+        text: published,
+        skipped,
+        label,
+      } = firstThatAgrees(
+        [
+          { label: 'row and sentence edits', build: () => present(base, { tidy: true }) },
+          { label: 'resume state and reviewer', build: () => present(base, { tidy: false }) },
+          { label: 'nothing', build: () => base },
+        ],
+        readsAsGated,
+      );
+      if (skipped.length > 0) {
+        console.error(
+          label === null
+            ? 'tea-test-review: the report does not re-read as the verdict that was gated even without the CLI edits; the agent report is published as written.'
+            : `tea-test-review: the report no longer read as the verdict that was gated after ${skipped.join(' and ')}; it is published without them.`,
+        );
+      }
+      writeReportArtifact(outputPath, normalizedReportTemporaryPath, published);
       if (parsed.reportedQualityScore !== undefined) {
         console.error(
           `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to effective score ${parsed.qualityScore} ` +
@@ -1492,19 +1549,6 @@ async function runReview(session) {
           `tea-test-review: normalized agent Recommendation "${parsed.reportedRecommendation}" to "${parsed.recommendation}", ` +
             `required by ${parsed.violations.critical} Critical / ${parsed.violations.high} High / ` +
             `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
-        );
-      }
-      // Findings still outside the gate (--gate-on all never has any) change nothing
-      // below; in a pull request review none remain.
-      const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
-      const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
-      const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
-      const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
-      if (reviewMode === 'pr') {
-        writeReportArtifact(
-          outputPath,
-          normalizedReportTemporaryPath,
-          appendPullRequestGate(fs.readFileSync(outputPath, 'utf8'), parsed.recommendation, gatingQualityScore, excludedFindings),
         );
       }
       const gated = { ...parsed, gatingQualityScore, gatingViolations };

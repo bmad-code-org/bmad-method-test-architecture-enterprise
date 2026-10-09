@@ -60,10 +60,10 @@ Four entries from the old list are deliberately gone:
   unfalsifiable.
 - **"Excessive logging"** is a style preference with no risk behind it.
 
-Test duration is published in the criteria table but is not independently
-measurable from a static read. Report `PASS` with the note that no excessive loops,
-sleeps, or repeated navigation were found, or cite the specific M1/H1 evidence that
-suggests otherwise. Never assert a measured runtime the run did not measure.
+Test duration is not measurable from a static read. The criteria table reads
+`➖ Not measured`, and the CLI restates that row whatever the report says. A fixed
+sleep or an unbounded loop is still an H1 or M1 finding on its own row. Never assert
+a runtime the run did not measure.
 
 ### 2. Calculate Performance Score
 

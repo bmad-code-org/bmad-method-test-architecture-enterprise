@@ -272,15 +272,14 @@ broken report; recompute rather than publishing the mismatch.
 
 ---
 
-### 4. Separate Scored Weaknesses From Advisory Observations
+### 4. Separate Scored Findings From Advisory Observations
 
-`Key Weaknesses` is another view of `dedupedViolations`, not a free-form list.
-Each item must carry its registry row so the human summary can be checked against
-the scored finding blocks.
+The scored findings are `dedupedViolations`, and the report writes each one once, in
+its finding block. There is no Key Weaknesses list.
 
 Subagent recommendations that do not correspond to a deduplicated violation are
 unscored ideas. Keep useful ones as advisory observations. Drop empty strings and
-literal `n/a`; do not promote them into weaknesses.
+literal `n/a`; do not promote them into findings.
 
 ```javascript
 const allRecommendations = dimensions.flatMap((dim) =>
@@ -290,11 +289,6 @@ const allRecommendations = dimensions.flatMap((dim) =>
     impact: results[dim].score < 70 ? 'HIGH' : 'MEDIUM',
   })),
 );
-
-const keyWeaknesses = dedupedViolations.slice(0, 5).map((violation) => ({
-  row: violation.row,
-  summary: violation.description ?? violation.category,
-}));
 
 const scoredRecommendationTexts = new Set(
   dedupedViolations.flatMap((violation) => [violation.recommendation, violation.description]).filter(Boolean),
@@ -312,7 +306,7 @@ const advisoryObservations = allRecommendations
 This text comparison is only a routing aid. It never changes
 `dedupedViolations`, the violation counts, the score, or the recommendation. If
 it is unclear whether an idea corresponds to a violation, keep the scored
-finding under Key Weaknesses and omit the duplicate advisory wording.
+finding and omit the duplicate advisory wording.
 
 ---
 
@@ -332,8 +326,8 @@ const reviewSummary = {
   // report sections verbatim; it is not a starting point for a judgment call.
   recommendation,
   verdict_rule: verdictRule,
-  // Carried through so the report can cite adoption counts on Convention rows and
-  // say `PASS (n/a)` where a convention is absent rather than a bare WARN.
+  // Carried through so the report can cite adoption counts on Convention rows. A
+  // row whose convention is absent is left out of the criteria table.
   convention_baseline: subagentContext.convention_baseline,
 
   dimension_scores: {
@@ -360,9 +354,8 @@ const reviewSummary = {
 
   high_severity_violations: highSeverity,
 
-  // Human-readable Executive Summary collections. Key weaknesses are scored;
-  // advisory observations are useful but never enter the ledger.
-  key_weaknesses: keyWeaknesses,
+  // Human-readable Executive Summary collection. Advisory observations are
+  // useful but never enter the ledger.
   advisory_observations: advisoryObservations,
 
   // The mode step-03 actually resolved, carried through verbatim. It used to read
@@ -413,6 +406,8 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${runKey}-${timestamp}.json`, JSO
 ### 7. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+
+**Resume state is for interactive runs.** The resume keys below (`workflowStatus`, `stepsCompleted`, `lastStep`, `lastSaved`, `inputDocuments`) let `step-01b-resume.md` continue an interrupted run. A headless run writes only `workflowType`, `runScope` and `runKey`, and the CLI removes any resume key from the report it publishes.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 

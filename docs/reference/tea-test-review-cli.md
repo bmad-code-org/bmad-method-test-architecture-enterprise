@@ -283,8 +283,8 @@ pull request that takes a file over 1000 lines.
 Introduced and modified findings are the PR verdict. A finding that is still pre-existing is cut from the report and
 left out of `findings`, `violations`, `qualityScore` and the recommendation. The cut removes its finding block, the
 counts, ledger and score lines, the list items and table rows that name it, and the Immediate Actions and Re-Review
-sections, then parses the result again with the same strict parser. The report's `PR Delta Gate` section says how many
-findings were left out, and stderr prints the same count.
+sections, then parses the result again with the same strict parser. A line under the report's title states the pull
+request decision, the reviewed commit and how many findings were left out, and stderr prints the same count.
 
 Use `--gate-on all` for a baseline audit. An explicit `--files` review skips git,
 so it defaults to `all`; combining `--files` with `--gate-on introduced` is
@@ -412,7 +412,7 @@ A review verdict (also written to `--json <file>` when given):
   "contextFiles": ["docs/stories/checkout-decline.md", "src/checkout/payment.ts"],
   "contextWaiversApplied": 0,
   "keyStrengths": ["Fully deterministic, no conditional branching or timing dependencies"],
-  "keyWeaknesses": ["Missing explicit test IDs on two test cases"],
+  "keyWeaknesses": [],
   "advisoryObservations": ["Consider extracting the login flow into a shared fixture"],
   "executionMode": "subagent",
   "conventionBaseline": {
@@ -436,7 +436,7 @@ Per severity, `findings` agrees with `violations`: exactly for Critical and High
 
 `reviewProvenance` records the TeA package version, rubric version, resolved model, base/head commits, GitHub trigger comment, workflow run, and gate mode. Unknown values are `null`. Its `sources` map names the source or fallback for every value, so a local run or custom adapter never invents CI or model metadata.
 
-`contextWaiversApplied` is strict and always `0`. `keyStrengths`, `keyWeaknesses`, and `advisoryObservations` are best-effort, pulled from the report's Executive Summary bullet lists (the third from an "Advisory Observations" subsection, capped at ten items); the pull-request comment does not use them and they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
+`contextWaiversApplied` is strict and always `0`. `keyStrengths`, `keyWeaknesses`, and `advisoryObservations` are best-effort, pulled from the report's Executive Summary bullet lists (the third from an "Advisory Observations" subsection, capped at ten items); the pull-request comment does not use them and they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`. The report no longer asks for a Key Weaknesses list, so `keyWeaknesses` comes back as `[]` for a current report, and the findings in `findings` are what a consumer lists.
 
 `executionMode` is the mode `step-03-quality-evaluation.md`'s capability probe resolved for this run: `agent-team`, `subagent`, or `sequential`. It is absent when the report states none. Without it a run that asked for parallel workers and silently fell back to `sequential` was indistinguishable afterwards from one that got what it asked for, which made any speed claim about the run unfalsifiable.
 
@@ -486,7 +486,7 @@ The verdict's `files` manifest comes from the report's own `## Reviewed Files` s
 
 The report itself is strictly validated:
 
-- YAML frontmatter: `workflowType: testarch-test-review`, non-empty `stepsCompleted`
+- YAML frontmatter: `workflowType: testarch-test-review`. A report that declares `stepsCompleted` must give it entries, and a report without it is valid, since that list is resume state for an interactive run
 - Matching `**Recommendation**` lines in both the Executive Summary and Decision sections (one of `Approve` / `Approve with Comments` / `Request Changes` / `Block`)
 - A bounded `**Quality Score**: N/100`
 - A `**Total Violations**` line with all four severity counts
@@ -495,6 +495,17 @@ The report itself is strictly validated:
 - Exactly one `**Context Basis**` line in the Executive Summary, plus a run-bound `## Review Context` manifest whenever the basis is not `none`
 - Exactly one `**Context Waivers Applied**: 0` line in the Executive Summary
 - Every finding under `## Critical Issues (Must Fix)` / `## Recommendations (Should Fix)` cites a real `**Row**: <id>` whose criteria-registry.md severity matches its own `**Severity**` line; the number of Critical findings documented must equal the Critical count in `**Total Violations**`, the number of P1 (High) findings documented must equal the High count, and the documented Medium and Low findings must not outnumber their counts
+
+## What the published report says
+
+The agent writes a short report: the score summary, one paragraph, the criteria table, each finding once (a location, one explanation, one fix, and a snippet only when it clarifies the evidence) and the decision. It is told to write no Key Weaknesses list, Next Steps, appendix of violations or Decision rationale, since each restates a finding. The CLI then makes the published copy say only what the run established:
+
+- The frontmatter keeps the workflow type and the run identity. The step list, last step, save time, workflow status and input documents are resume state for an interactive run, and a CI report does not carry them.
+- `**Reviewer**:` is the agent and model the CLI recorded, for example `claude / claude-sonnet-5-5`.
+- Criteria that do not apply to the repository are left out of the criteria table. Test Duration reads `Not measured`, since a static read cannot time a run, and Test Length is the line count the CLI took, failing only when the verdict counts an oversize-file finding (a file that was already over 1000 lines before the pull request is shown with its count and not scored).
+- The prompt carries the exact line count of each review file. A test or assertion count the agent states in the summary or the criteria notes is labelled `(estimate)`, because a static review did not count it.
+- Sentences in the summary and the criteria notes about how the rubric decided (a row that fired, a registry gap, a closed gate) are removed. Findings, labelled fields and manifests are never edited, and the CLI parses the tidied report again and publishes the edits only when it still reads as the verdict that was gated.
+- In `pr` mode the pull request decision, the reviewed commit and the number of findings left out are in a line under the title.
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 

@@ -16,13 +16,13 @@ only decision left to the reviewer is whether the predicate fires.
 Three rules bind every evaluation:
 
 1. **Severity is read from this table, never chosen.** A violation's severity is
-   whatever its row says. If a defect matches no row, report it in prose under
-   Best Practices or Recommendations without a severity and without a deduction,
-   and say the registry has no row for it. Inventing a severity is a defect in
-   the review, not a finding about the tests.
+   whatever its row says. If a defect matches no row, report it as an Advisory
+   Observation without a severity and without a deduction, and do not say how the
+   registry treated it. Inventing a severity is a defect in the review and says
+   nothing about the tests.
 2. **A criterion fires only when its gate is open.** The `Gate` column says what
    has to be true before the row can produce a violation at all. A closed gate
-   is `PASS (n/a)` with the reason stated, never a `WARN` and never a deduction.
+   leaves the row out of the report: no `WARN`, no deduction, no table row.
 3. **Context and convention may raise, never waive.** No repo habit, story, or
    focus note lowers a severity in this table or excuses an Absolute row.
 4. **A file no row can attach to is not a passing file.** If a reviewed file is
@@ -45,11 +45,10 @@ not gates, and they are evaluated once per run rather than once per file.
 | `playwrightUtilsActive` | `tea_use_playwright_utils` is `true` AND `@seontechnologies/playwright-utils` is in the project manifest | M9, L9          |
 | `pactjsUtilsActive`     | `tea_use_pactjs_utils` is `true` AND `@seontechnologies/pactjs-utils` is in the project manifest         | M10             |
 
-When a precondition is false, **its rows do not exist for that run.** Say so once,
-in the report, naming which half was missing (`the flag is off` or `the package is
-not installed, run the framework workflow`). Do not emit a per-file `PASS (n/a)`
-for a row that could not apply anywhere in the review set: that is the same noise
-the Convention class was built to remove, restated per file instead of per repo.
+When a precondition is false, **its rows do not exist for that run.** Write nothing
+about them in the report: no table row, no per-file `PASS (n/a)`, and no sentence
+about why they are absent. That would be the same noise the Convention class was
+built to remove, restated per file instead of per repo.
 
 A flag with no install never deducts. Deducting against a library the project does
 not have produces findings nobody can act on file by file, and the actionable
@@ -84,8 +83,8 @@ Read the deduction schedule below before scoring any Convention row.
 | --------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `established`   | adopted in ≥ 50% of the sampled corpus, corpus ≥ 4 files | Violation at the row's stated severity. Cite the adoption count.                                                           |
 | `emerging`      | adopted in ≥ 1 file but < 50%                            | Violation one severity step lower, floored at `LOW`. Cite the adoption count and say the convention is not yet house-wide. |
-| `absent`        | adopted in 0 files                                       | **No violation and no deduction.** Status `✅ PASS (n/a)`, note "the repo uses no such convention (0 of N sampled)".       |
-| `unknown`       | corpus < 4 files, too small to infer                     | **No violation and no deduction.** Status `✅ PASS (n/a)`, note the corpus was too small to establish a convention.        |
+| `absent`        | adopted in 0 files                                       | **No violation and no deduction.** Leave the row out of the criteria table.                                                |
+| `unknown`       | corpus < 4 files, too small to infer                     | **No violation and no deduction.** Leave the row out of the criteria table.                                                |
 
 One step lower means `CRITICAL`→`HIGH`, `HIGH`→`MEDIUM`, `MEDIUM`→`LOW`,
 `LOW`→`LOW`. Never step a severity in any other circumstance.
@@ -103,8 +102,8 @@ An install is stronger evidence of intent than a ratio over at most 8 sampled
 files, and it is most decisive exactly where the ratio is least informative.
 
 So when `playwrightUtilsActive` is true and the baseline comes back `absent`,
-`unknown`, or unavailable, score exactly as the schedule says (no deduction,
-`✅ PASS (n/a)`) and add one **run-level** line to the report:
+`unknown`, or unavailable, score exactly as the schedule says (no deduction, the
+row left out of the table) and add one **run-level** line to the report:
 
 > playwright-utils is installed and `tea_use_playwright_utils` is true; 0 of N
 > sampled files outside the review set use it. Adoption has not spread past the
@@ -195,25 +194,25 @@ The report's `## Quality Criteria Assessment` table has one row per published
 criterion. Each table row draws from the registry rows below it, and its `Basis`
 column states the gate that decided it.
 
-| Report criterion                     | Registry rows          | Basis                         |
-| ------------------------------------ | ---------------------- | ----------------------------- |
-| BDD Format (Given-When-Then)         | L5                     | Convention: `bddNaming`       |
-| Test IDs                             | L3                     | Convention: `testIds`         |
-| Priority Markers (P0/P1/P2/P3)       | L2                     | Convention: `priorityMarkers` |
-| Hard Waits (sleep, waitForTimeout)   | H1                     | Absolute                      |
-| Determinism (no conditionals)        | H2, H3, C6             | Absolute + Applicability      |
-| Isolation (cleanup, no shared state) | H4, C5                 | Absolute                      |
-| Fixture Patterns                     | M2, M5                 | Applicability                 |
-| Data Factories                       | M2                     | Applicability                 |
-| Network-First Pattern                | M1                     | Applicability                 |
-| Playwright Utils Adoption            | M9, L9                 | Convention: `playwrightUtils` |
-| Pact.js Utils Adoption               | M10                    | Applicability                 |
-| Explicit Assertions                  | C3, C4, C7, H10, M6    | Absolute + Applicability      |
-| Test Length (≤1000 lines)            | H5                     | Absolute                      |
-| Test Duration (≤1.5 min)             | H1, M1                 | Absolute                      |
-| Flakiness Patterns                   | H1, H2, H3, H4, M1, M6 | Absolute + Applicability      |
-| Disabled or Focused Tests            | C1, C2                 | Absolute                      |
-| Mobile Flow Patterns                 | C7, M8, H9, L8         | Applicability: Maestro flow   |
+| Report criterion                     | Registry rows          | Basis                                         |
+| ------------------------------------ | ---------------------- | --------------------------------------------- |
+| BDD Format (Given-When-Then)         | L5                     | Convention: `bddNaming`                       |
+| Test IDs                             | L3                     | Convention: `testIds`                         |
+| Priority Markers (P0/P1/P2/P3)       | L2                     | Convention: `priorityMarkers`                 |
+| Hard Waits (sleep, waitForTimeout)   | H1                     | Absolute                                      |
+| Determinism (no conditionals)        | H2, H3, C6             | Absolute + Applicability                      |
+| Isolation (cleanup, no shared state) | H4, C5                 | Absolute                                      |
+| Fixture Patterns                     | M2, M5                 | Applicability                                 |
+| Data Factories                       | M2                     | Applicability                                 |
+| Network-First Pattern                | M1                     | Applicability                                 |
+| Playwright Utils Adoption            | M9, L9                 | Convention: `playwrightUtils`                 |
+| Pact.js Utils Adoption               | M10                    | Applicability                                 |
+| Explicit Assertions                  | C3, C4, C7, H10, M6    | Absolute + Applicability                      |
+| Test Length (≤1000 lines)            | H5                     | Absolute                                      |
+| Test Duration (≤1.5 min)             | none                   | Not measured: a static read cannot time a run |
+| Flakiness Patterns                   | H1, H2, H3, H4, M1, M6 | Absolute + Applicability                      |
+| Disabled or Focused Tests            | C1, C2                 | Absolute                                      |
+| Mobile Flow Patterns                 | C7, M8, H9, L8         | Applicability: Maestro flow                   |
 
 `Disabled or Focused Tests` is a new published row. It existed as a scoring
 possibility with no rule and no table line, which is how a committed `.skip` on
@@ -230,7 +229,8 @@ green while the value is wrong, which is what the HIGH section heading names.
 ## STATUS SYMBOLS
 
 - `✅ PASS` — the gate was open and no row fired.
-- `✅ PASS (n/a)` — the gate was closed. State why in the note. Never deducts.
+- A row whose gate was closed has no status: it is left out of the table.
+- `➖ Not measured` — a static review cannot establish the claim (Test Duration).
 - `⚠️ WARN` — one or more rows fired at `MEDIUM` or `LOW`.
 - `❌ FAIL` — one or more rows fired at `CRITICAL` or `HIGH`.
 

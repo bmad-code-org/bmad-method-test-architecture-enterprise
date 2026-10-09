@@ -226,6 +226,8 @@ A report at this path belongs to a previous run of the **same** scope; reports f
 
 **Save this step's accumulated work to `{outputFile}`.** Create the `{test_artifacts}/test-review/` folder first if it does not exist (skip this when `output_file_override` sets the path).
 
+**Resume state is for interactive runs.** The resume keys below (`workflowStatus`, `stepsCompleted`, `lastStep`, `lastSaved`, `inputDocuments`) let `step-01b-resume.md` continue an interrupted run. A headless run writes only `workflowType`, `runScope` and `runKey`, and the CLI removes any resume key from the report it publishes.
+
 Create the file from the workflow template (if available), replacing any prior content as decided in the previous section, with YAML frontmatter:
 
 ```yaml
