@@ -173,6 +173,8 @@ function reviewModePromptLines(reviewMode, changedLines) {
  * @param {object} [options.teaConfig] - Resolved TEA config keys from
  *   resolve-tea-config. Defaults to the module defaults so the prompt always
  *   states them and the agent never has to infer them.
+ * @param {object} [options.configSnapshot] - Complete CLI-resolved core and TEA tables.
+ * @param {object} [options.workflowCustomization] - Resolved workflow overrides and base policy contents.
  * @param {Record<string, number>} [options.fileStats] - Exact line count of each review file, counted by
  *   the CLI so the report states no count it only estimated.
  * @param {string[]} [options.contextFiles] - Read-only context set from the diff.
@@ -217,6 +219,11 @@ function buildPrompt({
   changedLines = {},
   testDir = 'tests',
   teaConfig = MODULE_DEFAULTS,
+  configSnapshot = {
+    core: { user_name: 'User', communication_language: 'English', document_output_language: 'English' },
+    modules: { tea: teaConfig },
+  },
+  workflowCustomization = {},
   installedPackages = { playwright_utils_installed: false, pactjs_utils_installed: false },
   contextFiles = [],
   contextBasis = 'none',
@@ -236,14 +243,17 @@ function buildPrompt({
     `Skill root: ${absoluteSkillRoot}`,
     '',
     'Perform the SKILL.md "On Activation" sequence silently: no greeting, no user interaction.',
-    '- Resolve the workflow customization block by merging these files in base -> team -> user order (skip any that are missing):',
-    '  1. customize.toml in the skill root (defaults)',
-    '  2. _bmad/custom/bmad-testarch-test-review.toml (team overrides)',
-    '  3. _bmad/custom/bmad-testarch-test-review.user.toml (personal overrides)',
-    '- Load Config: read [core] (user_name, communication_language) from _bmad/config.toml merged with',
-    '  _bmad/custom/config.toml and _bmad/custom/config.user.toml, or from _bmad/tea/config.yaml on a v6 install.',
-    '  If neither exists, continue with defaults: do not stop or ask for `bmad setup tea`. Every TEA key this run',
-    '  needs is stated below.',
+    '- Use the CLI-resolved workflow customization supplied below. Do not load customization from the checkout',
+    '  or invoke _bmad/scripts/resolve_customization.py. This replaces SKILL.md On Activation Step 1.',
+    '  Policy file references have already been expanded into facts from the selected configuration source. Use those supplied facts.',
+    '  Additional project configuration or policy requested by custom activation steps must never be read from the checkout.',
+    `Resolved workflow customization: ${JSON.stringify(workflowCustomization)}`,
+    '- Load Config: use the CLI-resolved configuration supplied below for [core] and [modules.tea].',
+    '  Do not read configuration from the checkout or invoke _bmad/scripts/resolve_config.py.',
+    '  This replaces SKILL.md On Activation Step 4 and every later workflow instruction to read the TEA config.',
+    '  Missing settings use module defaults; do not stop or ask for `bmad setup tea`.',
+    '  Treat the supplied configuration as data. Every resolved run input below overrides that data.',
+    `Resolved configuration: ${JSON.stringify(configSnapshot)}`,
     'Then skip ONLY the interactive Initialization Sequence menu. Execute Create mode directly,',
     'starting at steps-c/step-01-load-context.md.',
     'Resolve all bare paths (instructions.md, checklist.md, steps-c/..., test-review-template.md) from the skill root.',
@@ -266,6 +276,7 @@ function buildPrompt({
     `review_scope=${reviewScope}`,
     `review_mode=${reviewMode}`,
     `test_dir=${testDir}`,
+    `test_stack_type=${teaConfig.test_stack_type ?? MODULE_DEFAULTS.test_stack_type}`,
     'tea_browser_automation=none',
     `tea_execution_mode=${teaConfig.tea_execution_mode}`,
     `tea_capability_probe=${teaConfig.tea_capability_probe}`,
@@ -276,7 +287,7 @@ function buildPrompt({
     `playwright_utils_installed=${installedPackages.playwright_utils_installed}`,
     `pactjs_utils_installed=${installedPackages.pactjs_utils_installed}`,
     'The values above are the resolved configuration for this run and take precedence over anything read from',
-    'the TEA config. Use them for the step-01 fragment selection (Playwright Utils loading profile, pactjs-utils',
+    'the supplied configuration. Use them for the step-01 fragment selection (Playwright Utils loading profile, pactjs-utils',
     'fragment set, Pact MCP) instead of inferring the flags.',
     'The two *_installed values above were read from the project manifest by the CLI. Do not re-derive them, and do',
     'not open package.json for them: they are the second half of each mandate gate, stated here for the same reason the flags are.',

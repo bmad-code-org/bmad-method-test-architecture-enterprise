@@ -307,6 +307,7 @@
     "ignore": "^7.0.5",
     "js-yaml": "^4.1.0",
     "markdown-it": "^14.3.0",
+    "minimatch": "^10.2.6",
     "ora": "^5.4.1",
     "semver": "^7.6.3",
     "smol-toml": "^1.6.0",

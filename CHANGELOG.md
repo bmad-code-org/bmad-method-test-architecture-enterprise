@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-test-review` reads review configuration from the pinned base Git tree, including all TOML layers or legacy YAML, so a PR cannot change its own review settings. CLI flags retain precedence, `test_stack_type` is resolved with the other review keys, and the prompt supplies the complete resolved config throughout activation. Workflow customizations and persistent-fact policy files also come from the base tree. Full-file `--files` runs without an explicit base keep working-tree config.
 - Quality CI splits the mutation suite across `test:evaluate-mutation:qualification-basics`, `:qualification-guards`, `:recovery` and `:journals`, preserving `test:evaluate-mutation` for local full-suite runs. Refreshed weights use four recent successful runs and the mutation timeout, with load headroom; `test:shards` now limits planned scripts to 60 percent of the job cap.
 - Teach Me Testing teaches rubric 5.0 scoring and the ten workflows, including Evaluate.
 - Evaluation call-count checks now include the two teaching turns in `eval:all`: 117 calls per runner and 351 across the three built-in runners.

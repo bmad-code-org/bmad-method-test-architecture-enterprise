@@ -70,9 +70,18 @@ function workflowRunFromEnvironment(env) {
  * Missing values stay null. The sources map tells artifact consumers where
  * each value came from, or why this process could not know it.
  */
-function buildReviewProvenance({ projectRoot, skillRoot, baseRef, filesProvided, modelIdentifier, gateMode = 'all', env = process.env }) {
+function buildReviewProvenance({
+  projectRoot,
+  skillRoot,
+  baseRef,
+  baseCommit,
+  filesProvided,
+  modelIdentifier,
+  gateMode = 'all',
+  env = process.env,
+}) {
   const rubricVersion = skillRubricVersion(skillRoot);
-  const baseSha = filesProvided ? null : gitSha(projectRoot, baseRef);
+  const baseSha = baseCommit ?? (filesProvided ? null : gitSha(projectRoot, baseRef));
   const headSha = gitSha(projectRoot, 'HEAD');
   const triggerComment = triggerCommentFromEnvironment(env);
   const workflowRun = workflowRunFromEnvironment(env);
@@ -93,11 +102,14 @@ function buildReviewProvenance({ projectRoot, skillRoot, baseRef, filesProvided,
         : 'unavailable: skill workflow.yaml has no readable rubric_version',
       modelIdentifier:
         modelIdentifier == null ? 'unavailable: selected adapter does not expose a model identifier' : 'resolved agent adapter model',
-      baseSha: filesProvided
-        ? 'unavailable: --files bypassed the git comparison base'
-        : baseSha
-          ? `git rev-parse ${baseRef}^{commit}`
-          : `unavailable: git could not resolve ${baseRef}`,
+      baseSha:
+        baseCommit && filesProvided
+          ? `config snapshot: git rev-parse ${baseRef}^{commit}; --files has no comparison base`
+          : filesProvided
+            ? 'unavailable: --files bypassed the git comparison base'
+            : baseSha
+              ? `git rev-parse ${baseRef}^{commit}`
+              : `unavailable: git could not resolve ${baseRef}`,
       headSha: headSha ? 'git rev-parse HEAD^{commit}' : 'unavailable: project root is not a readable git worktree',
       triggerComment: triggerComment
         ? 'GitHub event comment URL or id'
