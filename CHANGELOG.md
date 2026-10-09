@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-09
+
 ### Added
 
 - `tea-test-review` renders and publishes its own result surfaces, so any CI gets what the GitHub Action used to supply.
