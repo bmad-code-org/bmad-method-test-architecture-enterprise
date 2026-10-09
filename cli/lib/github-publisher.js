@@ -142,7 +142,9 @@ async function findOpenCheckRun(ctx, headSha, name, agent) {
   const runs = Array.isArray(found?.check_runs) ? found.check_runs : [];
   // A run another agent opened under the same name is that agent's live review, not a leftover of
   // this one: adopting it would let whichever job finishes last decide the check.
-  const ours = (run) => !agent || !run.output?.summary || run.output.summary.includes(`running on ${agent}.`);
+  // The sentence ends at the tag's closing dot, so `claude` does not own a run that says `claude.v2`.
+  const claimed = new RegExp(`running on ${agent?.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\\.(\\s|$)`);
+  const ours = (run) => !agent || !run.output?.summary || claimed.test(run.output.summary);
   const open = runs.find((run) => run && run.status !== 'completed' && Number.isInteger(run.id) && ours(run));
   return open ? open.id : null;
 }
@@ -182,11 +184,13 @@ function defaultWarn(message, env = process.env) {
 function resolveTarget(options = {}, env = process.env) {
   const payload = readEventPayload(env);
   const repo = parseRepository(options.repo ?? env.GITHUB_REPOSITORY);
-  const prNumber = Number.isInteger(options.prNumber) ? options.prNumber : resolvePrNumber(payload, env);
+  // null says --pr was stated and names no pull request, so the event must not supply another.
+  const prNumber = options.prNumber === null ? null : Number.isInteger(options.prNumber) ? options.prNumber : resolvePrNumber(payload, env);
   const token = tokenFromEnv(env);
   const apiUrl = env.GITHUB_API_URL || 'https://api.github.com';
   let missing = null;
   if (!token) missing = 'GITHUB_TOKEN is empty';
+  else if (options.repo !== undefined && !repo) missing = `--repo must be owner/name; got "${options.repo}"`;
   else if (!repo) missing = 'there is no repository (set GITHUB_REPOSITORY or pass --repo owner/name)';
   return {
     repo,
