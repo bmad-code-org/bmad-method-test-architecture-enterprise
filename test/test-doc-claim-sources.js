@@ -222,6 +222,35 @@ check('misplacedOutputs flags a flat output path and leaves inputs and legacy pa
   }
 });
 
+check('combined setup retains phase output folders and checks nested CI write targets', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-setup-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-framework');
+    const ciSteps = path.join(skillDir, 'ci', 'steps-c');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.mkdirSync(ciSteps, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'framework.md'),
+      "---\noutputFile: '{test_artifacts}/framework/framework-setup-progress.md'\n---\n",
+    );
+    fs.writeFileSync(path.join(ciSteps, 'ci.md'), "---\noutputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'\n---\n");
+    assert.strictEqual(source.declaredOutputPaths(skillDir).length, 2);
+    assert.deepStrictEqual(source.misplacedOutputs(skillDir), []);
+    fs.appendFileSync(path.join(ciSteps, 'ci.md'), '\nWrite `{test_artifacts}/ci-summary.json`.\n');
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/ci-summary.json'],
+    );
+    fs.writeFileSync(path.join(ciSteps, 'ci.md'), "---\noutputFile: '{test_artifacts}/trace/ci-pipeline-progress.md'\n---\n");
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/trace/ci-pipeline-progress.md'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 check('misplacedOutputs flags a flat write target in a step body and leaves legacy lines and trace root inputs alone', () => {
   // A staged fixture skill whose declared outputs all sit in its own folder, so
   // the one misplacement is the screenshot a step body writes flat at the root.

@@ -28,7 +28,7 @@ sessions:
       - "What is TEA"
       - "TEA Lite approach"
       - "Engagement models"
-      - "9 workflows overview"
+      - "10 registered workflow entries overview"
 
   session-02-concepts:
     docs:
@@ -79,6 +79,7 @@ sessions:
     workflows_referenced:
       - framework
     key_concepts:
+      - "Framework setup scope: framework, CI, or both; CI compatibility entry"
       - "Fixture composition"
       - "Network interception patterns"
       - "Data factory pattern"

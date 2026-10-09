@@ -39,6 +39,10 @@ Generate the test directory structure, configuration files, fixtures, factories,
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+## Both-Mode Coordinator Entry
+
+If `setup_scope = both`, this is Create, framework generation is needed, and `setup_parallel_started` is unset, load `{skill-root}/resources/setup-parallel.md` completely before generation. Agree the contract and dependency consent, then use this step's execution-mode resolution to choose concurrent workers or sequential fallback. A worker with `setup_worker = framework` continues this step without launching another both-mode coordinator. All worker outputs follow the same agreed contract.
+
 ## 0. Resolve Execution Mode (User Override First)
 
 ```javascript
@@ -419,6 +423,8 @@ Regardless of mode, outputs must be identical in structure and quality.
 ### 7. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

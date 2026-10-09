@@ -32,8 +32,8 @@ TEA runs in solutioning, implementation, and release gates; the Enterprise track
 | Command       | Primary Outputs                                                                        | Notes                                                                                                                                    | With Browser Automation (CLI/MCP)                                                                                                    |
 | ------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `test-design` | Combined risk assessment, NFR planning, mitigation plan, and coverage strategy         | Risk scoring + NFR thresholds/evidence plan                                                                                              | **+ Exploratory**: Interactive UI discovery with browser automation (uncover actual functionality)                                   |
-| `framework`   | Playwright/Cypress scaffold, `.env.example`, `.nvmrc`, sample specs                    | Use when no production-ready harness exists                                                                                              | -                                                                                                                                    |
-| `ci`          | CI workflow, selective test scripts, secrets checklist                                 | Platform-aware (GitHub Actions default)                                                                                                  | -                                                                                                                                    |
+| `framework`   | Stack-specific scaffold and optional CI pipeline                                       | One setup skill; prompt selects framework, CI, or both                                                                                   | -                                                                                                                                    |
+| `ci`          | CI workflow, selective test scripts, secrets checklist                                 | Compatibility entry selecting the framework skill's CI phase                                                                             | -                                                                                                                                    |
 | `atdd`        | Red-phase acceptance test scaffolds + implementation checklist                         | TDD red phase + optional recording mode                                                                                                  | **+ Recording**: UI selectors verified with live browser; API tests benefit from trace analysis                                      |
 | `automate`    | Prioritized specs, fixtures, README/script updates, DoD summary                        | Optional healing/recording, avoid duplicate coverage                                                                                     | **+ Healing**: Visual debugging + trace analysis for test fixes; **+ Recording**: Verified selectors (UI) + network inspection (API) |
 | `evaluate`    | A scored behavioral evaluation with named gaps, and a CI plan handed to `ci`           | Twelve stages, from target inspection to CI wiring; start with [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) | -                                                                                                                                    |
@@ -45,6 +45,12 @@ Invoke a workflow as `/bmad-testarch-<workflow>` in Claude Code, Cursor, and Win
 `nfr-assess` is the workflow's name in prose; the typeable skill is `bmad-testarch-nfr`.
 Inside an active TEA agent session, use the menu codes: `TD`, `TF`, `CI`, `AT`, `TA`, `EV`, `RV`, `NR`, `TR`, plus `TMT` for TEA Academy and `GATE`.
 
+`bmad-testarch-framework` owns both setup phases.
+Request framework only, CI only, or both. It infers scope from the prompt and asks "Do you want CI too?" once when CI scope is unclear.
+`bmad-testarch-ci` and `CI` remain compatibility entries selecting CI scope; `TF` starts framework setup.
+Setup scope is separate from Create, Resume, Validate, and Edit, which choose the operation on the selected outputs.
+The ten registered workflow entries remain installed, including the CI adapter.
+
 ## TEA Workflow Lifecycle
 
 BMad uses a 4-phase methodology with an optional Phase 1 and a documentation prerequisite:
@@ -52,7 +58,7 @@ BMad uses a 4-phase methodology with an optional Phase 1 and a documentation pre
 - **Documentation** (optional, brownfield): prerequisite using `document-project`
 - **Phase 1** (optional): discovery and analysis (`brainstorm`, `research`, `product-brief`)
 - **Phase 2** (required): planning (`prd` creates the PRD with FRs and NFRs)
-- **Phase 3** (track-dependent): solutioning (`architecture` → `test-design` system-level → `create-epics-and-stories` → TEA `framework`, `ci` → `implementation-readiness`)
+- **Phase 3** (track-dependent): solutioning (`architecture` → `test-design` system-level → `create-epics-and-stories` → TEA `framework` (framework and CI scope) → `implementation-readiness`)
 - **Phase 4** (required): implementation (`sprint-planning` → per-epic `test-design` → per-story dev workflows)
 
 The Quick Flow track skips Phases 1 and 3.
@@ -76,15 +82,13 @@ graph TB
         Architecture["<b>Architect: architecture</b>"]
         EpicsStories["<b>PM/Architect: create-epics-and-stories</b>"]
         TestDesignSys["<b>TEA: test-design (system-level + NFR planning)</b>"]
-        Framework["<b>TEA: framework (optional if needed)</b>"]
-        CI["<b>TEA: ci (optional if needed)</b>"]
+        Framework["<b>TEA: framework setup (framework, CI, or both)</b>"]
         GateCheck["<b>Architect: implementation-readiness</b>"]
         Architecture --> EpicsStories
         Architecture --> TestDesignSys
         TestDesignSys --> Framework
         EpicsStories --> Framework
-        Framework --> CI
-        CI --> GateCheck
+        Framework --> GateCheck
         Phase3Note["<b>Epics created AFTER architecture,</b><br/><b>then system-level test design and test infrastructure setup</b>"]
         EpicsStories -.-> Phase3Note
     end
@@ -143,7 +147,7 @@ Greenfield projects start TEA in Phase 3.
 The Phase 3 workflows run once per project, the Phase 4 workflows run per epic and per story, and the gate workflows run per epic or per release.
 `teach-me-testing` sits outside the lifecycle entirely and runs once per learner.
 
-Phase 3 order matters: run `test-design` first so NFR evidence needs can influence infrastructure, then `framework` once the architecture and test design have established the stack, then `ci` once the framework exists so the pipeline wires to real test commands.
+Phase 3 order matters: run `test-design` first so NFR evidence needs can influence infrastructure, then `framework` once architecture and test design have established the stack. Request both setup phases to agree the stack, framework, and test commands, then generate the scaffold and pipeline in parallel before validating them together. A CI-only request with no framework offers the framework phase first.
 
 ### `test-design` is dual-mode
 

@@ -1,6 +1,6 @@
 <!-- Powered by BMAD-CORE™ -->
 
-# Test Framework Setup
+# Test Framework and CI Setup
 
 **Version**: 5.0 (Step-File Architecture)
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-Initialize a production-ready test framework (Playwright or Cypress) with fixtures, helpers, configuration, and best practices.
+Initialize a production-ready browser, backend, or mobile test framework and CI/CD quality pipeline under shared framework-only, CI-only, or both scope. CI assets live under `{skill-root}/ci/`.
 
 ---
 
@@ -31,14 +31,8 @@ From `workflow.yaml`, resolve:
 - `date` (`test_artifacts`, `user_name`, `communication_language` and `document_output_language` come from activation)
 - `test_dir`, `use_typescript`, `framework_preference`, `project_size`
 
-### 2. First Step
+### 2. Shared Scope and Operation Routing
 
-Load, read completely, and execute:
-`{skill-root}/steps-c/step-01-preflight.md`
+Load `{skill-root}/SKILL.md` and `{skill-root}/resources/setup-routing.md` completely. Apply the read-only request gate before activation hooks or project writes, then preserve create/resume/validate/edit across each selected phase. Framework root paths and CI artifact/checkpoint paths remain unchanged. Framework Create routes to `{skill-root}/steps-c/step-01-preflight.md`; framework Resume routes to `{skill-root}/steps-c/step-01b-resume.md` after the shared resume checks.
 
-### 3. Resume Support
-
-If the user selects **Resume** mode, load, read completely, and execute:
-`{skill-root}/steps-c/step-01b-resume.md`
-
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+For both Create, load `{skill-root}/resources/setup-parallel.md` after framework selection. Every phase terminal loads `{skill-root}/resources/setup-phase-completion.md` and completes only after all selected phases pass.

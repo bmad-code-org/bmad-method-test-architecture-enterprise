@@ -5,7 +5,14 @@ description: Configure automated test execution with selective testing and burn-
 
 # How to Set Up CI Pipeline with TEA
 
-Use TEA's `ci` workflow to configure test jobs, sharding, burn-in runs, and result artifacts.
+Use the CI phase of TEA's `framework` skill to configure test jobs, sharding, burn-in runs, and result artifacts.
+The existing `bmad-testarch-ci` command and `CI` menu code select this phase through a compatibility adapter.
+
+`bmad-testarch-framework` owns framework and CI setup. Your prompt selects framework only, CI only, or both.
+TEA infers the scope from your request. When CI scope is unclear, it asks once: "Do you want CI too?"
+Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together.
+
+Setup scope is separate from the operation: Create starts a new run, Resume continues the saved scope and original operation, Validate checks existing outputs, and Edit revises them. Each operation journals its targets and position; Edit and Validate preserve prior Create checkpoints.
 
 ## When to Use This
 
@@ -18,19 +25,23 @@ Use TEA's `ci` workflow to configure test jobs, sharding, burn-in runs, and resu
 
 ## Prerequisites
 
-- Test framework configured (run `framework` first)
+- A working test framework, or permission to create one during setup
 - Tests written (have something to run in CI)
 - CI/CD platform access (GitHub Actions, GitLab CI, etc.)
 
 ## Steps
 
-### 1. Run the CI Workflow
+### 1. Run CI Setup
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-ci`
 - **Codex:** `$bmad-testarch-ci`
 - **Inside a `/bmad-tea` chat:** `CI`
 
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+
+You can also run `/bmad-testarch-framework` or `$bmad-testarch-framework` with "Set up CI for the existing test framework."
+If no framework exists, TEA offers to include framework setup. On acceptance, it agrees the stack, framework, and test commands before generating both outputs; final validation checks them together.
+Choose Create, Resume, Validate, or Edit for the selected setup scope. Existing CI customizations and saved checkpoints remain usable.
 
 ### 2. Select CI/CD Platform
 
@@ -454,7 +465,7 @@ git push -u origin test-ci-setup
 
 ## Evaluation Plans
 
-If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file.
+If the repository holds an evaluation written with `bmad-testarch-evaluate`, the framework skill's CI phase finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file.
 A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded.
 Evaluate writes the plan and this workflow writes every pipeline file.
 The last stage of `bmad-testarch-evaluate` invokes this workflow in edit mode on the pipeline file once the plan is written, or in create mode when the repository has no pipeline file.
@@ -746,7 +757,7 @@ Using too many CI minutes, hitting plan limit.
 
 ## Related Guides
 
-- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Run first
+- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Include the framework phase when needed
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Audit CI tests
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md): Burn-in utility
 

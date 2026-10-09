@@ -78,6 +78,9 @@ You can also invoke each workflow directly.
 
 - Claude Code / Cursor / Windsurf: `/bmad-testarch-framework`
 - Codex: `$bmad-testarch-framework`
+
+Request framework only, or ask to include CI in the same setup run. TEA asks "Do you want CI too?" once when CI scope is unclear.
+
 - Inside a TEA chat: `TF`
 
 Tell TEA:

@@ -51,6 +51,6 @@ Stage 12 appends this section as each inspection finishes.
 - Release flow: `release.yml` on `v*` tags, with `docs/RELEASING.md` naming the tag as the gate.
 - Risk profile: one `critical` behavior (`contract.json`), about forty model calls per live run, nightly and release accepted and per pull request not (the adopter's answer), a missed defect ships within a day (`docs/RELEASING.md`).
 - Tier exits: `pr` 0; `scheduled` not run, `RESERVATION_MODEL_KEY` is absent on this machine; `release` 2, repair owned by Stage 3.
-- Hand-off status: done, or an open item such as a declined baseline or a missing `bmad-testarch-ci`.
+- Hand-off status: framework skill invoked with CI scope and Create or Edit, or an open item such as a declined baseline or a missing `bmad-testarch-framework` (with no usable `bmad-testarch-ci` compatibility entry).
 
 Replace this worked record with the inspected target's facts and source paths. Record the selected target kind and interface in `evaluation.json` alone.

@@ -1,11 +1,11 @@
 ---
 name: bmad-testarch-framework
-description: 'Initialize test framework with Playwright or Cypress. Use when the user says "lets setup test framework" or "I want to initialize testing framework"'
+description: 'Initialize test framework and CI/CD setup for browser, backend or mobile stacks. Use when the user says "lets setup test framework" or "I want to initialize testing framework"'
 ---
 
-# Test Framework Setup
+# Test Framework and CI Setup
 
-**Goal:** Initialize a production-ready test framework architecture (Playwright or Cypress) with fixtures, helpers, and configuration.
+**Goal:** Set up a production-ready test framework, a CI/CD quality pipeline, or both, with stack selection, fixtures, helpers, hooks, quality gates, and evaluation-plan rendering.
 
 **Role:** You are the Master Test Architect.
 
@@ -19,6 +19,10 @@ You will continue to operate with your given name, identity, and communication_s
 - `{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill, installed beside this one: `{skill-root}/../bmod-tea/knowledge`. `tea-index.csv` there lists every fragment by a path relative to that folder.
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`.
+
+## Read-Only Request Gate
+
+Before activation hooks or project writes, load `{skill-root}/resources/setup-routing.md` and execute its section 1. This settles scope and any missing-framework offer; a decline stops the run. Preserve preset scope and operation from the CI adapter.
 
 ## On Activation
 
@@ -36,7 +40,7 @@ Any missing file is skipped. Scalars override, tables deep-merge, arrays of tabl
 
 ### Step 2: Execute Prepend Steps
 
-Execute each entry in `{workflow.activation_steps_prepend}` in order before proceeding.
+Execute each entry in `{workflow.activation_steps_prepend}` in order through `{skill-root}/resources/setup-state.md` section 3. The request gate has recovered the current run and persisted its journal before this step. Save each entry's started marker before executing it, skip completed entries, and halt on any started entry with an uncertain outcome.
 
 ### Step 3: Load Persistent Facts
 
@@ -56,32 +60,34 @@ Greet `{user_name}`, speaking in `{communication_language}`.
 
 ### Step 6: Execute Append Steps
 
-Execute each entry in `{workflow.activation_steps_append}` in order.
+Execute each entry in `{workflow.activation_steps_append}` in order through the same individual durable hook protocol. Save `framework` in `activation_completed` only after all applicable entries succeed. Preserve the full journal and hook ledger through every scope and operation Resume.
 
 Activation is complete. Begin the workflow below.
 
 ## Workflow Architecture
 
-This workflow uses **tri-modal step-file architecture**:
+The existing framework steps at the skill root and the CI steps under `ci/` share scope and operation routing. `bmad-testarch-ci` is the compatibility entry point with CI scope preset. Both installed names and the TF/CI menu codes remain available.
 
-- **Create mode (steps-c/)**: primary execution flow for new runs and resume continuation
-- **Validate mode (steps-v/)**: validation against checklist
-- **Edit mode (steps-e/)**: revise existing outputs
+Create and edit CI phases detect `ci/evaluation-ci-plan.json` and render it through `{skill-root}/ci/steps-c/step-03b-render-evaluation-plans.md`. Evaluate can continue invoking `bmad-testarch-ci` in create or edit mode.
 
 ## Initialization Sequence
 
-### 1. Mode Determination
+Load `{skill-root}/resources/setup-routing.md` completely. Continue sections 2 through 4 after the read-only gate and canonical activation. Its checkpoint, customization, and completion rules apply to every step below. Do not repeat canonical activation or the scope question.
 
-"Welcome to the workflow. What would you like to do?"
-
-- **[C] Create** — Run the workflow from the beginning
-- **[R] Resume** — Resume an interrupted Create workflow
-- **[V] Validate** — Validate existing outputs
-- **[E] Edit** — Edit existing outputs
-
-### 2. Route to First Step
+### Framework Phase
 
 - **If C:** Load `{skill-root}/steps-c/step-01-preflight.md`
-- **If R:** Load `{skill-root}/steps-c/step-01b-resume.md` (Create-mode continuation)
+- **If R:** Load `{skill-root}/steps-c/step-01b-resume.md` only for a legacy Create checkpoint without a journal next position. Journal-backed Resume dispatches its saved C/E/V next file/subsection directly.
 - **If V:** Load `{skill-root}/steps-v/step-01-validate.md`
 - **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
+
+### CI Phase
+
+Activate the CI settings as specified in `resources/setup-routing.md`, keeping `{skill-root}` bound to the canonical framework directory.
+
+- **If C:** Load `{skill-root}/ci/steps-c/step-01-preflight.md`
+- **If R:** Load `{skill-root}/ci/steps-c/step-01b-resume.md` only for a legacy Create checkpoint without a journal next position. Journal-backed Resume dispatches its saved C/E/V next file/subsection directly.
+- **If V:** Load `{skill-root}/ci/steps-v/step-01-validate.md`
+- **If E:** Load `{skill-root}/ci/steps-e/step-01-assess.md`
+
+For both scope, the coordinator runs the applicable framework and CI phases under the same operation and agreed contract. Read `resources/setup-parallel.md` before concurrent generation. Every phase terminal loads `{skill-root}/resources/setup-phase-completion.md`; completion occurs after all requested phases pass.

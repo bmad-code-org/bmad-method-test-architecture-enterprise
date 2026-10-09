@@ -1,7 +1,7 @@
 ---
 name: 'step-03b-render-evaluation-plans'
 description: 'Detect ci/evaluation-ci-plan.json files and render them into the pipeline'
-nextStepFile: '{skill-root}/steps-c/step-04-validate-and-summary.md'
+nextStepFile: '{skill-root}/ci/steps-c/step-04-validate-and-summary.md'
 outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
@@ -86,7 +86,7 @@ Other plans still render.
 
 ## 3. Render Each Plan
 
-Render with the template of the platform. For GitHub Actions the pattern is the evaluation block of `./github-actions-template.yaml`, between its `evaluation-plan:begin` and `evaluation-plan:end` markers. Write the jobs into the same pipeline file as the other jobs.
+Render with the template of the platform. For GitHub Actions the pattern is the evaluation block of `{skill-root}/ci/github-actions-template.yaml`, between its `evaluation-plan:begin` and `evaluation-plan:end` markers. Write the jobs into the same pipeline file as the other jobs.
 
 `tea-evaluate ci --evaluation <evaluation folder> --tier <tier>` is the runtime's one entry that runs a tier: it runs every check the plan places on the tier, a `gate` check included, and writes the evidence bundle under `runs/<invocationId>/`. It takes no check selector. A step per check command would run checks twice and a failing early step would stop the job before the bundle exists, so a tier is one step.
 
@@ -106,7 +106,7 @@ For each tier the plan places a check on, write one job:
 10. **Gates.**
     For each job the tier gates (section 2), make the job wait for the tier's evaluation job, by where the gated job lives.
     In the pipeline file this step writes, the wait is `needs`: append the evaluation job's id to the gated job's `needs`, keep the entries already there in their order (a `needs` that is one string becomes a list), and leave the job's `if:` and every other key as they are, so the job's own event handling stays as it was.
-    In another workflow file the wait is a `workflow_run` trigger, since a job waits only for jobs of its own workflow run and `needs` cannot reach the evaluation job: add to that file's `on:`, keeping the triggers already there, `workflow_run` with `workflows` naming the pipeline file this step writes (its `name:`, or its file path when it has none) and `types: [completed]`, give the job `if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == '<the GitHub event of the tier>' && github.event.workflow_run.path == '<the pipeline file path>'`, and set `ref: ${{ github.event.workflow_run.head_sha }}` on the job's `actions/checkout` steps, as the gate block of `./github-actions-template.yaml` shows between its `evaluation-gate:begin` and `evaluation-gate:end` markers.
+    In another workflow file the wait is a `workflow_run` trigger, since a job waits only for jobs of its own workflow run and `needs` cannot reach the evaluation job: add to that file's `on:`, keeping the triggers already there, `workflow_run` with `workflows` naming the pipeline file this step writes (its `name:`, or its file path when it has none) and `types: [completed]`, give the job `if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == '<the GitHub event of the tier>' && github.event.workflow_run.path == '<the pipeline file path>'`, and set `ref: ${{ github.event.workflow_run.head_sha }}` on the job's `actions/checkout` steps, as the gate block of `{skill-root}/ci/github-actions-template.yaml` shows between its `evaluation-gate:begin` and `evaluation-gate:end` markers.
     A completed workflow run triggers the job whatever workflow and event started it, and a `workflow_run` job checks out the default branch, so the three checks limit the job to a successful run of the pipeline file on the tier's event and the `ref` builds the commit the evaluation ran on.
     That job then starts only from that completion, and the summary says so.
     Give each other job of that file, except a job this item gates, an `if:` limiting it to the events it already ran on, as item 7 does for a pipeline that gains an event.
@@ -148,6 +148,8 @@ A run replaces what an earlier run wrote.
 Create mode only. Edit mode skips this section.
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

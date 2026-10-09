@@ -125,7 +125,7 @@ Test infrastructure.** Run `/bmad-testarch-framework`.
 Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
 
 **3.
-CI/CD with compliance.** Run `/bmad-testarch-ci`.
+CI/CD with compliance.** Run `/bmad-testarch-framework` and request CI, or use its `/bmad-testarch-ci` compatibility command. Request both phases to set up the framework and CI in the same run.
 Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
 
 ### Phase 4: Implementation (Required)

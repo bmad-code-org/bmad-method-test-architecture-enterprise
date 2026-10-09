@@ -2021,7 +2021,7 @@ What the engine said about the held-out or both view stays in that view's `engin
 A view that cannot be derived, because the held-out plan or `contract.json` is absent, does not parse or is off its shape, is a finding that names the view (exit 10); its stage does not run and the other views still run.
 A folder with no `partitionPlan`, and one whose `evaluation.json` cannot be read, runs each stage once over `contract.json` and writes the one `engine.json` and the one artifact.
 Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result.
-`bmad-testarch-ci` renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
+The framework skill's CI phase, reached through `bmad-testarch-ci`, renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
 
 Accepted baselines hold the neutral path forms of [Paths in the records](#paths-in-the-records), so they name no workspace, repository, staging directory or home directory.
 A baseline accepted before those forms existed holds absolute paths in its call records, so its replay reports drift until `compare --accept` records it again.

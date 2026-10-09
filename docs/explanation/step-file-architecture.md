@@ -205,7 +205,7 @@ Every workflow is validated with BMad Builder, which checks for granular instruc
 Validation reports describe the working tree at the time of the run and are not committed.
 Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
-Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
+Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and its `ci` compatibility entry for GitHub Actions and GitLab CI generation. Framework and CI setup share the canonical `bmad-testarch-framework` skill.
 `evaluate` was first proved on itself: it authored and ran its own suite live.
 
 ## Maintaining Step Files

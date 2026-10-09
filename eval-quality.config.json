@@ -1962,7 +1962,7 @@
           "match": "\\bsince \\d+\\.\\d+\\.\\d+\\b"
         },
         {
-          "match": "Outputs land in one folder per workflow"
+          "match": "Outputs use fixed folders under `{test_artifacts}`"
         },
         {
           "match": "All\\ eight\\ skills\\ covered\\ by\\ fragment\\ selection\\ now\\ have\\ behavioral\\ suites\\ of\\ their\\ own"
@@ -2006,7 +2006,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
+            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
           }
         },
         {
@@ -2058,7 +2058,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
+            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
           }
         },
         {
@@ -2102,12 +2102,12 @@
         },
         {
           "file": "docs/reference/configuration.md",
-          "key": "Outputs land in one folder per workflow",
+          "key": "Outputs use fixed folders under `{test_artifacts}`",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "OUTPUTS_IN_WORKFLOW_FOLDERS"
           },
-          "reason": "every {test_artifacts}/ output path each bmad-testarch-* workflow except evaluate declares, in its workflow.yaml and in its step files' frontmatter, sits under {test_artifacts}/<workflow>/; _input keys and legacy* resume keys are inputs and are left out"
+          "reason": "every declared {test_artifacts}/ output of the canonical workflow skills sits in its owned folder; framework owns framework/ and ci/, including nested CI steps. The CI compatibility entry delegates outputs to framework. _input keys and legacy* resume keys are inputs and are left out"
         },
         {
           "file": "test/docs/eval-quality-roadmap.md",
@@ -2116,7 +2116,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "1dc00b308a2f62e965700d34c878d54b2530f763da4be91cffed59615a43f793"
+            "hash": "3b4fda31a7ce9f10122564e3b57a96c69bf6e1a078ece57e1125850acb68e82e"
           }
         },
         {
@@ -2126,7 +2126,7 @@
           "reason": "Trace probe strength records retain three uncovered whole-body falsifiers; reviewed against the stored expected-strength artifact.",
           "asOf": {
             "subject": "test/probes/expected-strength.json",
-            "hash": "d2505d0c0278f7bdb1b5e5c71163de3aa39bc589f3045e344b099f1f5f59aa35"
+            "hash": "98b660f5f760a634226cc461dd620e3590efe4db116a777bf59d844430d5cee0"
           }
         }
       ]

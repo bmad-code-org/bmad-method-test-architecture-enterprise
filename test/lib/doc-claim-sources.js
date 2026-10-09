@@ -319,7 +319,7 @@ const FLAT_TARGET = /\{test_artifacts\}\/([^/\s`'"()[\]]+\.[A-Za-z0-9]+)(?![^\s`
 
 function flatBodyTargets(skillDir) {
   const found = [];
-  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v']) {
+  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v', 'ci/steps-c', 'ci/steps-e', 'ci/steps-v']) {
     const root = path.join(skillDir, stepsDir);
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
@@ -361,7 +361,7 @@ function declaredOutputPaths(skillDir) {
       found.push({ source: 'workflow.yaml', ...entry });
     }
   }
-  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v']) {
+  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v', 'ci/steps-c', 'ci/steps-e', 'ci/steps-v']) {
     const root = path.join(skillDir, stepsDir);
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
@@ -383,8 +383,12 @@ function declaredOutputPaths(skillDir) {
  */
 function misplacedOutputs(skillDir) {
   const folder = path.basename(skillDir).replace(/^bmad-testarch-/, '');
+  // The framework skill owns both setup phases. Existing checkpoints keep their phase folders.
+  const outputFolders = folder === 'framework' ? ['framework', 'ci'] : [folder];
   return [
-    ...declaredOutputPaths(skillDir).filter((entry) => !entry.value.startsWith(`{test_artifacts}/${folder}/`)),
+    ...declaredOutputPaths(skillDir).filter(
+      (entry) => !outputFolders.some((owner) => entry.value.startsWith(`{test_artifacts}/${owner}/`)),
+    ),
     ...flatBodyTargets(skillDir),
   ];
 }
@@ -399,12 +403,12 @@ exports.misplacedOutputs = misplacedOutputs;
 const testarchRoot = path.join(PROJECT_ROOT, 'skills');
 const layoutSkillDirs = fs
   .readdirSync(testarchRoot)
-  .filter((name) => name.startsWith('bmad-testarch-') && name !== 'bmad-testarch-evaluate')
+  .filter((name) => name.startsWith('bmad-testarch-') && name !== 'bmad-testarch-evaluate' && name !== 'bmad-testarch-ci')
   .map((name) => path.join(testarchRoot, name));
 if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-testarch-* skill directories`);
 
 /**
- * configuration.md, "Outputs land in one folder per workflow": every
+ * configuration.md, "Outputs use fixed folders under {test_artifacts}": every
  * governed workflow declares at least one output path, and none of them sits
  * outside that workflow's own folder.
  */

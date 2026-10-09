@@ -88,14 +88,18 @@ Display:
 
 ### 4. Route to Next Step
 
+This loader handles legacy Create checkpoints lacking an operation-specific journal next position. After the read-only gate has recovered the applicable run and hook ledger, compute the next file using the table below and save that concrete next position in the run journal. Load that file directly once. A journal-backed Resume uses its saved next file/subsection directly and never redispatches through this loader or the shared router. Edit/Validate Resume always follows the journal's saved operation-specific target/report/position.
+
+When the Create terminal's artifacts were saved but completion hooks remain unfinished, save `phase-handoff` or `canonical-completion` as applicable and load `{skill-root}/resources/setup-phase-completion.md` directly. If this phase is complete and the same recovered run has another pending/generated phase, dispatch that phase's original C/E/V entry or generated terminal directly. The completed-state halt below applies only after the selected run's phases and hooks have completed.
+
 If `workflowStatus` is `'completed'`, display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
 Based on `lastStep`, load the next incomplete step:
 
-- `'step-01-preflight'` → Load `./step-02-generate-pipeline.md`
-- `'step-02-generate-pipeline'` → Load `./step-03-configure-quality-gates.md`
-- `'step-03-configure-quality-gates'` → Load `./step-03b-render-evaluation-plans.md`
-- `'step-03b-render-evaluation-plans'` → Load `./step-04-validate-and-summary.md`
+- `'step-01-preflight'` → Load `{skill-root}/ci/steps-c/step-02-generate-pipeline.md`
+- `'step-02-generate-pipeline'` → Load `{skill-root}/ci/steps-c/step-03-configure-quality-gates.md`
+- `'step-03-configure-quality-gates'` → Load `{skill-root}/ci/steps-c/step-03b-render-evaluation-plans.md`
+- `'step-03b-render-evaluation-plans'` → Load `{skill-root}/ci/steps-c/step-04-validate-and-summary.md`
 - `'step-04-validate-and-summary'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
 **If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.

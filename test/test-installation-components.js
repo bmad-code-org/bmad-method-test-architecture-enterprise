@@ -332,30 +332,55 @@ async function runTests() {
   ];
 
   for (const dirName of workflowDirs) {
-    const workflowDir = path.join(projectRoot, `skills/${dirName}`);
+    const phasePath = dirName === 'bmad-testarch-ci' ? 'bmad-testarch-framework/ci' : dirName;
+    const workflowDir = path.join(projectRoot, `skills/${phasePath}`);
     const skillMdPath = path.join(projectRoot, `skills/${dirName}/SKILL.md`);
     const customizeTomlPath = path.join(projectRoot, `skills/${dirName}/customize.toml`);
     const workflowYamlPath = path.join(projectRoot, `skills/${dirName}/workflow.yaml`);
-    const instructionsMdPath = path.join(projectRoot, `skills/${dirName}/instructions.md`);
+    const instructionsMdPath = path.join(workflowDir, 'instructions.md');
     let workflowKnowledgeIndexValidated = false;
 
     if (await pathExists(skillMdPath)) {
       try {
         const skillContent = await fs.readFile(skillMdPath, 'utf8');
         assert(skillContent && skillContent.trim().length > 0, `${dirName}/SKILL.md is not empty`);
-        assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
-        assert(
-          skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
-          `${dirName}/SKILL.md resolves the workflow customization block`,
-        );
-        assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
-        assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
-        assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
-        assert(
-          skillContent.includes('Resolve sibling workflow files such as `instructions.md`'),
-          `${dirName}/SKILL.md explains sibling workflow path resolution`,
-        );
-        assert(/\{skill-root\}\/steps-[cev]\//.test(skillContent), `${dirName}/SKILL.md routes first step from {skill-root}`);
+        if (dirName === 'bmad-testarch-ci') {
+          assert(
+            skillContent.includes('setup_scope = ci') && skillContent.includes('setup_entry = bmad-testarch-ci'),
+            'CI compatibility entry presets CI scope and preserves invocation identity',
+          );
+          assert(
+            skillContent.includes('bmad-testarch-framework') && skillContent.includes('Load `{skill-root}/SKILL.md`'),
+            'CI compatibility entry activates the canonical skill',
+          );
+          assert(
+            skillContent.includes('create/resume/validate/edit') && skillContent.includes('setup_scope = both'),
+            'CI compatibility entry preserves operations and explicit combined requests',
+          );
+          assert(
+            skillContent.includes('bmad-testarch-ci.user.toml') && skillContent.includes('ci_platform'),
+            'CI compatibility entry preserves the existing customization layers',
+          );
+        } else {
+          assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
+          assert(
+            skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
+            `${dirName}/SKILL.md resolves the workflow customization block`,
+          );
+          assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
+          assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
+          assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
+          assert(
+            skillContent.includes('Resolve sibling workflow files such as `instructions.md`'),
+            `${dirName}/SKILL.md explains sibling workflow path resolution`,
+          );
+          assert(
+            dirName === 'bmad-testarch-ci'
+              ? skillContent.includes('bmad-testarch-framework') && skillContent.includes('CI-only')
+              : /\{skill-root\}\/steps-[cev]\//.test(skillContent),
+            `${dirName}/SKILL.md routes first step from {skill-root}`,
+          );
+        }
         assert(!skillContent.includes('Read `{skill-root}/workflow.md`'), `${dirName}/SKILL.md no longer redirects to workflow.md`);
         assert(!skillContent.includes('[workflow.md](workflow.md)'), `${dirName}/SKILL.md no longer uses a bare relative workflow link`);
       } catch (error) {
@@ -407,6 +432,7 @@ async function runTests() {
         assert(!instructionsContent.includes('`./steps-'), `${dirName}/instructions.md has no bare relative step references`);
         assert(
           instructionsContent.includes('`{skill-root}/steps-c/') ||
+            instructionsContent.includes('`{skill-root}/ci/steps-c/') ||
             instructionsContent.includes('`{skill-root}/steps-v/') ||
             instructionsContent.includes('`{skill-root}/steps-e/'),
           `${dirName}/instructions.md anchors step entrypoints to {skill-root}`,
@@ -417,7 +443,7 @@ async function runTests() {
     }
 
     for (const stepDir of ['steps-c', 'steps-e', 'steps-v']) {
-      const stepDirPath = path.join(projectRoot, `skills/${dirName}/${stepDir}`);
+      const stepDirPath = path.join(workflowDir, stepDir);
       if (!(await pathExists(stepDirPath))) continue;
 
       const stepFiles = (await fs.readdir(stepDirPath)).filter((fileName) => fileName.endsWith('.md'));
@@ -430,13 +456,17 @@ async function runTests() {
 
           assert(!stepContent.includes("nextStepFile: './"), `${stepLabel} has no cwd-sensitive nextStepFile`);
           if (stepContent.includes('nextStepFile:')) {
-            assert(/nextStepFile: '\{skill-root\}\/steps-[cev]\//.test(stepContent), `${stepLabel} anchors nextStepFile to {skill-root}`);
+            assert(
+              /nextStepFile: '\{skill-root\}\/(?:ci\/)?steps-[cev]\//.test(stepContent),
+              `${stepLabel} anchors nextStepFile to {skill-root}`,
+            );
           }
 
           assert(!stepContent.includes("validationChecklist: '../checklist.md'"), `${stepLabel} has no relative validation checklist path`);
           if (stepContent.includes('validationChecklist:')) {
             assert(
-              stepContent.includes("validationChecklist: '{skill-root}/checklist.md'"),
+              stepContent.includes("validationChecklist: '{skill-root}/checklist.md'") ||
+                stepContent.includes("validationChecklist: '{skill-root}/ci/checklist.md'"),
               `${stepLabel} anchors validationChecklist to {skill-root}`,
             );
           }
@@ -444,7 +474,8 @@ async function runTests() {
           assert(!stepContent.includes("checklistFile: '../checklist.md'"), `${stepLabel} has no relative checklistFile path`);
           if (stepContent.includes('checklistFile:')) {
             assert(
-              stepContent.includes("checklistFile: '{skill-root}/checklist.md'"),
+              stepContent.includes("checklistFile: '{skill-root}/checklist.md'") ||
+                stepContent.includes("checklistFile: '{skill-root}/ci/checklist.md'"),
               `${stepLabel} anchors checklistFile to {skill-root}`,
             );
           }
@@ -503,7 +534,7 @@ async function runTests() {
               `found ${knowledgeIndexReference}`,
             );
             // {tea-knowledge} is {skill-root}/../bmod-tea/knowledge: the bmod-tea skill installed beside this one.
-            const knowledgeIndexPath = path.join(workflowDir, '..', 'bmod-tea', 'knowledge', 'tea-index.csv');
+            const knowledgeIndexPath = path.join(projectRoot, 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv');
             assert(await pathExists(knowledgeIndexPath), `${stepLabel} knowledgeIndex target exists`);
 
             if (!workflowKnowledgeIndexValidated && (await pathExists(knowledgeIndexPath))) {
@@ -541,6 +572,129 @@ async function runTests() {
     }
   }
 
+  // Setup routing remains shared across the legacy entry points and all requested scopes.
+  try {
+    const router = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-routing.md'), 'utf8');
+    const canonical = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/SKILL.md'), 'utf8');
+    for (const mode of ['framework', 'ci', 'both']) {
+      assert(router.includes('`' + mode + '`'), `shared setup router names ${mode} scope`);
+    }
+    assert(
+      router.includes('Do you want CI too?') &&
+        router.includes('ask exactly once') &&
+        router.includes('Wait for the answer before any project writes'),
+      'unclear CI intent asks once before activation hooks or project writes',
+    );
+    assert(
+      router.includes('Set it up now and continue CI in this run?') &&
+        router.includes('Declining stops the run and leaves the project untouched'),
+      'CI without a framework offers framework-first setup before writes',
+    );
+    assert(
+      router.includes('framework_reused = true') && router.includes('validate and reuse it'),
+      'combined setup validates an existing framework',
+    );
+    assert(
+      router.includes('_bmad/custom/bmad-testarch-ci.user.toml') && router.includes('ci_workflow.ci_platform'),
+      'canonical CI scope reads legacy migrated customization',
+    );
+    for (const prefix of ['', 'ci/']) {
+      for (const [operation, route] of Object.entries({
+        C: 'steps-c/step-01-preflight.md',
+        R: 'steps-c/step-01b-resume.md',
+        V: 'steps-v/step-01-validate.md',
+        E: 'steps-e/step-01-assess.md',
+      })) {
+        assert(
+          canonical.includes('**If ' + operation + ':** Load `{skill-root}/' + prefix + route + '`'),
+          `canonical ${prefix || 'framework/'} scope retains ${operation} operation`,
+        );
+      }
+    }
+    assert(
+      router.includes('A completed framework checkpoint with pending CI continues to CI'),
+      'completed framework resume can continue pending CI',
+    );
+    const state = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-state.md'), 'utf8');
+    assert(
+      router.includes('All scopes and operations use `{test_artifacts}/framework/setup-run-progress.md`') &&
+        state.includes('create or adopt the active journal before executing any custom activation hook'),
+      'single-phase and combined operations persist recovery state before activation hooks',
+    );
+    for (const key of [
+      'framework.activation_steps_prepend.0',
+      'framework.activation_steps_append.0',
+      'ci.activation_steps_prepend.0',
+      'ci.activation_steps_append.0',
+      'ci.on_complete',
+      'framework.on_complete',
+    ]) {
+      assert(state.includes('`' + key + '`'), `recovery ledger tracks individual ${key} hooks`);
+    }
+    assert(
+      state.includes('If the key is in `hooks_completed`, skip execution') &&
+        state.includes('If the key is in `hooks_started` and has no completed marker, halt') &&
+        state.includes('Save the key and exact instruction in `hooks_started` before executing it'),
+      'interrupted activation hooks stop before replay or further writes',
+    );
+    assert(
+      state.includes('only after success') && state.includes('changed instruction or reordered hook list'),
+      'hook recovery keeps successful and changed instructions distinct',
+    );
+    assert(
+      state.includes('Completed journals are history; they do not select scope, operation, or hooks') &&
+        state.includes('A newer standalone or legacy phase checkpoint belonging to a different run takes priority'),
+      'completed both history cannot redirect an interrupted standalone CI run',
+    );
+    assert(
+      state.includes('It never enters a Create resume loader') && state.includes('Resume continues the same owned report'),
+      'Edit and Validate resume use their saved operation and report ownership',
+    );
+    assert(
+      router.includes('canonical-owned CI defaults') &&
+        router.includes('when the alias directory is absent') &&
+        router.includes('All legacy overrides, including migrated platform settings, remain effective even without the installed alias'),
+      'standalone canonical CI uses owned defaults and preserves legacy settings',
+    );
+    assert(
+      router.includes('For CI-only, build this contract from the existing framework scripts/configs and service documentation') &&
+        router.includes('an empty contract cannot proceed to generation'),
+      'CI-only generation and validation use the existing framework contract',
+    );
+    const savedExample = yaml.load(
+      extractFrontmatter(
+        await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-run-progress.example.md'), 'utf8'),
+      ),
+    );
+    assert(
+      savedExample.setup_scope === 'both' &&
+        savedExample.setup_operation === 'create' &&
+        savedExample.phase_status.framework === 'completed' &&
+        savedExample.phase_status.ci === 'pending',
+      'resume example records a completed framework with pending CI Create',
+    );
+    assert(
+      savedExample.phase_checkpoints.framework === '{test_artifacts}/framework/framework-setup-progress.md' &&
+        savedExample.phase_checkpoints.ci === '{test_artifacts}/ci/ci-pipeline-progress.md',
+      'resume example retains both legacy phase checkpoint paths',
+    );
+    assert(
+      typeof savedExample.run_id === 'string' &&
+        savedExample.phase_position.framework === 'phase-handoff' &&
+        savedExample.phase_position.ci.file === '{skill-root}/ci/steps-c/step-01-preflight.md',
+      'recovery example dispatches pending CI directly under its saved run identity',
+    );
+    for (const field of ['phase_targets', 'validation_reports', 'edit_requests', 'edit_applied', 'hook_instructions']) {
+      assert(savedExample[field] !== null && typeof savedExample[field] === 'object', `recovery example persists ${field}`);
+    }
+    assert(
+      savedExample.contract.ci_platform === 'github-actions' && savedExample.contract.test_commands.length > 0,
+      'resume example retains the agreed framework commands and CI platform',
+    );
+  } catch (error) {
+    assert(false, 'shared setup routing validates', error.message);
+  }
+
   const frameworkScaffoldStepPath = path.join(projectRoot, 'skills/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md');
   try {
     const frameworkScaffoldStep = await fs.readFile(frameworkScaffoldStepPath, 'utf8');
@@ -562,6 +716,7 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 5: Lean Skill Shape${colors.reset}\n`);
 
   const LEAN_SKILL_DIRS = ['bmad-testarch-evaluate'];
+  const ADAPTER_SKILL_DIRS = ['bmad-testarch-ci'];
   const LEAN_REQUIRED = ['SKILL.md', 'customize.toml', 'references', 'assets'];
   const LEAN_FORBIDDEN = ['workflow.yaml', 'steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'scripts'];
 
@@ -608,20 +763,50 @@ async function runTests() {
       .map((entry) => entry.name);
     const computedLean = [];
     const computedHouse = [];
+    const computedAdapters = [];
     for (const name of allSkillDirs) {
-      if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
+      if (ADAPTER_SKILL_DIRS.includes(name)) computedAdapters.push(name);
+      else if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
       else computedHouse.push(name);
     }
     assert(
       computedLean.sort().join(',') === [...LEAN_SKILL_DIRS].sort().join(','),
       `lean classification of skills/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
     );
+    assert(computedAdapters.sort().join(',') === [...ADAPTER_SKILL_DIRS].sort().join(','), 'CI compatibility adapter remains installed');
     assert(
-      computedHouse.sort().join(',') === [...workflowDirs].sort().join(','),
+      computedHouse.sort().join(',') ===
+        workflowDirs
+          .filter((name) => !ADAPTER_SKILL_DIRS.includes(name))
+          .sort()
+          .join(','),
       `house classification of skills/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
     );
   } catch (error) {
     assert(false, 'every skills/* directory lands on exactly one expected set', error.message);
+  }
+
+  for (const dirName of ADAPTER_SKILL_DIRS) {
+    const adapterDir = path.join(projectRoot, 'skills', dirName);
+    for (const forbidden of ['steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'resources']) {
+      assert(!(await pathExists(path.join(adapterDir, forbidden))), `${dirName} delegates ${forbidden} to the canonical framework skill`);
+    }
+    for (const required of ['SKILL.md', 'customize.toml', 'bmod.toml', 'workflow.yaml']) {
+      assert(await pathExists(path.join(adapterDir, required)), `${dirName}/${required} retains the installed entry point`);
+    }
+    const ciRoot = path.join(projectRoot, 'skills', 'bmad-testarch-framework', 'ci');
+    for (const required of [
+      'instructions.md',
+      'checklist.md',
+      'github-actions-template.yaml',
+      'gitlab-ci-template.yaml',
+      'azure-pipelines-template.yaml',
+      'jenkins-pipeline-template.groovy',
+      'harness-pipeline-template.yaml',
+      'resources',
+    ]) {
+      assert(await pathExists(path.join(ciRoot, required)), `canonical CI phase retains ${required}`);
+    }
   }
 
   for (const dirName of LEAN_SKILL_DIRS) {
@@ -776,7 +961,8 @@ async function runTests() {
   const ONCE_PER_PROJECT_DELIVERABLES = new Set(['test-design-architecture.md', 'test-design-qa.md', '{project_name}-handoff.md']);
 
   async function stepFrontmatter(workflow, stepsDir, fileName) {
-    const text = await fs.readFile(path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, stepsDir, fileName), 'utf8');
+    const phase = workflow === 'ci' ? 'bmad-testarch-framework/ci' : `bmad-testarch-${workflow}`;
+    const text = await fs.readFile(path.join(projectRoot, 'skills', phase, stepsDir, fileName), 'utf8');
     return yaml.load(extractFrontmatter(text)) ?? {};
   }
 

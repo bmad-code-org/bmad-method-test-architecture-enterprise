@@ -435,8 +435,8 @@ On Codex, use `$` for the skill prefix.
 | 2. Baseline (Phase 2)        | `/bmad-testarch-test-review`               | Quality baseline                                  |
 | 3. Planning (Phase 2-3)      | `prd`, `architecture` (BMM)                | Document requirements and architecture if missing |
 | 3. Planning (Phase 2-3)      | `/bmad-testarch-test-design`, system-level | Testability review                                |
-| 4. Infrastructure (Phase 3)  | `/bmad-testarch-framework`                 | Modernize the test framework, if needed           |
-| 4. Infrastructure (Phase 3)  | `/bmad-testarch-ci`                        | Set up or improve CI/CD                           |
+| 4. Infrastructure (Phase 3)  | `/bmad-testarch-framework`                 | Modernize the framework; include CI if needed     |
+| 4. Infrastructure (Phase 3)  | `/bmad-testarch-ci`                        | Select the framework skill's CI phase             |
 | 5. Per epic (Phase 4)        | `/bmad-testarch-test-design`, epic-level   | Focus on regression hotspots                      |
 | 5. Per epic (Phase 4)        | `/bmad-testarch-automate`                  | Add the missing tests                             |
 | 5. Per epic (Phase 4)        | `/bmad-testarch-test-review`               | Check quality                                     |

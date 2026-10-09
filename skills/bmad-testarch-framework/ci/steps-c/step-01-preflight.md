@@ -1,10 +1,10 @@
 ---
 name: 'step-01-preflight'
 description: 'Verify prerequisites and detect CI platform'
-nextStepFile: '{skill-root}/steps-c/step-02-generate-pipeline.md'
+nextStepFile: '{skill-root}/ci/steps-c/step-02-generate-pipeline.md'
 outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 legacyOutputFile: '{test_artifacts}/ci-pipeline-progress.md'
-resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
+resumeStepFile: '{skill-root}/ci/steps-c/step-01b-resume.md'
 ---
 
 # Step 1: Preflight Checks
@@ -40,7 +40,7 @@ Verify CI prerequisites and determine target CI platform.
 
 ## 1. Verify Git Repository
 
-- `.git/` exists
+- Git worktree is present (`.git` may be a directory or a worktree marker file)
 - Remote configured (if available)
 
 If missing: **HALT** with "Git repository required for CI/CD setup."
@@ -49,7 +49,7 @@ If missing: **HALT** with "Git repository required for CI/CD setup."
 
 ## 2. Detect Test Stack Type
 
-Determine the project's test stack type (`test_stack_type`) using the following algorithm:
+For both scope, use the agreed contract's stack and frameworks. Verify discovered files against that contract and report drift to the coordinator. For CI-only setup, determine the project's test stack type (`test_stack_type`) using the following algorithm:
 
 1. If `test_stack_type` is explicitly set in config (not `"auto"`), use that value.
 2. Otherwise, auto-detect by scanning project manifests:
@@ -80,20 +80,17 @@ Record detected `test_stack_type` in step output.
 - If `test_framework` is `"auto"`, detect from config files and project manifests found
 - Verify test dependencies are installed (language-appropriate package manager)
 
-If missing: **HALT** with "Run `framework` workflow first."
+Search both the project root and contract/configured test directories; follow test scripts to their config paths. For `setup_worker = ci` in a both Create run, the agreed future configs and dependency plan satisfy this generation prerequisite. Mark actual existence/dependency checks as deferred until the coordinator's combined validation.
+
+If the framework is missing in an ordinary CI Create run, apply the shared router's read-only framework-first offer before checkpoint writes: ask “There is no test framework yet. Set it up now and continue CI in this run?” Acceptance selects both scope and loads `{skill-root}/steps-c/step-01-preflight.md`; preserve the CI request and return here after framework completion. Declining stops and leaves the project untouched. Skip this question when the router already recorded acceptance. If the framework exists and only its dependencies are missing, install its declared dependencies through the agreed package manager and verify them before continuing.
 
 ---
 
 ## 4. Ensure Tests Pass Locally
 
-- Run the main test command based on detected stack and framework:
-  - **Node.js**: `npm test` or `npm run test:e2e`
-  - **Python**: `pytest` or `python -m pytest`
-  - **Java**: `mvn test` or `gradle test`
-  - **Go**: `go test ./...`
-  - **C#/.NET**: `dotnet test`
-  - **Ruby**: `bundle exec rspec`
-- If failing: **HALT** and request fixes before CI setup
+Resolve the project's exact local test commands, package-manager invocation and required service startup/readiness from its existing scripts/configs and documentation. Use language/framework defaults only when the project has no established command. Record all surfaces for fullstack/mobile. Hold execution until section 6c freezes the complete contract.
+
+For a CI worker in both Create, defer test execution until the framework worker finishes. Record pending validation; YAML generation may begin from the agreed future contract. The coordinator must run the resulting test commands and check pipeline consistency before completion.
 
 ---
 
@@ -129,6 +126,8 @@ Record detected `ci_platform` in step output.
 
 ## 6b. Read TEA Config Flags
 
+In both Create, also read the contract's accepted integration dependencies, Pact relevance result and planned scripts/configs. The CI worker may generate jobs from these planned artifacts before they exist; combined validation requires the actual installed dependencies, configs, tests and scripts. Ordinary CI-only runs use the on-disk checks below.
+
 From the TEA config read:
 
 - `tea_use_playwright_utils` — when true and the stack is Playwright, Step 3 drives burn-in selection through `runBurnIn` from `@seontechnologies/playwright-utils/burn-in` instead of `--only-changed`
@@ -138,7 +137,17 @@ Also record whether `@seontechnologies/playwright-utils` is in `package.json`. I
 
 ---
 
+## 6c. Freeze the Existing-Framework Contract and Execute Tests
+
+For CI-only, construct and atomically journal the complete immutable contract now, before pipeline generation: detected stack/language/frameworks, toolchain, actual package manager and lockfile, install commands, exact local and CI test commands, config/test directories, required services/startup/readiness, reporters/artifacts, effective CI platform, integration dependencies and Pact relevance. Read existing package scripts/config files and service docs; preserve `pnpm`, `yarn`, `npm`, or the language-specific manager the project uses. An empty or unresolved command/services contract stops generation until resolved. All later CI steps consume this same contract.
+
+For both, verify the already agreed contract and report drift to the coordinator; workers do not change it independently. A parallel CI worker may use future framework paths from that frozen contract and defer execution. Ordinary CI-only and sequential runs execute the contract's actual local commands with their required services now. If they fail, halt before pipeline generation and record failures in the run journal. The coordinator's final validator repeats execution only when generated or edited outputs need revalidation.
+
+---
+
 ## 7. Check for an Existing Checkpoint
+
+The pre-activation request gate has already selected the applicable run and its Resume/start-over decision. Honor that journal decision without another prompt or a reset of its ledger. A saved `setup_resume_requested` dispatches the journal's next position directly; never let the headless start-over fallback below replace selected Resume. A fresh new `run_id` following an approved start-over replaces this Create checkpoint at Save Progress while preserving prior archived journal history. Ask the phase-local question below only for a direct legacy invocation with no recorded coordinator decision.
 
 Check whether `{outputFile}` already exists. A project has one CI pipeline setup, so a checkpoint at this path belongs to a previous run of this workflow.
 When it does not exist, also check `{legacyOutputFile}`, where runs before the `ci/` folder wrote the checkpoint. Only an in-progress legacy checkpoint counts here; a completed one stays where it is and this run starts fresh in the folder.
@@ -161,6 +170,8 @@ A checkpoint that carries no `workflowStatus` predates that key: treat it as `'c
 ### 8. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 Create the `{test_artifacts}/ci/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 

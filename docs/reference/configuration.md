@@ -439,19 +439,26 @@ evaluations_folder = "quality/evals"
 
 CI/CD platform for pipeline generation.
 
-**Type:** `string` · **Default:** `"auto"` · **File:** `_bmad/custom/bmad-testarch-ci.toml`
+**Type:** `string` · **Default:** `"auto"` · **File:** `_bmad/custom/bmad-testarch-framework.toml`
 
 **Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
 
-Controls which CI template the `ci` workflow uses and where it writes.
+Controls which CI template the framework skill's CI phase uses and where it writes.
 With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, and `.circleci/config.yml`, then falls back to inferring from the git remote.
 Any other value skips detection.
 Earlier releases stored this key with the module config; a value there is no longer read.
 
-**Affects workflows:** `ci` only.
+**Affects setup scope:** CI, including both-scope runs of `framework` and the `ci` compatibility entry.
+
+An explicit `ci_platform` override in `_bmad/custom/bmad-testarch-framework.toml` or its `.user.toml` wins.
+When the canonical skill has no explicit override, existing `_bmad/custom/bmad-testarch-ci.toml` and `.user.toml` values supply the CI phase setting.
+This keeps migrated CI platform choices usable; the canonical default remains `"auto"`.
+
+Framework customization hooks run once per setup run. Existing CI customization hooks apply once when the CI phase runs, including a both-scope run. The shared journal records each hook individually so Resume skips completed entries; persistent facts reload on resumed invocations.
+`bmad setup tea` and `bmad migrate` keep the existing invocation entries and customization files.
 
 ```toml
-# _bmad/custom/bmad-testarch-ci.toml
+# _bmad/custom/bmad-testarch-framework.toml
 [workflow]
 ci_platform = "github-actions"
 ```
@@ -552,7 +559,14 @@ Every workflow now writes to a fixed folder of its own, described in [Output Lay
 
 ## Output Layout
 
-Outputs land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+Outputs use fixed folders under `{test_artifacts}`: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+Every framework setup run uses `framework/setup-run-progress.md` as its shared journal: framework-only, CI-only, or both scope, with Create, Edit, or Validate as the saved operation.
+It records the agreed contract, phase status, current position, and a durable ledger for each activation and completion hook.
+Edit saves its confirmed targets, requested changes, and applied changes. Validate saves its selected artifacts, reserved report path, and completed results before continuing. Resume of Validate continues the same report reserved for that run.
+Resume restores the saved scope, original operation, targets, and position, then continues each incomplete phase. Completed hooks remain recorded and are skipped on Resume.
+The phase files `framework/framework-setup-progress.md` and `ci/ci-pipeline-progress.md` remain Create progress checkpoints. Edit and Validate preserve their existing bytes.
+Resume of an older Create run can still use its existing phase checkpoint and migration rules.
+When a fresh run replaces the active journal, TEA first archives it intact as `framework/setup-run-progress-{run_id}.md`. The saved unique `run_id` identifies its history; previous Edit and Validate reports retain their paths.
 The folder names are fixed, and no configuration key moves them.
 `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`evaluations_folder`](#evaluations_folder).
 
@@ -565,31 +579,33 @@ A file that exists once per project keeps a plain name: `test-design-architectur
 ### TEA Output Files
 
 Paths are relative to `{test_artifacts}` unless noted.
-Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints are declared in the step files that write them.
+Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints and journals are declared in the step files or setup resources that write them.
 
-| Workflow           | Output                                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `test-design`      | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)        |
-| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
-| `test-design`      | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                       |
-| `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
-| `test-design`      | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                        |
-| `framework`        | `{project-root}/tests/README.md`                                                                                |
-| `framework`        | `framework/framework-setup-progress.md` (resume checkpoint)                                                     |
-| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
-| `ci`               | `ci/ci-pipeline-progress.md` (resume checkpoint)                                                                |
-| `atdd`             | `atdd/atdd-checklist-{story_key}.md`                                                                            |
-| `automate`         | `automate/automation-summary-{run_key}.md`                                                                      |
-| `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
-| `test-review`      | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
-| `nfr-assess`       | `nfr/nfr-assessment-{run_key}.md`                                                                               |
-| `nfr-assess`       | `nfr/perf-{run_key}-<page>.png` (browser evidence screenshots)                                                  |
-| `trace`            | `trace/traceability-matrix-{run_key}.md`                                                                        |
-| `trace`            | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                     |
-| `trace`            | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                        |
-| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                               |
-| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                                  |
-| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                             |
+| Workflow           | Output                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `test-design`      | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)                                         |
+| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                                                    |
+| `test-design`      | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                                                        |
+| `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`)                                  |
+| `test-design`      | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                                                         |
+| `framework`        | `{project-root}/tests/README.md`                                                                                                                 |
+| `framework`        | `framework/setup-run-progress.md` (journal for every setup scope and operation, with targets, position, contract, phase status, and hook ledger) |
+| `framework`        | `framework/setup-run-progress-{run_id}.md` (archived journal from a completed or explicitly replaced run)                                        |
+| `framework`        | `framework/framework-setup-progress.md` (Create progress checkpoint)                                                                             |
+| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                                                     |
+| `ci`               | `ci/ci-pipeline-progress.md` (Create progress checkpoint)                                                                                        |
+| `atdd`             | `atdd/atdd-checklist-{story_key}.md`                                                                                                             |
+| `automate`         | `automate/automation-summary-{run_key}.md`                                                                                                       |
+| `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)                                       |
+| `test-review`      | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                                                        |
+| `nfr-assess`       | `nfr/nfr-assessment-{run_key}.md`                                                                                                                |
+| `nfr-assess`       | `nfr/perf-{run_key}-<page>.png` (browser evidence screenshots)                                                                                   |
+| `trace`            | `trace/traceability-matrix-{run_key}.md`                                                                                                         |
+| `trace`            | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                                                      |
+| `trace`            | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                                                         |
+| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                                                                |
+| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                                                                   |
+| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                                                              |
 
 `trace` also reads two optional inputs it never writes, and both stay at the root of `{test_artifacts}` because other tools and people produce them: `live-verification-results.json` and `gate-waivers.md`.
 Any producer may write `live-verification-results.json` (an agent, a shell script, a CI job, or a person recording an outcome by hand).
@@ -641,8 +657,10 @@ A file grows only while the run that created it is still adding its later sectio
 To keep an earlier result for the same scope, commit or copy it before you re-run.
 A `trace` run that evaluates no gate also removes an earlier `gate-decision-{run_key}.json` for the same `run_key`, so the folder never pairs a new summary with a stale decision.
 
-`ci` and `framework` scaffold once per project, so each keeps one fixed checkpoint in its folder with no `run_key` in its name.
-The same three cases apply to that checkpoint, and a new run never merges into it.
+Framework setup keeps one shared `framework/setup-run-progress.md` journal for every scope and operation, with no `run_key` in its filename.
+Create keeps phase progress in the existing framework and CI checkpoint files. Edit and Validate keep their targets, report paths, results, and positions in the shared journal and preserve prior Create checkpoint bytes.
+Resume continues the original saved operation from its journal position. A legacy Create run without a saved journal position uses its phase's Resume loader.
+An unfinished journal retains its progress and hook ledger. Starting a fresh run never merges two runs into one journal.
 
 ### Files From Earlier TEA Versions
 
@@ -658,7 +676,7 @@ Upgrading leaves those files where they are:
   `atdd` recovers the story from the checklist's `storyKey`, a `test-design` checkpoint that already carries a `runKey` (`test-design-progress-{run_key}.md` at the root) keeps it, and for any other old file Resume asks which scope it covers.
   It then writes the file into the workflow's folder under its scoped name with `runScope` and `runKey` added, deletes the old copy, and continues.
   It never writes over a scoped file that already exists for the same scope.
-  `ci` and `framework` have no scope to resolve, so they move their root checkpoint into their folder under the same rules.
+  Framework and CI checkpoints have no story, epic, or release scope to resolve, so they move their root checkpoint into their folder under the same rules.
 
 Once nothing you run still reads an old file, archive or delete it.
 

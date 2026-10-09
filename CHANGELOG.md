@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Framework setup now includes CI in the same skill. Ask for a framework, CI, or both; TEA infers the scope or asks whether to include CI, and offers framework setup when a CI request has no harness. Existing framework and CI commands, menu codes, customizations, and saved progress keep working.
 - Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page, removed duplicate site headings, and revised issue templates and banner text.
 
 ### Fixed

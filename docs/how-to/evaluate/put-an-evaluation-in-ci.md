@@ -19,7 +19,7 @@ The live tiers run the real target when a pipeline can afford it.
 
 - An evaluation with an accepted baseline, as [How to Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md) describes
 - The evaluations folder installed in the pipeline, as [Prerequisites](/docs/reference/tea-evaluate-cli.md#prerequisites) describes
-- For the pipeline file: the CI workflow (`bmad-testarch-ci`), which renders the plan
+- For the pipeline file: the framework skill's CI phase (`bmad-testarch-ci` compatibility entry), which renders the plan
 
 ## Steps
 
@@ -122,7 +122,7 @@ Run the evaluation again, read what changed with `compare`, and accept the new b
 
 ### 6. Render the Plan Into Your Pipeline
 
-Run the CI workflow (`bmad-testarch-ci`) in create or edit mode.
+Run `bmad-testarch-framework` with CI scope in Create or Edit, or use the `bmad-testarch-ci` compatibility entry with the same operation.
 It finds the plan and writes one job per tier, each running `tea-evaluate ci --tier <tier>` and uploading the evaluation folder's `runs/` directory whatever the result.
 It also waits a publish or deploy job on the tier's evaluation job when the plan lists that job in `gates`.
 [Evaluation Plans in the CI guide](/docs/how-to/workflows/setup-ci.md#evaluation-plans) describes the rendered jobs.

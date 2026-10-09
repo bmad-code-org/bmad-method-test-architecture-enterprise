@@ -1,7 +1,7 @@
 ---
 name: 'step-03-configure-quality-gates'
 description: 'Configure burn-in, quality gates, and notifications'
-nextStepFile: '{skill-root}/steps-c/step-03b-render-evaluation-plans.md'
+nextStepFile: '{skill-root}/ci/steps-c/step-03b-render-evaluation-plans.md'
 knowledgeIndex: '{tea-knowledge}/tea-index.csv'
 outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
@@ -35,6 +35,8 @@ Configure burn-in loops, quality thresholds, and notification hooks.
 ## MANDATORY SEQUENCE
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
+
+Use the frozen contract's package manager, install/test commands, directories, toolchain, services and artifacts in every generated pipeline, quality gate and helper script. Preserve existing project commands; stack-specific snippets below supply defaults only when the contract establishes them. A missing CI-only contract stops generation.
 
 ### Deterministic Knowledge Selection
 
@@ -137,6 +139,8 @@ Configure:
 ### 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

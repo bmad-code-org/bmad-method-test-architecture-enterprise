@@ -45,7 +45,7 @@ Run TEA workflows standalone, without BMad Method planning.
 3. `test-review` (optional)
 4. `trace` (coverage matrix, then gate decision)
 
-Run `framework` or `ci` only if you want TEA to scaffold the harness or pipeline.
+Run `framework` if you want TEA to scaffold the harness, the CI pipeline, or both. The `ci` command remains a compatibility entry for the same skill's CI phase.
 Both work best after the stack and architecture are decided.
 
 **You bring:** coverage oracle inputs (requirements, specs, external system-of-record pointers, or an analyzable source tree), a development environment, and project context.
@@ -75,19 +75,19 @@ See [TEA Lite Quickstart](/docs/tutorials/tea-lite-quickstart.md) for the 30-min
 Use TEA in Phase 3, Phase 4, and the release gate.
 Model 5 adapts this sequence to an existing codebase.
 
-| Phase                      | TEA                                                                | Dev / Team                                                                       | Outputs                                                                            |
-| -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **Phase 1**: Discovery     | -                                                                  | Analyst `product-brief` (optional)                                               | `product-brief.md`                                                                 |
-| **Phase 2**: Planning      | -                                                                  | PM `prd`                                                                         | PRD with FRs and NFRs                                                              |
-| **Phase 3**: Solutioning   | `test-design` (system-level), then `framework` and `ci`            | Architect `architecture`, `create-epics-and-stories`, `implementation-readiness` | Testability review, NFR evidence plan, test scaffold, CI pipeline                  |
-| **Phase 4**: Sprint start  | -                                                                  | SM `sprint-planning`                                                             | Sprint status file with all epics and stories                                      |
-| **Phase 4**: Epic planning | `test-design` for THIS epic                                        | Review epic scope                                                                | `test-design/test-design-epic-N.md` with risk assessment and test plan             |
-| **Phase 4**: Story dev     | `atdd` before dev (optional), then `automate`                      | SM `create-story`, DEV implements                                                | Tests, story implementation                                                        |
-| **Phase 4**: Story review  | `test-review` (optional), re-run `trace`                           | Address recommendations, update code and tests                                   | Quality report, refreshed coverage matrix                                          |
-| **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2 | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, `gate-decision-{run_key}.json`, release summary |
+| Phase                      | TEA                                                                        | Dev / Team                                                                       | Outputs                                                                            |
+| -------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Phase 1**: Discovery     | -                                                                          | Analyst `product-brief` (optional)                                               | `product-brief.md`                                                                 |
+| **Phase 2**: Planning      | -                                                                          | PM `prd`                                                                         | PRD with FRs and NFRs                                                              |
+| **Phase 3**: Solutioning   | `test-design` (system-level), then `framework` with framework and CI scope | Architect `architecture`, `create-epics-and-stories`, `implementation-readiness` | Testability review, NFR evidence plan, test scaffold, CI pipeline                  |
+| **Phase 4**: Sprint start  | -                                                                          | SM `sprint-planning`                                                             | Sprint status file with all epics and stories                                      |
+| **Phase 4**: Epic planning | `test-design` for THIS epic                                                | Review epic scope                                                                | `test-design/test-design-epic-N.md` with risk assessment and test plan             |
+| **Phase 4**: Story dev     | `atdd` before dev (optional), then `automate`                              | SM `create-story`, DEV implements                                                | Tests, story implementation                                                        |
+| **Phase 4**: Story review  | `test-review` (optional), re-run `trace`                                   | Address recommendations, update code and tests                                   | Quality report, refreshed coverage matrix                                          |
+| **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2         | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, `gate-decision-{run_key}.json`, release summary |
 
-`test-design` runs before `framework` and `ci` so NFR evidence needs can shape the infrastructure.
-`framework` and `ci` run once, in Phase 3, after architecture.
+`test-design` runs before `framework` setup so NFR evidence needs can shape the infrastructure.
+Framework and CI setup run in the same skill, in Phase 3 after architecture. Request either phase or both; the `ci` compatibility entry selects CI scope.
 The gate decision is one of PASS, CONCERNS, or FAIL.
 
 ### Enterprise track deltas

@@ -76,6 +76,10 @@ Otherwise render `{agent.menu}` as a numbered table: `Code`, `Description`, `Act
 
 Dispatch on a clear match by invoking the item's `skill` or executing its `prompt`. Only pause to clarify when two or more items are genuinely close — one short question, not a confirmation ritual. When nothing on the menu fits, just continue the conversation; chat, clarifying questions, and the `bmad` skill are always fair game.
 
+### Framework and CI Setup Routing
+
+TF invokes `bmad-testarch-framework`, the canonical owner of framework and CI setup. CI invokes the installed `bmad-testarch-ci` compatibility entry with CI scope preset. Preserve both codes, names, custom menu overrides, requested scope and operation. A request for framework and pipeline setup routes directly to TF with both scope; these two compatible setup intents are one combined workflow. The shared router asks “Do you want CI too?” once when setup leaves CI intent unclear.
+
 ### Routing Ambiguity Boundaries
 
 Before dispatching, list the menu items directly supported by facts in the user's message. One supported item is a clear route. Two or more supported items require the missing deciding information when the user has supplied no priority, sequence, or requested deliverable that selects one.

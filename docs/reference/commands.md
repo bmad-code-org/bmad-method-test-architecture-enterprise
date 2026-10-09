@@ -20,6 +20,10 @@ The same workflow skill can be invoked in three ways:
 Load the TEA agent with `/bmad-tea` or `$bmad-tea` to use its menu codes and `GATE` router.
 Each workflow also runs directly.
 
+Framework and CI setup share one implementation in `bmad-testarch-framework`.
+The ten registered workflow entries remain available: `bmad-testarch-ci` is the compatibility adapter that selects CI scope, and both `TF` and `CI` menu codes keep working.
+The adapter preserves existing CI triggers and customization files.
+
 This page uses short workflow names.
 Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
 
@@ -36,7 +40,7 @@ Two do not map to a command by adding a prefix: `teach-me-testing` carries no `t
 | `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
 | `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
 
-Each workflow writes into its own folder under `{test_artifacts}`, and a file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`.
+Workflow outputs use fixed folders under `{test_artifacts}`. Framework setup journals every scope and operation; framework and CI phases also retain their separate Create checkpoints. A file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`.
 The folders, the run key rules, and what happens to files from earlier TEA versions are in [Output Layout](/docs/reference/configuration.md#output-layout).
 
 To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization.
@@ -46,8 +50,8 @@ See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-c
 
 - [`teach-me-testing`](#teach-me-testing): Learn testing (TEA Academy)
 - [`test-design`](#test-design): Risk-based test planning
-- [`framework`](#framework): Scaffold test framework
-- [`ci`](#ci): Setup CI/CD pipeline
+- [`framework`](#framework): Set up a test framework, CI, or both
+- [`ci`](#ci): Compatibility entry for CI setup
 - [`atdd`](#atdd): Acceptance TDD
 - [`automate`](#automate): Test automation
 - [`evaluate`](#evaluate): Scored behavioral evaluation
@@ -104,7 +108,14 @@ Learn testing through seven sessions with quizzes and saved progress.
 
 ## framework
 
-Scaffold a test framework for the detected stack and selected runner.
+Set up a test framework for the detected stack and selected runner, configure CI, or do both in one run.
+Your prompt selects the setup scope: framework only, CI only, or both.
+TEA infers scope when it can and asks "Do you want CI too?" once when CI scope is unclear.
+For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together. A CI request without a framework offers framework setup first.
+
+Setup scope and operation are independent. Create starts setup, Resume restores the journal's saved scope, original operation, targets, and position, Validate checks existing outputs, and Edit revises them. Edit and Validate preserve earlier Create checkpoint bytes; their own progress and hook ledger live in the shared journal.
+`TF` starts framework setup; `CI` and `bmad-testarch-ci` select CI scope through the compatibility adapter.
+
 See [Execution Targets](/docs/reference/execution-targets.md) for supported frameworks.
 
 **Phase:** Phase 3 (Solutioning)
@@ -113,7 +124,8 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 
 **Key Inputs:**
 
-- Tech stack, test framework choice, testing scope
+- Setup scope (framework only, CI only, or both), tech stack, test framework choice, testing scope
+- For CI scope: platform, sharding, burn-in preferences, and existing evaluation CI plans
 
 **Key Outputs:**
 
@@ -122,6 +134,7 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 - `playwright.config.ts` or `cypress.config.ts`
 - `.env.example`, `.nvmrc`
 - Sample tests with best practices
+- When CI is included: the pipeline, quality gates, evaluation jobs, and CI documentation listed under [`ci`](#ci)
 
 **How-To Guide:** [Setup Test Framework](/docs/how-to/workflows/setup-test-framework.md)
 
@@ -129,7 +142,9 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 
 ## ci
 
-Setup CI/CD pipeline with selective testing and burn-in
+Compatibility entry for the CI phase of `bmad-testarch-framework`, with selective testing and burn-in.
+The `/bmad-testarch-ci`, `$bmad-testarch-ci`, and `CI` invocations select CI scope and preserve CI-specific customizations.
+Request CI through the canonical framework skill to get the same phase. If the project has no test framework, TEA offers to create it first.
 
 **Phase:** Phase 3 (Solutioning)
 

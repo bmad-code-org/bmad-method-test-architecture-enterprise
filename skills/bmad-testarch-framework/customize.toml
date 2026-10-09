@@ -36,3 +36,7 @@ persistent_facts = []
 # Override wins. Leave empty for no custom post-completion behavior.
 
 on_complete = ""
+
+# Explicit canonical team/user override wins; otherwise CI alias ci_platform applies.
+# The default auto value does not mask a migrated bmad-testarch-ci override.
+ci_platform = "auto"

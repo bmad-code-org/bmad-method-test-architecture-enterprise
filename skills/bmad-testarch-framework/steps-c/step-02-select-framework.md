@@ -91,13 +91,15 @@ Respect `config.test_framework` if explicitly set (not `"auto"`).
 
 ## 2. Announce Decision
 
-State the selected framework and reasoning.
+State the selected framework and reasoning. For every scope, record the stack/framework/package-manager/test-command contract from `resources/setup-routing.md` before scaffold generation. Include every detected surface, config path, toolchain, exact local/CI test commands, service/startup/readiness requirements and integration plan. Include the CI platform only when CI is requested. Resolve dependency consent before workers or dependency writes and save the final accepted contract in the all-scope journal.
 
 ---
 
 ### 3. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

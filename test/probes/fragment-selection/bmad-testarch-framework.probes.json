@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-testarch-framework",
-    "implementationDigest": "sha256:9fe33f1501bd46a928016ae4e3de3e76b987248de5f7f2e237c9b28d690c0c2e",
+    "implementationDigest": "sha256:7dd2ee6c8b3dc8dfef36fc0013e143d5fa1afb81ce8fd72deea42aed4aa55a47",
     "artifactDigest": "sha256:6b1b3e4ad383376aca03486b5c67e68a5e7a9d4ab9d2d5ac706b7924baf6fef7",
-    "commitDigest": "sha256:9fe33f1501bd46a928016ae4e3de3e76b987248de5f7f2e237c9b28d690c0c2e",
+    "commitDigest": "sha256:7dd2ee6c8b3dc8dfef36fc0013e143d5fa1afb81ce8fd72deea42aed4aa55a47",
     "rationale": "A run that names every fragment in the index satisfies O-001 for framework-mobile-scaffold, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -86,9 +86,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-testarch-framework",
-    "implementationDigest": "sha256:9fe33f1501bd46a928016ae4e3de3e76b987248de5f7f2e237c9b28d690c0c2e",
+    "implementationDigest": "sha256:7dd2ee6c8b3dc8dfef36fc0013e143d5fa1afb81ce8fd72deea42aed4aa55a47",
     "artifactDigest": "sha256:6b1b3e4ad383376aca03486b5c67e68a5e7a9d4ab9d2d5ac706b7924baf6fef7",
-    "commitDigest": "sha256:9fe33f1501bd46a928016ae4e3de3e76b987248de5f7f2e237c9b28d690c0c2e",
+    "commitDigest": "sha256:7dd2ee6c8b3dc8dfef36fc0013e143d5fa1afb81ce8fd72deea42aed4aa55a47",
     "rationale": "framework-mobile-scaffold declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -98,7 +98,7 @@
         "privateRef": null,
         "digest": "sha256:6b1b3e4ad383376aca03486b5c67e68a5e7a9d4ab9d2d5ac706b7924baf6fef7"
       },
-      "revisionCommitDigest": "sha256:9fe33f1501bd46a928016ae4e3de3e76b987248de5f7f2e237c9b28d690c0c2e",
+      "revisionCommitDigest": "sha256:7dd2ee6c8b3dc8dfef36fc0013e143d5fa1afb81ce8fd72deea42aed4aa55a47",
       "noKnownDefectStatement": "framework-mobile-scaffold's expected selection is derived from the bmad-testarch-framework step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

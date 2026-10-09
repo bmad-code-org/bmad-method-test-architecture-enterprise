@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [ ] Git repository initialized (`.git/` exists)
+- [ ] Git repository initialized (`.git` directory or worktree marker exists)
 - [ ] Git remote configured (`git remote -v` shows origin)
 - [ ] Test framework configured (appropriate config for detected stack type)
 - [ ] Local tests pass (test command succeeds)
@@ -190,7 +190,7 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 
 ### Workflow Dependencies
 
-- [ ] `framework` workflow completed first
+- [ ] Framework configured or created and validated in this same combined run
 - [ ] Can proceed to `atdd` workflow after CI setup
 - [ ] Can proceed to `automate` workflow
 - [ ] CI integrates with `gate` workflow

@@ -178,6 +178,8 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
 
 **Save this step's accumulated work to `{progressFile}`.**
 
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position`; workers update only their own Create checkpoint.
+
 - **If `{progressFile}` does not exist** (first save), create it with YAML frontmatter:
 
   ```yaml
