@@ -22,6 +22,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const yaml = require('js-yaml');
 const { pathToFileURL } = require('node:url');
 
 const { chainedScripts, shardedChainRuns, shardRunProblems } = require('../tools/validate-ci-coverage');
@@ -130,6 +131,16 @@ function checkWorkflowMatrix() {
     check(
       run.total >= 1 && run.total <= MAX_SHARDS,
       `quality.yaml shards the chain ${run.total} ways; this file proves 1 to ${MAX_SHARDS}`,
+    );
+  }
+  const quality = yaml.load(fs.readFileSync(path.join(PROJECT_ROOT, '.github', 'workflows', 'quality.yaml'), 'utf8'));
+  const scriptBudget = quality.jobs.chain['timeout-minutes'] * 60 * 0.6;
+  const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
+  const productionPlan = planShards(chainedScripts(manifest), readWeights(), runs[0]?.total ?? MAX_SHARDS);
+  for (const [index, shard] of productionPlan.entries()) {
+    check(
+      shard.seconds <= scriptBudget,
+      `quality shard ${index + 1} projects ${shard.seconds.toFixed(1)}s of scripts; budget ${scriptBudget}s leaves 40 percent of the job cap for setup and runner load. Refresh weights or split long suites`,
     );
   }
   // The coverage job's manifest check has to expect the same shard count, or
