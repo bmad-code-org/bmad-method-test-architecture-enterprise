@@ -14,9 +14,9 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211340185Z-39f131a1/qualification/P-001/baseline-pass.json",
+      "path": "runs/20261009T005326769Z-7152b40f/qualification/P-001/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:295afc481cef4b529e7792662067b76df320ab39bc4b3021fe674f8c1e5b21f5"
+      "digest": "sha256:233ad4ea0a341467f65069c4049bfa256e5143df1e10481f4d65e8fa1bbdbc30"
     },
     "revisionCommitDigest": "sha256:712a3d0cf5beb693c898cf414c74170d19da885b5e769ca7ff3983ad4e465ef3",
     "noKnownDefectStatement": "The record store has no known defect."

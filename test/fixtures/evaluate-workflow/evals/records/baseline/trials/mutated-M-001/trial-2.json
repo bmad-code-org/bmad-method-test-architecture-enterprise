@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-001",
   "trialIndex": 2,
   "workspace": "trial-mutated-M-001-2",
-  "elapsedMs": 230,
+  "elapsedMs": 159,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -46,9 +46,9 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "id": "rec-792da626-bce3-4bf6-82d6-9846d6b1725e",
+            "id": "rec-a8e35e4d-69de-42c7-a734-f93a40c5c4ea",
             "title": "Ship the workflow",
-            "path": "store/rec-d68628e2-bae8-4a77-87a6-d7dfa73c46b6.json"
+            "path": "store/rec-5209b089-c3eb-481f-af73-98496b9c5d84.json"
           }
         },
         "stderr": {
@@ -72,7 +72,7 @@
         "channels": {
           "argument": {},
           "option": {
-            "id": "rec-792da626-bce3-4bf6-82d6-9846d6b1725e"
+            "id": "rec-a8e35e4d-69de-42c7-a734-f93a40c5c4ea"
           },
           "environment": [],
           "stdin": {
@@ -90,7 +90,7 @@
           "kind": "json",
           "value": {
             "found": false,
-            "id": "rec-792da626-bce3-4bf6-82d6-9846d6b1725e"
+            "id": "rec-a8e35e4d-69de-42c7-a734-f93a40c5c4ea"
           }
         },
         "stderr": {
