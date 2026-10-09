@@ -20,7 +20,7 @@
  * corpus and Playwright resolve, and starts no server and runs no spec file.
  * Four hand-authored Playwright spec sets under
  * `test/fixtures/automate-eval/cases/` stand in for what a real
- * `bmad-testarch-automate` run could produce. Running the suite against a real
+ * `bmad-testarch-automate` expand-mode run could produce. Running the suite against a real
  * model is the residual `test/docs/eval-quality-roadmap.md` records on
  * this skill's row, the same way it is recorded on `bmad-testarch-atdd`'s.
  *

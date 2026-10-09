@@ -237,6 +237,8 @@ Create the `{test_artifacts}/automate/` folder if it does not exist. Write the f
 ---
 runScope: '{run_scope}'
 runKey: '{run_key}'
+testMode: '{test_mode}'
+testEntry: '{test_entry}'
 workflowStatus: 'in-progress'
 stepsCompleted: ['step-01-preflight-and-context']
 lastStep: 'step-01-preflight-and-context'

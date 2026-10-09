@@ -60,15 +60,19 @@ The `automate` and `framework` suites execute committed test or scaffold fixture
 Each suite evaluates a specific skill against concrete artifacts:
 
 - `bmad-tea-routing`: Validates that user intent routes to the correct workflow, declines unsupported requests, and asks clarifying questions when requests are ambiguous.
-- `bmad-testarch-atdd`: Measures whether generated acceptance tests fail red for declared business criteria.
+- `bmad-testarch-automate` red-mode step files: Measures whether generated acceptance tests fail red for declared business criteria. The ATDD evaluation stages the canonical red instructions and reads them directly.
 - `bmad-testarch-test-design`: Checks that identified risks map to valid test levels and stay within fixture risk ceilings.
 - `bmad-testarch-test-review`: Verifies recall of planted anti-patterns without raising false alarms on clean code.
 - `bmad-testarch-nfr`: Evaluates whether NFR assessments ground their verdicts in supplied evidence files.
 - `bmad-testarch-trace`: Checks that requirements-to-evidence matrices resolve full provenance, identify gaps, and maintain stable metadata.
 - `bmad-testarch-ci`: Exercises the framework skill's CI phase instructions and validates that generated CI configurations parse and wire real test commands.
-- `bmad-testarch-automate`: Tests regression detection against running services using four hand-authored spec sets without model calls.
+- `bmad-testarch-automate` expand mode: Tests regression detection against running services using four hand-authored spec sets without model calls.
 - `bmad-testarch-framework`: Tests template-produced scaffolds in capability-restricted sandboxes with explicitly permitted registry and loopback access.
 - `bmad-teach-me-testing`: Tests multi-turn teaching sessions and persistent learner progress.
+
+The deterministic run-and-heal fixture check applies a known repair itself and reruns Playwright. It proves that the controlled fixture reproduces the test error and passes with the supplied repair. Other deterministic checks verify mode-routing guidance, retained product defects, and intended red failures.
+
+Separate recorded live-agent captures exercise the ATDD and automate entries, including routing, generated tests, repair decisions, settings, and Resume. Their saved commands, staged instruction files, before-and-after artifacts, native runner reports, and physical execution logs provide evidence of what the agent did in each captured run.
 
 ### 3. Clean Controls and Seeded Defects
 
@@ -149,7 +153,7 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 
 ## Evaluate
 
-The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is TEA's tenth workflow.
+The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is one of TEA's eight workflows.
 It takes a described target (a skill, an agent, a workflow, a tool-use system, an AI feature) through a scored development and held-out evaluation built on `eval-quality`, names the gaps the scores expose, helps repair them, and finishes with the CI plan that enforces the evaluation.
 Its runtime, `tea-evaluate`, validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
 `bmad-testarch-framework`'s CI setup renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).

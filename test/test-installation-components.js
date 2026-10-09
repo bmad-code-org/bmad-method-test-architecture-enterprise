@@ -233,7 +233,7 @@ async function runTests() {
     const kept = [...(migration.target.match(/`([a-z_]+)`/g) || [])].map((token) => token.slice(1, -1));
     const keptQuestions = new Set(kept.filter((key) => questionKeys.has(key)));
     assert(
-      questionKeys.size === 9 && [...questionKeys].every((key) => keptQuestions.has(key)),
+      questionKeys.size === 13 && [...questionKeys].every((key) => keptQuestions.has(key)),
       'migration-1.toml keeps every key bmod.toml asks',
       [...questionKeys].filter((key) => !keptQuestions.has(key)).join(', '),
     );
@@ -327,7 +327,7 @@ async function runTests() {
       assert(customizeContent.includes('activation_steps_prepend'), 'customize.toml defines activation_steps_prepend');
       assert(customizeContent.includes('activation_steps_append'), 'customize.toml defines activation_steps_append');
 
-      // Verify all 9 capability codes live on the [[agent.menu]] array-of-tables
+      // Verify all capability codes live on the [[agent.menu]] array-of-tables
       const expectedMenu = [
         { code: 'TMT', skill: 'bmad-teach-me-testing' },
         { code: 'TF', skill: 'bmad-testarch-framework' },
@@ -428,8 +428,28 @@ async function runTests() {
     'bmad-testarch-trace',
   ];
 
+  const canonicalAutomateRoot = path.join(projectRoot, 'skills/bmad-testarch-automate');
+  const redWorkflow = yaml.load(await fs.readFile(path.join(canonicalAutomateRoot, 'red/workflow.yaml'), 'utf8'));
+  for (const [component, expected] of Object.entries({
+    installed_path: 'red',
+    instructions: 'red/instructions.md',
+    validation: 'red/checklist.md',
+    template: 'red/atdd-checklist-template.md',
+  })) {
+    assert(redWorkflow[component] === expected, `red workflow ${component} resolves from the canonical skill root`);
+    assert(
+      await pathExists(path.resolve(canonicalAutomateRoot, redWorkflow[component])),
+      `red workflow ${component} selects an installed red asset`,
+    );
+  }
+
   for (const dirName of workflowDirs) {
-    const phasePath = dirName === 'bmad-testarch-ci' ? 'bmad-testarch-framework/ci' : dirName;
+    const phasePath =
+      dirName === 'bmad-testarch-ci'
+        ? 'bmad-testarch-framework/ci'
+        : dirName === 'bmad-testarch-atdd'
+          ? 'bmad-testarch-automate/red'
+          : dirName;
     const workflowDir = path.join(projectRoot, `skills/${phasePath}`);
     const skillMdPath = path.join(projectRoot, `skills/${dirName}/SKILL.md`);
     const customizeTomlPath = path.join(projectRoot, `skills/${dirName}/customize.toml`);
@@ -458,11 +478,28 @@ async function runTests() {
             skillContent.includes('bmad-testarch-ci.user.toml') && skillContent.includes('ci_platform'),
             'CI compatibility entry preserves the existing customization layers',
           );
+        } else if (dirName === 'bmad-testarch-atdd') {
+          assert(
+            skillContent.includes('red') && skillContent.includes('bmad-testarch-automate'),
+            'ATDD entry selects red mode in the combined generation skill',
+          );
+          assert(
+            skillContent.includes('resources/test-generation-routing.md') &&
+              skillContent.includes('red/steps-c/step-01-preflight-and-context.md'),
+            'ATDD entry verifies canonical generation capabilities before delegation',
+          );
+          const entryBmod = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills', dirName, 'bmod.toml'), 'utf8'));
+          assert(
+            Array.isArray(entryBmod.skill.required_skills) && entryBmod.skill.required_skills.includes('bmad-testarch-automate'),
+            'ATDD entry declares its canonical skill dependency',
+          );
         } else {
           assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
           assert(
-            skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
-            `${dirName}/SKILL.md resolves the workflow customization block`,
+            skillContent.includes(
+              `resolve_customization.py --skill ${dirName === 'bmad-testarch-automate' ? '{workflow-skill-root}' : '{skill-root}'} --project-root {project-root} --key workflow`,
+            ),
+            `${dirName}/SKILL.md resolves the selected workflow customization block`,
           );
           assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
           assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
@@ -472,8 +509,8 @@ async function runTests() {
             `${dirName}/SKILL.md explains sibling workflow path resolution`,
           );
           assert(
-            dirName === 'bmad-testarch-ci'
-              ? skillContent.includes('bmad-testarch-framework') && skillContent.includes('CI-only')
+            dirName === 'bmad-testarch-automate'
+              ? skillContent.includes('{skill-root}/resources/test-generation-routing.md')
               : /\{skill-root\}\/steps-[cev]\//.test(skillContent),
             `${dirName}/SKILL.md routes first step from {skill-root}`,
           );
@@ -528,7 +565,8 @@ async function runTests() {
         const instructionsContent = await fs.readFile(instructionsMdPath, 'utf8');
         assert(!instructionsContent.includes('`./steps-'), `${dirName}/instructions.md has no bare relative step references`);
         assert(
-          instructionsContent.includes('`{skill-root}/steps-c/') ||
+          instructionsContent.includes('`{skill-root}/red/steps-c/') ||
+            instructionsContent.includes('`{skill-root}/steps-c/') ||
             instructionsContent.includes('`{skill-root}/ci/steps-c/') ||
             instructionsContent.includes('`{skill-root}/steps-v/') ||
             instructionsContent.includes('`{skill-root}/steps-e/'),
@@ -554,7 +592,7 @@ async function runTests() {
           assert(!stepContent.includes("nextStepFile: './"), `${stepLabel} has no cwd-sensitive nextStepFile`);
           if (stepContent.includes('nextStepFile:')) {
             assert(
-              /nextStepFile: '\{skill-root\}\/(?:ci\/)?steps-[cev]\//.test(stepContent),
+              /nextStepFile: '\{skill-root\}\/(?:(?:ci|red)\/)?steps-[cev]\//.test(stepContent),
               `${stepLabel} anchors nextStepFile to {skill-root}`,
             );
           }
@@ -563,7 +601,8 @@ async function runTests() {
           if (stepContent.includes('validationChecklist:')) {
             assert(
               stepContent.includes("validationChecklist: '{skill-root}/checklist.md'") ||
-                stepContent.includes("validationChecklist: '{skill-root}/ci/checklist.md'"),
+                stepContent.includes("validationChecklist: '{skill-root}/ci/checklist.md'") ||
+                stepContent.includes("validationChecklist: '{skill-root}/red/checklist.md'"),
               `${stepLabel} anchors validationChecklist to {skill-root}`,
             );
           }
@@ -572,7 +611,8 @@ async function runTests() {
           if (stepContent.includes('checklistFile:')) {
             assert(
               stepContent.includes("checklistFile: '{skill-root}/checklist.md'") ||
-                stepContent.includes("checklistFile: '{skill-root}/ci/checklist.md'"),
+                stepContent.includes("checklistFile: '{skill-root}/ci/checklist.md'") ||
+                stepContent.includes("checklistFile: '{skill-root}/red/checklist.md'"),
               `${stepLabel} anchors checklistFile to {skill-root}`,
             );
           }
@@ -1093,6 +1133,83 @@ async function runTests() {
     );
   }
 
+  try {
+    const generationRoot = path.join(projectRoot, 'skills/bmad-testarch-automate');
+    const router = await fs.readFile(path.join(generationRoot, 'resources/test-generation-routing.md'), 'utf8');
+    const entry = await fs.readFile(path.join(generationRoot, 'SKILL.md'), 'utf8');
+    assert(
+      entry.indexOf('resources/test-generation-routing.md') < entry.indexOf('## On Activation'),
+      'generation resolves mode and operation before any activation hook',
+    );
+    assert(
+      router.includes('defaults to red through `bmad-testarch-atdd` and expand through the canonical entry') &&
+        router.includes('An explicit mode in the user') &&
+        router.includes('test_mode_defaulted = true'),
+      'generation preserves historical entry defaults in every run mode and explicit mode precedence',
+    );
+    assert(
+      router.includes('When no task mode signal is present, every run mode defaults') &&
+        router.includes('with no task wording use those entry defaults without a mode question') &&
+        router.includes('only when explicit task mode signals conflict in an interactive run') &&
+        router.includes('with conflicting signals uses the same historical entry default without a question') &&
+        !router.includes('or neither resolves a mode'),
+      'interactive AT, TA and slash commands retain no-signal defaults; only conflicting task signals ask',
+    );
+    const routingExamples = router
+      .split('\n')
+      .filter((line) => line.startsWith('| '))
+      .map((line) =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim()),
+      );
+    for (const example of [
+      ['AT or `/bmad-testarch-atdd`', 'none', 'interactive', 'red (entry default)', 'no'],
+      ['TA or `/bmad-testarch-automate`', 'none', 'interactive', 'expand (entry default)', 'no'],
+      ['`/bmad-testarch-automate`', 'lets write acceptance tests', 'interactive or headless', 'red', 'no'],
+      ['`/bmad-testarch-automate`', 'acceptance test scaffolds', 'interactive or headless', 'red', 'no'],
+      ['either entry', 'red and expand task signals', 'interactive', 'unresolved', 'ask once'],
+      ['AT or `/bmad-testarch-atdd`', 'red and expand task signals', 'headless', 'red (entry default)', 'no'],
+      ['TA or `/bmad-testarch-automate`', 'red and expand task signals', 'headless', 'expand (entry default)', 'no'],
+    ]) {
+      assert(
+        routingExamples.some((row) => row.length === example.length && row.every((value, index) => value === example[index])),
+        `generation routing example: ${example[0]}, ${example[1]}, ${example[2]} selects ${example[3]} (${example[4]})`,
+      );
+    }
+    assert(
+      router.includes('`write acceptance tests`') && router.includes('`acceptance test scaffolds`'),
+      'canonical acceptance-test trigger phrases explicitly select red mode',
+    );
+    assert(
+      router.includes('resume_checkpoint_path') &&
+        router.includes('outside the configured artifact folder') &&
+        router.includes('A missing supplied file stops before activation'),
+      'generation binds an exact Resume checkpoint before activation without substituting another file',
+    );
+    for (const prefix of ['', 'red/']) {
+      const loader = await fs.readFile(path.join(generationRoot, prefix, 'steps-c/step-01b-resume.md'), 'utf8');
+      assert(
+        loader.includes('select that exact readable file before building a candidate list') &&
+          loader.includes('Bind `outputFile`') &&
+          loader.includes('exact path after any migration') &&
+          loader.includes('outside `{test_artifacts}`') &&
+          loader.includes('**Run identity check.**'),
+        `generation ${prefix || 'expand/'} Resume retains exact checkpoint selection, saves and identity checks`,
+      );
+    }
+    assert(
+      router.includes('workflow_customization_manual = true') &&
+        router.includes('red/customize.toml') &&
+        router.includes('_bmad/custom/bmad-testarch-atdd.toml') &&
+        entry.includes('skip this resolver command'),
+      'canonical-only red retains the legacy customization namespace with embedded defaults',
+    );
+  } catch (error) {
+    assert(false, 'generation routing and Resume contract validates', error.message);
+  }
+
   const frameworkScaffoldStepPath = path.join(projectRoot, 'skills/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md');
   try {
     const frameworkScaffoldStep = await fs.readFile(frameworkScaffoldStepPath, 'utf8');
@@ -1114,7 +1231,7 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 5: Lean Skill Shape${colors.reset}\n`);
 
   const LEAN_SKILL_DIRS = ['bmad-testarch-evaluate'];
-  const ADAPTER_SKILL_DIRS = ['bmad-testarch-ci'];
+  const ADAPTER_SKILL_DIRS = ['bmad-testarch-ci', 'bmad-testarch-atdd'];
   const LEAN_REQUIRED = ['SKILL.md', 'customize.toml', 'references', 'assets'];
   const LEAN_FORBIDDEN = ['workflow.yaml', 'steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'scripts'];
 
@@ -1187,10 +1304,25 @@ async function runTests() {
   for (const dirName of ADAPTER_SKILL_DIRS) {
     const adapterDir = path.join(projectRoot, 'skills', dirName);
     for (const forbidden of ['steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'resources']) {
-      assert(!(await pathExists(path.join(adapterDir, forbidden))), `${dirName} delegates ${forbidden} to the canonical framework skill`);
+      assert(!(await pathExists(path.join(adapterDir, forbidden))), `${dirName} delegates ${forbidden} to its canonical skill`);
     }
     for (const required of ['SKILL.md', 'customize.toml', 'bmod.toml', 'workflow.yaml']) {
       assert(await pathExists(path.join(adapterDir, required)), `${dirName}/${required} retains the installed entry point`);
+    }
+    if (dirName === 'bmad-testarch-atdd') {
+      const redRoot = path.join(projectRoot, 'skills', 'bmad-testarch-automate', 'red');
+      for (const required of [
+        'instructions.md',
+        'checklist.md',
+        'atdd-checklist-template.md',
+        'resources',
+        'steps-c',
+        'steps-v',
+        'steps-e',
+      ]) {
+        assert(await pathExists(path.join(redRoot, required)), `canonical red mode retains ${required}`);
+      }
+      continue;
     }
     const ciRoot = path.join(projectRoot, 'skills', 'bmad-testarch-framework', 'ci');
     for (const required of [
@@ -1359,7 +1491,8 @@ async function runTests() {
   const ONCE_PER_PROJECT_DELIVERABLES = new Set(['test-design-architecture.md', 'test-design-qa.md', '{project_name}-handoff.md']);
 
   async function stepFrontmatter(workflow, stepsDir, fileName) {
-    const phase = workflow === 'ci' ? 'bmad-testarch-framework/ci' : `bmad-testarch-${workflow}`;
+    const phase =
+      workflow === 'ci' ? 'bmad-testarch-framework/ci' : workflow === 'atdd' ? 'bmad-testarch-automate/red' : `bmad-testarch-${workflow}`;
     const text = await fs.readFile(path.join(projectRoot, 'skills', phase, stepsDir, fileName), 'utf8');
     return yaml.load(extractFrontmatter(text)) ?? {};
   }
@@ -1368,7 +1501,8 @@ async function runTests() {
     const folder = `{test_artifacts}/${workflow}/`;
     const carriesScope = (value) => typeof value === 'string' && value.startsWith(folder) && tokens.some((token) => value.includes(token));
     try {
-      const stepsCDir = path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, 'steps-c');
+      const phase = workflow === 'atdd' ? 'bmad-testarch-automate/red' : `bmad-testarch-${workflow}`;
+      const stepsCDir = path.join(projectRoot, 'skills', phase, 'steps-c');
       const stepFiles = (await fs.readdir(stepsCDir)).filter((name) => name.endsWith('.md')).sort();
       let outputSteps = 0;
       for (const fileName of stepFiles) {

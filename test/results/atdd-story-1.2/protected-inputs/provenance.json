@@ -1,0 +1,13 @@
+{
+  "sourceRepositoryCommit": "81c87714c3647077b83babe5e8de8dbcd3a8238c",
+  "protectedInputs": [
+    {
+      "path": "test/fixtures/atdd-eval/ground-truth.json",
+      "sha256": "34cb7a5cbc49475d3ae6624f1ce0f24ca8049e970a3a6b99eb0f30affab6cb3e"
+    },
+    {
+      "path": "test/contracts/atdd.contract.json",
+      "sha256": "ce888f9858f9412831f378ff305bcdbbc7b5f2449736fbb1adbd7690953caed2"
+    }
+  ]
+}

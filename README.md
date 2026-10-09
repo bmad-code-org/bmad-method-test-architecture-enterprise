@@ -3,7 +3,7 @@
 [Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/) · [Getting started](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) · [Contributing](./CONTRIBUTING.md) · [MIT license](./LICENSE)
 
 TEA is a BMad module for test planning, automation, evaluation, and release decisions.
-Its agent, Murat, uses ten workflows and a shared testing knowledge base to turn requirements and risks into tests and evidence.
+Its agent, Murat, uses eight workflows and a shared testing knowledge base to turn requirements and risks into tests and evidence.
 You can use TEA on its own or alongside BMad Method.
 
 TEA helps you:
@@ -48,6 +48,8 @@ npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-en
 
 ## Start with one workflow
 
+Ten commands start the eight workflows: Framework includes CI setup; Automation includes red and expand modes.
+
 In Claude Code, Cursor, and Windsurf, type `/bmad-testarch-test-design` in chat.
 In Codex, type `$bmad-testarch-test-design`.
 You can also load `/bmad-tea` or `$bmad-tea` and choose a menu code.
@@ -59,8 +61,8 @@ Each workflow can run directly in a fresh session.
 | [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)          | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence                 |
 | [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                   |
 | [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Connect tests and quality checks to CI                 |
-| [ATDD](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)                        | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
-| [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)                | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
+| [Automation: red (ATDD)](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)      | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
+| [Automation: expand](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)      | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
 | [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)          | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                  |
 | [NFR Evidence Audit](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)    | `/bmad-testarch-nfr`         | NR   | Assess performance, security, and reliability evidence |
 | [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/)          | `/bmad-testarch-evaluate`    | EV   | Build and run a behavioral evaluation                  |
@@ -70,6 +72,8 @@ Framework and CI setup share one skill, `bmad-testarch-framework`.
 Ask for framework only, CI only, or both; TEA infers the scope from your prompt and asks "Do you want CI too?" once when CI scope is unclear in an interactive session. An unattended request with unclear scope runs framework setup only and states that CI was excluded.
 `/bmad-testarch-ci` and the `CI` menu code still work and start the same skill's CI setup, with your existing CI customizations.
 Create, Resume, Validate, and Edit remain available for the selected setup scope.
+
+Automation uses `red` mode before implementation and `expand` mode for existing code. Your prompt selects the mode. `/bmad-testarch-atdd` and `AT` default to red; `/bmad-testarch-automate` and `TA` default to expand. Existing commands and customization files keep working. Create runs execute the generated tests and repair test issues for up to three rounds. Red confirms the intended missing behavior; expand aims for passing coverage and reports product defects.
 
 For Codex, replace the leading `/` in the table with `$`.
 The agent menu also accepts `GATE` to route you through test review, NFR evidence audit, and trace Phase 2.

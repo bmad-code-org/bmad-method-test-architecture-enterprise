@@ -93,7 +93,7 @@ Present this content (mostly autonomous, clear and educational):
 
 TEA is a comprehensive test architecture framework that provides:
 
-- **10 Workflows:** Teach Me Testing, Test Design, Framework, CI, ATDD, Automate, Test Review, NFR Evidence Audit, Trace, Evaluate
+- **8 Workflows:** Teach Me Testing, Test Design, Framework and CI Setup, Automation (red and expand modes), Test Review, NFR Evidence Audit, Trace, Evaluate. The CI and ATDD commands and their menu codes remain available.
 - **Framework and CI setup:** One `bmad-testarch-framework` skill handles framework only, CI only, or both. The `bmad-testarch-ci` command and `CI` menu code start its CI setup. TEA infers the scope from your prompt and asks "Do you want CI too?" once when unclear in an interactive session. An unattended request with unclear scope sets up the framework only. Create, Resume, Validate, and Edit choose the operation.
 - **59 Knowledge Fragments:** Distilled expertise on patterns, best practices, Playwright Utils
 - **Quality Standards:** Definition of Done with execution limits (no flaky tests, no hard waits, etc.)
@@ -123,7 +123,7 @@ Present this content (adapt examples based on user role from progress file):
 
 "### 🚀 TEA Lite: Your First Workflow
 
-The **Automate workflow** generates tests for your application automatically.
+The **automation skill** generates tests in two modes: red writes acceptance tests before implementation; expand adds coverage to existing code. This quick start uses expand. Create runs execute generated tests and repair test issues for up to three rounds, while reporting real product defects. Existing ATDD and automate commands and menu codes keep working.
 
 **How it works:**
 
@@ -307,7 +307,7 @@ duration: '30 min'
 
 ## Key Concepts Covered
 
-1. **TEA Framework:** 10 workflows + 59 knowledge fragments + quality standards
+1. **TEA Framework:** 8 workflows + 59 knowledge fragments + quality standards
 2. **Risk-Based Testing:** P0-P3 prioritization matrix
 3. **Quality Standards:** Definition of Done (no flaky tests, no hard waits, stateless, self-cleaning)
 4. **Engagement Models:** Lite, Solo, Integrated, Enterprise, Brownfield

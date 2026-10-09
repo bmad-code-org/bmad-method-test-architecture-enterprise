@@ -35,9 +35,19 @@ Validate ATDD outputs and provide a completion summary.
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+## 0. Run and Heal Generated Tests
+
+Set `test_operation = create` and preserve the selected `test_mode`.
+Read `{skill-root}/resources/run-and-heal.md` completely and execute it before validation and completion.
+Use the aggregated generated-file list and this run's existing `{outputFile}` for results.
+For a 2.0.0 Resume, recover that list from the checkpoint body and its generated files before execution; preserve original scope and acceptance criteria.
+Before execution and before each repair edit, persist the resolved values in this checkpoint's YAML frontmatter using the exact keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used`. Retain these typed values when saving completion; recover legacy body-only values as the shared resource specifies.
+Record execution status in the completion summary. When `test_mode_defaulted = true`, include the exact line `Mode selection: entry default ({test_mode})` and explain that the invocation supplied no clear mode signal. Otherwise report the selected mode and its explicit task or saved-checkpoint basis.
+A product defect or unavailable environment is reported honestly; a completed generation workflow does not imply all tests pass.
+
 ## 1. Validation
 
-Use `checklist.md` to validate:
+Use `{skill-root}/red/checklist.md` to validate:
 
 - Prerequisites satisfied
 - Test files created correctly
@@ -55,7 +65,8 @@ Use `checklist.md` to validate:
 - [ ] CLI sessions cleaned up (no orphaned browsers)
 - [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
 
-Fix any gaps before completion.
+Correct documentation and summary metadata gaps before completion. Any generated test/support edit belongs to the shared loop's frozen manifest and retained repair budget; this validation stage grants no additional repairs. Keep existing tests and production source unchanged.
+Execution failures follow the shared bounded loop; retain its intended red failures, unresolved failures and blockers without further repair.
 
 ---
 
@@ -85,6 +96,7 @@ Report:
 ## 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used` in either save branch below. Save their current values; the first-save identity template never resets settings or spent rounds.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 
@@ -114,6 +126,7 @@ Report:
   - Set `lastSaved: '{date}'`
   - Ensure `storyId`, `storyKey`, `storyFile`, and `atddChecklistPath` are present and populated
   - Ensure `generatedTestFiles` remains populated with the deterministic list of present generated test paths
+  - Retain the resolved frontmatter settings and `healing_rounds_used` saved by the loop; completion never resets the budget.
   - Append this step's output to the appropriate section.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
@@ -129,8 +142,13 @@ Report:
 
 ## On Complete
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
+When `workflow_customization_manual = true`, execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally.
+Otherwise resolve the same selected customization surface below; never run the other mode's hook.
+
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow.on_complete`
 
 If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
 
-If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
+If the resolver fails or returns no output, use the selected `workflow.on_complete` block already resolved during activation (or resolve the selected defaults/team/user files with the same structural merge rules).
+Execute its non-empty value as the final terminal instruction.
+An explicitly resolved empty value means no completion hook; exit normally.

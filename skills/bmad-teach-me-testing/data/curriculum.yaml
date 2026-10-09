@@ -54,7 +54,7 @@ sessions:
     duration: "60 min"
     difficulty: intermediate
     objective: "Generate tests with TDD red-green approach"
-    description: "ATDD workflow (red phase), Automate workflow, component TDD, API testing"
+    description: "Automation red (ATDD) and expand modes, run and heal, component TDD, API testing"
     recommended_for:
       - intermediate
       - experienced

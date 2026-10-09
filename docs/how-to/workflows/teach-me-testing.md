@@ -253,8 +253,8 @@ Use these workflows to practice:
 
 - [Framework](/docs/how-to/workflows/setup-test-framework.md): Set up test framework
 - [Test Design](/docs/how-to/workflows/run-test-design.md): Plan test coverage
-- [ATDD](/docs/how-to/workflows/run-atdd.md): Generate failing tests first
-- [Automate](/docs/how-to/workflows/run-automate.md): Expand test coverage
+- Automation [red mode (ATDD)](/docs/how-to/workflows/run-atdd.md): Generate and verify failing acceptance tests first
+- Automation [expand mode](/docs/how-to/workflows/run-automate.md): Add coverage, run generated tests, and repair test issues
 - [Test Review](/docs/how-to/workflows/run-test-review.md): Audit test quality
 - [Trace](/docs/how-to/workflows/run-trace.md): Requirements traceability
 

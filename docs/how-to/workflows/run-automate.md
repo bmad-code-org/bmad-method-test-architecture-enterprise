@@ -5,8 +5,9 @@ description: Expand test automation coverage after implementation using TEA's au
 
 # How to Run Automate with TEA
 
-Use TEA's `automate` workflow to add tests for implemented features.
-Run the generated tests against your application and investigate failures before accepting them.
+Use the automation skill's `expand` mode to add tests for implemented features. It also supports `red` mode for acceptance scaffolds before implementation. Your prompt selects the mode; the automate command and `TA` menu code default to expand.
+
+Create runs execute the generated tests and repair test issues by default, for up to three rounds. The summary records the repairs and any remaining failures. Real product defects keep their failing assertions and appear as findings.
 
 ## When to Use This
 
@@ -32,6 +33,8 @@ If using Cypress, commands and syntax will differ.
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate`
 - **Codex:** `$bmad-testarch-automate`
 - **Inside a `/bmad-tea` chat:** `TA`
+
+Ask for `expand` when adding coverage to existing code, or `red` when writing acceptance tests before implementation. Interactive and unattended requests with unclear mode default to expand; unattended runs state that choice in the summary. The existing ATDD command and `AT` menu code default to red. Existing customization files and interrupted progress keep working.
 
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
@@ -548,6 +551,14 @@ Don't duplicate that coverage
 ```
 
 TEA will analyze existing tests and only generate new scenarios.
+
+### Run and Heal
+
+Create runs execute the generated tests, classify failures, apply the matching test fixes, and rerun up to three rounds. Selector failures use resilient locators; timing and hard-wait failures use observable readiness; data and network failures use controlled fixtures and request handling. A real product defect remains a finding with the assertion intact. The run reports blocked execution when its environment cannot run the tests.
+
+Validate checks the selected outputs and reports execution evidence. Edit checks the requested changes. These operations never run test repairs or require the full suite to pass.
+
+Run and heal is enabled by default. Customize `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, and `use_mcp_healing` in the [automation settings](/docs/reference/configuration.md#automation-run-and-heal).
 
 ### Browser Automation (Optional)
 

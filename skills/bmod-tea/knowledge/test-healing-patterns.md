@@ -2,643 +2,123 @@
 
 ## Principle
 
-Common test failures follow predictable patterns (stale selectors, race conditions, dynamic data assertions, network errors, hard waits). **Automated healing** identifies failure signatures and applies pattern-based fixes. Manual healing captures these patterns for future automation.
+Run generated tests, diagnose the cause from runtime and source evidence, repair confirmed test defects, and execute again. Acceptance criteria and assertions define the behavior to preserve. Error text suggests a hypothesis; it cannot establish that a test is wrong.
 
-## Rationale
+The merged `bmad-testarch-automate` skill applies these patterns during Create in red and expand modes through `resources/run-and-heal.md`. Execution and healing default to enabled, with at most three repair rounds. Validate and Edit never heal. Expand seeks passing tests. Red verifies that the criterion executes and fails for the intended missing behavior, which remains unchanged.
 
-**The Problem**: Test failures waste developer time on repetitive debugging. Teams manually fix the same selector issues, timing bugs, and data mismatches repeatedly across test suites.
+## Diagnose Before Editing
 
-**The Solution**: Catalog common failure patterns with diagnostic signatures and automated fixes. When a test fails, match the error message/stack trace against known patterns and apply the corresponding fix. This transforms test maintenance from reactive debugging to proactive pattern application.
+For each failure, read the generated test, its criterion, fixture setup, relevant application source, and fresh runner output. Inspect DOM/network snapshots or traces when needed. Record the file:line, class, supporting evidence and proposed repair. A timeout can mean a stale locator, unfinished setup, unavailable environment or absent product behavior. A numeric mismatch can be a product defect. Preserve uncertain failures and report what must be investigated.
 
-**Why This Matters**:
+| Class               | Confirm the cause                                                                  | Repair boundary                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Selector            | Intended element exists, generated locator misses it                               | Use its observed test ID, role/name or scoped locator                                   |
+| Timing              | Correct effect finishes after an unawaited operation or missed event               | Await operation; register the observable wait before its trigger                        |
+| Data                | Generated setup uses a stale/invalid value; authoritative factory has correct data | Fix setup input/identity and retain exact expected business values                      |
+| Network             | Test URL, declared service or existing external double is configured incorrectly   | Repair test wiring; preserve the real SUT boundary                                      |
+| Hard wait           | Sleep races a demonstrated state transition                                        | Replace sleep with the matching event/state wait                                        |
+| Syntax/import/setup | Generated code cannot parse/load or initialize its fixture                         | Repair generated code using actual project imports and fixture conventions              |
+| Product defect      | Valid setup reaches behavior that violates the criterion                           | Keep the failing assertion and report reproduction, expected/actual result and evidence |
+| Intended red        | Assertion executes and fails for the criterion's unimplemented behavior            | Keep the scaffold unchanged and record the verified missing behavior                    |
+| Unknown/environment | Required evidence, dependency, service or credential is unavailable                | Report could not measure or investigation needed; preserve test and source              |
 
-- Reduces test maintenance time by 60-80% (pattern-based fixes vs manual debugging)
-- Prevents flakiness regression (same bug fixed once, applied everywhere)
-- Builds institutional knowledge (failure catalog grows over time)
-- Enables self-healing test suites (automate workflow validates and heals)
+## Selector Repairs
 
-## Pattern Examples
-
-### Example 1: Common Failure Pattern - Stale Selectors (Element Not Found)
-
-**Context**: Test fails with "Element not found" or "Locator resolved to 0 elements" errors
-
-**Diagnostic Signature**:
-
-```typescript
-// src/testing/healing/selector-healing.ts
-
-export type SelectorFailure = {
-  errorMessage: string;
-  stackTrace: string;
-  selector: string;
-  testFile: string;
-  lineNumber: number;
-};
-
-/**
- * Detect stale selector failures
- */
-export function isSelectorFailure(error: Error): boolean {
-  const patterns = [
-    /locator.*resolved to 0 elements/i,
-    /element not found/i,
-    /waiting for locator.*to be visible/i,
-    /selector.*did not match any elements/i,
-    /unable to find element/i,
-  ];
-
-  return patterns.some((pattern) => pattern.test(error.message));
-}
-
-/**
- * Extract selector from error message
- */
-export function extractSelector(errorMessage: string): string | null {
-  // Playwright: "locator('button[type=\"submit\"]') resolved to 0 elements"
-  const playwrightMatch = errorMessage.match(/locator\('([^']+)'\)/);
-  if (playwrightMatch) return playwrightMatch[1];
-
-  // Cypress: "Timed out retrying: Expected to find element: '.submit-button'"
-  const cypressMatch = errorMessage.match(/Expected to find element: ['"]([^'"]+)['"]/i);
-  if (cypressMatch) return cypressMatch[1];
-
-  return null;
-}
-
-/**
- * Suggest better selector based on hierarchy
- */
-export function suggestBetterSelector(badSelector: string): string {
-  // If using CSS class → suggest data-testid
-  if (badSelector.startsWith('.') || badSelector.includes('class=')) {
-    const elementName = badSelector.match(/class=["']([^"']+)["']/)?.[1] || badSelector.slice(1);
-    return `page.getByTestId('${elementName}') // Prefer data-testid over CSS class`;
-  }
-
-  // If using ID → suggest data-testid
-  if (badSelector.startsWith('#')) {
-    return `page.getByTestId('${badSelector.slice(1)}') // Prefer data-testid over ID`;
-  }
-
-  // If using nth() → suggest filter() or more specific selector
-  if (badSelector.includes('.nth(')) {
-    return `page.locator('${badSelector.split('.nth(')[0]}').filter({ hasText: 'specific text' }) // Avoid brittle nth(), use filter()`;
-  }
-
-  // If using complex CSS → suggest ARIA role
-  if (badSelector.includes('>') || badSelector.includes('+')) {
-    return `page.getByRole('button', { name: 'Submit' }) // Prefer ARIA roles over complex CSS`;
-  }
-
-  return `page.getByTestId('...') // Add data-testid attribute to element`;
-}
-```
-
-**Healing Implementation**:
+Use `selector-resilience.md`. Observe the same intended element in the live page or source first. Prefer its existing data-testid, then an accessible role/name, then scoped meaningful text. A class name does not establish a test ID. Adding production attributes belongs to product work outside the healing loop. An absent feature in red remains an intended missing-behavior failure.
 
 ```typescript
-// tests/healing/selector-healing.spec.ts
-import { test, expect } from '@playwright/test';
-import { isSelectorFailure, extractSelector, suggestBetterSelector } from '../../src/testing/healing/selector-healing';
-
-test('heal stale selector failures automatically', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  try {
-    // Original test with brittle CSS selector
-    await page.locator('.btn-primary').click();
-  } catch (error: any) {
-    if (isSelectorFailure(error)) {
-      const badSelector = extractSelector(error.message);
-      const suggestion = badSelector ? suggestBetterSelector(badSelector) : null;
-
-      console.log('HEALING SUGGESTION:', suggestion);
-
-      // Apply healed selector
-      await page.getByTestId('submit-button').click(); // Fixed!
-    } else {
-      throw error; // Not a selector issue, rethrow
-    }
-  }
-
-  await expect(page.getByText('Success')).toBeVisible();
-});
+// Evidence: the checkout source and DOM expose this existing button.
+// Original generated locator: page.locator('.submit-payment-old')
+await page.getByRole('button', { name: 'Complete Payment', exact: true }).click();
+await expect(page.getByTestId('receipt-status')).toHaveText('Paid');
 ```
 
-**Key Points**:
+Keep the action target and receipt expectation. Ambiguous or unobserved replacement locators require investigation.
 
-- Diagnosis: Error message contains "locator resolved to 0 elements" or "element not found"
-- Fix: Replace brittle selector (CSS class, ID, nth) with robust alternative (data-testid, ARIA role)
-- Prevention: Follow selector hierarchy (data-testid > ARIA > text > CSS)
-- Automation: Pattern matching on error message + stack trace
+## Timing and Hard-Wait Repairs
 
----
-
-### Example 2: Common Failure Pattern - Race Conditions (Timing Errors)
-
-**Context**: Test fails with "timeout waiting for element" or "element not visible" errors
-
-**Diagnostic Signature**:
+Use `timing-debugging.md` and `network-first.md`. Await promise-returning setup and actions. Register the wait before the trigger so a fast event cannot be missed. Observe the exact request or state transition under test. A genuine slow or broken product path remains a product issue. Preserve its timeout budget.
 
 ```typescript
-// src/testing/healing/timing-healing.ts
-
-export type TimingFailure = {
-  errorMessage: string;
-  testFile: string;
-  lineNumber: number;
-  actionType: 'click' | 'fill' | 'waitFor' | 'expect';
-};
-
-/**
- * Detect race condition failures
- */
-export function isTimingFailure(error: Error): boolean {
-  const patterns = [
-    /timeout.*waiting for/i,
-    /element is not visible/i,
-    /element is not attached to the dom/i,
-    /waiting for element to be visible.*exceeded/i,
-    /timed out retrying/i,
-    /waitForLoadState.*timeout/i,
-  ];
-
-  return patterns.some((pattern) => pattern.test(error.message));
-}
-
-/**
- * Detect hard wait anti-pattern
- */
-export function hasHardWait(testCode: string): boolean {
-  const hardWaitPatterns = [/page\.waitForTimeout\(/, /cy\.wait\(\d+\)/, /await.*sleep\(/, /setTimeout\(/];
-
-  return hardWaitPatterns.some((pattern) => pattern.test(testCode));
-}
-
-/**
- * Suggest deterministic wait replacement
- */
-export function suggestDeterministicWait(testCode: string): string {
-  if (testCode.includes('page.waitForTimeout')) {
-    return `
-// ❌ Bad: Hard wait (flaky)
-// await page.waitForTimeout(3000)
-
-// ✅ Good: Wait for network response
-await page.waitForResponse(resp => resp.url().includes('/api/data') && resp.status() === 200)
-
-// OR wait for element state
-await page.getByTestId('loading-spinner').waitFor({ state: 'detached' })
-    `.trim();
-  }
-
-  if (testCode.includes('cy.wait(') && /cy\.wait\(\d+\)/.test(testCode)) {
-    return `
-// ❌ Bad: Hard wait (flaky)
-// cy.wait(3000)
-
-// ✅ Good: Wait for aliased network request
-cy.intercept('GET', '/api/data').as('getData')
-cy.visit('/page')
-cy.wait('@getData')
-    `.trim();
-  }
-
-  return `
-// Add network-first interception BEFORE navigation:
-await page.route('**/api/**', route => route.continue())
-const responsePromise = page.waitForResponse('**/api/data')
-await page.goto('/page')
-await responsePromise
-  `.trim();
-}
+// The trace shows the response completes before the old wait was registered.
+const responsePromise = page.waitForResponse(
+  (response) => response.url().endsWith('/api/orders') && response.request().method() === 'POST',
+);
+await page.getByRole('button', { name: 'Place Order' }).click();
+const response = await responsePromise;
+expect(response.status()).toBe(201);
+await expect(page.getByTestId('order-status')).toHaveText('Confirmed');
 ```
 
-**Healing Implementation**:
+When `tea_use_playwright_utils` is true, use the project's merged fixtures, `interceptNetworkCall` and `recurse` as required by `playwright-utils-mandate.md`. Register the helper before the triggering action and retain exact response assertions. Cypress uses a named intercept registered before navigation/action; backend suites await real operations through their own runner. Restore fake clocks in teardown when controlled time is relevant.
 
 ```typescript
-// tests/healing/timing-healing.spec.ts
-import { test, expect } from '@playwright/test';
-import { isTimingFailure, hasHardWait, suggestDeterministicWait } from '../../src/testing/healing/timing-healing';
-
-test('heal race condition with network-first pattern', async ({ page, context }) => {
-  // Setup interception BEFORE navigation (prevent race)
-  await context.route('**/api/products', (route) => {
-    route.fulfill({
-      status: 200,
-      body: JSON.stringify({ products: [{ id: 1, name: 'Product A' }] }),
-    });
-  });
-
-  const responsePromise = page.waitForResponse('**/api/products');
-
-  await page.goto('/products');
-  await responsePromise; // Deterministic wait
-
-  // Element now reliably visible (no race condition)
-  await expect(page.getByText('Product A')).toBeVisible();
-});
-
-test('heal hard wait with event-based wait', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  // ❌ Original (flaky): await page.waitForTimeout(3000)
-
-  // ✅ Healed: Wait for spinner to disappear
-  await page.getByTestId('loading-spinner').waitFor({ state: 'detached' });
-
-  // Element now reliably visible
-  await expect(page.getByText('Dashboard loaded')).toBeVisible();
-});
+// Replace a generated sleep with the observed terminal state.
+await page.getByTestId('loading-spinner').waitFor({ state: 'detached' });
+await expect(page.getByTestId('balance')).toHaveText('$42.00');
 ```
 
-**Key Points**:
+## Data Repairs
 
-- Diagnosis: Error contains "timeout" or "not visible", often after navigation
-- Fix: Replace hard waits with network-first pattern or element state waits
-- Prevention: ALWAYS intercept before navigate, use waitForResponse()
-- Automation: Detect `page.waitForTimeout()` or `cy.wait(number)` in test code
-
----
-
-### Example 3: Common Failure Pattern - Dynamic Data Assertions (Non-Deterministic IDs)
-
-**Context**: Test fails with "Expected 'User 123' but received 'User 456'" or timestamp mismatches
-
-**Diagnostic Signature**:
+Use `data-factories.md`. Trace identity to the factory or setup response, isolate fixture data and clean it up. Fix generated setup without changing the business expectation. Do not replace an exact value with a regex, substring, any-value matcher or the actual product output simply because it failed. Format-only matchers are appropriate when the original acceptance criterion explicitly specifies only a format.
 
 ```typescript
-// src/testing/healing/data-healing.ts
-
-export type DataFailure = {
-  errorMessage: string;
-  expectedValue: string;
-  actualValue: string;
-  testFile: string;
-  lineNumber: number;
-};
-
-/**
- * Detect dynamic data assertion failures
- */
-export function isDynamicDataFailure(error: Error): boolean {
-  const patterns = [
-    /expected.*\d+.*received.*\d+/i, // ID mismatches
-    /expected.*\d{4}-\d{2}-\d{2}.*received/i, // Date mismatches
-    /expected.*user.*\d+/i, // Dynamic user IDs
-    /expected.*order.*\d+/i, // Dynamic order IDs
-    /expected.*to.*contain.*\d+/i, // Numeric assertions
-  ];
-
-  return patterns.some((pattern) => pattern.test(error.message));
-}
-
-/**
- * Suggest flexible assertion pattern
- */
-export function suggestFlexibleAssertion(errorMessage: string): string {
-  if (/expected.*user.*\d+/i.test(errorMessage)) {
-    return `
-// ❌ Bad: Hardcoded ID
-// await expect(page.getByText('User 123')).toBeVisible()
-
-// ✅ Good: Regex pattern for any user ID
-await expect(page.getByText(/User \\d+/)).toBeVisible()
-
-// OR use partial match
-await expect(page.locator('[data-testid="user-name"]')).toContainText('User')
-    `.trim();
-  }
-
-  if (/expected.*\d{4}-\d{2}-\d{2}/i.test(errorMessage)) {
-    return `
-// ❌ Bad: Hardcoded date
-// await expect(page.getByText('2024-01-15')).toBeVisible()
-
-// ✅ Good: Dynamic date validation
-const today = new Date().toISOString().split('T')[0]
-await expect(page.getByTestId('created-date')).toHaveText(today)
-
-// OR use date format regex
-await expect(page.getByTestId('created-date')).toHaveText(/\\d{4}-\\d{2}-\\d{2}/)
-    `.trim();
-  }
-
-  if (/expected.*order.*\d+/i.test(errorMessage)) {
-    return `
-// ❌ Bad: Hardcoded order ID
-// const orderId = '12345'
-
-// ✅ Good: Capture dynamic order ID
-const orderText = await page.getByTestId('order-id').textContent()
-const orderId = orderText?.match(/Order #(\\d+)/)?.[1]
-expect(orderId).toBeTruthy()
-
-// Use captured ID in later assertions
-await expect(page.getByText(\`Order #\${orderId} confirmed\`)).toBeVisible()
-    `.trim();
-  }
-
-  return `Use regex patterns, partial matching, or capture dynamic values instead of hardcoding`;
-}
+// Evidence: createOrder returns the seeded order's ID; 'order-123' was invented.
+const seededOrder = await createOrder({ totalCents: 4200 });
+await page.goto(`/orders/${seededOrder.id}`);
+await expect(page.getByTestId('order-total')).toHaveText('$42.00');
 ```
 
-**Healing Implementation**:
+## Network Repairs
+
+Read the configured base URL, service readiness, route method and actual response. Correct a generated typo or a missing declared test fixture. A 500 from a real application endpoint is evidence to investigate and reproduce. Keep the real endpoint and the expected status assertion intact.
+
+An external double already specified by the scenario may have a wrong URL/method or may be registered after its request starts. Correct that wiring before the trigger within the declared boundary. Preserve response semantics. Never introduce an external double for the SUT endpoint under test or synthesize success to conceal a failure. Contract tests retain the real consumer and provider-source scrutiny, with `pactjs-utils-mandate.md` respected when enabled.
 
 ```typescript
-// tests/healing/data-healing.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('heal dynamic ID assertion with regex', async ({ page }) => {
-  await page.goto('/users');
-
-  // ❌ Original (fails with random IDs): await expect(page.getByText('User 123')).toBeVisible()
-
-  // ✅ Healed: Regex pattern matches any user ID
-  await expect(page.getByText(/User \d+/)).toBeVisible();
-});
-
-test('heal timestamp assertion with dynamic generation', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  // ❌ Original (fails daily): await expect(page.getByText('2024-01-15')).toBeVisible()
-
-  // ✅ Healed: Generate expected date dynamically
-  const today = new Date().toISOString().split('T')[0];
-  await expect(page.getByTestId('last-updated')).toContainText(today);
-});
-
-test('heal order ID assertion with capture', async ({ page, request }) => {
-  // Create order via API (dynamic ID)
-  const response = await request.post('/api/orders', {
-    data: { productId: '123', quantity: 1 },
-  });
-  const { orderId } = await response.json();
-
-  // ✅ Healed: Use captured dynamic ID
-  await page.goto(`/orders/${orderId}`);
-  await expect(page.getByText(`Order #${orderId}`)).toBeVisible();
-});
+// Evidence: the project config names '/api/orders'; the generated path was '/api/order'.
+const response = await request.post('/api/orders', { data: { quantity: 1, sku: seededProduct.sku } });
+expect(response.status()).toBe(201);
+expect((await response.json()).totalCents).toBe(4200);
 ```
 
-**Key Points**:
+When `tea_use_playwright_utils` is true, use the project's `apiRequest` fixture for API calls. The raw runner example above applies when that flag is false.
 
-- Diagnosis: Error message shows expected vs actual value mismatch with IDs/timestamps
-- Fix: Use regex patterns (`/User \d+/`), partial matching, or capture dynamic values
-- Prevention: Never hardcode IDs, timestamps, or random data in assertions
-- Automation: Parse error message for expected/actual values, suggest regex patterns
+## Syntax, Import and Setup Repairs
 
----
+A parser error or unresolved import prevents the acceptance criterion from executing. Read the existing project exports, dependency declarations and fixture composition. Correct generated syntax, import paths, asynchronous fixture lifetime or setup order. Keep the scenario/assertion intact. Missing dependencies or unavailable credentials are environment blockers when they cannot be supplied within the run's authorized setup.
 
-### Example 4: Common Failure Pattern - Network Errors (Missing Route Interception)
+## Red Verification
 
-**Context**: Test fails with "API call failed" or "500 error" during test execution
+Permanent Playwright acceptance scaffolds keep `test.skip('title', ...)`. Verify a disposable copy, preserving original files and every business assertion. Prefer the available `tea-atdd-red-check` for compatible browserless loopback projects: it uses a minimal worker environment, refuses worker child processes including browser launches, and supports `*.spec.ts` scaffolds. Derive its per-file process bound from the project's existing execution budgets; the default 15 seconds cannot replace a longer declared test budget. Its successful exit means the report exists.
 
-**Diagnostic Signature**:
+For browser tests, required project environment/services, non-loopback endpoints, another runner/format or a skill-only install with no verifier, use the actual project-native runner on the disposable activated copy with the original configuration and environment. Activate only the generated leaf scaffold wrappers. Preserve other skips and all test bodies. Run files separately when a load error would mask sibling results; capture fresh per-file JSON, every project/attempt's actual status, full assertion messages and load/setup errors. Compare production/config content and permissions before and after execution. Record the fallback reason and runner/budget in the summary. Keep the evaluation CLI's isolation unchanged.
 
-```typescript
-// src/testing/healing/network-healing.ts
+Map each result to the criterion's recorded failure signature and establish that the assertion executed. Skipped, empty, unmapped, timed-out and wrong-reason results cannot count as verified red. Repair wrong-reason syntax/import/locator/setup defects only until the expected missing-behavior failure is reached. Preserve that failure and keep production unchanged. A runner without usable per-test evidence reports could not measure.
 
-export type NetworkFailure = {
-  errorMessage: string;
-  url: string;
-  statusCode: number;
-  method: string;
-};
+## Bounded Loop and Report
 
-/**
- * Detect network failure
- */
-export function isNetworkFailure(error: Error): boolean {
-  const patterns = [
-    /api.*call.*failed/i,
-    /request.*failed/i,
-    /network.*error/i,
-    /500.*internal server error/i,
-    /503.*service unavailable/i,
-    /fetch.*failed/i,
-  ];
+1. Execute the generated scope and record fresh results.
+2. Classify with evidence and identify confirmed test defects.
+3. Persist the round count, apply scoped repairs and re-run.
+4. Stop when expand passes, red is verified, only preserved/blocked failures remain, or three repair rounds are used.
+5. Report commands, counts, healed file:line and change, criteria preserved, intended red failures, product defects and blockers.
 
-  return patterns.some((pattern) => pattern.test(error.message));
-}
-
-/**
- * Suggest route interception
- */
-export function suggestRouteInterception(url: string, method: string): string {
-  return `
-// ❌ Bad: Real API call (unreliable, slow, external dependency)
-
-// ✅ Good: Mock API response with route interception
-await page.route('${url}', route => {
-  route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      // Mock response data
-      id: 1,
-      name: 'Test User',
-      email: 'test@example.com'
-    })
-  })
-})
-
-// Then perform action
-await page.goto('/page')
-  `.trim();
-}
-```
-
-**Healing Implementation**:
-
-```typescript
-// tests/healing/network-healing.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('heal network failure with route mocking', async ({ page, context }) => {
-  // ✅ Healed: Mock API to prevent real network calls
-  await context.route('**/api/products', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        products: [
-          { id: 1, name: 'Product A', price: 29.99 },
-          { id: 2, name: 'Product B', price: 49.99 },
-        ],
-      }),
-    });
-  });
-
-  await page.goto('/products');
-
-  // Test now reliable (no external API dependency)
-  await expect(page.getByText('Product A')).toBeVisible();
-  await expect(page.getByText('$29.99')).toBeVisible();
-});
-
-test('heal 500 error with error state mocking', async ({ page, context }) => {
-  // Mock API failure scenario
-  await context.route('**/api/products', (route) => {
-    route.fulfill({ status: 500, body: JSON.stringify({ error: 'Internal Server Error' }) });
-  });
-
-  await page.goto('/products');
-
-  // Verify error handling (not crash)
-  await expect(page.getByText('Unable to load products')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-});
-```
-
-**Key Points**:
-
-- Diagnosis: Error message contains "API call failed", "500 error", or network-related failures
-- Fix: Add `page.route()` or `cy.intercept()` to mock API responses
-- Prevention: Mock ALL external dependencies (APIs, third-party services)
-- Automation: Extract URL from error message, generate route interception code
-
----
-
-### Example 5: Common Failure Pattern - Hard Waits (Unreliable Timing)
-
-**Context**: Test fails intermittently with "timeout exceeded" or passes/fails randomly
-
-**Diagnostic Signature**:
-
-```typescript
-// src/testing/healing/hard-wait-healing.ts
-
-/**
- * Detect hard wait anti-pattern in test code
- */
-export function detectHardWaits(testCode: string): Array<{ line: number; code: string }> {
-  const lines = testCode.split('\n');
-  const violations: Array<{ line: number; code: string }> = [];
-
-  lines.forEach((line, index) => {
-    if (line.includes('page.waitForTimeout(') || /cy\.wait\(\d+\)/.test(line) || line.includes('sleep(') || line.includes('setTimeout(')) {
-      violations.push({ line: index + 1, code: line.trim() });
-    }
-  });
-
-  return violations;
-}
-
-/**
- * Suggest event-based wait replacement
- */
-export function suggestEventBasedWait(hardWaitLine: string): string {
-  if (hardWaitLine.includes('page.waitForTimeout')) {
-    return `
-// ❌ Bad: Hard wait (flaky)
-${hardWaitLine}
-
-// ✅ Good: Wait for network response
-await page.waitForResponse(resp => resp.url().includes('/api/') && resp.ok())
-
-// OR wait for element state change
-await page.getByTestId('loading-spinner').waitFor({ state: 'detached' })
-await page.getByTestId('content').waitFor({ state: 'visible' })
-    `.trim();
-  }
-
-  if (/cy\.wait\(\d+\)/.test(hardWaitLine)) {
-    return `
-// ❌ Bad: Hard wait (flaky)
-${hardWaitLine}
-
-// ✅ Good: Wait for aliased request
-cy.intercept('GET', '/api/data').as('getData')
-cy.visit('/page')
-cy.wait('@getData') // Deterministic
-    `.trim();
-  }
-
-  return 'Replace hard waits with event-based waits (waitForResponse, waitFor state changes)';
-}
-```
-
-**Healing Implementation**:
-
-```typescript
-// tests/healing/hard-wait-healing.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('heal hard wait with deterministic wait', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  // ❌ Original (flaky): await page.waitForTimeout(3000)
-
-  // ✅ Healed: Wait for loading spinner to disappear
-  await page.getByTestId('loading-spinner').waitFor({ state: 'detached' });
-
-  // OR wait for specific network response
-  await page.waitForResponse((resp) => resp.url().includes('/api/dashboard') && resp.ok());
-
-  await expect(page.getByText('Dashboard ready')).toBeVisible();
-});
-
-test('heal implicit wait with explicit network wait', async ({ page }) => {
-  const responsePromise = page.waitForResponse('**/api/products');
-
-  await page.goto('/products');
-
-  // ❌ Original (race condition): await page.getByText('Product A').click()
-
-  // ✅ Healed: Wait for network first
-  await responsePromise;
-  await page.getByText('Product A').click();
-
-  await expect(page).toHaveURL(/\/products\/\d+/);
-});
-```
-
-**Key Points**:
-
-- Diagnosis: Test code contains `page.waitForTimeout()` or `cy.wait(number)`
-- Fix: Replace with `waitForResponse()`, `waitFor({ state })`, or aliased intercepts
-- Prevention: NEVER use hard waits, always use event-based/response-based waits
-- Automation: Scan test code for hard wait patterns, suggest deterministic replacements
-
----
-
-## Healing Pattern Catalog
-
-| Failure Type   | Diagnostic Signature                          | Healing Strategy                      | Prevention Pattern                        |
-| -------------- | --------------------------------------------- | ------------------------------------- | ----------------------------------------- |
-| Stale Selector | "locator resolved to 0 elements"              | Replace with data-testid or ARIA role | Selector hierarchy (testid > ARIA > text) |
-| Race Condition | "timeout waiting for element"                 | Add network-first interception        | Intercept before navigate                 |
-| Dynamic Data   | "Expected 'User 123' but got 'User 456'"      | Use regex or capture dynamic values   | Never hardcode IDs/timestamps             |
-| Network Error  | "API call failed", "500 error"                | Add route mocking                     | Mock all external dependencies            |
-| Hard Wait      | Test contains `waitForTimeout()` or `wait(n)` | Replace with event-based waits        | Always use deterministic waits            |
-
-## Healing Workflow
-
-1. **Run test** → Capture failure
-2. **Identify pattern** → Match error against diagnostic signatures
-3. **Apply fix** → Use pattern-based healing strategy
-4. **Re-run test** → Validate fix (max 3 iterations)
-5. **Mark unfixable** → Use `test.fixme()` if healing fails after 3 attempts
+Never introduce `test.fixme()`, additional skip calls, expected-failure annotations, weakened assertions, arbitrary sleeps, enlarged timeout budgets or catch-and-ignore logic during healing. Unresolved expand tests stay active. Red retains its existing scaffold convention. Resume retains the round count. Report remaining failures without claiming green.
 
 ## Healing Checklist
 
-Before enabling auto-healing in workflows:
-
-- [ ] **Failure catalog documented**: Common patterns identified (selectors, timing, data, network, hard waits)
-- [ ] **Diagnostic signatures defined**: Error message patterns for each failure type
-- [ ] **Healing strategies documented**: Fix patterns for each failure type
-- [ ] **Prevention patterns documented**: Best practices to avoid recurrence
-- [ ] **Healing iteration limit set**: Max 3 attempts before marking test.fixme()
-- [ ] **MCP integration optional**: Graceful degradation without Playwright MCP
-- [ ] **Pattern-based fallback**: Use knowledge base patterns when MCP unavailable
-- [ ] **Healing report generated**: Document what was healed and how
+- [ ] Generated scope, assertions, acceptance criteria and production baseline saved
+- [ ] Fresh execution evidence collected for every generated test
+- [ ] Each proposed repair supported by runtime/source evidence
+- [ ] Only generated tests and support files within this run repaired
+- [ ] Playwright Utils and Pact.js Utils mandates preserved when applicable
+- [ ] Correct red failures and real product defects left unchanged
+- [ ] At most three repair rounds, including rounds before interruption
+- [ ] Unresolved results reported with reproduction and next action
 
 ## Integration Points
 
-- **Used in workflows**: `*automate` (auto-healing after test generation), `*atdd` (optional healing for acceptance tests)
-- **Related fragments**: `selector-resilience.md` (selector debugging), `timing-debugging.md` (race condition fixes), `network-first.md` (interception patterns), `data-factories.md` (dynamic data handling)
-- **Tools**: Error message parsing, AST analysis for code patterns, Playwright MCP (optional), pattern matching
-
-_Source: Playwright test-healer patterns, production test failure analysis, common anti-patterns from test-resources-for-ai._
+- **Used in workflows**: `*automate` Create in red/expand modes; `*atdd` Create enters red mode through its existing command
+- **Related fragments**: `selector-resilience.md`, `timing-debugging.md`, `network-first.md`, `data-factories.md`, `test-quality.md`
+- **Tools**: project test runners, `tea-atdd-red-check`, runner traces and reports, optional browser evidence tools

@@ -2,8 +2,8 @@
 name: 'step-01-preflight-and-context'
 description: 'Verify prerequisites, load story, framework, and knowledge base, and resolve run identity'
 outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
-nextStepFile: '{skill-root}/steps-c/step-02-generation-mode.md'
-resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
+nextStepFile: '{skill-root}/red/steps-c/step-02-generation-mode.md'
+resumeStepFile: '{skill-root}/red/steps-c/step-01b-resume.md'
 knowledgeIndex: '{tea-knowledge}/tea-index.csv'
 ---
 
@@ -224,6 +224,8 @@ Create the `{test_artifacts}/atdd/` folder if it does not exist. Write the file 
 ---
 runScope: '{run_scope}'
 runKey: '{run_key}'
+testMode: '{test_mode}'
+testEntry: '{test_entry}'
 workflowStatus: 'in-progress'
 stepsCompleted: ['step-01-preflight-and-context']
 lastStep: 'step-01-preflight-and-context'

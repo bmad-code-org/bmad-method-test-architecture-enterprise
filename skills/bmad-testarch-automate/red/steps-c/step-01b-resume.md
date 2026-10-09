@@ -38,6 +38,8 @@ Resume an interrupted workflow by selecting the checklist that belongs to the st
 
 ### 1. Select the Run to Resume
 
+If `resume_checkpoint_path` is set, select that exact readable file before building a candidate list. Do not list, substitute, or ask to choose another checkpoint. Proceed directly to section 2 and apply its identity and legacy migration checks. A supplied checkpoint path is not a named target scope; only a separately supplied story, epic, feature, target or system request triggers the scope identity comparison.
+
 Each run writes its own checklist at `{outputFile}`, and its `run_key` is `story-{story_key}`. Build the candidate list:
 
 1. List every file matching `{progressGlob}`.
@@ -69,7 +71,7 @@ Read the selected checklist and parse YAML frontmatter for:
 - `lastSaved` — timestamp of last save
 - `storyId`, `storyKey`, `storyFile` — the story this checklist covers
 
-**Run identity check.** When the user named a story in this invocation, `runKey` must equal the `run_key` resolved for it, and `storyKey` must equal the resolved `story_key`. If either differs, display "⚠️ **Checklist belongs to a different story** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no story, adopt the checklist's own `storyKey`, `runScope`, and `runKey` as this run's identity.
+**Run identity check.** Check only identity fields first, before reading progress or rendering the dashboard. A mismatch response names the conflicting identities only and omits all saved status/step details. When the user named a story in this invocation, `runKey` must equal the `run_key` resolved for it, and `storyKey` must equal the resolved `story_key`. If either differs, display "⚠️ **Checklist belongs to a different story** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no story, adopt the checklist's own `storyKey`, `runScope`, and `runKey` as this run's identity.
 
 **Legacy checklist migration.** A checklist selected from `{legacyProgressGlob}`, or any checklist without `runKey`, predates run identity. ATDD checklists always recorded their story, so the identity is recoverable:
 
@@ -78,6 +80,8 @@ Read the selected checklist and parse YAML frontmatter for:
 3. If the checklist came from the legacy root and `{outputFile}` already exists for that story, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checklist deletes the legacy file and continues from `{outputFile}`; keeping the legacy checklist continues with item 4. A headless run keeps the folder checklist, leaves the legacy file untouched, and says so.
 4. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `runScope` and `runKey` added to its frontmatter and `atddChecklistPath` set to `{outputFile}`.
 5. If the checklist came from the legacy root, delete the legacy file only after that write succeeds. Continue from the migrated file.
+
+Bind `outputFile` and `atddChecklistPath` to the selected checklist's exact path after any migration. Preserve this path for all subsequent progress saves, even when it is outside `{test_artifacts}`. Refresh the stored `atddChecklistPath` to this exact path on the next progress save so the implementation handoff names the resumed checklist.
 
 If `workflowStatus` is missing (legacy checklist), infer it from `lastStep`: `'step-05-validate-and-complete'` means `completed`; any other known step means `in-progress`.
 

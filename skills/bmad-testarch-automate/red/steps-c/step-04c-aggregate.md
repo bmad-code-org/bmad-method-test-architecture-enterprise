@@ -2,7 +2,7 @@
 name: 'step-04c-aggregate'
 description: 'Aggregate subagent outputs and complete ATDD test infrastructure'
 outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
-nextStepFile: '{skill-root}/steps-c/step-05-validate-and-complete.md'
+nextStepFile: '{skill-root}/red/steps-c/step-05-validate-and-complete.md'
 ---
 
 # Step 4C: Aggregate ATDD Test Generation Results
@@ -22,7 +22,7 @@ Read outputs from parallel subagents (API + E2E red-phase test generation), aggr
 - ✅ Generate shared fixtures based on fixture needs
 - ✅ Write all generated test files to disk
 - ❌ Do NOT remove test.skip() (that's done after feature implementation)
-- ❌ Do NOT run tests yet (that's step 5 - verify scaffolds and optional RED activation)
+- ❌ Do NOT run tests yet (step 5 executes the red verifier and run-and-heal)
 
 ---
 

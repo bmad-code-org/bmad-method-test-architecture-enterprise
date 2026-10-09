@@ -17,7 +17,7 @@ sessions:
         title: "TEA Overview"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/"
       - path: "/docs/how-to/workflows/run-automate.md"
-        title: "Run Automate Workflow"
+        title: "Run Automation Expand Mode"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     knowledge_fragments: []
     online_references:
@@ -28,7 +28,7 @@ sessions:
       - "What is TEA"
       - "TEA Lite approach"
       - "Engagement models"
-      - "10 workflows overview"
+      - "8 workflows overview"
 
   session-02-concepts:
     docs:
@@ -108,10 +108,10 @@ sessions:
   session-05-atdd-automate:
     docs:
       - path: "/docs/how-to/workflows/run-atdd.md"
-        title: "Run ATDD Workflow"
+        title: "Run Automation Red Mode (ATDD)"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/"
       - path: "/docs/how-to/workflows/run-automate.md"
-        title: "Run Automate Workflow"
+        title: "Run Automation Expand Mode"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     knowledge_fragments:
       - path: "{tea-knowledge}/component-tdd.md"
@@ -127,9 +127,9 @@ sessions:
       - atdd
       - automate
     key_concepts:
-      - "ATDD workflow (red phase)"
+      - "Automation red mode (ATDD)"
       - "TDD red-green-refactor"
-      - "Automate workflow (coverage expansion)"
+      - "Automation expand mode (coverage expansion)"
       - "API testing without browser"
 
   session-06-quality-trace:

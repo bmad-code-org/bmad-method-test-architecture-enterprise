@@ -45,7 +45,7 @@ average_score: { { average_score } }
 {{user_name}} has demonstrated proficiency in:
 
 - ✅ **Testing Fundamentals:** Risk-based testing, test pyramid, test types
-- ✅ **TEA Methodology:** 10 workflows, engagement models, quality standards
+- ✅ **TEA Methodology:** 8 workflows, engagement models, quality standards
 - ✅ **Architecture Patterns:** Fixtures, network-first patterns, data factories
 - ✅ **Test Design:** Risk assessment, coverage planning, P0-P3 prioritization
 - ✅ **Test Development:** ATDD red-green approach, test automation

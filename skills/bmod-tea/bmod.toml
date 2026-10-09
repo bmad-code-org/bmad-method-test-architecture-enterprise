@@ -22,7 +22,7 @@ pre_install_message = ""
 post_install_message = '''
 TEA is ready. Talk to Murat (bmad-tea) or start with Test Design (bmad-testarch-test-design).
 
-Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-testarch-framework) installs the utils packages and owns framework and CI setup. Continuous Integration (bmad-testarch-ci) remains its CI compatibility entry. Ask bmad how to set up the rest.
+Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-testarch-framework) installs the utils packages and owns framework and CI setup. Continuous Integration (bmad-testarch-ci) remains its CI entry. Test Automation (bmad-testarch-automate) owns red and expand test generation with run-and-heal enabled by default; ATDD (bmad-testarch-atdd) starts red mode. Existing commands and customizations keep working. Ask bmad how to set up the rest.
 '''
 
 # Asked by `bmad setup` in this order. Members read each answer as modules.tea.<key>.
@@ -70,3 +70,23 @@ default = "auto"
 key = "test_framework"
 prompt = "Which test framework does the project use? auto (recommended; detected from project files), playwright, cypress, jest, vitest, pytest, junit, go-test, dotnet-test, rspec, maestro or other."
 default = "auto"
+
+[[bmod.config_questions]]
+key = "auto_validate"
+prompt = "Run generated tests during Create? true (recommended) or false to report generation without execution."
+default = "true"
+
+[[bmod.config_questions]]
+key = "auto_heal_failures"
+prompt = "Repair confirmed defects in generated tests after running them? true (recommended) or false to report failures without repairs. Acceptance criteria and real product defects are preserved."
+default = "true"
+
+[[bmod.config_questions]]
+key = "max_healing_iterations"
+prompt = "How many repair rounds may generated tests use? 0 to 3, with 3 recommended."
+default = "3"
+
+[[bmod.config_questions]]
+key = "use_mcp_healing"
+prompt = "Use available browser evidence tools to diagnose generated browser test failures? true (recommended) or false to use source, runner reports and traces."
+default = "true"

@@ -2,7 +2,7 @@
 name: 'step-01-validate'
 description: 'Validate workflow outputs against checklist'
 outputFile: '{test_artifacts}/atdd/atdd-validation-report-{validation_scope}-{run_timestamp}.md'
-validationChecklist: '{skill-root}/checklist.md'
+validationChecklist: '{skill-root}/red/checklist.md'
 ---
 
 # Step 1: Validate Outputs
@@ -65,6 +65,9 @@ Read `{validationChecklist}` and list all criteria.
 ### 3. Validate Outputs
 
 Evaluate outputs against each checklist item.
+Execution and healing checklist items inspect existing evidence only: record PASS/WARN/FAIL or unavailable execution.
+Do not run-and-heal, repair tests, require a passing full suite, or change Create checkpoints.
+A validation report completes even when its verdict is FAIL.
 
 For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. Require exactly one red-phase leaf per declared criterion. For every scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
 
@@ -87,8 +90,13 @@ Replace the `IN_PROGRESS` body in this run's reserved `{outputFile}` with the fi
 
 ## On Complete
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
+When `workflow_customization_manual = true`, execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally.
+Otherwise resolve the same selected customization surface below; never run the other mode's hook.
+
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow.on_complete`
 
 If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
 
-If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
+If the resolver fails or returns no output, use the selected `workflow.on_complete` block already resolved during activation (or resolve the selected defaults/team/user files with the same structural merge rules).
+Execute its non-empty value as the final terminal instruction.
+An explicitly resolved empty value means no completion hook; exit normally.

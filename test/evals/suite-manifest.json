@@ -37,7 +37,7 @@
       "$comment": [
         "One story, quay-locker-service, staged into a disposable workspace and generated against by a",
         "vendor run, then executed under NFR9's isolation by the deterministic tea-atdd-red-check, which",
-        "spends no vendor call of its own.",
+        "spends no vendor call of its own. Generation reads bmad-testarch-automate red mode through the existing ATDD suite identity.",
         "",
         "Five acceptance criteria, four asking for a route the fixture does not have and one extending a",
         "route it already has, which is what makes a vacuous pass possible: a scaffold that asserts only",
@@ -92,7 +92,7 @@
     {
       "$comment": [
         "No live agent and no generation step, unlike every other suite here. Four hand-authored Playwright spec",
-        "sets under test/fixtures/automate-eval/cases/ stand in for what a real bmad-testarch-automate run could",
+        "sets under test/fixtures/automate-eval/cases/ stand in for what a real bmad-testarch-automate expand-mode run could",
         "produce against the Story 6.6 voucher-service fixture, and every one of them actually runs, twice: once",
         "against the fixed implementation and once against a scratch copy carrying the fixture's seeded",
         "regression (the minimum-spend boundary flipped from inclusive to exclusive).",

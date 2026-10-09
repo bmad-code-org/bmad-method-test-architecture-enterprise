@@ -181,14 +181,14 @@ Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH` before applying t
 
 ## Which Workflows Change
 
-| Workflow      | What the flag changes                                                                                                                                                              |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `framework`   | Installs `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`, then scaffolds directories, Vitest configs, scripts, CI workflow, and samples when the relevance gate opens |
-| `atdd`        | Red-phase contract scaffolds generated in the mandated style. A scaffold is the file the developer un-skips and keeps                                                              |
-| `automate`    | The API worker emits contract artifacts in the mandated style and reports deviations                                                                                               |
-| `test-design` | Pact code examples in design documents match what `automate` will generate                                                                                                         |
-| `test-review` | Scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on flag plus install                                                    |
-| `ci`          | Adds the contract-test stage and quality gates                                                                                                                                     |
+| Workflow                   | What the flag changes                                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `framework`                | Installs `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`, then scaffolds directories, Vitest configs, scripts, CI workflow, and samples when the relevance gate opens |
+| `automate` red mode (ATDD) | Red-phase contract scaffolds generated in the mandated style. A scaffold is the file the developer un-skips and keeps                                                              |
+| `automate` expand mode     | The API worker emits contract artifacts in the mandated style and reports deviations                                                                                               |
+| `test-design`              | Pact code examples in design documents match what `automate` will generate                                                                                                         |
+| `test-review`              | Scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on flag plus install                                                    |
+| `framework` CI phase       | Adds the contract-test stage and quality gates                                                                                                                                     |
 
 ## Pact MCP (`tea_pact_mcp`)
 

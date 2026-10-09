@@ -1,11 +1,11 @@
 ---
 name: bmad-testarch-automate
-description: 'Expand test automation coverage for codebase. Use when user says "lets expand test coverage" or "I want to automate tests"'
+description: 'Generate tests in red or expand mode and run-and-heal new tests. Use when the user says "lets expand test coverage", "I want to automate tests", "lets write acceptance tests", or "I want to do ATDD"'
 ---
 
-# Test Automation Expansion
+# Test Generation: Red and Expand
 
-**Goal:** Expand test automation coverage after implementation or analyze existing codebase to generate a comprehensive test suite.
+**Goal:** Generate acceptance scaffolds before implementation in red mode, or expand passing coverage for implemented code in expand mode. Execute generated tests and repair confirmed test defects by default.
 
 **Role:** You are the Master Test Architect.
 
@@ -20,17 +20,24 @@ You will continue to operate with your given name, identity, and communication_s
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`.
 
+## Route Before Activation
+
+Read `{skill-root}/resources/test-generation-routing.md` completely and resolve `test_mode`, `test_operation`, and `workflow-skill-root` before executing activation.
+Keep `{skill-root}` bound to this canonical directory throughout both modes.
+The router selects exactly one customization surface; activation below uses that surface only.
+
 ## On Activation
 
 ### Step 1: Resolve the Workflow Block
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`
+When `workflow_customization_manual = true`, use the already resolved red workflow block and skip this resolver command.
+Otherwise run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow`
 
 **If the script fails**, resolve the `workflow` block yourself by reading these three files in base → team → user order and applying the same structural merge rules as the resolver:
 
-1. `{skill-root}/customize.toml` — defaults
-2. `{project-root}/_bmad/custom/{skill-name}.toml` — team overrides
-3. `{project-root}/_bmad/custom/{skill-name}.user.toml` — personal overrides
+1. `{workflow-skill-root}/customize.toml` (or `{skill-root}/red/customize.toml` for canonical-only red) — defaults
+2. `{project-root}/_bmad/custom/{workflow-skill-name}.toml` — team overrides
+3. `{project-root}/_bmad/custom/{workflow-skill-name}.user.toml` — personal overrides
 
 Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
 
@@ -70,18 +77,19 @@ This workflow uses **tri-modal step-file architecture**:
 
 ## Initialization Sequence
 
-### 1. Mode Determination
+The router has already resolved the operation from the request.
+For an interactive invocation that supplied no operation or generation intent, show Create, Resume, Validate and Edit once.
+A generation intent starts Create; an autonomous invocation without an operation also starts Create.
+Do not ask a second mode question.
 
-"Welcome to the workflow. What would you like to do?"
+Use `mode-prefix = red/` for red, or an empty prefix for expand:
 
-- **[C] Create** — Run the workflow from the beginning
-- **[R] Resume** — Resume an interrupted Create workflow
-- **[V] Validate** — Validate existing outputs
-- **[E] Edit** — Edit existing outputs
+- Create: load `{skill-root}/{mode-prefix}steps-c/step-01-preflight-and-context.md`.
+- Resume: load `{skill-root}/{mode-prefix}steps-c/step-01b-resume.md`; continue its original `lastStep` mapping, scope and output path.
+- Validate: load `{skill-root}/{mode-prefix}steps-v/step-01-validate.md`.
+- Edit: load `{skill-root}/{mode-prefix}steps-e/step-01-assess.md`.
 
-### 2. Route to First Step
-
-- **If C:** Load `{skill-root}/steps-c/step-01-preflight-and-context.md`
-- **If R:** Load `{skill-root}/steps-c/step-01b-resume.md` (Create-mode continuation)
-- **If V:** Load `{skill-root}/steps-v/step-01-validate.md`
-- **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
+Resume restores Create progress; it does not start a new generation run.
+Only Create terminals load `{skill-root}/resources/run-and-heal.md`.
+Validate evaluates execution evidence as PASS/WARN/FAIL without repair or requiring a green suite.
+Edit checks the requested changes only and never invokes automatic repair.

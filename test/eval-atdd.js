@@ -156,7 +156,7 @@ const {
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'atdd-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-atdd');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate');
 const RED_CHECK_PATH = path.join(PROJECT_ROOT, 'cli', 'atdd-red-check.js');
 const SUITE_ID = 'atdd';
 const CASE_ID = 'reservations';
@@ -558,7 +558,7 @@ function configToml(projectRoot) {
  * Layout, with the workspace itself as the agent's working directory:
  *
  *   <projectRoot>/   the fixture service and story, plus a resolved config and an empty tests/
- *   skill/           the bmad-testarch-atdd workflow, copied verbatim
+ *   skill/           the canonical bmad-testarch-automate workflow, including its red/ phase
  *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * @param {object} groundTruth
@@ -672,10 +672,10 @@ function buildPrompt(groundTruth, { storyRelativePath } = {}) {
     ? `nothing outside that directory is relevant to this story, except \`{story_file}\` itself, named above.`
     : `nothing outside that directory is relevant to this story.`;
   return [
-    `You are running the TEA workflow \`bmad-testarch-atdd\` against the project in \`${root}/\`.`,
+    `You are running the TEA Automation red-mode step files against the project in \`${root}/\`.`,
     '',
-    'The workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it',
-    'names in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.',
+    'The canonical workflow is in `skill/`. Select red mode. Read `skill/red/instructions.md` first, then execute every step file it',
+    'names in order, in full, without skipping or reordering. The red-mode step files are under `skill/red/steps-c/`.',
     '',
     '----- run configuration -----',
     'Resolve the workflow placeholders to these values:',
@@ -698,7 +698,9 @@ function buildPrompt(groundTruth, { storyRelativePath } = {}) {
     "JSON API with no browser surface, so every criterion is an API test and none needs the workflow's",
     "E2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,",
     'asserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete',
-    'any file outside that one path: this workflow generates tests and touches nothing else.',
+    'any other test or production file. You may write workflow diagnostics under',
+    `\`${root}/test-artifacts/atdd/\` and \`${root}/test-artifacts/automate/\`, and run the red-phase verifier`,
+    'on a disposable activated copy. Keep each scaffold skipped in the deliverable after verification.',
     '',
     'When you are done, print one line naming how many test files you wrote. Nothing else you print is read.',
   ].join('\n');

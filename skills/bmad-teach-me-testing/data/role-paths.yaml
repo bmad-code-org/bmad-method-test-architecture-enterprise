@@ -25,7 +25,7 @@ roles:
       session-02-concepts: "Emphasize P0-P3 for defending coverage decisions"
       session-03-architecture: "Fixture patterns for maintainable test suites"
       session-04-test-design: "Test design for planning coverage expansion"
-      session-05-atdd-automate: "ATDD and Automate for test generation"
+      session-05-atdd-automate: "Automation red and expand modes for test generation"
       session-06-quality-trace: "Test Review for quality metrics reporting"
       session-07-advanced: "Playwright Utils for advanced testing patterns"
 

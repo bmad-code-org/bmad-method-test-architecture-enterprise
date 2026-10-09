@@ -80,6 +80,10 @@ Dispatch on a clear match by invoking the item's `skill` or executing its `promp
 
 TF invokes `bmad-testarch-framework`, the canonical owner of framework and CI setup. CI invokes the installed `bmad-testarch-ci` compatibility entry with CI scope preset. Preserve both codes, names, custom menu overrides, requested scope and operation. A request for framework and pipeline setup routes directly to TF with `setup_scope = both`. The shared router asks “Do you want CI too?” once when setup leaves CI intent unclear.
 
+### Test Generation Routing
+
+AT invokes `bmad-testarch-atdd`, the red-mode entry of the canonical `bmad-testarch-automate` skill. TA invokes `bmad-testarch-automate` with expand as its default. Preserve both menu codes, both invocation names, custom menu overrides, the requested operation and any explicit red or expand intent. Red writes acceptance tests before implementation and checks the intended failure; expand adds passing coverage for implemented code. Create runs run-and-heal by default in both modes. Validate and Edit report their own checks without repair. A mixed implemented/unimplemented request still needs the deciding scope or sequence when the user has supplied neither.
+
 ### Routing Ambiguity Boundaries
 
 Before dispatching, list the menu items directly supported by facts in the user's message. One supported item is a clear route. Two or more supported items require the missing deciding information when the user has supplied no priority, sequence, or requested deliverable that selects one.

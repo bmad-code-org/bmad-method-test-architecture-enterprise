@@ -49,8 +49,8 @@ To teach ATDD (red-green TDD) and Automate workflows for test generation in a 60
 
 **What you'll learn:**
 
-- ATDD workflow (failing tests first)
-- Automate workflow (expand coverage)
+- Automation red mode (failing tests first)
+- Automation expand mode (expand coverage)
 - Component TDD
 - API testing patterns
 
@@ -65,18 +65,21 @@ Load {progressFile} and update session-05-atdd-automate:
 
 Save the updated progress file.
 
-### 3. Teaching: ATDD Workflow
+### 3. Teaching: Automation Red Mode (ATDD)
 
 "### 🔴 ATDD: Acceptance-Driven Test Development
 
 **TDD Red Phase:** Write failing tests FIRST
 
-**ATDD Workflow:**
+**Automation red mode:** `/bmad-testarch-atdd` and `AT` select red by default. `/bmad-testarch-automate` also supports an explicit red request.
+
+**Create sequence:**
 
 1. **Preflight:** Check prerequisites
 2. **Test Strategy:** Define what to test
 3. **Generate FAILING Tests:** Red phase (tests fail because code doesn't exist yet)
-4. **Implement Code:** Green phase (make tests pass)
+4. **Run and Heal:** Confirm each failure matches missing behavior; repair test errors for up to three rounds
+5. **Implement Code:** Green phase (make tests pass)
 
 **Why Failing Tests First:**
 
@@ -88,22 +91,27 @@ Save the updated progress file.
 
 **Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/>"
 
-### 4. Teaching: Automate Workflow
+### 4. Teaching: Automation Expand Mode
 
 "### 🤖 Automate: Expand Test Coverage
 
 **Purpose:** Generate tests for existing features
 
-**Automate Workflow:**
+**Automation expand mode:** `/bmad-testarch-automate` and `TA` select expand by default. An explicit mode in the prompt selects red or expand. Unattended runs keep the invoked command's default when mode is unclear.
+
+**Create sequence:**
 
 1. **Identify Targets:** What needs testing
 2. **Generate Tests:** API and/or E2E tests
-3. **Review & Run:** Tests should pass (code already exists)
+3. **Run and Heal:** Execute generated tests, classify failures, repair test issues, and rerun up to three rounds
+4. **Review Results:** Passing tests establish coverage; real product defects retain their assertions and remain findings
 
-**Difference from ATDD:**
+**Two modes in one automation skill:**
 
 - ATDD: Tests first, then code (red → green)
-- Automate: Code first, then tests (coverage expansion)
+- Expand: Code first, then tests (coverage expansion)
+
+Create runs execute and heal by default. Validate reports findings and Edit checks the requested changes; neither operation repairs tests. Each mode keeps its original customization hooks and output folder.
 
 {Role-adapted example}
 
@@ -176,11 +184,11 @@ D) Tests are deleted"
 
 Correct: A
 
-**Q2:** "What's the difference between ATDD and Automate workflows?
+**Q2:** "What's the difference between automation red/expand modes?
 A) ATDD generates E2E, Automate generates API tests
 B) ATDD writes tests first (red phase), Automate tests existing code
 C) ATDD is faster than Automate
-D) They're the same workflow"
+D) Both modes require implemented code before generating tests"
 
 Correct: B
 
@@ -198,8 +206,8 @@ Calculate score, handle <70% retry.
 
 Create {sessionNotesFile} with Session 5 content:
 
-- ATDD workflow (red-green TDD)
-- Automate workflow (coverage expansion)
+- Automation red mode (ATDD, red-green TDD)
+- Automation expand mode (coverage expansion)
 - Component TDD
 - API testing patterns
 - Docs: ATDD, Automate

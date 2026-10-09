@@ -241,7 +241,7 @@ See [Run ATDD](/docs/how-to/workflows/run-atdd.md).
 - [Set Up CI Pipeline](/docs/how-to/workflows/setup-ci.md) to run tests on pull requests
 - [Review Test Quality](/docs/how-to/workflows/run-test-review.md) to audit the generated suite
 - [TEA Configuration](/docs/reference/configuration.md) for setup options
-- [TEA Command Reference](/docs/reference/commands.md) for all ten workflows
+- [TEA Command Reference](/docs/reference/commands.md) for all eight workflows
 
 ### Try TEA Solo
 

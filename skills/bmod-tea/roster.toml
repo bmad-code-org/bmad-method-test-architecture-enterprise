@@ -1,3 +1,4 @@
+# Workflow modes and compatibility commands remain on the agent menu.
 # The people the tea module offers. A member with `skill` is an agent, present only while that
 # skill is installed; its name, title and icon follow the skill's customization.
 

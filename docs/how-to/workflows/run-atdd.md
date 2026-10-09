@@ -5,7 +5,7 @@ description: Generate red-phase acceptance test scaffolds before implementation 
 
 # How to Run ATDD with TEA
 
-Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds before implementation.
+Use the automation skill's `red` mode to generate acceptance test scaffolds before implementation. The existing `atdd` command and `AT` menu code select red by default; you can also ask `/bmad-testarch-automate` for red mode.
 TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
 
 ## When to Use This
@@ -32,6 +32,10 @@ Adapt the commands and selectors for Cypress.
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-atdd`
 - **Codex:** `$bmad-testarch-atdd`
 - **Inside a `/bmad-tea` chat:** `AT`
+
+Your prompt can explicitly request `red` or `expand`. In interactive and unattended runs with unclear mode, the ATDD entry defaults to red and the automate entry defaults to expand. Unattended runs state the selected default in the summary. Existing customization files and interrupted ATDD progress keep working.
+
+Create runs verify the generated tests in a disposable copy with their scaffold skips activated. TEA uses `tea-atdd-red-check` for compatible browserless loopback tests when the command is installed. Browser tests and projects needing their own environment or services use the installed project test runner with the original configuration and environment. Execution respects the project's existing test budgets, and the summary names the runner and any fallback reason. Tests must fail for the acceptance behavior that implementation will add. TEA repairs syntax, imports, selectors, data, timing, network, hard waits, and setup that cause the wrong failure, for up to three rounds. The implementation handoff retains its deliberate skipped scaffolds. The summary records repairs, intended red failures, and unresolved problems. Validate reports findings and Edit checks the changes you requested; neither operation repairs tests.
 
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
@@ -285,7 +289,7 @@ TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/a
 
 ### 5. Verify Red-Phase Scaffolds
 
-This is the TDD red phase, but TEA keeps generated tests in `test.skip()` until you're ready to work on a task.
+TEA verifies the TDD red phase using an isolated, un-skipped copy. The saved scaffolds keep `test.skip()` until you're ready to work on a task.
 Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
 
 **For Playwright:**

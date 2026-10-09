@@ -3892,7 +3892,7 @@ function buildAtddContract() {
       setup:
         'The one plan step stages the reservations fixture project into a disposable workspace: its files under ' +
         `${groundTruth.projectRoot}/, a resolved _bmad/config.toml, an empty ${groundTruth.testDir}/, and the ` +
-        'bmad-testarch-atdd workflow under skill/. ground-truth.json is never staged, and the harness asserts that ' +
+        'canonical bmad-testarch-automate workflow under skill/, with red mode selected. ground-truth.json is never staged, and the harness asserts that ' +
         'no staged file carries its bytes or its keys before the run. The prompt names the one path generation must ' +
         `write, ${groundTruth.testDir}/${ATDD_SCAFFOLD_RELATIVE_PATH}, which is what makes the scaffold addressable ` +
         'at all: a path an agent were free to invent is not one a contract can point at before the run. ' +
@@ -3907,7 +3907,7 @@ function buildAtddContract() {
     // matches the bound test/eval-atdd.js applies to the same run.
     budgets: { maxToolCalls: 300, maxWallClockMinutes: 20, maxCostUsd: '4.00' },
     safetyLimits: [
-      `The runner writes only inside the staged workspace, and only under its own ${groundTruth.testDir}/; the harness fails a run that changed the repository or wrote outside that directory.`,
+      `The runner writes only inside the staged workspace, under its own ${groundTruth.testDir}/ or test-artifacts/ diagnostics folders; the harness fails a run that changes production files or the repository.`,
       'No credential value appears in a prompt, an artifact, a log, or a result file.',
     ],
     requiredEvidence: [
