@@ -49,7 +49,7 @@ Live legs run through the local Claude Code CLI on the owner's subscription, wit
 The model is the CLI's default Claude model for adopters, recorded as a snapshot in `policy/evaluator-conditions.json`.
 Three trials per probe.
 Each review gets the CLI's own timeout for a one or two file set.
-Estimated live time: about 4 hours for the full corpus.
+Estimated live time: about 6 hours for the full corpus, development and held-out partitions together.
 The evaluation runs from a committed, clean tree; a `--from-working-tree` run is never accepted as a baseline.
 No git fetch, worktree creation or commit happens in this repository while a live run is in progress.
 
