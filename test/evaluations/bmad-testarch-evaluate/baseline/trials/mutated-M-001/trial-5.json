@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-001",
   "trialIndex": 5,
   "workspace": "trial-mutated-M-001-5",
-  "elapsedMs": 58334,
+  "elapsedMs": 45794,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Used the gaps.md \"Map AD-10 exits and classes to repairs\" table rows `tea-evaluate 11` and `tea-evaluate 12`, both assigning the class \"infrastructure\" since cli/evaluate.js is the tea-evaluate source for run and preflight.",
+            "basis": "Table rows `tea-evaluate 11` and `tea-evaluate 12` in the Map AD-10 exits and classes to repairs section of gaps.md both name the class infrastructure, since both commands are tea-evaluate CLI invocations (run and preflight respectively).",
             "status": "answered",
             "exit11": "infrastructure",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49991,\"outputTokens\":651,\"costUsd\":\"0.077566\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50457,\"outputTokens\":612,\"costUsd\":\"0.0780026\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md's classification rule, a web application is classified as the ai-feature target kind even with no AI behavior and takes the interface kind of the ai-feature row, which the mapping table lists as api.",
+            "basis": "Per inspection.md's classification mapping, a web application is classified as an `ai-feature` target even with no AI behavior, and takes the interface kind of the `ai-feature` row, which is `api` (reached via an adopter-owned EnvironmentProbePort over HTTP), matching the dental-booking app's browser HTML + JSON HTTP API surface.",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43729,\"outputTokens\":540,\"costUsd\":\"0.05192859999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44125,\"outputTokens\":527,\"costUsd\":\"0.052387\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with each row's source-and-exit id and class.",
+            "basis": "The gaps guide's \"Map AD-10 exits and classes to repairs\" table lists these source-and-exit rows with their classes in top-to-bottom order.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61167,\"outputTokens\":1152,\"costUsd\":\"0.0674032\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":31016,\"outputTokens\":581,\"costUsd\":\"0.0579168\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "answered or refused",
+            "basis": "The exit field is \"malformed\", not a numeric exit code the gaps guide's AD-10 table lists for tea-evaluate run, so per the guide a request naming no valid exit has no class and must not be guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50094,\"outputTokens\":650,\"costUsd\":\"0.07740559999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35152,\"outputTokens\":653,\"costUsd\":\"0.07496420000000001\"}\n"
         },
         "artifacts": {}
       }

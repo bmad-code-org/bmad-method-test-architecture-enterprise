@@ -4,7 +4,7 @@
   "phase": "baseline-pass",
   "workspace": "qualify-P-009",
   "targetArtifact": "skills/bmad-testarch-evaluate/references/gaps.md",
-  "targetArtifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "targetArtifactDigest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053",
   "verdict": "held",
   "oracles": [
     {
@@ -57,7 +57,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` under 'Map AD-10 exits and classes to repairs', keyed by the tea-evaluate CLI as the source for both the run and preflight commands.",
+            "basis": "Both commands are tea-evaluate CLI invocations (node cli/evaluate.js), so gaps.md's \"Map AD-10 exits and classes to repairs\" table rows `tea-evaluate 11` and `tea-evaluate 12` apply.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -65,7 +65,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49866,\"outputTokens\":591,\"costUsd\":\"0.0767168\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50426,\"outputTokens\":574,\"costUsd\":\"0.0775518\"}\n"
         },
         "artifacts": {}
       }
@@ -109,7 +109,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md, a web application is classified as an ai-feature target even with no AI behavior, taking the interface kind of the ai-feature row (targetKind=ai-feature, interface=api, adapter=adopter-owned EnvironmentProbePort).",
+            "basis": "AD-4's choice table states a web application is an ai-feature target, including one with no AI behavior, taking the interface kind of the ai-feature row (targetKind ai-feature, interface api, adopter-owned EnvironmentProbePort adapter).",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -117,7 +117,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43579,\"outputTokens\":453,\"costUsd\":\"0.0507816\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44106,\"outputTokens\":498,\"costUsd\":\"0.0520628\"}\n"
         },
         "artifacts": {}
       }
@@ -161,7 +161,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table (skills/bmad-testarch-evaluate/references/gaps.md) top-to-bottom, taking the first column (unquoted) as id and the second column verbatim as class.",
+            "basis": "Extracted every row of the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md in top-to-bottom order, using the first column (minus backticks) as id and the second column verbatim as class.",
             "status": "answered",
             "exits": [
               {
@@ -221,7 +221,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":77347,\"outputTokens\":1117,\"costUsd\":\"0.07022439999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":62047,\"outputTokens\":954,\"costUsd\":\"0.06525339999999999\"}\n"
         },
         "artifacts": {}
       }
@@ -268,13 +268,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The exit field is \"malformed\", not a numeric exit the gaps guide's table lists for the tea-evaluate source, so per gaps.md the request names an exit the table does not list and has no class.",
+            "basis": "The request asks for the AD-10 class for a `tea-evaluate run` failure whose exit field is the non-numeric value \"malformed\" rather than an actual exit code, and the gaps guide says a request that names no exit, or an exit the table does not list for that source, has no class and must never be guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50248,\"outputTokens\":739,\"costUsd\":\"0.078847\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50563,\"outputTokens\":826,\"costUsd\":\"0.0800118\"}\n"
         },
         "artifacts": {}
       }

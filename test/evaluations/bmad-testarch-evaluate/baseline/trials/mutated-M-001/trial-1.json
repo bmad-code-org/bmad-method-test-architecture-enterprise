@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-001",
   "trialIndex": 1,
   "workspace": "trial-mutated-M-001-1",
-  "elapsedMs": 73070,
+  "elapsedMs": 47505,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` both name the class infrastructure for the tea-evaluate CLI source.",
+            "basis": "Gaps.md's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` both assign the class infrastructure for these node cli/evaluate.js sources and exits.",
             "status": "answered",
             "exit11": "infrastructure",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50007,\"outputTokens\":601,\"costUsd\":\"0.0771642\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35071,\"outputTokens\":578,\"costUsd\":\"0.0743234\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md's classification note (\"A web application is an ai-feature target, including a web application with no AI behavior, and takes the interface kind of the ai-feature row\") and the ai-feature/api row of AD-4's mapping table, this HTML+JSON-API web app for dental booking classifies as ai-feature/api.",
+            "basis": "Per inspection.md's classification note (\"A web application is an ai-feature target, including a web application with no AI behavior, and takes the interface kind of the ai-feature row\") and the ai-feature row of AD-4's mapping table, which pairs ai-feature with the api interface kind.",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43979,\"outputTokens\":727,\"costUsd\":\"0.0544718\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44093,\"outputTokens\":479,\"costUsd\":\"0.0518398\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Extracted every row of the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md in top-to-bottom order, taking id from column 1 (backticks stripped) and class verbatim from column 2.",
+            "basis": "Listed every row of the \"Map AD-10 exits and classes to repairs\" table in gaps.md in top-to-bottom order with id (source and exit) and class exactly as written.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":62067,\"outputTokens\":1287,\"costUsd\":\"0.069127\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":39213,\"outputTokens\":835,\"costUsd\":\"0.043859800000000004\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "answered",
+            "basis": "The request names exit \"malformed\" for the failed tea-evaluate run command, but the gaps guide's AD-10 table lists only numeric tea-evaluate exits (10, 11, 12, 13, 64) and says any exit it does not list has no class, so it must refuse rather than guess.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50372,\"outputTokens\":1070,\"costUsd\":\"0.0823642\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35204,\"outputTokens\":808,\"costUsd\":\"0.07672219999999999\"}\n"
         },
         "artifacts": {}
       }

@@ -6,19 +6,19 @@
   "probeClass": "zero-action",
   "behaviorId": "B-001",
   "systemId": "grader-http-service",
-  "implementationDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
-  "artifactDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
-  "commitDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "implementationDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
+  "artifactDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
+  "commitDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
   "rationale": "Clean control: under the committed strict policy the grader accepts the answer.",
   "qualification": {
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211300848Z-9dcd763f/qualification/P-001/baseline-pass.json",
+      "path": "runs/20261009T005647810Z-30949961/qualification/P-001/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:fc10c26436bc82c9971701e48f255d9116a935653132fe760bf5e8c2aad80ca1"
+      "digest": "sha256:ff6b98f34c235d38db568c89ec6c355cd2286a47d32c866aba293525bf446861"
     },
-    "revisionCommitDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+    "revisionCommitDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
     "noKnownDefectStatement": "The strict policy has no known defect."
   },
   "expectedClean": true,

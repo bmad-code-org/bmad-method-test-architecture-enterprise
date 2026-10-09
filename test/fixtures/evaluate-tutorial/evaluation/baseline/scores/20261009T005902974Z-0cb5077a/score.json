@@ -1,0 +1,46 @@
+{
+  "invocationId": "20261009T005902974Z-0cb5077a",
+  "run": "20261009T005856077Z-6de24e2c",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-001",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-001/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-001/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-003",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-003/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-003/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-002",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-002/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/P-002/evidence-artifact.json"
+    }
+  ],
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "partition": "both",
+    "exitCode": 0,
+    "call": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/aggregate-strength.json",
+    "aggregate": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/strength-aggregate.json",
+    "aggregateDigest": "sha256:b514b073d4e67f29a291908112c3d22ed8df9ea9403688b15ec2f9ec7dba230e",
+    "floors": "runs/20261009T005856077Z-6de24e2c/scores/20261009T005902974Z-0cb5077a/strength-floors.json",
+    "floorsDigest": "sha256:40cf1b668754aa127b479c9d33484b4f2ce1e8f9ae0c2559ecbf6ce021a4b9d6",
+    "evidenceDigests": {
+      "P-001": "sha256:1ea5bb6fc43f475ed75e62efeabdb2ab0e5fba62ebc6426e644b6ba5e45d6ab7",
+      "P-003": "sha256:4616ccb78c85bc3e86b60ffb08bfbb17219158403a57d0d4df259eba5b08a0f1",
+      "P-002": "sha256:5e07328be4df0074d22da5870d96ea4165b1cd2595c944098a6b1e2e9726b3f2"
+    }
+  },
+  "refused": [],
+  "confinement": "seatbelt"
+}

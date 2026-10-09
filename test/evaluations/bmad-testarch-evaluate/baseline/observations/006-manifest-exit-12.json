@@ -40,7 +40,7 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "Both commands invoke the tea-evaluate CLI (cli/evaluate.js run / preflight), so each exit maps via the gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12`, which both name the class evaluation weakness.",
+        "basis": "Both commands invoke the tea-evaluate CLI (node cli/evaluate.js), so the gaps guide's \"Map AD-10 exits and classes to repairs\" table rows for `tea-evaluate 11` and `tea-evaluate 12` apply.",
         "status": "answered",
         "exit11": "evaluation weakness",
         "exit12": "evaluation weakness"
@@ -48,7 +48,7 @@
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":34751,\"outputTokens\":567,\"costUsd\":\"0.073435\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50445,\"outputTokens\":742,\"costUsd\":\"0.07923939999999999\"}\n"
     },
     "artifacts": {}
   }

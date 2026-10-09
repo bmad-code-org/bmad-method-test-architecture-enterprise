@@ -2,7 +2,7 @@
   "conditionArm": "clean",
   "trialIndex": 3,
   "workspace": "trial-clean-3",
-  "elapsedMs": 95869,
+  "elapsedMs": 58463,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per the gaps guide's \"Map AD-10 exits and classes to repairs\" table, `tea-evaluate run` exiting 11 is the `tea-evaluate 11` row and `tea-evaluate preflight` exiting 12 is the `tea-evaluate 12` row.",
+            "basis": "Both commands invoke tea-evaluate (cli/evaluate.js), so per the gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12`, exit 11 is classed \"evaluation weakness\" and exit 12 is classed \"infrastructure\".",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49913,\"outputTokens\":663,\"costUsd\":\"0.07752600000000001\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50370,\"outputTokens\":494,\"costUsd\":\"0.07662279999999999\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md, \"a web application is an ai-feature target, including a web application with no AI behavior, and takes the interface kind of the ai-feature row\"; the mapping table's ai-feature row lists interface kind `api`.",
+            "basis": "Per inspection.md's classification note under AD-4's choice table, a web application is classified as an ai-feature target even with no AI behavior, taking the interface kind of the ai-feature row, which is api (adopter-owned EnvironmentProbePort).",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43740,\"outputTokens\":581,\"costUsd\":\"0.0523902\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44115,\"outputTokens\":478,\"costUsd\":\"0.0518836\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order, taking id from column 1 (without backticks) and class from column 2 as written.",
+            "basis": "The gaps guide's \"Map AD-10 exits and classes to repairs\" table lists 12 source-and-exit rows in this top-to-bottom order, with id taken from the first column (without backticks) and class from the second column verbatim.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61986,\"outputTokens\":923,\"costUsd\":\"0.06664880000000001\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61222,\"outputTokens\":904,\"costUsd\":\"0.06467200000000001\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The gaps guide's AD-10 table lists only numeric tea-evaluate exits (10, 11, 12, 13, 64), so an exit value of \"malformed\" names no listed exit for that source and must not be guessed.",
+            "basis": "The gaps guide's AD-10 table only assigns classes to tea-evaluate exits 10, 11, 12, 13, and 64, and the request's exit field is the non-numeric value \"malformed\" rather than any of those, so per the guide's own rule (\"names an exit this table does not list ... has no class: say so, ask for the source, exit and stderr, and never guess a class\") this must be refused rather than assigned a class.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50027,\"outputTokens\":918,\"costUsd\":\"0.080057\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50858,\"outputTokens\":966,\"costUsd\":\"0.0822688\"}\n"
         },
         "artifacts": {}
       }

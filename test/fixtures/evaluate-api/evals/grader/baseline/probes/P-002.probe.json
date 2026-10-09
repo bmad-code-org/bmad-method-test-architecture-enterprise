@@ -6,9 +6,9 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "systemId": "grader-http-service",
-  "implementationDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "implementationDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
   "artifactDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
-  "commitDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "commitDigest": "sha256:39c7d819c0f83d5a19f03ebfb0538c802948d3a2ca341c9b2797a72b115ebb19",
   "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the grader then rejects the answer.",
   "qualification": {
     "route": "controlled-mutation",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "The grader rejects the answer, so its result says verdict rejected.",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211300848Z-9dcd763f/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261009T005647810Z-30949961/qualification/P-002/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:034f053e5b72b1abb0039c8ebb715dc0027c4f6b52b990ac079d9676f6ba8c01"
+      "digest": "sha256:077d6bd85f8e7fb720f0f47b25c5b7805c165e046c2072369fa014194a971497"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211300848Z-9dcd763f/qualification/P-002/mutated-fail.json",
+      "path": "runs/20261009T005647810Z-30949961/qualification/P-002/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:cde67b311cf2eb0f271a37b4fe6d8af37f91821a6aafc801d198c2e8df88ec65"
+      "digest": "sha256:dfc367685c02e2413064a128b6c7e6fb4ea295a0542f4137bda24d4ee53238f2"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261006T211300848Z-9dcd763f/qualification/P-002/mutated-fail.json",
+          "path": "runs/20261009T005647810Z-30949961/qualification/P-002/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:cde67b311cf2eb0f271a37b4fe6d8af37f91821a6aafc801d198c2e8df88ec65"
+          "digest": "sha256:dfc367685c02e2413064a128b6c7e6fb4ea295a0542f4137bda24d4ee53238f2"
         }
       ],
       "source": "controlled-mutation",

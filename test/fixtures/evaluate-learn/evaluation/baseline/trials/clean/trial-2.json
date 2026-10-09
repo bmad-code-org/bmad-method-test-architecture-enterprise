@@ -78,7 +78,7 @@
       }
     }
   ],
-  "elapsedMs": 1111,
+  "elapsedMs": 561,
   "evaluator": {
     "kind": "command",
     "answer": {

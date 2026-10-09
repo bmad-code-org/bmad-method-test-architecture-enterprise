@@ -40,13 +40,13 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "The gaps guide's AD-10 table maps the row \\\"tea-evaluate 11\\\" to the class \\\"evaluation weakness\\\", and the reported source (tea-evaluate, via node cli/evaluate.js) and exit code (11) match that row exactly.",
+        "basis": "The gaps guide's AD-10 table row \"`tea-evaluate 11`\" maps that source and exit to the class.",
         "class": "evaluation weakness"
       }
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49419,\"outputTokens\":544,\"costUsd\":\"0.063644\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49984,\"outputTokens\":562,\"costUsd\":\"0.0641498\"}\n"
     },
     "artifacts": {}
   }

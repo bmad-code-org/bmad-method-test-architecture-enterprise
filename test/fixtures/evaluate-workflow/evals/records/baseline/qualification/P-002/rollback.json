@@ -53,9 +53,9 @@
             "stdout": {
               "kind": "json",
               "value": {
-                "id": "rec-0edf6899-90fd-4821-8849-c4b1a36c96e9",
+                "id": "rec-bdc2c153-df0a-41c3-b65e-d3b135aceafe",
                 "title": "Ship the workflow",
-                "path": "store/rec-0edf6899-90fd-4821-8849-c4b1a36c96e9.json"
+                "path": "store/rec-bdc2c153-df0a-41c3-b65e-d3b135aceafe.json"
               }
             },
             "stderr": {
@@ -79,7 +79,7 @@
             "channels": {
               "argument": {},
               "option": {
-                "id": "rec-0edf6899-90fd-4821-8849-c4b1a36c96e9"
+                "id": "rec-bdc2c153-df0a-41c3-b65e-d3b135aceafe"
               },
               "environment": [],
               "stdin": {
@@ -97,7 +97,7 @@
               "kind": "json",
               "value": {
                 "found": true,
-                "id": "rec-0edf6899-90fd-4821-8849-c4b1a36c96e9",
+                "id": "rec-bdc2c153-df0a-41c3-b65e-d3b135aceafe",
                 "title": "Ship the workflow"
               }
             },

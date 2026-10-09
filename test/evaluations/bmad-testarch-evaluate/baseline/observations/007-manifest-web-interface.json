@@ -40,7 +40,7 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "AD-4's mapping table states a web application is an ai-feature target, including one with no AI behavior, and takes the interface kind of the ai-feature row, which is web.",
+        "basis": "Per inspection.md's classification note and the ai-feature row of AD-4's table, a web application is classified as ai-feature regardless of whether it has AI behavior, taking that row's web interface kind.",
         "status": "answered",
         "targetKind": "ai-feature",
         "interface": "web"
@@ -48,7 +48,7 @@
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43640,\"outputTokens\":355,\"costUsd\":\"0.04988600000000001\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":28809,\"outputTokens\":470,\"costUsd\":\"0.0484652\"}\n"
     },
     "artifacts": {}
   }

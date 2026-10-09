@@ -1,0 +1,38 @@
+{
+  "invocationId": "20261009T005352639Z-415f1faf",
+  "run": "20261009T005341512Z-0da75397",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-001",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/P-001/score.json",
+      "evidence": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/P-001/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-002",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/P-002/score.json",
+      "evidence": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/P-002/evidence-artifact.json"
+    }
+  ],
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "partition": "both",
+    "exitCode": 0,
+    "call": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/aggregate-strength.json",
+    "aggregate": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/strength-aggregate.json",
+    "aggregateDigest": "sha256:6f55d035f6b2468e07392ece85e8efe444b941ef27cf34bd981eafceed815676",
+    "floors": "runs/20261009T005341512Z-0da75397/scores/20261009T005352639Z-415f1faf/strength-floors.json",
+    "floorsDigest": "sha256:d73acf92f4a82da6c73c44f8f99504bdf7feeddafca72ada3d503d812b04d728",
+    "evidenceDigests": {
+      "P-001": "sha256:50307f76b15e785167cae72487dcbd8320601d1a56dad75eb13e8ff6202144bc",
+      "P-002": "sha256:e844e49c637f33ada33bfb5a06092a3ada2801ea2177f248ed7b1f574c43eed6"
+    }
+  },
+  "refused": [],
+  "confinement": "seatbelt"
+}

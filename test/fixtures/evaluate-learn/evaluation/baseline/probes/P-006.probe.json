@@ -23,13 +23,13 @@
     "expectedObservableFailure": "The type-violating request prints a pantry summary to stdout and exits 0 without the refusal diagnostic.",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211504211Z-2d577c5e/qualification/P-006/baseline-pass.json",
+      "path": "runs/20261009T005612271Z-9e44caff/qualification/P-006/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:85a74709f0d5d15b604ca49612e492e6f4cbc5f85eab2d30f4e27dddc52311ba"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211504211Z-2d577c5e/qualification/P-006/mutated-fail.json",
+      "path": "runs/20261009T005612271Z-9e44caff/qualification/P-006/mutated-fail.json",
       "privateRef": null,
       "digest": "sha256:998e001de5ea685d021473f81e5a7eb65bb0e2964b77e00f7d429e96a9b0e1d3"
     },
@@ -45,7 +45,7 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261006T211504211Z-2d577c5e/qualification/P-006/mutated-fail.json",
+          "path": "runs/20261009T005612271Z-9e44caff/qualification/P-006/mutated-fail.json",
           "privateRef": null,
           "digest": "sha256:998e001de5ea685d021473f81e5a7eb65bb0e2964b77e00f7d429e96a9b0e1d3"
         }

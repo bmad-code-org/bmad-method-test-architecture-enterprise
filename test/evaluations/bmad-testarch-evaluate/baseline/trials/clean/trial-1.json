@@ -2,7 +2,7 @@
   "conditionArm": "clean",
   "trialIndex": 1,
   "workspace": "trial-clean-1",
-  "elapsedMs": 67452,
+  "elapsedMs": 52093,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The `tea-evaluate 11` and `tea-evaluate 12` rows of the gaps guide's \"Map AD-10 exits and classes to repairs\" table assign these classes by source and exit, independent of subcommand.",
+            "basis": "The gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` cover these sources and exits.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49815,\"outputTokens\":724,\"costUsd\":\"0.0779416\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50374,\"outputTokens\":527,\"costUsd\":\"0.07693839999999999\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md, \"a web application is an ai-feature target, including a web application with no AI behavior, and takes the interface kind of the ai-feature row,\" which is the ai-feature/api row in the AD-4 mapping table.",
+            "basis": "Per inspection.md's classification note and the AD-4 mapping table row `ai-feature`/`api`, a web application is an ai-feature target even with no AI behavior, and takes that row's interface kind.",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43598,\"outputTokens\":493,\"costUsd\":\"0.051223399999999995\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44075,\"outputTokens\":474,\"costUsd\":\"0.0517596\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Transcribed every row of the \"Map AD-10 exits and classes to repairs\" table in gaps.md top-to-bottom, taking the first column (source and exit) and second column (AD-10 class) verbatim.",
+            "basis": "Extracted every row of the AD-10 exit table from skills/bmad-testarch-evaluate/references/gaps.md in top-to-bottom order, pairing each source-and-exit with its exact class text.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":92805,\"outputTokens\":1222,\"costUsd\":\"0.07555139999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":77239,\"outputTokens\":1054,\"costUsd\":\"0.0667874\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The request asks for the AD-10 class for a `tea-evaluate run` failure whose exit field is the string \\\"malformed\\\", but the gaps guide's AD-10 table lists only numeric exits 10, 11, 12, 13, and 64 for the tea-evaluate source, and it instructs that an exit the table does not list for that source has no class and must not be guessed.",
+            "basis": "The gaps guide's AD-10 table only lists numeric tea-evaluate exits (10, 11, 12, 13, 64), and it says a request naming an exit the table does not list has no class, so an exit of \\\"malformed\\\" must be refused rather than guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50254,\"outputTokens\":1066,\"costUsd\":\"0.0821296\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50566,\"outputTokens\":618,\"costUsd\":\"0.07794\"}\n"
         },
         "artifacts": {}
       }

@@ -43,14 +43,14 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "The request asks for the AD-10 class assigned by the gaps guide's exit-mapping table to a failed `node cli/evaluate.js run ...` (tea-evaluate source) with exit \\\"malformed\\\", which the table does not list for that source, so per the guide's own rule (\\\"names an exit this table does not list for that source\\\") it is classified as an evaluation weakness.",
+        "basis": "The command is tea-evaluate's own `run` subcommand, but the exit value given is \"malformed\" rather than a numeric exit the gaps table lists for that source, so per the catch-all rule in gaps.md this is classed as an evaluation weakness.",
         "status": "answered",
         "class": "evaluation weakness"
       }
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50076,\"outputTokens\":892,\"costUsd\":\"0.07979159999999999\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35141,\"outputTokens\":1239,\"costUsd\":\"0.0807916\"}\n"
     },
     "artifacts": {}
   }

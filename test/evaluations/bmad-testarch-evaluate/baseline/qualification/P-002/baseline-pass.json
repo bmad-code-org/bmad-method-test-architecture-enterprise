@@ -4,7 +4,7 @@
   "phase": "baseline-pass",
   "workspace": "qualify-P-002",
   "targetArtifact": "skills/bmad-testarch-evaluate/references/gaps.md",
-  "targetArtifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "targetArtifactDigest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053",
   "verdict": "held",
   "oracles": [
     {
@@ -57,7 +57,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Gaps guide's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` map tea-evaluate's own exits for these commands.",
+            "basis": "Row `tea-evaluate 11` → evaluation weakness and row `tea-evaluate 12` → infrastructure in the gaps guide's \"Map AD-10 exits and classes to repairs\" table.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -65,7 +65,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49836,\"outputTokens\":508,\"costUsd\":\"0.0758238\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50446,\"outputTokens\":613,\"costUsd\":\"0.10725520000000001\"}\n"
         },
         "artifacts": {}
       }
@@ -109,15 +109,15 @@
         "stdout": {
           "kind": "json",
           "value": {
+            "basis": "Per inspection.md's classification rule, a web application is classified as the ai-feature targetKind even with no AI behavior, taking that row's interface kind: ai-feature | api | adopter-owned EnvironmentProbePort.",
             "status": "answered",
             "targetKind": "ai-feature",
-            "interface": "api",
-            "basis": "Per references/inspection.md's mapping table, a web application is an ai-feature target even with no AI behavior, and the ai-feature row's interface kind is api (adopter-owned EnvironmentProbePort / http-probe-port.mjs)."
+            "interface": "api"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43657,\"outputTokens\":554,\"costUsd\":\"0.0519554\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44351,\"outputTokens\":672,\"costUsd\":\"0.08378440000000001\"}\n"
         },
         "artifacts": {}
       }
@@ -161,7 +161,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows transcribed top-to-bottom from the gaps guide's \"Map AD-10 exits and classes to repairs\" table, with id as the unbackticked source-and-exit and class as the second column verbatim.",
+            "basis": "Rows transcribed top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md (Stage 11), with id as the unbackticked Source-and-exit column and class as the AD-10 class column.",
             "status": "answered",
             "exits": [
               {
@@ -221,7 +221,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":93627,\"outputTokens\":1300,\"costUsd\":\"0.076492\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":94650,\"outputTokens\":1274,\"costUsd\":\"0.1066884\"}\n"
         },
         "artifacts": {}
       }
@@ -268,13 +268,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The request asks for the AD-10 class of a `tea-evaluate run` failure, but the gaps guide's exit table only lists numeric exits (10, 11, 12, 13, 64) for that source and has no entry for an exit of \"malformed\", so per the guide's own rule I must say so and ask for the real exit and stderr rather than guess a class.",
+            "basis": "The command names tea-evaluate run but its exit is \\\"malformed\\\", not a numeric code the gaps guide's exit table lists for that source, so per \\\"a request that names ... an exit this table does not list for that source, has no class\\\" it must be refused rather than guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50027,\"outputTokens\":916,\"costUsd\":\"0.080037\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50594,\"outputTokens\":763,\"costUsd\":\"0.1090508\"}\n"
         },
         "artifacts": {}
       }

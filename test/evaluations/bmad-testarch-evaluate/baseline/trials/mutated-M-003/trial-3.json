@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-003",
   "trialIndex": 3,
   "workspace": "trial-mutated-M-003-3",
-  "elapsedMs": 70113,
+  "elapsedMs": 53533,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Gaps guide table \"Map AD-10 exits and classes to repairs\" rows `tea-evaluate 11` (evaluation weakness) and `tea-evaluate 12` (infrastructure) apply to these tea-evaluate CLI invocations.",
+            "basis": "Both commands invoke tea-evaluate (cli/evaluate.js), so gaps.md's \"Map AD-10 exits and classes to repairs\" table rows `tea-evaluate 11` and `tea-evaluate 12` apply.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49917,\"outputTokens\":584,\"costUsd\":\"0.0767178\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50500,\"outputTokens\":670,\"costUsd\":\"0.078633\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The guide's choice table states a web application is an ai-feature target—including one with no AI behavior—and takes the interface kind of the ai-feature row, which is web.",
+            "basis": "The inspection.md classification rule states a web application is an ai-feature target even with no AI behavior, taking the interface kind of the ai-feature row (targetKind ai-feature, interface web, adopter-owned EnvironmentProbePort).",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "web"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":28737,\"outputTokens\":624,\"costUsd\":\"0.0501732\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":28826,\"outputTokens\":470,\"costUsd\":\"0.048518000000000006\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Listed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with each row's source-and-exit and AD-10 class.",
+            "basis": "Listed every row of the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md in top-to-bottom order, using column 1 (source and exit) as id and column 2 (AD-10 class) as class.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":60290,\"outputTokens\":1150,\"costUsd\":\"0.0639208\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61302,\"outputTokens\":941,\"costUsd\":\"0.06520619999999999\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The gaps guide's AD-10 table lists only exits 10, 11, 12, 13 and 64 for the tea-evaluate source, and says a request naming an exit the table does not list for that source has no class and must not be guessed; \"malformed\" is not one of those listed exits.",
+            "basis": "The gaps guide's AD-10 table lists only exits 10, 11, 12, 13 and 64 for the `tea-evaluate` source, and it says a request naming an exit the table does not list for that source has no class and must never be guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50095,\"outputTokens\":927,\"costUsd\":\"0.0801834\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50877,\"outputTokens\":769,\"costUsd\":\"0.0803748\"}\n"
         },
         "artifacts": {}
       }

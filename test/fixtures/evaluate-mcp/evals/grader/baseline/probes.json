@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "grader-tool-server",
-    "implementationDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
+    "implementationDigest": "sha256:c7329e0f4f8287930897be4b1fdf9cf9d6b6c75b594fc5b056f00c081af527a7",
     "artifactDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
-    "commitDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
+    "commitDigest": "sha256:c7329e0f4f8287930897be4b1fdf9cf9d6b6c75b594fc5b056f00c081af527a7",
     "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the grader then rejects the answer.",
     "qualification": {
       "route": "controlled-mutation",
@@ -24,13 +24,13 @@
       "expectedObservableFailure": "The grader rejects the answer, so its result says verdict rejected.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261006T211323386Z-2a057b06/qualification/P-002/baseline-pass.json",
+        "path": "runs/20261009T005314850Z-b3c531c0/qualification/P-002/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:dc283fb5b94ced5fd00bbc6131a91f6928f3a965c48b3bb7f110d6d77f00e9ae"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261006T211323386Z-2a057b06/qualification/P-002/mutated-fail.json",
+        "path": "runs/20261009T005314850Z-b3c531c0/qualification/P-002/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:0e8ee858a650a5f9dac14eaa976dd866c80b707eda97dbf7bde6fd7944ab15d6"
       },
@@ -46,7 +46,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261006T211323386Z-2a057b06/qualification/P-002/mutated-fail.json",
+            "path": "runs/20261009T005314850Z-b3c531c0/qualification/P-002/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:0e8ee858a650a5f9dac14eaa976dd866c80b707eda97dbf7bde6fd7944ab15d6"
           }

@@ -14,7 +14,7 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261006T211922974Z-aff01bf6/qualification/P-014/baseline-pass.json",
+      "path": "runs/20261009T005402966Z-ef26f29d/qualification/P-014/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:16d27382c7ae92a5813380aa0a9d406d12ac489b5493940dac39682187345371"
     },

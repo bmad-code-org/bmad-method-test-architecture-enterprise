@@ -2,9 +2,9 @@
   "probeId": "P-009",
   "mutationId": "M-005",
   "targetArtifact": "skills/bmad-testarch-evaluate/references/gaps.md",
-  "preDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
-  "mutatedDigest": "sha256:5c8a1ab2964269b83263f544151b670e43abe4fe244e10a36a865c59fd37101d",
-  "restoredDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
+  "preDigest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053",
+  "mutatedDigest": "sha256:ab6d2a578112a8dd81360c3f78388b96ad69488555d7c651b9d09b390bfaf796",
+  "restoredDigest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053",
   "reExecutionCap": 2,
   "rePasses": [
     {
@@ -61,7 +61,7 @@
             "stdout": {
               "kind": "json",
               "value": {
-                "basis": "Both commands invoke cli/evaluate.js (the tea-evaluate CLI), so gaps.md's 'Map AD-10 exits and classes to repairs' table rows for 'tea-evaluate 11' and 'tea-evaluate 12' apply.",
+                "basis": "Both commands invoke tea-evaluate (node cli/evaluate.js), so the gaps guide's 'Map AD-10 exits and classes to repairs' table rows 'tea-evaluate 11' and 'tea-evaluate 12' apply.",
                 "status": "answered",
                 "exit11": "evaluation weakness",
                 "exit12": "infrastructure"
@@ -69,7 +69,7 @@
             },
             "stderr": {
               "kind": "text",
-              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50098,\"outputTokens\":876,\"costUsd\":\"0.0678028\"}\n"
+              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50363,\"outputTokens\":625,\"costUsd\":\"0.06478339999999999\"}\n"
             },
             "artifacts": {}
           }
@@ -113,7 +113,7 @@
             "stdout": {
               "kind": "json",
               "value": {
-                "basis": "Per references/inspection.md, a web application (even with no AI behavior) is classified as the `ai-feature` targetKind row, which takes interface kind `api`.",
+                "basis": "Per references/inspection.md's AD-4 mapping table, a web application is classified as the ai-feature row even with no AI behavior, and that row's interface kind is api.",
                 "status": "answered",
                 "targetKind": "ai-feature",
                 "interface": "api"
@@ -121,7 +121,7 @@
             },
             "stderr": {
               "kind": "text",
-              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43603,\"outputTokens\":505,\"costUsd\":\"0.039180599999999996\"}\n"
+              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44112,\"outputTokens\":447,\"costUsd\":\"0.0386948\"}\n"
             },
             "artifacts": {}
           }
@@ -165,7 +165,7 @@
             "stdout": {
               "kind": "json",
               "value": {
-                "basis": "Listed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with id (source and exit) and class exactly as written.",
+                "basis": "Listed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with id (source and exit, backticks stripped) and class exactly as written.",
                 "status": "answered",
                 "exits": [
                   {
@@ -225,7 +225,7 @@
             },
             "stderr": {
               "kind": "text",
-              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":60938,\"outputTokens\":1179,\"costUsd\":\"0.05166359999999999\"}\n"
+              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":78316,\"outputTokens\":1147,\"costUsd\":\"0.0586722\"}\n"
             },
             "artifacts": {}
           }
@@ -272,13 +272,13 @@
             "stdout": {
               "kind": "json",
               "value": {
-                "basis": "The gaps guide's AD-10 table only assigns classes to specific numeric exits for tea-evaluate (10, 11, 12, 13, 64), and \\\"malformed\\\" is not a listed exit for that source, so no class can be assigned without guessing.",
+                "basis": "The request asked for the AD-10 class for a `tea-evaluate run` failure whose exit field is \"malformed\" (not a numeric exit code), but the gaps guide's table only assigns classes to specific numeric exits (10, 11, 12, 13, 64) for that source and states a request naming no exit, or an exit the table does not list, has no class and must not be guessed.",
                 "status": "refused"
               }
             },
             "stderr": {
               "kind": "text",
-              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50024,\"outputTokens\":536,\"costUsd\":\"0.063723\"}\n"
+              "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50641,\"outputTokens\":724,\"costUsd\":\"0.0659924\"}\n"
             },
             "artifacts": {}
           }
