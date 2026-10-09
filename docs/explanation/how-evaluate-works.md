@@ -1,17 +1,13 @@
 ---
 title: How Evaluate Works
-description: The stack behind an Evaluate evaluation, what TEA owns above eval-quality, how oracles, evaluators, held-out probes, judge calibration and gameability probes work, how the clean and mutated arms prove an evaluation can catch a defect, why the target is confined, and how CI placement is derived
+description: How Evaluate authors and runs evaluations, scores known defects, checks evidence integrity, and derives CI placement
 ---
 
 # How Evaluate Works
 
-An AI evaluation can pass and prove nothing.
-It sends a request, sees something plausible come back and reports success, while the failure it was written to catch sits right next to the thing it looked at.
-A green run never shows that blind spot.
-
-Evaluate is the TEA workflow (`bmad-testarch-evaluate`, menu code `EV`) built around that problem.
-It plants known defects in your AI feature, runs the evaluation again and asks whether the evaluation noticed.
-An evaluation that caught the planted defect is sensitive to that failure, and one that stayed green has a blind spot you now know about.
+Evaluate (`bmad-testarch-evaluate`, menu code `EV`) checks whether your evaluation can detect known defects.
+It plants a defect in your target, runs the evaluation, then restores the original files and runs again.
+A passing evaluation on the mutated target exposes a blind spot.
 
 Evaluation moves from confirmed requirements to CI in six steps, and three roles carry them.
 The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and `eval-quality` scores it.
@@ -28,13 +24,10 @@ flowchart TD
   Confirm --> Author --> Run --> Score --> Accept --> CI
 ```
 
-This page explains how the pieces fit and why they are built this way.
 To run one, start with the tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md).
 For the commands and fields, use the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-cli.md).
 
 ## The stack
-
-Four things stack on each other, and each one answers a different question.
 
 | Layer                              | What it is                                                                                        | The question it answers                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -49,18 +42,16 @@ Evaluate redirects a request to evaluate a vendor model on its own, because the 
 The evaluation is a folder (`evals/<evaluation-id>/` in the examples) that holds everything needed to repeat the measurement: the confirmed `requirements.md`, the `contract.json`, one probe file per probe, one mutation file per planted defect, the scoring policy and, once you accept one, a `baseline/` of results.
 Because it is committed, a reviewer reads a change to the evaluation the way they read a change to code.
 
-The contract is the test.
-It tells an evaluator how to expose a failure and what evidence counts as finding it.
+The contract tells an evaluator how to expose a failure and what evidence counts as finding it.
 Every behavior in it carries an observable success criterion, and every behavior that a defect probe covers is decided by exactly one oracle.
 
 `eval-quality` owns the mathematics and the integrity rules.
 It compiles the contract, seals the brief an independent evaluator reads, checks that the environment can measure anything at all, resolves oracles over evidence, scores each probe and compares two runs.
-A verdict that did not come from `eval-quality` is not one the system will accept.
+The runtime accepts verdicts from `eval-quality`.
 
 ## What TEA owns above eval-quality
 
-`eval-quality` does not run your target, choose your probes, write your oracles or put anything in a pipeline.
-Evaluate does all of that, in two parts.
+Evaluate authors the evaluation through its skill and executes it through `tea-evaluate`.
 
 The skill is a conversation with the Master Test Architect through twelve stages: inspect the target and name its kind, capture the requirements you confirm, design the corpus of probes, author the contract, design the oracles, scaffold the registry and adapters, choose the evaluator, plant and roll back mutations, scaffold the harness, run and score, interpret the gaps, and write the CI plan.
 Every stage has a craft guide, and a stage hands a checked artifact to the next.
@@ -70,14 +61,12 @@ It validates the folder, builds a disposable workspace for every arm, applies an
 It computes no verdict, no score and no rate of its own.
 Every exit that carries a judgment is `eval-quality`'s exit, passed through unchanged.
 
-This split matters because it keeps the two kinds of trust apart.
-You trust the engine's verdicts because the engine is general and tested against its own corpus.
-You trust the runtime's evidence because it describes what happened in a workspace the target could not escape.
+The engine checks scoring against its published corpus.
+The runtime records evidence from confined target processes.
 
 ## Oracles and evaluator kinds
 
-An oracle is the assertion: a relation that has to hold over the recorded evidence.
-"The title sent equals the title read back" is an oracle.
+An oracle is the assertion: a relation that has to hold over the recorded evidence. "The title sent equals the title read back" is an oracle.
 An exit code of zero alone decides nothing, because a process can succeed and still give a wrong answer.
 So a strong oracle reads the substantive channel, such as the response body or the structured result, and says what it expects of it.
 
@@ -149,9 +138,8 @@ The runtime qualifies it through six steps in a workspace of its own:
 5. The restored file's digest and mode are compared with the ones taken before the mutation.
 6. The clean arm runs again until it passes, within a cap the scoring policy sets.
 
-The run proves the rollback:
-`rollbackVerified` is true only when the restored bytes match and the clean arm passes again.
-A workspace that no longer passes after the restore is an unfit harness, and the run stops with exit 12 because the target has drifted.
+The run proves the rollback: `rollbackVerified` is true only when the restored bytes match and the clean arm passes again.
+If the harness cannot reproduce its clean baseline after restoration, the run exits 12 because the harness is unfit to qualify that mutation.
 A mutation that does not change the behavior exits 11, because an evaluation that cannot see a defect it was designed to see is the weakness Evaluate exists to find.
 
 Two more arms exist for particular probes.
@@ -169,20 +157,14 @@ The target is code you are measuring, so the runtime trusts none of it.
 A skill or an agent can read files, write files, start processes and call out, and an evaluation is only worth having if what it did is recorded honestly.
 So the runtime confines every process the target starts: it can write its disposable workspace and nothing else, it cannot read the contract, the probes or the evaluator, it cannot change your repository, and what it opens outside the grants is audited and makes the score Invalid.
 
-Four goals follow from that.
-The target cannot answer the test it is taking, because the test is closed to it.
-Your working tree, branches and hooks stay as they were.
-The evidence the runtime writes cannot be rewritten by the code it describes.
-Every use of the host the target needs is a short list you configure, which the audit then holds the target to.
-
 macOS confines through Seatbelt and Linux through Bubblewrap.
 A host that can do neither, or whose audit cannot observe, stops the command with exit 12, because an audit that cannot see would report an empty list as if it were evidence.
 [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md) describes the mechanisms, and the [reference](/docs/reference/tea-evaluate-cli.md#file-system-confinement) lists what you configure.
 
 ## How CI placement is derived
 
-Running everything on every pull request would be slow and costly, and running nothing there would let regressions merge.
-Evaluate resolves that with a plan, `ci/evaluation-ci-plan.json`, that places each check on a tier and is the only definition of which check runs when.
+`ci/evaluation-ci-plan.json` assigns each check to a CI tier.
+The runtime uses that plan to decide which checks run for each event.
 
 The checks fall into two groups.
 The deterministic set needs no secret and calls no model: the contract checks, the conformance run of an HTTP port, the gameability arm, the agreement of each oracle with its scorer and the replay of the baseline.

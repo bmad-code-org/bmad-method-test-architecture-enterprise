@@ -111,7 +111,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eva
 if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-adoption-guide.md, "none of the eight skills fragment selection spans is still listed as deferred." */
+/** test/docs/eval-quality-adoption-guide.md, "none of the eight skills fragment selection spans is still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
 if (fragmentSelectionSuite === undefined) refuse('suite-manifest.json registers no suite with id "fragment-selection"');
 const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
@@ -119,7 +119,7 @@ if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite n
 exports.NO_FRAGMENT_SELECTION_SKILL_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 0;
 
 /**
- * docs/explanation/eval-quality-adoption-guide.md:203, "the 34 CONCERNS the
+ * test/docs/eval-quality-adoption-guide.md:203, "the 34 CONCERNS the
  * stored corpus scores, every one of which test/probes/expected-strength.json
  * already records as expected."
  */
@@ -133,7 +133,7 @@ for (const corpus of Object.values(expectedStrength)) {
 exports.THIRTY_FOUR_CONCERNS = concernsCount === 34;
 
 /**
- * docs/explanation/eval-quality-command-adapter.md:255,273, "as of 1.4.0."
+ * test/docs/eval-quality-command-adapter.md:255,273, "as of 1.4.0."
  * The claim is about when a capability arrived, so this compares `>=`, not
  * `==`, against the lockfile-resolved release: updating the lockfile further
  * keeps the claim true.
@@ -160,16 +160,15 @@ function atLeast(version, floor) {
   return patch >= floorPatch;
 }
 exports.atLeast = atLeast;
-exports.EVAL_QUALITY_AT_LEAST_1_4_0 = atLeast(evalQualityVersion, '1.4.0');
 
-/** docs/explanation/eval-quality-roadmap.md:167, "Every harness has probed through the port as of `eval-quality` 1.2.0." */
+/** test/docs/eval-quality-roadmap.md:167, "Every harness has probed through the port as of `eval-quality` 1.2.0." */
 exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
 
-/** docs/explanation/eval-quality-roadmap.md:169, "every authorization has declared which environment keys its requests may carry since 3.0.0." */
+/** test/docs/eval-quality-roadmap.md:169, "every authorization has declared which environment keys its requests may carry since 3.0.0." */
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
 /**
- * docs/explanation/eval-quality-roadmap.md:168, "The lockfile records the
+ * test/docs/eval-quality-roadmap.md:168, "The lockfile records the
  * resolved eval-quality release." The claim holds when the lockfile entry has
  * a plain release version. Capability floors above use the same version.
  */

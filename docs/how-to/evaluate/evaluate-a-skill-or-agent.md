@@ -187,9 +187,8 @@ RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/stub-skill-
 SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
 
-`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
-The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
-If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
+`RUN` and `SCORE` capture the IDs printed by these commands; later examples use them to read your result.
+If either is empty, read the command's output and resolve the failure before continuing.
 
 `run` repeats the preflight, qualifies each seeded defect and the clean control, then runs every arm as a set of trials in fresh copies.
 This folder holds one clean control and one trial:
@@ -314,7 +313,7 @@ npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation -
 
 `score` reads each known-failing control whose trials violate its oracles as `false-positive` and exits 2; `eval-quality` computes that, and the summary lines say `BEFORE STATE`.
 The flag covers clean controls only, so a seeded probe whose baseline the defect breaks still stops `preflight` with exit 11.
-The result is a measurement. `compare` and `compare --accept` exit 10 on it.
+`compare` and `compare --accept` exit 10 on a before-state result.
 After the fix, change the statement to `No known defect at this revision.`, run without the flag and accept that run.
 [The `run` reference](/docs/reference/tea-evaluate-cli.md#record-a-before-state) lists what changes under the flag.
 

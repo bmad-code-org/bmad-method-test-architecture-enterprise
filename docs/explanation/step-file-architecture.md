@@ -5,21 +5,22 @@ description: How TEA splits workflows into granular step files, how those steps 
 
 # TEA Step-File and Orchestration Architecture
 
-TEA workflows are not one long instruction file. They are a chain of small step files, and some of those steps fan out into isolated workers whose outputs are merged back into a single artifact. This page covers both halves: the step-file format, and the orchestration that runs it.
+TEA workflows load one step file at a time.
+Some steps dispatch isolated workers, then merge their structured outputs.
 
 ## Why Step Files
 
-A single 5000-word instruction file produces a predictable set of failures. The model skims it, improvises past the vague parts ("analyze codebase then generate tests" specifies nothing), keeps going because nothing told it where to stop, and returns a different result on the next run.
+Step files give the model a bounded task, the context it needs, and an exit condition.
 
 Step files break the workflow into self-contained units that each do one thing:
 
 - **One step, one action.** Each file contains exactly one task.
 - **Explicit exit conditions.** The step states what "finished" means.
 - **Context injection.** Each step restates what it needs, assuming nothing about what the model still remembers.
-- **Strict boundaries.** Each step lists what it must not do, so out-of-scope work has an explicit prohibition rather than an implicit one.
-- **Just-in-time loading.** The agent reads one step file, executes it, then loads the next. It never loads them all at once.
+- **Strict boundaries.** Each step lists what it must not do, so the scope is explicit.
+- **Just-in-time loading.** The agent reads one step file, executes it, then loads the next.
 
-The result is consistent output for the same input, which is what makes the rest of the architecture possible: you cannot parallelize work whose boundaries are undefined.
+These boundaries let independent workers produce outputs the aggregation step can validate.
 
 Layout in the repository, per workflow skill:
 
@@ -76,7 +77,7 @@ Do NOT proceed until all conditions met.
 Load `steps-c/step-[N+1]-[action].md` and execute.
 ```
 
-A worker step is the same shape with two differences: its exit condition ends the worker rather than advancing the chain, and it writes structured JSON to a temp file for the aggregation step to read:
+A worker step is the same shape with two differences: its exit condition ends the worker, and it writes structured JSON to a temp file for the aggregation step to read:
 
 ```json
 {
@@ -95,14 +96,15 @@ A worker step is the same shape with two differences: its exit condition ends th
 
 ### Loading knowledge fragments from a step
 
-Step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`. `{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside the workflow, and the step body names the fragments it wants:
+Step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`.
+`{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside the workflow, and the step body names the fragments it wants:
 
 ```markdown
 Use `{knowledgeIndex}` to load:
 
-1. **fixture-architecture** - composable fixture patterns
-2. **api-request** - API test patterns
-3. **network-first** - network handling patterns
+1. **fixture-architecture**: composable fixture patterns
+2. **api-request**: API test patterns
+3. **network-first**: network handling patterns
 
 Generated tests MUST follow these patterns:
 
@@ -117,7 +119,10 @@ See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how 
 
 ## How Workflows Split Into Workers
 
-Four workflows ship dedicated worker step files. Four resolve execution mode inside a step but run their work in order. `teach-me-testing` does neither; it is a sequential, session-based learning flow.
+Four workflows ship dedicated worker step files.
+Four resolve execution mode inside a step and run their work in order.
+`teach-me-testing` is a sequential, session-based learning flow.
+`evaluate` uses its own authoring stages and the `tea-evaluate` runtime.
 
 | Workflow      | Shape               | Workers                                                                   | Aggregation                                                 |
 | ------------- | ------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -130,11 +135,13 @@ Four workflows ship dedicated worker step files. Four resolve execution mode ins
 | `test-design` | Sequential + probe  | Output generation                                                         | One deterministic design artifact                           |
 | `trace`       | Two-phase, ordered  | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
 
-Workers are isolated. They exchange nothing directly and communicate only through the structured outputs that the aggregation step validates.
+Workers are isolated.
+They exchange nothing directly and communicate only through the structured outputs that the aggregation step validates.
 
 ## Execution Modes
 
-`tea_execution_mode` picks the orchestration strategy. Default `auto`.
+`tea_execution_mode` picks the orchestration strategy.
+Default `auto`.
 
 | Mode         | Behavior                                                          |
 | ------------ | ----------------------------------------------------------------- |
@@ -143,9 +150,11 @@ Workers are isolated. They exchange nothing directly and communicate only throug
 | `subagent`   | Prefer isolated worker orchestration when the runtime supports it |
 | `sequential` | Run worker steps one at a time                                    |
 
-With `tea_capability_probe: true` (the default), TEA falls back safely: `auto` tries `agent-team`, then `subagent`, then `sequential`; an explicitly requested `agent-team` or `subagent` falls back to the next supported mode; `sequential` always stays sequential. With `tea_capability_probe: false`, TEA honors the requested mode strictly and fails if the runtime cannot execute it.
+With `tea_capability_probe: true` (the default), TEA falls back safely: `auto` tries `agent-team`, then `subagent`, then `sequential`; an explicitly requested `agent-team` or `subagent` falls back to the next supported mode; `sequential` always stays sequential.
+With `tea_capability_probe: false`, TEA honors the requested mode strictly and fails if the runtime cannot execute it.
 
-In `agent-team` and `subagent` modes, the runtime decides concurrency and timing. TEA imposes no parallel worker limit of its own.
+In `agent-team` and `subagent` modes, the runtime decides concurrency and timing.
+TEA imposes no parallel worker limit of its own.
 
 Recommended configuration, under `[modules.tea]` in `_bmad/config.toml`:
 
@@ -154,11 +163,13 @@ tea_execution_mode = "auto"
 tea_capability_probe = "true"
 ```
 
-Choose `sequential` when you need strict single-threaded execution or debugging clarity. Choose `agent-team` or `subagent` explicitly only when you want that mode specifically and know your runtime supports it.
+Choose `sequential` when you need strict single-threaded execution or debugging clarity.
+Choose `agent-team` or `subagent` explicitly only when you want that mode specifically and know your runtime supports it.
 
 ### Overriding a mode for one run
 
-Explicit phrasing during a run overrides config for that run only. Normalized terms:
+Explicit phrasing during a run overrides config for that run only.
+Normalized terms:
 
 - `agent team`, `agent teams`, `agentteam` → `agent-team`
 - `subagent`, `subagents`, `sub agent`, `sub agents` → `subagent`
@@ -169,19 +180,14 @@ Precedence: explicit run-level request, then `tea_execution_mode` in config, the
 
 ### What mode never changes
 
-Across every mode TEA holds the same guarantees: the same output schema per workflow, the same validation and aggregation rules, the same deterministic fallback semantics, and the same failure behavior when a worker output is missing or invalid. Mode selection changes orchestration, never artifact contracts.
+Every mode uses the same output schemas, validation rules, and aggregation checks.
+A missing or invalid worker output fails validation.
 
 ## Performance
 
-Parallel dispatch is the reason worker splits exist. The figures below are rough development-run estimates, not a published benchmark; treat them as the shape of the effect rather than as measurements.
-
-| Workflow      | Sequential | Parallel workers | Approx. change |
-| ------------- | ---------- | ---------------- | -------------- |
-| `automate`    | ~10 min    | ~5 min           | ~50% faster    |
-| `test-review` | ~5 min     | ~2 min           | ~60% faster    |
-| `nfr-assess`  | ~12 min    | ~4 min           | ~67% faster    |
-
-Users do not need to know any of this to run a workflow. What they see is consistent output for the same input, faster runs where parallelism applies, and progress reporting per step:
+Parallel workers can shorten a run when their tasks are independent.
+Actual duration depends on the runtime, model, input size, and worker count.
+Workflow progress reports the current step and active workers:
 
 ```text
 ✓ Step 1: Setup complete
@@ -195,15 +201,20 @@ Users do not need to know any of this to run a workflow. What they see is consis
 
 ## Validation
 
-Every workflow is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it. Validation runs against the working tree at the time it is invoked, so its output is a point-in-time reading rather than a durable artifact; the reports are not committed. Re-run BMad Builder validation after editing a step file, and read the result from that run.
+Every workflow is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it.
+Validation reports describe the working tree at the time of the run and are not committed.
+Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
-Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation. `evaluate` was first proved on itself: it authored and ran its own suite live.
+Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
+`evaluate` was first proved on itself: it authored and ran its own suite live.
 
 ## Maintaining Step Files
 
 Update a step file when knowledge fragments change, a new pattern needs enforcing, the model improvises past an existing boundary, a step is slow enough to warrant splitting or parallelizing, or user feedback says an instruction is ambiguous.
 
-**Practices that hold:** keep each step to 200-500 words; restate context rather than assuming recall; be explicit ("generate 3-5 test cases", not "generate some tests"); list forbidden actions rather than implying them; re-run BMad Builder validation after every edit.
+Keep steps focused, restate their context, and state the required output and exit condition.
+Use exact ranges such as "generate 3-5 test cases" and list forbidden actions.
+Re-run BMad Builder validation after edits.
 
 **Anti-patterns:** steps over 1000 words defeat the purpose; vague verbs like "analyze codebase" specify nothing; a missing exit condition leaves no stopping point; assumed knowledge across steps breaks under context pressure; more than one task in a step reintroduces everything step files were built to prevent.
 
@@ -221,8 +232,8 @@ Update a step file when knowledge fragments change, a new pattern needs enforcin
 
 ## Related
 
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - how steps select and load fragments
-- [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md) - running one of these workflows headless
-- [TEA Configuration](/docs/reference/configuration.md) - `tea_execution_mode` and `tea_capability_probe`
-- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) - authoring your own steps
-- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows in the lifecycle
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md): how steps select and load fragments
+- [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md): running one of these workflows headless
+- [TEA Configuration](/docs/reference/configuration.md): `tea_execution_mode` and `tea_capability_probe`
+- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md): authoring your own steps
+- [TEA Overview](/docs/explanation/tea-overview.md): the ten workflows in the lifecycle

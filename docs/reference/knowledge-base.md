@@ -5,9 +5,12 @@ description: Complete index of TEA's 59 knowledge fragments for context engineer
 
 # TEA Knowledge Base Index
 
-TEA loads domain standards into context from 59 knowledge fragments, selected per workflow by the `tea-index.csv` manifest. Why that beats prompting, and how loading is wired: [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
+TEA's knowledge base has 59 fragments of testing patterns and standards.
+Workflow steps use `tea-index.csv` to find the fragments their loading rules select.
+See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how this is wired.
 
-This page indexes every row of that manifest. Each entry is named by its manifest `id`, which differs from the file name for a few fragments; the link resolves to the file. The `Tier` column is the manifest's own `tier` value and decides when the fragment loads (see [Loading tiers](#loading-tiers)).
+This page indexes every manifest row by its `id` and links to the fragment file.
+The `Tier` column records the manifest's priority label; step-specific loading rules determine which fragments load (see [Loading tiers](#loading-tiers)).
 
 ## Fragment Categories
 
@@ -73,21 +76,23 @@ CI/CD patterns, burn-in testing, and selective test execution.
 
 Test quality standards, test level selection, TDD patterns, and the generation-safety gate.
 
-| Fragment                                                                                                                                                        | Tier     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Key Topics                                |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-quality.md)                   | core     | Execution limits, isolation rules, green criteria                                                                                                                                                                                                                                                                                                                                                                                                           | DoD, best practices, anti-patterns        |
-| [test-levels](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-levels-framework.md)           | core     | Guidelines for choosing unit, integration, or end-to-end coverage                                                                                                                                                                                                                                                                                                                                                                                           | Test pyramid, level selection             |
-| [test-priorities](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-priorities-matrix.md)      | core     | P0–P3 criteria, coverage targets, execution ordering                                                                                                                                                                                                                                                                                                                                                                                                        | Prioritization, risk-based testing        |
-| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-healing-patterns.md) | core     | Common failure patterns and automated fixes                                                                                                                                                                                                                                                                                                                                                                                                                 | Debugging, healing, fixes                 |
-| [confidence-gate](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/confidence-gate.md)             | core     | 1-10 confidence score with a stop-and-ask rule below threshold, so the agent declares unknowns instead of fabricating them                                                                                                                                                                                                                                                                                                                                  | Agent safety, generation, governance      |
-| [evidence-integrity](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/evidence-integrity.md)       | core     | Checks that cannot fail including assertions already true before the action, three-state diagnostics, probes that issue the client's own request, verifying the outcome rather than the act, verifying framework properties before use, stating environment asymmetry including screen geometry and accumulated credentials, ranking hypotheses by the cost of the measurement that kills them, and recording what a change did rather than what it was for | Falsifiability, hollow green, diagnostics |
-| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/component-tdd.md)                 | extended | Red→green→refactor workflow, provider isolation                                                                                                                                                                                                                                                                                                                                                                                                             | TDD, component testing                    |
+| Fragment                                                                                                                                                        | Tier     | Description                                                                                                                                                              | Key Topics                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-quality.md)                   | core     | Execution limits, isolation rules, green criteria                                                                                                                        | DoD, best practices, anti-patterns        |
+| [test-levels](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-levels-framework.md)           | core     | Guidelines for choosing unit, integration, or end-to-end coverage                                                                                                        | Test pyramid, level selection             |
+| [test-priorities](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-priorities-matrix.md)      | core     | P0–P3 criteria, coverage targets, execution ordering                                                                                                                     | Prioritization, risk-based testing        |
+| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/test-healing-patterns.md) | core     | Common failure patterns and automated fixes                                                                                                                              | Debugging, healing, fixes                 |
+| [confidence-gate](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/confidence-gate.md)             | core     | 1-10 confidence score; below the threshold, record unknowns and ask for the missing facts                                                                                | Agent safety, generation, governance      |
+| [evidence-integrity](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/evidence-integrity.md)       | core     | Assertions that can detect a failure, three-state diagnostics, probes that use the real client, outcome checks, verified framework behavior, and environment differences | Falsifiability, hollow green, diagnostics |
+| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/component-tdd.md)                 | extended | Red→green→refactor workflow, provider isolation                                                                                                                          | TDD, component testing                    |
 
 **Used in:** `test-design`, `atdd`, `automate`, `test-review`, `trace`
 
-`confidence-gate` covers selectors, endpoints, risk classification, fixtures, schemas, and data factories. Any generation step that cannot establish a value from the repo records it as an unknown rather than inventing it.
+`confidence-gate` covers selectors, endpoints, risk classification, fixtures, schemas, and data factories.
+A generation step records values it cannot establish from the repository as unknown.
 
-`evidence-integrity` covers the other half of the same problem: a check that cannot go red, and a diagnostic that reports a verdict it could not measure. Both produce green with nothing behind it, which is why the review registry's CRITICAL rows exist.
+`evidence-integrity` requires checks that can fail and diagnostics that report what they measured.
+It informs the review registry's CRITICAL rows.
 
 ---
 
@@ -112,7 +117,7 @@ Selector resilience, race condition debugging, and visual debugging.
 
 | Fragment                                                                                                                                                    | Tier        | Description                                           | Key Topics                         |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------- | ---------------------------------- |
-| [selector-resilience](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/selector-resilience.md) | core        | Robust selector strategies and debugging              | Selectors, locators, resilience    |
+| [selector-resilience](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/selector-resilience.md) | core        | Stable selector strategies and debugging              | Selectors, locators, resilience    |
 | [timing-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/timing-debugging.md)       | extended    | Race condition identification and deterministic fixes | Race conditions, timing issues     |
 | [visual-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/visual-debugging.md)       | specialized | Trace viewer usage, artifact expectations             | Debugging, trace viewer, artifacts |
 
@@ -153,7 +158,8 @@ Contract testing fundamentals plus Pact.js Utils, Pact MCP, and broker operation
 
 **Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (conditioned by `tea_use_pactjs_utils` and `tea_pact_mcp`)
 
-An expired PAT on the PactFlow webhook is the most common non-code cause of `can-i-deploy` timing out with `There is no verified pact between ...`. `pact-broker-webhooks` carries the rotation runbook.
+An expired PAT on the PactFlow webhook is the most common non-code cause of `can-i-deploy` timing out with `There is no verified pact between ...`.
+`pact-broker-webhooks` carries the rotation runbook.
 
 ---
 
@@ -177,17 +183,19 @@ Delivery-side testing for asynchronous, eventually-consistent webhook flows usin
 
 ### Mobile Native
 
-Maestro device flows and the level discipline that decides what becomes a flow at all. Loaded when `test_stack_type` is `mobile` or when the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml` or `*.flow.yml`).
+Maestro device flows and guidance on selecting device-level tests.
+Loaded when `test_stack_type` is `mobile` or when the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml` or `*.flow.yml`).
 
 | Fragment                                                                                                                                                      | Tier        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Key Topics                                                      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | [mobile-test-strategy](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/mobile-test-strategy.md) | specialized | Mobile test level framework, what belongs in a device flow, mobile risk categories, device matrix with a gate profile matching local, CI shape, no live third-party flag evaluation in the run path                                                                                                                                                                                                                                                              | Levels, risk, device matrix, permissions, lifecycle             |
-| [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/maestro-flows.md)               | specialized | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, command semantics that differ by platform, `text:` selectors as whole-element regex, taps that report COMPLETED without being handled, visible meaning inside the viewport, asserting the transition rather than a state that may already hold                                                                                                  | Maestro, selectors, isolation, regex selectors, anti-patterns   |
+| [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/maestro-flows.md)               | specialized | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, command semantics that differ by platform, `text:` selectors as whole-element regex, taps that report COMPLETED without being handled, visible meaning inside the viewport, checking that the action caused a transition                                                                                                                        | Maestro, selectors, isolation, regex selectors, anti-patterns   |
 | [mobile-ci-device-lab](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/mobile-ci-device-lab.md) | specialized | Build artifact selection including why a debug-variant development build does not solve it, dev-server manifest signing in non-interactive CI, one device profile across local and CI, native modules that degrade silently in a shell, deep links reachable through the shell's routed URL form, emulator snapshot caching, repairing locally created AVDs, per-device identity for sharded runs, runner version pinning, artifact layout and failure diagnosis | Build artifact, emulator, caching, pinning, sharding, artifacts |
 
 **Used in:** `framework`, `automate`, `atdd`, `test-design`, `test-review`, `ci` (when `test_stack_type` is `mobile` or a Maestro flow is present)
 
-The browser fragments (`network-first`, `playwright-config`, `intercept-network-call`, `selector-resilience`) are deliberately NOT loaded for a mobile stack: a device flow has no DOM and no request interceptor.
+Mobile loading rules exclude browser fragments such as `network-first`, `playwright-config`, `intercept-network-call`, and `selector-resilience`.
+Maestro flows use device selectors and synchronization.
 
 ---
 
@@ -205,7 +213,7 @@ CLI and MCP integration for AI-driven browser automation during test generation.
 
 ### Playwright-Utils Integration
 
-Patterns for the `@seontechnologies/playwright-utils` package (10 utility modules).
+Patterns for `@seontechnologies/playwright-utils`.
 
 | Fragment                                                                                                                                                                    | Tier     | Description                                                                                                                                                                                                                    | Key Topics                                |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
@@ -221,7 +229,10 @@ The package's remaining fragments are indexed under the category that matches wh
 
 **Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (all gated on `tea_use_playwright_utils: true`)
 
-`playwright-utils-mandate` loads first on every one of them. It decides how the other fragments are applied: generation follows its substitution table by default, and `test-review` reads its REQUIRED list as the firing predicate for registry rows `M9` and `L9`. `pactjs-utils-mandate` plays the same role for Pact suites and row `M10`. Both instantiate `library-integration-mandate`, which holds the contract they share and the checklist for wiring in the next library.
+`playwright-utils-mandate` loads first on every one of them.
+It decides how the other fragments are applied: generation follows its substitution table by default, and `test-review` reads its REQUIRED list as the firing predicate for registry rows `M9` and `L9`.
+`pactjs-utils-mandate` plays the same role for Pact suites and row `M10`.
+Both instantiate `library-integration-mandate`, which holds the contract they share and the checklist for wiring in the next library.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/>
 
@@ -231,7 +242,7 @@ The package's remaining fragments are indexed under the category that matches wh
 
 **Location:** `skills/bmod-tea/knowledge/tea-index.csv`
 
-**Fragment location:** `skills/bmod-tea/knowledge/` (all 59 fragments in a single directory)
+The 59 fragment files live beside the manifest in `skills/bmod-tea/knowledge/`.
 
 **Structure:**
 
@@ -243,29 +254,31 @@ risk-governance,Risk Governance,"Scoring matrix, category ownership, gate decisi
 
 **Columns:**
 
-- `id` - Unique fragment identifier (kebab-case). This is the name workflows cite, and it is not always the file stem
-- `name` - Human-readable fragment name
-- `description` - What the fragment covers
-- `tags` - Searchable tags (comma-separated)
-- `tier` - Loading priority (see below)
-- `fragment_file` - Path to the fragment markdown file, relative to the `knowledge/` folder
+- `id`: unique kebab-case identifier used by workflow steps; it can differ from the file stem
+- `name`: human-readable fragment name
+- `description`: what the fragment covers
+- `tags`: comma-separated search tags
+- `tier`: priority label (see below)
+- `fragment_file`: path relative to `knowledge/`
 
 ### Loading tiers
 
-Workflows do not carry per-workflow fragment lists. Each workflow step declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`, where `{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside it, and selects fragments at run time by tier, then narrows by stack and config:
+Step-file frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`.
+`{tea-knowledge}` resolves to the `knowledge/` folder of the installed `bmod-tea` skill.
 
-- **Core:** loaded whenever the workflow starts.
-- **Extended:** loaded when the workflow's context calls for it, such as `auth-session` once the tests involve authentication.
-- **Specialized:** loaded only on a matching use case, such as `contract-testing` for microservices or `email-auth` for email flows.
+The index contains 59 fragments: 24 core, 19 extended, and 16 specialized.
+Workflow steps select their fragments using explicit loading rules, including stack, runner, installed packages, and configuration.
+The framework and test-review steps define closed sets: a tier label alone cannot add a fragment.
 
-Loading core fragments alone cuts context usage 40-50% against loading everything.
-
-Four config keys narrow the set further: `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, and `tea_browser_automation`. `test_stack_type: mobile` swaps the browser fragments for the Maestro pair. See [TEA Configuration](/docs/reference/configuration.md).
+Library branches use `tea_use_playwright_utils`, `tea_use_pactjs_utils`, and package checks.
+Pact broker tools depend on `tea_pact_mcp` and session tool availability.
+Browser branches use `tea_browser_automation`; mobile branches load Maestro guidance.
+See [TEA Configuration](/docs/reference/configuration.md).
 
 ---
 
 ## Related
 
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - How context engineering works and why
-- [TEA Overview](/docs/explanation/tea-overview.md) - How the knowledge base fits in TEA
-- [TEA Command Reference](/docs/reference/commands.md) - Workflows that use fragments
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md): How context engineering works and why
+- [TEA Overview](/docs/explanation/tea-overview.md): How the knowledge base fits in TEA
+- [TEA Command Reference](/docs/reference/commands.md): Workflows that use fragments

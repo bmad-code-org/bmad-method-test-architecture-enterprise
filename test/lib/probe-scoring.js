@@ -1662,7 +1662,7 @@ function preflightDiagnostics(diagnostics, runId) {
  * `--strict` makes for `eval-quality`'s own binary.
  *
  * `false`, and the reason is TEA's exit classes rather than the ladder's.
- * `docs/explanation/eval-quality-adoption-guide.md` fixes exit `1` as a measured
+ * `test/docs/eval-quality-adoption-guide.md` fixes exit `1` as a measured
  * quality failure and exit `2` as an environment that could not measure
  * anything, and a TEA check decides the first by baseline movement. Promoting
  * would give exit `1` a second meaning inside one repository, and it would take

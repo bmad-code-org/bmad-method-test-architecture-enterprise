@@ -5,13 +5,15 @@ description: Understanding how TEA uses tea-index.csv for context engineering an
 
 # Knowledge Base System Explained
 
-TEA's knowledge base is how context engineering works in practice: domain standards load into AI context automatically, so test quality stops depending on how well the prompt was written.
+TEA workflows load testing patterns from a shared knowledge base.
 
-Without it, quality is a function of prompt engineering skill. "Write tests for login" produces hard waits one session and network-first patterns the next, and two teams on the same codebase drift into two pattern sets with no single source of truth. With it, `atdd` loads the same fragments every run and generates tests that look like the same expert wrote them. [Testing as Engineering](/docs/explanation/testing-as-engineering.md) covers why this matters; this page covers the mechanism.
+The workflow selects fragments for the task and supplies them to the model before it generates or reviews tests.
+[Testing as Engineering](/docs/explanation/testing-as-engineering.md) explains the testing process these patterns support.
 
 ## The `tea-index.csv` Manifest
 
-`skills/bmod-tea/knowledge/tea-index.csv` is the manifest. One row per fragment:
+`skills/bmod-tea/knowledge/tea-index.csv` is the manifest.
+One row per fragment:
 
 ```csv
 id,name,description,tags,tier,fragment_file
@@ -20,11 +22,17 @@ network-first,Network-First Safeguards,"Intercept-before-navigate workflow, HAR 
 test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,test-quality.md
 ```
 
-`tier` is one of `core`, `extended`, or `specialized`. The 59 fragments split 24 / 19 / 16 across those tiers.
+`tier` is one of `core`, `extended`, or `specialized`.
+The 59 fragments split 24 / 19 / 16 across those tiers.
 
-There is one copy of the knowledge base, in the `bmod-tea` skill, and `fragment_file` is relative to its `knowledge/` folder. The agent and every workflow find it as a sibling skill folder: step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`, where `{tea-knowledge}` is `{skill-root}/../bmod-tea/knowledge`. If `bmod-tea` is not installed, the skill says so and offers to install it.
+There is one copy of the knowledge base, in the `bmod-tea` skill, and `fragment_file` is relative to its `knowledge/` folder.
+The agent and every workflow find it as a sibling skill folder: step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`, where `{tea-knowledge}` is `{skill-root}/../bmod-tea/knowledge`.
+If `bmod-tea` is not installed, the skill says so and offers to install it.
 
-A workflow reads the manifest, selects the fragments its task needs, and loads only those. Running `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and skips the other 49 including `contract-testing.md`, `feature-flags.md`, and `file-utils.md`. Focused context produces better results at lower token cost, and it produces the _same_ results next session.
+A workflow reads the manifest, selects the fragments its task needs, and loads only those.
+Running `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and can skip unrelated fragments such as `contract-testing.md`, `feature-flags.md`, and `file-utils.md`.
+The selected fragments supply a shared reference across runs.
+Model outputs still need review and execution.
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
@@ -51,7 +59,7 @@ flowchart TD
     L5 --> Context
 
     Context --> Gen[Generate Tests<br/>Following patterns]
-    Gen --> Out([Consistent Output<br/>Same quality every time])
+    Gen --> Out([Consistent Output<br/>Shared testing patterns])
 
     style User fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
     style Read fill:#fff3e0,stroke:#e65100,stroke-width:2px
@@ -67,28 +75,28 @@ flowchart TD
     style Out fill:#4caf50,stroke:#1b5e20,stroke-width:3px,color:#fff
 ```
 
-| Workflow      | Fragments loaded                                              | Purpose                  |
-| ------------- | ------------------------------------------------------------- | ------------------------ |
-| `framework`   | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns  |
-| `test-design` | test-quality, test-priorities-matrix, risk-governance         | Planning standards       |
-| `atdd`        | test-quality, component-tdd, network-first, data-factories    | TDD patterns             |
-| `automate`    | test-quality, test-levels-framework, selector-resilience      | Comprehensive generation |
-| `test-review` | All quality, resilience, and debugging fragments              | Full audit patterns      |
-| `ci`          | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization       |
+| Workflow      | Fragments loaded                                              | Purpose                 |
+| ------------- | ------------------------------------------------------------- | ----------------------- |
+| `framework`   | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns |
+| `test-design` | test-quality, test-priorities-matrix, risk-governance         | Planning standards      |
+| `atdd`        | test-quality, component-tdd, network-first, data-factories    | TDD patterns            |
+| `automate`    | test-quality, test-levels-framework, selector-resilience      | Test generation         |
+| `test-review` | All quality, resilience, and debugging fragments              | Full audit patterns     |
+| `ci`          | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization      |
 
 ## Anatomy of a Fragment
 
 Every fragment follows the same shape:
 
 - **Principle.** One sentence: what is this pattern?
-- **Rationale.** Why this instead of the alternatives, what problems it solves.
+- **Rationale.** The problems it solves and when to apply it.
 - **Pattern examples.** Runnable code, basic through advanced, each with a short explanation.
 - **Anti-patterns.** The bad version, what breaks, and why.
 - **Related patterns.** Links to neighbouring fragments.
 
 ## What the Fragments Buy You
 
-**Consistent generation.** Without the knowledge base, `atdd` guesses from general model knowledge, so one session emits a hard wait inside an API test and the next emits a cleaner version that still does not match the first. With it, both sessions load `test-quality.md`, `network-first.md`, and `api-request.md`, and both emit:
+`test-quality.md`, `network-first.md`, and `api-request.md` give `atdd` a common API testing pattern:
 
 ```typescript
 import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
@@ -104,9 +112,10 @@ test('should fetch users', async ({ apiRequest }) => {
 });
 ```
 
-Always `apiRequest` when playwright-utils is enabled, always schema-validated, always `{ status, body }`.
+When Playwright Utils is enabled and installed, TEA uses `apiRequest` with the `{ status, body }` result shape.
+This example adds schema validation.
 
-**One correct answer instead of three plausible ones.** Testing an async background job, three developers with no shared reference produce a hard wait, a hand-rolled polling loop, and a `waitForSelector` with a 30-second ceiling. All three are suboptimal in different ways. The `recurse.md` fragment gives everyone the same one:
+The `recurse.md` fragment supplies a bounded polling pattern for background jobs:
 
 ```typescript
 import { mergeTests } from '@playwright/test';
@@ -136,23 +145,29 @@ test('job completion', async ({ apiRequest, recurse }) => {
 });
 ```
 
-**Objective review.** `test-review` scores against the fragments rather than against an opinion, so the same suite gets the same findings with the same explanations on every run.
+`test-review` applies the criteria registry and the patterns those criteria reference.
+Finding severity and score arithmetic are fixed; identifying findings still requires model judgment.
 
-**Cheap evolution and onboarding.** A pattern change is one fragment edit that every subsequent generation picks up, instead of a manual sweep across a hundred test files. A new team member runs `atdd` and reads the generated code rather than reading twenty documents.
+Update a fragment to change the guidance future workflow runs load.
+Existing tests still need their own migration.
 
 ## Maintaining the Knowledge Base
 
-**Add a fragment when** the pattern spans multiple workflows, the standard is non-obvious, the same question keeps getting asked, or you are integrating a new tool. **Do not add one** for a one-off pattern (document it in the test file), something everyone already knows, or something still experimental.
+**Add a fragment when** the pattern spans multiple workflows, the standard is non-obvious, the same question keeps getting asked, or you are integrating a new tool.
+**Do not add one** for a one-off pattern (document it in the test file), something everyone already knows, or something still experimental.
 
-**A good fragment** states its principle in one sentence, explains the rationale clearly, carries three or more code examples, shows the anti-patterns, and stands alone with minimal dependencies. Optimal size is 10-30 KB.
+**A good fragment** states its principle in one sentence, explains the rationale clearly, carries three or more code examples, shows the anti-patterns, and stands alone with minimal dependencies.
+Optimal size is 10-30 KB.
 
-**Update a fragment when** the pattern evolves, the tool ships a new API, feedback says it is unclear, or an example has a bug. Edit the markdown, update the examples, test against the affected workflows, and check nothing downstream breaks. `tea-index.csv` only needs touching when the description or tags change.
+**Update a fragment when** the pattern evolves, the tool ships a new API, feedback says it is unclear, or an example has a bug.
+Edit the markdown, update the examples, test against the affected workflows, and check nothing downstream breaks.
+`tea-index.csv` only needs touching when the description or tags change.
 
 ## Related
 
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - all 59 fragments, categorized
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - the context engineering argument
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - what `test-quality.md` encodes
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - what `network-first.md` encodes
-- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) - adding fragments for your own stack
-- [TEA Configuration](/docs/reference/configuration.md) - config keys that affect fragment loading
+- [Knowledge Base Index](/docs/reference/knowledge-base.md): all 59 fragments, categorized
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): the context engineering argument
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): what `test-quality.md` encodes
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): what `network-first.md` encodes
+- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md): adding fragments for your own stack
+- [TEA Configuration](/docs/reference/configuration.md): config keys that affect fragment loading

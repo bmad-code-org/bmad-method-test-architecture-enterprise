@@ -5,27 +5,25 @@ description: Expand test automation coverage after implementation using TEA's au
 
 # How to Run Automate with TEA
 
-Use TEA's `automate` workflow to generate comprehensive tests for existing features. Unlike `atdd`, these tests pass immediately because the feature already exists.
+Use TEA's `automate` workflow to add tests for implemented features.
+Run the generated tests against your application and investigate failures before accepting them.
 
 ## When to Use This
 
 - Feature already exists and works
 - Want to add test coverage to existing code
-- Need tests that pass immediately
 - Expanding existing test suite
 - Adding tests to legacy code
 
-**Don't use this if:**
-
-- Feature doesn't exist yet (use `atdd` instead)
-- Want failing tests to guide development (use `atdd` for TDD)
+For acceptance tests before implementation, use [ATDD](/docs/how-to/workflows/run-atdd.md).
 
 ## Prerequisites
 
 - Test framework setup complete (run `framework` if needed)
 - Feature implemented and working
 
-**Note:** This guide uses Playwright examples. If using Cypress, commands and syntax will differ.
+This guide uses Playwright examples.
+If using Cypress, commands and syntax will differ.
 
 ## Steps
 
@@ -67,7 +65,7 @@ We have basic tests in tests/e2e/profile-view.spec.ts
 Avoid duplicating that coverage
 ```
 
-TEA will analyze your artifacts and generate comprehensive tests that:
+TEA will analyze your artifacts and generate tests that:
 
 - Cover acceptance criteria from the story
 - Follow priorities from test design (P0 → P1 → P2)
@@ -103,10 +101,10 @@ TEA will ask which test levels to generate:
 
 **Options:**
 
-- **E2E tests** - Full browser-based user workflows
-- **API tests** - Backend endpoint testing (faster, more reliable)
-- **Component tests** - UI component testing in isolation (framework-dependent)
-- **Mix** - Combination of levels (recommended)
+- **E2E tests**: Full browser-based user workflows
+- **API tests**: Backend endpoint testing (faster, more reliable)
+- **Component tests**: UI component testing in isolation (framework-dependent)
+- **Mix**: Combination of levels (recommended)
 
 **Example response:**
 
@@ -120,7 +118,7 @@ Generate:
 
 ### 4. Review Generated Tests
 
-TEA generates a comprehensive test suite with multiple test levels.
+TEA generates a test suite with multiple test levels.
 
 #### API Tests (`tests/api/profile.spec.ts`):
 
@@ -246,13 +244,8 @@ testWithAuth.describe('Profile API', () => {
 });
 ```
 
-**Key Differences:**
-
-- `authToken` fixture (persisted, reused across tests)
-- `apiRequest` returns `{ status, body }` (cleaner)
-- Schema validation with Zod (type-safe)
-- Automatic retry for 5xx errors
-- Less boilerplate (no manual `await response.json()` everywhere)
+`apiRequest` returns `{ status, body }`, supports chained Zod validation, and retries 5xx responses.
+Use `retryConfig: { maxRetries: 0 }` when testing a server-error response.
 
 #### E2E Tests (`tests/e2e/profile.spec.ts`):
 
@@ -277,7 +270,7 @@ test('should edit profile', async ({ page }) => {
 });
 ```
 
-TEA generates additional tests for validation, edge cases, etc. based on priorities.
+TEA generates validation and edge-case tests according to the priorities you supplied.
 
 #### Fixtures (`tests/support/fixtures/profile.ts`):
 
@@ -369,12 +362,9 @@ test('should update profile', async ({ page, authToken, testProfile }) => {
 });
 ```
 
-**Key Benefits:**
-
-- `authToken` fixture (persisted token, no manual login)
-- Dynamic test data with faker (no conflicts)
-- Fixture composition with mergeTests
-- Reusable across test files
+The merged fixture exposes an auth token and generates profile data for each test.
+Configure the auth provider and browser session separately before visiting an authenticated page.
+Add cleanup if the test creates persistent records.
 
 ### 5. Review Additional Artifacts
 
@@ -421,7 +411,8 @@ Follow the patterns in existing tests:
 
 #### Definition of Done Summary:
 
-The checklist is part of the automation summary at `{test_artifacts}/automate/automation-summary-{run_key}.md`. The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you name a story or epic, `target-{slug}` for a feature or path with neither, and `system` for a run across the whole codebase.
+The checklist is part of the automation summary at `{test_artifacts}/automate/automation-summary-{run_key}.md`.
+The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you name a story or epic, `target-{slug}` for a feature or path with neither, and `system` for a run across the whole codebase.
 
 ```markdown
 ## Test Quality Checklist
@@ -438,7 +429,7 @@ The checklist is part of the automation summary at `{test_artifacts}/automate/au
 
 ### 6. Run the Tests
 
-All tests should pass immediately since the feature exists:
+Run the generated tests against the implemented feature:
 
 **For Playwright:**
 
@@ -463,7 +454,7 @@ Running 6 tests using 4 workers
   6 passed (7.4s)
 ```
 
-Tests pass because the feature already exists.
+Investigate each failure: it can reveal a product defect, an incorrect assertion, or missing test setup.
 
 ### 7. Review Test Coverage
 
@@ -473,7 +464,8 @@ Check which scenarios are covered:
 npx playwright show-report
 ```
 
-For code coverage, use whatever your project already has. TEA's `framework` workflow does not add a coverage script.
+For code coverage, use whatever your project already has.
+TEA's `framework` workflow does not add a coverage script.
 
 Compare against:
 
@@ -483,12 +475,12 @@ Compare against:
 
 ## What You Get
 
-### Comprehensive Test Suite
+### Test Suite
 
-- **API tests** - Fast, reliable backend testing
-- **E2E tests** - Critical user workflows
-- **Component tests** - UI component testing (if requested)
-- **Fixtures** - Shared utilities and setup
+- **API tests**: Fast, reliable backend testing
+- **E2E tests**: Critical user workflows
+- **Component tests**: UI component testing (if requested)
+- **Fixtures**: Shared utilities and setup
 
 ### Component Testing by Framework
 
@@ -499,23 +491,23 @@ TEA supports component testing using framework-appropriate tools:
 | **Cypress**    | Cypress Component Testing      | `tests/component/`                        |
 | **Playwright** | Vitest + React Testing Library | `tests/component/` or `src/**/*.test.tsx` |
 
-**Note:** Component tests use separate tooling from E2E tests:
+Component tests use separate tooling from E2E tests:
 
 - Cypress users: TEA generates Cypress Component Tests
 - Playwright users: TEA generates Vitest + React Testing Library tests
 
 ### Quality Features
 
-- **Network-first patterns** - Wait for actual responses, not timeouts
-- **Deterministic tests** - No flakiness, no conditionals
-- **Self-cleaning** - Tests don't leave test data behind
-- **Parallel-safe** - Can run all tests concurrently
+- **Network-first patterns**: Wait for the response a user action triggers
+- **Deterministic tests**: Explicit assertions and controlled setup
+- **Self-cleaning**: Tests don't leave test data behind
+- **Parallel-safe setup**: Isolated data for concurrent runs
 
 ### Documentation
 
-- **Updated README** - How to run tests
-- **Test structure explanation** - Where tests live
-- **Definition of Done** - Quality standards
+- **Updated README**: How to run tests
+- **Test structure explanation**: Where tests live
+- **Definition of Done**: Quality standards
 
 ## Tips
 
@@ -595,21 +587,17 @@ Generate P2 tests (if time permits)
 Run: automate
 ```
 
-This iterative approach:
-
-- Provides fast feedback
-- Allows validation before proceeding
-- Keeps test generation focused
+Run and review each batch before generating the next one.
 
 ## Common Issues
 
 ### Tests Pass But Coverage Is Incomplete
 
-**Problem:** Tests pass but don't cover all scenarios.
+Tests pass but don't cover all scenarios.
 
-**Cause:** TEA wasn't given complete context.
+TEA wasn't given complete context.
 
-**Solution:** Provide more details:
+Provide more details:
 
 ```text
 Generate tests for:
@@ -620,11 +608,11 @@ Generate tests for:
 
 ### Too Many Tests Generated
 
-**Problem:** TEA generated 50 tests for a simple feature.
+TEA generated 50 tests for a simple feature.
 
-**Cause:** Didn't specify priorities or scope.
+Didn't specify priorities or scope.
 
-**Solution:** Be specific:
+Be specific:
 
 ```text
 Generate ONLY:
@@ -636,11 +624,11 @@ Generate ONLY:
 
 ### Tests Duplicate Existing Coverage
 
-**Problem:** New tests cover the same scenarios as existing tests.
+New tests cover the same scenarios as existing tests.
 
-**Cause:** Didn't tell TEA about existing tests.
+Didn't tell TEA about existing tests.
 
-**Solution:** Specify existing coverage:
+Specify existing coverage:
 
 ```text
 We already have these tests:
@@ -652,24 +640,26 @@ Generate tests for scenarios NOT covered by those files
 
 ### Browser Automation for Better Selectors
 
-If browser automation is configured (`tea_browser_automation: "auto"`, `"cli"`, or `"mcp"`), TEA verifies selectors against live browser using CLI snapshots or MCP. Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
+If browser automation is configured (`tea_browser_automation: "auto"`, `"cli"`, or `"mcp"`), TEA verifies selectors against live browser using CLI snapshots or MCP.
+Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
 
-Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or configure MCP servers. See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md).
+Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or configure MCP servers.
+See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md).
 
 ## Related Guides
 
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Plan before generating
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) - Failing tests before implementation
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Audit generated quality
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Plan before generating
+- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md): Failing tests before implementation
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Audit generated quality
 
 ## Understanding the Concepts
 
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - **Why TEA generates quality tests** (foundational)
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Why prioritize P0 over P3
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - What makes tests good
-- [Fixture Architecture](/docs/explanation/fixture-architecture.md) - Reusable test patterns
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): **Why TEA generates quality tests** (foundational)
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why prioritize P0 over P3
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
+- [Fixture Architecture](/docs/explanation/fixture-architecture.md): Reusable test patterns
 
 ## Reference
 
-- [Command: automate](/docs/reference/commands.md#automate) - Full command reference
-- [TEA Configuration](/docs/reference/configuration.md) - MCP and Playwright Utils options
+- [Command: automate](/docs/reference/commands.md#automate): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): MCP and Playwright Utils options

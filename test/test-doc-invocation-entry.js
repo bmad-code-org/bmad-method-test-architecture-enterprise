@@ -33,7 +33,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const { ALLOWLIST_BY_COMMENT, ALLOWLISTED_SCRIPTS } = require('./lib/doc-invocation-entry.js');
 
 /** The pages `eval-quality.config.json`'s `doc-invocations` section names under `pages`. */
-const PAGES = ['README.md', 'docs/explanation/eval-quality-adoption-guide.md', 'test/README.md'];
+const PAGES = ['test/docs/eval-quality-adoption-guide.md', 'test/README.md'];
 
 /** Every `npm run <script>  # <comment>` line in one page, script and comment paired exactly as the line spells them. */
 function documentedLines(relative) {

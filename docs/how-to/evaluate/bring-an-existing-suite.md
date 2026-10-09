@@ -6,8 +6,7 @@ description: Use an AgentEvals or promptfoo suite as the evaluation layer, or le
 # How to Bring an Existing Suite into Evaluate with TEA
 
 Use this guide when you already grade your target with a framework such as AgentEvals or promptfoo, or when you want a framework Evaluate has not met before.
-The framework keeps grading.
-Evaluate adds the seeded defects, the held-out probes, the repeatable trials and the eval-quality verdict around it.
+Evaluate uses your framework to grade repeatable trials, including seeded defects and held-out probes.
 
 The mechanism is a `command` evaluator: an executable in the evaluation folder that wraps the framework, plus three files that make its use repeatable.
 
@@ -224,9 +223,8 @@ RUN=$(npm exec --prefix evals -- tea-evaluate run --evaluation evals/pantry-summ
 SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/pantry-summary --run "$RUN" 2>&1 | tee /dev/stderr | sed -n 's#.*runs/.*/scores/\([^ ]*\) (exit .*#\1#p')
 ```
 
-`RUN` holds the ID of the run this command just sealed, taken from the summary line `... score them with tea-evaluate score --run <ID>`, and `SCORE` holds the ID of the score invocation that `score` prints in `runs/<RUN>/scores/<SCORE>`.
-The `tee /dev/stderr` keeps the output on your screen, and every later command reads `$RUN` and `$SCORE`, so it follows your own run.
-If a variable comes back empty, the command stopped before it sealed or scored a run, and its output says why.
+`RUN` and `SCORE` capture the IDs printed by these commands; later examples use them to read your result.
+If either is empty, read the command's output and resolve the failure before continuing.
 
 ```text
 tea-evaluate run: 6 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001, mutated:M-002; score them with tea-evaluate score --run 20261007T090533030Z-498d99b8 (exit 0, /work/app/evals/pantry-summary/runs/20261007T090533030Z-498d99b8)

@@ -1,859 +1,134 @@
 # TEA: Test Engineering Architect
 
-[Node Version](https://nodejs.org)
-[License: MIT](./LICENSE)
-
-**TEA** stands for **Test Engineering Architect**. The npm package and repository slug `bmad-method-test-architecture-enterprise` is a package name and never an expansion of the acronym.
-
-TEA is a standalone BMAD module that delivers risk-based test strategy, test automation guidance, and release gate decisions. It ships:
-
-- one expert agent, Murat, Master Test Architect and Quality Advisor
-- ten workflows spanning Teach Me Testing (TEA Academy), test design, framework setup, CI guidance, ATDD, automation, test review, NFR Evidence Audit, traceability, and Evaluate ([evaluate your first skill](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/))
-- a 35-row criteria registry that fixes the severity of every reviewable violation, so a score is a lookup rather than a judgment call
-- `tea-test-review`, a headless CLI that runs the review workflow as a CI gate with real exit codes
-- a write-time enforcement hook that blocks the mechanically decidable violations before they reach disk
-
-TEA is two layers. **TEA Core** decides what must be verified, at what depth, with what evidence, and whether that evidence is sufficient to release; it assumes nothing about your language, framework, or platform. **Execution targets** turn those decisions into runnable tests on a specific stack, and that layer is swappable. See [Verification Architecture](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/verification-architecture/) for the split, and [Execution Targets](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/execution-targets/) for exactly which stacks are covered at which depth.
-
-Docs: [https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/)
-
-## Why TEA
-
-- Risk-based prioritization (P0-P3) from probability × impact, with measurable quality gates
-- Requirements traced to evidence, and PASS / CONCERNS / FAIL / WAIVED release decisions that survive an audit
-- NFR thresholds set at design time and audited against real evidence, defaulting to CONCERNS when evidence is missing
-- Consistent, knowledge-base driven outputs instead of whatever the model felt like producing
-- Stack-aware execution: Playwright and Cypress for browsers, Maestro for mobile native, Pact for contracts, pytest / JUnit / Go test / xUnit / RSpec for backend services, k6 and scanners as NFR evidence
-- Three enforcement points rather than one: fragments steer generation, a hook blocks the write, and `test-review` scores what actually landed
-
-## How BMad Works
-
-BMad works because it turns big, fuzzy work into **repeatable workflows**. Each workflow is broken into small steps with clear instructions, so the AI follows the same path every time. It also uses a **shared knowledge base** (standards and patterns) so outputs are consistent, not random. In short: **structured steps + shared standards = reliable results**.
-
-## How TEA Fits In
-
-TEA plugs into BMad the same way a specialist plugs into a team. It uses the same step‑by‑step workflow engine and shared standards, but focuses exclusively on testing and quality gates. That means you get a **risk‑based test plan**, **automation guidance**, and **go/no‑go decisions** that align with the rest of the BMad process.
-
-## How It Actually Works
-
-### The problem it is built around
-
-Ask a model to "write tests for this feature" and you reliably get four things: redundant coverage, incorrect assertions, flaky tests, and diffs nobody can review. The cause is a category error. Prompt-driven generation is nondeterministic, and it is being pointed at the one artifact whose entire job is determinism.
-
-TEA's answer is not a better prompt. It is to make the work repeatable at three levels.
-
-**Repeatable instructions.** A single 5,000-word instruction file fails predictably: the model skims it, improvises past the vague parts ("analyze codebase then generate tests" specifies nothing), keeps going because nothing told it where to stop, and returns something different next run. So every workflow is cut into step files that each do one thing, state what "finished" means, restate the context they need, list what they must not do, and load one at a time. Consistent output for the same input is what makes everything else possible: you cannot parallelize work whose boundaries are undefined.
-
-**Repeatable standards.** 59 knowledge fragments carry the patterns, and an index decides which ones enter context for the task at hand. The model is not asked to remember how fixtures compose or what network-first means. It is handed the fragment.
-
-**Repeatable judgment.** Risk scores, priorities, quality scores, and gate decisions are computed from stated rules rather than produced as opinions. This is the part most tools skip, and it is the difference between a review you can act on and a review you have to re-litigate.
-
-### The order you run things
-
-The ten workflows are a directed graph, not a menu. `skills/bmod-tea/help/help.md` describes it, and the `bmad` skill reads it to recommend the next step.
-
-```text
-Phase 3, solutioning, once per project
-  TD  test-design (system-level)  →  TF  framework  →  CI  ci
-
-Phase 4, implementation, per story
-  create-story  →  AT  atdd  →  dev implements  →  TA  automate
-
-Epic or release gate
-  TA  automate  →  RV  test-review
-  TA  automate  →  NR  nfr
-  TA  automate  →  EV  evaluate  →  CI  ci
-  RV  test-review  →  TR  trace (Phase 2 gate decision)
-```
-
-Phase 3 order matters and is deliberate: run `test-design` first so NFR evidence needs can shape the infrastructure, then `framework` once the architecture and the test design have settled the stack, then `ci` once the framework exists so the pipeline wires to real commands.
-
-`test-design` is dual-mode. At system level it produces an architecture-facing document and a QA-facing one. Per epic it produces `test-design/test-design-epic-N.md`. `teach-me-testing` sits outside the lifecycle and runs once per learner.
-
-For the full lifecycle diagram including the BMad phases around TEA, see [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/).
-
-### One epic, end to end
-
-Here is the same feature moving through the chain, with the rules TEA actually applies at each step.
-
-**1. Risk, in** `test-design`**.** Every identified risk gets a probability of 1 to 3 (unlikely, possible, likely) and an impact of 1 to 3 (minor, degraded, critical). Score is the product, so the range is 1 to 9, and the score determines the action:
-
-| Score | Action   | Gate impact          |
-| ----- | -------- | -------------------- |
-| 1-3   | DOCUMENT | none                 |
-| 4-5   | MONITOR  | none, watch closely  |
-| 6-8   | MITIGATE | CONCERNS at the gate |
-| 9     | BLOCK    | automatic FAIL       |
-
-A checkout risk scored `probability 2 × impact 3 = 6` lands in MITIGATE. It gets a row in the test design with a named owner and a date, and it will surface as CONCERNS at the gate until the mitigation is real.
-
-Priority is a separate judgment that the risk score informs rather than determines. P0 is revenue-critical, security-critical, data-integrity, regulatory, or previously broken. P1 is core journeys and complex logic. P2 is secondary features. P3 is nice-to-have. The design pins the effort too: P0 tests are budgeted at 2 hours each, P1 at 1, P2 at 0.5, P3 at 0.25.
-
-**2. Test level, still in** `test-design`**.** Favor unit when logic can be isolated with no side effects; integration for persistence, service contracts, and component boundaries; E2E for user-facing critical paths and multi-system interactions. Before adding any test, the duplicate-coverage guard asks whether a lower level already covers it. Overlap is allowed only for genuinely different aspects, defense in depth on critical paths, or regression prevention on something that broke before.
-
-**3. Red tests, in** `atdd` (optional). Run before implementation. It generates acceptance tests that all carry `test.skip()`, plus data factories, fixtures, and an implementation checklist that lists, per test, the tasks required to make it pass and the command to run it. The developer un-skips one test, confirms it fails, then makes it pass. The red phase is the point: a test that has never failed has proven nothing.
-
-**4. Coverage, in** `automate`**.** Run after implementation. Workers generate API, E2E, backend, and mobile tests in parallel depending on the detected stack, and the aggregation step reports the totals broken down by priority. It also rolls up every deviation from an active integration mandate as `file:line: reason`, and writes `None` when there are none, because a reader cannot tell an empty section from a forgotten one.
-
-**5. Quality, in** `test-review`**.** Every finding must cite a registry row (`C1`, `H2`, `M4`), and the row carries the severity. Score starts at 100:
-
-```text
-Starting Score:          100
-Critical Violations:     -{count} × 10
-High Violations:         -{count} × 5
-Medium Violations:       -{count} × 2
-Low Violations:          -{count} × 1
-Bonus (5 categories, each 0 or 5, max +25)
-Final Score:             clamped to 0-100     Grade: A ≥90, B ≥80, C ≥70, D ≥60, else F
-```
-
-The verdict is then derived from the findings, not written by the model:
-
-```javascript
-if (CRITICAL > 0) return 'Block'; // a test that cannot fail is not a suggestion
-if (HIGH > 0) return 'Request Changes';
-if (score < 70) return 'Request Changes'; // volume of MEDIUM/LOW can also fail the bar
-if (MEDIUM + LOW > 0) return 'Approve with Comments';
-return 'Approve';
-```
-
-This is the part worth sitting with. A suite with one CRITICAL and three MEDIUM findings, earning two bonus categories, scores `100 - 10 - 6 + 10 = 94`, a grade A, and is still a **Block**. Score measures the suite. The verdict answers a different question: is there anything here that makes the suite lie? One committed `.skip` on the test that mattered, or one `expect(true).toBe(true)`, means green proves nothing, which is worse than an absent test because it buys false confidence.
-
-That separation exists because it was measured. Two reviewers of the same four files scored 82 and 85, which is noise, and returned opposite verdicts, which is not. `--fail-on request-changes` acts on the verdict, so the gate was being decided by the unpinned half of the report. `DESIGN-CRITERIA-REGISTRY.md` records the whole investigation.
-
-**6. Gate, in** `trace` **Phase 2.** Requirements are mapped to tests with Given/When/Then, coverage is computed per priority, and the decision is deterministic:
-
-| Condition                                                       | Decision     |
-| --------------------------------------------------------------- | ------------ |
-| P0 coverage below 100%                                          | **FAIL**     |
-| Overall coverage below 80%                                      | **FAIL**     |
-| P1 coverage below 80%                                           | **FAIL**     |
-| P0 at 100%, overall ≥ 80%, P1 ≥ 90%                             | **PASS**     |
-| P0 at 100%, overall ≥ 80%, P1 between 80% and 89%               | **CONCERNS** |
-| Stakeholder-approved waiver with the complete approval contract | **WAIVED**   |
-
-Our epic finishes at P0 100%, P1 87%, overall 84%, so it gates at CONCERNS with the residual risk named rather than passing quietly. Two overlays can lower that result further and can never raise it: a requirement resting only on recorded live verification caps at CONCERNS, and a synthetic coverage oracle below high confidence does the same. WAIVED is never derived; a human sets it, and the artifact demands an approver, approval date, reason, expiry, monitoring plan, remediation owner, and fix target. The authoritative contract is in the [Traceability template](./skills/bmad-testarch-trace/trace-template.md#waiver-details).
-
-If the run is not gate-eligible at all, because evidence collection was waived, restricted, inaccessible, or deferred, TEA emits no decision rather than computing one on partial evidence.
-
-## Architecture & Flow
-
-BMad is a small **agent + workflow engine**. There is no external orchestrator; everything runs inside the LLM context window through structured instructions. TEA adds two pieces that run outside it: a Node hook that intercepts writes in your project, and a CLI that drives the review workflow headlessly in CI.
-
-### Building Blocks
-
-| File / Scope                                              | What it does                                                                                                 | When it loads                                                               |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `skills/bmad-tea/SKILL.md`                                | Murat's activation sequence and critical actions; renders the `{agent.menu}` placeholder                     | First, activates the TEA agent                                              |
-| `skills/bmad-tea/customize.toml`                          | Agent customization surface: `[[agent.menu]]` items (code to skill), persona fields, persistent facts, hooks | During agent activation                                                     |
-| `skills/<workflow>/SKILL.md`                              | Workflow entrypoint: resolves workflow customization, picks mode, routes to the first step                   | When a TEA workflow is invoked                                              |
-| `skills/<workflow>/customize.toml`                        | Workflow customization surface: activation hooks, persistent facts, optional `on_complete` behavior          | During workflow activation                                                  |
-| `skills/<workflow>/workflow.yaml`                         | Machine-readable metadata: run variables, tool hints, output paths                                           | Tooling and workflow metadata lookups                                       |
-| `instructions.md`                                         | Workflow-specific summary and operator notes                                                                 | On demand                                                                   |
-| `steps-c/*.md`                                            | **Create** steps: primary execution, 5 to 12 files per workflow, 75 across the module                        | One at a time (just-in-time)                                                |
-| `steps-c/step-NNx-subagent-*.md`                          | **Worker** steps: one isolated dimension each, dispatched in parallel                                        | When an orchestrator step delegates                                         |
-| `steps-e/*.md`                                            | **Edit** steps: always 2 files, assess target then apply edit                                                | One at a time                                                               |
-| `steps-v/*.md`                                            | **Validate** steps: always 1 file, evaluate against the checklist                                            | On demand                                                                   |
-| `checklist.md`                                            | Validation criteria: what "done" looks like for this workflow                                                | Read by steps-v                                                             |
-| `*-template.md`                                           | Output skeleton with `{PLACEHOLDER}` vars, filled in by steps to produce the artifact                        | Read by steps-c when generating output                                      |
-| `bmad-testarch-test-review/steps-c/criteria-registry.md`  | The 35 scoreable rows, each with a fixed severity and gate class. Severity is read here                      | Read by every review worker before it scores anything                       |
-| `bmad-testarch-framework/resources/hooks/tea-enforce.cjs` | Project-level guardrail for mechanically decidable test-quality violations; framework Create scaffolds it    | Before writes, after writes or shell commands, and when an agent turn stops |
-| `skills/bmod-tea/bmod.toml`                               | Module record: version, member skills, setup questions, install messages                                     | Read by `bmad setup tea` and `bmad`                                         |
-| `skills/bmod-tea/roster.toml`                             | Lists Murat as the module's agent                                                                            | Read by roster-aware skills such as party mode                              |
-| `skills/bmod-tea/help/*.md`                               | What each TEA skill is for, when to recommend it, and what each setup answer does                            | Read by the `bmad` skill when routing                                       |
-| `skills/bmod-tea/knowledge/tea-index.csv`                 | Knowledge fragment index: id, name, description, tags, tier, path. 59 rows                                   | Read before recommendations and by knowledge-loading steps                  |
-| `skills/bmod-tea/knowledge/*.md`                          | 59 reusable fragments: standards, patterns, API references, integration mandates                             | Selectively read into context by tier and config flags                      |
-
-The knowledge base has one copy, in the `bmod-tea` skill. The agent and every workflow that consults it read it as a sibling skill folder, `{skill-root}/../bmod-tea/knowledge`. If `bmod-tea` is missing, the skill says so and offers to install it. `bmad-teach-me-testing` carries a curated pointer file at `data/tea-resources-index.yaml` instead of reading the fragments.
-
-```mermaid
-flowchart TB
-  U[User] --> A[Agent activation<br/>persona + config + menu]
-  A --> W[Workflow entry: SKILL.md<br/>mode: Create / Resume / Validate / Edit]
-  W --> S[Step files<br/>steps-c / steps-e / steps-v]
-  S --> K[Knowledge fragments<br/>tea-index.csv to knowledge/*.md]
-  S --> T[Templates & checklists]
-  S --> P[Orchestrator step]
-  P --> X[Isolated workers<br/>one dimension each]
-  X --> G[Aggregation step<br/>scored against criteria-registry.md]
-  S --> O[Outputs: plans, tests, reports]
-  G --> O
-  O --> V[Validation: steps-v + checklist.md]
-  O --> C[Checkpoint frontmatter<br/>resume where it stopped]
-```
-
-### How It Works at Runtime
-
-**1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and the `core` and `modules.tea` config from `_bmad/config.toml` and its `_bmad/custom/` layers, greets you, and renders `{agent.menu}` as a numbered table. Naming one clear intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly. A message that supports several menu choices triggers one focused question naming the relevant choices before any workflow starts.
-
-**2. Workflow entry.** Direct workflow commands use the installed skill name, such as `/bmad-testarch-automate` or `$bmad-testarch-automate`, depending on the host's invocation syntax. `TA` is the equivalent agent-menu code, available only once TEA is active. Either way, the workflow's `SKILL.md` resolves its own `[workflow]` customization block and asks which mode to run: Create, Resume, Validate, or Edit. Create and Resume both route into `steps-c/`; Validate into `steps-v/`; Edit into `steps-e/`. `test-review` alone supports `headless: true`, which skips the greeting and the menu and runs Create directly. That is how the CLI drives it in CI.
-
-**3. Steps.** Each step file declares its own wiring in YAML frontmatter: `outputFile`, `nextStepFile`, and where relevant `knowledgeIndex` and `resumeStepFile`. A step loads on its own, pulls only the fragments its mode and config flags call for, fills any `*-template.md` placeholders, writes its output, and names the next step. Nothing loads the whole workflow at once, and the step files say so in as many words: "Do not load the next step until this step is complete."
-
-**4. Progress and resume.** Every create step appends itself to a checkpoint file's YAML frontmatter (`stepsCompleted`, `lastStep`, `lastSaved`), so an interrupted run resumes at the next incomplete step. Every workflow that runs once per scope also records run identity: `runScope` and `runKey` are resolved before anything is saved, the file name carries the `run_key` (`test-design/test-design-progress-epic-3.md`, `trace/traceability-matrix-epic-16.md`), and Resume refuses to continue a file whose `runKey` belongs to a different run. A trace run for epic 16 never opens epic 15's matrix or gate decision, and interrupting a system-level run to start an epic-level one leaves the first intact. `framework` and `ci` scaffold once per project, so each keeps a single fixed checkpoint in its own folder.
-
-**5. Validation.** `steps-v/` scores the finished output against `checklist.md`.
-
-See [Step-File Architecture](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/) for the loading model, worker isolation, and the per-workflow step patterns.
-
-### Parallel Workers and Execution Modes
-
-Five workflows split their heaviest step across isolated workers. An orchestrator step does no work of its own; it resolves the mode, dispatches, and hands off to an aggregation step.
-
-| Workflow      | Workers                                                        |
-| ------------- | -------------------------------------------------------------- |
-| `test-review` | determinism, isolation, maintainability, performance           |
-| `nfr`         | security, performance, reliability, maintainability            |
-| `automate`    | API, E2E, backend, mobile. Stack-gated, so 1 to 3 of the 4 run |
-| `atdd`        | failing API tests, failing E2E tests                           |
-| `test-design` | system-level mode may generate its two documents in parallel   |
-
-`tea_execution_mode` decides how they run: `auto`, `agent-team`, `subagent`, or `sequential`. With `tea_capability_probe` at its default of `true`, `auto` probes the runtime and prefers agent-team, then subagent, then sequential, which keeps behavior portable across supported agent runtimes. With probing off, TEA honors the configured mode strictly and fails with an explicit error rather than falling back silently. Mode changes orchestration only. The output schema, the validation rules, and the aggregation contract are identical in every mode.
-
-Workers exchange nothing directly. Each writes a JSON file under `/tmp` keyed by a shared run timestamp, and the aggregation step asserts every expected file exists before it scores anything. Isolation is what makes a parallel review honest. The shared criteria registry is what stops two isolated workers from disagreeing about what a finding is worth: every worker loads it, and none of them choose a severity.
-
-### How Knowledge Gets Selected
-
-`tea-index.csv` classifies all 59 fragments into three tiers: **core** (24, always loaded), **extended** (19, loaded when deeper analysis is called for), and **specialized** (16, loaded only when the case matches, such as contract testing on a real consumer-provider boundary). Steps name the fragments they need, and they name their exclusions just as explicitly. A Maestro run is told not to load the browser fragments, because a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a device flow.
-
-Over-loading is treated as a real defect, not a harmless cost. `npm run eval:fragment-selection` measures both directions: recall of the fragments a step requires, and the rate at which a run pulls one the step excludes by name.
-
-### The Three Control Points
-
-A test rule can be enforced at three moments, and most tools occupy one of them. TEA occupies all three. The release gate is the fourth row below because it consumes what the other three produce, rather than being a fourth place to enforce a rule.
-
-| Point          | When                   | Mechanism                                              | What it closes                                                               |
-| -------------- | ---------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| **Generation** | before the test exists | knowledge fragments and integration mandates           | the model improvising a pattern TEA already has a standard for               |
-| **Write**      | as the file lands      | `tea-enforce.cjs` on PreToolUse, PostToolUse, and Stop | a `.only`, a hard wait, or a tautological assertion getting committed at all |
-| **Review**     | after the fact         | `test-review` scored against the criteria registry     | severity drifting with whichever model happened to run the review            |
-| **Gate**       | at release             | `trace` Phase 2, PASS / CONCERNS / FAIL / WAIVED       | shipping on evidence nobody checked was sufficient                           |
-
-The hook has separate installation and runtime lifecycles. The `bmad-testarch-framework` Create path installs it during its documentation and scripts step. Resume reaches the same step when installation is still incomplete. Framework Validate and Edit do not install it, and no other TEA workflow calls it.
-
-Once installed, the hook is project-scoped rather than workflow-scoped. It runs on matching tool events across TEA workflows, other agents, and ordinary coding sessions without requiring Murat or a TEA workflow to be active.
-
-The three passes cover different user-visible moments. `--pre` checks content before a direct file write reaches disk and rejects a blocking violation with a fix. `--post` re-reads the affected file after direct file writes or shell commands, then reports violations that only become visible in the complete file. `--stop` scans recently modified test files when the agent turn finishes, including outputs a code generator did not name in its command. All three passes are limited to the test and Pact configuration globs written for the detected stack in `.tea/enforce-config.json`.
-
-This closes the gap between advisory generation guidance and a later `test-review`. It blocks seven mechanically decidable Absolute rules and warns on one: focused tests, tautological assertions, hard waits, oversized test files, Maestro flows that cannot fail, two Pact parallelism rules, and undocumented disabled tests as the warning. Rules that require semantic judgment stay in `test-review`. The hook fails open on its own errors so a broken guardrail cannot lock the agent out of writing. Agent platforms without a write-time hook API skip installation and rely on `test-review` for enforcement.
-
-**How workflows become commands.** `npx skills add` copies each TEA skill into the host's skill directory under its own name. Invoking that name loads the skill, and the step-file process takes over. The skill name is the same on every host.
+[Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/) · [Getting started](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) · [Contributing](./CONTRIBUTING.md) · [MIT license](./LICENSE)
+
+TEA is a BMad module for test planning, automation, evaluation, and release decisions.
+Its agent, Murat, uses ten workflows and a shared testing knowledge base to turn requirements and risks into tests and evidence.
+You can use TEA on its own or alongside BMad Method.
+
+TEA helps you:
+
+- Plan coverage by risk and priority, from P0 to P3.
+- Set up a test framework and CI, write acceptance tests, and expand automation.
+- Review test quality against a fixed criteria registry.
+- Evaluate skills, agents, and AI features with scored probes and regression checks.
+- Trace requirements to evidence and make PASS, CONCERNS, or FAIL release decisions, with waivers recorded separately.
 
 ## Install
+
+Install the skills from GitHub:
 
 ```bash
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-This adds the TEA skills and `bmod-tea`, the module record that holds the setup questions and the knowledge base. Then, in your assistant chat, run:
+Setup needs [uv](https://docs.astral.sh/uv/) and the `bmad` and `bmod-core-tools` skills from BMad Method core.
+If those skills are missing, install them:
+
+```bash
+npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools
+```
+
+Then type this in your assistant chat:
 
 ```text
 bmad setup tea
 ```
 
-`bmad setup` runs through [uv](https://docs.astral.sh/uv/) (Python 3.11 or later, which uv fetches when it is missing), so install uv first. The `bmad` skill comes from BMad Method core. If you do not have it, add it with `npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools`. Setup asks TEA's questions and writes the answers to `_bmad/config.toml`. Run `bmad setup tea` again later to see or change them.
+Setup asks about your test stack, integrations, and output folder, then writes the answers to `_bmad/config.toml`.
+Run it again to change those answers.
+The [configuration reference](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/) covers team and personal overrides.
 
-`npx skills add` installs the head of `main`. To install a release, point it at the release tag instead: `npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills`.
-
-Murat is listed in the module's roster, so party mode can bring him into a group discussion alongside other BMad agents.
-
-### Invocation Syntax
-
-| Host convention       | Example                                  |
-| --------------------- | ---------------------------------------- |
-| Slash command         | `/bmad-testarch-automate`                |
-| Dollar-prefixed skill | `$bmad-tea` or `$bmad-testarch-automate` |
-
-## Quickstart
-
-1. Install TEA (above)
-2. Load the TEA menu with `/bmad-tea` or `$bmad-tea` if you want a conversational entrypoint.
-3. Run one of the core workflows:
-
-- `TD` / `/bmad-testarch-test-design` / `$bmad-testarch-test-design` — test design, risk assessment, and NFR planning
-- `AT` / `/bmad-testarch-atdd` / `$bmad-testarch-atdd` — failing acceptance tests first (TDD red phase)
-- `TA` / `/bmad-testarch-automate` / `$bmad-testarch-automate` — expand automation coverage
-
-1. Or use in party mode: `/party` to include TEA with other agents
-
-## Engagement Models
-
-- **No TEA**: Use your existing testing approach
-- **TEA Solo**: Standalone use on non-BMad projects
-- **TEA Lite**: Start with `automate` only for fast onboarding
-- **Integrated (BMad Method / Enterprise)**: Use TEA in Phases 3–4 and release gates
-
-## Workflows
-
-| Trigger | Slash Command                | Dollar Skill                 | Purpose                                                                     |
-| ------- | ---------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| TMT     | `/bmad-teach-me-testing`     | `$bmad-teach-me-testing`     | Teach Me Testing (TEA Academy)                                              |
-| TD      | `/bmad-testarch-test-design` | `$bmad-testarch-test-design` | System-level or epic-level test design and NFR planning                     |
-| TF      | `/bmad-testarch-framework`   | `$bmad-testarch-framework`   | Scaffold test framework (frontend, backend, fullstack, or mobile)           |
-| CI      | `/bmad-testarch-ci`          | `$bmad-testarch-ci`          | Set up CI/CD quality pipeline (multi-platform)                              |
-| AT      | `/bmad-testarch-atdd`        | `$bmad-testarch-atdd`        | Generate failing acceptance tests + checklist                               |
-| TA      | `/bmad-testarch-automate`    | `$bmad-testarch-automate`    | Expand test automation coverage                                             |
-| RV      | `/bmad-testarch-test-review` | `$bmad-testarch-test-review` | Review test quality and score                                               |
-| NR      | `/bmad-testarch-nfr`         | `$bmad-testarch-nfr`         | Audit implemented NFR evidence                                              |
-| TR      | `/bmad-testarch-trace`       | `$bmad-testarch-trace`       | Trace requirements to tests + gate decision                                 |
-| GATE    | agent menu only              | agent menu only              | Route the release gate: test review, NFR evidence audit, then trace Phase 2 |
-
-`GATE` is a routing prompt on the agent menu, so it has no standalone command. Load the agent with `/bmad-tea` or `$bmad-tea` and pick it there.
-
-## The Release Gate
-
-`trace` Phase 2 produces the decision: PASS, CONCERNS, FAIL, or WAIVED. Two mechanics sit under that vocabulary and are easy to miss.
-
-**Live evidence is capped.** A requirement covered only by recorded live verification forces PASS down to CONCERNS, with a rationale naming the recorded source SHA. The overlay only ever lowers a PASS or annotates an existing CONCERNS. It can never lift a FAIL. Only a `pass` recorded against the commit under trace counts; `stale`, `unverifiable`, `contradicted`, `blocked`, and the rest are reported as blockers. The JSON contract is published at [Live Verification Results](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/live-verification-results/), so any runner can produce it. Trace reads that file and never runs anything itself.
-
-**Some runs are not gate-eligible at all.** A collection status of `waived`, `restricted`, `inaccessible`, or `deferred_shared` means no decision is emitted rather than a decision computed on partial evidence. A missing manifest resolves to `INACCESSIBLE`, not to 0% coverage.
-
-### `tea-test-review` in CI
-
-Installing this package also installs a `tea-test-review` binary that runs the review workflow headlessly against a pull request diff.
+The GitHub install follows `main`.
+To install a tagged release, replace `<version>` with the release number:
 
 ```bash
-npx tea-test-review --base origin/main --min-score 80
+npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills
 ```
 
-It reviews with the skill shipped in its own package, scopes to changed tests (`--base`, `--files`, or `--pr` to look up the base branch), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment or configuration failure, and `3` agent failure or an unparseable or untrusted report. For example, a missing credential exits `2`, while a runner crash after launch exits `3`.
+## Start with one workflow
 
-The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
+In Claude Code, Cursor, and Windsurf, type `/bmad-testarch-test-design` in chat.
+In Codex, type `$bmad-testarch-test-design`.
+You can also load `/bmad-tea` or `$bmad-tea` and choose a menu code.
+Each workflow can run directly in a fresh session.
 
-`tea-test-review --github` also opens a check run and keeps one short pull-request comment up to date, and `tea-test-review render` prints the same comment, check-run text or summary from a verdict file for any other CI. Copy-paste workflows live at `cli/examples/pr-test-review.yml` (GitHub Actions) and `cli/examples/gitlab-ci.yaml` (GitLab), and the full flag, exit-code, and security reference is at [tea-test-review CLI](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/).
+| Workflow                                                                                                                           | Command                      | Menu | Use it to                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---- | ------------------------------------------------------ |
+| [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/)    | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                   |
+| [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)          | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence                 |
+| [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Scaffold a test framework                              |
+| [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Connect tests and quality checks to CI                 |
+| [ATDD](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)                        | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
+| [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)                | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
+| [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)          | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                  |
+| [NFR Evidence Audit](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)    | `/bmad-testarch-nfr`         | NR   | Assess performance, security, and reliability evidence |
+| [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/)          | `/bmad-testarch-evaluate`    | EV   | Build and run a behavioral evaluation                  |
+| [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/)                      | `/bmad-testarch-trace`       | TR   | Map requirements to tests and decide a release gate    |
 
-## Configuration
+For Codex, replace the leading `/` in the table with `$`.
+The agent menu also accepts `GATE` to route you through test review, NFR evidence audit, and trace Phase 2.
 
-TEA's setup questions are declared in `skills/bmod-tea/bmod.toml` and asked by `bmad setup tea`, which writes the answers to `modules.tea` in `_bmad/config.toml`. Every one is read by a workflow today. Team overrides go in `_bmad/custom/config.toml` and personal ones in `_bmad/custom/config.user.toml`; run `bmad setup tea` again to see or change the answers.
+Choose a starting path:
 
-- `test_artifacts` — base output folder for test artifacts. Each workflow writes into its own folder under it (`test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, `framework/`), and a file produced once per story, epic, or release carries that scope in its name, such as `trace/gate-decision-epic-16.json`. See [Output Layout](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/#output-layout)
-- `tea_use_playwright_utils` — enable Playwright Utils integration (boolean, default true). When true **and the package is installed**, `@seontechnologies/playwright-utils` becomes the default implementation for everything it covers: generated Playwright tests use `interceptNetworkCall`, `apiRequest`, `recurse`, and `log` without being asked, and `test-review` flags a vanilla equivalent that carries no stated reason. See [Integrate Playwright Utils](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/integrate-playwright-utils/)
-- `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing (boolean, default true). It decides how Pact suites are written, not whether a project gets one: TEA still requires a real consumer-provider boundary before scaffolding a contract test. When on **and the package is installed**, generated Pact code uses `createProviderState`, `buildVerifierOptions`, and `createRequestFilter` rather than raw Pact boilerplate. A flag with no install generates the raw path and reports one recommendation rather than flagging every file
-- `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction: mcp, none (string, default mcp). Safe without a broker: every broker-dependent step degrades to provider source or an OpenAPI spec and reports that the broker was unreachable
-- `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string, default auto)
-- `tea_execution_mode` — how TEA orchestrates multi-step generation and evaluation: auto, subagent, agent-team, sequential (string, default auto)
-- `tea_capability_probe` — probe the runtime before selecting an execution mode (boolean, default true). With it off, TEA honors the configured mode strictly and fails loudly instead of falling back
-- `test_stack_type` — detected or configured stack type (auto, frontend, backend, fullstack, mobile). Mobile is checked before frontend, because a React Native project carries React in `package.json` and would otherwise misdetect as web
-- `test_framework` — detected or configured test framework (auto, Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec, Maestro, other)
+- [TEA Lite](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) for an existing project that needs more test coverage.
+- [TEA Academy](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/learn-testing-tea-academy/) to learn testing.
+- [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/) for the lifecycle and workflow order.
+- [Evaluate Your First Skill](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/) for a runnable evaluation tutorial.
 
-Two settings that only one workflow reads are set through that workflow's customization file instead, under `[workflow]`:
+## How it works
 
-- `evaluations_folder` — base folder for Evaluate's own evaluation folders (default `evals`, relative to the project root). Set it in `_bmad/custom/bmad-testarch-evaluate.toml`
-- `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci, other; default auto). Set it in `_bmad/custom/bmad-testarch-ci.toml`
+Each workflow loads one step file at a time.
+The steps define the task, the evidence to collect, and when to stop.
+They load the knowledge fragments needed for that task from `skills/bmod-tea/knowledge/tea-index.csv`.
+Workflows can delegate independent tasks when the assistant supports workers; execution mode is configurable.
 
-Full option reference: [Configuration](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/).
+Review findings use fixed criteria and severity rules.
+Trace applies coverage thresholds and evidence checks to the release decision.
+Generated tests and reports still need review, and a release gate depends on the evidence collected.
+See [step-file architecture](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/), [test quality standards](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/test-quality-standards/), and [risk-based testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/risk-based-testing/).
 
-## Knowledge Base
+Planning and traceability work across stacks.
+Test generation and execution support vary by target.
+The [execution-target matrix](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/execution-targets/) lists the supported stacks and their limits.
 
-TEA relies on a curated testing knowledge base of 59 fragments, indexed by tier:
+## Command-line tools
 
-- Index: `skills/bmod-tea/knowledge/tea-index.csv`
-- Fragments: `skills/bmod-tea/knowledge/`
-- Tiers: 24 core, 19 extended, 16 specialized
-
-Workflows load only the fragments required for the current task, and the required set is named in the step file rather than inferred from index tags. See [Knowledge Base](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/knowledge-base/).
-
-## Repository Layout
-
-```text
-skills/                  # the shipped module, one folder per skill
-├── bmod-tea/            # module record: bmod.toml, roster.toml, help/, knowledge/{tea-index.csv, *.md}
-├── bmad-tea/            # the agent: SKILL.md, customize.toml
-├── bmad-teach-me-testing/
-├── bmad-testarch-atdd/
-├── bmad-testarch-automate/
-├── bmad-testarch-ci/
-├── bmad-testarch-evaluate/
-├── bmad-testarch-framework/        # resources/hooks/tea-enforce.cjs lives here
-├── bmad-testarch-nfr/
-├── bmad-testarch-test-design/
-├── bmad-testarch-test-review/      # steps-c/criteria-registry.md lives here
-└── bmad-testarch-trace/
-
-cli/                     # tea-test-review: the headless CI gate
-docs/                    # source of truth for the docs site
-website/                 # Astro + Starlight, consumes docs/ through a symlink
-tools/                   # validators, doc build, changelog stamping
-test/                    # quality gate suites and the six eval harnesses
-```
-
-## How TEA Keeps Itself Honest
-
-TEA has deterministic checks and live evals. All eleven of TEA's skills have coverage registered in the suite manifest: ten behavioral suites, and the suite Evaluate authored for `bmad-testarch-evaluate` itself.
-
-### Current Eval Coverage
-
-The eight suites under `test/evals/` measure one decision inside each knowledge-bearing workflow: whether the agent selects the required knowledge fragments and avoids fragments the workflow excludes. They do not execute the complete workflow or grade its final artifact.
-
-The `atdd`, `automate`, `ci`, `framework`, `nfr`, `teach-me-testing`, `test-design`, `test-review`, and `trace` suites add behavioral evals, and so does `bmad-tea`'s own routing suite. `atdd` generates red-phase scaffolds against an unimplemented fixture, activates them, executes them under NFR9's isolation, and scores whether each one fails for the reason its criterion states. `automate` runs four hand-authored spec sets, standing in for generated coverage, against a fixed voucher-redemption service and against a scratch copy carrying its seeded minimum-spend regression, and scores whether the one spec set that tests the boundary catches the regression and whether the other three are correctly reported as missing it, vacuous, or duplicated rather than as clean passes; it spends no vendor call, since there is no live-agent mode to build one for. `ci` scaffolds a pipeline for a project whose team wrote down what it needs, then parses the generated workflow, lints it with `actionlint`, and scores every requested trigger, permission, command, gate, and artifact against a minimal-request control. `framework` installs and smoke-tests a scaffolded framework in a network-isolated sandbox, proving it runs rather than merely reading as valid. `nfr` audits one evidence bundle with known gaps and one clean bundle. `teach-me-testing` tests multi-turn teaching sessions, seeded quiz corrections, and persistent learner progress through `tea-transcript-runner`. `test-design` analyzes one seeded epic and one clean control epic. `test-review` runs the complete review against files containing nine planted defects plus one clean file, then scores recall, the non-false-positive rate, score variance, and verdict stability. `trace` runs the complete traceability workflow against a ten-criterion seeded set whose declared gate is FAIL and a five-criterion clean set whose declared gate is PASS, then scores criterion status, the gate decision and the criteria behind it, the coverage arithmetic, evidence citation, and case stability. `bmad-tea` routes nineteen intents to the right menu item, or declines the ones nothing on the menu serves.
-
-| Skill                       | Fragment-selection cases | Full behavioral eval                                                                |
-| --------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
-| `bmad-tea`                  | N/A                      | Yes; nineteen intents, eleven with a right answer and eight controls                |
-| `bmad-teach-me-testing`     | N/A                      | Yes; multi-turn session with seeded wrong quiz answer, review loop, and progress    |
-| `bmad-testarch-atdd`        | 3                        | Yes; one unimplemented fixture and five acceptance criteria                         |
-| `bmad-testarch-automate`    | 5                        | Yes; four hand-authored spec sets against a fixed service and its seeded regression |
-| `bmad-testarch-ci`          | 2                        | Yes; one full request, one minimal request and one request over an evaluation plan  |
-| `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, five seeded probes and four clean controls                  |
-| `bmad-testarch-framework`   | 3                        | Yes; install and smoke-test generated scaffold in network-isolated sandbox          |
-| `bmad-testarch-nfr`         | 2                        | Yes; one evidence bundle with known gaps and one clean bundle                       |
-| `bmad-testarch-test-design` | 5                        | Yes; one seeded epic and one clean control epic                                     |
-| `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file                          |
-| `bmad-testarch-trace`       | 2                        | Yes; a ten-criterion seeded set and a five-criterion clean set                      |
-
-A passing fragment-selection eval means the workflow loaded the right knowledge. All eleven of TEA's skills have coverage registered in the suite manifest; `bmad-testarch-evaluate` is covered by the `evaluate-authored` suite Evaluate wrote and ran on itself, so the manifest's deferred array is empty. [How TEA Is Tested](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/how-tea-is-tested/) explains the testing hierarchy, exit classes, and evidence model in plain language. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-roadmap/) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project. [The eval-quality Command Adapter](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-command-adapter/) records how TEA runs the commands those evals measure, and [Adopting eval-quality, One Skill at a Time](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-adoption-guide/) is the guide for taking one skill in another BMAD module from asserted quality to measured quality.
-
-### Deterministic Checks
-
-`npm test` chains 167 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 167 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
-
-- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 51 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
-- `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, the fragment-selection case count, the replay totals that the test README and the header of the replay suite state, the story count, epic count and appended-story count in the overview of the Evaluate plan, and the lane count in its parallel-lanes section.
-  The plan's source module also refuses a plan whose five lane lists differ between the plan's epics file and its sprint status file, so the gate fails on a story moved, dropped, duplicated or reordered in one file only.
-  A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.
-- `test:doc-claims` runs `eval-quality-gates doc-claims`, which holds a hand-written prose claim — a named symbol, a transcribed list, a worked JSON example, a named exit code, or a claim whose truth depends on when it was written — against the artifact it describes. A registered dated claim whose sentence was rewritten out from under it fails the same way a wrong symbol name does, so the entry cannot go stale by drifting out from under its own key either.
-- `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
-- `test:atdd-workflow-guidance` holds ATDD generation to one supplied criterion id per executable leaf, one primary scaffold per criterion, a criterion-defining first assertion, and a transition-bearing primary branch for state changes. It also checks every literal API and E2E example title against the same criterion-id format.
-- `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
-- `test:eval-routing-boundaries` mutates the facts, candidate codes, and missing deciding information in each source-bound routing ambiguity rule. It also rejects duplicate and orphan boundaries, plus any boundary that would turn a clear intent into a clarification.
-- `test:eval-schemas` checks this repository's own eval suite manifest against its schema, confirms that every threshold it declares is the threshold the harness actually applies, that the runner capabilities it declares are the ones the harness grants its runner, and that the preflight argv it declares fails on a missing runner and passes on a present one, and fails when a TEA skill has neither a behavioral or Evaluate-authored suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
-- `test:eval-diagnostics` checks that current result writers emit bounded case and repetition diagnostics, that quality and environment outcomes stay separate, that unstable signatures remain visible, and that the protected 1.3.0 baseline remains readable and byte-for-byte unchanged.
-- `test:nfr-evidence-guidance` holds every NFR worker and the publication audit to the supplied-evidence ledger, exercises supported, missing, and mismatched evidence, rejects contaminating examples, and binds the protected baseline and focused remediation records by digest.
-- `test:contract-oracles` evaluates every oracle in every eval contract with `eval-quality`'s own evaluator, over the stored replay outputs and over constructed selections for all 24 fragment-selection cases, and fails when an oracle faults or disagrees with the harness scorer on the same evidence. The first run found that every regex oracle in the `test-review` contract was refused by the evaluator before it matched anything.
-- `test:evaluate-guidance` parses the Evaluate skill's `SKILL.md` stage list and fails when a stage entry is missing, out of order, or points at a `references/` guide that does not exist.
-
-Four more checks hold the Evaluate documentation:
-
-- `test:docs-build-names` scans every page under `docs/` and fails on a name from how TEA was built: a story id, a decision id, a line of epic narrative, a planning path, a pull request number or a word from the review process.
-  It also fails when an executable command block (a fenced `bash`, `sh`, `shell` or `zsh` block) holds a timestamped run or score ID, which a reader's own run never has.
-- `test:docs-evaluate-sidebar` fails when a page that names `tea-evaluate` or `bmad-testarch-evaluate` is missing from the site sidebar, and when the TEA overview links no page that Evaluate owns.
-- `test:docs-gap-reader` lifts the held-out reader command out of the gaps how-to, runs it over a `gap-view.json` built with a caught, an uncaught and a withheld row, and fails when it crashes or leaves a row unprinted.
-- `test:docs-tutorial` runs the commands of the Evaluate tutorial against its fixture and fails on a command that errors or an output line the page promises and the run does not print.
-
-`test:workflows-lint` runs `actionlint` over every workflow in `.github/workflows/` and the `cli/examples/pr-test-review.yml` template, and fails on any finding. It disables the shellcheck and pyflakes integrations so the answer does not depend on which of those binaries a machine has. With no `actionlint` on `PATH` it fails and names `tools/install-actionlint.sh` rather than skipping, and it proves on every run that a workflow reading a step that does not exist is refused.
-
-These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
-
-`test:doc-invocations` runs `eval-quality-gates doc-invocations`, which re-runs every `npm run <script>` this README, the adoption guide, and `test/README.md` document in their CI-usage and individual-suites blocks against the real repository, so a renamed script or a broken example fails the build instead of a reader. Each of the eighteen documented scripts is declared as a full literal spelling, never a shared `npm run` prefix, which is what keeps the gate from ever matching, let alone running, `npm run eval:all` or `npm run release:next` on the same pages. The gate's own entry script is the one real program it is allowed to reach; it refuses anything outside its own hardcoded allowlist before invoking real `npm`, and `test:doc-invocation-entry` holds that allowlist's comment-to-script lookup against all three pages' literal text, line by line, so a swapped or drifted comment fails there even when the script it resolves to would still run.
-
-### Start Here
-
-You do not start an interactive agent session. A live eval launches the selected agent CLI as a headless subprocess, sends it each prompt, waits for the result, and scores the result.
-
-The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `bmad-tea-routing`, `ci`, `nfr`, `test-design`, `test-review`, `trace`, `atdd` and `automate` evals:
+TEA also publishes an npm package for CI and terminal use.
+It requires Node.js 22.20.0 or later:
 
 ```bash
-npm run eval:all -- --agent codex
+npm install --save-dev bmad-method-test-architecture-enterprise
 ```
 
-Use `claude` or `agy` instead, or run all three built-in adapters:
+- [`tea-test-review`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/) runs the review workflow against changed tests and returns a gate verdict.
+- [`tea-evaluate`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-evaluate-cli/) checks, runs, scores, and compares behavioral evaluations.
+
+For `tea-evaluate`, install `eval-quality` alongside TEA in the evaluations folder:
 
 ```bash
-npm run eval:all -- --agent claude
-npm run eval:all -- --agent agy
-npm run eval:all -- --agent agy --agent claude --agent codex
+npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality
+npm exec --prefix evals -- tea-evaluate --help
 ```
 
-`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story. One runner makes 115 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 12 pipelines, 4 test designs, 4 traces, and 2 ATDD generations. All three built-in runners make 345 calls.
-
-Check the data, executable, login, fixtures, and expected results without making a model call:
-
-```bash
-npm run eval:all -- --agent codex --preflight-only
-npm run eval:all -- --agent claude --preflight-only
-npm run eval:all -- --agent agy --preflight-only
-```
-
-Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and, for ten of the twelve suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential. `automate` and `framework` invoke no agent at all, so their preflight only checks that their own corpus and dependencies resolve, never a vendor or a credential. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent. `npm run test:eval-schemas` runs each suite's preflight with a missing runner and with a present one, so a preflight that stopped probing the runner would fail `npm test`.
-
-### A La Carte Live Evals
-
-Use the focused commands when debugging one metric or skill. A one-call review smoke test is:
-
-```bash
-# One review. Recall and the non-false-positive rate are measured; variance and stability are not.
-npm run eval:test-review -- --agent codex --runs 1
-
-# Complete eval with one runner.
-npm run eval:test-review -- --agent codex
-npm run eval:test-review -- --agent claude
-
-# Complete eval with all three built-in runners. This makes nine review calls.
-npm run eval:test-review -- --agent agy --agent claude --agent codex
-```
-
-The `trace` suite runs the same way, one call per fixture set per repetition:
-
-```bash
-# One trace per fixture set. Accuracy is measured; stability is not.
-npm run eval:trace -- --agent codex --runs 1
-
-# One fixture set only.
-npm run eval:trace -- --agent codex --set seeded-tenant-data-export
-
-# Complete eval with one runner. Two fixture sets twice: 4 calls.
-npm run eval:trace -- --agent codex
-```
-
-### Run Fragment Selection by Skill
-
-Each command below runs one repetition. Use `--runs 2` for the complete stability measurement.
-
-| Skill                 | Copy-paste command                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `atdd`                | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-atdd --runs 1`        |
-| `automate`            | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-automate --runs 1`    |
-| `ci`                  | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-ci --runs 1`          |
-| `framework`           | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-framework --runs 1`   |
-| `nfr`                 | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-nfr --runs 1`         |
-| `test-design`         | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-design --runs 1` |
-| `test-review` routing | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-review --runs 1` |
-| `trace`               | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-trace --runs 1`       |
-
-Run every suite with one or all built-in runners:
-
-```bash
-# 24 cases run twice: 48 calls.
-npm run eval:fragment-selection -- --agent codex
-npm run eval:fragment-selection -- --agent claude
-
-# All three runners: 144 calls.
-npm run eval:fragment-selection -- --agent agy --agent claude --agent codex
-```
-
-### Antigravity, Claude, Codex, and Custom Agent CLIs
-
-The built-in adapters are `claude`, `codex`, and `agy` (Antigravity CLI). Run live evals with any built-in adapter:
-
-```bash
-npm run eval:all -- --agent agy
-npm run eval:all -- --agent claude
-npm run eval:all -- --agent codex
-```
-
-Any other headless CLI can use `--agent custom`. The runner must:
-
-1. Read the complete prompt from standard input.
-2. Run non-interactively in the repository working directory.
-3. Print its final response to standard output. The review eval must also allow the agent to write the report path named in the prompt.
-4. Exit with a nonzero status when the agent call fails.
-
-[Gemini CLI headless mode](https://geminicli.com/docs/cli/headless/) accepts standard input alongside a `-p` prompt. Once Gemini is installed and authenticated, run every live eval with:
-
-```bash
-npm run eval:all -- \
-  --agent custom \
-  --agent-cmd gemini \
-  --agent-arg -p \
-  --agent-arg "Follow the complete instructions from standard input." \
-  --agent-arg --output-format \
-  --agent-arg text \
-  --agent-arg --approval-mode \
-  --agent-arg yolo \
-  --agent-arg --skip-trust \
-  --env-pass GEMINI_API_KEY \
-  --env-pass GOOGLE_API_KEY
-```
-
-This uses `yolo` because the review eval must write its report. To run fragment selection alone with a read-only policy:
-
-```bash
-npm run eval:fragment-selection -- \
-  --agent custom \
-  --agent-cmd gemini \
-  --agent-arg -p \
-  --agent-arg "Follow the complete instructions from standard input." \
-  --agent-arg --output-format \
-  --agent-arg text \
-  --agent-arg --approval-mode \
-  --agent-arg plan \
-  --agent-arg --skip-trust \
-  --env-pass GEMINI_API_KEY \
-  --env-pass GOOGLE_API_KEY
-```
-
-`--env-pass` is required only for credentials stored in environment variables. Stored CLI logins use the home directory that the harness already passes through. Model selection for a custom runner is also explicit, using repeated `--agent-arg` values for that CLI's model flag and value.
-
-### What Has to Pass
-
-Every row below is a declared gate. Ten of TEA's eleven skills have behavioral suites registered in the suite manifest, and `bmad-testarch-evaluate` has the Evaluate-authored suite. Recorded live baselines preserve timestamped history, and [How TEA Is Tested](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/how-tea-is-tested/) describes the evidence model. The live thresholds are the ones this repository's own eval suite manifest declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
-
-| Eval                              | Declared threshold                                                                                                                                                                                                                                                                                                                                                                                 | Declared volume                                                                                            |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `npm run eval:all -- --agent ...` | All eight live suites below meet their thresholds for the selected runner                                                                                                                                                                                                                                                                                                                          | 48 selections, 38 routing calls, 3 reviews, 4 audits, 6 pipelines, 4 test designs, 4 traces, 2 generations |
-| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                                                                                                                                                                                                                                                                          | 24 cases twice: 48 calls                                                                                   |
-| Test review                       | At least 70% overall recall, 100% CRITICAL recall, an 80% non-false-positive rate, score standard deviation no higher than 3, and a stable verdict                                                                                                                                                                                                                                                 | Three complete reviews                                                                                     |
-| Trace                             | At least 90% criterion-status accuracy and 90% evidence-citation precision; 100% on both discriminating criteria, the gate decision, the gate criteria, the coverage arithmetic, the oracle resolution, the rejected evidence, the waiver validity, and the live evidence; no clean-set false positive, no unstable case, and no fixture mutation                                                  | Two fixture sets twice: 4 calls                                                                            |
-| bmad-tea routing                  | At least 90% route accuracy, 80% reason-token recall, 87.5% scope fidelity, and 75% on both clarification and decline recall; zero confident routes on an intent nothing on the menu serves, zero on one whose menu items are genuinely close, zero clear intents left unrouted, and at most two intents whose answer changes between repetitions                                                  | 19 intents twice: 38 calls                                                                                 |
-| NFR                               | At least 87.5% domain-status accuracy and 90% threshold fidelity; 100% on undecidable domains, the overall status, and domain coverage; no unsupported PASS, no fabricated evidence, no clean-bundle false positive, no duplicate domain section, no disagreement between the gate artifact and the assessment it summarizes, no unstable case, and no fixture mutation                            | Two evidence bundles twice: 4 calls                                                                        |
-| CI                                | Zero parse failures and zero `actionlint` findings; at least 97% requested-element recall and 100% trigger accuracy; zero unrequested elements, zero workflow rule violations, no unstable case, and no fixture mutation                                                                                                                                                                           | Six projects twice: 12 calls                                                                               |
-| Test design                       | At least 80% grounded-risk recall, 80% risk precision, and 80% coverage mapping; 100% on the scale compliance, the score arithmetic, the category validity, the band placement, the risk-id shape, the risk-link resolution, and the priority ordering; no unscored risk table, no ungrounded risk, no missed top-severity risk, no risk-ceiling excess, no unstable case, and no fixture mutation | Two epics twice: 4 calls                                                                                   |
-| ATDD                              | 100% red-for-intended-reason rate and criteria coverage; no vacuous pass, no scaffold still skipped after activation, no load error, no non-assertion exit, no unmapped test, no production mutation, and no unstable case                                                                                                                                                                         | One story twice: 2 generation calls, plus execution under NFR9's isolation, which spends no call           |
-| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                                                                                                                                                                                                                                                                       | No agent calls                                                                                             |
-| `npm run test:eval-schemas`       | The suite manifest matches its schema, declares the thresholds the harnesses apply, and accounts for every TEA skill                                                                                                                                                                                                                                                                               | No agent calls                                                                                             |
-
-Every declared repetition has to complete. A run that loses one to a timeout, a transport error, or an unparseable reply cannot measure variance or stability, so it exits `2` rather than reporting a lower score.
-
-The non-false-positive rate is the share of reported findings that are not definite false positives, and only the clean fixture makes a false positive definite. A finding on a seeded fixture that matches no planted row is reported separately as `unattributed`: the fixture may carry an incidental real defect nobody planted, so counting it either way would be a guess.
-
-### The Suite Manifest and Machine-Readable Results
-
-This repository's own eval suite manifest registers every suite `eval:all` runs, with its skills, fixtures, ground truth, contract, thresholds, repetition count, CI tier, and the capabilities its runner needs. It also carries a `deferred` list: one entry per skill with no behavioral suite, naming the owner, the missing evidence, and the condition that retires the entry. `eval:all` reads the suite list from that file and refuses to run when a TEA skill appears in neither list.
-
-Add `--json <path>` to any of the six harnesses to write a result record alongside the console output:
-
-```bash
-npm run eval:all -- --agent codex --json results/eval-all.json
-npm run eval:test-review -- --agent codex --json results/test-review.json
-```
-
-The record carries the repository commit, the suite and case IDs, the runner executable and version, the resolved model and parameters, the fixture and prompt digests, the expected and completed repetitions, the measurements, the duration, and the final failure class. A generated JSON Schema in this repository's own dev tree describes it, and every record is validated against that schema before it is written.
-
-### CI Usage
-
-Run the eval's deterministic checks on every pull request. `npm test` runs all of these along with the rest of the chain:
-
-```bash
-npm ci
-npm run test:eval-data          # fragment-selection corpus, static
-npm run test:eval-trace-data    # trace corpus, static
-npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # stored outputs against the scorers
-```
-
-Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:
-
-```bash
-npm ci
-npm run eval:all -- --agent codex
-```
-
-The eval harnesses use CI-compatible exit codes: `0` means every threshold passed, `1` means a measured result missed a threshold, and `2` means the environment could not run the eval. Live jobs consume model quota and can vary as models change, so keep their result separate from the deterministic pull-request gate until the team chooses to make model quality a required check.
-
-TEA applies the same evidence rule to its documentation. Unproven explanations are labeled as hypotheses, and workarounds are labeled as countermeasures. `DESIGN-CRITERIA-REGISTRY.md` records the investigations behind the review rules and scoring decisions.
-
-## Extending TEA
-
-Custom workflows are still compatible with TEA, but they are no longer implicitly absorbed into TEA core. The supported path is:
-
-1. Package the workflow as custom content or a custom module.
-2. Attach it to `bmad-tea` using the agent customization flow.
-3. Install the workflow skill with `npx skills add`, then start a fresh chat so the new menu item is picked up.
-
-See [Extend TEA with Custom Workflows](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/extend-tea-with-custom-workflows/) and the BMAD customization guide at [BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md).
+The npm package includes the workflow skills used by the tools.
+See the [CI examples](./cli/examples/README.md) for test-review integration.
 
 ## Contributing
 
-See `CONTRIBUTING.md` for guidelines.
-
----
-
-## 📦 Publishing TEA to NPM (for Maintainers)
-
-TEA uses an automated publish workflow modeled after the main `BMAD-METHOD` repo. It supports:
-
-- `next` prereleases published automatically from `main`
-- manual stable releases on the `latest` dist-tag
-- trusted npm publishing (no `NPM_TOKEN` secret)
-- metadata sync for `package.json`, `package-lock.json`, and `.claude-plugin/marketplace.json`
-
-### Prerequisites (One-Time Setup)
-
-1. **npm Trusted Publishing:**
-
-- In npm package settings for `bmad-method-test-architecture-enterprise`, configure Trusted Publishers for this GitHub repository
-- Allow publishes from the `bmad-code-org/bmad-method-test-architecture-enterprise` repo and the `.github/workflows/publish.yaml` workflow
-- GitHub Actions must be able to request an OIDC token (`id-token: write`), which the workflow already does
-
-1. **GitHub App Secrets for Stable Releases:**
-
-- Add `RELEASE_APP_ID`
-- Add `RELEASE_APP_PRIVATE_KEY`
-- Install the corresponding GitHub App on this repository with contents write access
-- If `main` is protected, ensure the app is allowed to push the release commit and tag
-- These are used only for manual stable releases so the workflow can push the version bump commit and tag back to `main`
-
-1. **Verify Package Configuration:**
-
-```bash
- # Check package.json settings
- cat package.json | grep -A 3 "publishConfig"
- # Should show: "access": "public"
- if grep -Eq '"private"[[:space:]]*:[[:space:]]*true' package.json; then
-   echo '❌ package.json must not set "private": true'
- else
-   echo '✅ package.json is publishable ("private": true not present)'
- fi
-```
-
-### Release Process
-
-#### Option 1: Using npm Scripts (Recommended)
-
-From your local terminal after merging to `main`:
-
-```bash
-# Publish the next prerelease from current main
-npm run release:next
-
-# Publish a stable patch release
-npm run release:patch
-
-# Publish a stable minor release
-npm run release:minor
-
-# Publish a stable major release
-npm run release:major
-```
-
-#### Option 2: Manual Workflow Trigger
-
-1. Go to **Actions** tab in GitHub
-2. Click **"Publish"** workflow
-3. Click **"Run workflow"**
-4. Choose the branch to release, typically `main`
-5. Select channel:
-
-- `next` for a prerelease publish
-- `latest` for a stable release
-
-1. If using `latest`, choose the bump type (`patch`, `minor`, `major`)
-2. Click **"Run workflow"**
-
-### What Happens Automatically
-
-The workflow performs these steps:
-
-1. ✅ **Validation**: Runs the full `npm test` chain: schema checks, install tests, knowledge checks, criteria-to-fragment traceability, enforce-hook coverage, eval data validation, release metadata, changelog, workflow descriptions, linting, markdown linting, and formatting. The chain includes the CLI suite (`npm run test:cli`).
-2. ✅ **Version Bump**:
-
-- `next`: derives the next prerelease version and publishes it with dist-tag `next`
-- `latest`: bumps the stable version (`patch`, `minor`, or `major`)
-
-1. ✅ **Metadata Sync**: Updates `.claude-plugin/marketplace.json` to match the package version before publishing
-2. ✅ **Publish**: Publishes to npm with provenance enabled
-
-- `next` → `npm publish --tag next --provenance`
-- `latest` → `npm publish --tag latest --provenance`
-
-1. ✅ **Stable Release Finalization**: For `latest`, creates a version bump commit, tags it, pushes it to `main`, and creates a GitHub Release
-
-### Channel Strategy
-
-- `next`: prerelease channel for the newest merged changes
-- `latest`: stable channel for intentional releases
-- `patch`: bug fixes, no breaking changes
-- `minor`: new features, backwards compatible
-- `major`: breaking changes
-
-**Recommended Release Path:**
-
-1. Merge releasable work to `main`
-2. Let `next` publish for early validation
-3. When ready, cut a stable `latest` release via `patch`, `minor`, or `major`
-
-### Verify Publication
-
-**Check NPM:**
-
-```bash
-npm view bmad-method-test-architecture-enterprise
-npm view bmad-method-test-architecture-enterprise dist-tags
-```
-
-**Install TEA:**
-
-```bash
-npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
-```
-
-Then run `bmad setup tea` in the assistant chat.
-
-**Test Workflows:** type these in the assistant chat, not in a shell.
-
-```text
-/bmad-tea                     # load the agent persona and menu
-/bmad-testarch-test-design    # run a workflow directly
-```
-
-Hosts that use dollar-prefixed skills use `$` in place of `/`.
-
-### Rollback a Release (if needed)
-
-If you need to unpublish a version:
-
-```bash
-# Unpublish specific version (within 72 hours)
-npm unpublish bmad-method-test-architecture-enterprise@1.13.2-next.0
-
-# Deprecate version (preferred for older releases)
-npm deprecate bmad-method-test-architecture-enterprise@1.13.2-next.0 "Use version X.Y.Z instead"
-```
-
-### Troubleshooting
-
-**Trusted publishing failed:**
-
-- Verify npm Trusted Publishing is configured for this repository and workflow
-- Verify the workflow has `id-token: write`
-- Confirm the publish is running from the canonical repository, not a fork
-
-**"Package already exists":**
-
-- Check if package name is already taken on NPM
-- Update `name` in `package.json` if needed
-
-**"Version push failed":**
-
-- Verify `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` are configured
-- Verify the GitHub App is installed on this repository with contents write access
-- If branch protection is enabled on `main`, verify the app is allowed to push the release commit and tag
-
-**"Tests failed":**
-
-- Fix failing tests before release
-- Run `npm test` locally to verify
-
-**"Git push failed (protected branch)":**
-
-- This is not expected once the release GitHub App is configured correctly
-- Verify branch protection allows the app to push the release commit and tag
-- If needed, create the GitHub Release manually after resolving the app permissions
-
-### Release Checklist
-
-Before releasing:
-
-- [ ] All tests passing: `npm test`
-- [ ] Documentation up to date
-- [ ] CHANGELOG.md updated
-- [ ] No uncommitted changes
-- [ ] On `main` branch
-- [ ] npm Trusted Publishing configured
-- [ ] `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` configured
-- [ ] Package name available on NPM
-
-After releasing:
-
-- [ ] Verify NPM publication: `npm view bmad-method-test-architecture-enterprise`
-- [ ] Test installation: `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, then `bmad setup tea`
-- [ ] Verify workflows work
-- [ ] Check GitHub Release created
-- [ ] Monitor for issues
-
----
+[CONTRIBUTING.md](./CONTRIBUTING.md) covers local checks, pull requests, and publishing.
+[How TEA Is Tested](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/how-tea-is-tested/) explains the test and evaluation layers.
+The [test suite guide](./test/README.md) has commands for running individual suites and live evaluations.
 
 ## Community
 
-- [Discord](https://discord.gg/gk8jAdXWmj) — Get help, share ideas, collaborate
-- [YouTube](https://youtube.com/@BMadCode) — Tutorials, master class, and more
-- [X / Twitter](https://x.com/BMadCode)
-- [Website](https://bmadcode.com)
+- [Discord](https://discord.gg/gk8jAdXWmj) for help and discussion.
+- [GitHub Issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) for bugs and feature requests.
+- [YouTube](https://youtube.com/@BMadCode) for tutorials.
+- [BMad website](https://bmadcode.com) and [X](https://x.com/BMadCode).
 
-## Support BMad
-
-BMad is free for everyone and always will be. Star this repo, [buy me a coffee](https://buymeacoffee.com/bmad), or email [contact@bmadcode.com](mailto:contact@bmadcode.com) for corporate sponsorship.
+You can support BMad by starring the repository, [buying a coffee](https://buymeacoffee.com/bmad), or contacting [contact@bmadcode.com](mailto:contact@bmadcode.com) about sponsorship.
 
 ## License
 
-See `LICENSE`.
+[MIT](./LICENSE).

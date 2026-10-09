@@ -281,7 +281,7 @@ const DELIBERATELY_LOCAL = {
   'regenerate:doc-claim-hash':
     'a manual, human-triggered helper that prints a sha256 for a doc-claims asOf.subject file; it takes a path argument CI has none to supply, and its only job is producing a hash for a human to paste into eval-quality.config.json by hand, so there is nothing for a CI run to assert against',
   'eval:all':
-    'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see README.md)',
+    'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see test/README.md)',
   'eval:atdd': 'a live agent eval; same reason as eval:all',
   'eval:automate':
     'no live agent and no vendor cost, unlike its siblings above; test:eval-automate-data already runs this exact deterministic check in CI, so running it again here under a second name would be redundant rather than a coverage gap',
@@ -289,7 +289,7 @@ const DELIBERATELY_LOCAL = {
   'eval:contract-strength': 'a live agent eval; same reason as eval:all',
   'eval:fragment-selection': 'a live agent eval; same reason as eval:all',
   'eval:framework-scaffold':
-    "no live agent and no vendor cost, but a real npm install against the real registry and a real Playwright/Chromium run, unlike eval:automate above; test:eval-framework-scaffold-data and test:framework-scaffold-install-isolation already run its deterministic and isolation checks in CI, and the live install-and-smoke run itself stays in the manual/scheduled full-matrix tier the same way every live-agent eval above does, per docs/explanation/eval-quality-roadmap.md's CI policy",
+    "no live agent and no vendor cost, but a real npm install against the real registry and a real Playwright/Chromium run, unlike eval:automate above; test:eval-framework-scaffold-data and test:framework-scaffold-install-isolation already run its deterministic and isolation checks in CI, and the live install-and-smoke run itself stays in the manual/scheduled full-matrix tier the same way every live-agent eval above does, per test/docs/eval-quality-roadmap.md's CI policy",
   'eval:nfr': 'a live agent eval; same reason as eval:all',
   'eval:preflight': 'the --preflight-only entry point into the live eval:contract-strength; same reason as eval:all',
   'eval:routing': 'a live agent eval; same reason as eval:all',

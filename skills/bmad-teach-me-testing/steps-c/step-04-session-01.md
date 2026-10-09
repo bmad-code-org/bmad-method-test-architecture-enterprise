@@ -93,8 +93,8 @@ Present this content (mostly autonomous, clear and educational):
 
 TEA is a comprehensive test architecture framework that provides:
 
-- **9 Workflows:** Teach Me Testing, Test Design, Framework, CI, ATDD, Automate, Test Review, NFR Evidence Audit, Trace
-- **35 Knowledge Fragments:** Distilled expertise on patterns, best practices, Playwright Utils
+- **10 Workflows:** Teach Me Testing, Test Design, Framework, CI, ATDD, Automate, Test Review, NFR Evidence Audit, Trace, Evaluate
+- **59 Knowledge Fragments:** Distilled expertise on patterns, best practices, Playwright Utils
 - **Quality Standards:** Definition of Done with execution limits (no flaky tests, no hard waits, etc.)
 - **Risk-Based Testing:** P0-P3 matrix for prioritizing test coverage
 
@@ -102,7 +102,7 @@ TEA is a comprehensive test architecture framework that provides:
 Testing knowledge doesn't scale through manual teaching. TEA makes testing expertise accessible through:
 
 - Structured workflows that guide you step-by-step
-- Documentation (32 docs) organized by type (tutorials, how-to, explanation, reference)
+- Documentation organized by type (tutorials, how-to, explanation, reference)
 - Knowledge fragments for just-in-time learning
 - Online resources: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
 

@@ -3,7 +3,8 @@ title: 'AI-Generated Testing: Why Most Approaches Fail'
 description: Why prompt-driven test generation produces unreliable suites, and how standardized utilities, structured workflows, and deterministic interfaces fix it (worked through a JavaScript stack)
 ---
 
-AI-generated tests frequently fail in production because they lack systematic quality standards. This document explains the problem and presents a solution combining utility standards, TEA workflows, and automation interfaces across both UI, API and contract testing.
+AI-generated tests need planning, execution, and review.
+TEA supplies that process, with shared utilities and optional access to live systems.
 
 :::note[Source]
 This article is adapted from [The Testing Meta Most Teams Have Not Caught Up To Yet](https://dev.to/muratkeremozcan/the-testing-meta-most-teams-have-not-caught-up-to-yet-o5i) by Murat K Ozcan.
@@ -11,7 +12,7 @@ This article is adapted from [The Testing Meta Most Teams Have Not Caught Up To 
 
 ## The Problem with AI-Generated Tests
 
-When teams use AI to generate tests without structure, they often produce what can be called "slop factory" outputs:
+Common failures include:
 
 | Issue                | Description                                          |
 | -------------------- | ---------------------------------------------------- |
@@ -20,19 +21,14 @@ When teams use AI to generate tests without structure, they often produce what c
 | Flaky tests          | Non-deterministic tests that randomly pass or fail   |
 | Unreviewable diffs   | Generated code too verbose or inconsistent to review |
 
-The core problem is that prompt-driven testing paths lean into nondeterminism, which is the exact opposite of what testing exists to protect.
-
-:::caution[The Paradox]
-AI excels at generating code quickly, but testing requires precision and consistency. Without guardrails, AI-generated tests amplify the chaos they're meant to prevent.
-:::
-
 ## The Solution: A Three-Part Stack
 
-The solution combines three components that work together to enforce quality:
+TEA combines shared utilities, testing workflows, and live verification tools.
 
 ### 1. Utilities: Playwright-Utils + Pact.js Utils
 
-`@seontechnologies/playwright-utils` standardizes commonly reinvented testing primitives across UI, API, web, and non-web flows. `@seontechnologies/pactjs-utils` standardizes Pact.js contract-testing primitives for provider state setup, request filtering, and provider/message verifier configuration.
+`@seontechnologies/playwright-utils` standardizes commonly reinvented testing primitives across UI, API, web, and non-web flows.
+`@seontechnologies/pactjs-utils` standardizes Pact.js contract-testing primitives for provider state setup, request filtering, and provider/message verifier configuration.
 
 | Track              | Utility Layer                        | Purpose                                                  |
 | ------------------ | ------------------------------------ | -------------------------------------------------------- |
@@ -43,11 +39,9 @@ The solution combines three components that work together to enforce quality:
 
 **pactjs-utils examples:** `createProviderState`, `toJsonMap`, `setJsonBody`, `setJsonContent`, `createRequestFilter`, `noOpRequestFilter`, `buildVerifierOptions`, `buildMessageVerifierOptions`.
 
-Together, these utility libraries eliminate the need to reinvent core testing primitives across UI, API, web, non-web, and contract testing.
+### 2. Process: TEA (Test Architect)
 
-### 2. Process: TEA (Test Engineering Architect)
-
-A quality operating model packaged as ten workflows spanning learning, test design, evaluation, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
+Ten workflows cover learning, planning, test generation, evaluation, and release gates.
 
 | Workflow           | Purpose                                        |
 | ------------------ | ---------------------------------------------- |
@@ -62,10 +56,6 @@ A quality operating model packaged as ten workflows spanning learning, test desi
 | `nfr-assess`       | NFR Evidence Audit                             |
 | `trace`            | Coverage traceability and gate decisions       |
 
-:::tip[Key Insight]
-TEA doesn't just generate tests. It provides a complete quality operating model with workflows for planning, execution, and release gates.
-:::
-
 ### 3. Automation Interfaces: Playwright CLI + MCPs
 
 Automation interfaces enable real-time verification during test generation and review across browser and contract tracks:
@@ -74,7 +64,7 @@ Automation interfaces enable real-time verification during test generation and r
 - **Playwright MCP**: stateful browser automation with richer context for interactive exploration and DOM validation.
 - **Pact MCP**: broker-aware contract automation for verification matrix queries, provider-state discovery, compatibility analysis, and `can-i-deploy` deployment decisions.
 
-Instead of inferring behavior from documentation alone, these interfaces allow agents to:
+These interfaces let agents:
 
 - Run browser flows and confirm the DOM against the accessibility tree
 - Validate UI/API network behavior in real-time
@@ -92,20 +82,16 @@ The three components form a quality pipeline:
 | Process      | TEA Workflows                              | Enforces systematic test planning and review                 |
 | Verification | Playwright CLI + Playwright MCP + Pact MCP | Validates tests and contracts against live systems           |
 
-**Before (AI-only):** 20 tests with redundant coverage, incorrect assertions, and flaky behavior.
-
-**After (Full Stack):** Risk-based selection, verified selectors, validated behavior, contract compatibility checks, reviewable code.
-
 ## Why This Matters
 
 Traditional AI testing approaches fail because they:
 
-- **Lack quality standards** — No consistent patterns or utilities
-- **Skip planning** — Jump straight to test generation without risk assessment
-- **Can't verify** — Generate tests without validating against actual behavior
-- **Don't review** — No systematic audit of generated test quality
+- Use inconsistent test patterns
+- Generate tests before assessing risk
+- Leave generated tests unexecuted
+- Skip quality review
 
-The three-part stack addresses each gap:
+The workflow and tools address these gaps:
 
 | Gap             | Solution                                                                 |
 | --------------- | ------------------------------------------------------------------------ |
@@ -114,12 +100,14 @@ The three-part stack addresses each gap:
 | No verification | Playwright CLI + Playwright MCP + Pact MCP validate against live systems |
 | No review       | TEA `test-review` audits quality with scoring                            |
 
-This approach is sometimes called _context engineering_: loading domain-specific standards into AI context automatically rather than relying on prompts alone. TEA's `tea-index.csv` manifest loads relevant knowledge fragments so the AI doesn't relearn testing patterns each session. See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how the manifest selects fragments per workflow.
+This approach is sometimes called _context engineering_: loading domain standards into the model's context before it starts work.
+TEA's `tea-index.csv` manifest loads relevant knowledge fragments so the AI doesn't relearn testing patterns each session.
+See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how the manifest selects fragments per workflow.
 
 ## Related
 
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - the manifest that loads the standards
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the Definition of Done those standards encode
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - the determinism rule in detail
-- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows in the lifecycle
-- [Engagement Models](/docs/explanation/engagement-models.md) - the five ways to adopt TEA
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md): the manifest that loads the standards
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): the Definition of Done those standards encode
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): the determinism rule in detail
+- [TEA Overview](/docs/explanation/tea-overview.md): the ten workflows in the lifecycle
+- [Engagement Models](/docs/explanation/engagement-models.md): the five ways to adopt TEA
