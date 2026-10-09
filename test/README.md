@@ -282,7 +282,7 @@ It exits before any model call, and it is what `eval:all --preflight-only` passe
 
 ## Repository counts
 
-`npm test` chains 163 checks; `npm run test:ci-coverage` derives the count from `package.json`.
+`npm test` chains 164 checks; `npm run test:ci-coverage` derives the count from `package.json`.
 The fragment-selection corpus contains 24 cases.
 A preflight run checks 12 suites, including 10 that probe the selected agent executable, version, and credentials.
 The remaining suites check corpus and execution tooling.
